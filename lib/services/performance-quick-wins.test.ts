@@ -178,17 +178,17 @@ describe('Phase A: performance quick-wins safety', () => {
 
   it('29. POS products cache TTL is 60 seconds (unchanged)', () => {
     expect(posSrc).toContain('revalidate: 60');
-    expect(posSrc).toContain("tags: ['pos-products']");
+    expect(posSrc).toContain('posProductsTag(businessId)');
   });
 
   it('30. POS inventory cache TTL is 30 seconds (unchanged)', () => {
     expect(posSrc).toContain('revalidate: 30');
-    expect(posSrc).toContain("tags: ['pos-inventory']");
+    expect(posSrc).toContain('posInventoryTag(businessId, storeId)');
   });
 
   it('31. POS shifts cache TTL is 10 seconds (unchanged)', () => {
     expect(posSrc).toContain('revalidate: 10');
-    expect(posSrc).toContain("tags: ['pos-shifts']");
+    expect(posSrc).toContain('posShiftsTag(businessId, storeId)');
   });
 
   it('32. POS page still uses getCachedProducts', () => {

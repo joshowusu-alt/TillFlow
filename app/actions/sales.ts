@@ -15,7 +15,8 @@ import type { DiscountType } from '@/lib/services/sales';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 import { prisma } from '@/lib/prisma';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
-import { measureServerOperation } from '@/lib/observability';
+import { appLog, measureServerOperation } from '@/lib/observability';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 
 const CHECKOUT_ACTION_STAGE_THRESHOLDS_MS = {
   auditLog: 200,
@@ -150,6 +151,11 @@ export async function createSaleAction(formData: FormData): Promise<void> {
         hasDiscount: Boolean(orderDiscountType && orderDiscountType !== 'NONE') || orderDiscountValue > 0,
       });
 
+      const externalRef = formString(formData, 'externalRef');
+      if (!externalRef.startsWith('POS_ONLINE:') && !externalRef.startsWith('OFFLINE_SYNC:')) {
+        redirect('/pos?error=missing-sale-reference');
+      }
+
       const invoice = await createSale({
         businessId,
         storeId,
@@ -163,6 +169,7 @@ export async function createSaleAction(formData: FormData): Promise<void> {
         discountOverrideReasonCode: discountReasonCode,
         discountOverrideReason: discountReason,
         discountApprovedByUserId,
+        externalRef,
         payments: [
           { method: 'CASH', amountPence: formInt(formData, 'cashPaid') },
           { method: 'CARD', amountPence: formInt(formData, 'cardPaid') },
@@ -193,6 +200,7 @@ export async function createSaleAction(formData: FormData): Promise<void> {
           revalidateTag(`today-sales-${businessId}`);
           revalidateTag(`readiness-${businessId}`);
           revalidateTag('reports');
+          revalidatePosCatalog(businessId, storeId);
           revalidateOwnerDashboardCache();
           revalidatePath('/onboarding');
         },
@@ -374,8 +382,8 @@ export async function completeSaleAction(data: {
     });
 
     const externalRef = data.externalRef?.trim() || null;
-    if (externalRef && !externalRef.startsWith('POS_ONLINE:') && !externalRef.startsWith('OFFLINE_SYNC:')) {
-      return { success: false, error: 'Invalid sale attempt reference.' };
+    if (!externalRef || (!externalRef.startsWith('POS_ONLINE:') && !externalRef.startsWith('OFFLINE_SYNC:'))) {
+      return { success: false, error: 'This sale attempt is missing a checkout reference. Refresh POS and try again.' };
     }
 
     const invoice = await createSale({
@@ -405,9 +413,12 @@ export async function completeSaleAction(data: {
       businessId,
       storeId: data.storeId,
       productIds: affectedProductIds,
-    }).catch(() => {});
+    }).catch((error) => {
+      appLog('warn', 'low_stock_alert_failed', { businessId, storeId: data.storeId });
+      void error;
+    });
 
-    // Fire-and-forget: audit + cache revalidation should not block the cashier
+    // Best-effort audit after commit: failures must be logged, never swallowed.
     void measureServerOperation(
       'action.checkout.audit-log',
       async () => audit({
@@ -422,7 +433,10 @@ export async function completeSaleAction(data: {
       }),
       { ...checkoutTimingMetadata, stage: 'audit-log', rowCount: 1 },
       { thresholdMs: CHECKOUT_ACTION_STAGE_THRESHOLDS_MS.auditLog, operationType: 'action' },
-    ).catch(() => {});
+    ).catch((error) => {
+      appLog('error', 'checkout_audit_failed', { businessId, storeId: data.storeId, invoiceId: invoice.id });
+      void error;
+    });
 
     // Do not block the success response on cache revalidation — sale is already committed.
     void measureServerOperation(
@@ -433,12 +447,16 @@ export async function completeSaleAction(data: {
         revalidateTag(`today-sales-${businessId}`);
         revalidateTag(`readiness-${businessId}`);
         revalidateTag('reports');
+        revalidatePosCatalog(businessId, data.storeId);
         revalidateOwnerDashboardCache();
         revalidatePath('/onboarding');
       },
       { ...checkoutTimingMetadata, stage: 'revalidate' },
       { thresholdMs: CHECKOUT_ACTION_STAGE_THRESHOLDS_MS.revalidate, operationType: 'action' },
-    ).catch(() => {});
+    ).catch((error) => {
+      appLog('error', 'checkout_revalidate_failed', { businessId, storeId: data.storeId });
+      void error;
+    });
 
     return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence, transactionNumber: invoice.transactionNumber ?? null } };
   });
@@ -564,7 +582,11 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
       },
     }).catch(() => {});
 
-    revalidateTag('pos-products');
+    const amendedInvoice = await prisma.salesInvoice.findFirst({
+      where: { id: salesInvoiceId, businessId },
+      select: { storeId: true },
+    });
+    revalidatePosCatalog(businessId, amendedInvoice?.storeId);
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
 

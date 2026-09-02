@@ -21,6 +21,8 @@ const {
   mockUpsertInventoryBalance,
   mockPostJournalEntry,
   mockRecordCashDrawerEntryTx,
+  mockGetOpenShiftForTill,
+  mockGetOpenCashShiftForPayment,
   mockDetectVoidFrequencyRisk,
   prismaMock,
 } = vi.hoisted(() => {
@@ -28,6 +30,8 @@ const {
   const mockUpsertInventoryBalance = vi.fn();
   const mockPostJournalEntry = vi.fn();
   const mockRecordCashDrawerEntryTx = vi.fn();
+  const mockGetOpenShiftForTill = vi.fn();
+  const mockGetOpenCashShiftForPayment = vi.fn();
   const mockDetectVoidFrequencyRisk = vi.fn();
 
   const prismaMock = {
@@ -39,7 +43,18 @@ const {
       findUnique: vi.fn(),
       create: vi.fn(),
     },
+    purchaseInvoice: {
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
+    purchaseReturn: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+    },
     user: { findFirst: vi.fn() },
+    store: { findFirst: vi.fn() },
+    till: { findFirst: vi.fn() },
+    shift: { findFirst: vi.fn() },
     stockMovement: { createMany: vi.fn() },
     $transaction: vi.fn(),
   };
@@ -49,6 +64,8 @@ const {
     mockUpsertInventoryBalance,
     mockPostJournalEntry,
     mockRecordCashDrawerEntryTx,
+    mockGetOpenShiftForTill,
+    mockGetOpenCashShiftForPayment,
     mockDetectVoidFrequencyRisk,
     prismaMock,
   };
@@ -96,6 +113,8 @@ vi.mock('@/lib/accounting', () => ({
 
 vi.mock('@/lib/services/cash-drawer', () => ({
   recordCashDrawerEntryTx: mockRecordCashDrawerEntryTx,
+  getOpenShiftForTill: mockGetOpenShiftForTill,
+  getOpenCashShiftForPayment: mockGetOpenCashShiftForPayment,
 }));
 
 vi.mock('@/lib/services/risk-monitor', () => ({
@@ -103,7 +122,7 @@ vi.mock('@/lib/services/risk-monitor', () => ({
 }));
 
 // Import AFTER mocks
-import { createSalesReturn } from './returns';
+import { createSalesReturn, createPurchaseReturn } from './returns';
 
 // ---------------------------------------------------------------------------
 // Test data helpers
@@ -149,6 +168,11 @@ const MANAGER_USER = { id: 'mgr-1' };
 function setupSuccessfulMocks(invoice = makeInvoice()) {
   prismaMock.salesInvoice.findFirst.mockResolvedValue(invoice);
   prismaMock.user.findFirst.mockResolvedValue(MANAGER_USER);
+  prismaMock.store.findFirst.mockResolvedValue({ id: 'store-1' });
+  prismaMock.till.findFirst.mockResolvedValue({ id: 'till-1', storeId: 'store-1' });
+  prismaMock.shift.findFirst.mockResolvedValue({ id: 'shift-1', tillId: 'till-1' });
+  mockGetOpenShiftForTill.mockResolvedValue({ id: 'shift-1', tillId: 'till-1' });
+  mockGetOpenCashShiftForPayment.mockResolvedValue({ id: 'shift-1', tillId: 'till-1' });
   prismaMock.salesReturn.findUnique.mockResolvedValue(null);
   prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) =>
     fn(prismaMock)
@@ -256,6 +280,28 @@ describe('createSalesReturn', () => {
     ).rejects.toThrow('Manager approval is required');
   });
 
+  it('fails closed when a cash refund has no open shift', async () => {
+    setupSuccessfulMocks();
+    mockGetOpenCashShiftForPayment.mockResolvedValue(null);
+
+    await expect(createSalesReturn(makeInput())).rejects.toThrow(
+      'Open shift is required before recording a cash refund.',
+    );
+    expect(mockGetOpenCashShiftForPayment).toHaveBeenCalledWith(
+      prismaMock,
+      expect.objectContaining({ tillId: 'till-1' }),
+    );
+    expect(mockGetOpenShiftForTill).not.toHaveBeenCalled();
+    expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
+  });
+
+  it('does not swallow a cash-refund drawer failure', async () => {
+    setupSuccessfulMocks();
+    mockRecordCashDrawerEntryTx.mockRejectedValue(new Error('drawer write failed'));
+
+    await expect(createSalesReturn(makeInput())).rejects.toThrow('drawer write failed');
+  });
+
   it('6. inventory restored — upsertInventoryBalance called with qty added back', async () => {
     const inv = makeInvoice({
       lines: [{ productId: 'prod-2', qtyBase: 5, product: { defaultCostBasePence: 2000 } }],
@@ -275,5 +321,94 @@ describe('createSalesReturn', () => {
       8,
       2000
     );
+  });
+});
+
+describe('createPurchaseReturn cash drawer', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({
+      id: 'pinv-1',
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      totalPence: 5000,
+      vatPence: 0,
+      business: { vatEnabled: false },
+      store: {},
+      payments: [{ method: 'CASH', amountPence: 5000 }],
+      lines: [{ productId: 'prod-1', qtyBase: 1, product: { defaultCostBasePence: 1000 } }],
+    });
+    prismaMock.purchaseReturn.findUnique.mockResolvedValue(null);
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) =>
+      fn(prismaMock),
+    );
+    prismaMock.purchaseReturn.create.mockResolvedValue({ id: 'pret-1' });
+    prismaMock.purchaseInvoice.update.mockResolvedValue({});
+    prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
+    prismaMock.store.findFirst.mockResolvedValue({ id: 'store-1' });
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'user-1' });
+    prismaMock.till.findFirst.mockResolvedValue({ id: 'till-1', storeId: 'store-1' });
+    prismaMock.shift.findFirst.mockResolvedValue({ id: 'shift-1', tillId: 'till-1' });
+    mockGetOpenCashShiftForPayment.mockResolvedValue({ id: 'shift-1', tillId: 'till-1' });
+    mockFetchInventoryMap.mockResolvedValue(
+      new Map([['prod-1', { qtyOnHandBase: 10, avgCostBasePence: 1000 }]]),
+    );
+    mockUpsertInventoryBalance.mockResolvedValue(undefined);
+    mockPostJournalEntry.mockResolvedValue(undefined);
+    mockRecordCashDrawerEntryTx.mockResolvedValue(undefined);
+  });
+
+  it('records a cash drawer inflow for a cash purchase return', async () => {
+    await createPurchaseReturn({
+      businessId: 'biz-1',
+      purchaseInvoiceId: 'pinv-1',
+      userId: 'user-1',
+      refundMethod: 'CASH',
+      refundAmountPence: 5000,
+      type: 'RETURN',
+      tillId: 'till-1',
+    });
+
+    expect(mockRecordCashDrawerEntryTx).toHaveBeenCalledWith(
+      prismaMock,
+      expect.objectContaining({
+        entryType: 'CASH_REFUND',
+        amountPence: 5000,
+        referenceType: 'PURCHASE_RETURN',
+        referenceId: 'pret-1',
+      }),
+    );
+  });
+
+  it('fails closed when a cash purchase return has no open shift', async () => {
+    mockGetOpenCashShiftForPayment.mockResolvedValue(null);
+
+    await expect(
+      createPurchaseReturn({
+        businessId: 'biz-1',
+        purchaseInvoiceId: 'pinv-1',
+        userId: 'user-1',
+        refundMethod: 'CASH',
+        refundAmountPence: 5000,
+        type: 'RETURN',
+        tillId: 'till-1',
+      }),
+    ).rejects.toThrow('Open shift is required before recording a cash purchase refund.');
+    expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when a cash purchase return has no tillId', async () => {
+    await expect(
+      createPurchaseReturn({
+        businessId: 'biz-1',
+        purchaseInvoiceId: 'pinv-1',
+        userId: 'user-1',
+        refundMethod: 'CASH',
+        refundAmountPence: 5000,
+        type: 'RETURN',
+      }),
+    ).rejects.toThrow('Select an open till before recording a cash purchase refund.');
+    expect(mockGetOpenCashShiftForPayment).not.toHaveBeenCalled();
+    expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
   });
 });

@@ -9,8 +9,9 @@ import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
 import { createExpenseAction } from '@/app/actions/expenses';
 import { ACCOUNT_CODES } from '@/lib/accounting';
+import StableIdempotencyKeyInput from '@/components/StableIdempotencyKeyInput';
 
-export default async function ExpensesPage({ searchParams }: { searchParams?: { error?: string; page?: string } }) {
+export default async function ExpensesPage({ searchParams }: { searchParams?: { error?: string; page?: string; recorded?: string } }) {
   const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
 
@@ -18,7 +19,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
 
   // Run all queries in parallel
-  const [expenseAccounts, expenseCount, expenses] = await Promise.all([
+  const [expenseAccounts, expenseCount, expenses, openShifts] = await Promise.all([
     prisma.account.findMany({
       where: {
         businessId: business.id,
@@ -47,6 +48,14 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
       skip: (page - 1) * DEFAULT_PAGE_SIZE,
       take: DEFAULT_PAGE_SIZE,
     }),
+    prisma.shift.findMany({
+      where: {
+        status: 'OPEN',
+        till: { storeId: store.id, active: true, store: { businessId: business.id } },
+      },
+      select: { id: true, tillId: true, till: { select: { name: true } } },
+      orderBy: { openedAt: 'desc' },
+    }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(expenseCount / DEFAULT_PAGE_SIZE));
@@ -70,6 +79,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
         <div className="card mt-2 p-4 sm:p-5">
           <FormError error={searchParams?.error} />
           <form action={createExpenseAction} className="grid gap-4 md:grid-cols-4" encType="multipart/form-data">
+          <StableIdempotencyKeyInput scope={`expense-create:${business.id}`} rotate={searchParams?.recorded === '1'} />
           <input type="hidden" name="useSimple" value={features.detailedExpenseCategories ? 'false' : 'true'} />
           {/* Section: What & How Much */}
           <div className="md:col-span-4 border-t border-black/8 pt-3 mt-0">
@@ -125,6 +135,23 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
               <option value="CARD">Card</option>
               <option value="TRANSFER">Transfer</option>
               <option value="MOBILE_MONEY">Mobile Money</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Till (cash from this drawer)</label>
+            <select className="input" name="tillId" required={openShifts.length > 0} defaultValue={openShifts.length === 1 ? openShifts[0].tillId : ''}>
+              {openShifts.length === 0 ? (
+                <option value="">No open till — open a till for cash</option>
+              ) : (
+                <>
+                  {openShifts.length > 1 ? <option value="">Select till…</option> : null}
+                  {openShifts.map((shift) => (
+                    <option key={shift.tillId} value={shift.tillId}>
+                      {shift.till.name}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
           </div>
           {/* Section: Details */}

@@ -8,6 +8,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { withBusinessContext, safeAction, ok, type ActionResult } from '@/lib/action-utils';
+import { revalidatePosCatalog, revalidatePosInventory } from '@/lib/cache/pos-tags';
 import { postJournalEntry, ensureChartOfAccounts, ACCOUNT_CODES } from '@/lib/accounting';
 import { splitPayments, debitCashBankLines, creditCashBankLines, type PaymentMethod } from '@/lib/services/shared';
 import { revalidatePath, revalidateTag } from 'next/cache';
@@ -228,7 +229,18 @@ export async function repairInventoryAverageCostsAction(): Promise<
       },
     });
 
-    revalidateTag('pos-products');
+    const affectedStores = await prisma.inventoryBalance.findMany({
+      where: { store: { businessId } },
+      distinct: ['storeId'],
+      select: { storeId: true },
+    });
+    if (affectedStores.length === 0) {
+      revalidatePosCatalog(businessId);
+    } else {
+      for (const { storeId } of affectedStores) {
+        revalidatePosInventory(businessId, storeId);
+      }
+    }
     revalidatePath('/inventory');
     revalidatePath('/products');
     revalidatePath('/reports/dashboard');
@@ -473,6 +485,10 @@ export async function restoreOrphanedSaleProducts(): Promise<ActionResult<{ rest
       details: { restored, orphanedCount: orphanedProductIds.length },
     });
 
+    if (restored > 0) {
+      revalidatePosInventory(businessId, storeId);
+    }
+
     revalidatePath('/sales');
     revalidatePath('/products');
     revalidatePath('/reports/dashboard');
@@ -634,7 +650,7 @@ export async function ownerVoidSaleAction(saleReference: string): Promise<Action
           { transactionNumber: normalizedReference },
         ],
       },
-      select: { id: true, paymentStatus: true, totalPence: true, transactionNumber: true },
+      select: { id: true, paymentStatus: true, totalPence: true, transactionNumber: true, storeId: true },
     });
     if (!invoice) throw new Error('Sale not found. Paste the sale ID from the receipt link or the receipt number such as INV-000042.');
     if (['VOID', 'RETURNED'].includes(invoice.paymentStatus)) {
@@ -665,7 +681,7 @@ export async function ownerVoidSaleAction(saleReference: string): Promise<Action
 
     revalidatePath('/sales');
     revalidatePath(`/receipts/${invoice.id}`);
-    revalidateTag('pos-products');
+    revalidatePosInventory(businessId, invoice.storeId);
     revalidateTag('reports');
     revalidatePath('/settings');
     revalidatePath('/settings/data-repair');

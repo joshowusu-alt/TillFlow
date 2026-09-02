@@ -4,6 +4,13 @@ import { enforceCsrf } from '@/lib/middleware/csrf';
 import { isCronSecretPath, isValidCronRequest } from '@/lib/middleware/cron-gate';
 import { buildPassThroughResponse } from '@/lib/middleware/security-headers';
 
+/**
+ * Exact public pathname for Preview deploy identity.
+ * Must stay equality-only — never startsWith — so suffix and neighbouring
+ * `/api/qa/*` routes remain session-protected.
+ */
+export const PUBLIC_DEPLOY_SHA_PATH = '/api/qa/deploy-sha';
+
 /** Routes that don't require authentication */
 const PUBLIC_PATHS = [
   '/login',
@@ -86,7 +93,8 @@ export function middleware(request: NextRequest) {
     return buildPassThroughResponse(request, requestId);
   }
 
-  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+  const isPublic =
+    pathname === PUBLIC_DEPLOY_SHA_PATH || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
   if (!sessionToken && !isPublic) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

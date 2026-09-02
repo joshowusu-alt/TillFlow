@@ -5,7 +5,16 @@ import { revalidateTag } from 'next/cache';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { createPurchase } from '@/lib/services/purchases';
 import type { SupplierProductLinkSummary, SupplierProductLinkSkippedProduct } from '@/lib/services/purchases';
-import { recordOpeningInventory } from '@/lib/services/opening-inventory';
+import { recordOpeningInventory, type RecordOpeningInventoryResult } from '@/lib/services/opening-inventory';
+import { buildImportChunkKey, buildImportChunkPayloadHash } from '@/lib/import/import-chunk-identity';
+import {
+  findMoneyIdempotency,
+  insertMoneyIdempotency,
+  isPrismaUniqueConstraintOn,
+  parseIdempotencyResult,
+  replayOrConflict,
+} from '@/lib/services/money-idempotency';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { buildProductUnitCreates } from '@/lib/services/products';
 import { ensureChartOfAccounts } from '@/lib/accounting';
 import { audit } from '@/lib/audit';
@@ -61,6 +70,13 @@ export type ImportStockMeta = {
   importMode: ImportMode;
   /** True when uploaded file still contains payment_status (legacy). */
   legacyPaymentStatusColumn?: boolean;
+  /**
+   * Stable client-generated key for this import submit.
+   * When set, chunk idempotency uses it as importRunId so a retry of the same
+   * submit (same businessId + clientImportKey) replays prior chunks instead of
+   * posting again. A new key starts a new run. Clients should send the same
+   * clientImportKey for retries of one user submit.
+   */
   clientImportKey?: string;
 };
 
@@ -122,6 +138,90 @@ function paymentAccountToMethod(account: PurchasePaymentAccount | undefined): Pa
   if (account === 'BANK') return 'TRANSFER';
   if (account === 'MOBILE_MONEY') return 'MOBILE_MONEY';
   return 'CASH';
+}
+
+/**
+ * Opening equity + MoneyIdempotency must commit together so a crash after stock
+ * cannot be retried as a second inventory apply, and a crash after money cannot
+ * skip stock.
+ */
+async function recordOpeningInventoryOnce(input: {
+  businessId: string;
+  storeId: string;
+  userId?: string | null;
+  importRunId: string;
+  importMode: ImportMode;
+  lines: Array<{ productId: string; unitId: string; qtyInUnit: number; unitCostBasePence?: number | null }>;
+  description?: string;
+}): Promise<RecordOpeningInventoryResult> {
+  const hashLines = input.lines.map((l) => ({
+    productId: l.productId,
+    unitId: l.unitId,
+    qtyInUnit: l.qtyInUnit,
+    unitCostPence: l.unitCostBasePence,
+  }));
+  const amountPence = hashLines.reduce((s, l) => s + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
+  const idempotencyKey = buildImportChunkKey({
+    businessId: input.businessId,
+    importRunId: input.importRunId,
+    mode: input.importMode,
+    operation: 'opening-equity',
+    supplierKey: 'equity',
+    chunkIndex: 0,
+  });
+  const payloadHash = buildImportChunkPayloadHash({
+    businessId: input.businessId,
+    storeId: input.storeId,
+    importRunId: input.importRunId,
+    mode: input.importMode,
+    operation: 'opening-equity',
+    supplierKey: 'equity',
+    chunkIndex: 0,
+    lines: hashLines,
+    amountPence,
+    method: null,
+  });
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const existing = await findMoneyIdempotency(tx as any, input.businessId, idempotencyKey);
+      if (existing) {
+        replayOrConflict(existing, { payloadHash, commandKind: 'IMPORT_CHUNK' });
+        return parseIdempotencyResult<RecordOpeningInventoryResult>(existing.resultJson);
+      }
+
+      const openingResult = await recordOpeningInventory(
+        {
+          businessId: input.businessId,
+          storeId: input.storeId,
+          userId: input.userId,
+          referenceId: `${input.importRunId}-equity`,
+          description: input.description,
+          lines: input.lines,
+        },
+        tx,
+      );
+
+      await insertMoneyIdempotency(tx as any, {
+        businessId: input.businessId,
+        key: idempotencyKey,
+        payloadHash,
+        commandKind: 'IMPORT_CHUNK',
+        resultJson: JSON.stringify(openingResult),
+      });
+
+      return openingResult;
+    });
+  } catch (err) {
+    if (isPrismaUniqueConstraintOn(err, ['businessId', 'key'])) {
+      const winner = await findMoneyIdempotency(prisma as any, input.businessId, idempotencyKey);
+      if (winner) {
+        replayOrConflict(winner, { payloadHash, commandKind: 'IMPORT_CHUNK' });
+        return parseIdempotencyResult<RecordOpeningInventoryResult>(winner.resultJson);
+      }
+    }
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -653,7 +753,46 @@ async function _runImport(
     let journalsPosted = 0;
     const costReviewProductIds: string[] = [];
     const accountingEffectSummary: string[] = [];
-    const clientImportKey = meta.clientImportKey?.trim() || `import-${Date.now()}`;
+
+    if (importMode === 'OPENING_STOCK' && stockItems.length > 0) {
+      for (const item of stockItems.filter((i) => i.row.openingFunding === 'SUPPLIER_CREDIT')) {
+        if (!(item.row.supplierName ?? '').trim()) {
+          return err(`Opening stock on supplier credit requires a named supplier (${item.row.name}).`);
+        }
+      }
+    }
+    if (importMode === 'PURCHASES' && stockItems.length > 0) {
+      for (const item of stockItems.filter((c) => (c.row.paymentStatus ?? 'UNPAID') !== 'PAID')) {
+        if (!(item.row.supplierName ?? '').trim()) {
+          return err(`Unpaid purchases require a named supplier (${item.row.name}).`);
+        }
+      }
+    }
+
+    // ProductImport must exist before chunk writes so importRunId is durable.
+    // Prefer a stable clientImportKey (same submit retry); otherwise the row id.
+    const normalizedClientImportKey = meta.clientImportKey?.trim() || '';
+    if ((importMode === 'PURCHASES' || importMode === 'OPENING_STOCK') && !normalizedClientImportKey) {
+      return err('This import form is out of date. Reload the file and try again so paid chunks can replay safely.');
+    }
+    const importRecord = await prisma.productImport.create({
+      data: {
+        businessId,
+        uploadedByUserId: user.id,
+        fileName: meta?.fileName ?? null,
+        status: 'PROCESSING',
+        rowsParsed: meta?.rowsParsed ?? incomingRows.length,
+        rowsImported: 0,
+        rowsUpdated: 0,
+        rowsSkipped: 0,
+        rowsErrors: 0,
+        rowsWarnings: meta?.rowsWarnings ?? 0,
+        summaryJson: null,
+        errorReportJson: meta?.errorReportJson ?? null,
+      },
+      select: { id: true },
+    });
+    const importRunId = normalizedClientImportKey || importRecord.id;
 
     if (importMode === 'CATALOGUE') {
       accountingEffectSummary.push('Catalogue only — no stock movements, journals, cash or supplier payables.');
@@ -663,18 +802,13 @@ async function _runImport(
       const equityItems = stockItems.filter((i) => (i.row.openingFunding ?? 'EQUITY') !== 'SUPPLIER_CREDIT');
       const creditItems = stockItems.filter((i) => i.row.openingFunding === 'SUPPLIER_CREDIT');
 
-      for (const item of creditItems) {
-        if (!(item.row.supplierName ?? '').trim()) {
-          return err(`Opening stock on supplier credit requires a named supplier (${item.row.name}).`);
-        }
-      }
-
       if (equityItems.length > 0) {
-        const openingResult = await recordOpeningInventory({
+        const openingResult = await recordOpeningInventoryOnce({
           businessId,
           storeId: store.id,
           userId: user.id,
-          referenceId: `${clientImportKey}-equity`,
+          importRunId,
+          importMode,
           description: 'Opening stock import — Opening Balance Equity',
           lines: equityItems.map(({ row, productId }) => {
             const isPack =
@@ -729,6 +863,14 @@ async function _runImport(
                 userId: user.id,
                 stockMovementType: 'OPENING',
                 acknowledgeHighCost: true,
+                idempotencyKey: buildImportChunkKey({
+                  businessId,
+                  importRunId,
+                  mode: importMode,
+                  operation: 'opening-credit',
+                  supplierKey: group.supplierId,
+                  chunkIndex: Math.floor(i / INVOICE_CHUNK),
+                }),
               });
               mergeSupplierProductLinkSummary((invoice as any).supplierProductLinkSummary, group);
               const chunkValue = chunk.reduce((s, l) => s + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
@@ -753,12 +895,6 @@ async function _runImport(
       const paidItemsAll = stockItems.filter((c) => (c.row.paymentStatus ?? 'UNPAID') === 'PAID');
       const unpaidItemsAll = stockItems.filter((c) => (c.row.paymentStatus ?? 'UNPAID') !== 'PAID');
 
-      for (const item of unpaidItemsAll) {
-        if (!(item.row.supplierName ?? '').trim()) {
-          return err(`Unpaid purchases require a named supplier (${item.row.name}).`);
-        }
-      }
-
       const paidLineGroups = await groupLinesBySupplier(paidItemsAll);
       const unpaidLineGroups = await groupLinesBySupplier(unpaidItemsAll);
 
@@ -780,6 +916,14 @@ async function _runImport(
               stockMovementType: 'PURCHASE',
               acknowledgeHighCost: true,
               skipCashDrawerRequirement: true,
+              idempotencyKey: buildImportChunkKey({
+                businessId,
+                importRunId,
+                mode: importMode,
+                operation: 'purchase-paid',
+                supplierKey: group.supplierId ?? '__NO_SUPPLIER__',
+                chunkIndex: Math.floor(i / INVOICE_CHUNK),
+              }),
             });
             mergeSupplierProductLinkSummary((invoice as any).supplierProductLinkSummary, group);
             paidValuePence += chunkTotal;
@@ -811,6 +955,14 @@ async function _runImport(
               userId: user.id,
               stockMovementType: 'PURCHASE',
               acknowledgeHighCost: true,
+              idempotencyKey: buildImportChunkKey({
+                businessId,
+                importRunId,
+                mode: importMode,
+                operation: 'purchase-unpaid',
+                supplierKey: group.supplierId,
+                chunkIndex: Math.floor(i / INVOICE_CHUNK),
+              }),
             });
             mergeSupplierProductLinkSummary((invoice as any).supplierProductLinkSummary, group);
             const chunkValue = chunk.reduce((s, l) => s + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
@@ -867,13 +1019,10 @@ async function _runImport(
       accountingEffectSummary,
     };
 
-    const importRecord = await prisma.productImport.create({
+    await prisma.productImport.update({
+      where: { id: importRecord.id },
       data: {
-        businessId,
-        uploadedByUserId: user.id,
-        fileName: meta?.fileName ?? null,
         status: invoiceErrors.length > 0 ? 'PARTIAL' : 'COMPLETED',
-        rowsParsed: meta?.rowsParsed ?? incomingRows.length,
         rowsImported: createdItems.length,
         rowsUpdated: updatedCount,
         rowsSkipped: skippedNames.length,
@@ -882,7 +1031,6 @@ async function _runImport(
         summaryJson: JSON.stringify(summary),
         errorReportJson: meta?.errorReportJson ?? null,
       },
-      select: { id: true },
     });
 
     audit({
@@ -896,7 +1044,7 @@ async function _runImport(
       details: { ...summary, importId: importRecord.id },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId, store.id);
     revalidateTag('reports');
     revalidateTag(`readiness-${businessId}`);
     revalidateTag('control-portfolio');

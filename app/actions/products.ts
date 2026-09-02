@@ -23,6 +23,7 @@ import {
   type ProductUnitInput,
   type QuickCreateProductInput,
 } from '@/lib/services/products';
+import { revalidatePosCatalog, revalidatePosInventory } from '@/lib/cache/pos-tags';
 import { saveProductImageFile, validateExternalProductImageUrl } from '@/lib/services/storage';
 import { createPurchase } from '@/lib/services/purchases';
 import { persistActivationSnapshot } from '@/lib/activation-snapshot';
@@ -149,6 +150,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
 
     const product = await createProduct(businessId, fields);
 
+    let openingStockStoreId: string | null = null;
     if (openingStockQty > 0 && openingStockUnitId) {
       const store = await prisma.store.findFirst({
         where: { businessId },
@@ -173,6 +175,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
           userId: user.id,
           stockMovementType: 'OPENING',
         });
+        openingStockStoreId = store.id;
       }
     }
 
@@ -189,7 +192,11 @@ export async function createProductAction(formData: FormData): Promise<void> {
       details: { name: fields.name, price: fields.sellingPriceBasePence, minimumMarginThresholdBps: fields.minimumMarginThresholdBps },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    if (openingStockStoreId) {
+      revalidatePosInventory(businessId, openingStockStoreId);
+    } else {
+      revalidatePosCatalog(businessId);
+    }
     revalidateTag(`readiness-${businessId}`);
     revalidateOwnerDashboardCache();
     revalidatePath('/inventory', 'layout');
@@ -219,7 +226,7 @@ export async function updateProductAction(formData: FormData): Promise<void> {
       details: { name: fields.name, price: fields.sellingPriceBasePence, minimumMarginThresholdBps: fields.minimumMarginThresholdBps },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidateOwnerDashboardCache();
     revalidatePath('/inventory', 'layout');
     revalidatePath('/onboarding');
@@ -232,7 +239,7 @@ export async function quickCreateProductAction(input: QuickCreateProductInput) {
   return safeAction(async () => {
     const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
     const result = await quickCreateProduct(businessId, input);
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidateOwnerDashboardCache();
     revalidatePath('/inventory', 'layout');
     return ok(result);
@@ -259,7 +266,7 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
       details: { name: product.name },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidateOwnerDashboardCache();
     revalidatePath('/inventory', 'layout');
     revalidatePath('/onboarding');
@@ -304,7 +311,7 @@ export async function deactivateUnusedCatalogueProductAction(
       },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidateOwnerDashboardCache();
     revalidatePath('/inventory', 'layout');
     revalidatePath('/onboarding');
@@ -343,7 +350,7 @@ export async function repairInflatedPricesAction(): Promise<ActionResult<{ fixed
       },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidateOwnerDashboardCache();
     return ok({ fixed: inflated.length });
   });
@@ -457,7 +464,7 @@ export async function generateBarcodeAction(productId: string): Promise<ActionRe
       details: { barcode, productName: existing.name, source: 'INTERNAL' },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidatePath(`/products/${productId}`);
     revalidatePath('/products');
     return ok({ barcode });
@@ -516,7 +523,7 @@ export async function generateMissingBarcodesAction(): Promise<
       }
     }
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     // Intentionally skip revalidatePath('/products') here — the client sets
     // ?barcodesGenerated= then router.refresh() so the success banner survives.
     revalidatePath('/products/labels');

@@ -1,6 +1,7 @@
 'use server';
 
 import { createPurchase } from '@/lib/services/purchases';
+import { EXPLICIT_CASH_TILL_REQUIRED_MSG } from '@/lib/services/cash-drawer';
 import { createSupplier } from '@/lib/services/suppliers';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
@@ -11,6 +12,7 @@ import { withBusinessContext, formAction, type ActionResult, safeAction, ok, err
 import { audit } from '@/lib/audit';
 import type { PaymentStatus } from '@/lib/services/shared';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { purchaseNeedsSupplierLink, isOpeningStockMovement } from '@/lib/improve-records-classify';
 import {
   OPENING_STOCK_MOVEMENT_TYPES,
@@ -51,6 +53,21 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       }
     }
 
+    const cashPaid = formInt(formData, 'cashPaid');
+    const cardPaid = formInt(formData, 'cardPaid');
+    const transferPaid = formInt(formData, 'transferPaid');
+    const tillId = formString(formData, 'tillId');
+    const idempotencyKey = formString(formData, 'idempotencyKey');
+    const paidTender = cashPaid + cardPaid + transferPaid > 0 || paymentStatus === 'PAID';
+    if (paidTender && !idempotencyKey) {
+      redirect('/purchases?error=stale-purchase-form');
+    }
+    const willUseCash =
+      cashPaid > 0 || (paymentStatus === 'PAID' && cashPaid + cardPaid + transferPaid === 0);
+    if (willUseCash && !tillId) {
+      return err(EXPLICIT_CASH_TILL_REQUIRED_MSG);
+    }
+
     const invoice = await createPurchase({
       businessId,
       storeId,
@@ -58,17 +75,19 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       paymentStatus,
       dueDate,
       payments: [
-        { method: 'CASH', amountPence: formInt(formData, 'cashPaid') },
-        { method: 'CARD', amountPence: formInt(formData, 'cardPaid') },
-        { method: 'TRANSFER', amountPence: formInt(formData, 'transferPaid') }
+        { method: 'CASH', amountPence: cashPaid },
+        { method: 'CARD', amountPence: cardPaid },
+        { method: 'TRANSFER', amountPence: transferPaid }
       ],
       lines,
-      userId: user.id
+      userId: user.id,
+      tillId: tillId || undefined,
+      idempotencyKey: idempotencyKey || undefined,
     });
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId, storeId);
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
     revalidatePath('/onboarding');
@@ -282,7 +301,7 @@ export async function changePurchaseProductSupplierLinkAction(formData: FormData
       details: { purchaseInvoiceId: invoice.id, supplierId: invoice.supplierId },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidateTag('reports');
     revalidatePath('/onboarding');
     revalidatePath('/reports/sales-by-supplier');
@@ -363,7 +382,7 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
       details: { action: 'DELETE', lines: invoice.lines.length },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId, invoice.storeId);
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
     revalidatePath('/onboarding');

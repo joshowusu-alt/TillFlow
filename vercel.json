@@ -31,6 +31,7 @@
     "app/api/import-stock/**": { "maxDuration": 300 },
     "app/api/reset-purchase-data/**": { "maxDuration": 30 },
     "app/api/offline/batch-sync/**": { "maxDuration": 30 },
+    "app/api/qa/reliability-snapshot/route.ts": { "maxDuration": 30 },
     "app/api/**": { "maxDuration": 15 }
   }
 }

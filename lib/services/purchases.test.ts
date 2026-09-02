@@ -12,6 +12,9 @@ const { prismaMock, postJournalEntryMock, ensureChartOfAccountsMock, recordCashD
     purchaseInvoiceLine: { createMany: vi.fn() },
     purchasePayment: { create: vi.fn() },
     shift: { findFirst: vi.fn() },
+    user: { findFirst: vi.fn() },
+    till: { findFirst: vi.fn() },
+    moneyIdempotency: { findUnique: vi.fn(), create: vi.fn() },
     stockMovement: { createMany: vi.fn() },
     inventoryBalance: { upsert: vi.fn() },
     $executeRaw: vi.fn(),
@@ -49,6 +52,7 @@ vi.mock('./cash-drawer', async () => {
 });
 
 import { createPurchase, type PurchaseLineInput } from './purchases';
+import { MONEY_IDEMPOTENCY_ERROR, MoneyIdempotencyError } from './money-idempotency';
 
 describe('purchase unit conversion', () => {
   const bizId = 'biz-1';
@@ -68,6 +72,9 @@ describe('purchase unit conversion', () => {
       id: bizId, vatEnabled: false, currency: 'GHS',
     });
     prismaMock.store.findFirst.mockResolvedValue({ id: storeId });
+    prismaMock.user.findFirst.mockResolvedValue({ id: userId });
+    prismaMock.till.findFirst.mockResolvedValue({ id: 'till-1', storeId });
+    prismaMock.moneyIdempotency.findUnique.mockResolvedValue(null);
     prismaMock.supplier.findFirst.mockResolvedValue({ id: 'supplier-a', name: 'Supplier A' });
     prismaMock.product.findMany.mockResolvedValue([]);
     prismaMock.product.updateMany.mockResolvedValue({ count: 0 });
@@ -124,6 +131,8 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 8000 }],
       lines,
       userId,
+      tillId: 'till-1',
+      idempotencyKey: 'po-unit',
     });
 
     expect(prismaMock.purchaseInvoice.create).toHaveBeenCalledTimes(1);
@@ -158,6 +167,8 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 2500 }],
       lines,
       userId,
+      tillId: 'till-1',
+      idempotencyKey: 'po-unit',
     });
 
     expect(prismaMock.purchaseInvoiceLine.createMany).toHaveBeenCalledTimes(1);
@@ -220,6 +231,8 @@ describe('purchase unit conversion', () => {
         payments: [{ method: 'CASH', amountPence: 999999 }],
         lines: [{ productId: 'prod-1', unitId: 'unit-1', qtyInUnit: 1, unitCostPence: 100 }],
         userId,
+        tillId: 'till-1',
+        idempotencyKey: 'po-unit-overpay',
       })
     ).rejects.toThrow('Payment exceeds total due');
   });
@@ -246,6 +259,8 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 1050 }],
       lines: [{ productId, unitId: quarterPackUnitId, qtyInUnit: 2 }],
       userId,
+      tillId: 'till-1',
+      idempotencyKey: 'po-unit',
     });
 
     const createManyCall = prismaMock.purchaseInvoiceLine.createMany.mock.calls[0][0];
@@ -274,6 +289,8 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 100 }],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
       userId,
+      tillId: 'till-1',
+      idempotencyKey: 'po-unit',
     });
 
     expect(prismaMock.product.updateMany).toHaveBeenCalledWith({
@@ -312,6 +329,8 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 100 }],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
       userId,
+      tillId: 'till-1',
+      idempotencyKey: 'po-unit',
     });
 
     expect(prismaMock.product.updateMany).not.toHaveBeenCalled();
@@ -351,6 +370,8 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 100 }],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
       userId,
+      tillId: 'till-1',
+      idempotencyKey: 'po-unit',
     });
 
     expect(prismaMock.product.updateMany).not.toHaveBeenCalled();
@@ -421,6 +442,8 @@ describe('purchase unit conversion', () => {
         { productId: 'prod-3', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 },
       ],
       userId,
+      tillId: 'till-1',
+      idempotencyKey: 'po-unit',
     });
 
     expect(prismaMock.product.updateMany).toHaveBeenCalledWith(
@@ -468,6 +491,8 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 100 }],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
       userId,
+      tillId: 'till-1',
+      idempotencyKey: 'po-unit',
     });
 
     expect(prismaMock.product.findMany).not.toHaveBeenCalled();
@@ -478,5 +503,121 @@ describe('purchase unit conversion', () => {
       skippedDifferentSupplierCount: 0,
       skippedProducts: [],
     });
+  });
+
+  it('rejects a paid purchase without an idempotency key before any write', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([
+      {
+        productId: 'prod-1',
+        unitId: 'unit-piece',
+        conversionToBase: 1,
+        product: { defaultCostBasePence: 100, vatRateBps: 0 },
+        unit: { name: 'Piece' },
+      },
+    ]);
+
+    await expect(
+      createPurchase({
+        businessId: bizId,
+        storeId,
+        paymentStatus: 'PAID',
+        payments: [{ method: 'CASH', amountPence: 100 }],
+        lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
+        userId,
+        tillId: 'till-1',
+      }),
+    ).rejects.toMatchObject({
+      code: MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_REQUIRED,
+    });
+    expect(prismaMock.purchaseInvoice.create).not.toHaveBeenCalled();
+    expect(prismaMock.moneyIdempotency.create).not.toHaveBeenCalled();
+    expect(ensureChartOfAccountsMock).not.toHaveBeenCalled();
+  });
+
+  it('allows credit-only unpaid purchases without an idempotency key', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([
+      {
+        productId: 'prod-1',
+        unitId: 'unit-piece',
+        conversionToBase: 1,
+        product: { defaultCostBasePence: 100, vatRateBps: 0 },
+        unit: { name: 'Piece' },
+      },
+    ]);
+
+    await createPurchase({
+      businessId: bizId,
+      storeId,
+      paymentStatus: 'UNPAID',
+      payments: [],
+      lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
+      userId,
+    });
+
+    expect(prismaMock.purchaseInvoice.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+    expect(prismaMock.moneyIdempotency.create).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('commits keyed unpaid purchases in one transaction so inventory cannot lag the money row', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([
+      {
+        productId: 'prod-1',
+        unitId: 'unit-piece',
+        conversionToBase: 1,
+        product: { defaultCostBasePence: 100, vatRateBps: 0 },
+        unit: { name: 'Piece' },
+      },
+    ]);
+
+    await createPurchase({
+      businessId: bizId,
+      storeId,
+      paymentStatus: 'UNPAID',
+      payments: [],
+      lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
+      userId,
+      idempotencyKey: 'po-unpaid-key',
+    });
+
+    expect(prismaMock.$transaction).toHaveBeenCalled();
+    expect(prismaMock.moneyIdempotency.create).toHaveBeenCalled();
+    expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+    expect(prismaMock.stockMovement.createMany).toHaveBeenCalled();
+  });
+
+  it('replays an exact paid purchase key and rejects a payload change', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([
+      {
+        productId: 'prod-1',
+        unitId: 'unit-piece',
+        conversionToBase: 1,
+        product: { defaultCostBasePence: 100, vatRateBps: 0 },
+        unit: { name: 'Piece' },
+      },
+    ]);
+    prismaMock.moneyIdempotency.findUnique.mockResolvedValue({
+      id: 'mid-1',
+      businessId: bizId,
+      key: 'po-replay',
+      payloadHash: 'stale-hash',
+      commandKind: 'PURCHASE_CREATE',
+      resultJson: JSON.stringify({ invoiceId: 'inv-1' }),
+    });
+
+    await expect(
+      createPurchase({
+        businessId: bizId,
+        storeId,
+        paymentStatus: 'PAID',
+        payments: [{ method: 'CASH', amountPence: 100 }],
+        lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
+        userId,
+        tillId: 'till-1',
+        idempotencyKey: 'po-replay',
+      }),
+    ).rejects.toBeInstanceOf(MoneyIdempotencyError);
+    expect(prismaMock.purchaseInvoice.create).not.toHaveBeenCalled();
   });
 });

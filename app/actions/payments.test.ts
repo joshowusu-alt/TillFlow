@@ -102,6 +102,7 @@ describe('recordSupplierPaymentAction authorisation', () => {
           invoiceId: 'inv-1',
           paymentMethod: 'CASH',
           amount: '5.00',
+          tillId: 'till-1',
           idempotencyKey: 'key-mgr-1',
         }),
       ),

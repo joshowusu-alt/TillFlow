@@ -10,6 +10,7 @@ import {
   err,
   type ActionResult,
 } from '@/lib/action-utils';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { audit } from '@/lib/audit';
 
 export async function markAsOrdered(formData: FormData): Promise<ActionResult> {
@@ -59,7 +60,7 @@ export async function markAsOrdered(formData: FormData): Promise<ActionResult> {
 
     revalidatePath('/reports/reorder-suggestions');
     revalidateTag('reports');
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     return ok();
   });
 }

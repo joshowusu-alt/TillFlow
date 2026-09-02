@@ -159,10 +159,10 @@ describe('Phase B: cache revalidation and dashboard performance hardening', () =
 
   it('POS cached loaders remain scoped by function arguments and TTLs are unchanged', () => {
     expect(posSrc).toContain('getCachedProducts(business.id)');
-    expect(posSrc).toContain('getCachedInventory(baseStore.id)');
+    expect(posSrc).toContain('getCachedInventory(business.id, baseStore.id)');
     expect(posSrc).toContain('getCachedCustomers(businessId)');
-    expect(posSrc).toContain('getCachedTills(storeId)');
-    expect(posSrc).toContain('getCachedShifts(storeId)');
+    expect(posSrc).toContain('getCachedTills(businessId, storeId)');
+    expect(posSrc).toContain('getCachedShifts(businessId, storeId)');
     expect(posSrc).toContain('revalidate: 60');
     expect(posSrc).toContain('revalidate: 30');
     expect(posSrc).toContain('revalidate: 10');

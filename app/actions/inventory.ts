@@ -18,6 +18,7 @@ import {
   InventoryIncreaseError,
   isInventoryIncreaseReasonCode,
 } from '@/lib/services/inventory-increase';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 
 function mapAdjustmentError(error: unknown): never {
   if (error instanceof InventoryDecreaseError || error instanceof InventoryIncreaseError) {
@@ -87,7 +88,7 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
         productIds: [adjustment.productId],
       }).catch(() => {});
 
-      revalidateTag('pos-products');
+      revalidatePosCatalog(businessId, storeId);
       revalidateTag('reports');
       revalidateOwnerDashboardCache();
       const { revalidateImproveRecordsHome } = await import('@/lib/improve-records-revalidate');
@@ -142,7 +143,7 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
         productIds: [adjustment.productId],
       }).catch(() => {});
 
-      revalidateTag('pos-products');
+      revalidatePosCatalog(businessId, storeId);
       revalidateTag('reports');
       revalidateOwnerDashboardCache();
       const { revalidateImproveRecordsHome } = await import('@/lib/improve-records-revalidate');

@@ -5,6 +5,7 @@ import { revalidateTag } from 'next/cache';
 import { formAction, withBusinessContext, err, ok, safeAction, type ActionResult } from '@/lib/action-utils';
 import { formInt, formOptionalString, formString } from '@/lib/form-helpers';
 import { audit } from '@/lib/audit';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { approveAndCompleteStockTransfer, requestStockTransfer } from '@/lib/services/stock-transfers';
 
@@ -114,7 +115,8 @@ export async function approveStockTransferActionSafe(input: {
       },
     });
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId, transfer.fromStoreId);
+    revalidatePosCatalog(businessId, transfer.toStoreId);
 
     return ok({ transferId: transfer.id });
   });

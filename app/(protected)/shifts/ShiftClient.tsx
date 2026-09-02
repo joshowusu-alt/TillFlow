@@ -56,18 +56,30 @@ type OtherOpenShift = {
 
 type Props = {
   tills: Till[];
-  openShift: OpenShift | null;
+  openShifts?: OpenShift[];
+  /** @deprecated compatibility for older callers; server page supplies openShifts. */
+  openShift?: OpenShift | null;
   otherOpenShifts?: OtherOpenShift[];
   recentShifts: RecentShift[];
   currency: string;
   userRole?: string;
 };
 
-export default function ShiftClient({ tills, openShift, otherOpenShifts = [], recentShifts, currency, userRole }: Props) {
+export default function ShiftClient({
+  tills,
+  openShifts: openShiftList,
+  openShift: legacyOpenShift,
+  otherOpenShifts = [],
+  recentShifts,
+  currency,
+  userRole,
+}: Props) {
+  const openShifts = openShiftList ?? (legacyOpenShift ? [legacyOpenShift] : []);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [selectedTill, setSelectedTill] = useState(tills[0]?.id ?? '');
+  const [selectedOpenShiftId, setSelectedOpenShiftId] = useState(openShifts[0]?.id ?? '');
   const [openingCash, setOpeningCash] = useState('');
   const [actualCash, setActualCash] = useState('');
   const [closeNotes, setCloseNotes] = useState('');
@@ -89,6 +101,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
   const [addCashNote, setAddCashNote] = useState('');
   const [addCashError, setAddCashError] = useState<string | null>(null);
   const [addCashSuccess, setAddCashSuccess] = useState(false);
+  const openShift = openShifts.find((shift) => shift.id === selectedOpenShiftId) ?? openShifts[0] ?? null;
 
   // Lock background scroll when close-shift modal is open
   useEffect(() => {
@@ -138,6 +151,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
     formData.set('amount', addCashAmount);
     formData.set('reasonCode', addCashReasonCode);
     formData.set('note', addCashNote);
+    if (openShift) formData.set('shiftId', openShift.id);
     startTransition(async () => {
       try {
         const result = await addCashToTillAction(formData);
@@ -168,7 +182,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
           return;
         }
         setOpeningCash('');
-        router.refresh();
+        router.push(`/pos?till=${encodeURIComponent(result.data.tillId)}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to open shift');
       }
@@ -284,6 +298,24 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
       )}
 
       {openShift ? (
+        <div className="space-y-3">
+          {openShifts.length > 1 ? (
+            <div className="card p-4">
+              <h2 className="text-sm font-semibold">Your open shifts</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {openShifts.map((shift) => (
+                  <button
+                    key={shift.id}
+                    type="button"
+                    className={shift.id === openShift.id ? 'btn-primary text-sm' : 'btn-ghost border border-black/10 text-sm'}
+                    onClick={() => setSelectedOpenShiftId(shift.id)}
+                  >
+                    {shift.till.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         <div className="card p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -445,6 +477,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
             </div>
           )}
         </div>
+        </div>
       ) : (
         <>
         {closedSummary && (
@@ -501,6 +534,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
               <label className="label">Till</label>
               <select
                 className="input"
+                aria-label="Till"
                 value={selectedTill}
                 onChange={(e) => setSelectedTill(e.target.value)}
               >
@@ -512,8 +546,9 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
               </select>
             </div>
             <div>
-              <label className="label">Opening Cash (in drawer)</label>
+              <label className="label" htmlFor="opening-cash">Opening Cash (in drawer)</label>
               <input
+                id="opening-cash"
                 className="input"
                 type="number"
                 step="0.01"
@@ -830,8 +865,9 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
             )}
 
             <div className="mt-4">
-              <label className="label">Actual Cash Counted</label>
+              <label className="label" htmlFor="actual-cash-counted">Actual Cash Counted</label>
               <input
+                id="actual-cash-counted"
                 className="input text-lg font-semibold"
                 type="number"
                 step="0.01"
@@ -921,8 +957,9 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
               <div className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <div className="text-xs font-semibold uppercase tracking-wider text-amber-700">Owner Override</div>
                 <div>
-                  <label className="label">Your Password</label>
+                  <label className="label" htmlFor="owner-override-password">Your Password</label>
                   <input
+                    id="owner-override-password"
                     className="input"
                     type="password"
                     value={ownerPassword}
@@ -931,8 +968,9 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
                   />
                 </div>
                 <div>
-                  <label className="label">Reason Code</label>
+                  <label className="label" htmlFor="owner-override-reason">Reason Code</label>
                   <select
+                    id="owner-override-reason"
                     className="input"
                     value={overrideReasonCode}
                     onChange={(e) => setOverrideReasonCode(e.target.value)}
@@ -945,8 +983,9 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
                   </select>
                 </div>
                 <div>
-                  <label className="label">Justification</label>
+                  <label className="label" htmlFor="owner-override-justification">Justification</label>
                   <textarea
+                    id="owner-override-justification"
                     className="input"
                     rows={2}
                     value={overrideJustification}

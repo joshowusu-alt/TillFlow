@@ -163,7 +163,13 @@ beforeEach(() => {
     requireOpenTillForSales: false, discountApprovalThresholdBps: 5000,
   });
   prismaMock.store.findFirst.mockResolvedValue({ id: STORE });
-  prismaMock.till.findFirst.mockResolvedValue({ id: TILL });
+  prismaMock.till.findFirst.mockResolvedValue({
+    id: TILL,
+    active: true,
+    storeId: STORE,
+    store: { businessId: BIZ },
+  });
+  prismaMock.user.findFirst.mockResolvedValue({ id: 'user-1' });
   prismaMock.account.findMany.mockResolvedValue(defaultAccounts);
   prismaMock.customer.findFirst.mockResolvedValue(null);
   prismaMock.mobileMoneyCollection.findFirst.mockResolvedValue(null);
@@ -178,7 +184,10 @@ beforeEach(() => {
   prismaMock.$queryRaw.mockResolvedValue([{ id: 'cde-1' }]);
 
   (prismaMock as any).cashDrawerEntry = { create: vi.fn().mockResolvedValue({}) };
-  (prismaMock as any).shift = { update: vi.fn().mockResolvedValue({}) };
+  (prismaMock as any).shift = {
+    update: vi.fn().mockResolvedValue({}),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+  };
   (prismaMock as any).inventoryBalance = {
     upsert: vi.fn().mockResolvedValue({}),
     updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -188,7 +197,7 @@ beforeEach(() => {
     new Map([[PROD, { qtyOnHandBase: 100, avgCostBasePence: 300 }]])
   );
   batchDecrementInventoryBalanceMock.mockResolvedValue(undefined);
-  getOpenShiftForTillMock.mockResolvedValue(null);
+  getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 0 });
   recordCashDrawerEntryTxMock.mockResolvedValue({ id: 'cde-1' });
   detectExcessiveDiscountRiskMock.mockResolvedValue(undefined);
   detectNegativeMarginRiskMock.mockResolvedValue(undefined);
@@ -200,7 +209,7 @@ beforeEach(() => {
 // 1. Core CTE path — cash payment + open shift (Postgres)
 // ---------------------------------------------------------------------------
 describe('C11 shift/cash-drawer CTE — cash checkout (Postgres)', () => {
-  it('calls $queryRaw exactly once for cash payment with open shift', async () => {
+  it('locks the shift then runs the cash-drawer CTE', async () => {
     getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 5000 });
 
     await withDatabaseUrl(POSTGRES_DATABASE_URL, async () => {
@@ -209,7 +218,7 @@ describe('C11 shift/cash-drawer CTE — cash checkout (Postgres)', () => {
       }));
     });
 
-    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
     expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
   });
 
@@ -270,7 +279,7 @@ describe('C11 shift/cash-drawer CTE — cash checkout (Postgres)', () => {
 
     // $queryRaw is invoked as part of the $transaction callback, not outside it
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
-    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -322,17 +331,47 @@ describe('C11 shift/cash-drawer — SQLite helper path', () => {
     expect(recordCashDrawerEntryTxMock.mock.calls[0][1].amountPence).toBe(400);
     expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
   });
+
+  it('atomically increments each live non-cash tender total on the exact shift', async () => {
+    await withDatabaseUrl(SQLITE_DATABASE_URL, async () => {
+      await createSale(saleInput({
+        lines: [line({ qtyInUnit: 3 })],
+        payments: [
+          { method: 'CARD', amountPence: 500 },
+          { method: 'TRANSFER', amountPence: 400 },
+          { method: 'MOBILE_MONEY', amountPence: 600 },
+        ],
+      }));
+    });
+
+    expect((prismaMock as any).shift.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: SHIFT_ID,
+          tillId: TILL,
+          status: 'OPEN',
+        }),
+        data: {
+          cardTotalPence: { increment: 500 },
+          transferTotalPence: { increment: 400 },
+          momoTotalPence: { increment: 600 },
+        },
+      }),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
 // 2. Guard conditions — no drawer write when conditions unmet
 // ---------------------------------------------------------------------------
 describe('C11 shift/cash-drawer — guard conditions', () => {
-  it('skips drawer write when there is no open shift', async () => {
+  it('rejects checkout when there is no open shift', async () => {
     getOpenShiftForTillMock.mockResolvedValue(null);
 
     await withDatabaseUrl(POSTGRES_DATABASE_URL, async () => {
-      await createSale(saleInput({ payments: [{ method: 'CASH', amountPence: 500 }] }));
+      await expect(
+        createSale(saleInput({ payments: [{ method: 'CASH', amountPence: 500 }] })),
+      ).rejects.toThrow('Open till is required');
     });
 
     expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
@@ -346,7 +385,7 @@ describe('C11 shift/cash-drawer — guard conditions', () => {
       await createSale(saleInput({ payments: [{ method: 'CARD', amountPence: 500 }] }));
     });
 
-    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
     expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
   });
 
@@ -362,7 +401,7 @@ describe('C11 shift/cash-drawer — guard conditions', () => {
       }));
     });
 
-    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
     expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
   });
 });
@@ -389,7 +428,7 @@ describe('C11 shift/cash-drawer CTE — mixed payments (Postgres)', () => {
     });
 
     // One CTE for the cash portion, journal + inventory still run via their own paths
-    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
     expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
     expect(postJournalEntryMock).toHaveBeenCalledTimes(1);
     expect(batchDecrementInventoryBalanceMock).toHaveBeenCalledTimes(1);
@@ -400,6 +439,18 @@ describe('C11 shift/cash-drawer CTE — mixed payments (Postgres)', () => {
 // 4. Transaction boundary — rollback on failure (Postgres CTE)
 // ---------------------------------------------------------------------------
 describe('C11 shift/cash-drawer CTE — transaction boundary (Postgres)', () => {
+  it('rolls back checkout when shift close wins the row-lock ordering', async () => {
+    (prismaMock as any).shift.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      createSale(saleInput({ payments: [{ method: 'CARD', amountPence: 500 }] })),
+    ).rejects.toThrow('shift closed during checkout');
+
+    expect(prismaMock.salesInvoice.create).toHaveBeenCalledTimes(1);
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
+    expect(prismaMock.stockMovement.createMany).not.toHaveBeenCalled();
+  });
+
   it('propagates $queryRaw failure to the caller', async () => {
     getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 5000 });
     prismaMock.$queryRaw.mockRejectedValueOnce(new Error('DB connection lost'));
@@ -415,8 +466,9 @@ describe('C11 shift/cash-drawer CTE — transaction boundary (Postgres)', () => 
 
   it('throws when CTE returns empty rows (shift not found)', async () => {
     getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 5000 });
-    // Simulate the shift row not matching (already closed between context read and tx)
-    prismaMock.$queryRaw.mockResolvedValueOnce([]);
+    prismaMock.$queryRaw
+      .mockResolvedValueOnce([{ id: SHIFT_ID }])
+      .mockResolvedValueOnce([]);
 
     await withDatabaseUrl(POSTGRES_DATABASE_URL, async () => {
       await expect(
@@ -424,7 +476,7 @@ describe('C11 shift/cash-drawer CTE — transaction boundary (Postgres)', () => 
       ).rejects.toThrow('Shift not found or already closed during checkout');
     });
 
-    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
   });
 
   it('propagates SQLite helper failure to the caller', async () => {
@@ -485,10 +537,9 @@ describe('C11 — unchanged checkout paths', () => {
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
     const source = readFileSync(join(process.cwd(), 'lib/services/sales.ts'), 'utf8');
-    expect(source).toContain("['checkout-context-business']");
-    expect(source).toContain("{ revalidate: 60, tags: ['checkout-context'] }");
-    expect(source).toContain("['checkout-context-accounts']");
-    expect(source).toContain("{ revalidate: 300, tags: ['checkout-context'] }");
+    expect(source).toContain("['checkout-context-business', businessId]");
+    expect(source).toContain('checkoutContextTag(businessId)');
+    expect(source).toContain("['checkout-context-accounts', businessId]");
   });
 
   it('no schema files changed', async () => {

@@ -21,6 +21,7 @@ import {
     type OfflineCustomer
 } from './storage';
 import { isOnline } from './sync';
+import { POS_OFFLINE_CATALOGUE_MAX, capOfflineCatalogue } from '@/lib/pos/sellable-dto';
 
 export interface UseOfflinePosOptions {
     products: OfflineProduct[];
@@ -75,10 +76,11 @@ export function useOfflinePos(options: UseOfflinePosOptions): UseOfflinePosResul
             setOffline(!online);
 
             if (online) {
-                // Online: cache the server data for later use
+                // Online: cache the server data for later use (capped sellable snapshot, no images)
                 try {
+                    const snapshot = capOfflineCatalogue(options.products, POS_OFFLINE_CATALOGUE_MAX);
                     await Promise.all([
-                        cacheProducts({ businessId: options.business.id, storeId: options.store.id }, options.products),
+                        cacheProducts({ businessId: options.business.id, storeId: options.store.id }, snapshot),
                         cacheBusiness(options.business),
                         cacheStore(options.store),
                         cacheCustomers(options.business.id, options.customers),

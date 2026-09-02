@@ -92,7 +92,10 @@ export function getAvailableBase(
   return Math.max(product.onHandBase - usedBase, 0);
 }
 
-export function formatAvailable(product: PosProduct, availableBase: number) {
+export function formatAvailable(
+  product: { units: PosUnit[] },
+  availableBase: number,
+) {
   const baseUnit = product.units.find((unit) => unit.isBaseUnit);
   const packaging = getPrimaryPackagingUnit(
     product.units.map((unit) => ({ conversionToBase: unit.conversionToBase, unit }))

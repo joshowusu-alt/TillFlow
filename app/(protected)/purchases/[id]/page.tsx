@@ -33,7 +33,7 @@ export default async function PurchaseInvoicePage({
     where: { id: params.id, businessId: business.id },
     include: {
       supplier: { select: { id: true, name: true, phone: true, email: true } },
-      store: { select: { name: true } },
+      store: { select: { id: true, name: true } },
       lines: {
         include: {
           product: {
@@ -57,6 +57,20 @@ export default async function PurchaseInvoicePage({
   });
 
   if (!invoice) return <div className="card p-6">Invoice not found.</div>;
+
+  const openShifts = await prisma.shift.findMany({
+    where: {
+      status: 'OPEN',
+      till: { storeId: invoice.storeId, active: true, store: { businessId: business.id } },
+    },
+    select: { id: true, tillId: true, till: { select: { name: true } } },
+    orderBy: { openedAt: 'desc' },
+  });
+  const openTills = openShifts.map((shift) => ({
+    tillId: shift.tillId,
+    tillName: shift.till.name,
+    shiftId: shift.id,
+  }));
 
   const totalPaid = invoice.payments.reduce((s, p) => s + p.amountPence, 0);
   const outstanding = Math.max(invoice.totalPence - totalPaid, 0);
@@ -387,6 +401,7 @@ export default async function PurchaseInvoicePage({
                 today={today}
                 amountPlaceholder={(outstanding / 100).toFixed(2)}
                 formClassName="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+                openTills={openTills}
               />
             </div>
           </div>

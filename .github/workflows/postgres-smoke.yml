@@ -1,5 +1,16 @@
 name: Postgres Smoke
 
+# Path filter includes purchase concurrency coverage so paid createPurchase
+# exact-once tests run on every reliability money-path change.
+# POS-safety uses the same Preview-forbidden local SQLite app as CI.
+# Playwright Preview automation bypass is fail-closed in playwright.config.ts
+# (process.env is accepted as the bypass env). Preview QA owner provisioning is
+# idempotent and Preview-only. Reliability-journey retries stay 0 so a timeout
+# cannot repeat Preview money writes. Reliability provisioning-only Playwright
+# project (retries 0, 180s, zero financial writes) is the next hosted gate.
+# Phase 9 locators require exactly one visible target; actionTimeout 8s.
+# This comment keeps Postgres Smoke on those SHAs.
+
 on:
   workflow_dispatch:
   pull_request:
@@ -26,6 +37,15 @@ on:
       - 'docs/payments/**'
       - 'lib/migration/**'
       - 'lib/services/migration/**'
+      - 'lib/services/sales.ts'
+      - 'lib/services/shifts.ts'
+      - 'lib/services/cash-drawer.ts'
+      - 'lib/services/returns.ts'
+      - 'lib/services/payments.ts'
+      - 'lib/services/expensePayments.ts'
+      - 'lib/services/purchases.ts'
+      - 'lib/services/purchases-concurrency.test.ts'
+      - 'app/api/offline/**'
       - '.github/workflows/postgres-smoke.yml'
 
 permissions:
@@ -53,6 +73,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      TZ: Africa/Accra
       POSTGRES_PRISMA_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
       POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
     steps:
@@ -104,3 +125,31 @@ jobs:
 
       - name: SQL-only constraint-contract introspection
         run: node scripts/migration-p1-sql-only-constraint-contract.cjs
+
+      - name: Checkout, shift, and payment concurrency (Postgres)
+        env:
+          TZ: Africa/Accra
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+          POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+          SUPPLIER_PAYMENT_CONCURRENCY_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+        run: |
+          set -euo pipefail
+          files=(
+            lib/services/checkout-shift-cashdrawer-rtx.test.ts
+            lib/services/payments-concurrency.test.ts
+            lib/services/purchases-concurrency.test.ts
+            lib/services/sales.test.ts
+          )
+          present=()
+          for f in "${files[@]}"; do
+            if [ -f "$f" ]; then
+              present+=("$f")
+            else
+              echo "skip missing $f"
+            fi
+          done
+          if [ "${#present[@]}" -eq 0 ]; then
+            echo "No checkout/shift/concurrency tests present"
+            exit 0
+          fi
+          npx vitest run --reporter=dot "${present[@]}"

@@ -91,7 +91,7 @@ model Business {
   momoNumber                           String?
   // Opening capital / owner's investment
   openingCapitalPence                  Int      @default(0)
-  requireOpenTillForSales              Boolean  @default(false)
+  requireOpenTillForSales              Boolean  @default(true)
   discountApprovalThresholdBps         Int      @default(1500)
   minimumMarginThresholdBps            Int      @default(1500)
   varianceReasonRequired               Boolean  @default(true)
@@ -185,6 +185,7 @@ model Business {
   salesInvoices          SalesInvoice[]
   purchaseInvoices       PurchaseInvoice[]
   purchasePayments       PurchasePayment[]
+  moneyIdempotencyRecords MoneyIdempotency[]
   mobileMoneyCollections MobileMoneyCollection[]
   cashDrawerEntries      CashDrawerEntry[]
   riskAlerts             RiskAlert[]
@@ -1205,6 +1206,7 @@ model SalesInvoice {
   transactionNumber          String?
   externalRef                String?
   shiftId                    String?
+  saleSource                 String?   @default("POS")
   cashierUserId              String
   customerId                 String?
   paymentStatus              String
@@ -1502,6 +1504,24 @@ model ExpensePayment {
 
   @@index([expenseId, paidAt])
   @@index([businessId, paidAt])
+}
+
+/// Durable idempotency for customer receipts, expense payments, expense-create
+/// first payments, and purchase-create embedded payments.
+/// Supplier payments keep PurchasePayment.idempotencyKey (already unique per business).
+model MoneyIdempotency {
+  id          String   @id @default(cuid())
+  businessId  String
+  key         String
+  payloadHash String
+  commandKind String
+  resultJson  String
+  createdAt   DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, key])
+  @@index([businessId, createdAt])
 }
 
 model JournalEntry {

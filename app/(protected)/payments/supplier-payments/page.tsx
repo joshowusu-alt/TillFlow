@@ -3,7 +3,7 @@ import FormError from '@/components/FormError';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
@@ -19,13 +19,13 @@ const PAYMENT_LABEL: Record<string, string> = {
 };
 
 export default async function SupplierPaymentsPage({ searchParams }: { searchParams?: { error?: string; supplierId?: string } }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, store } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const supplierId = searchParams?.supplierId?.trim() || undefined;
   const today = new Date().toISOString().slice(0, 10);
 
-  const [invoices, recentPayments, linkedSupplier] = await measureServerOperation(
+  const [invoices, recentPayments, linkedSupplier, openShifts] = await measureServerOperation(
     'page.supplier-payments.load',
     () => Promise.all([
       prisma.purchaseInvoice.findMany({
@@ -74,6 +74,16 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
             select: { id: true, name: true, phone: true, creditLimitPence: true }
           })
         : Promise.resolve(null),
+      store
+        ? prisma.shift.findMany({
+            where: {
+              status: 'OPEN',
+              till: { storeId: store.id, active: true, store: { businessId: business.id } },
+            },
+            select: { id: true, tillId: true, till: { select: { name: true } } },
+            orderBy: { openedAt: 'desc' },
+          })
+        : Promise.resolve([]),
     ]),
     {
       businessId: business.id,
@@ -96,11 +106,18 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
   // Last payment for the supplier summary header
   const lastPaymentAt = recentPayments.length > 0 ? recentPayments[0].paidAt : null;
 
+  const openTills = openShifts.map((shift) => ({
+    tillId: shift.tillId,
+    tillName: shift.till.name,
+    shiftId: shift.id,
+  }));
+
   const renderPaymentForm = (invoiceId: string) => (
     <SupplierPaymentForm
       invoiceId={invoiceId}
       today={today}
       returnTo={linkedSupplier ? `/suppliers/${linkedSupplier.id}` : undefined}
+      openTills={openTills}
     />
   );
 

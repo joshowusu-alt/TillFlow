@@ -34,15 +34,19 @@ function weightedAvgCost(beforeQty: number, beforeCost: number, addQty: number, 
   return Math.round((beforeQty * beforeCost + addQty * addCost) / totalQty);
 }
 
-export async function recordOpeningInventory(input: {
-  businessId: string;
-  storeId: string;
-  userId?: string | null;
-  lines: OpeningInventoryLine[];
-  /** Stable id for journal / movement reference — also used as idempotency key. */
-  referenceId: string;
-  description?: string;
-}): Promise<RecordOpeningInventoryResult> {
+export async function recordOpeningInventory(
+  input: {
+    businessId: string;
+    storeId: string;
+    userId?: string | null;
+    lines: OpeningInventoryLine[];
+    /** Stable id for journal / movement reference — also used as idempotency key. */
+    referenceId: string;
+    description?: string;
+  },
+  db?: any,
+): Promise<RecordOpeningInventoryResult> {
+  const client = db ?? prisma;
   const lines = input.lines.filter((l) => l.productId && l.unitId && l.qtyInUnit > 0);
   if (lines.length === 0) {
     return {
@@ -56,7 +60,7 @@ export async function recordOpeningInventory(input: {
   }
 
   // Idempotency: if this reference already posted opening movements, do not double-apply.
-  const existing = await prisma.stockMovement.findFirst({
+  const existing = await client.stockMovement.findFirst({
     where: {
       storeId: input.storeId,
       referenceType: 'OPENING_BALANCE_INVENTORY',
@@ -153,7 +157,7 @@ export async function recordOpeningInventory(input: {
 
   await ensureChartOfAccounts(input.businessId);
 
-  await prisma.$transaction(async (tx) => {
+  const applyOpening = async (tx: any) => {
     for (const row of applied) {
       await incrementInventoryBalance(
         tx,
@@ -192,7 +196,13 @@ export async function recordOpeningInventory(input: {
         prismaClient: tx as any,
       });
     }
-  });
+  };
+
+  if (db) {
+    await applyOpening(client);
+  } else {
+    await prisma.$transaction(applyOpening);
+  }
 
   return {
     valuedUnits,

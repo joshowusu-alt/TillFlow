@@ -12,8 +12,24 @@ import {
   type JournalLine
 } from './shared';
 import { fetchInventoryMap, incrementInventoryBalance } from './shared';
-import { getOpenCashShiftForPayment, recordCashDrawerEntryTx } from './cash-drawer';
+import {
+  EXPLICIT_CASH_TILL_REQUIRED_MSG,
+  getOpenCashShiftForPayment,
+  recordCashDrawerEntryTx,
+} from './cash-drawer';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import {
+  assertMoneyMovementTenantChain,
+  buildPurchaseCreatePayloadHash,
+  findMoneyIdempotency,
+  insertMoneyIdempotency,
+  isPrismaUniqueConstraintOn,
+  MoneyIdempotencyError,
+  MONEY_IDEMPOTENCY_ERROR,
+  normalizeMoneyIdempotencyKey,
+  parseIdempotencyResult,
+  replayOrConflict,
+} from './money-idempotency';
 
 export type PurchasePaymentInput = PaymentInput;
 
@@ -46,6 +62,11 @@ export type CreatePurchaseInput = {
    * Cash drawer PAID_OUT entries are still recorded when a shift is open.
    */
   skipCashDrawerRequirement?: boolean;
+  /** Required when cash payments are recorded and skipCashDrawerRequirement is not set. */
+  tillId?: string | null;
+  shiftId?: string | null;
+  /** Required for durable replay when embedded payments are externally repeatable. */
+  idempotencyKey?: string;
 };
 
 export type SupplierProductLinkSkippedProduct = {
@@ -199,31 +220,53 @@ async function createPurchaseInvoicePayments(
     recordedByUserId?: string | null;
     supplierName?: string | null;
     skipCashDrawerRequirement?: boolean;
+    tillId?: string | null;
+    shiftId?: string | null;
   }
 ) {
   if (input.payments.length === 0) return;
 
   const cashSplit = splitPayments(input.payments);
-  const openShift =
-    cashSplit.cashPence > 0
-      ? await getOpenCashShiftForPayment(client, {
-          businessId: input.businessId,
-          storeId: input.storeId,
-          userId: input.recordedByUserId,
-        })
-      : null;
-
-  if (
-    cashSplit.cashPence > 0 &&
-    !input.skipCashDrawerRequirement &&
-    (!input.recordedByUserId || !openShift)
-  ) {
-    throw new Error('Open shift is required before recording cash supplier payments.');
+  let openShift: { id: string; tillId: string } | null = null;
+  if (cashSplit.cashPence > 0) {
+    if (input.skipCashDrawerRequirement) {
+      // Imports post Cash to GL without a till. Do not guess a user shift.
+      openShift = input.tillId
+        ? await getOpenCashShiftForPayment(client, {
+            businessId: input.businessId,
+            storeId: input.storeId,
+            tillId: input.tillId,
+            shiftId: input.shiftId,
+          })
+        : null;
+    } else {
+      if (!input.tillId) {
+        throw new Error(EXPLICIT_CASH_TILL_REQUIRED_MSG);
+      }
+      openShift = await getOpenCashShiftForPayment(client, {
+        businessId: input.businessId,
+        storeId: input.storeId,
+        tillId: input.tillId,
+        shiftId: input.shiftId,
+      });
+      if (!input.recordedByUserId || !openShift) {
+        throw new Error('Open shift is required before recording cash supplier payments.');
+      }
+    }
   }
+
+  await assertMoneyMovementTenantChain(client, {
+    businessId: input.businessId,
+    storeId: input.storeId,
+    userId: input.recordedByUserId,
+    tillId: openShift?.tillId,
+    shiftId: openShift?.id,
+  });
 
   for (const payment of input.payments) {
     const createdPayment = await client.purchasePayment.create({
       data: {
+        businessId: input.businessId,
         purchaseInvoiceId: input.invoiceId,
         method: payment.method,
         amountPence: payment.amountPence,
@@ -364,6 +407,18 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       ? [{ method: 'CASH' as const, amountPence: total }]
       : positivePayments;
   const totalPaid = payments.reduce((sum, p) => sum + p.amountPence, 0);
+  /**
+   * Paid money (any positive tender, including PAID with synthesized CASH)
+   * requires a durable key at this service boundary. Unpaid/credit-only
+   * (totalPaid === 0) may omit a key and creates a new AP invoice each call.
+   * A key supplied on unpaid still participates in exact-replay.
+   */
+  if (totalPaid > 0 && !input.idempotencyKey?.trim()) {
+    throw new MoneyIdempotencyError(
+      MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_REQUIRED,
+      'This paid purchase needs a durable idempotency key before money can be recorded.',
+    );
+  }
   if (totalPaid > total) {
     throw new Error('Payment exceeds total due');
   }
@@ -387,6 +442,33 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
 
   const split = splitPayments(payments);
   const apAmount = total - split.totalPence;
+
+  const idempotencyKey = input.idempotencyKey
+    ? normalizeMoneyIdempotencyKey(input.idempotencyKey)
+    : null;
+  const payloadHash = idempotencyKey
+    ? buildPurchaseCreatePayloadHash({
+        businessId: input.businessId,
+        storeId: input.storeId,
+        supplierId: input.supplierId ?? '',
+        payments,
+        lines: input.lines,
+        userId: input.userId ?? '',
+      })
+    : null;
+
+  if (idempotencyKey && payloadHash) {
+    const existing = await findMoneyIdempotency((db ?? prisma) as any, input.businessId, idempotencyKey);
+    if (existing) {
+      replayOrConflict(existing, { payloadHash, commandKind: 'PURCHASE_CREATE' });
+      const parsed = parseIdempotencyResult<{ invoiceId: string }>(existing.resultJson);
+      const replayed = await (db ?? prisma).purchaseInvoice.findFirst({
+        where: { id: parsed.invoiceId, businessId: input.businessId },
+      });
+      if (!replayed) throw new Error('Purchase invoice not found');
+      return replayed;
+    }
+  }
 
   const journalLines: JournalLine[] = [
     { accountCode: ACCOUNT_CODES.inventory, debitPence: subtotal },
@@ -465,6 +547,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         recordedByUserId: input.userId ?? null,
         supplierName: supplier?.name ?? null,
         skipCashDrawerRequirement: input.skipCashDrawerRequirement,
+        tillId: input.tillId,
+        shiftId: input.shiftId,
       });
     }
 
@@ -478,6 +562,16 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       prismaClient: client as any,
       accountMap: preloadedAccountMap,
     });
+
+    if (idempotencyKey && payloadHash) {
+      await insertMoneyIdempotency(client, {
+        businessId: input.businessId,
+        key: idempotencyKey,
+        payloadHash,
+        commandKind: 'PURCHASE_CREATE',
+        resultJson: JSON.stringify({ invoiceId: created.id }),
+      });
+    }
 
     return created;
   };
@@ -503,55 +597,25 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       return { productId, qtyBase: totals.qtyBase, newAvg };
     });
 
-    if (db) {
-      // Inside a caller-supplied tx — must use the tx client sequentially.
-      // This path is used for single-invoice flows (small N), not bulk import.
-      for (const { productId, qtyBase, newAvg } of upsertArgs) {
-        await incrementInventoryBalance(client, store.id, productId, qtyBase, newAvg);
-      }
-    } else {
-      // ── Bulk inventory upsert (1 SQL statement) ──────────────────────────
-      // The OLD approach used prisma.$transaction([N × upsert]) which sends
-      // each upsert as a separate SQL round-trip inside a PostgreSQL
-      // transaction (BEGIN → N queries → COMMIT). At ≥10 ms RTT per query,
-      // 150+ items easily exceed Prisma's default 5 s transaction timeout
-      // (P2028 "Transaction already closed"), surfacing as the generic
-      // "Something went wrong saving your data" message.
-      //
-      // FIX: on PostgreSQL, use a single INSERT … ON CONFLICT DO UPDATE —
-      // 1 round-trip for any number of products. On SQLite (dev), fall back
-      // to sub-batched $transaction with generous timeout.
-      if (upsertArgs.length > 0) {
-        const isPostgres = isPostgresDatabaseUrl(process.env.DATABASE_URL);
+    if (upsertArgs.length > 0) {
+      const isPostgres = isPostgresDatabaseUrl(process.env.DATABASE_URL);
 
-        if (isPostgres) {
-          const sid = store.id;
-          const values = upsertArgs.map(({ productId, qtyBase, newAvg }) =>
-            Prisma.sql`(gen_random_uuid()::text, ${sid}, ${productId}, ${qtyBase}, ${newAvg}, NOW())`
-          );
-          await prisma.$executeRaw`
-            INSERT INTO "InventoryBalance" ("id", "storeId", "productId", "qtyOnHandBase", "avgCostBasePence", "updatedAt")
-            VALUES ${Prisma.join(values)}
-            ON CONFLICT ("storeId", "productId") DO UPDATE SET
-              "qtyOnHandBase" = "InventoryBalance"."qtyOnHandBase" + EXCLUDED."qtyOnHandBase",
-              "avgCostBasePence" = EXCLUDED."avgCostBasePence",
-              "updatedAt" = NOW()
-          `;
-        } else {
-          // SQLite / dev: sub-batch the upserts to stay under the tx timeout.
-          const UPSERT_BATCH = 50;
-          for (let i = 0; i < upsertArgs.length; i += UPSERT_BATCH) {
-            const batch = upsertArgs.slice(i, i + UPSERT_BATCH);
-            await prisma.$transaction(
-              batch.map(({ productId, qtyBase, newAvg }) =>
-                prisma.inventoryBalance.upsert({
-                  where: { storeId_productId: { storeId: store.id, productId } },
-                  update: { qtyOnHandBase: { increment: qtyBase }, avgCostBasePence: newAvg },
-                  create: { storeId: store.id, productId, qtyOnHandBase: qtyBase, avgCostBasePence: newAvg },
-                })
-              )
-            );
-          }
+      if (isPostgres && typeof client.$executeRaw === 'function') {
+        const sid = store.id;
+        const values = upsertArgs.map(({ productId, qtyBase, newAvg }) =>
+          Prisma.sql`(gen_random_uuid()::text, ${sid}, ${productId}, ${qtyBase}, ${newAvg}, NOW())`
+        );
+        await client.$executeRaw`
+          INSERT INTO "InventoryBalance" ("id", "storeId", "productId", "qtyOnHandBase", "avgCostBasePence", "updatedAt")
+          VALUES ${Prisma.join(values)}
+          ON CONFLICT ("storeId", "productId") DO UPDATE SET
+            "qtyOnHandBase" = "InventoryBalance"."qtyOnHandBase" + EXCLUDED."qtyOnHandBase",
+            "avgCostBasePence" = EXCLUDED."avgCostBasePence",
+            "updatedAt" = NOW()
+        `;
+      } else {
+        for (const { productId, qtyBase, newAvg } of upsertArgs) {
+          await incrementInventoryBalance(client, store.id, productId, qtyBase, newAvg);
         }
       }
     }
@@ -574,34 +638,58 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     });
   };
 
+  const finishInvoice = async (created: Awaited<ReturnType<typeof _doInvoice>>, client: any) => {
+    await _doInventory(client, created.id);
+    const supplierProductLinkSummary = await linkPurchasedProductsToSupplier(client, {
+      ...input,
+      supplierName: supplier?.name ?? null,
+    });
+    (created as any).supplierProductLinkSummary = supplierProductLinkSummary;
+    return created;
+  };
+
+  const runWithMoneyTx = async (
+    client: any,
+  ): Promise<{ created: Awaited<ReturnType<typeof _doInvoice>>; replayed: boolean }> => {
+    try {
+      return { created: await _doInvoice(client), replayed: false };
+    } catch (error) {
+      if (idempotencyKey && payloadHash && isPrismaUniqueConstraintOn(error, ['businessId', 'key'])) {
+        const winner = await findMoneyIdempotency(client, input.businessId, idempotencyKey);
+        if (winner) {
+          replayOrConflict(winner, { payloadHash, commandKind: 'PURCHASE_CREATE' });
+          const parsed = parseIdempotencyResult<{ invoiceId: string }>(winner.resultJson);
+          const replayedInvoice = await client.purchaseInvoice.findFirst({
+            where: { id: parsed.invoiceId, businessId: input.businessId },
+          });
+          if (replayedInvoice) return { created: replayedInvoice, replayed: true };
+        }
+        throw new MoneyIdempotencyError(
+          MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_CONFLICT,
+          'This payment request conflicts with a previous submission.',
+        );
+      }
+      throw error;
+    }
+  };
+
   let invoice: Awaited<ReturnType<typeof _doInvoice>>;
-  const needsCashDrawerTransaction = split.cashPence > 0;
+  // Paid money always needs one commit. A supplied key on unpaid/credit
+  // also needs one commit so a later inventory failure cannot leave a
+  // replayable MoneyIdempotency success without stock.
+  const needsAtomicMoney = payments.length > 0 || Boolean(idempotencyKey);
   if (db) {
-    // Called inside a caller-supplied transaction — all writes in the same tx.
-    invoice = await _doInvoice(db);
-    await _doInventory(db, invoice.id);
-    const supplierProductLinkSummary = await linkPurchasedProductsToSupplier(db, {
-      ...input,
-      supplierName: supplier?.name ?? null,
+    const { created, replayed } = await runWithMoneyTx(db);
+    invoice = replayed ? created : await finishInvoice(created, db);
+  } else if (needsAtomicMoney) {
+    invoice = await prisma.$transaction(async (tx) => {
+      const { created, replayed } = await runWithMoneyTx(tx);
+      if (replayed) return created;
+      return finishInvoice(created, tx);
     });
-    (invoice as any).supplierProductLinkSummary = supplierProductLinkSummary;
-  } else if (needsCashDrawerTransaction) {
-    invoice = await prisma.$transaction(async (tx) => _doInvoice(tx));
-    await _doInventory(prisma as any, invoice.id);
-    const supplierProductLinkSummary = await linkPurchasedProductsToSupplier(prisma, {
-      ...input,
-      supplierName: supplier?.name ?? null,
-    });
-    (invoice as any).supplierProductLinkSummary = supplierProductLinkSummary;
   } else {
-    // Normal path: no outer $transaction needed — createMany = 1 RTT per step.
-    invoice = await _doInvoice(prisma);
-    await _doInventory(prisma as any, invoice.id);
-    const supplierProductLinkSummary = await linkPurchasedProductsToSupplier(prisma, {
-      ...input,
-      supplierName: supplier?.name ?? null,
-    });
-    (invoice as any).supplierProductLinkSummary = supplierProductLinkSummary;
+    const { created, replayed } = await runWithMoneyTx(prisma);
+    invoice = replayed ? created : await finishInvoice(created, prisma);
   }
 
   return invoice;

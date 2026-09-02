@@ -16,6 +16,7 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
       createdAt: true,
       totalPence: true,
       paymentStatus: true,
+      storeId: true,
       payments: { select: { amountPence: true } },
       supplier: { select: { name: true } },
       purchaseReturn: { select: { id: true } }
@@ -30,6 +31,14 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
   const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
   const balance = Math.max(invoice.totalPence - paid, 0);
   const isVoid = paid === 0;
+  const openShifts = await prisma.shift.findMany({
+    where: {
+      status: 'OPEN',
+      till: { storeId: invoice.storeId, active: true, store: { businessId: business.id } },
+    },
+    select: { id: true, tillId: true, till: { select: { name: true } } },
+    orderBy: { openedAt: 'desc' },
+  });
 
   return (
     <div className="space-y-6">
@@ -86,6 +95,23 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
                   <option value="CARD">Card</option>
                   <option value="TRANSFER">Transfer</option>
                   <option value="MOBILE_MONEY">Mobile Money</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Till (cash from this drawer)</label>
+                <select className="input" name="tillId" required={openShifts.length > 0} defaultValue={openShifts.length === 1 ? openShifts[0].tillId : ''}>
+                  {openShifts.length === 0 ? (
+                    <option value="">No open till — open a shift first</option>
+                  ) : (
+                    <>
+                      {openShifts.length > 1 ? <option value="">Select till…</option> : null}
+                      {openShifts.map((shift) => (
+                        <option key={shift.id} value={shift.tillId}>
+                          {shift.till.name}
+                        </option>
+                      ))}
+                    </>
+                  )}
                 </select>
               </div>
               <div>

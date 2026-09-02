@@ -6,6 +6,7 @@ import { formString, formOptionalString, formInt } from '@/lib/form-helpers';
 import { withBusinessContext, formAction } from '@/lib/action-utils';
 import { createCategory, updateCategory, deleteCategory } from '@/lib/services/categories';
 import { audit } from '@/lib/audit';
+import { posCategoriesTag } from '@/lib/cache/pos-tags';
 
 // ---------------------------------------------------------------------------
 // Categories CRUD
@@ -22,7 +23,7 @@ export async function createCategoryAction(formData: FormData): Promise<void> {
 
     await createCategory(businessId, { name, colour, imageUrl, sortOrder });
 
-    revalidateTag('pos-categories');
+    revalidateTag(posCategoriesTag(businessId));
     redirect('/products?tab=categories');
   }, '/products?tab=categories');
 }
@@ -41,7 +42,7 @@ export async function updateCategoryAction(formData: FormData): Promise<void> {
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'CATEGORY_UPDATE', entity: 'Category', entityId: id, details: { name } }).catch(() => {});
 
-    revalidateTag('pos-categories');
+    revalidateTag(posCategoriesTag(businessId));
     redirect('/products?tab=categories');
   }, '/products?tab=categories');
 }
@@ -56,7 +57,7 @@ export async function deleteCategoryAction(formData: FormData): Promise<void> {
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'CATEGORY_DELETE', entity: 'Category', entityId: id }).catch(() => {});
 
-    revalidateTag('pos-categories');
+    revalidateTag(posCategoriesTag(businessId));
     redirect('/products?tab=categories');
   }, '/products?tab=categories');
 }

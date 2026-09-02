@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  TZ: Africa/Accra
+
 # Stable displayed check names (Gate 3 interface):
 #   CI / lint
 #   CI / unit
@@ -15,6 +18,7 @@ permissions:
 #   CI / build
 #   CI / pos-safety
 # Job `name:` values must stay literal — do not matrix or templatize them.
+# Coverage is not a required gate — see docs/reliability/CI_GOVERNANCE.md.
 
 jobs:
   lint:
@@ -43,6 +47,7 @@ jobs:
     timeout-minutes: 20
     env:
       DATABASE_URL: file:./ci-unit.db
+      TZ: Africa/Accra
     steps:
       - name: Checkout
         uses: actions/checkout@v4

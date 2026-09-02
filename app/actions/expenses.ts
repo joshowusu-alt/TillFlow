@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { createExpense } from '@/lib/services/expenses';
+import { createExpense, CASH_EXPENSE_SHIFT_REQUIRED_MSG } from '@/lib/services/expenses';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
@@ -55,6 +55,16 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       amountPaidPence = amountPence;
     }
 
+    const tillId = formString(formData, 'tillId');
+    if (amountPaidPence > 0 && method === 'CASH' && !tillId) {
+      return err(CASH_EXPENSE_SHIFT_REQUIRED_MSG);
+    }
+
+    const idempotencyKey = formString(formData, 'idempotencyKey');
+    if (amountPaidPence > 0 && !idempotencyKey) {
+      return err('This expense form is out of date. Refresh the page and try again.');
+    }
+
     await createExpense({
       businessId,
       storeId,
@@ -64,18 +74,20 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       paymentStatus,
       method,
       amountPaidPence,
+      tillId: tillId || undefined,
       dueDate,
       vendorName,
       reference,
       attachmentPath,
-      notes
+      notes,
+      idempotencyKey: idempotencyKey || undefined,
     });
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_CREATE', entity: 'Expense', details: { amountPence, vendorName, notes } }).catch((e) => console.error('[audit] expense create failed', e));
 
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
-    redirect('/expenses');
+    redirect('/expenses?recorded=1');
   }, '/expenses');
 }
 

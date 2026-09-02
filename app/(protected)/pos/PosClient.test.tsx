@@ -3,8 +3,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PosClient from './PosClient';
-import { getParkedCartsStorageKey } from '@/lib/business-scope';
+import { getParkedCartsStorageKey, getPosTillStorageKey } from '@/lib/business-scope';
 import { completeSaleAction } from '@/app/actions/sales';
+
+const searchParamsGet = vi.hoisted(() => vi.fn((_key?: string) => null as string | null));
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
@@ -13,7 +15,7 @@ vi.mock('next/link', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => ({ get: () => null }),
+  useSearchParams: () => ({ get: (key: string) => searchParamsGet(key) }),
   useRouter: () => ({ prefetch: vi.fn() }),
 }));
 
@@ -48,17 +50,17 @@ vi.mock('./components/CameraScanner', () => ({
 const product = {
   id: 'prod-1',
   name: 'Coca Cola',
+  sku: 'COKE-330',
   barcode: '12345',
   sellingPriceBasePence: 250,
   vatRateBps: 0,
+  isTaxable: true,
   promoBuyQty: 0,
   promoGetQty: 0,
-  categoryId: 'soft-drinks',
   categoryName: 'Soft Drinks',
-  imageUrl: null,
   onHandBase: 30,
   units: [
-    { id: 'bottle', name: 'Bottle', pluralName: 'Bottles', conversionToBase: 1, isBaseUnit: true },
+    { id: 'bottle', name: 'Bottle', pluralName: 'Bottles', conversionToBase: 1, isBaseUnit: true, sellingPricePence: 250 },
   ],
 };
 
@@ -85,6 +87,7 @@ describe('PosClient desktop layout', () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
+    searchParamsGet.mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -356,7 +359,12 @@ describe('PosClient desktop layout', () => {
     expect(payload.externalRef).toMatch(/^POS_ONLINE:/);
 
     await waitFor(() => {
-      expect(screen.getByText(/Sale Complete/i)).toBeInTheDocument();
+      expect(screen.getByTestId('pos-sale-complete')).toBeVisible();
+      expect(screen.getByTestId('pos-ready-next-customer')).toBeVisible();
+      expect(screen.getByText('Sale Complete!')).toBeInTheDocument();
+      expect(screen.getByText('Ready for next customer')).toBeInTheDocument();
+      expect(screen.getAllByTestId('pos-sale-complete')).toHaveLength(1);
+      expect(screen.getAllByTestId('pos-ready-next-customer')).toHaveLength(1);
     });
   });
 
@@ -412,6 +420,7 @@ describe('PosClient mobile phase 1 layout', () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
+    searchParamsGet.mockReturnValue(null);
     mockPhoneViewport(true);
   });
 
@@ -546,6 +555,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
+    searchParamsGet.mockReturnValue(null);
     mockPhoneViewport(true);
   });
 
@@ -726,6 +736,7 @@ describe('PosClient P0 transaction safety', () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     vi.clearAllMocks();
+    searchParamsGet.mockReturnValue(null);
     mockPhoneViewport(true);
     document.documentElement.removeAttribute('data-pos-txn-active');
   });
@@ -883,5 +894,129 @@ describe('PosClient P0 transaction safety', () => {
     fireEvent.click(complete!);
     await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(1));
     expect(mockedCompleteSaleAction.mock.calls[0][0].externalRef).toBe('POS_ONLINE:restored-attempt-id');
+  });
+});
+
+describe('PosClient till selection', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.clearAllMocks();
+    searchParamsGet.mockImplementation((key?: string) => (key === 'till' ? 'till-3' : null));
+  });
+
+  afterEach(() => {
+    window.localStorage.clear();
+    searchParamsGet.mockReturnValue(null);
+  });
+
+  const tills = [
+    { id: 'till-1', name: 'Till 1' },
+    { id: 'till-3', name: 'Till 3' },
+  ];
+
+  it('prefers the till query param when that till is active and has an open shift', async () => {
+    render(
+      <PosClient
+        {...baseProps}
+        tills={tills}
+        openShiftTillIds={['till-1', 'till-3']}
+      />,
+    );
+    await waitFor(() => {
+      expect(document.querySelector('[data-selected-till-id="till-3"]')).not.toBeNull();
+    });
+  });
+
+  it('exposes the bound open-shift id once checkout extras are ready', async () => {
+    render(
+      <PosClient
+        {...baseProps}
+        tills={tills}
+        openShiftTillIds={['till-3']}
+        openShifts={[{ tillId: 'till-3', shiftId: 'shift-3' }]}
+      />,
+    );
+    await waitFor(() => {
+      const select = document.querySelector('#pos-till-select') as HTMLSelectElement | null;
+      expect(select).toHaveAttribute('data-checkout-till-state', 'ready');
+      expect(select).toHaveAttribute('data-pos-till-id', 'till-3');
+      expect(select).toHaveAttribute('data-pos-shift-id', 'shift-3');
+      expect(document.querySelector('[data-selected-shift-id="shift-3"]')).not.toBeNull();
+    });
+  });
+
+  it('rotates the online idempotency key when the cashier switches till after an unclear sale', async () => {
+    mockedCompleteSaleAction.mockRejectedValueOnce(new Error('network reset after accept'));
+    render(
+      <PosClient
+        {...baseProps}
+        tills={tills}
+        openShiftTillIds={['till-1', 'till-3']}
+        openShifts={[
+          { tillId: 'till-1', shiftId: 'shift-1' },
+          { tillId: 'till-3', shiftId: 'shift-3' },
+        ]}
+      />,
+    );
+    const search = screen.getByPlaceholderText(/type product name/i);
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: 'Coca' } });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+    const completeButtons = screen.getAllByRole('button', { name: /Complete Cash Sale/i });
+    const complete = completeButtons.find((btn) => !(btn as HTMLButtonElement).disabled)!;
+    fireEvent.click(complete);
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(1));
+    const firstRef = mockedCompleteSaleAction.mock.calls[0][0].externalRef as string;
+
+    const select = document.querySelector('#pos-till-select') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'till-1' } });
+    await waitFor(() => {
+      expect(document.querySelector('[data-selected-till-id="till-1"]')).not.toBeNull();
+    });
+    mockedCompleteSaleAction.mockResolvedValueOnce({
+      success: true,
+      data: { receiptId: 'inv-other-till', totalPence: 250, transactionNumber: 'INV-2' },
+    });
+    const retry = screen.getAllByRole('button', { name: /Complete Cash Sale/i })
+      .find((btn) => !(btn as HTMLButtonElement).disabled)!;
+    fireEvent.click(retry);
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(2));
+    expect(mockedCompleteSaleAction.mock.calls[1][0].externalRef).not.toBe(firstRef);
+    expect(mockedCompleteSaleAction.mock.calls[1][0].tillId).toBe('till-1');
+  });
+
+  it('ignores localStorage when the saved till has no open shift', async () => {
+    searchParamsGet.mockReturnValue(null);
+    window.localStorage.setItem(
+      getPosTillStorageKey({ businessId: 'biz-1', storeId: 'store-1' }),
+      'till-1',
+    );
+    render(
+      <PosClient
+        {...baseProps}
+        tills={tills}
+        openShiftTillIds={['till-3']}
+      />,
+    );
+    await waitFor(() => {
+      expect(document.querySelector('[data-selected-till-id="till-3"]')).not.toBeNull();
+    });
+  });
+
+  it('blocks sales when no till is open even if requireOpenTillForSales is false', async () => {
+    searchParamsGet.mockReturnValue(null);
+    render(
+      <PosClient
+        {...baseProps}
+        business={{ ...baseProps.business, requireOpenTillForSales: false }}
+        openShiftTillIds={[]}
+      />,
+    );
+    await waitFor(() => {
+      expect(document.querySelector('[data-pos-till-block="true"]')).not.toBeNull();
+    });
   });
 });

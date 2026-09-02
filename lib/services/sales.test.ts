@@ -229,7 +229,13 @@ beforeEach(() => {
     discountApprovalThresholdBps: 5000,
   });
   prismaMock.store.findFirst.mockResolvedValue({ id: STORE_ID });
-  prismaMock.till.findFirst.mockResolvedValue({ id: TILL_ID });
+  prismaMock.till.findFirst.mockResolvedValue({
+    id: TILL_ID,
+    active: true,
+    storeId: STORE_ID,
+    store: { businessId: BIZ_ID },
+  });
+  prismaMock.user.findFirst.mockResolvedValue({ id: 'user-1' });
   prismaMock.account.findMany.mockResolvedValue(defaultAccounts);
   prismaMock.customer.findFirst.mockResolvedValue(null);
   prismaMock.mobileMoneyCollection.findFirst.mockResolvedValue(null);
@@ -250,7 +256,11 @@ beforeEach(() => {
   prismaMock.$queryRaw.mockResolvedValue([{ id: 'cde-1' }]);
   // Additional tx models used inside the transaction
   (prismaMock as any).cashDrawerEntry = { create: vi.fn().mockResolvedValue({}) };
-  (prismaMock as any).shift = { update: vi.fn().mockResolvedValue({}) };
+  (prismaMock as any).shift = {
+    update: vi.fn().mockResolvedValue({}),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    findFirst: vi.fn(),
+  };
   (prismaMock as any).inventoryBalance = {
     upsert: vi.fn().mockResolvedValue({}),
     updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -261,7 +271,7 @@ beforeEach(() => {
   );
   decrementInventoryBalanceMock.mockResolvedValue(97);
   batchDecrementInventoryBalanceMock.mockResolvedValue(undefined);
-  getOpenShiftForTillMock.mockResolvedValue(null);
+  getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-1', expectedCashPence: 0 });
   recordCashDrawerEntryTxMock.mockResolvedValue(undefined);
   detectExcessiveDiscountRiskMock.mockResolvedValue(undefined);
   detectNegativeMarginRiskMock.mockResolvedValue(undefined);
@@ -652,8 +662,8 @@ describe('createSale — payments & stock', () => {
         lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
       }));
 
-      // C11: shift + cash drawer are consolidated into one $queryRaw CTE call.
-      expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+      // Lock (FOR UPDATE) plus the cash-drawer CTE.
+      expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
       // The old two-call path must not be used on Postgres.
       expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
       expect((prismaMock as any).cashDrawerEntry?.create).not.toHaveBeenCalled();
@@ -683,24 +693,34 @@ describe('createSale — payments & stock', () => {
     }
   });
 
-  it('skips shift/cash-drawer CTE when no cash payment', async () => {
+  it('locks the open shift without a cash-drawer CTE when there is no cash payment', async () => {
     getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-1', expectedCashPence: 5000 });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public';
 
-    await createSale(makeBaseInput({
-      payments: [{ method: 'CARD', amountPence: 500 }],
-      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
-    }));
+    try {
+      await createSale(makeBaseInput({
+        payments: [{ method: 'CARD', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
 
-    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+      expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+      const fragments = prismaMock.$queryRaw.mock.calls[0]?.[0] as string[] | undefined;
+      const sql = Array.isArray(fragments) ? fragments.join(' ') : String(fragments ?? '');
+      expect(sql).toContain('FOR UPDATE');
+      expect(sql).not.toContain('CASH_SALE');
+      expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
   });
 
-  it('skips shift/cash-drawer CTE when no open shift', async () => {
+  it('rejects a POS sale without an open shift even when the stored flag is false', async () => {
     getOpenShiftForTillMock.mockResolvedValue(null);
 
-    await createSale(makeBaseInput({
-      payments: [{ method: 'CASH', amountPence: 500 }],
-      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
-    }));
+    await expect(createSale(makeBaseInput({
+      payments: [{ method: 'CARD', amountPence: 500 }],
+    }))).rejects.toThrow('Open till is required');
 
     expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
   });
@@ -794,6 +814,9 @@ describe('createSale — payments & stock', () => {
       totalPence: 500,
       transactionNumber: 'INV-000001',
       externalRef: 'POS_ONLINE:attempt-1',
+      storeId: STORE_ID,
+      tillId: TILL_ID,
+      shiftId: 'shift-1',
     };
     prismaMock.salesInvoice.findFirst.mockResolvedValueOnce(existing);
 
@@ -806,12 +829,52 @@ describe('createSale — payments & stock', () => {
     expect((prismaMock as any).salesInvoice.create).not.toHaveBeenCalled();
   });
 
+  it('rejects a duplicate externalRef that already belongs to another till', async () => {
+    prismaMock.salesInvoice.findFirst.mockResolvedValueOnce({
+      id: 'inv-existing',
+      totalPence: 500,
+      transactionNumber: 'INV-000001',
+      externalRef: 'POS_ONLINE:attempt-1',
+      storeId: STORE_ID,
+      tillId: 'till-other',
+      shiftId: 'shift-1',
+    });
+
+    await expect(createSale(makeBaseInput({
+      externalRef: 'POS_ONLINE:attempt-1',
+      payments: [{ method: 'CASH', amountPence: 500 }],
+    }))).rejects.toThrow('different till or shift');
+    expect((prismaMock as any).salesInvoice.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a duplicate externalRef captured against a different shift', async () => {
+    prismaMock.salesInvoice.findFirst.mockResolvedValueOnce({
+      id: 'inv-existing',
+      totalPence: 500,
+      transactionNumber: 'INV-000001',
+      externalRef: 'POS_ONLINE:attempt-shift',
+      storeId: STORE_ID,
+      tillId: TILL_ID,
+      shiftId: 'shift-original',
+    });
+
+    await expect(createSale(makeBaseInput({
+      capturedShiftId: 'shift-later',
+      externalRef: 'POS_ONLINE:attempt-shift',
+      payments: [{ method: 'CASH', amountPence: 500 }],
+    }))).rejects.toThrow('different till or shift');
+    expect((prismaMock as any).salesInvoice.create).not.toHaveBeenCalled();
+  });
+
   it('returns the winner invoice when a concurrent externalRef create races on P2002', async () => {
     const existing = {
       id: 'inv-race-winner',
       totalPence: 500,
       transactionNumber: 'INV-000042',
       externalRef: 'POS_ONLINE:race-1',
+      storeId: STORE_ID,
+      tillId: TILL_ID,
+      shiftId: 'shift-1',
     };
     prismaMock.salesInvoice.findFirst
       .mockResolvedValueOnce(null) // pre-create idempotency miss
@@ -1375,5 +1438,227 @@ describe('createSale — discount clamping', () => {
 
     const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
     expect(createCall.data.totalPence).toBe(1000); // full price
+  });
+});
+
+describe('createSale — open till is mandatory regardless of the stored flag', () => {
+  it.each([true, false])(
+    'rejects a POS sale with no shift when requireOpenTillForSales is %s',
+    async (requireOpenTillForSales) => {
+      prismaMock.business.findUnique.mockResolvedValue({
+        id: BIZ_ID,
+        vatEnabled: false,
+        currency: 'GHS',
+        requireOpenTillForSales,
+        discountApprovalThresholdBps: 5000,
+      });
+      getOpenShiftForTillMock.mockResolvedValue(null);
+
+      await expect(createSale(makeBaseInput({
+        payments: [{ method: 'CASH', amountPence: 500 }],
+      }))).rejects.toThrow('Open till is required');
+    },
+  );
+
+  it('allows the online-order bypass to persist shiftId null', async () => {
+    getOpenShiftForTillMock.mockResolvedValue(null);
+
+    await createSale(makeBaseInput({
+      bypassOpenTillRequirement: true,
+      saleSource: 'ONLINE_ORDER',
+      payments: [{ method: 'MOBILE_MONEY', amountPence: 500 }],
+    }));
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.shiftId).toBeNull();
+    expect(createCall.data.saleSource).toBe('ONLINE_ORDER');
+  });
+
+  it('capturedShiftId + locked CLOSED is LATE_OFFLINE even if getOpenShiftForTill returns a later OPEN shift', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-later', expectedCashPence: 8000 });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public';
+    prismaMock.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) => {
+      const sql = Array.isArray(strings) ? strings.join(' ') : String(strings ?? '');
+      if (sql.includes('"openKey"') && sql.includes('FOR UPDATE')) {
+        return [{ id: 'shift-original', status: 'CLOSED', openKey: null }];
+      }
+      return [{ id: 'shift-later' }];
+    });
+
+    try {
+      await createSale(makeBaseInput({
+        capturedShiftId: 'shift-original',
+        payments: [{ method: 'CASH', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.shiftId).toBe('shift-original');
+    expect(createCall.data.saleSource).toBe('LATE_OFFLINE');
+    expect((prismaMock as any).shift.updateMany).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    const lockSql = (prismaMock.$queryRaw.mock.calls[0]?.[0] as string[] | undefined)?.join(' ') ?? '';
+    expect(lockSql).toContain('FOR UPDATE');
+    expect(lockSql).toContain('"openKey"');
+    expect(prismaMock.$queryRaw.mock.calls.some((call) => {
+      const sql = Array.isArray(call[0]) ? (call[0] as string[]).join(' ') : String(call[0] ?? '');
+      return sql.includes('CASH_SALE');
+    })).toBe(false);
+  });
+
+  it('capturedShiftId + locked OPEN applies live money on the captured shift', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-original', expectedCashPence: 4000 });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public';
+    prismaMock.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) => {
+      const sql = Array.isArray(strings) ? strings.join(' ') : String(strings ?? '');
+      if (sql.includes('"openKey"') && sql.includes('FOR UPDATE')) {
+        return [{ id: 'shift-original', status: 'OPEN', openKey: TILL_ID }];
+      }
+      return [{ id: 'shift-original' }];
+    });
+
+    try {
+      await createSale(makeBaseInput({
+        capturedShiftId: 'shift-original',
+        payments: [{ method: 'CARD', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.shiftId).toBe('shift-original');
+    expect(createCall.data.saleSource).toBe('POS');
+    expect((prismaMock as any).shift.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'shift-original' }),
+      }),
+    );
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+  });
+
+  it('capturedShiftId + locked OPEN never binds money to a later OPEN shift from getOpenShiftForTill', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-later', expectedCashPence: 8000 });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public';
+    prismaMock.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) => {
+      const sql = Array.isArray(strings) ? strings.join(' ') : String(strings ?? '');
+      if (sql.includes('"openKey"') && sql.includes('FOR UPDATE')) {
+        return [{ id: 'shift-original', status: 'OPEN', openKey: TILL_ID }];
+      }
+      return [{ id: 'shift-original' }];
+    });
+
+    try {
+      await createSale(makeBaseInput({
+        capturedShiftId: 'shift-original',
+        payments: [{ method: 'CARD', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    expect((prismaMock as any).shift.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'shift-original' }),
+      }),
+    );
+    expect((prismaMock as any).shift.updateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'shift-later' }),
+      }),
+    );
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.shiftId).toBe('shift-original');
+    expect(createCall.data.saleSource).toBe('POS');
+  });
+
+  it('capturedShiftId + SQLite findFirst CLOSED is LATE_OFFLINE with no drawer', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-later', expectedCashPence: 8000 });
+    (prismaMock as any).shift.findFirst.mockResolvedValue({
+      id: 'shift-original',
+      status: 'CLOSED',
+      openKey: null,
+    });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'file:./dev.db';
+
+    try {
+      await createSale(makeBaseInput({
+        capturedShiftId: 'shift-original',
+        payments: [{ method: 'CASH', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.shiftId).toBe('shift-original');
+    expect(createCall.data.saleSource).toBe('LATE_OFFLINE');
+    expect((prismaMock as any).shift.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    expect((prismaMock as any).shift.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'shift-original', tillId: TILL_ID }),
+      }),
+    );
+  });
+
+  it('capturedShiftId + SQLite findFirst OPEN applies live money on the captured shift', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-original', expectedCashPence: 4000 });
+    (prismaMock as any).shift.findFirst.mockResolvedValue({
+      id: 'shift-original',
+      status: 'OPEN',
+      openKey: TILL_ID,
+    });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'file:./dev.db';
+
+    try {
+      await createSale(makeBaseInput({
+        capturedShiftId: 'shift-original',
+        payments: [{ method: 'CARD', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.shiftId).toBe('shift-original');
+    expect(createCall.data.saleSource).toBe('POS');
+    expect((prismaMock as any).shift.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'shift-original' }),
+      }),
+    );
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('rejects a captured shift that fails the tenant-scoped lock', async () => {
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public';
+    prismaMock.$queryRaw.mockResolvedValue([]);
+
+    try {
+      await expect(createSale(makeBaseInput({
+        capturedShiftId: 'shift-missing',
+        payments: [{ method: 'CASH', amountPence: 500 }],
+      }))).rejects.toThrow('Captured offline shift does not match this sale context.');
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    expect(prismaMock.salesInvoice.create).not.toHaveBeenCalled();
+    expect((prismaMock as any).shift.updateMany).not.toHaveBeenCalled();
   });
 });

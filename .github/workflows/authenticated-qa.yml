@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      TZ: Africa/Accra
       PLAYWRIGHT_BASE_URL: https://www.tillflow.app
       PLAYWRIGHT_OWNER_EMAIL: ${{ secrets.PLAYWRIGHT_OWNER_EMAIL }}
       PLAYWRIGHT_OWNER_PASSWORD: ${{ secrets.PLAYWRIGHT_OWNER_PASSWORD }}

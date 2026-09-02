@@ -261,7 +261,7 @@ describe('supplier payments page — supplierId support', () => {
     const formSrc = readFileSync(join(process.cwd(), 'components/SupplierPaymentForm.tsx'), 'utf8');
     expect(formSrc).toContain('action={recordSupplierPaymentAction}');
     expect(formSrc).toContain('name="invoiceId"');
-    expect(formSrc).toContain('name="idempotencyKey"');
+    expect(formSrc).toContain('StableIdempotencyKeyInput');
     expect(formSrc).toContain('name="paymentMethod"');
     expect(formSrc).toContain('name="amount"');
     expect(formSrc).toContain('name="paidAt"');

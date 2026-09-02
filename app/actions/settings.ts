@@ -16,6 +16,7 @@ import {
   normalizeMerchantBrandPrimaryColor,
 } from '@/lib/merchant-branding';
 import { invalidateStorefrontBusinessCache } from '@/lib/services/online-orders';
+import { checkoutContextTag, revalidatePosTillShiftTags } from '@/lib/cache/pos-tags';
 
 function parseOptionalDate(value: string | null | undefined) {
   if (!value?.trim()) return null;
@@ -44,7 +45,7 @@ export async function setStoreModeAction(storeMode: 'SINGLE_STORE' | 'MULTI_STOR
     entityId: businessId,
     details: { storeMode: validated, requestedStoreMode, source: 'onboarding' },
   }).catch((e) => console.error('[audit]', e));
-  revalidateTag('checkout-context');
+  revalidateTag(checkoutContextTag(businessId));
   return { success: true };
 }
 
@@ -72,7 +73,6 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const momoEnabled = formData.get('momoEnabled') === 'on';
     const momoProvider = formOptionalString(formData, 'momoProvider');
     const momoNumber = formOptionalString(formData, 'momoNumber');
-    const requireOpenTillForSales = formData.get('requireOpenTillForSales') === 'on';
     const varianceReasonRequired = formData.get('varianceReasonRequired') === 'on';
     const discountApprovalThresholdBps = Math.max(
       0,
@@ -121,7 +121,6 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         momoProvider,
         momoNumber,
         openingCapitalPence,
-        requireOpenTillForSales,
         varianceReasonRequired,
         discountApprovalThresholdBps,
         minimumMarginThresholdBps,
@@ -137,7 +136,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, momoEnabled } }).catch((e) => console.error('[audit]', e));
 
     revalidateTag(`readiness-${businessId}`);
-    revalidateTag('checkout-context');
+    revalidateTag(checkoutContextTag(businessId));
     revalidatePath('/onboarding');
     revalidatePath('/settings');
 
@@ -176,7 +175,7 @@ export async function updateOrganizationSettingsAction(formData: FormData): Prom
       details: { customerScope, storeMode, requestedStoreMode, source: 'organization-settings' },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('checkout-context');
+    revalidateTag(checkoutContextTag(businessId));
 
     redirect('/settings/organization');
   }, '/settings/organization');
@@ -340,7 +339,7 @@ export async function updateLoyaltySettingsAction(formData: FormData): Promise<v
       details: { source: 'loyalty-settings', loyaltyEnabled, loyaltyPointsPerGhsPence, loyaltyGhsPerHundredPoints },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('checkout-context');
+    revalidateTag(checkoutContextTag(businessId));
 
     redirect('/settings/loyalty');
   }, '/settings/loyalty');
@@ -356,6 +355,7 @@ export async function createTillAction(formData: FormData): Promise<ActionResult
   if (existing >= 10) return { success: false, error: 'Maximum of 10 active tills per store.' };
 
   await prisma.till.create({ data: { storeId, name } });
+  revalidatePosTillShiftTags(businessId, storeId);
 
   audit({
     businessId,
@@ -384,6 +384,7 @@ export async function deactivateTillAction(tillId: string): Promise<ActionResult
   if (openShift) return { success: false, error: 'This till has an open shift. Close the shift before deactivating.' };
 
   await prisma.till.update({ where: { id: tillId }, data: { active: false } });
+  revalidatePosTillShiftTags(businessId, storeId);
 
   audit({
     businessId,

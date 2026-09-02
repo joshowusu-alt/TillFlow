@@ -8,6 +8,7 @@ import { Logo } from '@/components/Logo';
 import Link from 'next/link';
 import type { BusinessPlan } from '@/lib/features';
 import { computeSubscriptionPricing } from '@/lib/plan-pricing';
+import { canAdvanceRegisterStep1, canAdvanceRegisterStep2 } from '@/lib/register/advance';
 
 const errorMessages: Record<string, string> = {
   missing: 'Please fill in all fields.',
@@ -46,8 +47,8 @@ export default function RegisterForm({ error }: RegisterFormProps) {
   const [referredByName, setReferredByName] = useState('');
   const [referredByPhone, setReferredByPhone] = useState('');
 
-  const canAdvanceFrom1 = businessName.trim().length > 0 && ownerName.trim().length > 0;
-  const canAdvanceFrom2 = email.trim().length > 0 && password.length >= 6;
+  const canAdvanceFrom1 = canAdvanceRegisterStep1(businessName, ownerName);
+  const canAdvanceFrom2 = canAdvanceRegisterStep2(email, password);
 
   const stepLabels = ['Business', 'Account', 'Plan', 'Currency'];
   const accentClasses = {
@@ -393,6 +394,7 @@ export default function RegisterForm({ error }: RegisterFormProps) {
           <input type="hidden" name="referredByName" value={referredByName} />
           <input type="hidden" name="referredByPhone" value={referredByPhone} />
           <input type="hidden" name="sourceChannel" value="INBOUND" />
+          <input type="hidden" name="qaTag" value="" />
 
           <details className="rounded-xl border border-black/8 bg-white/80 px-4 py-3 text-sm">
             <summary className="cursor-pointer font-semibold text-black/70">How did you hear about TillFlow? (optional)</summary>

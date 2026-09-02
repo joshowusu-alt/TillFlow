@@ -1,8 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { hashOfflineSalePayload } from '@/lib/offline/payload-hash';
 
-// ---------------------------------------------------------------------------
-// Hoisted mocks
-// ---------------------------------------------------------------------------
 const { prismaMock, mockCreateSale } = vi.hoisted(() => {
   const mockCreateSale = vi.fn();
   const prismaMock = {
@@ -10,6 +8,8 @@ const { prismaMock, mockCreateSale } = vi.hoisted(() => {
     till: { findFirst: vi.fn() },
     customer: { findFirst: vi.fn() },
     salesInvoice: { findFirst: vi.fn() },
+    shift: { findFirst: vi.fn(), findMany: vi.fn() },
+    user: { findFirst: vi.fn() },
   };
   return { prismaMock, mockCreateSale };
 });
@@ -26,119 +26,498 @@ vi.mock('@/lib/billing-entitlements', () => ({
   getBillingEntitlement: vi.fn(() => ({ canWrite: true })),
 }));
 
-// Import AFTER mocks
 import { processOfflineSale, type OfflineSalePayload } from './process-offline-sale';
 
-// ---------------------------------------------------------------------------
-// Test data helpers
-// ---------------------------------------------------------------------------
-const USER = { id: 'user-1', businessId: 'biz-1' };
+const USER = { id: 'user-sync', businessId: 'biz-1' };
 const STORE = { id: 'store-1' };
 const TILL = { id: 'till-1' };
+const OPEN_SHIFT = { id: 'shift-1', tillId: 'till-1', status: 'OPEN', closedAt: null, openKey: 'till-1' };
+const CLOSED_SHIFT = { id: 'shift-1', tillId: 'till-1', status: 'CLOSED', closedAt: new Date('2026-08-01T12:00:00Z'), openKey: null };
+const CASHIER = { id: 'cashier-1', businessId: 'biz-1', active: true };
 
-function makePayload(overrides: Partial<OfflineSalePayload> = {}): OfflineSalePayload {
+function baseFields() {
   return {
     id: 'offline-abc123',
+    businessId: 'biz-1',
     storeId: 'store-1',
     tillId: 'till-1',
-    customerId: null,
-    paymentStatus: 'PAID',
+    shiftId: 'shift-1',
+    cashierUserId: 'cashier-1',
+    customerId: null as string | null,
+    paymentStatus: 'PAID' as const,
     lines: [
       {
         productId: 'prod-1',
         unitId: 'unit-1',
         qtyInUnit: 2,
+        unitPricePence: 2500,
+        lineSubtotalPence: 5000,
         discountType: 'NONE',
         discountValue: '0',
       },
     ],
-    payments: [{ method: 'CASH', amountPence: 5000 }],
+    payments: [{ method: 'CASH' as const, amountPence: 5000 }],
     orderDiscountType: 'NONE',
     orderDiscountValue: '0',
-    createdAt: new Date('2025-01-15T10:00:00Z').toISOString(),
-    ...overrides,
+    createdAt: new Date().toISOString(),
+    localSaleTime: new Date().toISOString(),
+    localSequence: 1,
+    inventoryPolicy: 'enforce' as const,
   };
 }
 
-function setupStoreTill() {
-  prismaMock.store.findFirst.mockResolvedValue(STORE);
-  prismaMock.till.findFirst.mockResolvedValue(TILL);
+async function makePayload(overrides: Partial<OfflineSalePayload> = {}): Promise<OfflineSalePayload> {
+  const merged = { ...baseFields(), ...overrides } as OfflineSalePayload;
+  if (overrides.lines) merged.lines = overrides.lines;
+  if (overrides.payments) merged.payments = overrides.payments;
+  merged.payloadHash = overrides.payloadHash ?? (await hashOfflineSalePayload({
+    ...merged,
+    businessId: merged.businessId || USER.businessId,
+  }));
+  merged.idempotencyKey = overrides.idempotencyKey ?? 'idem-abc123';
+  return merged;
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-describe('processOfflineSale', () => {
+function setupHappyPath() {
+  prismaMock.store.findFirst.mockResolvedValue(STORE);
+  prismaMock.till.findFirst.mockResolvedValue(TILL);
+  prismaMock.shift.findFirst.mockResolvedValue(OPEN_SHIFT);
+  prismaMock.user.findFirst.mockResolvedValue(CASHIER);
+  prismaMock.salesInvoice.findFirst.mockResolvedValue(null);
+}
+
+describe('processOfflineSale — offline lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setupStoreTill();
+    setupHappyPath();
+    vi.useRealTimers();
   });
 
-  it('1. idempotency — duplicate externalRef returns existing invoiceId without calling createSale', async () => {
-    prismaMock.salesInvoice.findFirst.mockResolvedValue({ id: 'inv-existing' });
+  it('capture → sync while shift open calls createSale with captured cashier and enforce stock', async () => {
+    mockCreateSale.mockResolvedValue({ id: 'inv-new' });
+    const payload = await makePayload();
 
-    const result = await processOfflineSale(makePayload(), USER);
+    const result = await processOfflineSale(payload, USER);
 
-    expect(result).toMatchObject({ success: true, invoiceId: 'inv-existing' });
+    expect(result).toEqual({ success: true, status: 'synced', invoiceId: 'inv-new' });
+    expect(mockCreateSale).toHaveBeenCalledTimes(1);
+    expect(mockCreateSale).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessId: 'biz-1',
+        tillId: 'till-1',
+        cashierUserId: 'cashier-1',
+        inventoryPolicy: 'enforce',
+        externalRef: 'OFFLINE_SYNC:idem-abc123',
+        capturedShiftId: 'shift-1',
+      }),
+    );
+    expect(mockCreateSale.mock.calls[0][0].saleSource).toBeUndefined();
+    expect(mockCreateSale.mock.calls[0][0].bypassOpenTillRequirement).toBeUndefined();
+  });
+
+  it('always passes capturedShiftId and does not force saleSource from a pre-tx shift read', async () => {
+    mockCreateSale.mockResolvedValue({ id: 'inv-captured' });
+
+    for (const shift of [OPEN_SHIFT, CLOSED_SHIFT]) {
+      vi.clearAllMocks();
+      setupHappyPath();
+      prismaMock.shift.findFirst.mockResolvedValue(shift);
+      mockCreateSale.mockResolvedValue({ id: 'inv-captured' });
+
+      const result = await processOfflineSale(await makePayload(), USER);
+
+      expect(result).toEqual({ success: true, status: 'synced', invoiceId: 'inv-captured' });
+      expect(mockCreateSale).toHaveBeenCalledTimes(1);
+      const args = mockCreateSale.mock.calls[0][0];
+      expect(args.capturedShiftId).toBe('shift-1');
+      expect(args.saleSource).toBeUndefined();
+      expect(args.bypassOpenTillRequirement).toBeUndefined();
+    }
+  });
+
+  it('capture → shift closed → sync still passes capturedShiftId without pre-deciding LATE_OFFLINE', async () => {
+    prismaMock.shift.findFirst.mockResolvedValue(CLOSED_SHIFT);
+    mockCreateSale.mockResolvedValueOnce({ id: 'inv-late' });
+    const payload = await makePayload();
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toEqual({ success: true, status: 'synced', invoiceId: 'inv-late' });
+    expect(mockCreateSale).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capturedShiftId: 'shift-1',
+        tillId: 'till-1',
+      }),
+    );
+    expect(mockCreateSale.mock.calls[0][0].saleSource).toBeUndefined();
+    expect(mockCreateSale.mock.calls[0][0].bypassOpenTillRequirement).toBeUndefined();
+  });
+
+  it('same payload replay returns already_synced without createSale', async () => {
+    const payload = await makePayload();
+    prismaMock.salesInvoice.findFirst.mockResolvedValue({
+      id: 'inv-existing',
+      storeId: 'store-1',
+      tillId: 'till-1',
+      shiftId: 'shift-1',
+      cashierUserId: 'cashier-1',
+      customerId: null,
+      lines: [
+        {
+          productId: 'prod-1',
+          unitId: 'unit-1',
+          qtyInUnit: 2,
+          unitPricePence: 2500,
+          lineSubtotalPence: 5000,
+        },
+      ],
+      payments: [{ method: 'CASH', amountPence: 5000 }],
+    });
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toMatchObject({
+      success: true,
+      status: 'already_synced',
+      invoiceId: 'inv-existing',
+    });
     expect(mockCreateSale).not.toHaveBeenCalled();
   });
 
-  it('2. successful new sale — createSale succeeds and returns invoiceId', async () => {
-    prismaMock.salesInvoice.findFirst.mockResolvedValue(null);
-    mockCreateSale.mockResolvedValue({ id: 'inv-new' });
+  it('same key on a different captured shift is payload_mismatch', async () => {
+    const payload = await makePayload();
+    prismaMock.salesInvoice.findFirst.mockResolvedValue({
+      id: 'inv-existing',
+      storeId: 'store-1',
+      tillId: 'till-1',
+      shiftId: 'shift-other',
+      cashierUserId: 'cashier-1',
+      customerId: null,
+      lines: [
+        {
+          productId: 'prod-1',
+          unitId: 'unit-1',
+          qtyInUnit: 2,
+          unitPricePence: 2500,
+          lineSubtotalPence: 5000,
+        },
+      ],
+      payments: [{ method: 'CASH', amountPence: 5000 }],
+    });
 
-    const result = await processOfflineSale(makePayload(), USER);
+    const result = await processOfflineSale(payload, USER);
 
-    expect(result).toEqual({ success: true, invoiceId: 'inv-new' });
+    expect(result).toEqual({ success: false, status: 'rejected', reason: 'payload_mismatch' });
+    expect(mockCreateSale).not.toHaveBeenCalled();
+  });
+
+  it('replay without captured unit prices still returns already_synced', async () => {
+    const payload = await makePayload({
+      lines: [
+        {
+          productId: 'prod-1',
+          unitId: 'unit-1',
+          qtyInUnit: 2,
+          discountType: 'NONE',
+          discountValue: '0',
+        },
+      ],
+    });
+    prismaMock.salesInvoice.findFirst.mockResolvedValue({
+      id: 'inv-priced',
+      storeId: 'store-1',
+      tillId: 'till-1',
+      shiftId: 'shift-1',
+      cashierUserId: 'cashier-1',
+      customerId: null,
+      lines: [
+        {
+          productId: 'prod-1',
+          unitId: 'unit-1',
+          qtyInUnit: 2,
+          unitPricePence: 2500,
+          lineSubtotalPence: 5000,
+        },
+      ],
+      payments: [{ method: 'CASH', amountPence: 5000 }],
+    });
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toMatchObject({
+      success: true,
+      status: 'already_synced',
+      invoiceId: 'inv-priced',
+    });
+    expect(mockCreateSale).not.toHaveBeenCalled();
+  });
+
+  it('replay of a cash tender that included change still returns already_synced', async () => {
+    const payload = await makePayload({
+      payments: [{ method: 'CASH', amountPence: 10000 }],
+    });
+    prismaMock.salesInvoice.findFirst.mockResolvedValue({
+      id: 'inv-change',
+      storeId: 'store-1',
+      tillId: 'till-1',
+      shiftId: 'shift-1',
+      cashierUserId: 'cashier-1',
+      customerId: null,
+      lines: [
+        {
+          productId: 'prod-1',
+          unitId: 'unit-1',
+          qtyInUnit: 2,
+          unitPricePence: 2500,
+          lineSubtotalPence: 5000,
+        },
+      ],
+      payments: [{ method: 'CASH', amountPence: 5000 }],
+    });
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toMatchObject({
+      success: true,
+      status: 'already_synced',
+      invoiceId: 'inv-change',
+    });
+    expect(mockCreateSale).not.toHaveBeenCalled();
+  });
+
+  it('same key different payload is rejected', async () => {
+    const payload = await makePayload({
+      lines: [
+        {
+          productId: 'prod-1',
+          unitId: 'unit-1',
+          qtyInUnit: 9,
+          unitPricePence: 2500,
+          lineSubtotalPence: 22500,
+          discountType: 'NONE',
+          discountValue: '0',
+        },
+      ],
+    });
+    prismaMock.salesInvoice.findFirst.mockResolvedValue({
+      id: 'inv-existing',
+      storeId: 'store-1',
+      tillId: 'till-1',
+      shiftId: 'shift-1',
+      cashierUserId: 'cashier-1',
+      customerId: null,
+      lines: [
+        {
+          productId: 'prod-1',
+          unitId: 'unit-1',
+          qtyInUnit: 2,
+          unitPricePence: 2500,
+          lineSubtotalPence: 5000,
+        },
+      ],
+      payments: [{ method: 'CASH', amountPence: 5000 }],
+    });
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toEqual({ success: false, status: 'rejected', reason: 'payload_mismatch' });
+    expect(mockCreateSale).not.toHaveBeenCalled();
+  });
+
+  it('tenant attack is rejected', async () => {
+    const payload = await makePayload({ businessId: 'biz-attacker' });
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toEqual({ success: false, status: 'rejected', reason: 'tenant_mismatch' });
+    expect(mockCreateSale).not.toHaveBeenCalled();
+    expect(prismaMock.store.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('network timeout after commit — idempotent replay returns already_synced', async () => {
+    const payload = await makePayload();
+    const existing = {
+      id: 'inv-committed',
+      storeId: 'store-1',
+      tillId: 'till-1',
+      shiftId: 'shift-1',
+      cashierUserId: 'cashier-1',
+      customerId: null,
+      lines: [
+        {
+          productId: 'prod-1',
+          unitId: 'unit-1',
+          qtyInUnit: 2,
+          unitPricePence: 2500,
+          lineSubtotalPence: 5000,
+        },
+      ],
+      payments: [{ method: 'CASH', amountPence: 5000 }],
+    };
+
+    // First attempt: committed, client timed out before seeing 200
+    mockCreateSale.mockResolvedValue({ id: 'inv-committed' });
+    const first = await processOfflineSale(payload, USER);
+    expect(first).toEqual({ success: true, status: 'synced', invoiceId: 'inv-committed' });
+
+    // Replay after timeout: invoice now exists for the same key + hash
+    prismaMock.salesInvoice.findFirst.mockResolvedValue(existing);
+    const replay = await processOfflineSale(payload, USER);
+
+    expect(replay).toMatchObject({
+      success: true,
+      status: 'already_synced',
+      invoiceId: 'inv-committed',
+    });
     expect(mockCreateSale).toHaveBeenCalledTimes(1);
   });
 
-  it('3. P2002 race condition — falls back to findFirst and returns existing invoice', async () => {
+  it('P2002 race after commit is treated as already_synced when fingerprint matches', async () => {
+    const payload = await makePayload();
     prismaMock.salesInvoice.findFirst
-      .mockResolvedValueOnce(null)              // initial idempotency check
-      .mockResolvedValueOnce({ id: 'inv-race' }); // fallback after P2002
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'inv-race',
+        storeId: 'store-1',
+        tillId: 'till-1',
+        shiftId: 'shift-1',
+        cashierUserId: 'cashier-1',
+        customerId: null,
+        lines: [
+          {
+            productId: 'prod-1',
+            unitId: 'unit-1',
+            qtyInUnit: 2,
+            unitPricePence: 2500,
+            lineSubtotalPence: 5000,
+          },
+        ],
+        payments: [{ method: 'CASH', amountPence: 5000 }],
+      });
 
-    const p2002Error = Object.assign(new Error('Unique constraint failed'), {
-      code: 'P2002',
-      meta: { target: ['externalRef'] },
+    mockCreateSale.mockRejectedValue(
+      Object.assign(new Error('Unique constraint failed'), {
+        code: 'P2002',
+        meta: { target: ['externalRef'] },
+      }),
+    );
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toMatchObject({ success: true, status: 'already_synced', invoiceId: 'inv-race' });
+  });
+
+  it('insufficient stock is needs_review and does not allow-negative by default', async () => {
+    mockCreateSale.mockRejectedValue(new Error('Insufficient on hand'));
+    const payload = await makePayload();
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toEqual({ success: false, status: 'needs_review', reason: 'insufficient_stock' });
+    expect(mockCreateSale).toHaveBeenCalledWith(expect.objectContaining({ inventoryPolicy: 'enforce' }));
+  });
+
+  it('deleted product is needs_review', async () => {
+    mockCreateSale.mockRejectedValue(new Error('Unit not configured for product'));
+    const payload = await makePayload();
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toEqual({ success: false, status: 'needs_review', reason: 'product_deleted' });
+  });
+
+  it('clock skew over 24h is needs_review', async () => {
+    const payload = await makePayload({
+      localSaleTime: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
+      createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
     });
-    mockCreateSale.mockRejectedValue(p2002Error);
 
-    const result = await processOfflineSale(makePayload(), USER);
+    const result = await processOfflineSale(payload, USER);
 
-    expect(result).toMatchObject({ success: true, invoiceId: 'inv-race' });
+    expect(result).toEqual({ success: false, status: 'needs_review', reason: 'clock_skew' });
+    expect(mockCreateSale).not.toHaveBeenCalled();
   });
 
-  it('4. createSale failure — propagates non-P2002 error', async () => {
-    prismaMock.salesInvoice.findFirst.mockResolvedValue(null);
+  it('missing shiftId is needs_review (legacy queue migrate path)', async () => {
+    const payload = await makePayload({ shiftId: null });
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toEqual({ success: false, status: 'needs_review', reason: 'missing_shift' });
+    expect(mockCreateSale).not.toHaveBeenCalled();
+  });
+
+  it('revoked cashier does not rewrite captured cashierUserId', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'cashier-1', businessId: 'biz-1', active: false });
+    mockCreateSale.mockResolvedValue({ id: 'inv-revoked-cashier' });
+    const payload = await makePayload();
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toEqual({ success: true, status: 'synced', invoiceId: 'inv-revoked-cashier' });
+    expect(mockCreateSale).toHaveBeenCalledWith(
+      expect.objectContaining({ cashierUserId: 'cashier-1' }),
+    );
+    expect(mockCreateSale.mock.calls[0][0].cashierUserId).not.toBe(USER.id);
+  });
+
+  it('cashier from another tenant is needs_review', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'cashier-1', businessId: 'biz-other', active: true });
+    const payload = await makePayload();
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toEqual({ success: false, status: 'needs_review', reason: 'cashier_revoked' });
+    expect(mockCreateSale).not.toHaveBeenCalled();
+  });
+
+  it('tampered payloadHash is rejected', async () => {
+    const payload = await makePayload({ payloadHash: 'deadbeef' });
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toEqual({ success: false, status: 'rejected', reason: 'payload_mismatch' });
+    expect(mockCreateSale).not.toHaveBeenCalled();
+  });
+
+  it('omitted payloadHash is rejected', async () => {
+    const payload = await makePayload({ payloadHash: '' });
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toEqual({ success: false, status: 'rejected', reason: 'payload_mismatch' });
+    expect(mockCreateSale).not.toHaveBeenCalled();
+  });
+
+  it('duplicate local sequence in the same batch is needs_review for the second item', async () => {
+    mockCreateSale.mockResolvedValue({ id: 'inv-seq' });
+    const first = await makePayload({ id: 'offline-1', idempotencyKey: 'idem-1', localSequence: 4 });
+    const second = await makePayload({ id: 'offline-2', idempotencyKey: 'idem-2', localSequence: 4 });
+    const seenSequences = new Set<string>();
+
+    const a = await processOfflineSale(first, USER, { seenSequences });
+    const b = await processOfflineSale(second, USER, { seenSequences });
+
+    expect(a.status).toBe('synced');
+    expect(b).toEqual({ success: false, status: 'needs_review', reason: 'duplicate_local_sequence' });
+  });
+
+  it('unexpected createSale failure still throws', async () => {
     mockCreateSale.mockRejectedValue(new Error('Unexpected DB error'));
+    const payload = await makePayload();
 
-    await expect(processOfflineSale(makePayload(), USER)).rejects.toThrow('Unexpected DB error');
+    await expect(processOfflineSale(payload, USER)).rejects.toThrow('Unexpected DB error');
   });
 
-  it('5. businessId from user auth — createSale called with user.businessId not payload value', async () => {
-    prismaMock.salesInvoice.findFirst.mockResolvedValue(null);
+  it('createSale is called with user.businessId not a spoofed payload tenant', async () => {
     mockCreateSale.mockResolvedValue({ id: 'inv-biz' });
-
     const customUser = { id: 'user-99', businessId: 'biz-correct' };
-    await processOfflineSale(makePayload(), customUser);
+    prismaMock.store.findFirst.mockResolvedValue(STORE);
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'cashier-1', businessId: 'biz-correct', active: true });
+    const payload = await makePayload({ businessId: 'biz-correct' });
 
-    expect(mockCreateSale).toHaveBeenCalledWith(
-      expect.objectContaining({ businessId: 'biz-correct' })
-    );
-  });
+    await processOfflineSale(payload, customUser);
 
-  it('6. offline sync replays sale with allow-negative inventory policy', async () => {
-    prismaMock.salesInvoice.findFirst.mockResolvedValue(null);
-    mockCreateSale.mockResolvedValue({ id: 'inv-offline' });
-
-    await processOfflineSale(makePayload(), USER);
-
-    expect(mockCreateSale).toHaveBeenCalledWith(
-      expect.objectContaining({
-        inventoryPolicy: 'allow-negative',
-        externalRef: 'OFFLINE_SYNC:offline-abc123',
-      })
-    );
+    expect(mockCreateSale).toHaveBeenCalledWith(expect.objectContaining({ businessId: 'biz-correct' }));
   });
 });

@@ -27,10 +27,11 @@ import { detectExcessiveDiscountRisk, detectNegativeMarginRisk } from './risk-mo
 import { clampLoyaltyRedemption, computePointsEarned } from '@/lib/loyalty';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 import { resolveBranchIdForStore } from './branches';
-import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS, appLog } from '@/lib/observability';
 import { isSqliteDatabaseUrl } from '@/lib/database-runtime';
 import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
 import { unstable_cache } from 'next/cache';
+import { checkoutContextTag } from '@/lib/cache/pos-tags';
 
 // Account codes fetched on every checkout — extracted to module level so the
 // unstable_cache key is stable across calls.
@@ -49,37 +50,43 @@ const CHECKOUT_ACCOUNT_CODES = [
 // (business settings, store existence, chart of accounts). Caching them
 // eliminates 2–3 serialised Neon RTTs per checkout (~300–450 ms at iad1).
 //
-// Tag: 'checkout-context' — invalidated by app/actions/settings.ts whenever
-// business settings change, and by refreshCurrentView for manual resets.
+// Tag: checkoutContextTag(businessId) — invalidated by app/actions/settings.ts
+// whenever that business's settings change, and by refreshCurrentView.
 //
 // NOT cached: till (active-flag safety gate), branchId (active-flag risk),
 // openShift (changes on shift open/close), inventoryMap (changes every sale),
 // productUnits (cart-dependent), momoResult, customerResult (per-checkout).
 
-const getCachedBusiness = unstable_cache(
-  async (businessId: string) => prisma.business.findUnique({ where: { id: businessId } }),
-  ['checkout-context-business'],
-  { revalidate: 60, tags: ['checkout-context'] },
-);
+function getCachedBusiness(businessId: string) {
+  return unstable_cache(
+    () => prisma.business.findUnique({ where: { id: businessId } }),
+    ['checkout-context-business', businessId],
+    { revalidate: 60, tags: [checkoutContextTag(businessId)] },
+  )();
+}
 
-const getCachedStore = unstable_cache(
-  async (storeId: string, businessId: string) =>
-    prisma.store.findFirst({
-      where: { id: storeId, businessId },
-      select: { id: true },
-    }),
-  ['checkout-context-store'],
-  { revalidate: 300, tags: ['checkout-context'] },
-);
+function getCachedStore(storeId: string, businessId: string) {
+  return unstable_cache(
+    () =>
+      prisma.store.findFirst({
+        where: { id: storeId, businessId },
+        select: { id: true },
+      }),
+    ['checkout-context-store', businessId, storeId],
+    { revalidate: 300, tags: [checkoutContextTag(businessId)] },
+  )();
+}
 
-const getCachedCheckoutAccounts = unstable_cache(
-  async (businessId: string) =>
-    prisma.account.findMany({
-      where: { businessId, code: { in: [...CHECKOUT_ACCOUNT_CODES] } },
-    }),
-  ['checkout-context-accounts'],
-  { revalidate: 300, tags: ['checkout-context'] },
-);
+function getCachedCheckoutAccounts(businessId: string) {
+  return unstable_cache(
+    () =>
+      prisma.account.findMany({
+        where: { businessId, code: { in: [...CHECKOUT_ACCOUNT_CODES] } },
+      }),
+    ['checkout-context-accounts', businessId],
+    { revalidate: 300, tags: [checkoutContextTag(businessId)] },
+  )();
+}
 
 function computeDiscount(
   subtotal: number,
@@ -287,6 +294,7 @@ function resolveSaleUnitCostBasePence(
 }
 
 export type SalePaymentInput = PaymentInput;
+export type SaleSource = 'POS' | 'ONLINE_ORDER' | 'LATE_OFFLINE' | 'UNRECONCILED_LEGACY';
 
 export type DiscountType = 'NONE' | 'PERCENT' | 'AMOUNT';
 
@@ -323,11 +331,19 @@ export type CreateSaleInput = {
   inventoryPolicy?: 'enforce' | 'allow-negative';
   skipInventoryMovements?: boolean;
   /**
-   * Set true for system-driven sales (e.g. online orders) where no human cashier
-   * has an open till. The require-open-till business setting still applies to
-   * staff-initiated sales.
+   * Allowed only for `lib/services/online-order-commit.ts`. Operational POS
+   * sales always require an OPEN shift; this flag is ignored as a way to
+   * persist `shiftId = null` from POS or offline sync.
    */
   bypassOpenTillRequirement?: boolean;
+  /** Auditable origin. Default POS for new operational sales. */
+  saleSource?: SaleSource;
+  /**
+   * Agent B hook: immutable shift captured when the sale was queued offline.
+   * LATE_OFFLINE may attach this original shift even after it has closed.
+   * Do not invent a later open shift when this is set.
+   */
+  capturedShiftId?: string | null;
   /** Points to redeem at checkout (requires customerId). */
   loyaltyPointsToRedeem?: number;
   /** Actual cash tendered (may exceed applied cash when change is due). */
@@ -336,6 +352,69 @@ export type CreateSaleInput = {
   changeDuePence?: number | null;
   lines: SaleLineInput[];
 };
+
+export const IDEMPOTENT_SALE_CONTEXT_MISMATCH_MSG =
+  'This sale was already recorded on a different till or shift. Start a new checkout.';
+
+/** Same externalRef may replay only onto the original store, till, and captured shift. */
+export function idempotentCheckoutMatchesExisting(
+  existing: { storeId: string; tillId: string; shiftId?: string | null },
+  input: { storeId: string; tillId: string; capturedShiftId?: string | null },
+): boolean {
+  if (existing.storeId !== input.storeId) return false;
+  if (existing.tillId !== input.tillId) return false;
+  const captured = input.capturedShiftId?.trim() || null;
+  if (captured && (existing.shiftId ?? null) !== captured) return false;
+  return true;
+}
+
+type LockedCapturedShift = {
+  id: string;
+  status: string;
+  openKey: string | null;
+};
+
+/**
+ * Lock the immutable captured offline shift inside the sale transaction.
+ * Postgres: SELECT … FOR UPDATE on the tenant-scoped row.
+ * SQLite: findFirst on the same tx (serialized writers).
+ */
+async function lockCapturedShiftForOfflineSale(
+  tx: Prisma.TransactionClient,
+  input: {
+    capturedShiftId: string;
+    tillId: string;
+    storeId: string;
+    businessId: string;
+  },
+): Promise<LockedCapturedShift | null> {
+  if (!isSqliteDatabaseUrl(process.env.DATABASE_URL)) {
+    const rows = await tx.$queryRaw<LockedCapturedShift[]>`
+      SELECT sh."id", sh."status", sh."openKey"
+      FROM "Shift" AS sh
+      JOIN "Till" AS t ON t."id" = sh."tillId"
+      JOIN "Store" AS st ON st."id" = t."storeId"
+      WHERE sh."id" = ${input.capturedShiftId}
+        AND sh."tillId" = ${input.tillId}
+        AND st."id" = ${input.storeId}
+        AND st."businessId" = ${input.businessId}
+      FOR UPDATE
+    `;
+    return rows[0] ?? null;
+  }
+
+  return tx.shift.findFirst({
+    where: {
+      id: input.capturedShiftId,
+      tillId: input.tillId,
+      till: {
+        storeId: input.storeId,
+        store: { businessId: input.businessId },
+      },
+    },
+    select: { id: true, status: true, openKey: true },
+  });
+}
 
 const CHECKOUT_STAGE_THRESHOLDS_MS = {
   validate: 200,
@@ -439,11 +518,15 @@ async function createSaleImpl(input: CreateSaleInput) {
       },
     });
     if (existingByRef) {
+      if (!idempotentCheckoutMatchesExisting(existingByRef, input)) {
+        throw new UserError(IDEMPOTENT_SALE_CONTEXT_MISMATCH_MSG);
+      }
       return existingByRef;
     }
   }
 
   // Pre-compute values available from input (no DB dependency)
+  const capturedShiftId = input.capturedShiftId?.trim() || null;
   const productIds = [...new Set(input.lines.map((l) => l.productId))];
   const hasMomoPayment = input.payments.some(
     (p) => p.method === 'MOBILE_MONEY' && p.amountPence > 0
@@ -483,7 +566,7 @@ async function createSaleImpl(input: CreateSaleInput) {
 
   // ── SINGLE BATCH: fire ALL lookups in parallel (was 5 sequential batches) ──
   const [
-    business, store, productUnits, till, branchId, openShift,
+    business, store, productUnits, till, cashier, branchId, openShift,
     accounts, inventoryMap, momoResult, customerResult,
   ] = await measureCheckoutStage(
     'action.checkout.context',
@@ -515,7 +598,20 @@ async function createSaleImpl(input: CreateSaleInput) {
         },
       }),
       prisma.till.findFirst({
-        where: { id: input.tillId, storeId: input.storeId, active: true },
+        where: { id: input.tillId },
+        select: {
+          id: true,
+          active: true,
+          storeId: true,
+          store: { select: { businessId: true } },
+        },
+      }),
+      prisma.user.findFirst({
+        where: {
+          id: input.cashierUserId,
+          businessId: input.businessId,
+          ...(capturedShiftId || input.saleSource === 'LATE_OFFLINE' ? {} : { active: true }),
+        },
         select: { id: true },
       }),
       resolveBranchIdForStore({ businessId: input.businessId, storeId: input.storeId }),
@@ -531,9 +627,24 @@ async function createSaleImpl(input: CreateSaleInput) {
 
   if (!business) throw new Error('Business not found');
   if (!store) throw new Error('Store not found');
-  if (!till) throw new Error('Till not found');
-  if (business.requireOpenTillForSales && !openShift && !input.bypassOpenTillRequirement) {
+  if (!till) throw new UserError('Till not found');
+  if (till.store.businessId !== input.businessId) {
+    throw new UserError('Till does not belong to this business.');
+  }
+  if (till.storeId !== input.storeId) {
+    throw new UserError('Till does not belong to this store.');
+  }
+  if (!till.active) {
+    throw new UserError('Till is inactive.');
+  }
+  if (!cashier) throw new UserError('Cashier is not authorised for this business.');
+  // Offline path: do not decide LATE_OFFLINE vs live money from this pre-tx
+  // getOpenShiftForTill read — that happens under the captured-shift lock.
+  if (!openShift && !input.bypassOpenTillRequirement && !capturedShiftId) {
     throw new UserError('Open till is required before recording sales.');
+  }
+  if (input.bypassOpenTillRequirement && input.saleSource && input.saleSource !== 'ONLINE_ORDER') {
+    throw new Error('Open-till bypass is restricted to online-order commits.');
   }
   if (input.customerId) {
     if (!customerResult) throw new Error('Customer not found');
@@ -694,6 +805,15 @@ async function createSaleImpl(input: CreateSaleInput) {
       .filter((p) => p.method !== 'CASH' && p.amountPence > 0)
       .map((p) => ({ ...p })),
   ];
+  const cardPence = payments
+    .filter((payment) => payment.method === 'CARD')
+    .reduce((sum, payment) => sum + payment.amountPence, 0);
+  const transferPence = payments
+    .filter((payment) => payment.method === 'TRANSFER')
+    .reduce((sum, payment) => sum + payment.amountPence, 0);
+  const liveMomoPence = payments
+    .filter((payment) => payment.method === 'MOBILE_MONEY')
+    .reduce((sum, payment) => sum + payment.amountPence, 0);
 
   let confirmedMomoCollection:
     | {
@@ -822,12 +942,44 @@ async function createSaleImpl(input: CreateSaleInput) {
       );
     }
 
+    let liveShiftForMoney: { id: string } | null = null;
+    let attachedShiftId: string | null = null;
+    let persistedSaleSource: SaleSource = input.bypassOpenTillRequirement
+      ? 'ONLINE_ORDER'
+      : (input.saleSource && input.saleSource !== 'LATE_OFFLINE' ? input.saleSource : 'POS');
+
+    if (capturedShiftId) {
+      const lockedCaptured = await lockCapturedShiftForOfflineSale(tx, {
+        capturedShiftId,
+        tillId: till.id,
+        storeId: input.storeId,
+        businessId: input.businessId,
+      });
+      if (!lockedCaptured) {
+        throw new UserError('Captured offline shift does not match this sale context.');
+      }
+      attachedShiftId = lockedCaptured.id;
+      const capturedIsLiveOpen =
+        lockedCaptured.status === 'OPEN' && lockedCaptured.openKey === till.id;
+      if (capturedIsLiveOpen) {
+        // Ordinary sync: money stays on the captured shift, never a later OPEN.
+        liveShiftForMoney = { id: lockedCaptured.id };
+      } else {
+        liveShiftForMoney = null;
+        persistedSaleSource = 'LATE_OFFLINE';
+      }
+    } else {
+      liveShiftForMoney = openShift;
+      attachedShiftId = openShift?.id ?? null;
+    }
+
     const invoiceCreateData = {
       businessId: input.businessId,
       storeId: store.id,
       branchId,
       tillId: till.id,
-      shiftId: openShift?.id ?? null,
+      shiftId: attachedShiftId,
+      saleSource: persistedSaleSource,
       cashierUserId: input.cashierUserId,
       customerId: input.customerId || null,
       paymentStatus: finalStatus,
@@ -921,6 +1073,9 @@ async function createSaleImpl(input: CreateSaleInput) {
               },
             });
             if (existingByRef) {
+              if (!idempotentCheckoutMatchesExisting(existingByRef, input)) {
+                throw new UserError(IDEMPOTENT_SALE_CONTEXT_MISMATCH_MSG);
+              }
               idempotentReplayInvoice = existingByRef;
               return existingByRef;
             }
@@ -937,6 +1092,50 @@ async function createSaleImpl(input: CreateSaleInput) {
     if (idempotentReplayInvoice) {
       idempotentExternalRefReplay = true;
       return idempotentReplayInvoice;
+    }
+
+    if (liveShiftForMoney) {
+      if (!isSqliteDatabaseUrl(process.env.DATABASE_URL)) {
+        const locked = await tx.$queryRaw<{ id: string }[]>`
+          SELECT sh."id"
+          FROM "Shift" AS sh
+          JOIN "Till" AS t ON t."id" = sh."tillId"
+          JOIN "Store" AS st ON st."id" = t."storeId"
+          WHERE sh."id" = ${liveShiftForMoney.id}
+            AND sh."tillId" = ${till.id}
+            AND sh."status" = ${'OPEN'}
+            AND t."active" = TRUE
+            AND st."id" = ${input.storeId}
+            AND st."businessId" = ${input.businessId}
+          FOR UPDATE
+        `;
+        if (locked.length === 0) {
+          throw new UserError('The till shift closed during checkout. Reopen the till and try again.');
+        }
+      }
+
+      const shiftUpdate = await tx.shift.updateMany({
+        where: {
+          id: liveShiftForMoney.id,
+          tillId: till.id,
+          status: 'OPEN',
+          till: {
+            active: true,
+            storeId: input.storeId,
+            store: { businessId: input.businessId },
+          },
+        },
+        data: {
+          cardTotalPence: { increment: cardPence },
+          transferTotalPence: { increment: transferPence },
+          momoTotalPence: { increment: liveMomoPence },
+        },
+      });
+      if (shiftUpdate.count !== 1) {
+        throw new UserError('The till shift closed during checkout. Reopen the till and try again.');
+      }
+    } else if (!input.bypassOpenTillRequirement && !capturedShiftId) {
+      throw new UserError('Open till is required before recording sales.');
     }
 
     // Parallelise: MoMo, cash-drawer, inventory updates and stock movements
@@ -976,7 +1175,7 @@ async function createSaleImpl(input: CreateSaleInput) {
       );
     }
 
-    if (cashPence > 0 && openShift) {
+    if (cashPence > 0 && liveShiftForMoney) {
       txPromises.push(
         measureCheckoutStage(
           'action.checkout.shift-update',
@@ -989,7 +1188,7 @@ async function createSaleImpl(input: CreateSaleInput) {
                 businessId: input.businessId,
                 storeId: input.storeId,
                 tillId: till.id,
-                shiftId: openShift.id,
+                shiftId: liveShiftForMoney.id,
                 createdByUserId: input.cashierUserId,
                 cashierUserId: input.cashierUserId,
                 entryType: 'CASH_SALE',
@@ -1012,7 +1211,7 @@ async function createSaleImpl(input: CreateSaleInput) {
                 SET "expectedCashPence" = sh."expectedCashPence" + ${cashPence}
                 FROM "Till" AS t
                 JOIN "Store" AS st ON st."id" = t."storeId"
-                WHERE sh."id" = ${openShift.id}
+                WHERE sh."id" = ${liveShiftForMoney.id}
                   AND sh."status" = ${'OPEN'}
                   AND sh."tillId" = ${till.id}
                   AND t."id" = sh."tillId"
@@ -1038,7 +1237,7 @@ async function createSaleImpl(input: CreateSaleInput) {
                   ${input.businessId},
                   ${input.storeId},
                   ${till.id},
-                  ${openShift.id},
+                  ${liveShiftForMoney.id},
                   ${input.cashierUserId},
                   ${input.cashierUserId},
                   ${'CASH_SALE'},
@@ -1104,6 +1303,36 @@ async function createSaleImpl(input: CreateSaleInput) {
       }
     }
 
+    if (shouldApplyInventoryMovements) {
+      txPromises.push(
+        measureCheckoutStage(
+          'action.checkout.stock-movements',
+          input,
+          async () => tx.stockMovement.createMany({
+            data: lineDetails.map((line) => {
+              const beforeQtyBase = stockMovementInventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
+              return {
+                storeId: input.storeId,
+                productId: line.productId,
+                qtyBase: -line.qtyBase,
+                beforeQtyBase,
+                afterQtyBase: beforeQtyBase - line.qtyBase,
+                unitCostBasePence:
+                  costByProduct.get(line.productId) ??
+                  line.productUnit.product.defaultCostBasePence,
+                type: 'SALE' as const,
+                referenceType: 'SALES_INVOICE' as const,
+                referenceId: created.id,
+                userId: input.cashierUserId,
+              };
+            }),
+          }),
+          { stage: 'stock-movements', rowCount: lineDetails.length },
+          CHECKOUT_STAGE_THRESHOLDS_MS.stockMovements,
+        ),
+      );
+    }
+
     // Journal entry inside tx — accounting must be atomic with the sale
     const paymentSplit = splitPayments(payments);
     const arAmount = total - paymentSplit.totalPence;
@@ -1150,35 +1379,6 @@ async function createSaleImpl(input: CreateSaleInput) {
     CHECKOUT_STAGE_THRESHOLDS_MS.transactionTotal,
   );
 
-  // Post-tx: stock movement audit trail — non-critical, fire-and-forget.
-  // Skip on idempotent externalRef replay — the winning request already applied effects.
-  if (shouldApplyInventoryMovements && !idempotentExternalRefReplay) {
-    void measureCheckoutStage(
-      'action.checkout.stock-movements',
-      input,
-      async () => prisma.stockMovement.createMany({
-        data: lineDetails.map((line) => {
-          const beforeQtyBase = stockMovementInventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
-          const afterQtyBase = beforeQtyBase - line.qtyBase;
-          return {
-            storeId: input.storeId,
-            productId: line.productId,
-            qtyBase: -line.qtyBase,
-            beforeQtyBase,
-            afterQtyBase,
-            unitCostBasePence: costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence,
-            type: 'SALE' as const,
-            referenceType: 'SALES_INVOICE' as const,
-            referenceId: invoice.id,
-            userId: input.cashierUserId,
-          };
-        }),
-      }),
-      { stage: 'stock-movements', rowCount: lineDetails.length },
-      CHECKOUT_STAGE_THRESHOLDS_MS.stockMovements,
-    ).catch(() => {});
-  }
-
   // Fire-and-forget: risk detection is non-critical, don't block the sale
   if (!idempotentExternalRefReplay) {
     detectExcessiveDiscountRisk({
@@ -1189,7 +1389,14 @@ async function createSaleImpl(input: CreateSaleInput) {
       discountPence: totalDiscountPence,
       grossSalesPence,
       thresholdBps: business.discountApprovalThresholdBps,
-    }).catch(() => {});
+    }).catch((error) => {
+      appLog('warn', 'checkout_risk_detection_failed', {
+        businessId: input.businessId,
+        storeId: input.storeId,
+        stage: 'excessive-discount',
+      });
+      void error;
+    });
 
     detectNegativeMarginRisk({
       businessId: input.businessId,
@@ -1197,7 +1404,14 @@ async function createSaleImpl(input: CreateSaleInput) {
       cashierUserId: input.cashierUserId,
       salesInvoiceId: invoice.id,
       grossMarginPence: grossMarginEstimate,
-    }).catch(() => {});
+    }).catch((error) => {
+      appLog('warn', 'checkout_risk_detection_failed', {
+        businessId: input.businessId,
+        storeId: input.storeId,
+        stage: 'negative-margin',
+      });
+      void error;
+    });
   }
 
   return invoice;

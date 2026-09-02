@@ -9,11 +9,29 @@ import {
   debitCashBankLines,
   type JournalLine
 } from './shared';
-import { getOpenCashShiftForPayment, recordCashDrawerEntryTx } from './cash-drawer';
+import {
+  EXPLICIT_CASH_TILL_REQUIRED_MSG,
+  getOpenCashShiftForPayment,
+  recordCashDrawerEntryTx,
+} from './cash-drawer';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import { UserError } from '@/lib/action-utils';
 import type { Role } from '@/lib/auth';
 import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
+import {
+  assertMoneyMovementTenantChain,
+  buildCustomerPaymentPayloadHash,
+  findMoneyIdempotency,
+  insertMoneyIdempotency,
+  isPrismaUniqueConstraintOn as isMoneyUniqueConstraintOn,
+  lockPurchaseInvoiceForUpdate,
+  lockSalesInvoiceForUpdate,
+  MoneyIdempotencyError,
+  MONEY_IDEMPOTENCY_ERROR,
+  normalizeMoneyIdempotencyKey,
+  replayOrConflict,
+  sumAmountPence,
+} from './money-idempotency';
 
 const SUPPLIER_PAYMENT_ROLES: readonly Role[] = ['OWNER', 'MANAGER'];
 
@@ -41,11 +59,18 @@ export type RecordSupplierPaymentOptions = {
   actorName?: string | null;
   notes?: string;
   idempotencyKey: string;
+  /** Required when any payment line is CASH. */
+  tillId?: string | null;
+  shiftId?: string | null;
 };
 
 export type RecordSupplierPaymentResult = {
   invoice: Awaited<ReturnType<typeof loadPurchaseInvoiceWithPayments>>;
   replayed: boolean;
+};
+
+export type RecordCustomerPaymentOptions = {
+  idempotencyKey: string;
 };
 
 /** Rollout freeze: set TILLFLOW_SUPPLIER_PAYMENT_WRITES=0 during mixed-version cutover. */
@@ -142,6 +167,13 @@ async function findByIdempotencyKey(businessId: string, idempotencyKey: string, 
   });
 }
 
+async function loadSalesInvoiceWithPayments(businessId: string, invoiceId: string, tx: typeof prisma | any = prisma) {
+  return tx.salesInvoice.findFirst({
+    where: { id: invoiceId, businessId },
+    include: { payments: true },
+  });
+}
+
 /**
  * Record additional payment(s) against an existing sales invoice.
  */
@@ -149,11 +181,12 @@ export async function recordCustomerPayment(
   businessId: string,
   invoiceId: string,
   payments: PaymentInput[],
-  actorUserId?: string
+  actorUserId?: string,
+  options?: RecordCustomerPaymentOptions,
 ) {
   return measureServerOperation(
     'action.customer-receipt.record',
-    () => recordCustomerPaymentImpl(businessId, invoiceId, payments, actorUserId),
+    () => recordCustomerPaymentImpl(businessId, invoiceId, payments, actorUserId, options),
     {
       businessId,
       action: 'recordCustomerPaymentAction',
@@ -168,97 +201,186 @@ async function recordCustomerPaymentImpl(
   businessId: string,
   invoiceId: string,
   payments: PaymentInput[],
-  actorUserId?: string
+  actorUserId?: string,
+  options?: RecordCustomerPaymentOptions,
 ) {
+  const idempotencyKey = normalizeMoneyIdempotencyKey(options?.idempotencyKey);
+  const newPayments = filterPositivePayments(payments);
+  if (newPayments.length === 0) {
+    return loadSalesInvoiceWithPayments(businessId, invoiceId);
+  }
+
+  const payloadHash = buildCustomerPaymentPayloadHash({
+    businessId,
+    invoiceId,
+    payments: newPayments.map((p) => ({
+      method: p.method,
+      amountPence: p.amountPence,
+      reference: p.reference ?? null,
+    })),
+    recordedByUserId: actorUserId ?? '',
+  });
+
+  const existing = await findMoneyIdempotency(prisma as any, businessId, idempotencyKey);
+  if (existing) {
+    replayOrConflict(existing, {
+      payloadHash,
+      commandKind: 'CUSTOMER_RECEIPT',
+      entityId: invoiceId,
+      entityIdKey: 'invoiceId',
+    });
+    const invoice = await loadSalesInvoiceWithPayments(businessId, invoiceId);
+    if (!invoice) throw new Error('Invoice not found');
+    return invoice;
+  }
+
   const invoiceBase = await prisma.salesInvoice.findFirst({
     where: { id: invoiceId, businessId },
     select: { id: true, totalPence: true, tillId: true, storeId: true, shiftId: true, cashierUserId: true },
   });
   if (!invoiceBase) throw new Error('Invoice not found');
 
-  const newPayments = filterPositivePayments(payments);
-  if (newPayments.length === 0) return prisma.salesInvoice.findFirst({ where: { id: invoiceId }, include: { payments: true } });
-
   const split = splitPayments(newPayments);
-  const updated = await prisma.$transaction(async (tx) => {
-    // Re-read payments inside the transaction to prevent concurrent overpayment.
-    const invoice = await tx.salesInvoice.findFirst({
-      where: { id: invoiceId, businessId },
-      include: { payments: true },
-    });
-    if (!invoice) throw new Error('Invoice not found');
 
-    const previouslyPaid = invoice.payments.reduce((s, p) => s + p.amountPence, 0);
-    const newPaid = newPayments.reduce((s, p) => s + p.amountPence, 0);
-    const totalPaid = previouslyPaid + newPaid;
-    if (totalPaid > invoice.totalPence) throw new Error('Payment exceeds outstanding balance');
-
-    const status = derivePaymentStatus(invoice.totalPence, totalPaid);
-
-    await tx.salesPayment.createMany({
-      data: newPayments.map((p) => ({
-        salesInvoiceId: invoice.id,
-        method: p.method,
-        amountPence: p.amountPence,
-        reference: p.reference ?? null,
-        // Debtor / customer-receipt workflow after the sale already exists.
-        receiptOrigin: RECEIPT_ORIGIN.LATER_CREDIT_COLLECTION,
-      }))
-    });
-
-    if (split.cashPence > 0) {
-      if (!actorUserId) {
-        throw new Error('Open shift is required before recording cash customer payments.');
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const existingInTx = await findMoneyIdempotency(tx as any, businessId, idempotencyKey);
+      if (existingInTx) {
+        replayOrConflict(existingInTx, {
+          payloadHash,
+          commandKind: 'CUSTOMER_RECEIPT',
+          entityId: invoiceId,
+          entityIdKey: 'invoiceId',
+        });
+        const replayed = await loadSalesInvoiceWithPayments(businessId, invoiceId, tx);
+        if (!replayed) throw new Error('Invoice not found');
+        return replayed;
       }
 
-      const openShift = await getOpenCashShiftForPayment(tx, {
+      await lockSalesInvoiceForUpdate(tx as any, businessId, invoiceId);
+
+      const invoice = await tx.salesInvoice.findFirst({
+        where: { id: invoiceId, businessId },
+        include: { payments: true },
+      });
+      if (!invoice) throw new Error('Invoice not found');
+
+      const previouslyPaid = sumAmountPence(invoice.payments);
+      const newPaid = sumAmountPence(newPayments);
+      if (previouslyPaid + newPaid > invoice.totalPence) {
+        throw new Error('Payment exceeds outstanding balance');
+      }
+
+      let openShift: { id: string; tillId: string } | null = null;
+      if (split.cashPence > 0) {
+        if (!actorUserId) {
+          throw new Error('Open shift is required before recording cash customer payments.');
+        }
+        openShift = await getOpenCashShiftForPayment(tx, {
+          businessId,
+          storeId: invoice.storeId,
+          userId: actorUserId,
+          fallbackTillId: invoice.tillId,
+        });
+        if (!openShift) {
+          throw new Error('Open shift is required before recording cash customer payments.');
+        }
+      }
+
+      await assertMoneyMovementTenantChain(tx as any, {
         businessId,
         storeId: invoice.storeId,
         userId: actorUserId,
-        fallbackTillId: invoice.tillId,
+        tillId: openShift?.tillId,
+        shiftId: openShift?.id,
       });
-      if (!openShift) {
-        throw new Error('Open shift is required before recording cash customer payments.');
+
+      await tx.salesPayment.createMany({
+        data: newPayments.map((p) => ({
+          salesInvoiceId: invoice.id,
+          method: p.method,
+          amountPence: p.amountPence,
+          reference: p.reference ?? null,
+          receiptOrigin: RECEIPT_ORIGIN.LATER_CREDIT_COLLECTION,
+        })),
+      });
+
+      if (openShift && actorUserId) {
+        await recordCashDrawerEntryTx(tx, {
+          businessId,
+          storeId: invoice.storeId,
+          tillId: openShift.tillId,
+          shiftId: openShift.id,
+          createdByUserId: actorUserId,
+          cashierUserId: actorUserId,
+          entryType: 'CASH_DEBTOR_PAYMENT',
+          amountPence: split.cashPence,
+          reasonCode: 'CUSTOMER_RECEIPT',
+          reason: 'Cash received against outstanding invoice',
+          referenceType: 'SALES_INVOICE',
+          referenceId: invoice.id,
+        });
       }
 
-      await recordCashDrawerEntryTx(tx, {
-        businessId,
-        storeId: invoice.storeId,
-        tillId: openShift.tillId,
-        shiftId: openShift.id,
-        createdByUserId: actorUserId,
-        cashierUserId: actorUserId,
-        entryType: 'CASH_DEBTOR_PAYMENT',
-        amountPence: split.cashPence,
-        reasonCode: 'CUSTOMER_RECEIPT',
-        reason: 'Cash received against outstanding invoice',
-        referenceType: 'SALES_INVOICE',
-        referenceId: invoice.id,
+      const persisted = await tx.salesPayment.findMany({
+        where: { salesInvoiceId: invoice.id },
+        select: { id: true, amountPence: true },
       });
+      const totalPaid = sumAmountPence(persisted);
+      if (totalPaid > invoice.totalPence) {
+        throw new Error('Payment exceeds outstanding balance');
+      }
+      const status = derivePaymentStatus(invoice.totalPence, totalPaid);
+
+      const updatedInvoice = await tx.salesInvoice.update({
+        where: { id: invoice.id },
+        data: { paymentStatus: status },
+        include: { payments: true },
+      });
+
+      await postJournalEntry({
+        businessId,
+        description: `Customer receipt ${invoice.id}`,
+        referenceType: 'CUSTOMER_RECEIPT',
+        referenceId: invoice.id,
+        lines: [
+          ...debitCashBankLines(split),
+          { accountCode: ACCOUNT_CODES.ar, creditPence: split.totalPence },
+        ].filter(Boolean) as JournalLine[],
+        prismaClient: tx as any,
+      });
+
+      await insertMoneyIdempotency(tx as any, {
+        businessId,
+        key: idempotencyKey,
+        payloadHash,
+        commandKind: 'CUSTOMER_RECEIPT',
+        resultJson: JSON.stringify({ invoiceId: invoice.id }),
+      });
+
+      return updatedInvoice;
+    });
+  } catch (error) {
+    if (isMoneyUniqueConstraintOn(error, ['businessId', 'key'])) {
+      const winner = await findMoneyIdempotency(prisma as any, businessId, idempotencyKey);
+      if (winner) {
+        replayOrConflict(winner, {
+          payloadHash,
+          commandKind: 'CUSTOMER_RECEIPT',
+          entityId: invoiceId,
+          entityIdKey: 'invoiceId',
+        });
+        const invoice = await loadSalesInvoiceWithPayments(businessId, invoiceId);
+        if (!invoice) throw new Error('Invoice not found');
+        return invoice;
+      }
+      throw new MoneyIdempotencyError(
+        MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_CONFLICT,
+        'This payment request conflicts with a previous submission.',
+      );
     }
-
-    const updatedInvoice = await tx.salesInvoice.update({
-      where: { id: invoice.id },
-      data: { paymentStatus: status },
-      include: { payments: true }
-    });
-
-    await postJournalEntry({
-      businessId,
-      description: `Customer receipt ${invoice.id}`,
-      referenceType: 'CUSTOMER_RECEIPT',
-      referenceId: invoice.id,
-      lines: [
-        ...debitCashBankLines(split),
-        { accountCode: ACCOUNT_CODES.ar, creditPence: split.totalPence }
-      ].filter(Boolean) as JournalLine[],
-      prismaClient: tx as any
-    });
-
-    return updatedInvoice;
-  });
-
-  return updated;
+    throw error;
+  }
 }
 
 /**
@@ -366,6 +488,8 @@ async function recordSupplierPaymentImpl(
         );
       }
 
+      await lockPurchaseInvoiceForUpdate(tx as any, businessId, invoiceId);
+
       const invoice = await tx.purchaseInvoice.findFirst({
         where: { id: invoiceId, businessId },
         include: {
@@ -377,24 +501,35 @@ async function recordSupplierPaymentImpl(
         throw new SupplierPaymentError(SUPPLIER_PAYMENT_ERROR.NOT_FOUND, 'Invoice not found');
       }
 
-      const previouslyPaid = invoice.payments.reduce((s, p) => s + p.amountPence, 0);
-      const newPaid = newPayments.reduce((s, p) => s + p.amountPence, 0);
-      const totalPaid = previouslyPaid + newPaid;
-      if (totalPaid > invoice.totalPence) throw new Error('Payment exceeds outstanding balance');
-
-      const status = derivePaymentStatus(invoice.totalPence, totalPaid);
-
-      const openShift = split.cashPence > 0
-        ? await getOpenCashShiftForPayment(tx, {
-            businessId,
-            storeId: invoice.storeId,
-            userId: recordedByUserId,
-          })
-        : null;
-
-      if (split.cashPence > 0 && !openShift) {
-        throw new Error('Open shift is required before recording cash supplier payments.');
+      const previouslyPaid = sumAmountPence(invoice.payments);
+      const newPaid = sumAmountPence(newPayments);
+      if (previouslyPaid + newPaid > invoice.totalPence) {
+        throw new Error('Payment exceeds outstanding balance');
       }
+
+      let openShift: { id: string; tillId: string } | null = null;
+      if (split.cashPence > 0) {
+        if (!options.tillId) {
+          throw new Error(EXPLICIT_CASH_TILL_REQUIRED_MSG);
+        }
+        openShift = await getOpenCashShiftForPayment(tx, {
+          businessId,
+          storeId: invoice.storeId,
+          tillId: options.tillId,
+          shiftId: options.shiftId,
+        });
+        if (!openShift) {
+          throw new Error('Open shift is required before recording cash supplier payments.');
+        }
+      }
+
+      await assertMoneyMovementTenantChain(tx as any, {
+        businessId,
+        storeId: invoice.storeId,
+        userId: recordedByUserId,
+        tillId: openShift?.tillId,
+        shiftId: openShift?.id,
+      });
 
       const createdPayments = [];
       for (let i = 0; i < newPayments.length; i++) {
@@ -443,6 +578,16 @@ async function recordSupplierPaymentImpl(
           });
         }
       }
+
+      const persisted = await tx.purchasePayment.findMany({
+        where: { purchaseInvoiceId: invoice.id },
+        select: { amountPence: true },
+      });
+      const totalPaid = sumAmountPence(persisted);
+      if (totalPaid > invoice.totalPence) {
+        throw new Error('Payment exceeds outstanding balance');
+      }
+      const status = derivePaymentStatus(invoice.totalPence, totalPaid);
 
       const updatedInvoice = await tx.purchaseInvoice.update({
         where: { id: invoice.id },

@@ -12,6 +12,7 @@ import { ensureControlPlaneBusinessBootstrap } from '@/lib/control-plane-bootstr
 import { resolveRegisterPlanSelection } from '@/lib/plan-pricing';
 import { createTrialSubscription } from '@/lib/subscription-lifecycle';
 import { enqueueSubscriptionReminder } from '@/lib/subscription-reminders';
+import { resolveRegisterQaTag } from '@/lib/reliability/preview-qa-tag';
 
 /**
  * Self-service registration: creates a new Business, Store, Till, and OWNER user.
@@ -35,6 +36,10 @@ export async function register(formData: FormData) {
   const referredByName = String(formData.get('referredByName') || '').trim() || null;
   const referredByPhone = String(formData.get('referredByPhone') || '').trim() || null;
   const sourceChannel = String(formData.get('sourceChannel') || 'INBOUND').trim() || 'INBOUND';
+  const qaTag = resolveRegisterQaTag({
+    vercelEnv: process.env.VERCEL_ENV,
+    requestedTag: String(formData.get('qaTag') || '').trim(),
+  });
 
   const rawPlan = String(formData.get('plan') || 'STARTER').toUpperCase();
   const rawAddonSelected = formData.get('addonOnlineStorefront') === 'on';
@@ -70,6 +75,7 @@ export async function register(formData: FormData) {
         ...createTrialSubscription(plan, { addonOnlineStorefront, billingInterval }),
         vatEnabled: false,
         mode: 'SIMPLE',
+        requireOpenTillForSales: true,
       },
     });
 
@@ -94,6 +100,7 @@ export async function register(formData: FormData) {
         email,
         passwordHash,
         role: 'OWNER',
+        ...(qaTag ? { qaTag } : {}),
       },
     });
 

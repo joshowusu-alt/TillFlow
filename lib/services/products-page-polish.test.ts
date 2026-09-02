@@ -23,10 +23,11 @@ describe('products page polish', () => {
   });
 
   it('keeps the Add product form present but closed by default', () => {
-    expect(src).toContain('<details className="group">');
+    expect(src).toContain('<details className="group" data-testid="product-create-details">');
     expect(src).toContain('id="product-create"');
     expect(src).toContain('ProductCreateFormEnhancer');
-    expect(src).not.toMatch(/<details[^>]*open/);
+    expect(src).toContain('ProductCreateHashOpener');
+    expect(src).not.toMatch(/<details[^>]*\sopen/);
   });
 
   it('places product search before the collapsed Add product form', () => {

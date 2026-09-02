@@ -23,6 +23,7 @@ import { usePosUndoHistory } from '@/hooks/usePosUndoHistory';
 import { useStagedProductSelection } from '@/hooks/useStagedProductSelection';
 import { getProductBaseUnitId } from '@/lib/payments/pos-barcode';
 import { buildPosProductIndex } from '@/lib/pos/product-index';
+import { resolvePosTillId } from '@/lib/pos/till-context';
 import { usePosBarcodeHandler } from '@/hooks/usePosBarcodeHandler';
 import { usePosLoyaltyRedemption } from '@/hooks/usePosLoyaltyRedemption';
 import LoyaltyRedemptionPanel from './components/LoyaltyRedemptionPanel';
@@ -45,6 +46,14 @@ import {
 } from '@/lib/payments/pos-checkout-state';
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
 import { filterPosProducts } from '@/lib/payments/pos-search';
+import type { PosCatalogueMode, SellableProductDto } from '@/lib/pos/sellable-dto';
+import {
+  POS_OFFLINE_CATALOGUE_LIMIT_MESSAGE,
+  resolvePosCatalogueMode,
+  showOfflineCatalogueLimit,
+} from '@/lib/pos/sellable-dto';
+import type { BarcodeScanResolution } from '@/lib/payments/pos-barcode';
+import type { PosProduct } from '@/lib/payments/pos-cart';
 import { completeSaleAction } from '@/app/actions/sales';
 import { dispatchNavKpiRefresh } from '@/lib/navigation/nav-kpi-events';
 import {
@@ -84,28 +93,7 @@ function formatRelativeTime(timestamp: string) {
   return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
 }
 
-type UnitDto = {
-  id: string;
-  name: string;
-  pluralName: string;
-  conversionToBase: number;
-  isBaseUnit: boolean;
-};
-
-type ProductDto = {
-  id: string;
-  name: string;
-  barcode: string | null;
-  sellingPriceBasePence: number;
-  vatRateBps: number;
-  promoBuyQty: number;
-  promoGetQty: number;
-  categoryId: string | null;
-  categoryName: string | null;
-  imageUrl: string | null;
-  units: UnitDto[];
-  onHandBase: number;
-};
+type ProductDto = SellableProductDto;
 
 type CategoryDto = { id: string; name: string; colour: string };
 
@@ -125,7 +113,11 @@ type PosClientProps = {
   store: { id: string; name: string };
   tills: { id: string; name: string }[];
   openShiftTillIds: string[];
+  openShifts?: { tillId: string; shiftId: string }[];
+  cashierUserId?: string;
   products: ProductDto[];
+  posCatalogueMode?: PosCatalogueMode;
+  catalogueSize?: number;
   customers: PosCustomerOption[];
   units: { id: string; name: string }[];
   categories: CategoryDto[];
@@ -166,7 +158,11 @@ export default function PosClient({
   store,
   tills,
   openShiftTillIds,
+  openShifts,
+  cashierUserId,
   products,
+  posCatalogueMode,
+  catalogueSize,
   customers,
   units,
   categories,
@@ -184,15 +180,11 @@ export default function PosClient({
   const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'PART_PAID' | 'UNPAID'>('PAID');
   const [barcode, setBarcode] = useState('');
   const [tillId, setTillId] = useState(() => {
-    // Priority 1: explicit URL param (allows deep-link to a specific till)
-    const urlTillId = searchParams?.get('tillId');
-    if (urlTillId && tills.some((t) => t.id === urlTillId)) return urlTillId;
-    // Priority 2: till with an open shift (when exactly one is open)
-    if (openShiftTillIds.length === 1 && tills.some((t) => t.id === openShiftTillIds[0])) {
-      return openShiftTillIds[0];
-    }
-    // Priority 3: first till (fallback — localStorage override happens in useEffect after mount)
-    return tills[0]?.id ?? '';
+    return resolvePosTillId({
+      requestedTillId: searchParams?.get('till') ?? searchParams?.get('tillId'),
+      tills,
+      openShiftTillIds,
+    });
   });
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(['CASH']);
   const [cashTendered, setCashTendered] = useState('');
@@ -272,6 +264,7 @@ export default function PosClient({
   const [quickAddBarcode, setQuickAddBarcode] = useState('');
   const [pendingScan, setPendingScan] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
+  const [serverSearchMatches, setServerSearchMatches] = useState<ProductDto[]>([]);
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const productSearchRef = useRef<HTMLInputElement>(null);
@@ -375,9 +368,24 @@ export default function PosClient({
     playBeep(true);
   }, [popUndoSnapshot, playBeep, setCart]);
 
+  const urlCatalogueMode = searchParams?.get('posCatalogueMode');
+  const useServerCatalogue =
+    resolvePosCatalogueMode({
+      productCount: catalogueSize ?? productOptions.length,
+      posCatalogueMode: posCatalogueMode ?? urlCatalogueMode,
+    }) === 'paged';
+  const knownCatalogueSize = catalogueSize ?? productOptions.length;
+
   // O(1) product lookup via Map — avoids O(n) find() per cart line
-  const productMap = useMemo(() => buildProductMap(productOptions), [productOptions]);
+  const productMap = useMemo(
+    () => buildProductMap(productOptions as unknown as PosProduct[]),
+    [productOptions]
+  );
   const productIndex = useMemo(() => buildPosProductIndex(productOptions), [productOptions]);
+
+  const mergeProductOption = useCallback((incoming: ProductDto) => {
+    setProductOptions((prev) => (prev.some((product) => product.id === incoming.id) ? prev : [...prev, incoming]));
+  }, []);
 
   const getProduct = useCallback(
     (id: string) => productMap.get(id),
@@ -463,47 +471,19 @@ export default function PosClient({
     if (typeof window === 'undefined') return;
     if (tills.length === 0) return;
 
-    const urlTillId = searchParams?.get('tillId');
-    if (urlTillId && tills.some((t) => t.id === urlTillId)) {
-      setTillId(urlTillId);
-      return;
-    }
-
-    const singleOpenTillId =
-      openShiftTillIds.length === 1 && tills.some((t) => t.id === openShiftTillIds[0])
-        ? openShiftTillIds[0]
-        : '';
-
-    if (business.requireOpenTillForSales && singleOpenTillId) {
-      setTillId(singleOpenTillId);
-      return;
-    }
-
     const saved = window.localStorage.getItem(tillStorageKey);
-    if (
-      saved &&
-      tills.some((t) => t.id === saved) &&
-      (!business.requireOpenTillForSales || openShiftTillIds.includes(saved))
-    ) {
-      setTillId(saved);
-      return;
-    }
-
-    setTillId((current) => {
-      if (current && tills.some((t) => t.id === current)) {
-        if (!business.requireOpenTillForSales || openShiftTillIds.includes(current)) {
-          return current;
-        }
-      }
-      if (singleOpenTillId) return singleOpenTillId;
-      if (!business.requireOpenTillForSales) return tills[0]?.id ?? '';
-      const firstOpen = openShiftTillIds.find((id) => tills.some((t) => t.id === id));
-      return firstOpen ?? '';
-    });
+    setTillId((current) =>
+      resolvePosTillId({
+        requestedTillId: searchParams?.get('till') ?? searchParams?.get('tillId'),
+        savedTillId: saved,
+        currentTillId: current,
+        tills,
+        openShiftTillIds,
+      }),
+    );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     tillStorageKey,
-    business.requireOpenTillForSales,
     openShiftTillIds.join('|'),
     tills.map((t) => t.id).join('|'),
   ]);
@@ -512,8 +492,15 @@ export default function PosClient({
   useEffect(() => {
     if (typeof window !== 'undefined' && tillId) {
       window.localStorage.setItem(tillStorageKey, tillId);
+      const capturedShiftId = openShifts?.find((shift) => shift.tillId === tillId)?.shiftId;
+      if (capturedShiftId) {
+        window.localStorage.setItem(`pos.capture.shift.${business.id}.${tillId}`, capturedShiftId);
+      }
+      if (cashierUserId) {
+        window.localStorage.setItem(`pos.capture.cashier.${business.id}`, cashierUserId);
+      }
     }
-  }, [tillId, tillStorageKey]);
+  }, [tillStorageKey, tillId, openShifts, cashierUserId, business.id]);
 
   // Restore the last online idempotency identity after a remount (e.g. SW reload).
   // Apply after cart hydrate so the sale-identity rotator does not immediately replace it.
@@ -709,9 +696,38 @@ export default function PosClient({
     setShowSplitPanel(true);
   };
 
+  useEffect(() => {
+    if (!useServerCatalogue) {
+      setServerSearchMatches([]);
+      return;
+    }
+    const q = productSearch.trim();
+    if (!q) {
+      setServerSearchMatches([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({ q, storeId: store.id, take: '12' });
+      void fetch(`/api/pos/search?${params}`, { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() : { products: [] }))
+        .then((data: { products?: ProductDto[] }) => {
+          setServerSearchMatches(Array.isArray(data.products) ? data.products : []);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setServerSearchMatches([]);
+        });
+    }, 150);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [productSearch, store.id, useServerCatalogue]);
+
   const filteredProducts = useMemo(() => {
+    if (useServerCatalogue) return serverSearchMatches;
     return filterPosProducts(productOptions, productSearch, 12, productIndex);
-  }, [productOptions, productSearch, productIndex]);
+  }, [useServerCatalogue, serverSearchMatches, productOptions, productSearch, productIndex]);
   const productSearchMatches = filteredProducts.length;
 
   // Viewport sizing for the product dropdown in compact mode is handled by
@@ -747,12 +763,24 @@ export default function PosClient({
     commitStagedProduct,
   } = useStagedProductSelection<ProductDto>({ onAddToCart: addToCart });
 
-  const handleQuickCreated = useCallback((created: { id: string; name: string; barcode: string | null; sellingPriceBasePence: number; vatRateBps: number; promoBuyQty: number; promoGetQty: number; onHandBase: number; units: { id: string; name: string; pluralName: string; conversionToBase: number; isBaseUnit: boolean }[] }, matchedScan: boolean) => {
+  const handleQuickCreated = useCallback((created: { id: string; name: string; sku?: string | null; barcode: string | null; sellingPriceBasePence: number; vatRateBps: number; isTaxable?: boolean; promoBuyQty: number; promoGetQty: number; onHandBase: number; units: { id: string; name: string; pluralName: string; conversionToBase: number; isBaseUnit: boolean; sellingPricePence?: number | null }[] }, matchedScan: boolean) => {
     setQuickAddOpen(false);
     setProductId(created.id);
     const baseUnitId = getProductBaseUnitId(created);
     setUnitId(baseUnitId);
-    setProductOptions((prev) => [...prev, { ...created, categoryId: null, categoryName: null, imageUrl: null }]);
+    setProductOptions((prev) => [
+      ...prev,
+      {
+        ...created,
+        sku: created.sku ?? null,
+        isTaxable: created.isTaxable ?? true,
+        categoryName: null,
+        units: created.units.map((unit) => ({
+          ...unit,
+          sellingPricePence: unit.sellingPricePence ?? null,
+        })),
+      },
+    ]);
     if (matchedScan) {
       addToCart({ productId: created.id, unitId: baseUnitId, qtyInUnit: 1 });
     }
@@ -790,6 +818,17 @@ export default function PosClient({
   const { handleBarcodeScan } = usePosBarcodeHandler({
     products: productOptions,
     productIndex,
+    lookupRemote: useServerCatalogue
+      ? async (code) => {
+          const params = new URLSearchParams({ code, storeId: store.id });
+          const res = await fetch(`/api/pos/barcode?${params}`);
+          if (!res.ok) return null;
+          const data = (await res.json()) as BarcodeScanResolution<ProductDto>;
+          if (data.kind === 'missing' || !('product' in data) || !data.product) return data;
+          mergeProductOption(data.product);
+          return data;
+        }
+      : undefined,
     addToCart: (line) => {
       addToCart(line);
       setProductId(line.productId);
@@ -1116,17 +1155,24 @@ export default function PosClient({
             businessId: business.id,
             storeId: store.id,
             tillId,
+            shiftId: window.localStorage.getItem(`pos.capture.shift.${business.id}.${tillId}`),
+            cashierUserId: window.localStorage.getItem(`pos.capture.cashier.${business.id}`),
             customerId: saleSnapshot.customerId || null,
             paymentStatus,
-            lines: saleSnapshot.cart.map((l) => ({
-              productId: l.productId,
-              unitId: l.unitId,
-              qtyInUnit: l.qtyInUnit,
-              qtyBase: l.qtyBase,
-              lineSubtotalPence: l.lineSubtotalPence,
-              discountType: l.discountType ?? 'NONE',
-              discountValue: l.discountValue ?? '',
-            })),
+            lines: saleSnapshot.cart.map((l) => {
+              const product = saleSnapshot.productOptions.find((p) => p.id === l.productId);
+              const unitPricePence = product?.sellingPriceBasePence;
+              return {
+                productId: l.productId,
+                unitId: l.unitId,
+                qtyInUnit: l.qtyInUnit,
+                qtyBase: l.qtyBase,
+                unitPricePence,
+                lineSubtotalPence: l.lineSubtotalPence,
+                discountType: l.discountType ?? 'NONE',
+                discountValue: l.discountValue ?? '',
+              };
+            }),
             payments: buildOfflinePayments({
               cashApplied: submitCashPaid,
               cardPaidValue: submitCardPaid,
@@ -1136,6 +1182,8 @@ export default function PosClient({
             orderDiscountType,
             orderDiscountValue: orderDiscountInput,
             createdAt: new Date().toISOString(),
+            localSaleTime: new Date().toISOString(),
+            idempotencyKey: saleAttemptId,
           });
           const stockDecrements = buildOptimisticStockDecrements(saleSnapshot.cart, saleSnapshot.productOptions);
           setProductOptions((prev) => applyOptimisticStock(prev, stockDecrements));
@@ -1213,7 +1261,7 @@ export default function PosClient({
     checkoutExtrasReady &&
     !checkoutUnavailable &&
     tillSelected &&
-    (!business.requireOpenTillForSales || openShiftTillIds.includes(tillId));
+    openShiftTillIds.includes(tillId);
   const canSubmit = Boolean(
     saleAttemptReady &&
     checkoutExtrasReady &&
@@ -1288,14 +1336,13 @@ export default function PosClient({
   const primaryCheckoutIssue = checkoutIssues.find((issue) => issue.tone === 'warning') ?? checkoutIssues[0] ?? null;
   const errorParam = searchParams?.get('error');
   const selectedTillName = tills.find((till) => till.id === tillId)?.name ?? null;
+  const boundShiftId = openShifts?.find((shift) => shift.tillId === tillId)?.shiftId ?? '';
   const showNoTillBlock =
     checkoutExtrasReady &&
     !checkoutUnavailable &&
     (tills.length === 0 ||
-      (Boolean(business.requireOpenTillForSales) && openShiftTillIds.length === 0) ||
-      (Boolean(business.requireOpenTillForSales) &&
-        tillSelected &&
-        !openShiftTillIds.includes(tillId)));
+      openShiftTillIds.length === 0 ||
+      (tillSelected && !openShiftTillIds.includes(tillId)));
   // Phone empty-cart keeps checkout collapsed; loading uses the compact till chip instead of the full panel.
   const showCheckoutPanel =
     !isPhoneViewport || cart.length > 0 || checkoutUnavailable;
@@ -1340,6 +1387,7 @@ export default function PosClient({
   const saleIdentity = useMemo(
     () =>
       JSON.stringify({
+        tillId,
         cart,
         customerId,
         paymentStatus,
@@ -1355,6 +1403,7 @@ export default function PosClient({
         dueDateDecision,
       }),
     [
+      tillId,
       cart,
       customerId,
       paymentStatus,
@@ -1393,6 +1442,8 @@ export default function PosClient({
             : 'pb-4'
       }`}
       data-pos-mobile-phase="2"
+      data-selected-till-id={tillId}
+      data-selected-shift-id={boundShiftId || undefined}
     >
       <div className="space-y-3 sm:space-y-4">
         {/* ── Scan / Search bar ─────────────────────────────── */}
@@ -1478,7 +1529,7 @@ export default function PosClient({
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="font-semibold text-black">No products match &ldquo;{productSearch}&rdquo;</div>
-                          <div className="mt-1 text-xs text-black/45">Search across {productOptions.length} products or create a new SKU right away.</div>
+                          <div className="mt-1 text-xs text-black/45">Search across {knownCatalogueSize} products or create a new SKU right away.</div>
                           <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
                             <button
                               type="button"
@@ -1498,7 +1549,7 @@ export default function PosClient({
                   ) : (
                     <>
                     <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/5 bg-white/95 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-black/35 backdrop-blur">
-                      <span>{productSearchMatches} of {productOptions.length} products</span>
+                      <span>{productSearchMatches} of {knownCatalogueSize} products</span>
                       {!isPhoneViewport ? (
                         <span className="normal-case tracking-normal text-black/35">Enter adds • F2 scan</span>
                       ) : (
@@ -1518,6 +1569,7 @@ export default function PosClient({
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             if (!baseUnitId || outOfStock) return;
+                            mergeProductOption(product);
                             if (product.units.length > 1) {
                               // Multiple units — stage for unit selection
                               stageProduct(product);
@@ -1600,6 +1652,13 @@ export default function PosClient({
             </div>
           </div>
 
+          {showOfflineCatalogueLimit({
+            catalogueMode: posCatalogueMode ?? urlCatalogueMode,
+            catalogueSize: knownCatalogueSize,
+          }) ? (
+            <p className="mt-2 text-xs text-black/45">{POS_OFFLINE_CATALOGUE_LIMIT_MESSAGE}</p>
+          ) : null}
+
           {barcodeAlert && (
             <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900 shadow-sm">
               <div className="flex min-w-0 items-center gap-3">
@@ -1630,7 +1689,7 @@ export default function PosClient({
                 </svg>
               </span>
               <div className="min-w-0 flex-1">
-                <div className="font-semibold">Ready for next customer</div>
+                <div className="font-semibold" data-testid="pos-ready-next-customer">Ready for next customer</div>
                 <div className="text-xs text-emerald-700">Scanner focus is back on the till. Keep serving.</div>
               </div>
               {!isPhoneViewport ? (
@@ -1814,7 +1873,7 @@ export default function PosClient({
                         </svg>
                       </div>
                       <div>
-                        <div className="font-semibold">Sale Complete!</div>
+                        <div className="font-semibold" data-testid="pos-sale-complete">Sale Complete!</div>
                         <div className="text-sm opacity-90">{formatMoney(saleSuccess.totalPence, business.currency)}</div>
                         <div className="text-xs opacity-60 font-mono mt-0.5">TXN&nbsp;{saleSuccess.transactionNumber ?? `#${saleSuccess.receiptId.slice(0, 8).toUpperCase()}`}</div>
                       </div>
@@ -2145,6 +2204,8 @@ export default function PosClient({
                   disabled
                   aria-busy="true"
                   data-checkout-till-state="loading"
+                  data-pos-till-id={tillId || undefined}
+                  data-pos-shift-id={boundShiftId || undefined}
                 >
                   <option value="">Preparing checkout…</option>
                 </select>
@@ -2156,7 +2217,7 @@ export default function PosClient({
               >
                 <span className="inline-flex h-2 w-2 rounded-full bg-emerald-600" aria-hidden="true" />
                 <span className="text-xs font-semibold text-emerald-900">
-                  {selectedTillName ?? 'Till'} · {business.requireOpenTillForSales ? 'Open' : 'Ready'}
+                  {selectedTillName ?? 'Till'} · Open
                 </span>
                 <label className="sr-only" htmlFor="pos-till-select">Till</label>
                 <select
@@ -2168,6 +2229,8 @@ export default function PosClient({
                   onChange={(e) => setTillId(e.target.value)}
                   data-checkout-till-state="ready"
                   data-checkout-state="ready"
+                  data-pos-till-id={tillId || undefined}
+                  data-pos-shift-id={boundShiftId || undefined}
                 >
                   {tills.map((till) => (
                     <option key={till.id} value={till.id}>
@@ -2199,6 +2262,8 @@ export default function PosClient({
                             ? 'ready'
                             : 'closed'
                   }
+                  data-pos-till-id={tillId || undefined}
+                  data-pos-shift-id={boundShiftId || undefined}
                 >
                   {checkoutLoading ? (
                     <option value="">Preparing checkout…</option>
@@ -2226,16 +2291,12 @@ export default function PosClient({
                   <div className="mt-1 text-xs text-amber-800" data-checkout-state="empty">
                     No tills are configured for this store
                   </div>
-                ) : business.requireOpenTillForSales ? (
+                ) : (
                   <div
                     className={`mt-1 text-xs ${tillReady ? 'text-emerald-700' : 'text-rose'}`}
                     data-checkout-state={tillReady ? 'ready' : 'closed'}
                   >
                     {tillReady ? 'Till is open' : 'Till is not open'}
-                  </div>
-                ) : (
-                  <div className="mt-1 text-xs text-emerald-700" data-checkout-state="ready">
-                    Till ready
                   </div>
                 )}
               </div>
@@ -2460,6 +2521,7 @@ export default function PosClient({
                   paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
                 }`}
                 type="button"
+                data-testid="pos-complete-checkout"
                 disabled={!canSubmit || isCompletingSale}
                 onClick={handleCompleteSale}
               >
@@ -2534,6 +2596,7 @@ export default function PosClient({
                           </button>
                           <button
                             type="button"
+                            data-testid="pos-complete-sheet"
                             className={`btn-primary flex-1 px-5 py-3 text-sm font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                               paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
                             }`}

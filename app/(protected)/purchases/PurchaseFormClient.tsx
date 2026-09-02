@@ -14,7 +14,9 @@ import CameraScanner from '@/app/(protected)/pos/components/CameraScanner';
 import {
   PURCHASE_DRAFT_VERSION,
   clearPurchaseDraft,
+  clearPurchaseOperationKey,
   getPurchaseDraftStorageKey,
+  readOrCreatePurchaseOperationKey,
 } from '@/lib/purchases/purchase-draft';
 
 type UnitDto = {
@@ -79,13 +81,16 @@ type PurchaseDraft = {
   dueDate: string;
 };
 
+type OpenTillOption = { tillId: string; tillName: string; shiftId: string };
+
 export default function PurchaseFormClient({
   storeId,
   products,
   suppliers,
   currency,
   units,
-  vatEnabled
+  vatEnabled,
+  openTills = [],
 }: {
   storeId: string;
   products: ProductDto[];
@@ -93,6 +98,7 @@ export default function PurchaseFormClient({
   currency: string;
   units: UnitOption[];
   vatEnabled: boolean;
+  openTills?: OpenTillOption[];
 }) {
   const searchParams = useSearchParams();
   const draftStorageKey = getPurchaseDraftStorageKey(storeId);
@@ -114,6 +120,7 @@ export default function PurchaseFormClient({
   const [cashPaid, setCashPaid] = useState('');
   const [cardPaid, setCardPaid] = useState('');
   const [transferPaid, setTransferPaid] = useState('');
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [barcodeLookup, setBarcodeLookup] = useState('');
   const [lookupCameraOpen, setLookupCameraOpen] = useState(false);
   const [quickCameraOpen, setQuickCameraOpen] = useState(false);
@@ -138,8 +145,18 @@ export default function PurchaseFormClient({
     );
   }, [productSearch, productOptions]);
 
+  useEffect(() => {
+    const isRetry = Boolean(searchParams?.get('error'));
+    if (!isRetry) {
+      clearPurchaseOperationKey(storeId);
+    }
+    setIdempotencyKey((current) => readOrCreatePurchaseOperationKey(storeId, isRetry ? current : undefined));
+  }, [storeId, searchParams]);
+
   const resetPurchaseForm = useCallback(() => {
     clearPurchaseDraft(storeId);
+    clearPurchaseOperationKey(storeId);
+    setIdempotencyKey(readOrCreatePurchaseOperationKey(storeId));
     setDraftNotice(null);
     setSupplierId('');
     setProductId(products[0]?.id ?? '');
@@ -696,10 +713,12 @@ export default function PurchaseFormClient({
 
       <form action={createPurchaseAction} className="space-y-6">
         <input type="hidden" name="storeId" value={storeId} />
+        <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
         <input type="hidden" name="cart" value={JSON.stringify(cart)} />
         <input type="hidden" name="cashPaid" value={Math.max(0, cashPaidPence)} />
         <input type="hidden" name="cardPaid" value={Math.max(0, cardPaidPence)} />
         <input type="hidden" name="transferPaid" value={Math.max(0, transferPaidPence)} />
+        {openTills.length === 1 ? <input type="hidden" name="tillId" value={openTills[0]!.tillId} /> : null}
 
         <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-4 sm:p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -1104,6 +1123,30 @@ export default function PurchaseFormClient({
             </div>
             <div className="mt-1 text-xs text-black/50">Select one or more methods.</div>
           </div>
+          {openTills.length !== 1 ? (
+            <div>
+              <label className="label">Till (cash from this drawer)</label>
+              <select
+                className="input"
+                name="tillId"
+                required={openTills.length > 0}
+                defaultValue=""
+              >
+                {openTills.length === 0 ? (
+                  <option value="">No open till — open a till for cash</option>
+                ) : (
+                  <>
+                    <option value="">Select till…</option>
+                    {openTills.map((till) => (
+                      <option key={till.tillId} value={till.tillId}>
+                        {till.tillName}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+            </div>
+          ) : null}
           <div>
             <label className="label">Due Date</label>
             <input className="input" name="dueDate" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />

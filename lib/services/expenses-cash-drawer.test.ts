@@ -9,8 +9,12 @@ const {
   prismaMock: {
     account: { findFirst: vi.fn() },
     store: { findFirst: vi.fn() },
+    user: { findFirst: vi.fn() },
+    till: { findFirst: vi.fn() },
+    shift: { findFirst: vi.fn() },
     expense: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
-    expensePayment: { create: vi.fn() },
+    expensePayment: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
+    moneyIdempotency: { findUnique: vi.fn(), create: vi.fn() },
     cashDrawerEntry: { findFirst: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -61,6 +65,7 @@ const baseExpenseInput = {
   paymentStatus: 'PAID' as const,
   method: 'CASH' as const,
   amountPaidPence: 50000,
+  tillId: 'till-1',
 };
 
 describe('expense cash drawer linkage', () => {
@@ -68,6 +73,14 @@ describe('expense cash drawer linkage', () => {
     vi.clearAllMocks();
     prismaMock.account.findFirst.mockResolvedValue({ id: accountId, code: '5000' });
     prismaMock.store.findFirst.mockResolvedValue({ id: storeId });
+    prismaMock.user.findFirst.mockResolvedValue({ id: userId });
+    prismaMock.till.findFirst.mockResolvedValue({ id: 'till-1', storeId });
+    prismaMock.shift.findFirst.mockResolvedValue({ id: 'shift-1', tillId: 'till-1' });
+    prismaMock.moneyIdempotency.findUnique.mockResolvedValue(null);
+    prismaMock.moneyIdempotency.create.mockImplementation(async ({ data }: any) => ({
+      id: 'midem-exp-1',
+      ...data,
+    }));
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
     getOpenCashShiftForPaymentMock.mockResolvedValue({ id: 'shift-1', tillId: 'till-1' });
     recordCashDrawerEntryTxMock.mockResolvedValue({
@@ -98,7 +111,41 @@ describe('expense cash drawer linkage', () => {
       id: 'payment-follow-up',
       ...data,
     }));
+    prismaMock.expensePayment.findMany.mockImplementation(async () => [
+      { amountPence: 25000 },
+    ]);
+    prismaMock.expense.update.mockImplementation(async ({ data }: any) => {
+      const created = prismaMock.expense.create.mock.results.find((r: any) => r.type === 'return')?.value;
+      return {
+        id: expenseId,
+        account: { code: '5000' },
+        payments: created?.payments ?? [],
+        ...created,
+        ...data,
+      };
+    });
     prismaMock.cashDrawerEntry.findFirst.mockResolvedValue(null);
+  });
+
+  it('uses the explicit Till 3 OPEN shift when the user also has Till 1 open', async () => {
+    getOpenCashShiftForPaymentMock.mockResolvedValue({ id: 'shift-3', tillId: 'till-3' });
+    prismaMock.shift.findFirst.mockResolvedValue({ id: 'shift-3', tillId: 'till-3' });
+    prismaMock.till.findFirst.mockResolvedValue({ id: 'till-3', storeId });
+
+    await createExpense({ ...baseExpenseInput, tillId: 'till-3' });
+
+    expect(getOpenCashShiftForPaymentMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.objectContaining({ businessId: bizId, storeId, tillId: 'till-3' }),
+    );
+    expect(getOpenCashShiftForPaymentMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.not.objectContaining({ fallbackTillId: expect.anything() }),
+    );
+    expect(recordCashDrawerEntryTxMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.objectContaining({ tillId: 'till-3', shiftId: 'shift-3' }),
+    );
   });
 
   it('1. PAID Cash expense during open shift creates PAID_OUT_EXPENSE', async () => {
@@ -217,11 +264,13 @@ describe('expense cash drawer linkage', () => {
       expenseId,
       method: 'CASH',
       amountPence: 25000,
+      tillId: 'till-1',
+      idempotencyKey: 'idem-exp-cash',
     });
 
     expect(getOpenCashShiftForPaymentMock).toHaveBeenCalledWith(
       prismaMock,
-      expect.objectContaining({ businessId: bizId, storeId, userId }),
+      expect.objectContaining({ businessId: bizId, storeId, tillId: 'till-1' }),
     );
     expect(recordCashDrawerEntryTxMock).toHaveBeenCalledWith(
       prismaMock,
@@ -234,9 +283,7 @@ describe('expense cash drawer linkage', () => {
     );
   });
 
-  it('11. No double-counting when ExpensePayment already has drawer entry', async () => {
-    prismaMock.cashDrawerEntry.findFirst.mockResolvedValue({ id: 'existing-drawer' });
-
+  it('11. New expense payments always write a drawer entry for cash', async () => {
     await recordExpensePayment({
       businessId: bizId,
       storeId,
@@ -244,9 +291,11 @@ describe('expense cash drawer linkage', () => {
       expenseId,
       method: 'CASH',
       amountPence: 25000,
+      tillId: 'till-1',
+      idempotencyKey: 'idem-exp-drawer',
     });
 
-    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).toHaveBeenCalledTimes(1);
   });
 
   it('12. Journal/accounting behaviour for all payment methods remains as currently designed', async () => {
@@ -304,6 +353,8 @@ describe('expense cash drawer linkage', () => {
         expenseId,
         method: 'CASH',
         amountPence: 25000,
+        tillId: 'till-1',
+        idempotencyKey: 'idem-exp-noshift',
       }),
     ).rejects.toThrow(CASH_EXPENSE_SHIFT_REQUIRED_MSG);
 
@@ -318,6 +369,7 @@ describe('expense cash drawer linkage', () => {
       expenseId,
       method: 'CARD',
       amountPence: 25000,
+      idempotencyKey: 'idem-exp-card',
     });
 
     expect(getOpenCashShiftForPaymentMock).not.toHaveBeenCalled();
@@ -328,6 +380,113 @@ describe('expense cash drawer linkage', () => {
     recordCashDrawerEntryTxMock.mockRejectedValue(new Error('drawer write failed'));
 
     await expect(createExpense(baseExpenseInput)).rejects.toThrow('drawer write failed');
+  });
+
+  it('rolls back recordExpensePayment when the drawer write fails', async () => {
+    recordCashDrawerEntryTxMock.mockRejectedValue(new Error('drawer write failed'));
+
+    await expect(
+      recordExpensePayment({
+        businessId: bizId,
+        storeId,
+        userId,
+        expenseId,
+        method: 'CASH',
+        amountPence: 25000,
+        tillId: 'till-1',
+        idempotencyKey: 'idem-exp-drawer-fail',
+      }),
+    ).rejects.toThrow('drawer write failed');
+    expect(prismaMock.moneyIdempotency.create).not.toHaveBeenCalled();
+  });
+
+  it('rolls back recordExpensePayment when the journal write fails', async () => {
+    postJournalEntryMock.mockRejectedValue(new Error('journal write failed'));
+
+    await expect(
+      recordExpensePayment({
+        businessId: bizId,
+        storeId,
+        userId,
+        expenseId,
+        method: 'CARD',
+        amountPence: 25000,
+        idempotencyKey: 'idem-exp-journal-fail',
+      }),
+    ).rejects.toThrow('journal write failed');
+    expect(prismaMock.moneyIdempotency.create).not.toHaveBeenCalled();
+  });
+
+  it('replays an identical expense payment without a second post', async () => {
+    const { buildExpensePaymentPayloadHash } = await import('./money-idempotency');
+    const hash = buildExpensePaymentPayloadHash({
+      businessId: bizId,
+      expenseId,
+      method: 'CARD',
+      amountPence: 25000,
+      reference: '',
+      userId,
+    });
+    prismaMock.moneyIdempotency.findUnique.mockResolvedValue({
+      id: 'midem-replay',
+      businessId: bizId,
+      key: 'idem-exp-replay',
+      payloadHash: hash,
+      commandKind: 'EXPENSE_PAYMENT',
+      resultJson: JSON.stringify({ expenseId, paymentId: 'payment-follow-up' }),
+    });
+    prismaMock.expensePayment.findFirst.mockResolvedValue({
+      id: 'payment-follow-up',
+      amountPence: 25000,
+    });
+
+    const result = await recordExpensePayment({
+      businessId: bizId,
+      storeId,
+      userId,
+      expenseId,
+      method: 'CARD',
+      amountPence: 25000,
+      idempotencyKey: 'idem-exp-replay',
+    });
+
+    expect(result.id).toBe('payment-follow-up');
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.expensePayment.create).not.toHaveBeenCalled();
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects same expense-payment key with a different amount', async () => {
+    const { buildExpensePaymentPayloadHash } = await import('./money-idempotency');
+    const hash = buildExpensePaymentPayloadHash({
+      businessId: bizId,
+      expenseId,
+      method: 'CARD',
+      amountPence: 25000,
+      reference: '',
+      userId,
+    });
+    prismaMock.moneyIdempotency.findUnique.mockResolvedValue({
+      id: 'midem-conflict',
+      businessId: bizId,
+      key: 'idem-exp-conflict',
+      payloadHash: hash,
+      commandKind: 'EXPENSE_PAYMENT',
+      resultJson: JSON.stringify({ expenseId, paymentId: 'payment-follow-up' }),
+    });
+
+    await expect(
+      recordExpensePayment({
+        businessId: bizId,
+        storeId,
+        userId,
+        expenseId,
+        method: 'CARD',
+        amountPence: 40000,
+        idempotencyKey: 'idem-exp-conflict',
+      }),
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    expect(prismaMock.expensePayment.create).not.toHaveBeenCalled();
   });
 });
 

@@ -21,6 +21,11 @@ import {
   HOME_RESUME_STALE_MS,
   useRouterRefreshOnVisibility,
 } from '@/hooks/useRouterRefreshOnVisibility';
+import {
+  ONBOARDING_ADD_PRODUCT_MANUALLY_NAME,
+  ONBOARDING_ADD_PRODUCT_MANUALLY_TESTID,
+  PRODUCT_CREATE_HREF,
+} from '@/lib/products/product-create-href';
 
 /* ────────────────────────────── Icons ────────────────────────────── */
 const StepIcons: Record<string, React.ReactNode> = {
@@ -966,9 +971,13 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
 
                 {stage.key === 'products' && isCurrent ? (
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <Link href="/products/new" className="btn-primary py-2.5 text-center text-sm">
-                      Add a product manually
-                    </Link>
+                    <a
+                      href={PRODUCT_CREATE_HREF}
+                      data-testid={ONBOARDING_ADD_PRODUCT_MANUALLY_TESTID}
+                      className="btn-primary py-2.5 text-center text-sm"
+                    >
+                      {ONBOARDING_ADD_PRODUCT_MANUALLY_NAME}
+                    </a>
                     <Link
                       href="/settings/import-stock"
                       className="btn-ghost border border-black/10 py-2.5 text-center text-sm"

@@ -214,7 +214,7 @@ export default function OpeningStockClient({
         {products.length === 0 ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
             No products found.{' '}
-            <Link href="/products" className="underline font-medium">
+            <Link href="/products#product-create" className="underline font-medium">
               Add your products first
             </Link>
             , then come back here.
@@ -289,6 +289,7 @@ export default function OpeningStockClient({
                         <label className="label">Product</label>
                         <select
                           className="input text-sm"
+                          aria-label="Product"
                           value={row.productId}
                           onChange={e => updateRow(row.id, 'productId', e.target.value)}
                         >
@@ -304,6 +305,7 @@ export default function OpeningStockClient({
                           <label className="label">Unit</label>
                           <select
                             className="input text-sm"
+                            aria-label="Unit"
                             value={row.unitId}
                             onChange={e => updateRow(row.id, 'unitId', e.target.value)}
                           >
@@ -356,6 +358,7 @@ export default function OpeningStockClient({
                   <div className="col-span-4">
                     <select
                       className="input text-sm"
+                      aria-label="Product"
                       value={row.productId}
                       onChange={e =>
                         updateRow(row.id, 'productId', e.target.value)
@@ -371,6 +374,7 @@ export default function OpeningStockClient({
                   <div className="col-span-2">
                     <select
                       className="input text-sm"
+                      aria-label="Unit"
                       value={row.unitId}
                       onChange={e =>
                         updateRow(row.id, 'unitId', e.target.value)

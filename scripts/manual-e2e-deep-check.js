@@ -23,6 +23,14 @@ async function screenshotStep(page, name) {
   } catch (_) { /* best effort */ }
 }
 
+async function fillVisiblePaymentForm(page, amount) {
+  const record = page.getByRole('button', { name: /Record payment/i }).first();
+  await record.waitFor({ state: 'visible', timeout: 20000 });
+  const form = record.locator('xpath=ancestor::form[1]');
+  await form.locator('input[name="amount"]').fill(amount);
+  await record.click();
+}
+
 /** Poll page URL until it matches the pattern (30s timeout by default) */
 async function waitForURLPattern(page, pattern, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
@@ -44,6 +52,36 @@ async function ensureOwnerPassword() {
     });
     step('Owner password/PIN ensured');
   } catch (e) { step(`ensureOwnerPassword warning: ${e.message}`); }
+}
+
+/** Operational POS sales require an OPEN shift. Seed does not open one. */
+async function ensureOpenShift(email) {
+  const user = await prisma.user.findFirst({ where: { email } });
+  if (!user) throw new Error(`Cannot open till: no user ${email}`);
+  const store = await prisma.store.findFirst({ where: { businessId: user.businessId } });
+  if (!store) throw new Error('Cannot open till: no store for this business');
+  const till = await prisma.till.findFirst({
+    where: { storeId: store.id, active: true },
+    orderBy: { name: 'asc' },
+  });
+  if (!till) throw new Error('Cannot open till: no active till');
+  const existing = await prisma.shift.findFirst({
+    where: { tillId: till.id, status: 'OPEN' },
+  });
+  if (existing) return existing;
+  const openingCashPence = 10000;
+  const created = await prisma.shift.create({
+    data: {
+      tillId: till.id,
+      userId: user.id,
+      openingCashPence,
+      expectedCashPence: openingCashPence,
+      status: 'OPEN',
+      openKey: till.id,
+    },
+  });
+  step(`Opened till ${till.name} (${created.id})`);
+  return created;
 }
 
 async function login(page, email, password) {
@@ -287,6 +325,7 @@ async function run() {
   try {
     // Ensure password is correct before starting (defensive)
     await ensureOwnerPassword();
+    await ensureOpenShift(OWNER_EMAIL);
 
     step('1/12 Login as owner');
     await login(page, OWNER_EMAIL, OWNER_PASSWORD);
@@ -380,7 +419,7 @@ async function run() {
     await page.waitForTimeout(500);
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
-    await page.waitForTimeout(5000);
+    await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
     step('6b/12 Create unpaid purchase OK');
 
     // Sales (paid, multi-line) -> receipt open -> amend
@@ -485,9 +524,7 @@ async function run() {
 
     await page.goto(`${BASE_URL}/payments/customer-receipts`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(1000);
-    const customerPayRow = page.locator('tbody tr').first();
-    await customerPayRow.locator('input[name="amount"]').fill('0.10');
-    await customerPayRow.getByRole('button', { name: /Record payment/i }).click();
+    await fillVisiblePaymentForm(page, '0.10');
     await page.waitForTimeout(3000);
     report.payments.customerReceipt = true;
     step('10/12 Customer payment OK');
@@ -496,9 +533,7 @@ async function run() {
     step('11/12 Supplier payment');
     await page.goto(`${BASE_URL}/payments/supplier-payments`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(1000);
-    const supplierPayRow = page.locator('tbody tr').first();
-    await supplierPayRow.locator('input[name="amount"]').fill('0.10');
-    await supplierPayRow.getByRole('button', { name: /Record payment/i }).click();
+    await fillVisiblePaymentForm(page, '0.10');
     await page.waitForTimeout(3000);
     report.payments.supplierPayment = true;
     step('11/12 Supplier payment OK');
@@ -520,9 +555,7 @@ async function run() {
       await page.goto(`${BASE_URL}/payments/expense-payments`, { waitUntil: 'networkidle' });
       await page.waitForTimeout(1000);
     }
-    const expensePayRow = page.locator('tbody tr').first();
-    await expensePayRow.locator('input[name="amount"]').fill('0.10');
-    await expensePayRow.getByRole('button', { name: /Record payment/i }).click();
+    await fillVisiblePaymentForm(page, '0.10');
     await page.waitForTimeout(3000);
     report.payments.expensePayment = true;
     step('12/12 Expense payment OK');

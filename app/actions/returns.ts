@@ -1,11 +1,13 @@
 'use server';
 
 import { createSalesReturn, createPurchaseReturn } from '@/lib/services/returns';
+import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { formString, formInt } from '@/lib/form-helpers';
 import { ReturnTypeEnum, PaymentMethodEnum } from '@/lib/validation/enums';
 import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { isVoidReturnReasonCode } from '@/lib/fraud/reason-codes';
@@ -111,7 +113,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
       },
     });
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId, salesReturn.storeId ?? undefined);
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
 
@@ -135,6 +137,7 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
       redirect('/purchases?error=invalid-refund-method');
     }
     const reason = formString(formData, 'reason') || null;
+    const tillId = formString(formData, 'tillId');
 
     await createPurchaseReturn({
       businessId,
@@ -143,12 +146,17 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
       refundMethod: refundMethod || null,
       refundAmountPence,
       reason,
-      type
+      type,
+      tillId: tillId || null,
     });
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_RETURN', entity: 'PurchaseInvoice', entityId: purchaseInvoiceId, details: { type, reason, refundAmountPence } });
 
-    revalidateTag('pos-products');
+    const purchaseInvoice = await prisma.purchaseInvoice.findFirst({
+      where: { id: purchaseInvoiceId, businessId },
+      select: { storeId: true },
+    });
+    revalidatePosCatalog(businessId, purchaseInvoice?.storeId);
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
 

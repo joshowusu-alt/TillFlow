@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth';
 import { checkCacheDataRateLimit } from '@/lib/security/sync-throttle';
+import {
+  POS_OFFLINE_CATALOGUE_MAX,
+  SELLABLE_PRODUCT_SELECT,
+  capOfflineCatalogue,
+  toSellableProductDto,
+} from '@/lib/pos/sellable-dto';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,62 +80,45 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Store not found' }, { status: 404 });
         }
 
-        const inventory = await prisma.inventoryBalance.findMany({
-            where: { storeId: store.id },
-            select: { productId: true, qtyOnHandBase: true }
-        });
+        const updatedSinceRaw = request.nextUrl.searchParams.get('updatedSince');
+        const updatedSince = updatedSinceRaw ? new Date(updatedSinceRaw) : null;
+        const updatedSinceValid = updatedSince && !Number.isNaN(updatedSince.getTime());
+
+        const [catalogueSize, catalogVersionRow, products] = await Promise.all([
+            prisma.product.count({ where: { businessId: business.id, active: true } }),
+            prisma.product.aggregate({
+                where: { businessId: business.id, active: true },
+                _max: { updatedAt: true },
+            }),
+            prisma.product.findMany({
+                where: {
+                    businessId: business.id,
+                    active: true,
+                    ...(updatedSinceValid ? { updatedAt: { gt: updatedSince } } : {}),
+                },
+                select: SELLABLE_PRODUCT_SELECT,
+                orderBy: { updatedAt: 'desc' },
+                take: POS_OFFLINE_CATALOGUE_MAX,
+            }),
+        ]);
+        const snapshotProductIds = products.map((product) => product.id);
+        // InventoryBalance is @@unique([storeId, productId]) — only the 5,000-SKU snapshot, never the whole store.
+        const inventory = snapshotProductIds.length
+            ? await prisma.inventoryBalance.findMany({
+                where: { storeId: store.id, productId: { in: snapshotProductIds } },
+                select: { productId: true, qtyOnHandBase: true }
+            })
+            : [];
         const inventoryMap = new Map(inventory.map((item) => [item.productId, item.qtyOnHandBase]));
 
-        const products = await prisma.product.findMany({
-            where: { businessId: business.id, active: true },
-            select: {
-                id: true,
-                name: true,
-                barcode: true,
-                sellingPriceBasePence: true,
-                vatRateBps: true,
-                promoBuyQty: true,
-                promoGetQty: true,
-                productUnits: {
-                    select: {
-                        unitId: true,
-                        conversionToBase: true,
-                        isBaseUnit: true,
-                        sellingPricePence: true,
-                        defaultCostPence: true,
-                        unit: {
-                            select: {
-                                id: true,
-                                name: true,
-                                pluralName: true
-                            }
-                        }
-                    }
-                }
-            }
-        });
-
-        const productDtos = products.map((product) => ({
-            businessId: business.id,
-            storeId: store.id,
-            id: product.id,
-            name: product.name,
-            barcode: product.barcode,
-            sellingPriceBasePence: product.sellingPriceBasePence,
-            vatRateBps: product.vatRateBps,
-            promoBuyQty: product.promoBuyQty,
-            promoGetQty: product.promoGetQty,
-            onHandBase: inventoryMap.get(product.id) ?? 0,
-            units: product.productUnits.map((pu) => ({
-                id: pu.unit.id,
-                name: pu.unit.name,
-                pluralName: pu.unit.pluralName,
-                conversionToBase: pu.conversionToBase,
-                isBaseUnit: pu.isBaseUnit,
-                sellingPricePence: pu.sellingPricePence,
-                defaultCostPence: pu.defaultCostPence
+        const sellable = capOfflineCatalogue(
+            products.map((product) => ({
+                businessId: business.id,
+                storeId: store.id,
+                ...toSellableProductDto(product, inventoryMap.get(product.id) ?? 0),
             }))
-        }));
+        );
+        const catalogVersion = catalogVersionRow._max.updatedAt?.toISOString() ?? null;
 
         const customers = await prisma.customer.findMany({
             where: { businessId: business.id },
@@ -137,7 +126,12 @@ export async function GET(request: NextRequest) {
         });
 
         return NextResponse.json({
-            products: productDtos,
+            products: sellable,
+            catalogVersion,
+            catalogueSize,
+            offlineCatalogueMax: POS_OFFLINE_CATALOGUE_MAX,
+            offlineCatalogueTruncated: catalogueSize > POS_OFFLINE_CATALOGUE_MAX && !updatedSinceValid,
+            updatedSince: updatedSinceValid ? updatedSince.toISOString() : null,
             business: {
                 id: business.id,
                 currency: business.currency,

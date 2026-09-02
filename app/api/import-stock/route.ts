@@ -26,6 +26,18 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (
+      (meta.importMode === 'PURCHASES' || meta.importMode === 'OPENING_STOCK') &&
+      !meta.clientImportKey?.trim()
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'This import form is out of date. Reload the file and try again so paid chunks can replay safely.',
+        },
+        { status: 400 }
+      );
+    }
     const result = await importStockAction(rows, meta);
     return NextResponse.json(result);
   } catch (e: unknown) {

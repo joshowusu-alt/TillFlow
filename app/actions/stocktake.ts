@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidateTag } from 'next/cache';
 import { withBusinessStoreContext, safeAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 import { getFeatures } from '@/lib/features';
 import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
@@ -309,7 +310,7 @@ export async function completeStocktakeAction(data: {
       },
     });
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId, storeId);
     const { revalidateImproveRecordsHome } = await import('@/lib/improve-records-revalidate');
     revalidateImproveRecordsHome();
 

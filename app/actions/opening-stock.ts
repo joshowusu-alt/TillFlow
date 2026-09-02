@@ -6,6 +6,15 @@ import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/l
 import { recordOpeningInventory } from '@/lib/services/opening-inventory';
 import { createPurchase } from '@/lib/services/purchases';
 import { audit } from '@/lib/audit';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
+import {
+  findMoneyIdempotency,
+  hashCanonicalParts,
+  insertMoneyIdempotency,
+  isPrismaUniqueConstraintOn,
+  parseIdempotencyResult,
+  replayOrConflict,
+} from '@/lib/services/money-idempotency';
 
 export type OpeningStockLine = {
   productId: string;
@@ -65,19 +74,67 @@ export async function createOpeningStockAction(
       }
 
       if (equityLines.length > 0) {
-        const result = await recordOpeningInventory({
-          businessId,
-          storeId: store.id,
-          userId: user.id,
-          referenceId: `opening-stock-ui-${Date.now()}`,
-          description: 'Opening stock setup — Opening Balance Equity',
-          lines: equityLines.map((l) => ({
-            productId: l.productId,
-            unitId: l.unitId,
-            qtyInUnit: l.qtyInUnit,
-            unitCostBasePence: l.unitCostPence > 0 ? l.unitCostPence : 0,
-          })),
-        });
+        const digest = hashCanonicalParts(
+          equityLines
+            .map((l) => `${l.productId}:${l.unitId}:${l.qtyInUnit}:${l.unitCostPence}`)
+            .sort(),
+        );
+        const idempotencyKey = `opening-ui:${digest}`;
+        const payloadHash = digest;
+        const openingLines = equityLines.map((l) => ({
+          productId: l.productId,
+          unitId: l.unitId,
+          qtyInUnit: l.qtyInUnit,
+          unitCostBasePence: l.unitCostPence > 0 ? l.unitCostPence : 0,
+        }));
+        const applyEquity = async () => {
+          try {
+            return await prisma.$transaction(async (tx) => {
+              const existing = await findMoneyIdempotency(tx as any, businessId, idempotencyKey);
+              if (existing) {
+                replayOrConflict(existing, { payloadHash, commandKind: 'OPENING_STOCK' });
+                return parseIdempotencyResult<{ valuedPence: number; costReviewProductIds: string[]; unvaluedUnits: number }>(
+                  existing.resultJson,
+                );
+              }
+              const openingResult = await recordOpeningInventory(
+                {
+                  businessId,
+                  storeId: store.id,
+                  userId: user.id,
+                  referenceId: idempotencyKey,
+                  description: 'Opening stock setup — Opening Balance Equity',
+                  lines: openingLines,
+                },
+                tx,
+              );
+              await insertMoneyIdempotency(tx as any, {
+                businessId,
+                key: idempotencyKey,
+                payloadHash,
+                commandKind: 'OPENING_STOCK',
+                resultJson: JSON.stringify({
+                  valuedPence: openingResult.valuedPence,
+                  costReviewProductIds: openingResult.costReviewProductIds,
+                  unvaluedUnits: openingResult.unvaluedUnits,
+                }),
+              });
+              return openingResult;
+            });
+          } catch (errUnique: unknown) {
+            if (isPrismaUniqueConstraintOn(errUnique, ['businessId', 'key'])) {
+              const winner = await findMoneyIdempotency(prisma as any, businessId, idempotencyKey);
+              if (winner) {
+                replayOrConflict(winner, { payloadHash, commandKind: 'OPENING_STOCK' });
+                return parseIdempotencyResult<{ valuedPence: number; costReviewProductIds: string[]; unvaluedUnits: number }>(
+                  winner.resultJson,
+                );
+              }
+            }
+            throw errUnique;
+          }
+        };
+        const result = await applyEquity();
         inventoryValuePence += result.valuedPence;
         missingCostCount += result.costReviewProductIds.length;
         costReviewProductIds.push(...result.costReviewProductIds);
@@ -116,6 +173,10 @@ export async function createOpeningStockAction(
             userId: user.id,
             stockMovementType: 'OPENING',
             acknowledgeHighCost: true,
+            idempotencyKey: `opening-ui-credit:${hashCanonicalParts([
+              supplierId,
+              ...group.map((l) => `${l.productId}:${l.unitId}:${l.qtyInUnit}:${l.unitCostPence}`).sort(),
+            ])}`,
           });
           const creditValue = group.reduce(
             (sum, l) => sum + Math.round(l.unitCostPence * l.qtyInUnit),
@@ -156,7 +217,7 @@ export async function createOpeningStockAction(
       },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId, store.id);
     revalidateTag('reports');
     revalidateTag(`readiness-${businessId}`);
     const { revalidateImproveRecordsHome } = await import('@/lib/improve-records-revalidate');

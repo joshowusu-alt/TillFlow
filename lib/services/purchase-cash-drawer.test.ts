@@ -17,6 +17,9 @@ const {
     purchaseInvoiceLine: { createMany: vi.fn() },
     purchasePayment: { create: vi.fn() },
     shift: { findFirst: vi.fn(), update: vi.fn() },
+    user: { findFirst: vi.fn() },
+    till: { findFirst: vi.fn() },
+    moneyIdempotency: { findUnique: vi.fn(), create: vi.fn() },
     stockMovement: { createMany: vi.fn() },
     inventoryBalance: { upsert: vi.fn() },
     $executeRaw: vi.fn(),
@@ -77,6 +80,9 @@ describe('purchase invoice cash drawer linkage', () => {
       currency: 'GHS',
     });
     prismaMock.store.findFirst.mockResolvedValue({ id: storeId });
+    prismaMock.user.findFirst.mockResolvedValue({ id: userId });
+    prismaMock.till.findFirst.mockResolvedValue({ id: 'till-1', storeId });
+    prismaMock.moneyIdempotency.findUnique.mockResolvedValue(null);
     prismaMock.supplier.findFirst.mockResolvedValue({ id: 'supplier-accra', name: 'ACCRA GOODS' });
     prismaMock.product.findMany.mockResolvedValue([]);
     prismaMock.product.updateMany.mockResolvedValue({ count: 0 });
@@ -133,6 +139,8 @@ describe('purchase invoice cash drawer linkage', () => {
       payments: [{ method: 'CASH', amountPence: 229800 }],
       lines: [productLine],
       userId,
+      tillId: 'till-1',
+      idempotencyKey: 'po-drawer',
     });
 
     expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function));
@@ -170,6 +178,8 @@ describe('purchase invoice cash drawer linkage', () => {
       payments: [],
       lines: [productLine],
       userId,
+      tillId: 'till-1',
+      idempotencyKey: 'po-drawer',
     });
 
     expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({
@@ -194,11 +204,50 @@ describe('purchase invoice cash drawer linkage', () => {
         payments: [{ method: 'CASH', amountPence: 229800 }],
         lines: [productLine],
         userId,
+        tillId: 'till-1',
+        idempotencyKey: 'po-drawer',
       }),
     ).rejects.toThrow('Open shift is required before recording cash supplier payments.');
 
     expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
     expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+  });
+
+  it('does not guess a user OPEN shift when cash purchase has no tillId', async () => {
+    await expect(
+      createPurchase({
+        businessId: bizId,
+        storeId,
+        supplierId: 'supplier-accra',
+        paymentStatus: 'PAID',
+        payments: [{ method: 'CASH', amountPence: 229800 }],
+        lines: [productLine],
+        userId,
+        idempotencyKey: 'po-drawer-no-till',
+      }),
+    ).rejects.toThrow('Select an open till before recording this cash payment');
+
+    expect(prismaMock.shift.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+  });
+
+  it('does not guess a user shift when skipCashDrawerRequirement is set', async () => {
+    await createPurchase({
+      businessId: bizId,
+      storeId,
+      supplierId: 'supplier-accra',
+      paymentStatus: 'PAID',
+      payments: [{ method: 'CASH', amountPence: 229800 }],
+      lines: [productLine],
+      userId,
+      skipCashDrawerRequirement: true,
+      idempotencyKey: 'po-drawer-skip',
+    });
+
+    expect(prismaMock.shift.findFirst).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    expect(prismaMock.purchasePayment.create).toHaveBeenCalled();
   });
 
   it('does not create drawer entries for non-cash purchase payments', async () => {
@@ -210,6 +259,7 @@ describe('purchase invoice cash drawer linkage', () => {
       payments: [{ method: 'TRANSFER', amountPence: 229800 }],
       lines: [productLine],
       userId,
+      idempotencyKey: 'po-drawer-transfer',
     });
 
     expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({
@@ -238,6 +288,8 @@ describe('purchase invoice cash drawer linkage', () => {
       ],
       lines: [productLine],
       userId,
+      tillId: 'till-1',
+      idempotencyKey: 'po-drawer',
     });
 
     expect(recordCashDrawerEntryTxMock).toHaveBeenCalledTimes(1);
@@ -269,6 +321,8 @@ describe('purchase invoice cash drawer linkage', () => {
         payments: [{ method: 'CASH', amountPence: 229800 }],
         lines: [productLine],
         userId,
+        tillId: 'till-1',
+        idempotencyKey: 'po-drawer',
       }),
     ).rejects.toThrow('drawer write failed');
   });

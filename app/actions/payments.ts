@@ -1,6 +1,7 @@
 'use server';
 
 import { recordCustomerPayment, recordSupplierPayment } from '@/lib/services/payments';
+import { EXPLICIT_CASH_TILL_REQUIRED_MSG } from '@/lib/services/cash-drawer';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { toPence } from '@/lib/form-helpers';
@@ -30,12 +31,17 @@ export async function recordCustomerPaymentAction(formData: FormData): Promise<v
 
     const invoiceId = formString(formData, 'invoiceId');
     const payments = parsePayments(formData);
+    const idempotencyKey = formString(formData, 'idempotencyKey');
+    if (!idempotencyKey) {
+      throw new Error('This payment form is out of date. Refresh the page or reopen the payment form, then try again.');
+    }
 
-    await recordCustomerPayment(businessId, invoiceId, payments, user.id);
+    await recordCustomerPayment(businessId, invoiceId, payments, user.id, { idempotencyKey });
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
     const returnTo = formString(formData, 'returnTo') || '/payments/customer-receipts';
-    redirect(returnTo);
+    const sep = returnTo.includes('?') ? '&' : '?';
+    redirect(`${returnTo}${sep}paid=${encodeURIComponent(invoiceId)}`);
   }, '/payments/customer-receipts');
 }
 
@@ -45,10 +51,17 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
 
     const invoiceId = formString(formData, 'invoiceId');
     const payments = parsePayments(formData);
+    const tillId = formString(formData, 'tillId');
     const paidAtStr = formString(formData, 'paidAt');
     const paidAt = paidAtStr ? new Date(paidAtStr) : undefined;
     const notes = formString(formData, 'notes') || undefined;
     const idempotencyKey = formString(formData, 'idempotencyKey');
+    if (!idempotencyKey) {
+      throw new Error('This payment form is out of date. Refresh the page or reopen the payment form, then try again.');
+    }
+    if (payments.some((p) => p.method === 'CASH' && p.amountPence > 0) && !tillId) {
+      throw new Error(EXPLICIT_CASH_TILL_REQUIRED_MSG);
+    }
 
     await recordSupplierPayment(businessId, invoiceId, payments, {
       paidAt,
@@ -57,6 +70,7 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
       actorName: user.name,
       notes,
       idempotencyKey,
+      tillId: tillId || undefined,
     });
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
