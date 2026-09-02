@@ -184,12 +184,11 @@ test.describe('UI programme shell geometry (read-only)', () => {
     await expect(page.getByRole('banner')).toBeVisible();
     await expect(page.getByRole('main')).toBeVisible();
     await expect(page.getByRole('navigation', { name: /primary mobile navigation/i })).toBeVisible();
-    await page.keyboard.press('Tab');
     const skip = page.getByRole('link', { name: /skip to content/i });
-    if (await skip.isVisible().catch(() => false)) {
-      await skip.click();
-      await expect(page.locator('#main-content')).toBeVisible();
-    }
+    await skip.focus();
+    await expect(skip).toBeFocused();
+    await skip.press('Enter');
+    await expect(page.locator('#main-content')).toBeFocused();
     await page.evaluate(() => {
       document.documentElement.style.zoom = '2';
     });

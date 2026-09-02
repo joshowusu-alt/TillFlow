@@ -498,6 +498,15 @@ html:has(input:focus, textarea:focus, select:focus) .hide-when-keyboard-open {
   display: none !important;
 }
 
+/* More (Sign out on phones) hides with the tab bar. Restore header Sign out
+   while a field is focused so the path is not removed. Must follow the compact
+   landscape `display: none !important` rule. */
+html[data-keyboard-open] .nav-trust-signout,
+html[data-text-entry-active] .nav-trust-signout,
+html:has(input:focus, textarea:focus, select:focus) .nav-trust-signout {
+  display: block !important;
+}
+
 .overlay-shell {
   padding-top: max(1rem, calc(env(safe-area-inset-top, 0px) + 0.5rem));
   padding-right: max(1rem, calc(env(safe-area-inset-right, 0px) + 0.5rem));

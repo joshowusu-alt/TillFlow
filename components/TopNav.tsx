@@ -268,10 +268,8 @@ export default function TopNav({
     const sync = () => {
       if (mq.matches) {
         nav.removeAttribute('inert');
-        nav.removeAttribute('aria-hidden');
       } else {
         nav.setAttribute('inert', '');
-        nav.setAttribute('aria-hidden', 'true');
       }
     };
     sync();
@@ -295,7 +293,7 @@ export default function TopNav({
           <a
             href="/pos"
             aria-label="TillFlow — go to POS"
-            className="shrink-0"
+            className="inline-flex h-11 min-h-11 min-w-11 shrink-0 items-center"
           >
             <Logo
               variant="lockup"

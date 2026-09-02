@@ -183,6 +183,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
         <main
           id="main-content"
+          tabIndex={-1}
           className="app-main-shell w-full min-w-0 max-w-full px-4 pt-3 sm:px-5 sm:pt-4 lg:px-6 lg:pt-5"
           data-route-shell={pathname === '/pos' || pathname.startsWith('/pos/') ? 'pos' : undefined}
         >

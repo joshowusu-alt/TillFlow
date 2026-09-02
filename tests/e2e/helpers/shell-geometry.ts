@@ -40,7 +40,7 @@ export async function readShellGeometry(page: Page) {
     const logo = document.querySelector('.app-shell-header a[aria-label*="TillFlow"]') as HTMLElement | null;
     const trustTrees = document.querySelectorAll('[data-nav-trust="true"]').length;
     const mainNav = document.querySelector('nav[aria-label="Main navigation"]') as HTMLElement | null;
-    const mainNavInert = Boolean(mainNav?.hasAttribute('inert') || mainNav?.getAttribute('aria-hidden') === 'true');
+    const mainNavInert = Boolean(mainNav?.hasAttribute('inert'));
 
     const visible = (el: HTMLElement | null) => {
       if (!el) return false;
@@ -80,7 +80,7 @@ export async function expectShellContract(page: Page, isPosRoute: boolean) {
     const nav = document.querySelector('nav[aria-label="Main navigation"]');
     if (!nav) return false;
     const desktop = window.innerWidth >= lg;
-    const inert = nav.hasAttribute('inert') || nav.getAttribute('aria-hidden') === 'true';
+    const inert = nav.hasAttribute('inert');
     return desktop ? !inert : inert;
   }, SHELL_LG_PX);
 
@@ -119,6 +119,7 @@ export async function expectShellContract(page: Page, isPosRoute: boolean) {
       '[data-shell-signout="header"]',
       '[data-shell-more="true"]',
       'a.home-open-pos',
+      '.app-shell-header a[aria-label*="TillFlow"]',
     ];
     const tooSmall: string[] = [];
     for (const selector of selectors) {

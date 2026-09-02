@@ -122,10 +122,15 @@ export default function NavMobileMenu({
 
     window.addEventListener('orientationchange', closeMenu);
     mediaQuery.addEventListener('change', handleMediaChange);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
 
     return () => {
       window.removeEventListener('orientationchange', closeMenu);
       mediaQuery.removeEventListener('change', handleMediaChange);
+      window.removeEventListener('keydown', onKey);
     };
   }, [mobileOpen, setMobileOpen]);
 
