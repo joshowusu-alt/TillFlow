@@ -26,7 +26,7 @@ describe('Trust Breakers T1: cold boot and POS measurement', () => {
     expect(onboardingAction).toContain('page.onboarding.get-readiness');
     expect(read('app/(protected)/onboarding/OwnerReadinessContent.tsx')).toContain('page.onboarding.owner-readiness');
     expect(read('app/(protected)/onboarding/OwnerReadinessContent.tsx')).toContain('measureServerOperation');
-    expect(onboardingPage).toContain('<Suspense');
+    expect(read('app/(protected)/onboarding/OwnerReadinessContent.tsx')).toContain('<Suspense');
     expect(onboardingPage).toContain('OwnerReadinessContent');
   });
 

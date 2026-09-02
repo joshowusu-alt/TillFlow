@@ -1,6 +1,6 @@
 export default function CommandCenterLoading() {
   return (
-    <div className="space-y-4 animate-pulse" role="status" aria-live="polite" aria-label="Loading page">
+    <div className="space-y-4 animate-pulse motion-reduce:animate-none" role="status" aria-live="polite" aria-label="Loading command centre" data-route-skeleton="command-center">
       <div className="space-y-2">
         <div className="h-7 w-56 max-w-full rounded-xl bg-black/5" />
         <div className="h-3.5 w-64 max-w-full rounded bg-black/5" />

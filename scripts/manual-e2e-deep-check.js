@@ -203,7 +203,7 @@ async function addProductFromSearch(page, query) {
 
   // Multi-unit products stage; single-unit may add immediately. Do not race cash Exact.
   const addToCartBtn = page.getByRole('button', { name: /Add to Cart/i });
-  const readyHint = page.getByText(/Ready —|Ready to complete/i).first();
+  const readyHint = page.getByText(/✓ Ready —|Ready to complete •/i).first();
   const outcome = await Promise.race([
     addToCartBtn.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'staged'),
     readyHint.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'direct'),
@@ -464,7 +464,7 @@ async function run() {
     await page.locator('select[name="customerId"]').selectOption({ index: 1 });
     await page.getByRole('button', { name: /no due date/i }).click();
     await page
-      .getByText(/Ready —|Ready to complete/i)
+      .getByText(/✓ Ready —|Ready to complete •/i)
       .first()
       .waitFor({ state: 'visible', timeout: 15000 })
       .catch(async () => {
@@ -512,7 +512,7 @@ async function run() {
     await page.getByRole('button', { name: /no due date/i }).click();
     await page.locator('#pos-cash-tendered').fill('0.50');
     await page
-      .getByText(/Ready —|Ready to complete/i)
+      .getByText(/✓ Ready —|Ready to complete •/i)
       .first()
       .waitFor({ state: 'visible', timeout: 15000 })
       .catch(async () => {

@@ -62,7 +62,7 @@ export default function OwnerHomeCompletedStream({ shell }: { shell: OwnerHomeCr
       <OwnerHomeRefresh />
       <div className="lg:mx-auto lg:max-w-[90rem]">
         <div
-          className="relative overflow-hidden lg:mt-4 lg:rounded-[1.25rem] lg:shadow-[0_18px_50px_rgba(15,23,42,0.12)]"
+          className="home-hero relative overflow-hidden lg:mt-4 lg:rounded-[1.25rem] lg:shadow-[0_18px_50px_rgba(15,23,42,0.12)]"
           style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%)' }}
         >
           <div
@@ -77,7 +77,7 @@ export default function OwnerHomeCompletedStream({ shell }: { shell: OwnerHomeCr
             style={{ background: 'linear-gradient(to bottom, transparent, rgba(15,23,42,0.25))' }}
           />
 
-          <div className="relative mx-auto max-w-5xl px-4 pb-5 pt-6 sm:px-6 sm:pb-8 sm:pt-8 lg:max-w-none lg:px-8 lg:py-7 xl:px-10">
+          <div className="home-hero-inner relative mx-auto max-w-5xl px-4 pb-5 pt-6 sm:px-6 sm:pb-8 sm:pt-8 lg:max-w-none lg:px-8 lg:py-7 xl:px-10">
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(18rem,1fr)] lg:items-end xl:grid-cols-[minmax(0,1fr)_minmax(22rem,1.02fr)] xl:gap-6">
               <div className="min-w-0">
                 {hour < 12 && firstName ? (
@@ -119,9 +119,9 @@ export default function OwnerHomeCompletedStream({ shell }: { shell: OwnerHomeCr
           </div>
         </div>
 
-        <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:max-w-none lg:px-8 lg:py-6">
+        <div className="home-completed-actions mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:max-w-none lg:px-8 lg:py-6">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:items-start xl:grid-cols-[minmax(0,1fr)_minmax(22rem,26rem)] xl:gap-6">
-            <div className="order-1 lg:col-start-1 lg:row-start-1">
+            <div className="home-open-pos order-1 lg:col-start-1 lg:row-start-1">
               <HomeActionCard
                 action={openPosAction}
                 className="w-full min-h-14 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent lg:min-h-[5.5rem] lg:p-5"

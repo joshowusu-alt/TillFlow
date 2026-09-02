@@ -46,6 +46,7 @@ const PUBLIC_PATHS = [
 ];
 
 function isDevHarnessAllowed(): boolean {
+  if (process.env.VERCEL_ENV === 'production') return false;
   return (
     process.env.NODE_ENV === 'development' ||
     process.env.ALLOW_OWNER_HOME_PREVIEW === 'true'
@@ -60,6 +61,16 @@ export function middleware(request: NextRequest) {
   if (csrfRejection) return csrfRejection;
 
   // Dev-only harness routes must 404 outside development (no login redirect, no fixtures).
+  if (pathname.startsWith('/dev/loading-harness')) {
+    return new NextResponse('Not Found', {
+      status: 404,
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        'cache-control': 'no-store',
+      },
+    });
+  }
+
   if (pathname.startsWith('/dev/') && !isDevHarnessAllowed()) {
     return new NextResponse('Not Found', {
       status: 404,

@@ -17,9 +17,10 @@ import MerchantBrandBadge from './MerchantBrandBadge';
 import NavTrustPanel from './NavTrustPanel';
 import NavMobileMenu from './NavMobileMenu';
 import NavIcon from './navigation/NavIcon';
-import { OPEN_MOBILE_NAV_EVENT } from './BottomTabBar';
+import { OPEN_MOBILE_NAV_EVENT, MOBILE_NAV_STATE_EVENT } from './BottomTabBar';
 import { NAV_KPI_REFRESH_EVENT, type NavKpiRefreshDetail } from '@/lib/navigation/nav-kpi-events';
 import { mobileReportingScopeLabel } from '@/lib/navigation/mobile-scope-label';
+import { SHELL_COMPACT_LANDSCAPE_MQ, SHELL_LG_PX } from '@/lib/navigation/shell-layout';
 
 export type TopNavUser = {
   name: string;
@@ -59,7 +60,8 @@ export default function TopNav({
   const [pendingMobileHref, setPendingMobileHref] = useState<string | null>(null);
   const [liveTodaySales, setLiveTodaySales] = useState(todaySales);
   const [liveOnlineOrdersCount, setLiveOnlineOrdersCount] = useState(onlineOrdersCount);
-  const lastSalesRefreshAtRef = useRef(0);
+  const [suppressDesktopNav, setSuppressDesktopNav] = useState(false);
+  const lastSalesRefreshAtRef = useRef(todaySales ? Date.now() : 0);
   const isOnline = useNetworkStatus();
   const router = useRouter();
   const [isRefreshing, startRefreshTransition] = useTransition();
@@ -155,8 +157,8 @@ export default function TopNav({
       }
     };
 
-    void refreshNavKpis(!todaySales);
-
+    // Do not fetch on first paint. Layout does not pass todaySales; a mount
+    // refetch races Home/POS useful-shell. Refresh on More, focus, or a sale.
     if (mobileOpen) {
       void refreshNavKpis(true);
     }
@@ -224,6 +226,23 @@ export default function TopNav({
     return () => window.removeEventListener(OPEN_MOBILE_NAV_EVENT, handleOpen);
   }, []);
 
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(MOBILE_NAV_STATE_EVENT, { detail: { open: mobileOpen } }));
+    const main = document.getElementById('main-content');
+    const bottom = document.querySelector('.mobile-bottom-tab-bar');
+    if (mobileOpen) {
+      main?.setAttribute('inert', '');
+      bottom?.setAttribute('inert', '');
+    } else {
+      main?.removeAttribute('inert');
+      bottom?.removeAttribute('inert');
+    }
+    return () => {
+      main?.removeAttribute('inert');
+      bottom?.removeAttribute('inert');
+    };
+  }, [mobileOpen]);
+
   // Keep sticky/scroll offsets aligned with the real header height so POS
   // content never starts underneath an opaque sticky banner.
   useEffect(() => {
@@ -231,7 +250,7 @@ export default function TopNav({
     if (!header) return;
 
     const publishOffset = () => {
-      const height = Math.ceil(header.getBoundingClientRect().height);
+      const height = Math.ceil(header.offsetHeight || header.getBoundingClientRect().height);
       if (height <= 0) return;
       document.documentElement.style.setProperty('--app-header-offset', `${height}px`);
       document.documentElement.style.setProperty('--app-header-height-mobile', `${height}px`);
@@ -241,29 +260,65 @@ export default function TopNav({
     const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(publishOffset) : null;
     observer?.observe(header);
     window.addEventListener('orientationchange', publishOffset);
+    const resetInvalidScroll = () => {
+      publishOffset();
+      if (typeof window === 'undefined') return;
+      const compactLandscape = window.matchMedia(SHELL_COMPACT_LANDSCAPE_MQ).matches;
+      if (compactLandscape) {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      }
+    };
+    window.addEventListener('orientationchange', resetInvalidScroll);
     return () => {
       observer?.disconnect();
       window.removeEventListener('orientationchange', publishOffset);
+      window.removeEventListener('orientationchange', resetInvalidScroll);
     };
   }, [pathname, mobileOpen, pendingMobileHref, liveTodaySales, isOnline]);
+
+  // Desktop nav stays in the tree for SSR, but must not remain an accessible
+  // landmark on phone/tablet. `inert` removes it from the a11y tree without a
+  // second mounted menu identity.
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const mq = window.matchMedia(`(min-width: ${SHELL_LG_PX}px)`);
+    const sync = () => {
+      if (mq.matches) {
+        nav.removeAttribute('inert');
+      } else {
+        nav.setAttribute('inert', '');
+      }
+    };
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${SHELL_LG_PX}px)`);
+    const sync = () => setSuppressDesktopNav(!mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   return (
     <>
       <header
         ref={headerRef}
-        className={`app-shell-header border-b border-slate-200/80 bg-white/96 backdrop-blur-2xl shadow-nav${isPosRoute ? ' app-shell-header-pos' : ''}`}
+        className={`app-shell-header border-b border-slate-200 bg-white shadow-nav${isPosRoute ? ' app-shell-header-pos' : ''}`}
         role="banner"
         data-pos-compact-header={isPosRoute ? 'true' : undefined}
-        style={{ position: 'sticky', top: 0, zIndex: 30 }}
       >
         <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
           Skip to content
         </a>
-        <div className="flex w-full items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-7 lg:py-2">
+      <div className="flex w-full min-w-0 max-w-full items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 lg:px-7 lg:py-2 app-shell-header-row">
           <a
             href="/pos"
             aria-label="TillFlow — go to POS"
-            className="shrink-0"
+            className="inline-flex h-11 min-h-11 min-w-11 shrink-0 items-center"
           >
             <Logo
               variant="lockup"
@@ -276,12 +331,15 @@ export default function TopNav({
             ref={navRef}
             aria-label="Main navigation"
             className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex"
+            data-desktop-nav={suppressDesktopNav ? 'deferred' : 'hydrated'}
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
                 setOpenGroup(null);
               }
             }}
           >
+            {!suppressDesktopNav ? (
+              <>
             {user.role === 'OWNER' ? (
               <Link
                 href="/onboarding"
@@ -462,9 +520,11 @@ export default function TopNav({
                 </div>
               );
             })}
+              </>
+            ) : null}
           </nav>
 
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             {isOnline ? (
               <button
                 type="button"
@@ -518,10 +578,15 @@ export default function TopNav({
             <NavTrustPanel user={user} storeName={storeName} isOnline={isOnline} todaySales={liveTodaySales} />
             <button
               type="button"
-              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 shadow-sm transition hover:bg-slate-50 active:bg-slate-100 lg:hidden"
+              className={`app-shell-menu-button h-11 w-11 items-center justify-center rounded-xl border border-slate-200/80 bg-white shadow-sm transition hover:bg-slate-50 active:bg-slate-100 ${
+                isPosRoute ? 'flex lg:hidden' : 'hidden'
+              }`}
               onClick={() => setMobileOpen((prev) => !prev)}
               aria-expanded={mobileOpen}
+              aria-haspopup="dialog"
+              aria-controls={mobileOpen ? 'shell-more-drawer' : undefined}
               aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              data-shell-menu-button="true"
             >
               {mobileOpen ? (
                 <svg className="h-5 w-5 text-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -537,11 +602,11 @@ export default function TopNav({
         </div>
 
         <div
-          className={`border-t border-slate-200/60 bg-white/80 px-4 lg:hidden sm:px-6 ${
+          className={`app-shell-status-strip max-w-full overflow-x-clip border-t border-slate-200/60 bg-white px-3 lg:hidden sm:px-6 ${
             isPosRoute ? 'py-1.5' : 'py-2'
           }`}
         >
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <div className="flex flex-nowrap items-center gap-x-2 overflow-x-clip">
             <span
               className="metric-chip"
               title={

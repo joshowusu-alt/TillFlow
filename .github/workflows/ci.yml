@@ -200,12 +200,22 @@ jobs:
       - name: Phase 3A financial QA
         run: npm run test:qa:phase3a
 
+      # Read-only geometry last. Do not run it before smoke: owner POS visits
+      # share the CI SQLite file with cashier till-open and can leave extras closed.
+      - name: UI programme shell geometry
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:6200
+        run: npm run test:e2e:ui-programme
+
       - name: Upload POS-safety artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pos-safety-artifacts
           path: |
-            .playwright-mcp/**
+            playwright/test-results/**
+            docs/loading/GATE_E_LABORATORY_BENCHMARK.md
+            docs/loading/GATE_F_POS_STABILITY.md
+            tmp/ui-programme-evidence/**
             .ci-server.log
           if-no-files-found: ignore

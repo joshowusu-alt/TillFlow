@@ -119,19 +119,13 @@ export function PosDeferredApply({ payload }: { payload: PosDeferredPayload }) {
 
 export function PosDeferredLoadingHint() {
   return (
-    <div
-      className="mb-2"
+    <p
+      className="sr-only"
       role="status"
       aria-live="polite"
       data-pos-deferred-loading="true"
     >
-      <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200/80 bg-white/90 px-2.5 py-1.5 text-xs text-slate-600 shadow-sm">
-        <span
-          className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-accent motion-reduce:animate-none"
-          aria-hidden="true"
-        />
-        Preparing checkout…
-      </div>
-    </div>
+      Preparing checkout…
+    </p>
   );
 }

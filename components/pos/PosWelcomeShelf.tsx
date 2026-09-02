@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 
 type PosWelcomeShelfProps = {
   firstName: string;
@@ -23,20 +23,40 @@ function todayKey(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export default function PosWelcomeShelf({ firstName, storeName, hasOpenShift, openTillName, userKey }: PosWelcomeShelfProps) {
-  const [visible, setVisible] = useState<boolean>(false);
-  const [greeting, setGreeting] = useState<string>('Welcome back');
+const SHELF_CLASS =
+  'mb-2 flex items-center gap-2 rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 via-white to-white px-3 py-2 shadow-card sm:mb-3 sm:items-center sm:gap-3 sm:rounded-2xl sm:px-5 sm:py-3.5';
 
-  useEffect(() => {
+/** Same geometry as the live welcome shelf so deferred extras do not push POS down. */
+export function PosWelcomeShelfSkeleton() {
+  return (
+    <div
+      className={SHELF_CLASS}
+      data-pos-welcome-shelf="skeleton"
+      aria-hidden="true"
+    >
+      <div className="min-w-0 flex-1">
+        <div className="h-3 w-24 rounded bg-blue-100/80 sm:h-3.5" />
+        <div className="mt-0.5 h-5 w-44 rounded bg-slate-200/70 sm:mt-1 sm:h-7 sm:w-56" />
+        <div className="mt-0.5 h-4 w-full max-w-sm rounded bg-slate-100 sm:h-5" />
+      </div>
+      <div className="h-7 w-14 flex-shrink-0 rounded-full border border-slate-200 bg-white" />
+    </div>
+  );
+}
+
+export default function PosWelcomeShelf({ firstName, storeName, hasOpenShift, openTillName, userKey }: PosWelcomeShelfProps) {
+  const [visible, setVisible] = useState(true);
+  const [greeting, setGreeting] = useState('Welcome back');
+
+  useLayoutEffect(() => {
     setGreeting(greetingFor(new Date().getHours()));
     const storageKey = `tillflow:pos-welcome:${userKey}`;
     try {
-      const stored = window.localStorage.getItem(storageKey);
-      if (stored !== todayKey()) {
-        setVisible(true);
+      if (window.localStorage.getItem(storageKey) === todayKey()) {
+        setVisible(false);
       }
     } catch {
-      setVisible(true);
+      // Keep the reserved shelf when localStorage is unavailable.
     }
   }, [userKey]);
 
@@ -52,10 +72,7 @@ export default function PosWelcomeShelf({ firstName, storeName, hasOpenShift, op
   if (!visible) return null;
 
   return (
-    <div
-      className="mb-2 flex items-center gap-2 rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 via-white to-white px-3 py-2 shadow-card sm:mb-3 sm:items-center sm:gap-3 sm:rounded-2xl sm:px-5 sm:py-3.5"
-      data-pos-welcome-shelf="true"
-    >
+    <div className={SHELF_CLASS} data-pos-welcome-shelf="true">
       <div className="min-w-0 flex-1">
         <p className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-accent sm:text-[11px] sm:tracking-[0.22em]">
           {storeName}

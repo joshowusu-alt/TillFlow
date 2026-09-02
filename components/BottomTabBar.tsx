@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import type { AppRole } from '@/lib/navigation-config';
 import { getBottomTabsForRole } from '@/lib/navigation/mobile-menu-config';
 
@@ -13,6 +14,7 @@ import { getBottomTabsForRole } from '@/lib/navigation/mobile-menu-config';
  * which is a server component.
  */
 export const OPEN_MOBILE_NAV_EVENT = 'tillflow:open-mobile-nav';
+export const MOBILE_NAV_STATE_EVENT = 'tillflow:mobile-nav-state';
 
 /** Routes that should NOT render the bottom tab bar. */
 const HIDDEN_ROUTES = [
@@ -140,6 +142,15 @@ function TabIcon({ name }: { name: TabIconName }) {
 
 export default function BottomTabBar({ userRole }: { userRole: AppRole }) {
   const pathname = usePathname() ?? '';
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const onState = (event: Event) => {
+      setMenuOpen(Boolean((event as CustomEvent<{ open?: boolean }>).detail?.open));
+    };
+    window.addEventListener(MOBILE_NAV_STATE_EVENT, onState);
+    return () => window.removeEventListener(MOBILE_NAV_STATE_EVENT, onState);
+  }, []);
 
   if (HIDDEN_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))) {
     return null;
@@ -161,7 +172,7 @@ export default function BottomTabBar({ userRole }: { userRole: AppRole }) {
         {tabs.map((tab) => {
           const active = tab.match ? tab.match(pathname) : false;
           const common =
-            'flex h-14 min-w-[64px] flex-col items-center justify-center gap-0.5 rounded-xl px-3 transition-colors';
+            'mobile-bottom-tab-item flex h-14 min-w-[64px] flex-col items-center justify-center gap-0.5 rounded-xl px-3 transition-colors';
           const stateClasses = active
             ? 'text-accent font-semibold'
             : 'text-slate-600 hover:text-slate-900 active:bg-slate-100';
@@ -176,12 +187,21 @@ export default function BottomTabBar({ userRole }: { userRole: AppRole }) {
           return (
             <li key={tab.label} className="flex-1">
               {tab.opensMenu ? (
-                <button type="button" onClick={openMobileNav} className={`${common} ${stateClasses} w-full`}>
+                <button
+                  type="button"
+                  onClick={openMobileNav}
+                  className={`${common} ${stateClasses} w-full`}
+                  data-shell-more="true"
+                  aria-haspopup="dialog"
+                  aria-expanded={menuOpen}
+                  aria-controls={menuOpen ? 'shell-more-drawer' : undefined}
+                >
                   {content}
                 </button>
               ) : (
                 <Link
                   href={tab.href!}
+                  prefetch={tab.href === '/pos' ? true : undefined}
                   aria-current={active ? 'page' : undefined}
                   className={`${common} ${stateClasses}`}
                 >

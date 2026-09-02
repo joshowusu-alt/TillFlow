@@ -770,7 +770,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
   if (readyToSell) {
     const stages = data.stages ?? [];
     return (
-      <div className="min-h-screen bg-gradient-to-br from-accentSoft via-white to-paper">
+      <div className="bg-gradient-to-br from-accentSoft via-white to-paper">
         <div className="mx-auto max-w-xl px-4 py-8 pb-4 sm:py-10">
           <div className="mb-6 text-center">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">Ready to sell</p>
@@ -863,7 +863,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-accentSoft via-white to-paper">
+    <div className="bg-gradient-to-br from-accentSoft via-white to-paper">
       <div className="mx-auto max-w-xl px-4 py-8 pb-4 sm:py-10">
         <div className="mb-5 text-center">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">Setup</p>

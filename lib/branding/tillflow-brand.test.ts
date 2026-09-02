@@ -198,7 +198,9 @@ describe('TillFlow brand logo system', () => {
     expect(navKpisAction).toContain('getHomePerformanceSummary');
     expect(navKpisAction).toContain('countOnlineOrdersNeedingAttention');
     expect(topNav).toContain('setLiveOnlineOrdersCount');
-    expect(topNav).toContain('void refreshNavKpis(!todaySales)');
+    expect(topNav).toContain('void refreshNavKpis(false)');
+    expect(topNav).toContain('useRef(todaySales ? Date.now() : 0)');
+    expect(topNav).toContain('Do not fetch on first paint');
     expect(onboardingActions).toContain('getTodayKPIs');
   });
 

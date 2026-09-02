@@ -1,5 +1,3 @@
-import ChecklistReadinessSkeleton from './ChecklistReadinessSkeleton';
+import HomeInstantLoading from './HomeInstantLoading';
 
-export default function Loading() {
-  return <ChecklistReadinessSkeleton />;
-}
+export default HomeInstantLoading;

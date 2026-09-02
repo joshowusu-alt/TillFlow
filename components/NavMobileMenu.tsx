@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import LogoutForm from '@/components/LogoutForm';
 import { getFeatures, hasPlanAccess, type BusinessPlan } from '@/lib/features';
@@ -18,6 +18,7 @@ import {
 import InstallButton from './InstallButton';
 import NavIcon from './navigation/NavIcon';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import type { TopNavUser } from './TopNav';
 
 interface NavMobileMenuProps {
@@ -83,6 +84,9 @@ export default function NavMobileMenu({
   momoEnabled = true,
 }: NavMobileMenuProps) {
   useBodyScrollLock(mobileOpen);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeDrawer = useCallback(() => setMobileOpen(false), [setMobileOpen]);
+  useFocusTrap(mobileOpen, panelRef, closeDrawer);
   const [expandedAreas, setExpandedAreas] = useState<Record<string, boolean>>({});
 
   const menuContext = useMemo<MobileNavContext>(
@@ -301,7 +305,7 @@ export default function NavMobileMenu({
         Help & support
       </Link>
       <LogoutForm>
-        <button type="submit" className="btn-ghost w-full py-2 text-sm text-black/70">
+        <button type="submit" className="btn-ghost w-full py-2 text-sm text-black/70" data-shell-signout="drawer">
           Sign out
         </button>
       </LogoutForm>
@@ -332,6 +336,7 @@ export default function NavMobileMenu({
           <button
             type="submit"
             className="flex min-h-11 w-full items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white px-3.5 py-3 text-left text-sm font-medium text-black/70"
+            data-shell-signout="drawer"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
               <NavIcon iconKey="account" className="h-[18px] w-[18px]" />
@@ -350,16 +355,31 @@ export default function NavMobileMenu({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-slate-950/25 backdrop-blur-[2px] lg:hidden" onClick={() => setMobileOpen(false)} />
+      <button
+        type="button"
+        className="fixed inset-0 z-40 bg-slate-950/25 backdrop-blur-[2px] motion-reduce:backdrop-blur-none lg:hidden"
+        onClick={closeDrawer}
+        aria-label="Close menu"
+        tabIndex={-1}
+        data-shell-drawer-overlay="true"
+      />
       <div
-        className={`${panelClassName} fixed z-50 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-floating backdrop-blur-xl lg:hidden`}
+        ref={panelRef}
+        id="shell-more-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shell-more-drawer-title"
+        tabIndex={-1}
+        className={`${panelClassName} fixed z-50 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-floating backdrop-blur-xl motion-reduce:backdrop-blur-none lg:hidden`}
         data-mobile-drawer-variant={isCashierCompactDrawer ? 'cashier-compact' : user.role === 'OWNER' ? 'owner-launcher' : 'manager-menu'}
       >
         <div className={isCashierCompactDrawer ? 'flex flex-col' : 'flex h-full flex-col'}>
           <div className="border-b border-slate-200/80 bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 py-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="truncate text-base font-semibold text-ink">{businessName || 'Your business'}</div>
+                <div id="shell-more-drawer-title" className="truncate text-base font-semibold text-ink">
+                  {businessName || 'Your business'}
+                </div>
                 <div className="mt-1 text-sm text-black/60">{storeName || 'Main branch'}</div>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-800">
@@ -370,6 +390,18 @@ export default function NavMobileMenu({
                   </span>
                 </div>
               </div>
+              <button
+                type="button"
+                className="inline-flex h-11 min-h-11 min-w-11 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-ink"
+                onClick={closeDrawer}
+                aria-label="Close menu"
+                data-autofocus="true"
+                data-shell-drawer-close="true"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
             {!isCashierCompactDrawer ? (
               <div className="mt-3">

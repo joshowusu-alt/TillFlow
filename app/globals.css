@@ -189,6 +189,7 @@ a {
 
 input, select, textarea {
   font-family: inherit;
+  scroll-margin-top: calc(var(--app-header-offset) + 0.5rem);
   scroll-margin-bottom: calc(9rem + env(safe-area-inset-bottom, 0px) + var(--keyboard-safe-bottom));
 }
 
@@ -266,6 +267,13 @@ textarea {
   overflow-x: clip;
 }
 
+.app-shell-status-strip,
+.app-shell-header-row {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+}
+
 .app-main-shell[data-route-shell='pos'] {
   padding-bottom: calc(var(--pos-mobile-bottom-clearance) + 1rem);
 }
@@ -276,6 +284,98 @@ textarea {
   min-height: 1.75rem;
   padding-top: 0.2rem;
   padding-bottom: 0.2rem;
+}
+
+/*
+ * Compact phone landscape and keyboard-open portrait (shared with
+ * lib/navigation/shell-layout.ts). One identity row; Sign out lives in More.
+ * Status-strip and Sign out are hidden here with higher specificity than
+ * `lg:hidden` / `md:block` so `!important` is not required.
+ */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px),
+       (orientation: portrait) and (max-height: 500px) and (max-width: 767px) {
+  :root {
+    --app-header-height-mobile: 3.25rem;
+    --mobile-bottom-nav-content-height: 3.75rem;
+    --mobile-bottom-nav-clearance: calc(var(--mobile-bottom-nav-height) + 1.25rem);
+  }
+
+  .app-shell-header {
+    background-color: #fff;
+    position: relative;
+    top: auto;
+  }
+
+  /* POS has no Home hero. Keep the hamburger in the landscape viewport when
+     the barcode field takes focus and the welcome shelf makes the page tall. */
+  .app-shell-header-pos {
+    position: sticky;
+    top: 0;
+  }
+
+  .app-shell-header-row {
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+    gap: 0.5rem;
+  }
+
+  .app-shell-status-strip {
+    display: none;
+  }
+
+  .nav-trust {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .app-shell-header .nav-trust-signout,
+  .app-shell-header .nav-trust-sales {
+    display: none;
+  }
+
+  .app-shell-header-pos .app-shell-menu-button {
+    height: 2.75rem;
+    width: 2.75rem;
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .mobile-bottom-tab-item {
+    height: 2.75rem;
+    min-height: 44px;
+  }
+
+  .home-hero-inner {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .home-hero h1 {
+    font-size: 1.35rem;
+    line-height: 1.2;
+  }
+
+  .home-completed-actions {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .home-open-pos {
+    position: sticky;
+    bottom: calc(var(--mobile-bottom-nav-height) + 0.5rem);
+    z-index: 20;
+  }
+}
+
+/* Short desktop: keep header Sign out. Never apply phone-compact hiding. */
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 1024px) {
+  :root {
+    --app-header-height-desktop: 3.5rem;
+  }
+
+  .nav-trust-signout {
+    display: block;
+  }
 }
 
 .operational-page {
@@ -412,6 +512,12 @@ html[data-keyboard-open] .hide-when-keyboard-open,
 html[data-text-entry-active] .hide-when-keyboard-open,
 html:has(input:focus, textarea:focus, select:focus) .hide-when-keyboard-open {
   display: none !important;
+}
+
+/* Restore header Sign out only for a real visual-viewport keyboard, not for
+   POS autofocus (`data-text-entry-active` / :has(input:focus)). */
+html[data-keyboard-open] .app-shell-header .nav-trust-signout {
+  display: block;
 }
 
 .overlay-shell {

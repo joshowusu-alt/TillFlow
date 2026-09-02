@@ -22,7 +22,7 @@ Coverage is **not** a required gate. Adding it to the unit job would be slow and
 
 The financial gate is risk-based:
 
-1. `CI / pos-safety` — focused checkout/shift/drawer/payment/return unit tests plus smoke/deep/phase-3A E2E
+1. `CI / pos-safety` — focused checkout/shift/drawer/payment/return unit tests plus smoke/deep/phase-3A E2E, then read-only UI shell geometry (`test:e2e:ui-programme`, retries 0, seed owner, no sales; runs last so it cannot disturb cashier till-open)
 2. `Postgres Smoke` — migrate/deploy plus checkout/shift/concurrency tests against a real Postgres service when those files are present
 3. Authenticated E2E (local `pos-safety` and optional Preview reliability journey)
 

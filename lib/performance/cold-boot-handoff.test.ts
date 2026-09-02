@@ -32,12 +32,13 @@ describe('Trust Breakers T2b: cold boot launch handoff', () => {
   });
 
   it('completes launch from the protected shell instead of the readiness body', () => {
+    const ownerContent = read('app/(protected)/onboarding/OwnerReadinessContent.tsx');
     expect(protectedLayout).toContain('LaunchSessionCompletion');
     expect(onboardingPage).not.toContain('LaunchSessionCompletion');
     expect(onboardingClient).not.toContain('LaunchSessionCompletion');
-    expect(onboardingPage).toContain('<Suspense');
-    expect(onboardingPage).toContain('ChecklistReadinessSkeleton');
     expect(onboardingPage).toContain('OwnerReadinessContent');
+    expect(ownerContent).toContain('<Suspense');
+    expect(ownerContent).toContain('ChecklistReadinessSkeleton');
   });
 
   it('gates branded root loading to an intentional launch session', () => {
