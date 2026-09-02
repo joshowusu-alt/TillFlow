@@ -1,6 +1,7 @@
 /**
  * Owner Home critical shell — identity + Open POS without waiting on KPIs/IYR.
  */
+import { cache } from 'react';
 import { requireBusiness } from '@/lib/auth';
 import { getBusinessPlan, type BusinessPlan } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
@@ -21,7 +22,7 @@ export type OwnerHomeCriticalShell = {
   needsFullReadiness: boolean;
 };
 
-export async function getOwnerHomeCriticalShell(): Promise<OwnerHomeCriticalShell> {
+export const getOwnerHomeCriticalShell = cache(async (): Promise<OwnerHomeCriticalShell> => {
   return measureHomePerf('home.critical-shell', async () => {
     const { user, business } = await requireBusiness(['OWNER']);
 
@@ -80,4 +81,4 @@ export async function getOwnerHomeCriticalShell(): Promise<OwnerHomeCriticalShel
       needsFullReadiness: !journey.onboardingComplete,
     };
   });
-}
+});

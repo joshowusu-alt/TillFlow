@@ -11,29 +11,26 @@ const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), 'utf8');
 
 describe('Loading Phase 1: skeleton and route-loader polish', () => {
-  it('uses checklist-shaped light skeleton for onboarding Instant Loading and Suspense', () => {
-    const loading = read('app/(protected)/onboarding/loading.tsx');
-    const page = read('app/(protected)/onboarding/page.tsx');
+  it('keeps distinct checklist and completed-home skeletons', () => {
     const checklist = read('app/(protected)/onboarding/ChecklistReadinessSkeleton.tsx');
-
-    expect(loading).toContain('ChecklistReadinessSkeleton');
-    expect(loading).not.toContain('OwnerReadinessSkeleton');
-    expect(page).toContain('ChecklistReadinessSkeleton');
-    expect(page).toContain('fallback={<ChecklistReadinessSkeleton />}');
-    expect(page).not.toContain('fallback={<OwnerReadinessSkeleton />}');
-    expect(page).not.toMatch(/import OwnerReadinessSkeleton/);
+    const homeSkeleton = read('app/(protected)/onboarding/OwnerReadinessSkeleton.tsx');
 
     expect(checklist).toContain('Preparing setup checklist');
     expect(checklist).toContain('from-accentSoft');
     expect(checklist).not.toContain('bg-slate-900');
     expect(checklist).not.toContain('Preparing owner home');
-  });
 
-  it('preserves completed-home dark skeleton separately without wiring it to route loading', () => {
-    const homeSkeleton = read('app/(protected)/onboarding/OwnerReadinessSkeleton.tsx');
     expect(homeSkeleton).toContain('bg-slate-900');
     expect(homeSkeleton).toContain('Preparing owner home');
     expect(homeSkeleton).toContain('Completed owner-home');
+  });
+
+  it('selects Home Instant Loading skeleton from owner critical-shell state', () => {
+    const loading = read('app/(protected)/onboarding/loading.tsx');
+    expect(loading).toContain('requireBusiness');
+    expect(loading).toContain('onboardingCompletedAt');
+    expect(loading).toContain('ChecklistReadinessSkeleton');
+    expect(loading).toContain('OwnerReadinessSkeleton');
   });
 
   it('renders checklist skeleton without dark completed-home control-centre shell', () => {

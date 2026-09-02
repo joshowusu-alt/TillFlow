@@ -14,10 +14,9 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
   const salesAction = read('app/actions/sales.ts');
   const todayKpis = read('lib/reports/today-kpis.ts');
 
-  it('streams owner readiness behind Suspense instead of blocking the page shell', () => {
-    expect(onboardingPage).toContain('<Suspense');
+  it('streams owner readiness without a page-level checklist fallback for completed Home', () => {
     expect(onboardingPage).toContain('OwnerReadinessContent');
-    expect(onboardingPage).toContain('ChecklistReadinessSkeleton');
+    expect(onboardingPage).not.toContain('ChecklistReadinessSkeleton');
     expect(onboardingPage).not.toMatch(/await\s+measureServerOperation[\s\S]*getReadiness/);
     expect(onboardingPage).not.toContain('await getReadiness');
   });
@@ -30,6 +29,8 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
     expect(ownerContent).toContain('markOnboardingCompleteAfterFirstSale');
     expect(ownerContent).not.toContain('completeOnboarding()');
     expect(ownerContent).toContain('<OnboardingClient readiness={readiness} />');
+    expect(ownerContent).toContain('IncompleteOwnerHome');
+    expect(ownerContent).toContain('ChecklistReadinessSkeleton');
   });
 
   it('preserves auth and role gates on the top-level page', () => {
@@ -71,14 +72,16 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
     expect(readinessJourney).toContain('HOME_RESUME_STALE_MS');
   });
 
-  it('uses a checklist-shaped Instant Loading fallback; keeps completed-home skeleton separate', () => {
+  it('uses a state-aware Instant Loading fallback for Home', () => {
     const checklist = read('app/(protected)/onboarding/ChecklistReadinessSkeleton.tsx');
     const homeSkeleton = read('app/(protected)/onboarding/OwnerReadinessSkeleton.tsx');
     const loading = read('app/(protected)/onboarding/loading.tsx');
 
+    expect(loading).toContain('requireBusiness');
+    expect(loading).toContain('onboardingCompletedAt');
     expect(loading).toContain('ChecklistReadinessSkeleton');
+    expect(loading).toContain('OwnerReadinessSkeleton');
     expect(checklist).toContain('Preparing setup checklist');
-    expect(checklist).not.toContain('bg-slate-900');
     expect(homeSkeleton).toContain('Preparing owner home');
     expect(homeSkeleton).toContain('bg-slate-900');
     expect(homeSkeleton).not.toContain('min-h-[70vh]');
