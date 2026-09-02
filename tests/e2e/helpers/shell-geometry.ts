@@ -180,7 +180,15 @@ export async function expectSignOutReachable(page: Page, isPosRoute: boolean) {
   if (isPosRoute) {
     const hamburger = page.locator('[data-shell-menu-button="true"]');
     await expect(hamburger).toBeVisible();
-    await hamburger.click();
+    const box = await hamburger.boundingBox();
+    expect(box, 'POS hamburger stays inside the viewport').toBeTruthy();
+    if (box) {
+      expect(box.x).toBeGreaterThanOrEqual(-1);
+      expect(box.x + box.width).toBeLessThanOrEqual(geo.width + 1);
+      expect(box.y).toBeGreaterThanOrEqual(-1);
+      expect(box.y + box.height).toBeLessThanOrEqual(geo.height + 1);
+    }
+    await hamburger.click({ force: true });
     await expect(page.locator('[data-shell-signout="drawer"]').first()).toBeVisible();
     await page.keyboard.press('Escape');
     const overlay = page.locator('[data-shell-drawer-overlay="true"]');

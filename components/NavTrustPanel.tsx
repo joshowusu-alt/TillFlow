@@ -22,7 +22,7 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
     : undefined;
 
   return (
-    <div className="nav-trust flex min-w-0 items-center gap-2" data-nav-trust="true">
+    <div className="nav-trust flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden" data-nav-trust="true">
       <span
         className={isOnline ? 'status-dot-online' : 'status-dot-offline'}
         aria-hidden="true"

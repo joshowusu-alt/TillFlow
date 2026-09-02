@@ -524,7 +524,7 @@ export default function TopNav({
             ) : null}
           </nav>
 
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             {isOnline ? (
               <button
                 type="button"
