@@ -81,7 +81,6 @@ export async function readShellGeometry(page: Page) {
 }
 
 export async function expectShellContract(page: Page, isPosRoute: boolean) {
-  await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForFunction((lg) => {
     const nav = document.querySelector('nav[aria-label="Main navigation"]');
     if (!nav) return false;
@@ -89,6 +88,12 @@ export async function expectShellContract(page: Page, isPosRoute: boolean) {
     const inert = nav.hasAttribute('inert');
     return desktop ? !inert : inert;
   }, SHELL_LG_PX);
+
+  await page.evaluate(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body) active.blur();
+    window.scrollTo(0, 0);
+  });
 
   const geo = await readShellGeometry(page);
   const mode = classifyShellLayout({ width: geo.width, height: geo.height });
