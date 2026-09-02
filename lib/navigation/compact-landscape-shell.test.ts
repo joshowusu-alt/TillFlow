@@ -50,7 +50,8 @@ describe('Compact phone-landscape shell', () => {
     );
     expect(compactBlock).toContain('.nav-trust-signout');
     expect(compactBlock).toContain('display: none');
-    expect(css).toContain('html:has(input:focus, textarea:focus, select:focus) .nav-trust-signout');
+    expect(css).toContain('html[data-keyboard-open] .nav-trust-signout');
+    expect(css).not.toContain('html:has(input:focus, textarea:focus, select:focus) .nav-trust-signout');
   });
 
   it('lets app-main-shell own padding-bottom so Tailwind py-* cannot collapse bottom-nav clearance', () => {
