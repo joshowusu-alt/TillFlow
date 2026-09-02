@@ -337,6 +337,10 @@ export default function PosClient({
   const cartFilled = cart.length > 0;
 
   useEffect(() => {
+    barcodeRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  useEffect(() => {
     const urlCustomerId = searchParams?.get('customerId');
     if (urlCustomerId && customerExists(urlCustomerId)) {
       setCustomerId(urlCustomerId);
@@ -1454,7 +1458,6 @@ export default function PosClient({
                 <input
                   className="input pl-10 pr-11 text-base font-mono tracking-wider sm:text-lg"
                   ref={barcodeRef}
-                  autoFocus
                   value={barcode}
                   onChange={(event) => setBarcode(event.target.value)}
                   onKeyDown={handleBarcodeKey}

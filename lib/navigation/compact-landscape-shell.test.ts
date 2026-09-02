@@ -11,6 +11,7 @@ describe('Compact phone-landscape shell', () => {
     expect(css).toContain(`@media ${SHELL_COMPACT_LANDSCAPE_MQ}`);
     expect(css).toContain(SHELL_PHONE_KEYBOARD_MQ);
     expect(css).toContain('.app-shell-status-strip');
+    expect(css).toContain('.app-shell-header-pos');
     expect(css).toContain('.nav-trust');
     expect(css).toContain('.nav-trust-signout');
     expect(css).toContain('.home-open-pos');

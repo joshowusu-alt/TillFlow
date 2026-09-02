@@ -306,6 +306,13 @@ textarea {
     top: auto;
   }
 
+  /* POS has no Home hero. Keep the hamburger in the landscape viewport when
+     the barcode field takes focus and the welcome shelf makes the page tall. */
+  .app-shell-header-pos {
+    position: sticky;
+    top: 0;
+  }
+
   .app-shell-header-row {
     padding-top: 0.35rem;
     padding-bottom: 0.35rem;
