@@ -31,6 +31,9 @@ export async function readShellGeometry(page: Page) {
     const bottom = document.querySelector('.mobile-bottom-tab-bar') as HTMLElement | null;
     const headerBox = header?.getBoundingClientRect();
     const mainBox = main?.getBoundingClientRect();
+    const headerBottom = header
+      ? header.getBoundingClientRect().top + header.offsetHeight
+      : 0;
     const bottomBox = bottom && getComputedStyle(bottom).display !== 'none'
       ? bottom.getBoundingClientRect()
       : null;
@@ -58,8 +61,8 @@ export async function readShellGeometry(page: Page) {
       width: window.innerWidth,
       height: window.innerHeight,
       scrollY: window.scrollY,
-      headerHeight: headerBox?.height ?? 0,
-      headerBottom: headerBox?.bottom ?? 0,
+      headerHeight: header?.offsetHeight ?? headerBox?.height ?? 0,
+      headerBottom,
       mainTop: mainBox?.top ?? 0,
       mainBottom: mainBox?.bottom ?? 0,
       bottomTop: bottomBox?.top ?? null,
