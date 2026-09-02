@@ -34,7 +34,7 @@ describe('Authenticated Playwright QA setup', () => {
   it('keeps launch completion in protected layout and owner readiness streaming intact', () => {
     expect(read('app/(protected)/layout.tsx')).toContain('LaunchSessionCompletion');
     expect(read('app/(protected)/onboarding/page.tsx')).not.toContain('LaunchSessionCompletion');
-    expect(read('app/(protected)/onboarding/page.tsx')).toContain('ChecklistReadinessSkeleton');
+    expect(read('app/(protected)/onboarding/OwnerReadinessContent.tsx')).toContain('ChecklistReadinessSkeleton');
     expect(read('app/(protected)/loading.tsx')).toContain('ProtectedRouteLoading');
     expect(read('components/RootLaunchLoading.tsx')).toContain('LAUNCH_GENERIC_MESSAGE');
     expect(read('components/RootLaunchLoading.tsx')).toContain('ROOT_COLD_START_MESSAGE');
