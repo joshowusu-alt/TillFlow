@@ -506,11 +506,9 @@ html:has(input:focus, textarea:focus, select:focus) .hide-when-keyboard-open {
   display: none !important;
 }
 
-/* More (Sign out on phones) hides with the tab bar. Restore header Sign out
-   only when the visual keyboard flags are set — not on every focused input.
-   POS autofocus must not reveal header Sign out beside the hamburger. */
-html[data-keyboard-open] .nav-trust-signout,
-html[data-text-entry-active] .nav-trust-signout {
+/* Restore header Sign out only for a real visual-viewport keyboard, not for
+   POS autofocus (`data-text-entry-active` / :has(input:focus)). */
+html[data-keyboard-open] .nav-trust-signout {
   display: block !important;
 }
 
