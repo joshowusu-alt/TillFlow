@@ -11,7 +11,7 @@ function isOnboardingPath(pathname: string) {
  * before the journey-specific Home Instant Loading UI.
  */
 export default async function Loading() {
-  const pathname = headers().get('x-pathname') || '';
+  const pathname = headers().get('x-pathname') || headers().get('next-url') || '';
   if (isOnboardingPath(pathname)) {
     return <HomeInstantLoading />;
   }

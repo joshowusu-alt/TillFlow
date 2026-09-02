@@ -19,7 +19,7 @@ describe('Route skeleton geometry parity', () => {
     expect(read('app/(protected)/reports/cashflow-forecast/loading.tsx')).toContain('variant="report-detail"');
     expect(read('app/(protected)/online-orders/loading.tsx')).toContain('variant="online-orders"');
     expect(read('app/(protected)/products/[id]/loading.tsx')).toContain('variant="product-form"');
-    expect(read('app/(protected)/products/new/loading.tsx')).toContain('variant="product-form"');
+    expect(read('app/(protected)/products/new/loading.tsx')).toContain('variant="products"');
     expect(read('app/(protected)/people/loading.tsx')).toContain('variant="people-hub"');
     expect(read('app/(protected)/purchases/[id]/loading.tsx')).toContain('variant="purchase-detail"');
   });

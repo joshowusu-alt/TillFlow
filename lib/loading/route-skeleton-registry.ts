@@ -4,7 +4,7 @@
  */
 export const ROUTE_SKELETON_REGISTRY = [
   { route: '/products', variant: 'products', dedicated: false },
-  { route: '/products/new', variant: 'product-form', dedicated: false },
+  { route: '/products/new', variant: 'products', dedicated: false },
   { route: '/products/[id]', variant: 'product-form', dedicated: false },
   { route: '/purchases', variant: 'purchases', dedicated: false },
   { route: '/purchases/[id]', variant: 'purchase-detail', dedicated: false },
