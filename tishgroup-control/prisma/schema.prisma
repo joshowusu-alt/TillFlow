@@ -144,9 +144,8 @@ model ControlStaff {
   email              String                   @unique
   role               String                   @default("ACCOUNT_MANAGER")
   active             Boolean                  @default(true)
-  // Per-user auth columns. Null on existing rows so the legacy
-  // shared-key login keeps working until app/actions/control-auth.ts
-  // is migrated. See docs/control-auth-upgrade.md for the migration plan.
+  // Per-user auth columns. Null hashes cannot authenticate.
+  // Personal password setup is required before a staff member can sign in.
   passwordHash       String?
   passwordSetAt      DateTime?
   twoFactorSecret    String?  // base32 TOTP secret; gated behind 2FA toggle
