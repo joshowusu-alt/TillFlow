@@ -7,8 +7,9 @@ import InstallPrompt from '@/components/InstallPrompt';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import Toast from '@/components/toast';
 import { getControlStaffOptional } from '@/lib/control-auth';
-import { listManagedBusinesses } from '@/lib/control-service';
+import { listManagedPortfolio } from '@/lib/control-service';
 import { getPortfolioSummaryFor, getCollectionQueuesFor } from '@/lib/control-metrics';
+import { portfolioAvailabilityMessage } from '@/lib/control-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,22 +58,29 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const staff = await getControlStaffOptional();
 
   let navCounts: { urgent: number; collections: number; unreviewed: number } | undefined;
+  let portfolioError: string | null = null;
 
   if (staff) {
     try {
       // Layout only needs aggregate counts; the search input fetches matches
       // from /api/search on demand so we no longer ship the full portfolio
-      // to every page.
-      const businesses = await getCachedNavCounts();
-      const summary = getPortfolioSummaryFor(businesses);
-      const queues = getCollectionQueuesFor(businesses);
-      navCounts = {
-        urgent: summary.grace + summary.fallback + summary.readOnly,
-        collections: queues.overdue.length + queues.locked.length,
-        unreviewed: businesses.filter((b) => b.needsReview).length,
-      };
+      // to every page. Unavailable queries must not invent mock counts.
+      const snapshot = await listManagedPortfolio();
+      portfolioError = snapshot.availability === 'unavailable'
+        ? portfolioAvailabilityMessage(snapshot)
+        : null;
+      if (snapshot.availability !== 'unavailable') {
+        const businesses = snapshot.businesses;
+        const summary = getPortfolioSummaryFor(businesses);
+        const queues = getCollectionQueuesFor(businesses);
+        navCounts = {
+          urgent: summary.grace + summary.fallback + summary.readOnly,
+          collections: queues.overdue.length + queues.locked.length,
+          unreviewed: businesses.filter((b) => b.needsReview).length,
+        };
+      }
     } catch {
-      // Graceful degradation — nav counts not available
+      portfolioError = 'Live portfolio data is unavailable. This is not an empty book — the query failed.';
     }
   }
 
@@ -83,19 +91,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <InstallPrompt />
         <Suspense fallback={null}><Toast /></Suspense>
         {staff ? (
-          <ControlShell staff={staff} navCounts={navCounts}>{children}</ControlShell>
+          <ControlShell staff={staff} navCounts={navCounts}>
+            {portfolioError ? (
+              <div className="mb-4 rounded-2xl border border-control-ember/20 bg-control-ember/8 px-4 py-3 text-sm text-control-ink">
+                {portfolioError}
+              </div>
+            ) : null}
+            {children}
+          </ControlShell>
         ) : children}
       </body>
     </html>
   );
 }
-
-import { unstable_cache } from 'next/cache';
-// 60-second TTL on portfolio nav counts. Mutations call revalidatePath
-// on `/`, `/businesses`, `/collections`, etc., which wipes this cache
-// because the layout consumes it via Next's data cache wrapper.
-const getCachedNavCounts = unstable_cache(
-  () => listManagedBusinesses(),
-  ['control-nav-counts'],
-  { revalidate: 60, tags: ['control-portfolio'] }
-);

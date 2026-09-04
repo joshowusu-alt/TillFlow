@@ -2,12 +2,16 @@ import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 
 export type CollectionsRhythm = {
-  /** Last 14 days oldest → newest, each entry = total collected amountPence that day. */
+  /** Last 14 days oldest → newest, each entry = total collected whole GHS that day. */
   daily: number[];
-  /** Total collected over the window in pence. */
+  /** Total collected over the window in whole GHS. Field name is historical — values are not pence. */
   totalPence: number;
-  /** Pence collected on the most recent day in the window. */
+  /** Whole GHS collected on the most recent day in the window. Field name is historical — values are not pence. */
   todayPence: number;
+  /** Same as totalPence; amounts are whole GHS. */
+  totalGhs: number;
+  /** Same as todayPence; amounts are whole GHS. */
+  todayGhs: number;
 };
 
 /**
@@ -37,12 +41,12 @@ const _loadCollectionsRhythm = unstable_cache(
         }
       }
 
-      const totalPence = buckets.reduce((sum, value) => sum + value, 0);
-      const todayPence = buckets[buckets.length - 1] ?? 0;
-      return { daily: buckets, totalPence, todayPence };
+      const totalGhs = buckets.reduce((sum, value) => sum + value, 0);
+      const todayGhs = buckets[buckets.length - 1] ?? 0;
+      return { daily: buckets, totalPence: totalGhs, todayPence: todayGhs, totalGhs, todayGhs };
     } catch (error) {
       console.error('[control-collections-trend] Failed to load payments', error);
-      return { daily: new Array(14).fill(0), totalPence: 0, todayPence: 0 };
+      return { daily: new Array(14).fill(0), totalPence: 0, todayPence: 0, totalGhs: 0, todayGhs: 0 };
     }
   },
   ['control-collections-rhythm'],

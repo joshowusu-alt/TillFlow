@@ -9,12 +9,18 @@ export const CONTROL_SESSION_COOKIE = 'tishgroup_control_session';
 
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
 
-export type ControlStaffRole = 'CONTROL_ADMIN' | 'ACCOUNT_MANAGER' | 'COLLECTIONS_AGENT' | 'SUPPORT_AGENT';
+export const MIN_CONTROL_SESSION_SECRET_LENGTH = 16;
+export const MIN_CONTROL_PASSWORD_LENGTH = 12;
+
+export const ALLOWED_CONTROL_ROLES = ['CONTROL_ADMIN', 'ACCOUNT_MANAGER', 'COLLECTIONS_AGENT', 'SUPPORT_AGENT'] as const;
+
+export type ControlStaffRole = (typeof ALLOWED_CONTROL_ROLES)[number];
 
 type SessionPayload = {
   staffId: string;
   email: string;
   role: ControlStaffRole;
+  sessionVersion: number;
   exp: number;
 };
 
@@ -23,6 +29,7 @@ type ControlStaffSession = {
   name: string;
   email: string;
   role: ControlStaffRole;
+  sessionVersion: number;
 };
 
 export type ControlStaffOption = {
@@ -41,26 +48,44 @@ function isMissingControlStaffSchemaError(error: unknown) {
   );
 }
 
-function normalizeRole(role?: string | null): ControlStaffRole {
-  switch (String(role ?? '').toUpperCase()) {
-    case 'CONTROL_ADMIN':
-      return 'CONTROL_ADMIN';
-    case 'COLLECTIONS_AGENT':
-      return 'COLLECTIONS_AGENT';
-    case 'SUPPORT_AGENT':
-      return 'SUPPORT_AGENT';
-    case 'ACCOUNT_MANAGER':
-    default:
-      return 'ACCOUNT_MANAGER';
-  }
+export function parseControlStaffRole(value: unknown): ControlStaffRole | null {
+  const role = String(value ?? '').trim().toUpperCase();
+  return (ALLOWED_CONTROL_ROLES as readonly string[]).includes(role) ? role as ControlStaffRole : null;
+}
+
+/** Fail-closed: unknown roles are never mapped to ACCOUNT_MANAGER. */
+export function normalizeRole(role?: string | null): ControlStaffRole | null {
+  return parseControlStaffRole(role);
+}
+
+export function canAuthenticateStaffPassword(passwordHash: string | null | undefined): boolean {
+  return typeof passwordHash === 'string' && passwordHash.length > 0;
+}
+
+export function nextSessionVersion(current: number | null | undefined): number {
+  const value = typeof current === 'number' && Number.isFinite(current) ? Math.trunc(current) : 0;
+  return value + 1;
+}
+
+export function sessionVersionsMatch(cookieVersion: unknown, dbVersion: unknown): boolean {
+  return typeof cookieVersion === 'number'
+    && typeof dbVersion === 'number'
+    && Number.isFinite(cookieVersion)
+    && Number.isFinite(dbVersion)
+    && cookieVersion === dbVersion;
 }
 
 function formatRoleLabel(role: ControlStaffRole) {
   return role.replace(/_/g, ' ');
 }
 
-function getControlSessionSecret() {
-  return process.env.CONTROL_SESSION_SECRET?.trim() || process.env.CONTROL_PLANE_ACCESS_KEY?.trim() || null;
+/** Session HMAC secret comes only from CONTROL_SESSION_SECRET. No ACCESS_KEY fallback. */
+export function getControlSessionSecret() {
+  const secret = process.env.CONTROL_SESSION_SECRET?.trim() || '';
+  if (secret.length < MIN_CONTROL_SESSION_SECRET_LENGTH) {
+    return null;
+  }
+  return secret;
 }
 
 function encodePayload(payload: SessionPayload, secret: string) {
@@ -81,13 +106,17 @@ function decodePayload(token: string, secret: string) {
 
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as SessionPayload;
-    if (!payload.staffId || !payload.email || !payload.role || !payload.exp) {
+    const role = parseControlStaffRole(payload.role);
+    if (!payload.staffId || !payload.email || !role || !payload.exp) {
+      return null;
+    }
+    if (typeof payload.sessionVersion !== 'number' || !Number.isFinite(payload.sessionVersion)) {
       return null;
     }
     if (payload.exp * 1000 <= Date.now()) {
       return null;
     }
-    return payload;
+    return { ...payload, role };
   } catch {
     return null;
   }
@@ -95,10 +124,6 @@ function decodePayload(token: string, secret: string) {
 
 export function controlAuthConfigured() {
   return Boolean(getControlSessionSecret());
-}
-
-export function controlBootstrapKeyConfigured() {
-  return Boolean(process.env.CONTROL_PLANE_ACCESS_KEY?.trim());
 }
 
 export async function getControlStaffOptional(): Promise<ControlStaffSession | null> {
@@ -123,6 +148,7 @@ export async function getControlStaffOptional(): Promise<ControlStaffSession | n
         email: true,
         role: true,
         active: true,
+        sessionVersion: true,
       },
     });
 
@@ -130,11 +156,21 @@ export async function getControlStaffOptional(): Promise<ControlStaffSession | n
       return null;
     }
 
+    const role = parseControlStaffRole(staff.role);
+    if (!role) {
+      return null;
+    }
+
+    if (!sessionVersionsMatch(payload.sessionVersion, staff.sessionVersion)) {
+      return null;
+    }
+
     return {
       id: staff.id,
       name: staff.name,
       email: staff.email,
-      role: normalizeRole(staff.role),
+      role,
+      sessionVersion: staff.sessionVersion,
     };
   } catch (error) {
     if (isMissingControlStaffSchemaError(error)) {
@@ -164,11 +200,17 @@ export async function createControlSession(staff: ControlStaffSession) {
     throw new Error('Control-plane session secret is not configured.');
   }
 
+  const role = parseControlStaffRole(staff.role);
+  if (!role) {
+    throw new Error('Control staff role is not allowlisted.');
+  }
+
   const expiresAt = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
   const token = encodePayload({
     staffId: staff.id,
     email: staff.email,
-    role: staff.role,
+    role,
+    sessionVersion: staff.sessionVersion,
     exp: expiresAt,
   }, secret);
 
@@ -199,34 +241,6 @@ export function canWriteNotes(role: ControlStaffRole) {
   return role === 'CONTROL_ADMIN' || role === 'ACCOUNT_MANAGER' || role === 'COLLECTIONS_AGENT' || role === 'SUPPORT_AGENT';
 }
 
-export async function findOrBootstrapControlStaff(email: string) {
-  try {
-    const existing = await prisma.controlStaff.findUnique({ where: { email } });
-    if (existing) {
-      return existing;
-    }
-
-    const bootstrapEmail = process.env.CONTROL_BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
-    if (!bootstrapEmail || email !== bootstrapEmail) {
-      return null;
-    }
-
-    return prisma.controlStaff.create({
-      data: {
-        email,
-        name: email.split('@')[0]?.replace(/[._-]/g, ' ') || 'Control admin',
-        role: 'CONTROL_ADMIN',
-        active: true,
-      },
-    });
-  } catch (error) {
-    if (isMissingControlStaffSchemaError(error)) {
-      throw new Error('Control-plane database tables are not available yet. Apply the latest Prisma migration before signing in.');
-    }
-    throw error;
-  }
-}
-
 export async function listActiveControlStaff(): Promise<ControlStaffOption[]> {
   try {
     const staff = await prisma.controlStaff.findMany({
@@ -240,12 +254,16 @@ export async function listActiveControlStaff(): Promise<ControlStaffOption[]> {
       },
     });
 
-    return staff.map((entry) => ({
-      id: entry.id,
-      name: entry.name,
-      email: entry.email,
-      role: normalizeRole(entry.role),
-    }));
+    return staff.flatMap((entry) => {
+      const role = parseControlStaffRole(entry.role);
+      if (!role) return [];
+      return [{
+        id: entry.id,
+        name: entry.name,
+        email: entry.email,
+        role,
+      }];
+    });
   } catch (error) {
     if (isMissingControlStaffSchemaError(error)) {
       return [];
@@ -269,15 +287,19 @@ export async function listControlStaffDirectory(): Promise<Array<ControlStaffOpt
       },
     });
 
-    return staff.map((entry) => ({
-      id: entry.id,
-      name: entry.name,
-      email: entry.email,
-      role: normalizeRole(entry.role),
-      active: entry.active,
-      createdAt: entry.createdAt.toISOString().slice(0, 10),
-      hasPassword: Boolean(entry.passwordHash),
-    }));
+    return staff.flatMap((entry) => {
+      const role = parseControlStaffRole(entry.role);
+      if (!role) return [];
+      return [{
+        id: entry.id,
+        name: entry.name,
+        email: entry.email,
+        role,
+        active: entry.active,
+        createdAt: entry.createdAt.toISOString().slice(0, 10),
+        hasPassword: canAuthenticateStaffPassword(entry.passwordHash),
+      }];
+    });
   } catch (error) {
     if (isMissingControlStaffSchemaError(error)) {
       return [];
@@ -286,4 +308,4 @@ export async function listControlStaffDirectory(): Promise<Array<ControlStaffOpt
   }
 }
 
-export { formatRoleLabel, isMissingControlStaffSchemaError, normalizeRole };
+export { formatRoleLabel, isMissingControlStaffSchemaError };

@@ -56,261 +56,181 @@ export type ManagedBusiness = {
   failedReminderCount?: number;
 };
 
-export const managedBusinesses: ManagedBusiness[] = [
-  {
-    id: 'adom-mart',
-    name: 'Adom Mart',
-    ownerName: 'Abena Owusu',
-    ownerPhone: '+233 24 555 1101',
-    ownerEmail: 'abena@adommart.example',
-    assignedManager: 'Kojo Mensah',
-    plan: 'STARTER',
-    effectivePlan: 'STARTER',
-    state: 'PAID_ACTIVE',
-    billingCadence: 'MONTHLY',
-    signedUpAt: '2026-02-15',
-    planSetAt: '2026-02-15',
-    nextDueAt: '2026-04-25',
-    lastPaymentAt: '2026-03-25',
-    monthlyValue: 199,
-    outstandingAmount: 0,
-    health: 'HEALTHY',
-    needsReview: false,
-    reviewedAt: '2026-04-01 09:15',
-    reviewedBy: 'Kojo Mensah',
-    lastActivityAt: '2026-04-08 11:10',
-    branches: 1,
-    notes: 'Stable single-branch tenant. Low support load.',
-  },
-  {
-    id: 'sunrise-provisions',
-    name: 'Sunrise Provisions',
-    ownerName: 'Yaw Antwi',
-    ownerPhone: '+233 20 441 2208',
-    ownerEmail: 'yaw@sunriseprovisions.example',
-    assignedManager: 'Esi Quansah',
-    plan: 'STARTER',
-    effectivePlan: 'STARTER',
-    state: 'RENEWAL_DUE_SOON',
-    billingCadence: 'MONTHLY',
-    signedUpAt: '2026-03-01',
-    planSetAt: '2026-03-01',
-    nextDueAt: '2026-04-12',
-    lastPaymentAt: '2026-03-12',
-    monthlyValue: 199,
-    outstandingAmount: 199,
-    health: 'WATCH',
-    needsReview: false,
-    reviewedAt: '2026-04-02 10:10',
-    reviewedBy: 'Esi Quansah',
-    lastActivityAt: '2026-04-08 09:42',
-    branches: 1,
-    notes: 'Needs pre-due reminder. Owner prefers MoMo confirmation before noon.',
-  },
-  {
-    id: 'harvest-square',
-    name: 'Harvest Square',
-    ownerName: 'Rita Boateng',
-    ownerPhone: '+233 54 330 9921',
-    ownerEmail: 'rita@harvestsquare.example',
-    assignedManager: 'Kojo Mensah',
-    plan: 'GROWTH',
-    effectivePlan: 'GROWTH',
-    state: 'PAID_ACTIVE',
-    billingCadence: 'MONTHLY',
-    signedUpAt: '2026-01-20',
-    planSetAt: '2026-03-05',
-    nextDueAt: '2026-04-18',
-    lastPaymentAt: '2026-03-18',
-    monthlyValue: 349,
-    outstandingAmount: 0,
-    health: 'HEALTHY',
-    needsReview: false,
-    reviewedAt: '2026-03-06 14:05',
-    reviewedBy: 'Kojo Mensah',
-    lastActivityAt: '2026-04-08 12:05',
-    branches: 1,
-    notes: 'Strong reporting usage. Candidate for annual billing pitch.',
-  },
-  {
-    id: 'green-basket',
-    name: 'Green Basket',
-    ownerName: 'Nana Kusi',
-    ownerPhone: '+233 27 994 7202',
-    ownerEmail: 'nana@greenbasket.example',
-    assignedManager: 'Esi Quansah',
-    plan: 'GROWTH',
-    effectivePlan: 'GROWTH',
-    state: 'PAID_ACTIVE',
-    billingCadence: 'MONTHLY',
-    signedUpAt: '2026-02-09',
-    planSetAt: '2026-02-09',
-    nextDueAt: '2026-04-22',
-    lastPaymentAt: '2026-03-22',
-    monthlyValue: 349,
-    outstandingAmount: 0,
-    health: 'HEALTHY',
-    needsReview: false,
-    reviewedAt: '2026-02-12 16:30',
-    reviewedBy: 'Esi Quansah',
-    lastActivityAt: '2026-04-08 10:55',
-    branches: 1,
-    notes: 'Good fit. No commercial friction at the moment.',
-  },
-  {
-    id: 'market-hub',
-    name: 'Market Hub',
-    ownerName: 'Felicia Asare',
-    ownerPhone: '+233 55 210 4408',
-    ownerEmail: 'felicia@markethub.example',
-    assignedManager: 'Kofi Ansah',
-    plan: 'GROWTH',
-    effectivePlan: 'GROWTH',
-    state: 'PAYMENT_OVERDUE_GRACE',
-    billingCadence: 'MONTHLY',
-    signedUpAt: '2026-01-11',
-    planSetAt: '2026-01-11',
-    nextDueAt: '2026-04-03',
-    lastPaymentAt: '2026-03-03',
-    monthlyValue: 349,
-    outstandingAmount: 349,
-    health: 'WATCH',
-    needsReview: false,
-    reviewedAt: '2026-01-15 11:25',
-    reviewedBy: 'Kofi Ansah',
-    lastActivityAt: '2026-04-08 08:36',
-    branches: 1,
-    notes: 'In Growth grace. Relationship owner needs same-day follow-up.',
-  },
-  {
-    id: 'harbor-value',
-    name: 'Harbor Value',
-    ownerName: 'Stephen Manu',
-    ownerPhone: '+233 24 199 2034',
-    ownerEmail: 'stephen@harborvalue.example',
-    assignedManager: 'Kofi Ansah',
-    plan: 'GROWTH',
-    effectivePlan: 'STARTER',
-    state: 'PAYMENT_RESTRICTED',
-    billingCadence: 'MONTHLY',
-    signedUpAt: '2025-12-18',
-    planSetAt: '2026-01-04',
-    nextDueAt: '2026-03-28',
-    lastPaymentAt: '2026-02-28',
-    monthlyValue: 349,
-    outstandingAmount: 349,
-    health: 'AT_RISK',
-    needsReview: false,
-    reviewedAt: '2026-01-10 13:40',
-    reviewedBy: 'Kofi Ansah',
-    lastActivityAt: '2026-04-07 18:11',
-    branches: 1,
-    notes: 'Fallback active. Escalate if not paid before lockout date.',
-  },
-  {
-    id: 'orchid-retail',
-    name: 'Orchid Retail',
-    ownerName: 'Mary Appiah',
-    ownerPhone: '+233 50 009 4120',
-    ownerEmail: 'mary@orchidretail.example',
-    assignedManager: 'Kojo Mensah',
-    plan: 'GROWTH',
-    effectivePlan: 'GROWTH',
-    state: 'TRIAL_ACTIVE',
-    billingCadence: 'MONTHLY',
-    signedUpAt: '2026-04-01',
-    planSetAt: '2026-04-01',
-    nextDueAt: '2026-04-15',
-    lastPaymentAt: null,
-    monthlyValue: 349,
-    outstandingAmount: 0,
-    health: 'HEALTHY',
-    needsReview: false,
-    reviewedAt: null,
-    reviewedBy: null,
-    lastActivityAt: '2026-04-08 12:33',
-    branches: 1,
-    notes: 'Trial business. Schedule commercial conversion call before trial end.',
-  },
-  {
-    id: 'capstone-grocers',
-    name: 'Capstone Grocers',
-    ownerName: 'Daniel Ofori',
-    ownerPhone: '+233 26 880 9302',
-    ownerEmail: 'daniel@capstonegrocers.example',
-    assignedManager: 'Esi Quansah',
-    plan: 'GROWTH',
-    effectivePlan: 'GROWTH',
-    state: 'PAID_ACTIVE',
-    billingCadence: 'ANNUAL',
-    signedUpAt: '2025-11-04',
-    planSetAt: '2026-01-02',
-    nextDueAt: '2027-01-02',
-    lastPaymentAt: '2026-01-02',
-    monthlyValue: 291,
-    outstandingAmount: 0,
-    health: 'HEALTHY',
-    needsReview: false,
-    reviewedAt: '2026-01-04 09:00',
-    reviewedBy: 'Esi Quansah',
-    lastActivityAt: '2026-04-08 07:59',
-    branches: 1,
-    notes: 'Annual Growth account. Strong candidate for referral program.',
-  },
-  {
-    id: 'royal-stores',
-    name: 'Royal Stores',
-    ownerName: 'Kwaku Addae',
-    ownerPhone: '+233 24 901 4402',
-    ownerEmail: 'kwaku@royalstores.example',
-    assignedManager: 'Kofi Ansah',
-    plan: 'PRO',
-    effectivePlan: 'PRO',
-    state: 'PAID_ACTIVE',
-    billingCadence: 'MONTHLY',
-    signedUpAt: '2026-01-08',
-    planSetAt: '2026-02-12',
-    nextDueAt: '2026-04-20',
-    lastPaymentAt: '2026-03-20',
-    monthlyValue: 699,
-    outstandingAmount: 0,
-    health: 'HEALTHY',
-    needsReview: false,
-    reviewedAt: '2026-02-13 15:20',
-    reviewedBy: 'Kofi Ansah',
-    lastActivityAt: '2026-04-08 12:12',
-    branches: 4,
-    notes: 'Primary Pro showcase account. Uses owner dashboard daily.',
-  },
-  {
-    id: 'union-fairprice',
-    name: 'Union Fairprice',
-    ownerName: 'Josephine Tetteh',
-    ownerPhone: '+233 27 717 6609',
-    ownerEmail: 'josephine@unionfairprice.example',
-    assignedManager: 'Esi Quansah',
-    plan: 'PRO',
-    effectivePlan: 'STARTER',
-    state: 'READ_ONLY',
-    billingCadence: 'MONTHLY',
-    signedUpAt: '2025-10-26',
-    planSetAt: '2026-01-15',
-    nextDueAt: '2026-03-15',
-    lastPaymentAt: '2026-02-15',
-    monthlyValue: 699,
-    outstandingAmount: 699,
-    health: 'AT_RISK',
-    needsReview: false,
-    reviewedAt: '2026-01-16 08:55',
-    reviewedBy: 'Esi Quansah',
-    lastActivityAt: '2026-04-05 14:18',
-    branches: 3,
-    notes: 'Read-only after Pro grace and fallback ended. Needs executive contact.',
-  },
-];
+export type PortfolioAvailability = 'ok' | 'empty' | 'unavailable';
+
+export type PortfolioErrorKind =
+  | 'none'
+  | 'missing_table'
+  | 'timeout'
+  | 'pool'
+  | 'permission'
+  | 'query_failed';
+
+export type PortfolioSnapshot = {
+  businesses: ManagedBusiness[];
+  availability: PortfolioAvailability;
+  errorKind: PortfolioErrorKind;
+};
 
 export const planRates: Record<ManagedPlan, number> = {
   STARTER: 199,
   GROWTH: 349,
   PRO: 699,
 };
+
+export function classifyPortfolioError(error: unknown): Exclude<PortfolioErrorKind, 'none'> {
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+
+  if (
+    message.includes('no such table')
+    || message.includes('does not exist in the current database')
+    || (message.includes('relation') && message.includes('does not exist'))
+  ) {
+    return 'missing_table';
+  }
+
+  if (
+    message.includes('etimedout')
+    || message.includes('timed out')
+    || message.includes('timeout')
+    || message.includes('statement timeout')
+  ) {
+    return 'timeout';
+  }
+
+  if (
+    message.includes('too many connections')
+    || message.includes('remaining connection slots')
+    || message.includes('connection pool')
+    || (message.includes('pool') && (message.includes('exhaust') || message.includes('timeout')))
+  ) {
+    return 'pool';
+  }
+
+  if (
+    message.includes('permission denied')
+    || message.includes('access denied')
+    || message.includes('not authorized')
+    || message.includes('insufficient privilege')
+  ) {
+    return 'permission';
+  }
+
+  return 'query_failed';
+}
+
+export function emptyPortfolioSnapshot(
+  availability: Exclude<PortfolioAvailability, 'ok'> = 'empty',
+  errorKind: PortfolioErrorKind = 'none',
+): PortfolioSnapshot {
+  if (availability === 'unavailable' && errorKind === 'none') {
+    return { businesses: [], availability, errorKind: 'query_failed' };
+  }
+
+  return { businesses: [], availability, errorKind };
+}
+
+export function snapshotFromBusinessRows(businesses: ManagedBusiness[]): PortfolioSnapshot {
+  if (businesses.length === 0) {
+    return emptyPortfolioSnapshot('empty', 'none');
+  }
+
+  return { businesses, availability: 'ok', errorKind: 'none' };
+}
+
+export function snapshotFromQueryFailure(error: unknown): PortfolioSnapshot {
+  return emptyPortfolioSnapshot('unavailable', classifyPortfolioError(error));
+}
+
+export function inferHealth(state: ManagedState): BusinessHealth {
+  if (state === 'CANCELLED') return 'WATCH';
+  if (
+    state === 'READ_ONLY'
+    || state === 'TRIAL_RESTRICTED'
+    || state === 'PAYMENT_RESTRICTED'
+    || state === 'PAYMENT_OVERDUE_GRACE'
+    || state === 'TRIAL_EXPIRED_GRACE'
+  ) {
+    return 'AT_RISK';
+  }
+  if (
+    state === 'TRIAL_DUE_SOON'
+    || state === 'TRIAL_DUE_TODAY'
+    || state === 'RENEWAL_DUE_SOON'
+    || state === 'PAYMENT_DUE_TODAY'
+  ) {
+    return 'WATCH';
+  }
+  return 'HEALTHY';
+}
+
+export function resolveFirstPaymentAt(args: {
+  firstPaymentAt?: Date | string | null;
+  lastPaymentDate?: Date | string | null;
+  lastPaymentAt?: Date | string | null;
+}) {
+  return args.firstPaymentAt ?? args.lastPaymentDate ?? args.lastPaymentAt ?? null;
+}
+
+export function resolveInternalNotes(args: {
+  latestNote?: string | null;
+  profileNotes?: string | null;
+}) {
+  return args.latestNote ?? args.profileNotes ?? 'No internal control-plane note recorded yet.';
+}
+
+export type ErrorLogHealthInput =
+  | { ok: true; errors: unknown[] }
+  | { ok: false; errorKind: 'missing_table' | 'query_failed'; errors: unknown[] };
+
+export function classifyErrorLogFailure(error: unknown): 'missing_table' | 'query_failed' {
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  if (
+    message.includes('no such table')
+    || message.includes('does not exist in the current database')
+    || (message.includes('relation') && message.includes('does not exist'))
+  ) {
+    return 'missing_table';
+  }
+  return 'query_failed';
+}
+
+export function errorLogHealthCopy(result: ErrorLogHealthInput): {
+  isHealthy: boolean;
+  description: string;
+  emptyMessage: string;
+} {
+  if (!result.ok) {
+    return {
+      isHealthy: false,
+      description: 'The error log could not be loaded. Platform health is unknown until this query succeeds.',
+      emptyMessage: 'Error log unavailable. Do not treat this as a healthy platform.',
+    };
+  }
+
+  if (result.errors.length === 0) {
+    return {
+      isHealthy: true,
+      description: 'No errors recorded. All critical operations are running cleanly.',
+      emptyMessage: 'No system errors recorded. All critical operations are running cleanly.',
+    };
+  }
+
+  return {
+    isHealthy: false,
+    description: `Showing the ${result.errors.length} most recent system errors. Click any business link to investigate the account.`,
+    emptyMessage: '',
+  };
+}
+
+export function portfolioAvailabilityMessage(snapshot: PortfolioSnapshot): string | null {
+  if (snapshot.availability === 'unavailable') {
+    return 'Live portfolio data is unavailable. This is not an empty book — the query failed.';
+  }
+
+  if (snapshot.availability === 'empty') {
+    return 'No live businesses in the portfolio yet. Sample accounts are not shown.';
+  }
+
+  return null;
+}

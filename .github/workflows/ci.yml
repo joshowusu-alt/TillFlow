@@ -219,3 +219,100 @@ jobs:
             tmp/ui-programme-evidence/**
             .ci-server.log
           if-no-files-found: ignore
+
+  tishgroup:
+    name: tishgroup
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: tishgroup-control
+    env:
+      TZ: Africa/Accra
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/tishgroup_ci?schema=public
+      POSTGRES_PRISMA_URL: postgresql://postgres:postgres@127.0.0.1:5432/tishgroup_ci?schema=public
+      POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@127.0.0.1:5432/tishgroup_ci?schema=public
+      CONTROL_SESSION_SECRET: ci-control-session-secret
+      CONTROL_ENFORCE_AUTH_CUTOVER: '0'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tishgroup_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            tishgroup-control/package-lock.json
+            package-lock.json
+
+      - name: Assert isolated CI database
+        run: node scripts/assert-isolated-database.mjs
+
+      - name: Install TishGroup dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit, commercial, auth, and contract tests
+        run: npm test
+
+      - name: Secret scan
+        working-directory: .
+        run: |
+          set -euo pipefail
+          if rg -n "CONTROL_PLANE_ACCESS_KEY" tishgroup-control/app/login/page.tsx tishgroup-control/app/actions/control-auth.ts; then
+            echo "Shared-key auth copy returned"
+            exit 1
+          fi
+          if rg -n "id: 'adom-mart'" tishgroup-control/lib/control-data.ts tishgroup-control/lib/control-service.ts; then
+            echo "Mock portfolio returned to runtime"
+            exit 1
+          fi
+          if rg -n "ensure-control-schema" tishgroup-control/package.json; then
+            echo "Build-time DDL returned"
+            exit 1
+          fi
+
+      - name: Install root TillFlow dependencies
+        working-directory: .
+        run: npm ci
+
+      - name: Validate control schema migrations
+        working-directory: .
+        run: node scripts/validate-control-migrations.mjs
+
+      - name: Root TillFlow cross-application contract tests
+        working-directory: .
+        env:
+          DATABASE_URL: file:./ci-tishgroup-contract.db
+        run: |
+          npx vitest run --reporter=dot lib/control-commercial-status.test.ts lib/control-money.test.ts lib/internal-control-billing-notes.test.ts lib/tishgroup-cross-app-contract.test.ts lib/control-schema-migration.test.ts lib/plan-pricing.test.ts
+
+      - name: Production build with zero DDL
+        env:
+          CONTROL_ENFORCE_AUTH_CUTOVER: '0'
+        run: npm run build
+

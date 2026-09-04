@@ -25,19 +25,25 @@ export async function syncBusinessSupportProfileCounts(businessId: string) {
   });
 
   const hasCritical = openIssues.some((i) => i.priority === 'CRITICAL');
-  const supportStatus = openIssues.length === 0 ? 'HEALTHY' : hasCritical ? 'AT_RISK' : 'WATCH';
+  const createStatus = openIssues.length === 0 ? 'UNREVIEWED' : hasCritical ? 'AT_RISK' : 'WATCH';
+  const derivedStatus = openIssues.length === 0 ? 'HEALTHY' : hasCritical ? 'AT_RISK' : 'WATCH';
+
+  const existing = await prisma.controlBusinessProfile.findUnique({
+    where: { businessId },
+    select: { supportStatus: true },
+  });
 
   await prisma.controlBusinessProfile.upsert({
     where: { businessId },
     create: {
       businessId,
       openSupportIssueCount: openIssues.length,
-      supportStatus,
+      supportStatus: createStatus,
     },
-    update: {
-      openSupportIssueCount: openIssues.length,
-      supportStatus,
-    },
+    update:
+      String(existing?.supportStatus ?? '').toUpperCase() === 'UNREVIEWED'
+        ? { openSupportIssueCount: openIssues.length }
+        : { openSupportIssueCount: openIssues.length, supportStatus: derivedStatus },
   });
 }
 

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { loginControlStaffAction } from '@/app/actions/control-auth';
 import { controlAuthConfigured, getControlStaffOptional } from '@/lib/control-auth';
+import { isSafeInternalReturnPath } from '@/lib/safe-return-path';
 import { readSearchParam, resolveSearchParams, type ControlSearchParams } from '@/lib/search-params';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,8 @@ export default async function LoginPage({
   const resolvedSearchParams = await resolveSearchParams(searchParams);
 
   const error = readSearchParam(resolvedSearchParams.error);
-  const next = readSearchParam(resolvedSearchParams.next);
+  const rawNext = readSearchParam(resolvedSearchParams.next);
+  const next = isSafeInternalReturnPath(rawNext) ? String(rawNext).trim() : '';
   const authConfigured = controlAuthConfigured();
 
   return (
@@ -58,12 +60,12 @@ export default async function LoginPage({
           <div className="eyebrow">Staff sign-in</div>
           <h2 className="mt-2.5 text-[1.65rem] font-semibold leading-tight tracking-tight text-control-ink sm:mt-3 sm:text-2xl">Access Tish Group Control</h2>
           <p className="mt-2.5 text-sm leading-6 text-black/64 sm:mt-3">
-            Use your staff email and personal password. If your password hasn't been set yet, use the shared access key — ask a Control admin to set your personal password.
+            Use your staff email and personal password. A Control admin must set your password before you can sign in.
           </p>
 
           {!authConfigured ? (
             <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">
-              Control-plane session secret is not configured. Add CONTROL_SESSION_SECRET or CONTROL_PLANE_ACCESS_KEY before using this app.
+              Control-plane session secret is not configured. Set CONTROL_SESSION_SECRET before using this app.
             </div>
           ) : null}
 
@@ -91,7 +93,7 @@ export default async function LoginPage({
               <span className="font-medium text-control-ink">Password</span>
               <input
                 type="password"
-                name="accessKey"
+                name="password"
                 className="control-field"
                 autoComplete="current-password"
                 required

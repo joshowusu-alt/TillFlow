@@ -92,15 +92,20 @@ describe('control plan pricing', () => {
     expect(growth.storefrontLine).toBe('Storefront: Not selected');
   });
 
-  it('blank payment fallback converts whole GHS interval charge to pesewas once', () => {
-    const amounts = (plan: 'GROWTH' | 'PRO', addon: boolean, interval: 'MONTHLY' | 'ANNUAL') =>
-      resolveControlPaymentAmounts(computeSubscriptionPricing({ plan, addonOnlineStorefront: addon, billingInterval: interval }));
-
-    expect(amounts('GROWTH', true, 'ANNUAL')).toEqual({
+  it('rejects blank payment amounts instead of converting list price to pesewas', () => {
+    const pricing = computeSubscriptionPricing({ plan: 'GROWTH', addonOnlineStorefront: true, billingInterval: 'ANNUAL' });
+    expect(() => resolveControlPaymentAmounts(pricing)).toThrow(/explicit and greater than zero/);
+    expect(resolveControlPaymentAmounts(pricing, 5490)).toEqual({
       recordedAmountGhs: 5490,
       businessBillingAmountPence: 549000,
     });
-    expect(amounts('PRO', false, 'ANNUAL').businessBillingAmountPence).toBe(699000);
-    expect(amounts('GROWTH', true, 'MONTHLY').businessBillingAmountPence).toBe(54900);
+    expect(resolveControlPaymentAmounts(
+      computeSubscriptionPricing({ plan: 'PRO', billingInterval: 'ANNUAL' }),
+      6990,
+    ).businessBillingAmountPence).toBe(699000);
+    expect(resolveControlPaymentAmounts(
+      computeSubscriptionPricing({ plan: 'GROWTH', addonOnlineStorefront: true, billingInterval: 'MONTHLY' }),
+      549,
+    ).businessBillingAmountPence).toBe(54900);
   });
 });

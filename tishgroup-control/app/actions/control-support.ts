@@ -12,10 +12,14 @@ import {
   SUPPORT_SOURCES,
   SUPPORT_STATUSES,
 } from '@/lib/support-issues/types';
+import { safeReturnPath, withRedirectParam } from '@/lib/safe-return-path';
 
-function readReturnPath(formData: FormData) {
-  const value = String(formData.get('returnPath') ?? '').trim();
-  return value.startsWith('/') ? value : '/command/support';
+function returnPathFromForm(formData: FormData) {
+  return safeReturnPath(String(formData.get('returnPath') ?? ''), '/command/support');
+}
+
+function redirectError(formData: FormData, message: string): never {
+  redirect(withRedirectParam(returnPathFromForm(formData), 'error', message));
 }
 
 function revalidateSupportViews(businessId?: string) {
@@ -55,7 +59,7 @@ function pickString(formData: FormData, key: string) {
 export async function createSupportIssueAction(formData: FormData) {
   const staff = await requireControlStaff();
   if (!canWriteNotes(staff.role)) {
-    redirect(`${readReturnPath(formData)}&error=Permission denied`);
+    redirectError(formData, 'Permission denied');
   }
 
   const businessId = pickString(formData, 'businessId');
@@ -72,13 +76,13 @@ export async function createSupportIssueAction(formData: FormData) {
   const ownerPhone = pickString(formData, 'ownerPhone') || null;
 
   if (!businessId || !title) {
-    redirect(`${readReturnPath(formData)}&error=Business and title are required`);
+    redirectError(formData, 'Business and title are required');
   }
   if (!SUPPORT_ISSUE_TYPES.includes(issueType as (typeof SUPPORT_ISSUE_TYPES)[number])) {
-    redirect(`${readReturnPath(formData)}&error=Invalid issue type`);
+    redirectError(formData, 'Invalid issue type');
   }
   if (!SUPPORT_PRIORITIES.includes(priority as (typeof SUPPORT_PRIORITIES)[number])) {
-    redirect(`${readReturnPath(formData)}&error=Invalid priority`);
+    redirectError(formData, 'Invalid priority');
   }
 
   const ctx = await ensureBusinessContext(businessId);
@@ -113,13 +117,13 @@ export async function createSupportIssueAction(formData: FormData) {
   });
 
   revalidateSupportViews(businessId);
-  redirect(`${readReturnPath(formData)}&updated=issue`);
+  redirect(withRedirectParam(returnPathFromForm(formData), 'updated', 'issue'));
 }
 
 export async function updateSupportIssueAction(formData: FormData) {
   const staff = await requireControlStaff();
   if (!canWriteNotes(staff.role)) {
-    redirect(`${readReturnPath(formData)}&error=Permission denied`);
+    redirectError(formData, 'Permission denied');
   }
 
   const issueId = pickString(formData, 'issueId');
@@ -130,10 +134,10 @@ export async function updateSupportIssueAction(formData: FormData) {
   const nextAction = formData.has('nextAction') ? pickString(formData, 'nextAction') || null : undefined;
   const resolutionNotes = formData.has('resolutionNotes') ? pickString(formData, 'resolutionNotes') || null : undefined;
 
-  if (!issueId) redirect(`${readReturnPath(formData)}&error=Missing issue`);
+  if (!issueId) redirectError(formData, 'Missing issue');
 
   const existing = await prisma.controlSupportIssue.findUnique({ where: { id: issueId } });
-  if (!existing) redirect(`${readReturnPath(formData)}&error=Issue not found`);
+  if (!existing) redirectError(formData, 'Issue not found');
 
   const data: Record<string, unknown> = {};
   const changes: Record<string, { from: unknown; to: unknown }> = {};
@@ -177,24 +181,24 @@ export async function updateSupportIssueAction(formData: FormData) {
   });
 
   revalidateSupportViews(existing.businessId);
-  redirect(readReturnPath(formData));
+  redirect(returnPathFromForm(formData));
 }
 
 export async function addSupportIssueNoteAction(formData: FormData) {
   const staff = await requireControlStaff();
   if (!canWriteNotes(staff.role)) {
-    redirect(`${readReturnPath(formData)}&error=Permission denied`);
+    redirectError(formData, 'Permission denied');
   }
 
   const issueId = pickString(formData, 'issueId');
   const note = pickString(formData, 'note');
-  if (!issueId || !note) redirect(`${readReturnPath(formData)}&error=Missing note`);
+  if (!issueId || !note) redirectError(formData, 'Missing note');
 
   const issue = await prisma.controlSupportIssue.findUnique({
     where: { id: issueId },
     select: { businessId: true, title: true },
   });
-  if (!issue) redirect(`${readReturnPath(formData)}&error=Issue not found`);
+  if (!issue) redirectError(formData, 'Issue not found');
 
   await prisma.controlSupportIssueNote.create({
     data: { issueId, note, createdByStaffId: staff.id },
@@ -213,7 +217,7 @@ export async function addSupportIssueNoteAction(formData: FormData) {
   });
 
   revalidateSupportViews(issue.businessId);
-  redirect(readReturnPath(formData));
+  redirect(returnPathFromForm(formData));
 }
 
 export async function resolveSupportIssueAction(formData: FormData) {

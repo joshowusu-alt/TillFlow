@@ -3,18 +3,35 @@
 import bcrypt from 'bcryptjs';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { prisma } from '@/lib/prisma';
-import { controlAuthConfigured, controlBootstrapKeyConfigured, createControlSession, findOrBootstrapControlStaff, isMissingControlStaffSchemaError, normalizeRole } from '@/lib/control-auth';
+import { recordAuditInTransaction } from '@/lib/audit';
+import {
+  canAuthenticateStaffPassword,
+  controlAuthConfigured,
+  createControlSession,
+  isMissingControlStaffSchemaError,
+  MIN_CONTROL_PASSWORD_LENGTH,
+  nextSessionVersion,
+  parseControlStaffRole,
+  requireControlStaff,
+} from '@/lib/control-auth';
 import { checkRateLimit, LOGIN_RATE_LIMIT } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-monitor';
+import { safeReturnPath } from '@/lib/safe-return-path';
+import { prisma } from '@/lib/prisma';
+
+const INVALID_CREDENTIALS = 'Invalid credentials.';
 
 function readRequiredField(formData: FormData, name: string) {
   return String(formData.get(name) ?? '').trim();
 }
 
+function redirectInvalidCredentials(): never {
+  redirect(`/login?error=${encodeURIComponent(INVALID_CREDENTIALS)}`);
+}
+
 export async function loginControlStaffAction(formData: FormData): Promise<void> {
   const email = readRequiredField(formData, 'email').toLowerCase();
-  const credential = readRequiredField(formData, 'accessKey');
+  const credential = readRequiredField(formData, 'password');
 
   const ip = headers().get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
   const rateLimitKey = `login:${ip}`;
@@ -33,12 +50,28 @@ export async function loginControlStaffAction(formData: FormData): Promise<void>
   }
 
   try {
-    let staff: { id: string; name: string; email: string; role: string; active: boolean; passwordHash: string | null } | null = null;
+    let staff: {
+      id: string;
+      name: string;
+      email: string;
+      role: string;
+      active: boolean;
+      passwordHash: string | null;
+      sessionVersion: number;
+    } | null = null;
 
     try {
       staff = await prisma.controlStaff.findUnique({
         where: { email },
-        select: { id: true, name: true, email: true, role: true, active: true, passwordHash: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          active: true,
+          passwordHash: true,
+          sessionVersion: true,
+        },
       });
     } catch (error) {
       if (isMissingControlStaffSchemaError(error)) {
@@ -48,92 +81,142 @@ export async function loginControlStaffAction(formData: FormData): Promise<void>
     }
 
     if (!staff) {
-      // Bootstrap path: allow first admin setup via CONTROL_BOOTSTRAP_ADMIN_EMAIL
-      if (!controlBootstrapKeyConfigured()) {
-        redirect('/login?error=Shared bootstrap key is not configured. Ask a Control admin to create your account and set a personal password.');
-      }
-      const bootstrapped = await findOrBootstrapControlStaff(email);
-      if (!bootstrapped) {
-        redirect('/login?error=No active Control staff record for that email. Add the staff member first or set CONTROL_BOOTSTRAP_ADMIN_EMAIL for initial access.');
-      }
-      // Bootstrap accounts have no passwordHash — require the shared access key
-      if (credential !== process.env.CONTROL_PLANE_ACCESS_KEY?.trim()) {
-        redirect('/login?error=Invalid credential.');
-      }
-      await createControlSession({
-        id: bootstrapped.id,
-        name: bootstrapped.name,
-        email: bootstrapped.email,
-        role: normalizeRole(bootstrapped.role),
+      await captureError({
+        context: 'login:unknown_email',
+        error: new Error('Login attempt for unknown email'),
+        staffEmail: email,
+        staffRole: 'UNKNOWN',
+        metadata: { ip },
       });
-      redirect('/');
+      redirectInvalidCredentials();
+    }
+
+    const role = parseControlStaffRole(staff.role);
+    if (!role) {
+      await captureError({
+        context: 'login:unknown_role',
+        error: new Error('Login attempt for staff with unknown role'),
+        staffId: staff.id,
+        staffEmail: email,
+        staffRole: staff.role,
+        metadata: { ip },
+      });
+      redirectInvalidCredentials();
     }
 
     if (!staff.active) {
-      await captureError({ context: 'login:inactive_account', error: new Error('Login attempt on inactive account'), staffEmail: email, staffRole: 'UNKNOWN', metadata: { ip } });
-      redirect('/login?error=This Control staff account is inactive.');
+      await captureError({
+        context: 'login:inactive_account',
+        error: new Error('Login attempt on inactive account'),
+        staffId: staff.id,
+        staffEmail: email,
+        staffRole: role,
+        metadata: { ip },
+      });
+      redirectInvalidCredentials();
     }
 
-    // Per-staff bcrypt password takes priority when set
-    if (staff.passwordHash) {
-      const valid = await bcrypt.compare(credential, staff.passwordHash);
-      if (!valid) {
-        await captureError({ context: 'login:bad_password', error: new Error('Invalid password attempt'), staffEmail: email, staffRole: staff.role, metadata: { ip } });
-        redirect('/login?error=Invalid password.');
-      }
-    } else {
-      // Legacy shared-key path — still works until staff sets a personal password
-      if (!controlBootstrapKeyConfigured()) {
-        redirect('/login?error=Ask a Control admin to set your personal password.');
-      }
-      if (credential !== process.env.CONTROL_PLANE_ACCESS_KEY?.trim()) {
-        await captureError({ context: 'login:bad_shared_key', error: new Error('Invalid shared key attempt'), staffEmail: email, staffRole: staff.role, metadata: { ip } });
-        redirect('/login?error=Invalid credential. Ask an admin to set your personal password.');
-      }
+    // Null hash cannot authenticate. The retired shared bootstrap key never signs in a staff identity.
+    if (!canAuthenticateStaffPassword(staff.passwordHash)) {
+      await captureError({
+        context: 'login:password_not_set',
+        error: new Error('Login attempt with unset personal password'),
+        staffId: staff.id,
+        staffEmail: email,
+        staffRole: role,
+        metadata: { ip },
+      });
+      redirectInvalidCredentials();
     }
+
+    const valid = await bcrypt.compare(credential, staff.passwordHash as string);
+    if (!valid) {
+      await captureError({
+        context: 'login:bad_password',
+        error: new Error('Invalid password attempt'),
+        staffId: staff.id,
+        staffEmail: email,
+        staffRole: role,
+        metadata: { ip },
+      });
+      redirectInvalidCredentials();
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.controlStaff.update({
+        where: { id: staff.id },
+        data: { lastLoginAt: new Date() },
+      });
+      await recordAuditInTransaction(tx, {
+        staff: { id: staff.id, email: staff.email, role },
+        action: 'LOGIN_SUCCESS',
+        summary: 'Control staff signed in',
+        metadata: { ip },
+      });
+    });
 
     await createControlSession({
       id: staff.id,
       name: staff.name,
       email: staff.email,
-      role: normalizeRole(staff.role),
+      role,
+      sessionVersion: staff.sessionVersion,
     });
   } catch (error) {
     if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
     await captureError({ context: 'login:unexpected_error', error, staffEmail: email, staffRole: 'UNKNOWN' });
-    redirect(`/login?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to sign in.')}`);
+    redirect(`/login?error=${encodeURIComponent('Unable to sign in.')}`);
   }
 
-  const nextPath = readRequiredField(formData, 'next');
-  if (nextPath.startsWith('/') && !nextPath.startsWith('//') && !nextPath.startsWith('/login')) {
-    redirect(nextPath);
-  }
-  redirect('/');
+  redirect(safeReturnPath(readRequiredField(formData, 'next'), '/'));
 }
 
 export async function setStaffPasswordAction(formData: FormData): Promise<void> {
-  const { requireControlStaff, canManageStaff } = await import('@/lib/control-auth');
-  const actor = await requireControlStaff();
-
-  if (!canManageStaff(actor.role)) {
-    redirect('/staff?error=Only Control admins can set staff passwords.');
-  }
+  const actor = await requireControlStaff(['CONTROL_ADMIN']);
 
   const staffId = String(formData.get('staffId') ?? '').trim();
-  const password = String(formData.get('password') ?? '').trim();
+  const password = String(formData.get('password') ?? '');
 
-  if (!staffId || password.length < 10) {
-    redirect('/staff?error=Password must be at least 10 characters.');
+  if (!staffId || password.length < MIN_CONTROL_PASSWORD_LENGTH) {
+    redirect(`/staff?error=Password must be at least ${MIN_CONTROL_PASSWORD_LENGTH} characters.`);
+  }
+
+  const target = await prisma.controlStaff.findUnique({
+    where: { id: staffId },
+    select: { id: true, email: true, role: true, sessionVersion: true },
+  });
+
+  if (!target) {
+    redirect('/staff?error=Staff member was not found.');
+  }
+
+  const targetRole = parseControlStaffRole(target.role);
+  if (!targetRole) {
+    redirect('/staff?error=Staff member has a role that is not allowlisted.');
   }
 
   const hash = await bcrypt.hash(password, 12);
+  const sessionVersion = nextSessionVersion(target.sessionVersion);
 
   try {
-    await prisma.controlStaff.update({
-      where: { id: staffId },
-      data: { passwordHash: hash, passwordSetAt: new Date() },
+    await prisma.$transaction(async (tx) => {
+      await tx.controlStaff.update({
+        where: { id: target.id },
+        data: {
+          passwordHash: hash,
+          passwordSetAt: new Date(),
+          sessionVersion,
+        },
+      });
+      await recordAuditInTransaction(tx, {
+        staff: actor,
+        action: 'PASSWORD_SET',
+        summary: `Password set for staff ${target.id}`,
+        metadata: { targetStaffId: target.id, targetRole },
+      });
     });
-  } catch {
+  } catch (error) {
+    if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
     redirect('/staff?error=Failed to set password. Check the staff ID and try again.');
   }
 

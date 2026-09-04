@@ -5,8 +5,9 @@ import { StatePill } from '@/components/status-pill';
 import BulkRemindButton from '@/components/bulk-remind-button';
 import { bulkRemindDueSoonAction } from '@/app/actions/control-businesses';
 import { canRecordPayments, canManageSubscriptions, requireControlStaff } from '@/lib/control-auth';
-import { listManagedBusinesses } from '@/lib/control-service';
-import { formatCedi, getCollectionQueuesFor } from '@/lib/control-metrics';
+import { listManagedPortfolio } from '@/lib/control-service';
+import { portfolioAvailabilityMessage } from '@/lib/control-data';
+import { formatCedi, getAccountMove, getCollectionQueuesFor } from '@/lib/control-metrics';
 import { readSearchParam, resolveSearchParams, type ControlSearchParams } from '@/lib/search-params';
 import type { ManagedBusiness } from '@/lib/control-data';
 
@@ -52,25 +53,6 @@ function daysFromNow(dateStr: string): number {
   return Math.round((target.getTime() - today.getTime()) / 86_400_000);
 }
 
-function getAccountMove(state: string, nextDueAt: string): string {
-  const days = daysFromNow(nextDueAt);
-  const overdue = Math.abs(days);
-  switch (state) {
-    case 'DUE_SOON':
-      return days <= 1
-        ? `Due tomorrow — send reminder now and confirm MoMo or bank transfer.`
-        : `Due in ${days} day${days === 1 ? '' : 's'} — send reminder and confirm payment channel.`;
-    case 'GRACE':
-      return `${overdue} day${overdue === 1 ? '' : 's'} past due — call now and push for same-day MoMo or transfer.`;
-    case 'STARTER_FALLBACK':
-      return `${overdue} day${overdue === 1 ? '' : 's'} past due, access downgraded — escalate for partial or full payment today.`;
-    case 'READ_ONLY':
-      return `${overdue} day${overdue === 1 ? '' : 's'} past due, account locked — confirm payment first to restore access immediately.`;
-    default:
-      return `Account in good standing — confirm renewal prep and upsell readiness.`;
-  }
-}
-
 function sortBusinesses(items: ManagedBusiness[], sort: SortKey): ManagedBusiness[] {
   const sorted = [...items];
   switch (sort) {
@@ -97,7 +79,10 @@ export default async function CollectionsPage({
   const sort = readSort(resolvedSearchParams.sort);
   const current = { view, preview: previewSize, sort };
 
-  const businesses = await listManagedBusinesses();
+  const snapshot = await listManagedPortfolio();
+  const businesses = snapshot.businesses;
+  const availabilityNote = portfolioAvailabilityMessage(snapshot);
+  const unavailable = snapshot.availability === 'unavailable';
   const queues = getCollectionQueuesFor(businesses);
   const queueEntries = [
     {
@@ -119,8 +104,8 @@ export default async function CollectionsPage({
     {
       key: 'overdue',
       title: 'Overdue but still operating',
-      description: 'These businesses are in grace or fallback. Same-day follow-up matters here.',
-      bestMove: 'Escalate same day and make the fallback or lock timeline explicit.',
+      description: 'These businesses are overdue or restricted. Same-day follow-up matters here.',
+      bestMove: 'Escalate same day and make the restricted or lock timeline explicit.',
       responseWindow: 'Same day',
       items: sortBusinesses(queues.overdue, sort),
     },
@@ -134,10 +119,10 @@ export default async function CollectionsPage({
     },
   ];
   const headerStats = [
-    { label: 'Healthy accounts', value: String(queues.healthy.length), hint: 'No immediate collections pressure.' },
-    { label: 'Due soon', value: String(queues.dueSoon.length), hint: 'Reminder queue before overdue handling starts.' },
-    { label: 'Overdue', value: String(queues.overdue.length), hint: 'Accounts already consuming same-day collections attention.' },
-    { label: 'Locked', value: String(queues.locked.length), hint: 'Accounts needing payment confirmation or a restriction decision.' },
+    { label: 'Healthy accounts', value: unavailable ? '—' : String(queues.healthy.length), hint: 'No immediate collections pressure.' },
+    { label: 'Due soon', value: unavailable ? '—' : String(queues.dueSoon.length), hint: 'Reminder queue before overdue handling starts.' },
+    { label: 'Overdue', value: unavailable ? '—' : String(queues.overdue.length), hint: 'Accounts already consuming same-day collections attention.' },
+    { label: 'Locked', value: unavailable ? '—' : String(queues.locked.length), hint: 'Accounts needing payment confirmation or a restriction decision.' },
   ];
 
   const sortOptions: { key: SortKey; label: string }[] = [
@@ -151,7 +136,7 @@ export default async function CollectionsPage({
       <ControlPageHeader
         eyebrow="Collections board"
         title="Queue-first collections control."
-        description="Work reminders first, then same-day overdue recovery, then locked accounts. The page should tell the team what queue to open next."
+        description={availabilityNote ?? 'Work reminders first, then same-day overdue recovery, then locked accounts. The page should tell the team what queue to open next.'}
         chips={queueEntries.map((queue) => ({ label: queue.title, href: `#${queue.key}` }))}
         stats={headerStats}
         aside={(
@@ -179,6 +164,12 @@ export default async function CollectionsPage({
           </div>
         )}
       />
+
+      {availabilityNote ? (
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${unavailable ? 'border-control-ember/20 bg-control-ember/8 text-control-ink' : 'border-control-teal/20 bg-control-teal/5 text-control-ink/70'}`}>
+          {availabilityNote}
+        </div>
+      ) : null}
 
       <section className="control-toolbar">
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-black/62">
@@ -281,7 +272,7 @@ export default async function CollectionsPage({
                   </div>
                 ))}
                 {visibleItems.length === 0 ? (
-                  <div className="control-inline-note">No accounts are currently in this queue.</div>
+                  <div className="control-inline-note">{unavailable ? 'Queue counts are hidden until the portfolio query succeeds.' : 'No accounts are currently in this queue.'}</div>
                 ) : null}
                 {hiddenCount > 0 ? (
                   <div className="control-inline-note">

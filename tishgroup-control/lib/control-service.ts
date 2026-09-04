@@ -1,9 +1,34 @@
 import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
-import { managedBusinesses, planRates, type BusinessHealth, type ManagedBusiness, type ManagedPlan, type ManagedState } from '@/lib/control-data';
+import {
+  classifyPortfolioError,
+  emptyPortfolioSnapshot,
+  inferHealth,
+  resolveFirstPaymentAt,
+  resolveInternalNotes,
+  snapshotFromBusinessRows,
+  snapshotFromQueryFailure,
+  type ManagedBusiness,
+  type ManagedPlan,
+  type ManagedState,
+  type PortfolioAvailability,
+  type PortfolioSnapshot,
+} from '@/lib/control-data';
+import { FORBIDDEN_MOCK_PORTFOLIO_IDS } from '@tillflow/lib/control-money';
 import { deriveManagedState } from '@/lib/billing-state';
 import { resolveControlMonthlyValueGhs, resolveControlCollectionAmountGhs } from '@/lib/vendor/plan-pricing';
 import { prisma } from '@/lib/prisma';
+
+export type { PortfolioAvailability, PortfolioSnapshot };
+export {
+  classifyPortfolioError,
+  emptyPortfolioSnapshot,
+  inferHealth,
+  resolveFirstPaymentAt,
+  resolveInternalNotes,
+  snapshotFromBusinessRows,
+  snapshotFromQueryFailure,
+};
 
 export type ManagedBusinessPayment = {
   id: string;
@@ -83,13 +108,6 @@ function isMissingControlPlaneError(error: unknown) {
       && (error.message.includes('Unknown field')
         || error.message.includes('controlBusinessProfile')
         || error.message.includes('ControlBusinessProfile')));
-}
-
-function inferHealth(state: ManagedBusiness['state']): BusinessHealth {
-  if (state === 'CANCELLED') return 'HEALTHY';
-  if (state === 'READ_ONLY' || state === 'TRIAL_RESTRICTED' || state === 'PAYMENT_RESTRICTED') return 'AT_RISK';
-  if (state === 'TRIAL_DUE_SOON' || state === 'TRIAL_DUE_TODAY' || state === 'TRIAL_EXPIRED_GRACE' || state === 'RENEWAL_DUE_SOON' || state === 'PAYMENT_DUE_TODAY' || state === 'PAYMENT_OVERDUE_GRACE') return 'WATCH';
-  return 'HEALTHY';
 }
 
 function normalizePlan(plan?: string | null): ManagedPlan {
@@ -201,20 +219,25 @@ async function getControlProfilesByBusinessId() {
   }
 }
 
+function rejectMockPortfolioIds(businesses: ManagedBusiness[]) {
+  const forbidden = new Set<string>(FORBIDDEN_MOCK_PORTFOLIO_IDS);
+  return businesses.filter((business) => !forbidden.has(business.id));
+}
+
 // Per-request memo (React cache) layered on top of a 60s cross-request
 // data cache (unstable_cache). Mutations invalidate the data cache via
 // revalidateTag('control-portfolio') from revalidateControlViews().
-const _loadLiveBusinesses = unstable_cache(
-  async (): Promise<ManagedBusiness[]> => {
-    return computeLiveBusinesses();
+const _loadLivePortfolio = unstable_cache(
+  async (): Promise<PortfolioSnapshot> => {
+    return computeLivePortfolio();
   },
   ['control-live-businesses'],
   { revalidate: 60, tags: ['control-portfolio'] }
 );
 
-const getLiveBusinesses = cache(async (): Promise<ManagedBusiness[]> => _loadLiveBusinesses());
+const getLivePortfolio = cache(async (): Promise<PortfolioSnapshot> => _loadLivePortfolio());
 
-async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
+async function computeLivePortfolio(): Promise<PortfolioSnapshot> {
   try {
     const [businesses, controlProfiles] = await Promise.all([
       prisma.business.findMany({
@@ -273,10 +296,10 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
     ]);
 
     if (businesses.length === 0) {
-      return managedBusinesses;
+      return emptyPortfolioSnapshot('empty', 'none');
     }
 
-    return businesses.map((business) => {
+    const mapped = businesses.map((business) => {
       const profile = controlProfiles.get(business.id);
       const subscription = profile?.subscription;
       const plan = normalizePlan(subscription?.purchasedPlan ?? business.selectedPlan ?? business.plan);
@@ -287,10 +310,11 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
         subscriptionStatus: business.subscriptionStatus,
         trialStartedAt: business.trialStartedAt,
         trialEndsAt: business.trialEndsAt,
-        firstPaymentAt: business.firstPaymentAt
-          ?? subscription?.lastPaymentDate
-          ?? business.lastPaymentAt
-          ?? (String(subscription?.status ?? '').toUpperCase() === 'PAID_ACTIVE' ? subscription?.startDate : null),
+        firstPaymentAt: resolveFirstPaymentAt({
+          firstPaymentAt: business.firstPaymentAt,
+          lastPaymentDate: subscription?.lastPaymentDate,
+          lastPaymentAt: business.lastPaymentAt,
+        }),
         currentPeriodEndsAt: business.currentPeriodEndsAt,
         nextBillingDate: subscription?.nextDueDate ?? business.nextBillingDate,
         nextPaymentDueAt: business.nextPaymentDueAt,
@@ -358,23 +382,31 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
         reviewedBy: profile?.reviewedByStaff?.name ?? null,
         lastActivityAt: formatDateTime(profile?.lastActivityAt ?? business.salesInvoices[0]?.createdAt ?? business.createdAt),
         branches: business.stores.length,
-        notes: latestNote ?? profile?.notes ?? business.billingNotes ?? 'No internal control-plane note recorded yet.',
+        notes: resolveInternalNotes({ latestNote, profileNotes: profile?.notes }),
         lastReminderAt: formatIsoDateTime(latestReminder?.sentAt ?? latestReminder?.createdAt),
         lastReminderStatus: latestReminder?.status ?? null,
         nextReminderAt: formatIsoDateTime(nextReminder?.nextAttemptAt ?? null),
         failedReminderCount,
       } satisfies ManagedBusiness;
     });
+
+    return snapshotFromBusinessRows(rejectMockPortfolioIds(mapped));
   } catch (error) {
-    if (!isMissingTableError(error)) {
-      console.error('[tishgroup-control] Falling back to mock portfolio data', error);
+    const snapshot = snapshotFromQueryFailure(error);
+    if (snapshot.errorKind !== 'missing_table') {
+      console.error('[tishgroup-control] Portfolio query failed; returning empty unavailable snapshot', error);
     }
-    return managedBusinesses;
+    return snapshot;
   }
 }
 
+export async function listManagedPortfolio(): Promise<PortfolioSnapshot> {
+  return getLivePortfolio();
+}
+
 export async function listManagedBusinesses() {
-  return getLiveBusinesses();
+  const snapshot = await getLivePortfolio();
+  return snapshot.businesses;
 }
 
 function normalizeRosterPage(value?: number) {
@@ -415,7 +447,7 @@ function matchesBusinessSearch(business: ManagedBusiness, search: string) {
 }
 
 export async function listManagedBusinessesPage(options: ManagedBusinessRosterOptions = {}): Promise<ManagedBusinessRoster> {
-  const businesses = await getLiveBusinesses();
+  const businesses = (await getLivePortfolio()).businesses;
   const filter = options.filter === 'unreviewed' ? 'unreviewed' : 'all';
   const search = options.search?.trim() ?? '';
   const pageSize = normalizeRosterPageSize(options.pageSize);
@@ -452,7 +484,7 @@ export async function listManagedBusinessesPage(options: ManagedBusinessRosterOp
 }
 
 export async function getManagedBusiness(businessId: string) {
-  const businesses = await getLiveBusinesses();
+  const businesses = (await getLivePortfolio()).businesses;
   return businesses.find((business) => business.id === businessId) ?? null;
 }
 

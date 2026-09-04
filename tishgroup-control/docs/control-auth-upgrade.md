@@ -1,84 +1,72 @@
-# Control plane auth upgrade plan
+# Control plane auth upgrade
 
-The current login flow uses a single shared `CONTROL_PLANE_ACCESS_KEY`
-that every operator types in. The email field is just a lookup, not a
-credential. This is the largest remaining security gap on the control
-plane: rotation requires telling everyone, lost devices are not
-self-service, and there is no path to 2FA.
+Phase 0 authentication containment is implemented. Staff sign in with a
+personal password. Login never creates a staff row, never bootstraps
+`CONTROL_ADMIN`, and never accepts `CONTROL_PLANE_ACCESS_KEY` as a
+credential or session secret.
 
-This document is the agreed migration plan. Everything below is
-**intentionally not yet implemented** because per-user auth needs
-human review of the chosen primitives (password hashing library, TOTP
-issuer, lockout thresholds) before code lands.
+## Phase 0 (landed)
 
-## What's already done
+1. Session HMAC is derived only from `CONTROL_SESSION_SECRET` (minimum
+   16 characters). `controlAuthConfigured()` is true only when that
+   secret is set. There is no fallback to `CONTROL_PLANE_ACCESS_KEY`.
+2. Roles are allowlisted: `CONTROL_ADMIN`, `ACCOUNT_MANAGER`,
+   `COLLECTIONS_AGENT`, `SUPPORT_AGENT`. Unknown roles fail closed
+   (`parseControlStaffRole` / `normalizeRole` return `null`). Sessions
+   with an unknown role are rejected.
+3. Login looks up `ControlStaff` by email. Missing, inactive, null
+   `passwordHash`, and failed `bcrypt.compare` all deny access. Missing
+   email, bad password, and null hash share one generic error string.
+   Failures are audited internally without hashes.
+4. Successful login writes `lastLoginAt`, records `LOGIN_SUCCESS`, and
+   stores `sessionVersion` in the signed cookie. `getControlStaffOptional`
+   rejects the cookie when `sessionVersion` does not match the database.
+5. Password set is `CONTROL_ADMIN` only, requires an existing allowlisted
+   target, enforces a 12-character minimum, hashes with bcrypt cost 12,
+   audits `PASSWORD_SET` without the hash, and increments `sessionVersion`.
+6. Middleware keeps `/api/digest` and `/api/cron` reachable without a
+   staff cookie (those routes use their own secrets). `next` is set only
+   when `isSafeInternalReturnPath` accepts the return path.
+7. `scripts/auth-cutover-preflight.mjs` is a read-only count of active
+   staff with `passwordHash IS NULL`, grouped by role. It prints counts
+   and roles only. Exit `1` if any active staff lack a password. When
+   `VERCEL_ENV=production` or `CONTROL_ENFORCE_AUTH_CUTOVER=1`, that
+   failure is the production blocker.
 
-1. `prisma/schema.prisma` — `ControlStaff` has nullable
-   `passwordHash`, `passwordSetAt`, `twoFactorSecret`,
-   `twoFactorEnabled`, `lastLoginAt` columns. Existing rows pass
-   through as null so the legacy login keeps working until cutover.
-2. `lib/audit.ts` — `recordAudit()` ready to log `LOGIN_SUCCESS`,
-   `LOGIN_FAILED`, `PASSWORD_SET`, `TFA_ENABLED`, `TFA_DISABLED`
-   actions when the new flow exists.
-3. `lib/notify.ts` — `notifyStateTransition` can be reused to alert
-   on suspicious sign-ins (new device family, geographic anomaly).
+## Remaining work
 
-## Cutover steps (one PR each, in order)
+### Create-staff password persistence
 
-### 1. Add password hashing
-- Add `bcrypt` (or `argon2`) to `tishgroup-control/package.json`.
-- Add a server action `setControlStaffPasswordAction(formData)` that
-  takes `staffId`, `password`. Validates length ≥ 12, hashes with
-  cost 12, writes `passwordHash` + `passwordSetAt`.
-- Admin-only (gated behind `canManageStaff(staff.role)`).
-- New `/staff/:id/credentials` page with a set-password form for
-  admins to provision colleagues.
+The staff create form now collects `password` (min 12). The create
+action in `app/actions/control-businesses.ts` still upserts name/role
+and does not hash or store that password. Until that action is updated,
+admins must use **Set a personal password** after creating a row.
 
-### 2. Per-user login flow
-- New server action `loginControlStaffWithPasswordAction`. Accepts
-  email + password. If `passwordHash` is null, falls back to the
-  legacy `CONTROL_PLANE_ACCESS_KEY` flow; otherwise verifies the
-  hash. On success writes `lastLoginAt`, calls
-  `recordAudit({ action: 'LOGIN_SUCCESS', ... })`, calls
-  `createControlSession`. On fail records `LOGIN_FAILED` with the
-  request IP and rate-limits via `lib/security/login-throttle.ts`
-  (already present in the main app — copy/refactor).
-- Update `/login` page form: keep email field, change "access key"
-  to "password" only when the staff record has a passwordHash.
+### Audit union
 
-### 3. 2FA opt-in
-- `setupControlStaff2FAAction` generates a TOTP secret using
-  `otplib` (or stdlib HMAC), stores in `twoFactorSecret`, returns
-  the otpauth URL. UI renders a QR via the existing
-  `app/api/icon/route.tsx` pattern (or any QR lib). Save click
-  flips `twoFactorEnabled = true`.
-- Login flow: after password verifies, if `twoFactorEnabled`,
-  prompt for the 6-digit code. Verify against `twoFactorSecret`
-  with a 30-second window. Failures audit-log the attempt.
-- Audit `TFA_ENABLED` / `TFA_DISABLED` events.
+`LOGIN_SUCCESS` and `PASSWORD_SET` are written via `recordAudit` but are
+not yet members of the `AuditAction` union in `lib/audit.ts`. Add them
+there so callers no longer need a cast.
 
-### 4. Cutover
-- Once every active staff record has a non-null `passwordHash`,
-  remove the `CONTROL_PLANE_ACCESS_KEY` fallback from the login
-  action. Keep the env var for one release as a kill-switch in
-  case a backout is needed.
-- Delete the legacy form path on `/login`.
+### 2FA opt-in
 
-### 5. Hardening (post-cutover)
-- Add IP-based lockouts after 10 failed logins in 15 minutes
-  (re-use `lib/security/login-throttle.ts`).
-- Surface `lastLoginAt` and recent `LOGIN_*` audit rows on the
-  staff directory page so admins can see who has stale access.
-- Optional: WebAuthn second factor as a 2FA alternative for staff
-  on iOS / desktop devices that prefer Touch ID.
+- Generate a TOTP secret, store `twoFactorSecret`, return an otpauth URL.
+- After password verifies, prompt for the 6-digit code when
+  `twoFactorEnabled` is true.
+- Audit `TFA_ENABLED` / `TFA_DISABLED`.
 
-## Estimate
+### Hardening
 
-- Step 1 (hashing + setup): ~2 hours
-- Step 2 (login flow): ~3 hours
-- Step 3 (2FA): ~3 hours
-- Step 4 (cutover): ~30 minutes
-- Step 5 (hardening): ~2 hours
+- Surface `lastLoginAt` and recent `LOGIN_*` rows on the staff directory.
+- Optional WebAuthn second factor.
 
-Total: roughly one focused day. Splitting into 4-5 PRs keeps any
-single change reviewable.
+## Preflight
+
+From `tishgroup-control`:
+
+```bash
+node scripts/auth-cutover-preflight.mjs
+```
+
+Uses `POSTGRES_URL_NON_POOLING` or `DATABASE_URL`. Never prints emails,
+names, or hashes.

@@ -1,4 +1,7 @@
+import { classifyErrorLogFailure, errorLogHealthCopy } from '@/lib/control-data';
 import { prisma } from '@/lib/prisma';
+
+export { classifyErrorLogFailure, errorLogHealthCopy };
 
 type CaptureErrorArgs = {
   context: string;
@@ -59,27 +62,34 @@ export type ErrorLogEntry = {
   metadata: Record<string, unknown> | null;
 };
 
-export async function listRecentErrors(limit = 50): Promise<ErrorLogEntry[]> {
+export type ErrorLogQueryResult =
+  | { ok: true; errors: ErrorLogEntry[] }
+  | { ok: false; errorKind: 'missing_table' | 'query_failed'; errors: ErrorLogEntry[] };
+
+export async function listRecentErrors(limit = 50): Promise<ErrorLogQueryResult> {
   try {
     const rows = await prisma.controlAuditLog.findMany({
       where: { action: { in: ['SYSTEM_ERROR', 'LOGIN_FAILURE'] } },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
-    return rows.map((row) => {
-      const meta = safeParse(row.metadata);
-      return {
-        id: row.id,
-        staffEmail: row.staffEmail,
-        context: (meta?.context as string) ?? row.action,
-        message: (meta?.message as string) ?? row.summary,
-        businessId: row.businessId,
-        createdAt: row.createdAt,
-        metadata: meta,
-      };
-    });
-  } catch {
-    return [];
+    return {
+      ok: true,
+      errors: rows.map((row) => {
+        const meta = safeParse(row.metadata);
+        return {
+          id: row.id,
+          staffEmail: row.staffEmail,
+          context: (meta?.context as string) ?? row.action,
+          message: (meta?.message as string) ?? row.summary,
+          businessId: row.businessId,
+          createdAt: row.createdAt,
+          metadata: meta,
+        };
+      }),
+    };
+  } catch (error) {
+    return { ok: false, errorKind: classifyErrorLogFailure(error), errors: [] };
   }
 }
 
