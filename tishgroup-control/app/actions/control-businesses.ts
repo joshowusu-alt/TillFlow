@@ -33,7 +33,7 @@ import {
   shouldRevokeMerchantSessions,
   type CanonicalStoredStatus,
 } from '@/lib/vendor/control-commercial-status';
-import { recordAudit, recordAuditInTransaction } from '@/lib/audit';
+import { recordAuditInTransaction } from '@/lib/audit';
 import { captureError } from '@/lib/error-monitor';
 import { notifyStateTransition, notifyPaymentRecorded } from '@/lib/notify';
 import { activateSubscriptionAfterPayment, calculateNextBillingDate } from '@/lib/subscription-lifecycle';
@@ -824,24 +824,26 @@ export async function resendSubscriptionReminderAction(formData: FormData): Prom
       throw new Error('Subscription reminder not found.');
     }
 
-    await prisma.messageOutbox.update({
-      where: { id: reminder.id },
-      data: {
-        status: 'PENDING',
-        attempts: 0,
-        lastError: null,
-        lockedAt: null,
-        nextAttemptAt: new Date(),
-        sentAt: null,
-      },
-    });
+    await prisma.$transaction(async (tx) => {
+      await tx.messageOutbox.update({
+        where: { id: reminder.id },
+        data: {
+          status: 'PENDING',
+          attempts: 0,
+          lastError: null,
+          lockedAt: null,
+          nextAttemptAt: new Date(),
+          sentAt: null,
+        },
+      });
 
-    await recordAudit({
-      staff,
-      action: 'SUBSCRIPTION_REMINDER_RESENT',
-      businessId,
-      summary: `Subscription SMS reminder queued for resend: ${reminder.eventType}`,
-      metadata: { reminderId, previousStatus: reminder.status },
+      await recordAuditInTransaction(tx, {
+        staff,
+        action: 'SUBSCRIPTION_REMINDER_RESENT',
+        businessId,
+        summary: `Subscription SMS reminder queued for resend: ${reminder.eventType}`,
+        metadata: { reminderId, previousStatus: reminder.status },
+      });
     });
   } catch (error) {
     redirect(`/businesses/${businessId}?tab=billing&error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to queue reminder resend.')}`);
@@ -1190,62 +1192,66 @@ export async function bulkRemindDueSoonAction(): Promise<void> {
       redirect('/collections?toast_error=No due-soon accounts found to remind.');
     }
 
-    const queued = await Promise.all(dueSoonBusinesses.map(async (business) => {
-      const recipient = normalizeGhanaPhone(business.phone);
-      if (!recipient) return null;
+    await prisma.$transaction(async (tx) => {
+      let count = 0;
+      for (const business of dueSoonBusinesses) {
+        const recipient = normalizeGhanaPhone(business.phone);
+        if (!recipient) continue;
 
-      const dueDate = business.nextBillingDate ?? business.nextPaymentDueAt;
-      const periodKey = dueDate?.toISOString().slice(0, 10)
-        ?? business.currentPeriodStartedAt?.toISOString().slice(0, 10)
-        ?? new Date().toISOString().slice(0, 10);
-      const idempotencyKey = `${business.id}:SUBSCRIPTION_RENEWAL_REMINDER:bulk:${periodKey}`;
-      const dueText = dueDate?.toLocaleDateString('en-GB') ?? 'your renewal date';
+        const dueDate = business.nextBillingDate ?? business.nextPaymentDueAt;
+        const periodKey = dueDate?.toISOString().slice(0, 10)
+          ?? business.currentPeriodStartedAt?.toISOString().slice(0, 10)
+          ?? new Date().toISOString().slice(0, 10);
+        const idempotencyKey = `${business.id}:SUBSCRIPTION_RENEWAL_REMINDER:bulk:${periodKey}`;
+        const dueText = dueDate?.toLocaleDateString('en-GB') ?? 'your renewal date';
 
-      return prisma.messageOutbox.upsert({
-        where: { idempotencyKey },
-        update: {
-          status: 'PENDING',
-          attempts: 0,
-          lastError: null,
-          lockedAt: null,
-          nextAttemptAt: new Date(),
-          sentAt: null,
-        },
-        create: {
-          businessId: business.id,
-          eventType: 'SUBSCRIPTION_RENEWAL_REMINDER',
-          idempotencyKey,
-          channel: 'SMS',
-          recipient,
-          body: `Reminder: your TillFlow subscription payment is due on ${dueText}. Please pay to keep access active.`,
-          status: 'PENDING',
-          nextAttemptAt: new Date(),
-          payloadJson: JSON.stringify({
-            source: 'TISHGROUP_CONTROL_BULK_REMIND',
+        await tx.messageOutbox.upsert({
+          where: { idempotencyKey },
+          update: {
+            status: 'PENDING',
+            attempts: 0,
+            lastError: null,
+            lockedAt: null,
+            nextAttemptAt: new Date(),
+            sentAt: null,
+          },
+          create: {
             businessId: business.id,
-            businessName: business.name,
-            periodKey,
-            dueDate: dueDate?.toISOString() ?? null,
-          }),
-        },
+            eventType: 'SUBSCRIPTION_RENEWAL_REMINDER',
+            idempotencyKey,
+            channel: 'SMS',
+            recipient,
+            body: `Reminder: your TillFlow subscription payment is due on ${dueText}. Please pay to keep access active.`,
+            status: 'PENDING',
+            nextAttemptAt: new Date(),
+            payloadJson: JSON.stringify({
+              source: 'TISHGROUP_CONTROL_BULK_REMIND',
+              businessId: business.id,
+              periodKey,
+              dueDate: dueDate?.toISOString() ?? null,
+            }),
+          },
+        });
+        count += 1;
+      }
+
+      if (count === 0) {
+        throw new Error('NO_SMS_RECIPIENTS');
+      }
+
+      await recordAuditInTransaction(tx, {
+        staff,
+        action: 'BULK_REMINDER_SENT',
+        businessId: null,
+        summary: `Bulk SMS reminder queued for ${count} reminder${count === 1 ? '' : 's'} across ${dueSoonBusinesses.length} due-soon account${dueSoonBusinesses.length === 1 ? '' : 's'}.`,
+        metadata: { businessCount: dueSoonBusinesses.length, reminderCount: count },
       });
-    }));
-
-    const queuedCount = queued.filter(Boolean).length;
-
-    if (queuedCount === 0) {
-      redirect('/collections?toast_error=No due-soon accounts have valid SMS recipients.');
-    }
-
-    await recordAudit({
-      staff,
-      action: 'BULK_REMINDER_SENT',
-      businessId: null,
-      summary: `Bulk SMS reminder queued for ${queuedCount} reminder${queuedCount === 1 ? '' : 's'} across ${dueSoonBusinesses.length} due-soon account${dueSoonBusinesses.length === 1 ? '' : 's'}.`,
-      metadata: { businessCount: dueSoonBusinesses.length, reminderCount: queuedCount },
     });
   } catch (error) {
     if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
+    if (error instanceof Error && error.message === 'NO_SMS_RECIPIENTS') {
+      redirect('/collections?toast_error=No due-soon accounts have valid SMS recipients.');
+    }
     redirect(`/collections?toast_error=${encodeURIComponent(error instanceof Error ? error.message : 'Bulk remind failed.')}`);
   }
 

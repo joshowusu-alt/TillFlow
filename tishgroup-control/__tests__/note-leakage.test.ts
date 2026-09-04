@@ -41,6 +41,15 @@ describe('control note leakage containment', () => {
     expect(paymentForm).toContain('Partial payments do not automatically grant paid access');
   });
 
+  it('keeps support ticket notes on ControlSupportIssueNote, not merchant billingNotes', () => {
+    const supportAction = read('tishgroup-control/app/actions/control-support.ts');
+    const supportMutations = read('tishgroup-control/lib/support-mutations.ts');
+    expect(supportAction).toContain('canMutateSupport');
+    expect(supportMutations).toContain('controlSupportIssueNote');
+    expect(supportMutations).not.toContain('billingNotes');
+    expect(supportMutations).not.toContain('controlNote');
+  });
+
   it('removes roster quick billing setup that defaulted STARTER + PAID_ACTIVE', () => {
     const roster = read('tishgroup-control/app/businesses/page.tsx');
     expect(roster).toContain('Commercial changes must be made on the business billing page');

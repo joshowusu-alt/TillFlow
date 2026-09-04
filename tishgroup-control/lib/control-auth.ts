@@ -263,6 +263,11 @@ export function canWriteNotes(role: ControlStaffRole) {
   return role === 'CONTROL_ADMIN' || role === 'ACCOUNT_MANAGER' || role === 'COLLECTIONS_AGENT' || role === 'SUPPORT_AGENT';
 }
 
+/** Support ticket mutations: explicit, not inherited from collections notes. */
+export function canMutateSupport(role: ControlStaffRole) {
+  return role === 'CONTROL_ADMIN' || role === 'ACCOUNT_MANAGER' || role === 'SUPPORT_AGENT';
+}
+
 export async function listActiveControlStaff(): Promise<ControlStaffOption[]> {
   try {
     const staff = await prisma.controlStaff.findMany({

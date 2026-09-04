@@ -3,6 +3,7 @@ import { isSafeInternalReturnPath } from '@/lib/safe-return-path';
 import {
   ALLOWED_CONTROL_ROLES,
   canAuthenticateStaffPassword,
+  canMutateSupport,
   controlAuthConfigured,
   getControlSessionSecret,
   nextSessionVersion,
@@ -35,6 +36,15 @@ describe('parseControlStaffRole / normalizeRole', () => {
     expect(normalizeRole('NOT_A_ROLE')).toBeNull();
     expect(normalizeRole('ACCOUNT_OWNER')).toBeNull();
     expect(normalizeRole()).toBeNull();
+  });
+});
+
+describe('canMutateSupport', () => {
+  it('is explicit for ACCOUNT_MANAGER and SUPPORT_AGENT and excludes COLLECTIONS_AGENT', () => {
+    expect(canMutateSupport('CONTROL_ADMIN')).toBe(true);
+    expect(canMutateSupport('ACCOUNT_MANAGER')).toBe(true);
+    expect(canMutateSupport('SUPPORT_AGENT')).toBe(true);
+    expect(canMutateSupport('COLLECTIONS_AGENT')).toBe(false);
   });
 });
 

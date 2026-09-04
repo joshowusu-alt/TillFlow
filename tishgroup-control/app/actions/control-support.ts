@@ -3,15 +3,16 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { recordAudit } from '@/lib/audit';
-import { canWriteNotes, requireControlStaff } from '@/lib/control-auth';
-import { syncBusinessSupportProfileCounts } from '@/lib/support-issues/sync';
+import { canMutateSupport, requireControlStaff } from '@/lib/control-auth';
 import {
-  SUPPORT_ISSUE_TYPES,
-  SUPPORT_PRIORITIES,
-  SUPPORT_SOURCES,
-  SUPPORT_STATUSES,
-} from '@/lib/support-issues/types';
+  SupportNotFoundError,
+  SupportPermissionError,
+  SupportValidationError,
+  addSupportIssueNoteMutation,
+  createSupportIssueMutation,
+  updateSupportIssueMutation,
+  type SupportDb,
+} from '@/lib/support-mutations';
 import { safeReturnPath, withRedirectParam } from '@/lib/safe-return-path';
 
 function returnPathFromForm(formData: FormData) {
@@ -33,190 +34,102 @@ function revalidateSupportViews(businessId?: string) {
   }
 }
 
-async function ensureBusinessContext(businessId: string) {
-  const business = await prisma.business.findUnique({
-    where: { id: businessId, isDemo: false },
-    select: {
-      name: true,
-      phone: true,
-      users: { where: { role: 'OWNER' }, take: 1, select: { name: true, email: true } },
-    },
-  });
-  if (!business) throw new Error('Business not found');
-  const owner = business.users[0];
-  return {
-    businessName: business.name,
-    ownerName: owner?.name ?? null,
-    ownerPhone: business.phone,
-    ownerEmail: owner?.email ?? null,
-  };
-}
-
 function pickString(formData: FormData, key: string) {
   return String(formData.get(key) ?? '').trim();
 }
 
+function supportDb(): SupportDb {
+  return prisma as unknown as SupportDb;
+}
+
+function mapSupportError(formData: FormData, error: unknown): never {
+  if (error instanceof SupportPermissionError) {
+    redirectError(formData, 'Permission denied');
+  }
+  if (error instanceof SupportValidationError || error instanceof SupportNotFoundError) {
+    redirectError(formData, error.message);
+  }
+  redirectError(formData, error instanceof Error ? error.message : 'Unable to save support change.');
+}
+
 export async function createSupportIssueAction(formData: FormData) {
   const staff = await requireControlStaff();
-  if (!canWriteNotes(staff.role)) {
+  if (!canMutateSupport(staff.role)) {
     redirectError(formData, 'Permission denied');
   }
 
-  const businessId = pickString(formData, 'businessId');
-  const title = pickString(formData, 'title');
-  const issueType = pickString(formData, 'issueType') || 'OTHER';
-  const priority = pickString(formData, 'priority') || 'NORMAL';
-  const description = pickString(formData, 'description') || null;
-  const source = pickString(formData, 'source') || 'CONTROL';
-  const relatedRoute = pickString(formData, 'relatedRoute') || null;
-  const nextAction = pickString(formData, 'nextAction') || null;
-  const assignedStaffId = pickString(formData, 'assignedStaffId') || null;
-  const assignedAgentName = pickString(formData, 'assignedAgentName') || null;
-  const ownerName = pickString(formData, 'ownerName') || null;
-  const ownerPhone = pickString(formData, 'ownerPhone') || null;
-
-  if (!businessId || !title) {
-    redirectError(formData, 'Business and title are required');
+  try {
+    const result = await createSupportIssueMutation(supportDb(), {
+      staff: { id: staff.id, email: staff.email, role: staff.role },
+      staffRole: staff.role,
+      businessId: pickString(formData, 'businessId'),
+      title: pickString(formData, 'title'),
+      issueType: pickString(formData, 'issueType') || 'OTHER',
+      priority: pickString(formData, 'priority') || 'NORMAL',
+      description: pickString(formData, 'description') || null,
+      source: pickString(formData, 'source') || 'CONTROL',
+      relatedRoute: pickString(formData, 'relatedRoute') || null,
+      nextAction: pickString(formData, 'nextAction') || null,
+      assignedStaffId: pickString(formData, 'assignedStaffId') || null,
+      assignedAgentName: pickString(formData, 'assignedAgentName') || null,
+      ownerName: pickString(formData, 'ownerName') || null,
+      ownerPhone: pickString(formData, 'ownerPhone') || null,
+      idempotencyKey: pickString(formData, 'idempotencyKey') || null,
+    });
+    revalidateSupportViews(result.businessId);
+  } catch (error) {
+    mapSupportError(formData, error);
   }
-  if (!SUPPORT_ISSUE_TYPES.includes(issueType as (typeof SUPPORT_ISSUE_TYPES)[number])) {
-    redirectError(formData, 'Invalid issue type');
-  }
-  if (!SUPPORT_PRIORITIES.includes(priority as (typeof SUPPORT_PRIORITIES)[number])) {
-    redirectError(formData, 'Invalid priority');
-  }
 
-  const ctx = await ensureBusinessContext(businessId);
-
-  const issue = await prisma.controlSupportIssue.create({
-    data: {
-      businessId,
-      createdByStaffId: staff.id,
-      assignedStaffId: assignedStaffId || null,
-      assignedAgentName: assignedAgentName || null,
-      issueType,
-      priority,
-      status: 'OPEN',
-      title,
-      description,
-      source: SUPPORT_SOURCES.includes(source as (typeof SUPPORT_SOURCES)[number]) ? source : 'CONTROL',
-      relatedRoute,
-      nextAction,
-      ownerName: ownerName || ctx.ownerName,
-      ownerPhone: ownerPhone || ctx.ownerPhone,
-    },
-  });
-
-  await syncBusinessSupportProfileCounts(businessId);
-
-  await recordAudit({
-    staff: { id: staff.id, email: staff.email, role: staff.role },
-    action: 'SUPPORT_ISSUE_CREATED',
-    businessId,
-    summary: `Support issue created: ${title}`,
-    metadata: { issueId: issue.id, issueType, priority },
-  });
-
-  revalidateSupportViews(businessId);
   redirect(withRedirectParam(returnPathFromForm(formData), 'updated', 'issue'));
 }
 
 export async function updateSupportIssueAction(formData: FormData) {
   const staff = await requireControlStaff();
-  if (!canWriteNotes(staff.role)) {
+  if (!canMutateSupport(staff.role)) {
     redirectError(formData, 'Permission denied');
   }
 
-  const issueId = pickString(formData, 'issueId');
-  const status = pickString(formData, 'status');
-  const priority = pickString(formData, 'priority');
-  const assignedStaffId = formData.has('assignedStaffId') ? pickString(formData, 'assignedStaffId') || null : undefined;
-  const assignedAgentName = formData.has('assignedAgentName') ? pickString(formData, 'assignedAgentName') || null : undefined;
-  const nextAction = formData.has('nextAction') ? pickString(formData, 'nextAction') || null : undefined;
-  const resolutionNotes = formData.has('resolutionNotes') ? pickString(formData, 'resolutionNotes') || null : undefined;
-
-  if (!issueId) redirectError(formData, 'Missing issue');
-
-  const existing = await prisma.controlSupportIssue.findUnique({ where: { id: issueId } });
-  if (!existing) redirectError(formData, 'Issue not found');
-
-  const data: Record<string, unknown> = {};
-  const changes: Record<string, { from: unknown; to: unknown }> = {};
-
-  if (status && SUPPORT_STATUSES.includes(status as (typeof SUPPORT_STATUSES)[number])) {
-    data.status = status;
-    changes.status = { from: existing.status, to: status };
-    if (status === 'RESOLVED') data.resolvedAt = new Date();
-    if (status === 'CLOSED') data.closedAt = new Date();
-  }
-  if (priority && SUPPORT_PRIORITIES.includes(priority as (typeof SUPPORT_PRIORITIES)[number])) {
-    data.priority = priority;
-    changes.priority = { from: existing.priority, to: priority };
-  }
-  if (assignedStaffId !== undefined) {
-    data.assignedStaffId = assignedStaffId;
-    changes.assignedStaffId = { from: existing.assignedStaffId, to: assignedStaffId };
-  }
-  if (assignedAgentName !== undefined) {
-    data.assignedAgentName = assignedAgentName;
-    changes.assignedAgentName = { from: existing.assignedAgentName, to: assignedAgentName };
-  }
-  if (nextAction !== undefined) {
-    data.nextAction = nextAction;
-    changes.nextAction = { from: existing.nextAction, to: nextAction };
-  }
-  if (resolutionNotes !== undefined) {
-    data.resolutionNotes = resolutionNotes;
-    changes.resolutionNotes = { from: existing.resolutionNotes, to: resolutionNotes };
+  try {
+    const result = await updateSupportIssueMutation(supportDb(), {
+      staff: { id: staff.id, email: staff.email, role: staff.role },
+      staffRole: staff.role,
+      issueId: pickString(formData, 'issueId'),
+      status: pickString(formData, 'status') || undefined,
+      priority: pickString(formData, 'priority') || undefined,
+      assignedStaffId: formData.has('assignedStaffId') ? pickString(formData, 'assignedStaffId') || null : undefined,
+      assignedAgentName: formData.has('assignedAgentName') ? pickString(formData, 'assignedAgentName') || null : undefined,
+      nextAction: formData.has('nextAction') ? pickString(formData, 'nextAction') || null : undefined,
+      resolutionNotes: formData.has('resolutionNotes') ? pickString(formData, 'resolutionNotes') || null : undefined,
+      idempotencyKey: pickString(formData, 'idempotencyKey') || null,
+    });
+    revalidateSupportViews(result.businessId);
+  } catch (error) {
+    mapSupportError(formData, error);
   }
 
-  await prisma.controlSupportIssue.update({ where: { id: issueId }, data });
-  await syncBusinessSupportProfileCounts(existing.businessId);
-
-  await recordAudit({
-    staff: { id: staff.id, email: staff.email, role: staff.role },
-    action: 'SUPPORT_ISSUE_UPDATED',
-    businessId: existing.businessId,
-    summary: `Support issue updated: ${existing.title}`,
-    metadata: { issueId, changes },
-  });
-
-  revalidateSupportViews(existing.businessId);
   redirect(returnPathFromForm(formData));
 }
 
 export async function addSupportIssueNoteAction(formData: FormData) {
   const staff = await requireControlStaff();
-  if (!canWriteNotes(staff.role)) {
+  if (!canMutateSupport(staff.role)) {
     redirectError(formData, 'Permission denied');
   }
 
-  const issueId = pickString(formData, 'issueId');
-  const note = pickString(formData, 'note');
-  if (!issueId || !note) redirectError(formData, 'Missing note');
+  try {
+    const result = await addSupportIssueNoteMutation(supportDb(), {
+      staff: { id: staff.id, email: staff.email, role: staff.role },
+      staffRole: staff.role,
+      issueId: pickString(formData, 'issueId'),
+      note: pickString(formData, 'note'),
+      idempotencyKey: pickString(formData, 'idempotencyKey') || null,
+    });
+    revalidateSupportViews(result.businessId);
+  } catch (error) {
+    mapSupportError(formData, error);
+  }
 
-  const issue = await prisma.controlSupportIssue.findUnique({
-    where: { id: issueId },
-    select: { businessId: true, title: true },
-  });
-  if (!issue) redirectError(formData, 'Issue not found');
-
-  await prisma.controlSupportIssueNote.create({
-    data: { issueId, note, createdByStaffId: staff.id },
-  });
-  await prisma.controlSupportIssue.update({
-    where: { id: issueId },
-    data: { lastUpdatedAt: new Date() },
-  });
-
-  await recordAudit({
-    staff: { id: staff.id, email: staff.email, role: staff.role },
-    action: 'SUPPORT_NOTE_ADDED',
-    businessId: issue.businessId,
-    summary: `Note on support issue: ${note.slice(0, 80)}`,
-    metadata: { issueId },
-  });
-
-  revalidateSupportViews(issue.businessId);
   redirect(returnPathFromForm(formData));
 }
 

@@ -1,6 +1,23 @@
 import { prisma } from '@/lib/prisma';
 
-const SECRET_METADATA_KEYS = ['password', 'passwordHash', 'hash', 'secret', 'token', 'session', 'accessKey', 'twoFactorSecret'];
+const SECRET_METADATA_KEYS = [
+  'password',
+  'passwordHash',
+  'hash',
+  'secret',
+  'token',
+  'session',
+  'accessKey',
+  'twoFactorSecret',
+  'note',
+  'description',
+  'body',
+  'recipient',
+  'email',
+  'phone',
+];
+
+const BCRYPT_LIKE = /\$2[aby]\$\d{2}\$[A-Za-z0-9./]{22,}/;
 
 export type AuditAction =
   | 'SUBSCRIPTION_UPDATED'
@@ -44,16 +61,31 @@ export type RecordAuditArgs = {
   idempotencyKey?: string | null;
 };
 
+function isSensitiveKey(key: string) {
+  const lower = key.toLowerCase();
+  return SECRET_METADATA_KEYS.some((secret) => lower.includes(secret.toLowerCase()));
+}
+
+function sanitizeValue(value: unknown): unknown {
+  if (typeof value === 'string' && BCRYPT_LIKE.test(value)) {
+    return '[redacted]';
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return sanitizeAuditMetadata(value as Record<string, unknown>);
+  }
+  return value;
+}
+
 export function sanitizeAuditMetadata(metadata?: Record<string, unknown> | null): Record<string, unknown> | null {
   if (!metadata) return null;
   const sanitized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(metadata)) {
-    if (SECRET_METADATA_KEYS.some((secret) => key.toLowerCase().includes(secret.toLowerCase()))) {
+    if (isSensitiveKey(key)) {
       continue;
     }
-    sanitized[key] = value;
+    sanitized[key] = sanitizeValue(value);
   }
-  return sanitized;
+  return Object.keys(sanitized).length > 0 ? sanitized : null;
 }
 
 function auditData({ staff, action, businessId, summary, metadata, idempotencyKey }: RecordAuditArgs) {
@@ -78,8 +110,14 @@ export async function recordAuditInTransaction(
 }
 
 /**
- * Best-effort audit for non-critical visibility. Critical commercial and staff
- * mutations must use recordAuditInTransaction inside the same Prisma transaction.
+ * Best-effort audit for non-critical visibility only.
+ * Remaining best-effort writers (must not change commercial, staff, support-ticket,
+ * entitlement, or merchant-visible billing state):
+ * - Scale cockpit operational fields: AGENT_ASSIGNED, REFERRAL_UPDATED,
+ *   SETUP_CALL_COMPLETED, FIRST_SALE_VERIFIED, PAYMENT_FOLLOWUP_FLAGGED, NOTE_ADDED
+ * - captureError / LOGIN_FAILURE telemetry
+ * Critical commercial, staff, support, payment, and SMS-queue mutations must use
+ * recordAuditInTransaction inside the same Prisma transaction.
  */
 export async function recordAudit(args: RecordAuditArgs): Promise<void> {
   try {

@@ -295,6 +295,10 @@ jobs:
             echo "Build-time DDL returned"
             exit 1
           fi
+          if rg -n -- "--password=" tishgroup-control/scripts/provision-control-staff-password.mjs; then
+            echo "Password cutover CLI accepts password arguments"
+            exit 1
+          fi
 
       - name: Install root TillFlow dependencies
         working-directory: .

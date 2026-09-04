@@ -238,7 +238,7 @@ export async function addScaleSupportNoteAction(formData: FormData) {
     staff: { id: staff.id, email: staff.email, role: staff.role },
     action: 'NOTE_ADDED',
     businessId,
-    summary: `Support note: ${note.slice(0, 80)}`,
+    summary: 'Internal control note added',
     metadata: { category },
   });
 
