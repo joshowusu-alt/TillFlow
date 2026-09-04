@@ -82,8 +82,8 @@ export function canonicalTrialBootstrapStatus(value?: string | null): CanonicalS
   if (raw === 'TRIAL_RESTRICTED') return 'TRIAL_RESTRICTED';
   if (raw === 'READ_ONLY' || raw === 'SUSPENDED') return 'READ_ONLY';
   if (raw === 'CANCELLED' || raw === 'INACTIVE' || raw === 'DEACTIVATED') return 'CANCELLED';
-  if (raw === 'PAID_ACTIVE' || raw === 'PAYMENT_RESTRICTED') {
-    throw new UnknownCommercialStatusError(raw);
+  if (raw === 'PAID_ACTIVE' || raw === 'PAYMENT_RESTRICTED' || raw === 'ACTIVE') {
+    return 'TRIAL_ACTIVE';
   }
   throw new UnknownCommercialStatusError(raw || '(empty)');
 }

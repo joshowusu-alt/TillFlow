@@ -67,6 +67,9 @@ export type ErrorLogQueryResult =
   | { ok: false; errorKind: 'missing_table' | 'query_failed'; errors: ErrorLogEntry[] };
 
 export async function listRecentErrors(limit = 50): Promise<ErrorLogQueryResult> {
+  if (process.env.VERCEL_ENV === 'preview' && process.env.CONTROL_FORCE_UNAVAILABLE === '1') {
+    return { ok: false, errorKind: 'query_failed', errors: [] };
+  }
   try {
     const rows = await prisma.controlAuditLog.findMany({
       where: { action: { in: ['SYSTEM_ERROR', 'LOGIN_FAILURE'] } },

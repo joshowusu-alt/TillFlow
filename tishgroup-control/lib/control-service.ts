@@ -238,6 +238,9 @@ const _loadLivePortfolio = unstable_cache(
 const getLivePortfolio = cache(async (): Promise<PortfolioSnapshot> => _loadLivePortfolio());
 
 async function computeLivePortfolio(): Promise<PortfolioSnapshot> {
+  if (process.env.VERCEL_ENV === 'preview' && process.env.CONTROL_FORCE_UNAVAILABLE === '1') {
+    return snapshotFromQueryFailure(new Error('Forced Preview unavailable state'));
+  }
   try {
     const [businesses, controlProfiles] = await Promise.all([
       prisma.business.findMany({

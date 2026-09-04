@@ -17,8 +17,11 @@ describe('canonical commercial status contract', () => {
     expect(canonicalTrialBootstrapStatus(undefined)).toBe('TRIAL_ACTIVE');
   });
 
-  it('never defaults unknown values to PAID_ACTIVE', () => {
-    expect(() => canonicalTrialBootstrapStatus('ACTIVE')).toThrow(UnknownCommercialStatusError);
+  it('never defaults unknown or paid values to PAID_ACTIVE on signup bootstrap', () => {
+    expect(canonicalTrialBootstrapStatus('PAID_ACTIVE')).toBe('TRIAL_ACTIVE');
+    expect(canonicalTrialBootstrapStatus('ACTIVE')).toBe('TRIAL_ACTIVE');
+    expect(canonicalTrialBootstrapStatus('PAYMENT_RESTRICTED')).toBe('TRIAL_ACTIVE');
+    expect(() => canonicalTrialBootstrapStatus('STARTER_FALLBACK')).toThrow(UnknownCommercialStatusError);
     expect(() => parseStoredStatusForMutation('ACTIVE')).toThrow(UnknownCommercialStatusError);
     expect(() => parseStoredStatusForMutation('STARTER_FALLBACK')).toThrow(UnknownCommercialStatusError);
     expect(() => parseStoredStatusForMutation('')).toThrow(UnknownCommercialStatusError);
