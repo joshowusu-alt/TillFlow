@@ -39,6 +39,7 @@ import { notifyStateTransition, notifyPaymentRecorded } from '@/lib/notify';
 import { activateSubscriptionAfterPayment, calculateNextBillingDate } from '@/lib/subscription-lifecycle';
 import { safeReturnPath, withRedirectParam } from '@/lib/safe-return-path';
 import {
+  hasQualifyingPaidSettlement,
   parseExplicitPaymentAmountGhs,
   parseRequiredCurrency,
   parseRequiredIdempotencyKey,
@@ -414,10 +415,20 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
         where: { controlBusinessId: profile.id },
         select: { startDate: true, nextDueDate: true, monthlyValuePence: true, outstandingAmountPence: true, status: true },
       });
-      const paymentCount = await tx.controlPayment.count({ where: { controlBusinessId: profile.id } });
-      const hasRecordedPayment = paymentCount > 0 || Boolean(business.firstPaymentAt);
-      if (!paidActivationAllowed({ requestedStatus: status, hasRecordedPayment })) {
-        throw new Error('Paid access requires a recorded payment. Plan, date, or note changes do not activate paid access.');
+      const recordedPayments = await tx.controlPayment.findMany({
+        where: { controlBusinessId: profile.id },
+        select: { amountPence: true },
+      });
+      const recommendedIntervalChargeGhs = controlIntervalChargeGhs(pricing);
+      if (!paidActivationAllowed({
+        requestedStatus: status,
+        hasQualifyingPaidSettlement: hasQualifyingPaidSettlement({
+          firstPaymentAt: business.firstPaymentAt,
+          paymentAmountsGhs: recordedPayments.map((payment) => payment.amountPence),
+          recommendedIntervalChargeGhs,
+        }),
+      })) {
+        throw new Error('Paid access requires a full qualifying payment. Partial payments, plan, date, or note changes do not activate paid access.');
       }
 
       const previousStatus = existingSubscription?.status ?? business.subscriptionStatus;

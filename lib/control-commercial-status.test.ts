@@ -40,10 +40,10 @@ describe('canonical commercial status contract', () => {
   });
 
   it('does not treat missing payment as paid activation', () => {
-    expect(paidActivationAllowed({ requestedStatus: 'PAID_ACTIVE', hasRecordedPayment: false })).toBe(false);
-    expect(paidActivationAllowed({ requestedStatus: 'TRIAL_ACTIVE', hasRecordedPayment: false })).toBe(true);
-    expect(paidActivationAllowed({ requestedStatus: 'PAID_ACTIVE', hasRecordedPayment: true })).toBe(true);
-    expect(paidActivationAllowed({ requestedStatus: 'PAID_ACTIVE', hasRecordedPayment: false, explicitEntitlementGrant: true })).toBe(true);
+    expect(paidActivationAllowed({ requestedStatus: 'PAID_ACTIVE', hasQualifyingPaidSettlement: false })).toBe(false);
+    expect(paidActivationAllowed({ requestedStatus: 'TRIAL_ACTIVE', hasQualifyingPaidSettlement: false })).toBe(true);
+    expect(paidActivationAllowed({ requestedStatus: 'PAID_ACTIVE', hasQualifyingPaidSettlement: true })).toBe(true);
+    expect(paidActivationAllowed({ requestedStatus: 'PAID_ACTIVE', hasQualifyingPaidSettlement: false, explicitEntitlementGrant: true })).toBe(true);
   });
 
   it('revokes sessions for restriction and cancellation, not for trial', () => {

@@ -24,6 +24,8 @@ describe('Phase 0 regression contracts', () => {
     expect(mutations).toContain('parseStoredStatusForMutation');
     const businesses = readFileSync(join(__dirname, '../app/actions/control-businesses.ts'), 'utf8');
     expect(businesses).not.toMatch(/default:\s*return 'PAID_ACTIVE'/);
+    expect(businesses).not.toContain('paymentCount > 0 || Boolean(business.firstPaymentAt)');
+    expect(businesses).toContain('hasQualifyingPaidSettlement');
   });
 
   it('mock portfolio cannot return in runtime', () => {

@@ -169,9 +169,9 @@ export function shouldRevokeMerchantSessions(status: CanonicalStoredStatus): boo
 
 export function paidActivationAllowed(args: {
   requestedStatus: CanonicalStoredStatus;
-  hasRecordedPayment: boolean;
+  hasQualifyingPaidSettlement: boolean;
   explicitEntitlementGrant?: boolean;
 }): boolean {
   if (args.requestedStatus !== 'PAID_ACTIVE') return true;
-  return Boolean(args.hasRecordedPayment || args.explicitEntitlementGrant);
+  return Boolean(args.hasQualifyingPaidSettlement || args.explicitEntitlementGrant);
 }

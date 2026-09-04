@@ -72,3 +72,23 @@ export function statusFamilyUnchanged(previous: string | null | undefined, next:
     return false;
   }
 }
+
+/**
+ * A payment qualifies for paid activation only if it is a full interval
+ * settlement, or firstPaymentAt is already set from a prior full grant.
+ * Any ControlPayment row, including a GHS 1 partial, is not enough.
+ */
+export function hasQualifyingPaidSettlement(args: {
+  firstPaymentAt?: Date | string | null;
+  paymentAmountsGhs: number[];
+  recommendedIntervalChargeGhs: number;
+}): boolean {
+  if (args.firstPaymentAt) return true;
+  return args.paymentAmountsGhs.some((amountGhs) => (
+    settleControlPayment({
+      amountGhs,
+      recommendedIntervalChargeGhs: args.recommendedIntervalChargeGhs,
+      currentOutstandingGhs: args.recommendedIntervalChargeGhs,
+    }).grantsPaidAccess
+  ));
+}

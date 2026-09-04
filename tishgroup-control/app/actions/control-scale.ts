@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { recordAudit } from '@/lib/audit';
+import { recordAudit, recordAuditInTransaction } from '@/lib/audit';
 import { canManageSubscriptions, canWriteNotes, requireControlStaff } from '@/lib/control-auth';
 import { safeReturnPath, withRedirectParam } from '@/lib/safe-return-path';
 
@@ -345,18 +345,24 @@ export async function extendScaleTrialGraceAction(formData: FormData) {
   const graceEndsAt = new Date(base.getTime() + hours * 60 * 60 * 1000);
 
   const previous = business.paymentGraceEndsAt?.toISOString() ?? null;
-  await prisma.business.update({
-    where: { id: businessId },
-    data: { paymentGraceEndsAt: graceEndsAt },
-  });
-
-  await recordAudit({
-    staff: { id: staff.id, email: staff.email, role: staff.role },
-    action: 'TRIAL_GRACE_EXTENDED',
-    businessId,
-    summary: `Trial/payment grace extended by ${hours}h`,
-    metadata: { previous, next: graceEndsAt.toISOString(), hours },
-  });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.business.update({
+        where: { id: businessId },
+        data: { paymentGraceEndsAt: graceEndsAt },
+      });
+      await recordAuditInTransaction(tx, {
+        staff: { id: staff.id, email: staff.email, role: staff.role },
+        action: 'TRIAL_GRACE_EXTENDED',
+        businessId,
+        summary: `Trial/payment grace extended by ${hours}h`,
+        metadata: { previous, next: graceEndsAt.toISOString(), hours },
+      });
+    });
+  } catch (error) {
+    if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
+    redirectError(formData, error instanceof Error ? error.message : 'Unable to extend trial grace.');
+  }
 
   revalidateScaleViews(businessId);
   redirect(returnPathFromForm(formData));

@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   coerceExistingStoredStatus,
   parseStoredStatusForMutation,
+  paidActivationAllowed,
   UnknownCommercialStatusError,
 } from '../lib/vendor/control-commercial-status';
 import {
+  hasQualifyingPaidSettlement,
   parseExplicitPaymentAmountGhs,
   preserveStatusWhenAssigningSoldPlan,
   settleControlPayment,
@@ -56,5 +58,34 @@ describe('Phase 0 commercial mutation negatives', () => {
   it('legacy TRIAL coercion never becomes PAID_ACTIVE', () => {
     expect(coerceExistingStoredStatus('TRIAL')).toBe('TRIAL_ACTIVE');
     expect(coerceExistingStoredStatus('ACTIVE')).toBe('TRIAL_ACTIVE');
+  });
+
+  it('a partial payment row does not qualify for paid activation', () => {
+    expect(hasQualifyingPaidSettlement({
+      firstPaymentAt: null,
+      paymentAmountsGhs: [1, 50],
+      recommendedIntervalChargeGhs: 199,
+    })).toBe(false);
+    expect(paidActivationAllowed({
+      requestedStatus: 'PAID_ACTIVE',
+      hasQualifyingPaidSettlement: hasQualifyingPaidSettlement({
+        firstPaymentAt: null,
+        paymentAmountsGhs: [1],
+        recommendedIntervalChargeGhs: 199,
+      }),
+    })).toBe(false);
+  });
+
+  it('a full catalog payment or existing firstPaymentAt qualifies for paid activation', () => {
+    expect(hasQualifyingPaidSettlement({
+      firstPaymentAt: null,
+      paymentAmountsGhs: [199],
+      recommendedIntervalChargeGhs: 199,
+    })).toBe(true);
+    expect(hasQualifyingPaidSettlement({
+      firstPaymentAt: new Date('2026-04-01'),
+      paymentAmountsGhs: [1],
+      recommendedIntervalChargeGhs: 199,
+    })).toBe(true);
   });
 });
