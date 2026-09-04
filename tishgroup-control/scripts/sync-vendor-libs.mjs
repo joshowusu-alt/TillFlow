@@ -7,19 +7,28 @@ const controlRoot = path.join(__dirname, '..');
 const repoLib = path.join(controlRoot, '..', 'lib');
 const vendorRoot = path.join(controlRoot, 'lib', 'vendor');
 
-const FILES = [
+const PHASE0_FILES = [
+  'plan-pricing.ts',
+  'features.ts',
+  'control-commercial-status.ts',
+  'control-money.ts',
+  'internal-control-billing-notes.ts',
+];
+
+const ALL_FILES = [
   'activation-display.ts',
   'activation-readiness.ts',
   'activation-steps.ts',
   'subscription-lifecycle.ts',
-  'plan-pricing.ts',
-  'features.ts',
   'whatsapp-templates.ts',
   'referrals/constants.ts',
   'referrals/reporting.ts',
   'guides/content.ts',
   'notifications/utils.ts',
+  ...PHASE0_FILES,
 ];
+
+const FILES = process.argv.includes('--all') ? ALL_FILES : PHASE0_FILES;
 
 function copyFile(relPath) {
   const src = path.join(repoLib, relPath);

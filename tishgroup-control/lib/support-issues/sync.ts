@@ -1,6 +1,23 @@
 import { prisma } from '@/lib/prisma';
 import { OPEN_SUPPORT_STATUSES, type SupportPriority } from './types';
 
+type SupportSyncClient = {
+  controlSupportIssue: {
+    findMany: (args: {
+      where: { businessId: string; status: { in: typeof OPEN_SUPPORT_STATUSES } };
+      select: { priority: true; lastUpdatedAt: true; createdAt: true };
+    }) => Promise<Array<{ priority: string; lastUpdatedAt: Date; createdAt: Date }>>;
+  };
+  controlBusinessProfile: {
+    findUnique: (args: { where: { businessId: string }; select: { supportStatus: true } }) => Promise<{ supportStatus: string } | null>;
+    upsert: (args: {
+      where: { businessId: string };
+      create: { businessId: string; openSupportIssueCount: number; supportStatus: string };
+      update: { openSupportIssueCount: number; supportStatus?: string };
+    }) => Promise<unknown>;
+  };
+};
+
 const PRIORITY_RANK: Record<string, number> = {
   CRITICAL: 0,
   HIGH: 1,
@@ -17,27 +34,33 @@ export function highestPriority(priorities: string[]): SupportPriority | null {
   return priorities.sort((a, b) => rankPriority(a) - rankPriority(b))[0] as SupportPriority;
 }
 
-/** Keep ControlBusinessProfile.openSupportIssueCount in sync with open issues. */
-export async function syncBusinessSupportProfileCounts(businessId: string) {
-  const openIssues = await prisma.controlSupportIssue.findMany({
+/** Keep ControlBusinessProfile.openSupportIssueCount in sync with open issues. Never overwrite UNREVIEWED. */
+export async function syncBusinessSupportProfileCounts(businessId: string, db: SupportSyncClient = prisma) {
+  const openIssues = await db.controlSupportIssue.findMany({
     where: { businessId, status: { in: OPEN_SUPPORT_STATUSES } },
     select: { priority: true, lastUpdatedAt: true, createdAt: true },
   });
 
   const hasCritical = openIssues.some((i) => i.priority === 'CRITICAL');
-  const supportStatus = openIssues.length === 0 ? 'HEALTHY' : hasCritical ? 'AT_RISK' : 'WATCH';
+  const createStatus = openIssues.length === 0 ? 'UNREVIEWED' : hasCritical ? 'AT_RISK' : 'WATCH';
+  const derivedStatus = openIssues.length === 0 ? 'HEALTHY' : hasCritical ? 'AT_RISK' : 'WATCH';
 
-  await prisma.controlBusinessProfile.upsert({
+  const existing = await db.controlBusinessProfile.findUnique({
+    where: { businessId },
+    select: { supportStatus: true },
+  });
+
+  await db.controlBusinessProfile.upsert({
     where: { businessId },
     create: {
       businessId,
       openSupportIssueCount: openIssues.length,
-      supportStatus,
+      supportStatus: createStatus,
     },
-    update: {
-      openSupportIssueCount: openIssues.length,
-      supportStatus,
-    },
+    update:
+      String(existing?.supportStatus ?? '').toUpperCase() === 'UNREVIEWED'
+        ? { openSupportIssueCount: openIssues.length }
+        : { openSupportIssueCount: openIssues.length, supportStatus: derivedStatus },
   });
 }
 

@@ -47,9 +47,9 @@ The app now also includes:
 
 Set these variables for the internal app:
 
-- `CONTROL_PLANE_ACCESS_KEY` required shared internal sign-in key
-- `CONTROL_SESSION_SECRET` optional dedicated cookie signing secret; if omitted, the access key is reused
-- `CONTROL_BOOTSTRAP_ADMIN_EMAIL` optional email allowed to create the first `CONTROL_ADMIN` staff record during initial setup
+- `CONTROL_SESSION_SECRET` required cookie signing secret (minimum 16 characters). Session HMAC uses this value only.
+- `CONTROL_PLANE_ACCESS_KEY` not used for staff login or session signing
+- `CONTROL_BOOTSTRAP_ADMIN_EMAIL` unused; login never creates a staff row
 
 ## Run locally
 
@@ -70,9 +70,9 @@ Required environment variables:
 
 - `POSTGRES_PRISMA_URL`
 - `POSTGRES_URL_NON_POOLING`
-- `CONTROL_PLANE_ACCESS_KEY`
-- `CONTROL_SESSION_SECRET`
-- `CONTROL_BOOTSTRAP_ADMIN_EMAIL` (optional)
+- `CONTROL_SESSION_SECRET` (required; minimum 16 characters; no access-key fallback)
+- `CONTROL_PLANE_ACCESS_KEY` (not used for staff login or session signing)
+- `CONTROL_BOOTSTRAP_ADMIN_EMAIL` (unused; login never creates a staff row)
 
 Recommended Vercel setup:
 

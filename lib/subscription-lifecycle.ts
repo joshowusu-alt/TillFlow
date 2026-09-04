@@ -486,7 +486,7 @@ export function computeBillingAccessState(input: SubscriptionInput & { today?: D
   const billingInterval = normalizeInterval(input.billingInterval ?? input.billingCadence);
   const trialStartedAt = toDate(input.trialStartedAt);
   const trialEndsAt = resolveBillingDate(input, 'trialEndsAt');
-  const firstPaymentAt = toDate(input.firstPaymentConfirmedAt ?? input.firstPaymentAt ?? input.lastPaymentRecordedAt ?? input.lastPaymentAt);
+  const firstPaymentAt = toDate(input.firstPaymentConfirmedAt ?? input.firstPaymentAt);
   const lastPaymentAt = toDate(input.lastPaymentRecordedAt ?? input.lastPaymentAt);
   const explicitStatus = String(input.subscriptionStatus ?? input.planStatus ?? '').toUpperCase();
   const rawCurrentPeriodEndsAt = resolveBillingDate(input, 'currentPeriodEndsAt');

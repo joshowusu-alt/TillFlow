@@ -31,6 +31,12 @@ type Props = {
   canWrite: boolean;
 };
 
+function createIdempotencyKey() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 const FILTERS = [
   { id: 'open', label: 'Open' },
   { id: 'critical', label: 'Critical' },
@@ -71,6 +77,8 @@ export default function SupportCockpitView({
   const [search, setSearch] = useState(initialSearch);
   const [selected, setSelected] = useState<SupportIssueRow | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [createKey] = useState(createIdempotencyKey);
+  const manageIdempotencyKey = `${selected?.id ?? 'none'}:${createKey}`;
 
   const filtered = useMemo(
     () => filterSupportIssues(data.issues, { filter, search }),
@@ -120,6 +128,7 @@ export default function SupportCockpitView({
       {showCreate && canWrite ? (
         <form action={createSupportIssueAction} className="card space-y-3 p-4">
           <input type="hidden" name="returnPath" value={returnPath} />
+          <input type="hidden" name="idempotencyKey" value={createKey} />
           <h3 className="font-display font-bold text-control-ink">New support issue</h3>
           <select name="businessId" required className="input text-sm w-full">
             <option value="">Select business</option>
@@ -259,6 +268,7 @@ export default function SupportCockpitView({
           <form action={updateSupportIssueAction} className="grid gap-2 sm:grid-cols-2">
             <input type="hidden" name="returnPath" value={returnPath} />
             <input type="hidden" name="issueId" value={selected.id} />
+            <input type="hidden" name="idempotencyKey" value={manageIdempotencyKey} />
             <select name="status" defaultValue={selected.status} className="input text-sm">
               {SUPPORT_STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -282,6 +292,7 @@ export default function SupportCockpitView({
           <form action={addSupportIssueNoteAction} className="space-y-2">
             <input type="hidden" name="issueId" value={selected.id} />
             <input type="hidden" name="returnPath" value={returnPath} />
+            <input type="hidden" name="idempotencyKey" value={`${manageIdempotencyKey}-note`} />
             <textarea name="note" rows={2} className="input text-sm w-full" placeholder="Add a note" />
             <button type="submit" className="btn-ghost border border-control-line text-sm w-full">
               Add note
@@ -291,6 +302,7 @@ export default function SupportCockpitView({
             <form action={resolveSupportIssueAction}>
               <input type="hidden" name="issueId" value={selected.id} />
               <input type="hidden" name="returnPath" value={returnPath} />
+              <input type="hidden" name="idempotencyKey" value={`${manageIdempotencyKey}-resolve`} />
               <button type="submit" className="btn-primary text-xs py-2">
                 Mark resolved
               </button>
@@ -298,6 +310,7 @@ export default function SupportCockpitView({
             <form action={closeSupportIssueAction}>
               <input type="hidden" name="issueId" value={selected.id} />
               <input type="hidden" name="returnPath" value={returnPath} />
+              <input type="hidden" name="idempotencyKey" value={`${manageIdempotencyKey}-close`} />
               <button type="submit" className="btn-ghost border border-control-line text-xs py-2">
                 Close issue
               </button>

@@ -1,10 +1,18 @@
-import { managedBusinesses, planRates, type ManagedBusiness } from '@/lib/control-data';
+import { paidArrGhs } from '@tillflow/lib/control-money';
+import { planRates, type ManagedBusiness, type ManagedState } from '@/lib/control-data';
 
 function sum(values: number[]) {
   return values.reduce((total, value) => total + value, 0);
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+export const PAID_MRR_STATES: readonly ManagedState[] = [
+  'PAID_ACTIVE',
+  'RENEWAL_DUE_SOON',
+  'PAYMENT_DUE_TODAY',
+  'PAYMENT_OVERDUE_GRACE',
+];
 
 function parseDate(value?: string | null) {
   if (!value || value === 'Not scheduled') return null;
@@ -27,18 +35,27 @@ function isDueThisWeek(business: ManagedBusiness) {
   return days != null && days >= 0 && days <= 7;
 }
 
+export function isPaidMrrBusiness(business: ManagedBusiness) {
+  return PAID_MRR_STATES.includes(business.state);
+}
+
 export function formatCedi(value: number) {
   return `GHc ${value.toLocaleString('en-GH')}`;
 }
 
 export function getPortfolioSummary() {
-  return getPortfolioSummaryFor(managedBusinesses);
+  return getPortfolioSummaryFor([]);
 }
 
 export function getPortfolioSummaryFor(businesses: ManagedBusiness[]) {
   const activeBusinesses = businesses.filter((business) => business.state !== 'INACTIVE' && business.state !== 'CANCELLED');
+  const paidBusinesses = businesses.filter(isPaidMrrBusiness);
   const totalBusinesses = businesses.length;
-  const mrr = sum(activeBusinesses.map((business) => business.monthlyValue));
+  const mrr = sum(paidBusinesses.map((business) => business.monthlyValue));
+  const arr = sum(paidBusinesses.map((business) => paidArrGhs({
+    monthlyValueGhs: business.monthlyValue,
+    billingCadence: business.billingCadence,
+  })));
   const expectedCollections = sum(
     activeBusinesses
       .filter((business) => ['TRIAL_DUE_SOON', 'TRIAL_DUE_TODAY', 'TRIAL_EXPIRED_GRACE', 'TRIAL_RESTRICTED', 'RENEWAL_DUE_SOON', 'PAYMENT_DUE_TODAY', 'PAYMENT_OVERDUE_GRACE', 'PAYMENT_RESTRICTED', 'READ_ONLY'].includes(business.state))
@@ -53,7 +70,7 @@ export function getPortfolioSummaryFor(businesses: ManagedBusiness[]) {
   return {
     totalBusinesses,
     mrr,
-    arr: mrr * 12,
+    arr,
     expectedCollections,
     activePaid,
     dueSoon,
@@ -64,12 +81,12 @@ export function getPortfolioSummaryFor(businesses: ManagedBusiness[]) {
 }
 
 export function getRevenueByPlan() {
-  return getRevenueByPlanFor(managedBusinesses);
+  return getRevenueByPlanFor([]);
 }
 
 export function getRevenueByPlanFor(businesses: ManagedBusiness[]) {
   return (Object.keys(planRates) as Array<keyof typeof planRates>).map((plan) => {
-    const matchingBusinesses = businesses.filter((business) => business.plan === plan && business.state !== 'INACTIVE' && business.state !== 'CANCELLED');
+    const matchingBusinesses = businesses.filter((business) => business.plan === plan && isPaidMrrBusiness(business));
     const revenue = sum(matchingBusinesses.map((business) => business.monthlyValue));
 
     return {
@@ -81,7 +98,7 @@ export function getRevenueByPlanFor(businesses: ManagedBusiness[]) {
 }
 
 export function getCollectionQueues() {
-  return getCollectionQueuesFor(managedBusinesses);
+  return getCollectionQueuesFor([]);
 }
 
 export function getCollectionQueuesFor(businesses: ManagedBusiness[]) {
@@ -93,8 +110,51 @@ export function getCollectionQueuesFor(businesses: ManagedBusiness[]) {
   };
 }
 
-export function getBusinessById(businessId: string) {
-  return managedBusinesses.find((business) => business.id === businessId);
+export function getBusinessById(_businessId: string) {
+  return undefined;
+}
+
+export function amountDueGhs(business: ManagedBusiness) {
+  if (business.outstandingAmount > 0) {
+    return business.outstandingAmount;
+  }
+
+  return 0;
+}
+
+export function getAccountMove(state: string, nextDueAt: string): string {
+  const days = daysUntil(nextDueAt);
+  const overdue = days == null ? 0 : Math.abs(days);
+
+  switch (state) {
+    case 'TRIAL_DUE_SOON':
+    case 'RENEWAL_DUE_SOON':
+      if (days == null) {
+        return 'Due soon — send reminder and confirm payment channel.';
+      }
+      return days <= 1
+        ? 'Due tomorrow — send reminder now and confirm MoMo or bank transfer.'
+        : `Due in ${days} day${days === 1 ? '' : 's'} — send reminder and confirm payment channel.`;
+    case 'TRIAL_DUE_TODAY':
+    case 'PAYMENT_DUE_TODAY':
+      return 'Due today — send reminder now and confirm MoMo or bank transfer.';
+    case 'TRIAL_EXPIRED_GRACE':
+    case 'PAYMENT_OVERDUE_GRACE':
+      return `${overdue} day${overdue === 1 ? '' : 's'} past due — call now and push for same-day MoMo or transfer.`;
+    case 'TRIAL_RESTRICTED':
+    case 'PAYMENT_RESTRICTED':
+      return `${overdue} day${overdue === 1 ? '' : 's'} past due, access restricted — escalate for partial or full payment today.`;
+    case 'READ_ONLY':
+      return `${overdue} day${overdue === 1 ? '' : 's'} past due, account locked — confirm payment first to restore access immediately.`;
+    case 'CANCELLED':
+    case 'INACTIVE':
+      return 'Account cancelled — do not treat this as good standing.';
+    case 'PAID_ACTIVE':
+    case 'TRIAL_ACTIVE':
+      return 'Account in good standing — confirm renewal prep and upsell readiness.';
+    default:
+      return 'Unknown account state — escalate to Control Admin before assuming good standing.';
+  }
 }
 
 export function getAgingBucketsFor(businesses: ManagedBusiness[]) {
@@ -123,7 +183,7 @@ export function getAgingBucketsFor(businesses: ManagedBusiness[]) {
       count: overdueList.length,
       amount: sum(overdueList.map((b) => b.outstandingAmount)),
       label: 'Overdue',
-      description: 'Operating on grace or fallback. Same-day contact required.',
+      description: 'Operating on grace or restricted access. Same-day contact required.',
       href: '/collections#overdue',
     },
     locked: {

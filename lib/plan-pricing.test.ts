@@ -170,31 +170,37 @@ describe('resolveControlCollectionAmountGhs', () => {
   });
 });
 
-describe('control payment blank-amount fallback (Business.billingAmount in pesewas)', () => {
+describe('control payment amounts (Business.billingAmount in pesewas)', () => {
   const amounts = (
     plan: 'STARTER' | 'GROWTH' | 'PRO',
     addonOnlineStorefront: boolean,
     billingInterval: 'MONTHLY' | 'ANNUAL',
-    enteredAmountGhs?: number,
+    enteredAmountGhs: number,
   ) =>
     resolveControlPaymentAmounts(
       computeSubscriptionPricing({ plan, addonOnlineStorefront, billingInterval }),
       enteredAmountGhs,
     );
 
+  it('rejects blank or zero payment amounts instead of defaulting to list price', () => {
+    const pricing = computeSubscriptionPricing({ plan: 'STARTER', billingInterval: 'MONTHLY' });
+    expect(() => resolveControlPaymentAmounts(pricing)).toThrow(/explicit and greater than zero/);
+    expect(() => resolveControlPaymentAmounts(pricing, 0)).toThrow(/explicit and greater than zero/);
+  });
+
   it('annual Growth + add-on stores 549000 pesewas, not 5490', () => {
-    expect(amounts('GROWTH', true, 'ANNUAL')).toEqual({
+    expect(amounts('GROWTH', true, 'ANNUAL', 5490)).toEqual({
       recordedAmountGhs: 5490,
       businessBillingAmountPence: 549000,
     });
   });
 
   it('annual Pro stores 699000 pesewas', () => {
-    expect(amounts('PRO', false, 'ANNUAL').businessBillingAmountPence).toBe(699000);
+    expect(amounts('PRO', false, 'ANNUAL', 6990).businessBillingAmountPence).toBe(699000);
   });
 
   it('monthly Growth + add-on stores 54900 pesewas', () => {
-    expect(amounts('GROWTH', true, 'MONTHLY').businessBillingAmountPence).toBe(54900);
+    expect(amounts('GROWTH', true, 'MONTHLY', 549).businessBillingAmountPence).toBe(54900);
   });
 
   it('records a manual payment without changing the recurring interval charge', () => {

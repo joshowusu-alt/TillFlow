@@ -218,6 +218,12 @@ model ControlStaff {
   email              String                  @unique
   role               String                  @default("ACCOUNT_MANAGER")
   active             Boolean                 @default(true)
+  passwordHash       String?
+  passwordSetAt      DateTime?
+  twoFactorSecret    String?
+  twoFactorEnabled   Boolean                 @default(false)
+  lastLoginAt        DateTime?
+  sessionVersion     Int                    @default(0)
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
   assignedBusinesses ControlBusinessProfile[] @relation("ControlBusinessAssignedManager")
@@ -335,7 +341,7 @@ model ControlSubscription {
   id                     String                 @id @default(cuid())
   controlBusinessId      String                 @unique
   purchasedPlan          String
-  status                 String                 @default("ACTIVE")
+  status                 String                 @default("TRIAL_ACTIVE")
   billingCadence         String                 @default("MONTHLY")
   startDate              DateTime               @default(now())
   nextDueDate            DateTime?
@@ -361,6 +367,7 @@ model ControlPayment {
   paidAt            DateTime
   method            String
   reference         String?
+  idempotencyKey    String?                @unique
   note              String?
   receivedByStaffId String?
   createdAt         DateTime               @default(now())
@@ -383,6 +390,23 @@ model ControlNote {
 
   @@index([controlBusinessId, createdAt])
   @@index([createdByStaffId])
+}
+
+model ControlAuditLog {
+  id             String   @id @default(cuid())
+  staffId        String?
+  staffEmail     String
+  staffRole      String
+  action         String
+  businessId     String?
+  summary        String
+  metadata       String?
+  idempotencyKey String?  @unique
+  createdAt      DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([staffId, createdAt])
+  @@index([action, createdAt])
 }
 
 model Store {
