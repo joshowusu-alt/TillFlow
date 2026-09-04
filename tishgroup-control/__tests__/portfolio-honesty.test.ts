@@ -145,11 +145,11 @@ describe('paid MRR and ARR honesty', () => {
 });
 
 describe('payment dates, notes, and health', () => {
-  it('does not infer firstPaymentAt from PAID_ACTIVE + startDate', () => {
+  it('does not infer firstPaymentAt from a partial lastPaymentAt', () => {
     expect(resolveFirstPaymentAt({
       firstPaymentAt: null,
-      lastPaymentDate: null,
-      lastPaymentAt: null,
+      lastPaymentDate: new Date('2026-09-04T00:00:00.000Z'),
+      lastPaymentAt: new Date('2026-09-04T00:00:00.000Z'),
     })).toBeNull();
   });
 

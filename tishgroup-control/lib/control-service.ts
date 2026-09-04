@@ -213,9 +213,9 @@ async function getControlProfilesByBusinessId() {
     return new Map(profiles.map((profile) => [profile.businessId, profile]));
   } catch (error) {
     if (!isMissingControlPlaneError(error)) {
-      console.error('[tishgroup-control] Failed to load control-plane tables, using tenant-derived data', error);
+      console.error('[tishgroup-control] Failed to load control-plane tables', error);
     }
-    return new Map();
+    throw error;
   }
 }
 

@@ -1,3 +1,4 @@
+import { sanitizeAuditMetadata } from '@/lib/audit';
 import { classifyErrorLogFailure, errorLogHealthCopy } from '@/lib/control-data';
 import { prisma } from '@/lib/prisma';
 
@@ -40,7 +41,7 @@ export async function captureError({
         action,
         businessId: businessId ?? null,
         summary: `[${context}] ${message.slice(0, 200)}`,
-        metadata: JSON.stringify({ context, message, stack, ...metadata }),
+        metadata: JSON.stringify(sanitizeAuditMetadata({ context, message, stack, ...(metadata ?? {}) })),
       },
     });
   } catch (writeError) {

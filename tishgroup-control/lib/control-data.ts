@@ -169,7 +169,7 @@ export function resolveFirstPaymentAt(args: {
   lastPaymentDate?: Date | string | null;
   lastPaymentAt?: Date | string | null;
 }) {
-  return args.firstPaymentAt ?? args.lastPaymentDate ?? args.lastPaymentAt ?? null;
+  return args.firstPaymentAt ?? null;
 }
 
 export function resolveInternalNotes(args: {

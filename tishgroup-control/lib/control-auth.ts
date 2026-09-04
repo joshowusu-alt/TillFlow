@@ -180,6 +180,28 @@ export async function getControlStaffOptional(): Promise<ControlStaffSession | n
   }
 }
 
+export async function invalidateControlSession(): Promise<void> {
+  const token = cookies().get(CONTROL_SESSION_COOKIE)?.value;
+  const secret = getControlSessionSecret();
+  if (!token || !secret) {
+    return;
+  }
+
+  const payload = decodePayload(token, secret);
+  if (!payload) {
+    return;
+  }
+
+  try {
+    await prisma.controlStaff.update({
+      where: { id: payload.staffId },
+      data: { sessionVersion: { increment: 1 } },
+    });
+  } catch {
+    // Missing staff or schema — still clear the cookie at the HTTP layer.
+  }
+}
+
 export async function requireControlStaff(roles?: ControlStaffRole[]) {
   const staff = await getControlStaffOptional();
 

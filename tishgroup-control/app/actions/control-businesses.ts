@@ -603,7 +603,13 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
         where: { idempotencyKey },
         select: { id: true },
       });
-      if (duplicate) {
+      const duplicateReference = reference
+        ? await tx.controlPayment.findFirst({
+          where: { controlBusinessId: profile.id, reference },
+          select: { id: true },
+        })
+        : null;
+      if (duplicate || duplicateReference) {
         throw new Error('This payment reference was already recorded. Duplicate submission was ignored.');
       }
       const purchasedPlan = normalizePlan(existingSubscription?.purchasedPlan ?? business.plan);
@@ -699,7 +705,6 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
             ...(billingNotes ? { billingNotes } : {}),
           }
           : {
-            lastPaymentAt: paidAt,
             ...(billingNotes ? { billingNotes } : {}),
           },
       });
