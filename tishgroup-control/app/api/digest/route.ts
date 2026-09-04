@@ -4,6 +4,7 @@ import { getPortfolioSummaryFor, getCollectionQueuesFor, formatCedi } from '@/li
 import { getPortfolioSlaCounts } from '@/lib/sla';
 import { getCollectionsRhythm } from '@/lib/collections-trend';
 import { captureError } from '@/lib/error-monitor';
+import { isControlMaintenanceMode, maintenanceDeniedPayload } from '@/lib/control-maintenance';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,9 @@ export const dynamic = 'force-dynamic';
 const SECRET = process.env.DIGEST_CRON_SECRET?.trim() || null;
 
 export async function GET(request: Request) {
+  if (isControlMaintenanceMode()) {
+    return NextResponse.json(maintenanceDeniedPayload(), { status: 503 });
+  }
   if (process.env.NODE_ENV === 'production' && !SECRET) {
     await captureError({
       context: 'digest:missing_secret',

@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { canMutateSupport, requireControlStaff } from '@/lib/control-auth';
+import { canMutateSupport, requireControlStaffForMutation } from '@/lib/control-auth';
 import {
   SupportNotFoundError,
   SupportPermissionError,
@@ -53,7 +53,7 @@ function mapSupportError(formData: FormData, error: unknown): never {
 }
 
 export async function createSupportIssueAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canMutateSupport(staff.role)) {
     redirectError(formData, 'Permission denied');
   }
@@ -85,7 +85,7 @@ export async function createSupportIssueAction(formData: FormData) {
 }
 
 export async function updateSupportIssueAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canMutateSupport(staff.role)) {
     redirectError(formData, 'Permission denied');
   }
@@ -112,7 +112,7 @@ export async function updateSupportIssueAction(formData: FormData) {
 }
 
 export async function addSupportIssueNoteAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canMutateSupport(staff.role)) {
     redirectError(formData, 'Permission denied');
   }

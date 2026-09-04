@@ -12,7 +12,7 @@ import {
   MIN_CONTROL_PASSWORD_LENGTH,
   nextSessionVersion,
   parseControlStaffRole,
-  requireControlStaff,
+  requireControlStaffForMutation,
 } from '@/lib/control-auth';
 import { checkRateLimit, LOGIN_RATE_LIMIT } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-monitor';
@@ -172,7 +172,7 @@ export async function loginControlStaffAction(formData: FormData): Promise<void>
 }
 
 export async function setStaffPasswordAction(formData: FormData): Promise<void> {
-  const actor = await requireControlStaff(['CONTROL_ADMIN']);
+  const actor = await requireControlStaffForMutation(['CONTROL_ADMIN']);
 
   const staffId = String(formData.get('staffId') ?? '').trim();
   const password = String(formData.get('password') ?? '');

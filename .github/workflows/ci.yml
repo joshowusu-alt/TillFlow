@@ -299,6 +299,14 @@ jobs:
             echo "Password cutover CLI accepts password arguments"
             exit 1
           fi
+          if rg -n -- "--force" tishgroup-control/scripts/provision-control-staff-password.mjs scripts/validate-control-migrations.mjs tishgroup-control/scripts/ensure-disposable-sentinel.mjs; then
+            echo "Destructive or password scripts expose a --force escape hatch"
+            exit 1
+          fi
+          if rg -n "CONTROL_PREVIEW_ISOLATED_DB !== '1'" scripts/validate-control-migrations.mjs; then
+            echo "Isolated boolean still authorises remote destructive validation"
+            exit 1
+          fi
 
       - name: Install root TillFlow dependencies
         working-directory: .

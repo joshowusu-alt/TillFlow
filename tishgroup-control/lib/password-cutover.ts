@@ -1,16 +1,21 @@
 import { ALLOWED_CONTROL_ROLES, MIN_CONTROL_PASSWORD_LENGTH, nextSessionVersion, parseControlStaffRole, type ControlStaffRole } from '@/lib/control-auth';
 import { recordAuditInTransaction } from '@/lib/audit';
+import {
+  ISOLATED_PREVIEW_FINGERPRINT,
+  PRODUCTION_FINGERPRINT,
+  assertNoForceEscapeHatch,
+  assertPasswordCutoverTarget,
+  classifyDatabaseUrl,
+  parseDatabaseIdentity,
+  type DatabaseTargetEnv,
+} from '@/lib/database-target';
 
-export const ISOLATED_PREVIEW_HOST_PREFIXES = ['ep-old-sunset-za6o0nyo'];
+export { classifyDatabaseUrl, parseDatabaseIdentity, PRODUCTION_FINGERPRINT, ISOLATED_PREVIEW_FINGERPRINT };
+export const ISOLATED_PREVIEW_HOST_PREFIXES = [ISOLATED_PREVIEW_FINGERPRINT.hostPrefix];
 
 export type PasswordCutoverMode = 'production' | 'preview';
 
-export type PasswordCutoverEnv = {
-  CONTROL_PASSWORD_CUTOVER?: string;
-  CONTROL_PASSWORD_CUTOVER_ENV?: string;
-  CONTROL_PREVIEW_ISOLATED_DB?: string;
-  VERCEL_ENV?: string;
-};
+export type PasswordCutoverEnv = DatabaseTargetEnv;
 
 export class PasswordCutoverError extends Error {
   constructor(message: string) {
@@ -19,87 +24,25 @@ export class PasswordCutoverError extends Error {
   }
 }
 
-export function classifyDatabaseUrl(url: string | undefined | null): 'missing' | 'unparseable' | 'loopback' | 'local-network' | 'remote' {
-  if (!url) return 'missing';
-  try {
-    const parsed = new URL(url.replace(/^prisma\+/, ''));
-    const hostname = parsed.hostname.toLowerCase();
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return 'loopback';
-    if (hostname === 'postgres' || hostname === 'db' || hostname.endsWith('.local')) return 'local-network';
-    return 'remote';
-  } catch {
-    return 'unparseable';
-  }
-}
-
 export function databaseHostPrefix(url: string | undefined | null): string | null {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url.replace(/^prisma\+/, ''));
-    const host = parsed.hostname.toLowerCase();
-    const first = host.split('.')[0] ?? '';
-    return first || null;
-  } catch {
-    return null;
-  }
-}
-
-function isIsolatedPreviewHost(url: string | undefined | null) {
-  const prefix = databaseHostPrefix(url);
-  if (!prefix) return false;
-  return ISOLATED_PREVIEW_HOST_PREFIXES.some((known) => prefix.startsWith(known) || known.startsWith(prefix));
+  return parseDatabaseIdentity(url).hostPrefix;
 }
 
 export function assertPasswordCutoverEnvironment(args: {
   mode: PasswordCutoverMode;
   env: PasswordCutoverEnv;
   databaseUrl?: string | null;
+  expectedHostPrefix?: string | null;
+  expectedDatabase?: string | null;
+  expectedUser?: string | null;
+  argv?: string[];
 }): void {
-  const { mode, env, databaseUrl } = args;
-  const classification = classifyDatabaseUrl(databaseUrl);
-  const isolatedFlag = env.CONTROL_PREVIEW_ISOLATED_DB === '1';
-  const cutoverFlag = env.CONTROL_PASSWORD_CUTOVER === '1';
-  const declaredEnv = String(env.CONTROL_PASSWORD_CUTOVER_ENV ?? '').trim().toLowerCase();
-
-  if (classification === 'missing' || classification === 'unparseable') {
-    throw new PasswordCutoverError('Database identity could not be proven. Refusing password cutover.');
+  try {
+    assertNoForceEscapeHatch(args.argv ?? [], args.env as Record<string, string | undefined>);
+    assertPasswordCutoverTarget(args);
+  } catch (error) {
+    throw new PasswordCutoverError(error instanceof Error ? error.message : 'Database target refused.');
   }
-
-  if (mode === 'production') {
-    if (!cutoverFlag) {
-      throw new PasswordCutoverError('Refusing: CONTROL_PASSWORD_CUTOVER=1 is required for Production password provisioning.');
-    }
-    if (declaredEnv !== 'production') {
-      throw new PasswordCutoverError('Refusing: CONTROL_PASSWORD_CUTOVER_ENV=production is required for Production mode.');
-    }
-    if (isolatedFlag) {
-      throw new PasswordCutoverError('Refusing: isolated Preview database cannot be used in Production mode.');
-    }
-    if (isIsolatedPreviewHost(databaseUrl)) {
-      throw new PasswordCutoverError('Refusing: isolated Preview database cannot be used in Production mode.');
-    }
-    if (classification !== 'remote') {
-      throw new PasswordCutoverError('Refusing: Production password cutover requires a proven remote Production database.');
-    }
-    return;
-  }
-
-  if (mode !== 'preview') {
-    throw new PasswordCutoverError('Refusing: mode must be production or preview.');
-  }
-  if (declaredEnv !== 'preview') {
-    throw new PasswordCutoverError('Refusing: CONTROL_PASSWORD_CUTOVER_ENV=preview is required for Preview rehearsal.');
-  }
-  if (!isolatedFlag) {
-    throw new PasswordCutoverError('Refusing: Preview password cutover requires CONTROL_PREVIEW_ISOLATED_DB=1.');
-  }
-  if (classification === 'loopback' || classification === 'local-network') {
-    return;
-  }
-  if (classification === 'remote' && isIsolatedPreviewHost(databaseUrl)) {
-    return;
-  }
-  throw new PasswordCutoverError('Refusing: Production database cannot be used in Preview mode.');
 }
 
 const WEAK_PASSWORD_FRAGMENTS = ['password', 'tillflow', 'tishgroup', '123456789012', 'qwertyuiopas'];

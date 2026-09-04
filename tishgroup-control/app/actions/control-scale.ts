@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { recordAudit, recordAuditInTransaction } from '@/lib/audit';
-import { canManageSubscriptions, canWriteNotes, requireControlStaff } from '@/lib/control-auth';
+import { canManageSubscriptions, canWriteNotes, requireControlStaffForMutation } from '@/lib/control-auth';
 import { safeReturnPath, withRedirectParam } from '@/lib/safe-return-path';
 
 function returnPathFromForm(formData: FormData) {
@@ -52,7 +52,7 @@ async function ensureProfile(businessId: string) {
 }
 
 export async function assignScaleAgentAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canWriteNotes(staff.role)) {
     redirectError(formData, 'Permission denied');
   }
@@ -120,7 +120,7 @@ function parseFollowUpDate(raw: string) {
 }
 
 export async function updateScaleReferralAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canWriteNotes(staff.role)) {
     redirectError(formData, 'Permission denied');
   }
@@ -182,7 +182,7 @@ export async function updateScaleReferralAction(formData: FormData) {
 }
 
 export async function markReferralStatusAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canWriteNotes(staff.role)) {
     redirectError(formData, 'Permission denied');
   }
@@ -213,7 +213,7 @@ export async function markReferralStatusAction(formData: FormData) {
 }
 
 export async function addScaleSupportNoteAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canWriteNotes(staff.role)) {
     redirectError(formData, 'Permission denied');
   }
@@ -247,7 +247,7 @@ export async function addScaleSupportNoteAction(formData: FormData) {
 }
 
 export async function markScaleSetupCallAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canWriteNotes(staff.role)) redirectError(formData, 'Permission denied');
 
   const businessId = String(formData.get('businessId') ?? '').trim();
@@ -274,7 +274,7 @@ export async function markScaleSetupCallAction(formData: FormData) {
 }
 
 export async function markScaleFirstSaleAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canWriteNotes(staff.role)) redirectError(formData, 'Permission denied');
 
   const businessId = String(formData.get('businessId') ?? '').trim();
@@ -298,7 +298,7 @@ export async function markScaleFirstSaleAction(formData: FormData) {
 }
 
 export async function markScalePaymentFollowUpAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canWriteNotes(staff.role)) redirectError(formData, 'Permission denied');
 
   const businessId = String(formData.get('businessId') ?? '').trim();
@@ -325,7 +325,7 @@ export async function markScalePaymentFollowUpAction(formData: FormData) {
 }
 
 export async function extendScaleTrialGraceAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canManageSubscriptions(staff.role)) {
     redirectError(formData, 'Permission denied');
   }

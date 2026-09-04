@@ -9,6 +9,12 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  assertLoopbackDestructiveTarget,
+  assertNoForceEscapeHatch,
+  classifyDatabaseUrl,
+  redactDatabaseText,
+} from '../tishgroup-control/scripts/lib/database-target.mjs';
 
 const require = createRequire(import.meta.url);
 const { Client } = require('pg');
@@ -18,17 +24,9 @@ const migrationsDir = join(root, 'prisma', 'migrations');
 const phase0Name = '20260904160000_control_staff_auth_and_audit';
 const phase0Sql = readFileSync(join(migrationsDir, phase0Name, 'migration.sql'), 'utf8');
 
-function classifyDatabaseUrl(url) {
-  if (!url) return 'missing';
-  try {
-    const parsed = new URL(url.replace(/^prisma\+/, ''));
-    const hostname = parsed.hostname.toLowerCase();
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return 'loopback';
-    if (hostname === 'postgres' || hostname === 'db' || hostname.endsWith('.local')) return 'local-network';
-    return 'remote';
-  } catch {
-    return 'unparseable';
-  }
+function failClosed(message) {
+  console.error(redactDatabaseText(message));
+  process.exit(1);
 }
 
 function sourceUrl() {
@@ -56,6 +54,7 @@ async function withClient(url, fn) {
 }
 
 async function recreateDatabase(adminUrl, name) {
+  assertLoopbackDestructiveTarget(adminUrl, name);
   await withClient(adminUrl, async (client) => {
     await client.query(`DROP DATABASE IF EXISTS ${name}`);
     await client.query(`CREATE DATABASE ${name}`);
@@ -145,11 +144,19 @@ CREATE TABLE IF NOT EXISTS "ControlAuditLog" (
 `;
 
 async function main() {
+  try {
+    assertNoForceEscapeHatch(process.argv, process.env);
+  } catch (error) {
+    failClosed(error instanceof Error ? error.message : 'Force flag refused.');
+  }
+
   const url = sourceUrl();
   const classification = classifyDatabaseUrl(url);
-  if (classification !== 'loopback' && classification !== 'local-network' && process.env.CONTROL_PREVIEW_ISOLATED_DB !== '1') {
-    console.error('PHASE 0 BLOCKED — ISOLATED PREVIEW DATABASE REQUIRED');
-    process.exit(1);
+  if (classification !== 'loopback') {
+    failClosed('PHASE 0 BLOCKED — DESTRUCTIVE MIGRATION VALIDATION IS LOOPBACK-ONLY');
+  }
+  if (process.env.CONTROL_PREVIEW_ISOLATED_DB === '1' && classification !== 'loopback') {
+    failClosed('CONTROL_PREVIEW_ISOLATED_DB cannot authorise remote DROP or reset.');
   }
 
   const adminUrl = maintenanceUrl(url);

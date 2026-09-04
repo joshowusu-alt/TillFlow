@@ -12,7 +12,7 @@ import {
   MIN_CONTROL_PASSWORD_LENGTH,
   nextSessionVersion,
   parseControlStaffRole,
-  requireControlStaff,
+  requireControlStaffForMutation,
 } from '@/lib/control-auth';
 import { planRates, type ManagedPlan } from '@/lib/control-data';
 import {
@@ -372,7 +372,7 @@ function ensureRole(condition: boolean, fallbackMessage: string, businessId: str
 }
 
 export async function updateControlSubscriptionAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const businessId = readRequired(formData, 'businessId');
   const returnPath = readReturnPath(formData, `/businesses/${businessId}`);
   ensureRole(canManageSubscriptions(staff.role), 'Your Control role cannot change subscriptions.', businessId);
@@ -562,7 +562,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
 }
 
 export async function recordControlPaymentAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const businessId = readRequired(formData, 'businessId');
   ensureRole(canRecordPayments(staff.role), 'Your Control role cannot record payments.', businessId);
 
@@ -751,7 +751,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
   redirect(`/businesses/${businessId}?updated=payment`);
 }
 export async function addControlNoteAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const businessId = readRequired(formData, 'businessId');
   ensureRole(canWriteNotes(staff.role), 'Your Control role cannot add internal notes.', businessId);
 
@@ -804,7 +804,7 @@ export async function addControlNoteAction(formData: FormData): Promise<void> {
 }
 
 export async function resendSubscriptionReminderAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const businessId = readRequired(formData, 'businessId');
   const reminderId = readRequired(formData, 'reminderId');
   ensureRole(canRecordPayments(staff.role) || canManageSubscriptions(staff.role), 'Your Control role cannot resend subscription reminders.', businessId);
@@ -854,7 +854,7 @@ export async function resendSubscriptionReminderAction(formData: FormData): Prom
 }
 
 export async function reviewControlBusinessAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const businessId = readRequired(formData, 'businessId');
   ensureRole(canWriteNotes(staff.role), 'Your Control role cannot review businesses.', businessId);
 
@@ -925,7 +925,7 @@ export async function reviewControlBusinessAction(formData: FormData): Promise<v
 }
 
 export async function reopenControlBusinessReviewAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const businessId = readRequired(formData, 'businessId');
   ensureRole(canWriteNotes(staff.role), 'Your Control role cannot reopen business reviews.', businessId);
 
@@ -973,7 +973,7 @@ export async function reopenControlBusinessReviewAction(formData: FormData): Pro
 }
 
 export async function createControlStaffAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canManageStaff(staff.role)) {
     redirect('/staff?error=Only TG control admins can manage staff accounts.');
   }
@@ -1028,7 +1028,7 @@ export async function createControlStaffAction(formData: FormData): Promise<void
 }
 
 export async function toggleControlStaffAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canManageStaff(staff.role)) {
     redirect('/staff?error=Only TG control admins can manage staff accounts.');
   }
@@ -1079,7 +1079,7 @@ export async function toggleControlStaffAction(formData: FormData): Promise<void
 }
 
 export async function bulkReviewControlBusinessesAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const returnPath = readReturnPath(formData, '/businesses?filter=unreviewed');
   if (!canWriteNotes(staff.role)) {
     redirect(withRedirectParam(returnPath, 'error', 'Your TG role cannot bulk review businesses.'));
@@ -1170,7 +1170,7 @@ export async function bulkReviewControlBusinessesAction(formData: FormData): Pro
 }
 
 export async function bulkRemindDueSoonAction(): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   ensureRole(canRecordPayments(staff.role) || canManageSubscriptions(staff.role), 'Your Control role cannot send subscription reminders.', null);
 
   const DUE_SOON_STATES = ['RENEWAL_DUE_SOON', 'PAYMENT_DUE_TODAY', 'TRIAL_DUE_SOON', 'TRIAL_DUE_TODAY'];

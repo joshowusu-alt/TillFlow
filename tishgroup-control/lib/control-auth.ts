@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
+import { assertControlMutationsAllowed } from '@/lib/control-maintenance';
 
 export const dynamic = 'force-dynamic';
 
@@ -213,6 +214,12 @@ export async function requireControlStaff(roles?: ControlStaffRole[]) {
     redirect('/');
   }
 
+  return staff;
+}
+
+export async function requireControlStaffForMutation(roles?: ControlStaffRole[]) {
+  const staff = await requireControlStaff(roles);
+  assertControlMutationsAllowed();
   return staff;
 }
 

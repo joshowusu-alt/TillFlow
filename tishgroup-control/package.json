@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/sync-vendor-libs.mjs && prisma generate && node scripts/assert-no-build-ddl.mjs && node scripts/auth-cutover-preflight.mjs --if-production && next build",
+    "build": "node scripts/write-build-identity.mjs && node scripts/sync-vendor-libs.mjs && prisma generate && node scripts/assert-no-build-ddl.mjs && node scripts/auth-cutover-preflight.mjs --if-production && next build",
     "db:generate": "prisma generate",
     "typecheck": "tsc --noEmit",
     "auth:cutover-preflight": "node scripts/auth-cutover-preflight.mjs",

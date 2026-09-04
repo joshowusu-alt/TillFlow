@@ -79,18 +79,32 @@ function createHarness(options: { failOn?: 'audit' | 'staff'; rows?: CutoverStaf
 const previewEnv = {
   CONTROL_PASSWORD_CUTOVER_ENV: 'preview',
   CONTROL_PREVIEW_ISOLATED_DB: '1',
+  CONTROL_DISPOSABLE_MODE: '1',
+  CONTROL_DISPOSABLE_SENTINEL_LABEL: 'tishgroup-phase0-preview',
+  CONTROL_PASSWORD_CUTOVER_HOST_PREFIX: 'ep-old-sunset-za6o0nyo',
+  CONTROL_PASSWORD_CUTOVER_DATABASE: 'tillflow_preview',
+  CONTROL_PASSWORD_CUTOVER_USER: 'tillflow_preview_app',
 };
 const productionEnv = {
   CONTROL_PASSWORD_CUTOVER: '1',
   CONTROL_PASSWORD_CUTOVER_ENV: 'production',
+  CONTROL_PASSWORD_CUTOVER_HOST_PREFIX: 'ep-fancy-darkness-abyuvjxt',
+  CONTROL_PASSWORD_CUTOVER_DATABASE: 'neondb',
+  CONTROL_PASSWORD_CUTOVER_USER: 'neondb_owner',
 };
+const productionUrl = 'postgresql://neondb_owner:x@ep-fancy-darkness-abyuvjxt.example.test/neondb';
+const previewUrl = 'postgresql://tillflow_preview_app:x@ep-old-sunset-za6o0nyo.neon.example.test/tillflow_preview';
+const loopbackUrl = 'postgresql://postgres:postgres@127.0.0.1:5432/tishgroup_ci';
 
 describe('password cutover environment gates', () => {
   it('refuses Production mode without the cutover flag', () => {
     expect(() => assertPasswordCutoverEnvironment({
       mode: 'production',
-      env: { CONTROL_PASSWORD_CUTOVER_ENV: 'production' },
-      databaseUrl: 'postgresql://user:x@ep-blue-rain-example.neon.tech/neondb',
+      env: { ...productionEnv, CONTROL_PASSWORD_CUTOVER: '0' },
+      databaseUrl: productionUrl,
+      expectedHostPrefix: productionEnv.CONTROL_PASSWORD_CUTOVER_HOST_PREFIX,
+      expectedDatabase: productionEnv.CONTROL_PASSWORD_CUTOVER_DATABASE,
+      expectedUser: productionEnv.CONTROL_PASSWORD_CUTOVER_USER,
     })).toThrow(/CONTROL_PASSWORD_CUTOVER=1/);
   });
 
@@ -98,15 +112,21 @@ describe('password cutover environment gates', () => {
     expect(() => assertPasswordCutoverEnvironment({
       mode: 'production',
       env: productionEnv,
-      databaseUrl: 'postgresql://user:x@ep-old-sunset-za6o0nyo.neon.tech/neondb',
-    })).toThrow(/isolated Preview database/);
+      databaseUrl: previewUrl,
+      expectedHostPrefix: previewEnv.CONTROL_PASSWORD_CUTOVER_HOST_PREFIX,
+      expectedDatabase: previewEnv.CONTROL_PASSWORD_CUTOVER_DATABASE,
+      expectedUser: previewEnv.CONTROL_PASSWORD_CUTOVER_USER,
+    })).toThrow(/not the allowlisted Production fingerprint|isolated Preview database/);
   });
 
   it('refuses Production when Preview mode is requested', () => {
     expect(() => assertPasswordCutoverEnvironment({
       mode: 'preview',
       env: previewEnv,
-      databaseUrl: 'postgresql://user:x@ep-blue-rain-example.neon.tech/neondb',
+      databaseUrl: productionUrl,
+      expectedHostPrefix: productionEnv.CONTROL_PASSWORD_CUTOVER_HOST_PREFIX,
+      expectedDatabase: productionEnv.CONTROL_PASSWORD_CUTOVER_DATABASE,
+      expectedUser: productionEnv.CONTROL_PASSWORD_CUTOVER_USER,
     })).toThrow(/Production database cannot be used in Preview mode/);
   });
 
@@ -114,16 +134,37 @@ describe('password cutover environment gates', () => {
     expect(() => assertPasswordCutoverEnvironment({
       mode: 'preview',
       env: previewEnv,
-      databaseUrl: 'postgresql://user:x@ep-old-sunset-za6o0nyo.neon.tech/neondb',
+      databaseUrl: previewUrl,
+      expectedHostPrefix: previewEnv.CONTROL_PASSWORD_CUTOVER_HOST_PREFIX,
+      expectedDatabase: previewEnv.CONTROL_PASSWORD_CUTOVER_DATABASE,
+      expectedUser: previewEnv.CONTROL_PASSWORD_CUTOVER_USER,
     })).not.toThrow();
   });
 
   it('allows Preview rehearsal on loopback', () => {
     expect(() => assertPasswordCutoverEnvironment({
       mode: 'preview',
-      env: previewEnv,
-      databaseUrl: 'postgresql://postgres:postgres@127.0.0.1:5432/tishgroup_ci',
+      env: {
+        CONTROL_PASSWORD_CUTOVER_ENV: 'preview',
+        CONTROL_PREVIEW_ISOLATED_DB: '1',
+      },
+      databaseUrl: loopbackUrl,
+      expectedHostPrefix: '127.0.0.1',
+      expectedDatabase: 'tishgroup_ci',
+      expectedUser: 'postgres',
     })).not.toThrow();
+  });
+
+  it('refuses --force even with a matching Production fingerprint', () => {
+    expect(() => assertPasswordCutoverEnvironment({
+      mode: 'production',
+      env: productionEnv,
+      databaseUrl: productionUrl,
+      expectedHostPrefix: productionEnv.CONTROL_PASSWORD_CUTOVER_HOST_PREFIX,
+      expectedDatabase: productionEnv.CONTROL_PASSWORD_CUTOVER_DATABASE,
+      expectedUser: productionEnv.CONTROL_PASSWORD_CUTOVER_USER,
+      argv: ['node', 'script.mjs', '--force'],
+    })).toThrow(/force/);
   });
 });
 
@@ -257,13 +298,21 @@ describe('password cutover CLI', () => {
     CONTROL_PASSWORD_CUTOVER: '0',
     CONTROL_PASSWORD_CUTOVER_ENV: 'production',
     CONTROL_PREVIEW_ISOLATED_DB: '0',
-    DATABASE_URL: 'postgresql://postgres:postgres@127.0.0.1:5432/tishgroup_ci',
-    POSTGRES_PRISMA_URL: 'postgresql://postgres:postgres@127.0.0.1:5432/tishgroup_ci',
-    POSTGRES_URL_NON_POOLING: 'postgresql://postgres:postgres@127.0.0.1:5432/tishgroup_ci',
+    DATABASE_URL: productionUrl,
+    POSTGRES_PRISMA_URL: productionUrl,
+    POSTGRES_URL_NON_POOLING: productionUrl,
   };
 
   it('refuses missing Production cutover flag', async () => {
-    await expect(execFileAsync('node', [script, '--mode', 'production', '--staff-id', 'staff-1', '--dry-run'], {
+    await expect(execFileAsync('node', [
+      script,
+      '--mode', 'production',
+      '--staff-id', 'staff-1',
+      '--expected-host-prefix', 'ep-fancy-darkness-abyuvjxt',
+      '--expected-database', 'neondb',
+      '--expected-user', 'neondb_owner',
+      '--dry-run',
+    ], {
       env: baseEnv,
       timeout: 15_000,
     })).rejects.toMatchObject({
@@ -274,7 +323,14 @@ describe('password cutover CLI', () => {
   it('refuses password arguments and does not echo them', async () => {
     try {
       await execFileAsync('node', [script, '--mode', 'preview', '--staff-id', 'staff-1', '--password=CorrectHorse1!'], {
-        env: { ...baseEnv, CONTROL_PASSWORD_CUTOVER_ENV: 'preview', CONTROL_PREVIEW_ISOLATED_DB: '1' },
+        env: {
+          ...baseEnv,
+          CONTROL_PASSWORD_CUTOVER_ENV: 'preview',
+          CONTROL_PREVIEW_ISOLATED_DB: '1',
+          DATABASE_URL: loopbackUrl,
+          POSTGRES_PRISMA_URL: loopbackUrl,
+          POSTGRES_URL_NON_POOLING: loopbackUrl,
+        },
         timeout: 15_000,
       });
       throw new Error('expected refusal');
@@ -284,5 +340,23 @@ describe('password cutover CLI', () => {
       expect(err.stderr).not.toContain('CorrectHorse1!');
       expect(err.stdout ?? '').not.toContain('CorrectHorse1!');
     }
+  });
+
+  it('refuses --force', async () => {
+    await expect(execFileAsync('node', [
+      script,
+      '--mode', 'production',
+      '--staff-id', 'staff-1',
+      '--force',
+      '--expected-host-prefix', 'ep-fancy-darkness-abyuvjxt',
+      '--expected-database', 'neondb',
+      '--expected-user', 'neondb_owner',
+      '--dry-run',
+    ], {
+      env: { ...baseEnv, CONTROL_PASSWORD_CUTOVER: '1' },
+      timeout: 15_000,
+    })).rejects.toMatchObject({
+      stderr: expect.stringMatching(/force/),
+    });
   });
 });

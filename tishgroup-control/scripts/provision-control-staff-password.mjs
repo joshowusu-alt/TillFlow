@@ -4,11 +4,22 @@
  *
  * Preview rehearsal:
  *   CONTROL_PASSWORD_CUTOVER_ENV=preview CONTROL_PREVIEW_ISOLATED_DB=1 \
- *     node scripts/provision-control-staff-password.mjs --mode preview --staff-id <STAFF_ID> --dry-run
+ *   CONTROL_DISPOSABLE_MODE=1 CONTROL_DISPOSABLE_SENTINEL_LABEL=tishgroup-phase0-preview \
+ *   CONTROL_PASSWORD_CUTOVER_HOST_PREFIX=ep-old-sunset-za6o0nyo \
+ *   CONTROL_PASSWORD_CUTOVER_DATABASE=tillflow_preview \
+ *   CONTROL_PASSWORD_CUTOVER_USER=tillflow_preview_app \
+ *     node scripts/provision-control-staff-password.mjs --mode preview --staff-id <STAFF_ID> \
+ *     --expected-host-prefix ep-old-sunset-za6o0nyo --expected-database tillflow_preview \
+ *     --expected-user tillflow_preview_app --confirm-target tishgroup-phase0-preview --dry-run
  *
  * Production (after owner authorisation):
  *   CONTROL_PASSWORD_CUTOVER=1 CONTROL_PASSWORD_CUTOVER_ENV=production \
- *     node scripts/provision-control-staff-password.mjs --mode production --staff-id <STAFF_ID> --confirm <STAFF_ID>
+ *   CONTROL_PASSWORD_CUTOVER_HOST_PREFIX=ep-fancy-darkness-abyuvjxt \
+ *   CONTROL_PASSWORD_CUTOVER_DATABASE=neondb \
+ *   CONTROL_PASSWORD_CUTOVER_USER=neondb_owner \
+ *     node scripts/provision-control-staff-password.mjs --mode production --staff-id <STAFF_ID> \
+ *     --expected-host-prefix ep-fancy-darkness-abyuvjxt --expected-database neondb \
+ *     --expected-user neondb_owner --confirm <STAFF_ID> --confirm-target ep-fancy-darkness-abyuvjxt
  */
 import { stdin as input, stderr, stdout } from 'node:process';
 import { PrismaClient } from '@prisma/client';
@@ -16,10 +27,19 @@ import bcrypt from 'bcryptjs';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  DISPOSABLE_SENTINEL_ID,
+  DISPOSABLE_SENTINEL_LABEL,
+  ISOLATED_PREVIEW_FINGERPRINT,
+  PRODUCTION_FINGERPRINT,
+  assertNoForceEscapeHatch,
+  assertPasswordCutoverTarget,
+  assertTypedConfirmation,
+  redactDatabaseText,
+} from './lib/database-target.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '..');
-const ISOLATED_PREVIEW_HOST_PREFIXES = ['ep-old-sunset-za6o0nyo'];
 const MIN_PASSWORD_LENGTH = 12;
 const ALLOWED_ROLES = ['CONTROL_ADMIN', 'ACCOUNT_MANAGER', 'COLLECTIONS_AGENT', 'SUPPORT_AGENT'];
 const WEAK_PASSWORD_FRAGMENTS = ['password', 'tillflow', 'tishgroup', '123456789012', 'qwertyuiopas'];
@@ -36,15 +56,8 @@ for (const envFile of ['.env.production.local', '.env.local', '.env']) {
 }
 
 function fail(message) {
-  stderr.write(`${redact(message)}\n`);
+  stderr.write(`${redactDatabaseText(message)}\n`);
   process.exit(1);
-}
-
-function redact(value) {
-  return String(value)
-    .replace(/\$2[aby]\$\d{2}\$[A-Za-z0-9./]{22,}/g, '[redacted-hash]')
-    .replace(/password[=:]\s*\S+/gi, 'password=[redacted]')
-    .replace(/postgres(?:ql)?:\/\/[^\s]+/gi, '[redacted-db]');
 }
 
 if (process.argv.some((arg) => /^--(password|secret|hash|dsn|database-url)=?/i.test(arg))) {
@@ -60,71 +73,6 @@ function argValue(name) {
     return process.argv[index + 1];
   }
   return null;
-}
-
-function classifyDatabaseUrl(url) {
-  if (!url) return 'missing';
-  try {
-    const parsed = new URL(url.replace(/^prisma\+/, ''));
-    const hostname = parsed.hostname.toLowerCase();
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return 'loopback';
-    if (hostname === 'postgres' || hostname === 'db' || hostname.endsWith('.local')) return 'local-network';
-    return 'remote';
-  } catch {
-    return 'unparseable';
-  }
-}
-
-function databaseHostPrefix(url) {
-  if (!url) return null;
-  try {
-    return new URL(url.replace(/^prisma\+/, '')).hostname.toLowerCase().split('.')[0] || null;
-  } catch {
-    return null;
-  }
-}
-
-function isIsolatedPreviewHost(url) {
-  const prefix = databaseHostPrefix(url);
-  if (!prefix) return false;
-  return ISOLATED_PREVIEW_HOST_PREFIXES.some((known) => prefix.startsWith(known) || known.startsWith(prefix));
-}
-
-function assertEnvironment(mode, databaseUrl) {
-  const classification = classifyDatabaseUrl(databaseUrl);
-  const isolatedFlag = process.env.CONTROL_PREVIEW_ISOLATED_DB === '1';
-  const cutoverFlag = process.env.CONTROL_PASSWORD_CUTOVER === '1';
-  const declaredEnv = String(process.env.CONTROL_PASSWORD_CUTOVER_ENV ?? '').trim().toLowerCase();
-
-  if (classification === 'missing' || classification === 'unparseable') {
-    throw new Error('Database identity could not be proven. Refusing password cutover.');
-  }
-
-  if (mode === 'production') {
-    if (!cutoverFlag) {
-      throw new Error('Refusing: CONTROL_PASSWORD_CUTOVER=1 is required for Production password provisioning.');
-    }
-    if (declaredEnv !== 'production') {
-      throw new Error('Refusing: CONTROL_PASSWORD_CUTOVER_ENV=production is required for Production mode.');
-    }
-    if (isolatedFlag || isIsolatedPreviewHost(databaseUrl)) {
-      throw new Error('Refusing: isolated Preview database cannot be used in Production mode.');
-    }
-    if (classification !== 'remote') {
-      throw new Error('Refusing: Production password cutover requires a proven remote Production database.');
-    }
-    return;
-  }
-
-  if (declaredEnv !== 'preview') {
-    throw new Error('Refusing: CONTROL_PASSWORD_CUTOVER_ENV=preview is required for Preview rehearsal.');
-  }
-  if (!isolatedFlag) {
-    throw new Error('Refusing: Preview password cutover requires CONTROL_PREVIEW_ISOLATED_DB=1.');
-  }
-  if (classification === 'loopback' || classification === 'local-network') return;
-  if (classification === 'remote' && isIsolatedPreviewHost(databaseUrl)) return;
-  throw new Error('Refusing: Production database cannot be used in Preview mode.');
 }
 
 function validatePassword(password, email) {
@@ -147,13 +95,23 @@ function validatePassword(password, email) {
   }
 }
 
+try {
+  assertNoForceEscapeHatch(process.argv, process.env);
+} catch (error) {
+  fail(error instanceof Error ? error.message : 'Force flag refused.');
+}
+
 const dryRun = process.argv.includes('--dry-run');
 const mode = argValue('--mode');
 const staffId = argValue('--staff-id');
 const confirmation = argValue('--confirm');
+const confirmTarget = argValue('--confirm-target');
+const expectedHostPrefix = argValue('--expected-host-prefix');
+const expectedDatabase = argValue('--expected-database');
+const expectedUser = argValue('--expected-user');
 
 if (mode !== 'production' && mode !== 'preview') {
-  fail('Usage: --mode production|preview --staff-id <id> [--confirm <id>] [--dry-run]');
+  fail('Usage: --mode production|preview --staff-id <id> --expected-host-prefix <prefix> --expected-database <name> --expected-user <user> [--confirm <id>] [--confirm-target <id>] [--dry-run]');
 }
 if (!staffId) {
   fail('Refusing: --staff-id is required.');
@@ -161,10 +119,30 @@ if (!staffId) {
 
 const databaseUrl = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_PRISMA_URL || process.env.DATABASE_URL || '';
 
+let identity;
 try {
-  assertEnvironment(mode, databaseUrl);
+  identity = assertPasswordCutoverTarget({
+    mode,
+    env: process.env,
+    databaseUrl,
+    expectedHostPrefix,
+    expectedDatabase,
+    expectedUser,
+  });
 } catch (error) {
   fail(error instanceof Error ? error.message : 'Environment refused.');
+}
+
+if (!dryRun) {
+  try {
+    if (mode === 'production') {
+      assertTypedConfirmation(PRODUCTION_FINGERPRINT.hostPrefix, confirmTarget);
+    } else if (identity.classification === 'remote') {
+      assertTypedConfirmation(ISOLATED_PREVIEW_FINGERPRINT.branchLabel, confirmTarget);
+    }
+  } catch (error) {
+    fail(error instanceof Error ? error.message : 'Target confirmation refused.');
+  }
 }
 
 async function readPasswordFromStdin() {
@@ -210,11 +188,33 @@ async function readPasswordFromStdin() {
   });
 }
 
+async function loadDisposableSentinel(client) {
+  try {
+    const rows = await client.$queryRaw`
+      SELECT id, label FROM "_tishgroup_disposable_sentinel" WHERE id = ${DISPOSABLE_SENTINEL_ID}
+    `;
+    return Array.isArray(rows) && rows[0] ? rows[0] : null;
+  } catch {
+    return null;
+  }
+}
+
 const prisma = new PrismaClient({
   datasources: { db: { url: databaseUrl } },
 });
 
 try {
+  if (identity.classification === 'remote') {
+    const sentinel = await loadDisposableSentinel(prisma);
+    if (mode === 'production') {
+      if (sentinel) {
+        throw new Error('Refusing: Production mode cannot target a disposable database.');
+      }
+    } else if (!sentinel || sentinel.label !== DISPOSABLE_SENTINEL_LABEL) {
+      throw new Error('Refusing: disposable sentinel is missing or does not match the allowlisted Preview branch.');
+    }
+  }
+
   const staffRows = await prisma.controlStaff.findMany({
     where: { id: staffId },
     select: { id: true, role: true, active: true, passwordHash: true, sessionVersion: true, email: true },
@@ -227,14 +227,18 @@ try {
   if (!ALLOWED_ROLES.includes(loaded.role)) throw new Error('Disallowed staff role.');
 
   const hadPassword = typeof loaded.passwordHash === 'string' && loaded.passwordHash.length > 0;
+  stdout.write(`${JSON.stringify({
+    step: 'dry-run',
+    dryRun: true,
+    role: loaded.role,
+    active: loaded.active,
+    hasPassword: hadPassword,
+    count: 1,
+    hostPrefix: identity.hostPrefix,
+    databaseName: identity.databaseName,
+  })}\n`);
+
   if (dryRun) {
-    stdout.write(`${JSON.stringify({
-      dryRun: true,
-      role: loaded.role,
-      active: loaded.active,
-      hasPassword: hadPassword,
-      count: 1,
-    })}\n`);
     process.exitCode = 0;
   } else {
     if (!confirmation || confirmation !== staffId) {
@@ -283,6 +287,7 @@ try {
     });
 
     stdout.write(`${JSON.stringify({
+      step: 'applied',
       dryRun: false,
       role: result.role,
       sessionVersion: result.sessionVersion,

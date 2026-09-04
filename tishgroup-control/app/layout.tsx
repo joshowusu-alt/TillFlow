@@ -7,6 +7,7 @@ import InstallPrompt from '@/components/InstallPrompt';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import Toast from '@/components/toast';
 import { getControlStaffOptional } from '@/lib/control-auth';
+import { isControlMaintenanceMode } from '@/lib/control-maintenance';
 import { listManagedPortfolio } from '@/lib/control-service';
 import { getPortfolioSummaryFor, getCollectionQueuesFor } from '@/lib/control-metrics';
 import { portfolioAvailabilityMessage } from '@/lib/control-data';
@@ -56,6 +57,7 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const staff = await getControlStaffOptional();
+  const maintenance = isControlMaintenanceMode();
 
   let navCounts: { urgent: number; collections: number; unreviewed: number } | undefined;
   let portfolioError: string | null = null;
@@ -90,8 +92,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <ServiceWorkerRegistration />
         <InstallPrompt />
         <Suspense fallback={null}><Toast /></Suspense>
+        {maintenance ? (
+          <div role="status" className="border-b border-amber-300/80 bg-amber-50 px-4 py-3 text-center text-sm text-control-ink">
+            Changes are temporarily disabled. You can still sign in with a personal password. Commercial, staff, support, payment, and subscription updates are blocked.
+          </div>
+        ) : null}
         {staff ? (
-          <ControlShell staff={staff} navCounts={navCounts}>
+          <ControlShell staff={staff} navCounts={navCounts} maintenance={maintenance}>
             {portfolioError ? (
               <div className="mb-4 rounded-2xl border border-control-ember/20 bg-control-ember/8 px-4 py-3 text-sm text-control-ink">
                 {portfolioError}

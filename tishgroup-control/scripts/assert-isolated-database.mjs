@@ -1,32 +1,31 @@
 /**
- * Fail closed unless DATABASE_URL is a loopback/local test database,
- * or the operator has explicitly marked a proven isolated clone.
+ * Fail closed unless DATABASE_URL is loopback, or a proven isolated Preview
+ * fingerprint. CONTROL_PREVIEW_ISOLATED_DB=1 is not enough for an unknown host.
  * Never prints the connection string.
  */
-function classifyDatabaseUrl(url) {
-  if (!url) return 'missing';
-  try {
-    const normalized = url.replace(/^prisma\+/, '');
-    const parsed = new URL(normalized);
-    const hostname = parsed.hostname.toLowerCase();
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return 'loopback';
-    if (hostname === 'postgres' || hostname === 'db' || hostname.endsWith('.local')) return 'local-network';
-    return 'remote';
-  } catch {
-    return 'unparseable';
-  }
-}
+import {
+  classifyDatabaseUrl,
+  isIsolatedPreviewFingerprint,
+  isProductionFingerprint,
+  parseDatabaseIdentity,
+} from './lib/database-target.mjs';
 
 const url = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_PRISMA_URL || process.env.DATABASE_URL || '';
+const identity = parseDatabaseIdentity(url);
 const classification = classifyDatabaseUrl(url);
 
-if (process.env.CONTROL_PREVIEW_ISOLATED_DB === '1' && classification !== 'missing') {
-  console.log('assert-isolated-database: pass (operator marked isolated clone)');
+if (isProductionFingerprint(identity)) {
+  console.error('PHASE 0 BLOCKED — PRODUCTION DATABASE REFUSED');
+  process.exit(1);
+}
+
+if (classification === 'loopback' || (classification === 'local-network' && process.env.CONTROL_CI_DISPOSABLE_DB === '1')) {
+  console.log(`assert-isolated-database: pass (${classification})`);
   process.exit(0);
 }
 
-if (classification === 'loopback' || classification === 'local-network') {
-  console.log(`assert-isolated-database: pass (${classification})`);
+if (process.env.CONTROL_PREVIEW_ISOLATED_DB === '1' && isIsolatedPreviewFingerprint(identity)) {
+  console.log('assert-isolated-database: pass (isolated preview fingerprint)');
   process.exit(0);
 }
 

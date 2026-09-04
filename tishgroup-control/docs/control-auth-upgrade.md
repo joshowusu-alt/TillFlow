@@ -42,28 +42,52 @@ TishGroup Production alias to the new application. It is not a public
 route. Passwords must be typed at a hidden prompt or piped on stdin —
 never as command arguments, env vars, or files in this repo.
 
+A boolean isolated flag is never enough. Production mode requires the
+exact Production fingerprint. Preview mode requires disposable mode, the
+isolated fingerprint, and a database-side sentinel. There is no `--force`.
+
 Preview rehearsal (isolated clone only):
 
 ```bash
-CONTROL_PASSWORD_CUTOVER_ENV=preview CONTROL_PREVIEW_ISOLATED_DB=1 \
+CONTROL_PASSWORD_CUTOVER_ENV=preview \
+CONTROL_PREVIEW_ISOLATED_DB=1 \
+CONTROL_DISPOSABLE_MODE=1 \
+CONTROL_DISPOSABLE_SENTINEL_LABEL=tishgroup-phase0-preview \
+CONTROL_PASSWORD_CUTOVER_HOST_PREFIX=ep-old-sunset-za6o0nyo \
+CONTROL_PASSWORD_CUTOVER_DATABASE=tillflow_preview \
+CONTROL_PASSWORD_CUTOVER_USER=tillflow_preview_app \
   node scripts/provision-control-staff-password.mjs \
-  --mode preview --staff-id <STAFF_ID> --dry-run
-
-CONTROL_PASSWORD_CUTOVER_ENV=preview CONTROL_PREVIEW_ISOLATED_DB=1 \
-  node scripts/provision-control-staff-password.mjs \
-  --mode preview --staff-id <STAFF_ID> --confirm <STAFF_ID>
+  --mode preview --staff-id <STAFF_ID> \
+  --expected-host-prefix ep-old-sunset-za6o0nyo \
+  --expected-database tillflow_preview \
+  --expected-user tillflow_preview_app \
+  --confirm-target tishgroup-phase0-preview --dry-run
 ```
 
 Production (owner-authorised, one staff id at a time):
 
 ```bash
 CONTROL_PASSWORD_CUTOVER=1 CONTROL_PASSWORD_CUTOVER_ENV=production \
+CONTROL_PASSWORD_CUTOVER_HOST_PREFIX=ep-fancy-darkness-abyuvjxt \
+CONTROL_PASSWORD_CUTOVER_DATABASE=neondb \
+CONTROL_PASSWORD_CUTOVER_USER=neondb_owner \
   node scripts/provision-control-staff-password.mjs \
-  --mode production --staff-id <STAFF_ID> --dry-run
+  --mode production --staff-id <STAFF_ID> \
+  --expected-host-prefix ep-fancy-darkness-abyuvjxt \
+  --expected-database neondb \
+  --expected-user neondb_owner \
+  --confirm <STAFF_ID> --confirm-target ep-fancy-darkness-abyuvjxt --dry-run
 
 CONTROL_PASSWORD_CUTOVER=1 CONTROL_PASSWORD_CUTOVER_ENV=production \
+CONTROL_PASSWORD_CUTOVER_HOST_PREFIX=ep-fancy-darkness-abyuvjxt \
+CONTROL_PASSWORD_CUTOVER_DATABASE=neondb \
+CONTROL_PASSWORD_CUTOVER_USER=neondb_owner \
   node scripts/provision-control-staff-password.mjs \
-  --mode production --staff-id <STAFF_ID> --confirm <STAFF_ID>
+  --mode production --staff-id <STAFF_ID> \
+  --expected-host-prefix ep-fancy-darkness-abyuvjxt \
+  --expected-database neondb \
+  --expected-user neondb_owner \
+  --confirm <STAFF_ID> --confirm-target ep-fancy-darkness-abyuvjxt
 ```
 
 Then:
@@ -72,9 +96,22 @@ Then:
 CONTROL_ENFORCE_AUTH_CUTOVER=1 node scripts/auth-cutover-preflight.mjs
 ```
 
-The CLI refuses the isolated Preview database in Production mode and
-refuses Production in Preview mode. It does not create staff, change
-roles, or activate accounts.
+The CLI always prints a dry-run result before any write. It refuses
+Preview, CI, and unknown databases in Production mode, and refuses
+Production and unknown databases in Preview mode.
+
+## Safe rollback (maintenance / read-only)
+
+Set `CONTROL_MAINTENANCE_MODE=read-only` on the Phase 0 application.
+Personal login remains available. Shared-key authentication remains
+impossible. Commercial, staff, support, payment, subscription, and
+customer-visible mutations are denied in server actions. Cron/digest
+routes fail closed. `/api/health` remains available and does not expose
+secrets. Remove the variable or set it to `off` to restore normal Phase 0
+operation without dropping schema or repairing data.
+
+Do not restore the June 2026 TishGroup binary. That binary restores
+shared-key authentication.
 
 ## Remaining work
 

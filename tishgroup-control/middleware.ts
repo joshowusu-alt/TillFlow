@@ -8,6 +8,7 @@ const PUBLIC_PREFIXES = [
   '/offline',
   '/manifest.webmanifest',
   '/api/icon',
+  '/api/health',
   '/api/digest',
   '/api/cron',
 ];
