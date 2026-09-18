@@ -37,6 +37,14 @@ describe('selected-store mutation fail-closed', () => {
     expect(files.shifts).toContain('till: { store: { businessId } }');
   });
 
+  it('mutation pages use sole-or-selected store resolution, not stores[0] fallback', () => {
+    expect(read('app/(protected)/purchases/page.tsx')).toContain('resolveSoleOrSelectedStoreId');
+    expect(read('app/(protected)/expenses/page.tsx')).toContain('resolveSoleOrSelectedStoreId');
+    expect(read('app/(protected)/inventory/stocktake/page.tsx')).toContain('resolveSoleOrSelectedStoreId');
+    expect(read('app/(protected)/inventory/adjustments/page.tsx')).toContain('resolveSoleOrSelectedStoreId');
+    expect(read('app/(protected)/purchases/page.tsx')).not.toContain('stores[0]');
+  });
+
   it('never substitutes stores[0] or defaultStoreId on these write paths', () => {
     for (const source of Object.values(files)) {
       expect(source).not.toContain('defaultStoreId');

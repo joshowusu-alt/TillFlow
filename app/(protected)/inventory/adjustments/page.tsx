@@ -3,6 +3,7 @@ import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { getBusinessStores } from '@/lib/services/stores';
+import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 import SelectedStorePicker from '@/components/SelectedStorePicker';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { formatDateTime, formatMoney } from '@/lib/format';
@@ -58,7 +59,8 @@ export default async function StockAdjustmentsPage({
   if (!business) {
     return <div className="card p-6">Seed data missing.</div>;
   }
-  const { stores, selectedStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
+  const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
+  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
   const store = stores.find((item) => item.id === selectedStoreId) ?? null;
   if (!store) {
     return (

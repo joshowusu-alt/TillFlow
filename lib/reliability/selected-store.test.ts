@@ -6,10 +6,24 @@ import {
   assertRequestedStoreMatchesSource,
   assertSelectedStoreForBusiness,
   requireExplicitStoreId,
+  resolveSoleOrSelectedStoreId,
   resolveStoreFromTill,
 } from './selected-store';
 
 describe('selected store enforcement', () => {
+  it('uses the only store and never auto-selects the first of many', () => {
+    expect(resolveSoleOrSelectedStoreId([{ id: 'store-only' }])).toBe('store-only');
+    expect(
+      resolveSoleOrSelectedStoreId([{ id: 'store-a' }, { id: 'store-b' }]),
+    ).toBeNull();
+    expect(
+      resolveSoleOrSelectedStoreId([{ id: 'store-a' }, { id: 'store-b' }], 'store-b'),
+    ).toBe('store-b');
+    expect(
+      resolveSoleOrSelectedStoreId([{ id: 'store-a' }, { id: 'store-b' }], 'store-other'),
+    ).toBeNull();
+  });
+
   it('fails closed when storeId is missing or blank', () => {
     expect(() => requireExplicitStoreId(undefined)).toThrow(MISSING_STORE_CONTEXT_MSG);
     expect(() => requireExplicitStoreId('')).toThrow(MISSING_STORE_CONTEXT_MSG);
