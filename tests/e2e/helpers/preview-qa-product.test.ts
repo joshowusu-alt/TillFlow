@@ -253,8 +253,9 @@ describe('Reliability QA product identity', () => {
 
   it('does not treat hidden responsive product cards as the catalogue table', () => {
     const products = source('app/(protected)/products/page.tsx');
-    expect(products).toContain('lg:hidden');
+    expect(products).toContain('CompactMobileList');
     expect(products).toContain('hidden lg:block');
+    expect(source('components/CompactMobileList.tsx')).toContain('lg:hidden');
     expect(source('tests/e2e/helpers/preview-qa-product.ts')).toContain("getByRole('table')");
     expect(source('tests/e2e/helpers/preview-qa-product.ts')).toContain("locator('visible=true')");
   });

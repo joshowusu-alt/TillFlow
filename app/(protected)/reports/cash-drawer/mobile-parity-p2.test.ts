@@ -36,7 +36,7 @@ describe('P2 cash drawer mobile shift ledger', () => {
     expect(src).toContain('actualCashPence');
     expect(src).toContain('shift.variance');
     // Totals still come from server-side reduce over persisted shift values.
-    expect(src).toContain('shifts.reduce((sum, shift) => sum + shift.expectedCashPence, 0)');
+    expect(src).toContain('acceptedClosed.reduce((sum, shift) => sum + shift.expectedCashPence, 0)');
     expect(src).toContain("requireBusiness(['MANAGER', 'OWNER'])");
   });
 });

@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { formString, formInt } from '@/lib/form-helpers';
-import { withBusinessStoreContext, formAction, UserError } from '@/lib/action-utils';
+import { requireSelectedStoreContext, formAction, UserError } from '@/lib/action-utils';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
@@ -34,10 +34,10 @@ function mapAdjustmentError(error: unknown): never {
  */
 export async function createStockAdjustmentAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { user, businessId, storeId: defaultStoreId } =
-      await withBusinessStoreContext(['MANAGER', 'OWNER']);
-
-    const storeId = formString(formData, 'storeId') || defaultStoreId;
+    const { user, businessId, storeId } = await requireSelectedStoreContext(
+      ['MANAGER', 'OWNER'],
+      formString(formData, 'storeId'),
+    );
     const productId = formString(formData, 'productId');
     const unitId = formString(formData, 'unitId');
     const qtyInUnit = formInt(formData, 'qtyInUnit');
@@ -168,14 +168,10 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
 }
 
 /**
- * Automated reversal is unavailable (payload-safe compensating entries are
- * Owner-only opposite postings until a dedicated reversal workflow lands).
+ * Legacy export. Controlled Reverse lives in inventory-reversal.
+ * Kept so any leftover form post still hits the owner-only, once-only path.
  */
-export async function reverseStockAdjustmentAction(_formData: FormData): Promise<void> {
-  return formAction(async () => {
-    await withBusinessStoreContext(['OWNER']);
-    throw new UserError(
-      'Automated adjustment reversal is unavailable. Use an Owner-only opposite compensating adjustment with a link to the original record.',
-    );
-  }, '/inventory/adjustments');
+export async function reverseStockAdjustmentAction(formData: FormData): Promise<void> {
+  const { reverseInventoryAdjustmentAction } = await import('@/app/actions/inventory-reversal');
+  return reverseInventoryAdjustmentAction(formData);
 }

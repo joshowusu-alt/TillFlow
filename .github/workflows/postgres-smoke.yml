@@ -110,6 +110,7 @@ jobs:
       - name: Money received reporting PostgreSQL suite
         run: npx vitest run --reporter=dot lib/reports/money-received.pg.test.ts lib/reports/money-received-scale.pg.test.ts lib/reports/money-received-unknown-method.pg.test.ts lib/reports/money-received-store-scope.pg.test.ts
         env:
+          TILLFLOW_INCLUDE_PG_TESTS: '1'
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
           POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
 
@@ -119,6 +120,7 @@ jobs:
       - name: Migration P1 Slice 2B PostgreSQL service integration
         run: npx vitest run --reporter=dot lib/services/migration/slice2b-pg.integration.test.ts
         env:
+          TILLFLOW_INCLUDE_PG_TESTS: '1'
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
           POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
           MIGRATION_SLICE2B_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public

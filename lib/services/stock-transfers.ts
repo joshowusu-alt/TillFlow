@@ -10,6 +10,9 @@ export async function requestStockTransfer(input: {
   reason?: string | null;
   lines: { productId: string; qtyBase: number }[];
 }) {
+  if (!input.fromStoreId || input.fromStoreId === 'ALL' || !input.toStoreId || input.toStoreId === 'ALL') {
+    throw new Error('Transfer source and destination must be specific authorised branches.');
+  }
   if (input.fromStoreId === input.toStoreId) {
     throw new Error('Source and destination branches must be different.');
   }

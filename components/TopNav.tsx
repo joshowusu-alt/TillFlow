@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { refreshCurrentView } from '@/app/actions/refresh';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getFeatures, hasPlanAccess, type BusinessPlan, type StoreMode } from '@/lib/features';
@@ -21,6 +21,8 @@ import { OPEN_MOBILE_NAV_EVENT, MOBILE_NAV_STATE_EVENT } from './BottomTabBar';
 import { NAV_KPI_REFRESH_EVENT, type NavKpiRefreshDetail } from '@/lib/navigation/nav-kpi-events';
 import { mobileReportingScopeLabel } from '@/lib/navigation/mobile-scope-label';
 import { SHELL_COMPACT_LANDSCAPE_MQ, SHELL_LG_PX } from '@/lib/navigation/shell-layout';
+import { withOperationalStoreQuery } from '@/lib/reliability/operational-store';
+import OperationalStoreSwitcher, { type OperationalStoreOption } from './OperationalStoreSwitcher';
 
 export type TopNavUser = {
   name: string;
@@ -32,6 +34,8 @@ export default function TopNav({
   plan,
   storeMode,
   storeName,
+  storeId,
+  stores = [],
   businessName,
   merchantBranding,
   momoEnabled,
@@ -43,6 +47,8 @@ export default function TopNav({
   plan?: BusinessPlan;
   storeMode?: StoreMode;
   storeName?: string;
+  storeId?: string | null;
+  stores?: OperationalStoreOption[];
   businessName?: string;
   merchantBranding?: MerchantBrandProfile;
   momoEnabled?: boolean;
@@ -50,6 +56,8 @@ export default function TopNav({
   todaySales?: { totalPence: number; txCount: number; currency: string };
   onlineOrdersCount?: number;
 }){
+  const canSwitchStore = (user.role === 'OWNER' || user.role === 'MANAGER') && stores.length > 1;
+  const operationalHref = (href: string) => withOperationalStoreQuery(href, storeId);
   const pathname = usePathname() ?? '';
   // '/onboarding' is Home once setup is complete (and the Setup Guide entry point
   // beforehand). Either way it should read as "Home" here, not "Admin".
@@ -395,7 +403,7 @@ export default function TopNav({
                   return (
                     <Link
                       key={item.href}
-                      href={item.href}
+                      href={operationalHref(item.href)}
                       className={
                         active
                           ? 'shell-nav-link shell-nav-link-active min-h-10 gap-2'
@@ -418,7 +426,7 @@ export default function TopNav({
                 return (
                   <Link
                     key={item.href}
-                    href={item.href}
+                    href={operationalHref(item.href)}
                     className={
                       active
                         ? 'shell-nav-card-link shell-nav-card-link-active group min-h-[3.875rem]'
@@ -555,25 +563,23 @@ export default function TopNav({
                 Offline mode
               </span>
             )}
-            {(merchantBranding || storeName) ? (
-              <span
-                className="hidden h-9 items-center gap-2 rounded-xl border border-slate-200/80 bg-white/80 px-2.5 text-xs font-medium text-ink shadow-sm xl:inline-flex"
-                title={businessName ? `${businessName} · ${storeName ?? 'Main branch'}` : storeName}
-              >
-                {merchantBranding ? (
-                  <MerchantBrandBadge
-                    branding={merchantBranding}
-                    surface="admin-shell"
-                    className="!h-6 !w-6 !rounded-md"
-                  />
-                ) : (
-                  <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
-                )}
-                <span className="max-w-[10rem] truncate">
-                  {storeName || 'Main branch'}
-                </span>
-              </span>
-            ) : null}
+            <span className="hidden items-center gap-2 xl:inline-flex">
+              {merchantBranding ? (
+                <MerchantBrandBadge
+                  branding={merchantBranding}
+                  surface="admin-shell"
+                  className="!h-6 !w-6 !rounded-md"
+                />
+              ) : null}
+              <Suspense fallback={<span className="text-xs font-semibold text-ink">{storeName || 'Select branch'}</span>}>
+                <OperationalStoreSwitcher
+                  stores={stores}
+                  selectedStoreId={storeId}
+                  selectedStoreName={storeName}
+                  canSwitch={canSwitchStore}
+                />
+              </Suspense>
+            </span>
             <InstallButton />
             <NavTrustPanel user={user} storeName={storeName} isOnline={isOnline} todaySales={liveTodaySales} />
             <button
@@ -607,17 +613,19 @@ export default function TopNav({
           }`}
         >
           <div className="flex flex-nowrap items-center gap-x-2 overflow-x-clip">
-            <span
-              className="metric-chip"
-              title={
-                mobileScopeLabel === 'All branches'
-                  ? 'Figures shown in this header are across all branches'
-                  : 'Operational branch for this session'
-              }
-            >
-              <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
-              {mobileScopeLabel}
-            </span>
+            <Suspense fallback={<span className="text-xs font-semibold text-ink">{storeName || 'Select branch'}</span>}>
+              <OperationalStoreSwitcher
+                stores={stores}
+                selectedStoreId={storeId}
+                selectedStoreName={storeName}
+                canSwitch={canSwitchStore}
+              />
+            </Suspense>
+            {mobileScopeLabel === 'All branches' ? (
+              <span className="metric-chip" title="Figures shown in this header are across all branches">
+                Today · All branches
+              </span>
+            ) : null}
             <span className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
               {isOnline ? 'Sync ready' : 'Offline mode'}
             </span>

@@ -56,6 +56,9 @@ vi.mock('./shared', async () => {
     incrementInventoryBalanceQtyOnly: incrementInventoryBalanceQtyOnlyMock,
   };
 });
+vi.mock('@/lib/services/document-numbers', () => ({
+  reserveNextDocumentNumber: vi.fn().mockResolvedValue('ADJ-000001'),
+}));
 
 const BIZ = 'biz-1';
 const STORE = 'store-1';

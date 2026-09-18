@@ -27,6 +27,14 @@ async function fillVisiblePaymentForm(page, amount) {
   const record = page.getByRole('button', { name: /Record payment/i }).first();
   await record.waitFor({ state: 'visible', timeout: 20000 });
   const form = record.locator('xpath=ancestor::form[1]');
+  if ((await form.count()) === 0) {
+    await record.click();
+    const dialogForm = page.locator('form').filter({ has: page.locator('input[name="amount"]') }).last();
+    await dialogForm.locator('input[name="amount"]').waitFor({ state: 'visible', timeout: 20000 });
+    await dialogForm.locator('input[name="amount"]').fill(amount);
+    await dialogForm.getByRole('button', { name: /Record payment/i }).click();
+    return;
+  }
   await form.locator('input[name="amount"]').fill(amount);
   await record.click();
 }
@@ -383,6 +391,7 @@ async function run() {
     // working 6b/12 purchase below, so the purchase is created without a
     // cash-drawer dependency.
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
+    await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     // On success, createPurchaseAction redirects to the invoice detail page
     // (/purchases/{id}?created=1), not back to the list page, so wait for
@@ -418,6 +427,7 @@ async function run() {
     await page.getByRole('button', { name: /^Add line$/i }).click();
     await page.waitForTimeout(500);
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
+    await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
     step('6b/12 Create unpaid purchase OK');

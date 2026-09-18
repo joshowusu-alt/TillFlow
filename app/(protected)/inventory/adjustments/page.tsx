@@ -1,12 +1,18 @@
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
-import { requireBusinessStore } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import { getBusinessStores } from '@/lib/services/stores';
+import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
+import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
 import { isInventoryIncreasePhase2EnabledForBusiness } from '@/lib/inventory-increase-flag';
 import StockAdjustmentClient from '../StockAdjustmentClient';
+import ReverseStockAdjustmentForm from './ReverseStockAdjustmentForm';
+import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +31,7 @@ function AdjustmentsEmptyState({ q }: { q?: string }) {
       <div className="mt-1 text-sm text-black/55">
         {q
           ? 'Try a different search term.'
-          : 'Record a decrease for confirmed loss, or a controlled increase for physical-count surplus / found stock. Posted adjustments are immutable — never correct a decrease with another decrease.'}
+          : 'Record a decrease for confirmed loss, or a controlled increase for physical-count surplus / found stock. Posted adjustments are immutable — Owner Reverse posts the exact opposite movement.'}
       </div>
     </div>
   );
@@ -47,11 +53,24 @@ export default async function StockAdjustmentsPage({
     value?: string;
     cost?: string;
     replayed?: string;
+    storeId?: string;
   };
 }) {
-  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
-  if (!business || !store) {
+  const { user, business, store: operationalStore, stores: authorisedStores } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
+  if (!business) {
     return <div className="card p-6">Seed data missing.</div>;
+  }
+  const { stores } = await getBusinessStores(business.id, operationalStore?.id ?? searchParams?.storeId);
+  const selectedStoreId = operationalStore?.id ?? resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
+  const store = stores.find((item) => item.id === selectedStoreId) ?? operationalStore ?? null;
+  if (!store) {
+    return (
+      <SelectOperationalStoreNotice
+        stores={authorisedStores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch before recording a stock adjustment"
+      />
+    );
   }
 
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
@@ -93,6 +112,8 @@ export default async function StockAdjustmentsPage({
         reason: true,
         reasonCode: true,
         valuePence: true,
+        transactionNumber: true,
+        reversalOfId: true,
         product: {
           select: {
             name: true,
@@ -119,6 +140,20 @@ export default async function StockAdjustmentsPage({
       where: { storeId: store.id, NOT: { direction: { in: ['INCREASE', 'IN'] } } },
     }),
   ]);
+
+  const reversedOriginalIds = new Set(
+    adjustments.map((adjustment) => adjustment.reversalOfId).filter((id): id is string => Boolean(id)),
+  );
+  const existingReversals = adjustments.length
+    ? await prisma.stockAdjustment.findMany({
+        where: { storeId: store.id, reversalOfId: { in: adjustments.map((adjustment) => adjustment.id) } },
+        select: { reversalOfId: true },
+      })
+    : [];
+  for (const row of existingReversals) {
+    if (row.reversalOfId) reversedOriginalIds.add(row.reversalOfId);
+  }
+  const canReverseAdjustments = user.role === 'OWNER';
 
   const totalPages = Math.max(1, Math.ceil(adjustmentCount / PAGE_SIZE));
   const adjustmentRows = adjustments.map((adjustment) => {
@@ -151,6 +186,10 @@ export default async function StockAdjustmentsPage({
       <PageHeader
         title="Stock Adjustments"
         subtitle="Correct stock safely and keep a clear audit trail."
+      />
+      <EffectiveStoreBanner
+        storeName={store.name}
+        actionLabel="Stock adjustments on this page are recorded in this branch."
       />
 
       {searchParams?.error ? (
@@ -260,8 +299,8 @@ export default async function StockAdjustmentsPage({
             <h2 className="text-lg font-display font-semibold">Recent adjustments</h2>
             <p className="mt-1 text-sm text-black/55">
               Every posting is permanently recorded with inventory, journal, and audit in one
-              transaction. Automated reversal is unavailable — Owner-only opposite compensating
-              entries may link the original ID until a dedicated reversal lands.
+              transaction. Owner Reverse posts the exact opposite quantity and direction with a
+              required reason. A reversal cannot itself be reversed.
             </p>
           </div>
           <div className="text-xs text-black/45 sm:flex-shrink-0">
@@ -284,7 +323,9 @@ export default async function StockAdjustmentsPage({
                     <div className="mt-1 text-sm text-black/60">
                       {formatDateTime(adjustment.createdAt)}
                     </div>
-                    <div className="mt-1 font-mono text-xs text-black/40">{adjustment.id}</div>
+                    <div className="mt-1 font-mono text-xs text-black/40">
+                      {displayDocumentNumber('stock_adjustment', adjustment.transactionNumber, adjustment.id)}
+                    </div>
                   </div>
                   <span
                     className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isIncreaseDirection(adjustment.direction) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}
@@ -308,6 +349,16 @@ export default async function StockAdjustmentsPage({
                       {adjustment.reason ?? 'No reason provided'}
                     </div>
                   </div>
+                  {canReverseAdjustments ? (
+                    <div className="col-span-2">
+                      <ReverseStockAdjustmentForm
+                        adjustmentId={adjustment.id}
+                        storeId={store.id}
+                        isReversal={Boolean(adjustment.reversalOfId)}
+                        disabled={reversedOriginalIds.has(adjustment.id)}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))
@@ -325,12 +376,13 @@ export default async function StockAdjustmentsPage({
                 <th>Direction</th>
                 <th>Reason</th>
                 <th>User</th>
+                <th>Reverse</th>
               </tr>
             </thead>
             <tbody>
               {adjustmentRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-12 text-center">
+                  <td colSpan={8} className="px-3 py-12 text-center">
                     <AdjustmentsEmptyState />
                   </td>
                 </tr>
@@ -341,7 +393,9 @@ export default async function StockAdjustmentsPage({
                     className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none"
                   >
                     <td className="px-3 py-3 text-sm">{formatDateTime(adjustment.createdAt)}</td>
-                    <td className="px-3 py-3 font-mono text-xs text-black/50">{adjustment.id}</td>
+                    <td className="px-3 py-3 font-mono text-xs text-black/50">
+                      {displayDocumentNumber('stock_adjustment', adjustment.transactionNumber, adjustment.id)}
+                    </td>
                     <td className="px-3 py-3 text-sm font-semibold">{adjustment.product.name}</td>
                     <td className="px-3 py-3 text-sm">{formatted}</td>
                     <td className="px-3 py-3 text-sm">
@@ -356,6 +410,18 @@ export default async function StockAdjustmentsPage({
                       {adjustment.reason ?? '-'}
                     </td>
                     <td className="px-3 py-3 text-sm">{adjustment.user.name ?? 'Unknown'}</td>
+                    <td className="px-3 py-3 text-sm">
+                      {canReverseAdjustments ? (
+                        <ReverseStockAdjustmentForm
+                          adjustmentId={adjustment.id}
+                          storeId={store.id}
+                          isReversal={Boolean(adjustment.reversalOfId)}
+                          disabled={reversedOriginalIds.has(adjustment.id)}
+                        />
+                      ) : (
+                        <span className="text-xs text-black/40">Owner only</span>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}

@@ -6,11 +6,12 @@ import ResponsiveModal from '@/components/ResponsiveModal';
 
 type Props = {
   currency: string;
+  storeId?: string | null;
   onCreated: (customer: { id: string; name: string }) => void;
   onClose: () => void;
 };
 
-export default function QuickAddCustomer({ currency, onCreated, onClose }: Props) {
+export default function QuickAddCustomer({ currency, storeId, onCreated, onClose }: Props) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -31,6 +32,7 @@ export default function QuickAddCustomer({ currency, onCreated, onClose }: Props
           phone: phone.trim() || null,
           email: email.trim() || null,
           creditLimitPence: Math.round(Number(creditLimit || 0) * 100),
+          storeId,
         });
         if (result.success) {
           onCreated(result.data);

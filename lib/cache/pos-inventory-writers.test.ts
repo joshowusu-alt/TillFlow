@@ -32,7 +32,7 @@ describe('POS inventory writer source map', () => {
     expect(read('app/actions/import-stock.ts')).toContain('revalidatePosCatalog(businessId, store.id)');
     expect(read('app/actions/opening-stock.ts')).toContain('revalidatePosCatalog(businessId, store.id)');
     expect(read('app/actions/inventory.ts')).toMatch(/revalidatePosCatalog\(businessId,\s*storeId\)/);
-    expect(read('app/actions/stocktake.ts')).toMatch(/revalidatePosCatalog\(businessId,\s*storeId\)/);
+    expect(read('app/actions/stocktake.ts')).toMatch(/revalidatePosCatalog\(businessId,\s*stocktake\.storeId\)/);
   });
 
   it('repair inventory qty paths use store-scoped invalidation', () => {
@@ -57,7 +57,7 @@ describe('POS inventory writer source map', () => {
   it('products opening-stock path passes storeId; other sites stay product-only', () => {
     const products = read('app/actions/products.ts');
     expect(products).toContain('revalidatePosInventory(businessId, openingStockStoreId)');
-    expect(products).toMatch(/createPurchase\([\s\S]*storeId: store\.id[\s\S]*revalidatePosInventory\(businessId, openingStockStoreId\)/);
+    expect(products).toMatch(/createPurchase\([\s\S]*storeId: selected\.storeId[\s\S]*revalidatePosInventory\(businessId, openingStockStoreId\)/);
     expect(products).toContain('revalidatePosCatalog(businessId)');
     assertNoGlobalInventoryTag(products, 'products.ts');
   });

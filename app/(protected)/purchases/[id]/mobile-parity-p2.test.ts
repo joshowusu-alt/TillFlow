@@ -25,7 +25,8 @@ describe('P2 purchase-detail mobile presentation', () => {
     expect(src).toContain('invoice.payments.reduce');
     expect(src).toContain('invoice.totalPence - totalPaid');
     expect(src).toContain('formatMoney(invoice.totalPence');
-    expect(src).toContain('formatMoney(outstanding');
+    expect(src).toContain('RemainingBalance');
+    expect(src).toContain('paidPence={totalPaid}');
   });
 
   it('keeps SupplierPaymentForm / PR #78 controls intact on the detail page', () => {

@@ -6,9 +6,14 @@ import { createTillAction, deactivateTillAction } from '@/app/actions/settings';
 interface Till {
   id: string;
   name: string;
+  openShift?: {
+    cashierName: string;
+    openedAt: string;
+    openingCashPence: number;
+  } | null;
 }
 
-export default function TillManagement({ tills }: { tills: Till[] }) {
+export default function TillManagement({ tills, storeId }: { tills: Till[]; storeId: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState('');
   const [isPending, startTransition] = useTransition();
@@ -41,14 +46,26 @@ export default function TillManagement({ tills }: { tills: Till[] }) {
     <div className="rounded-xl border border-black/10 bg-white/70 p-4">
       <div className="text-sm font-semibold">Till Management</div>
       <div className="mt-1 text-xs text-black/60">
-        Add or deactivate tills for this store. Each till can run an independent shift.
+        Add or deactivate tills for this store. Each till can have only one open shift at a time.
+        Open and close shifts from Cash Management — this screen does not open a second shift.
       </div>
 
       {tills.length > 0 && (
         <ul className="mt-3 divide-y divide-black/5">
           {tills.map((till) => (
             <li key={till.id} className="flex items-center justify-between py-2 text-sm">
-              <span>{till.name}</span>
+              <div>
+                <span>{till.name}</span>
+                {till.openShift ? (
+                  <div className="text-[11px] text-black/45">
+                    Open — {till.openShift.cashierName}
+                    {' · '}
+                    {new Date(till.openShift.openedAt).toLocaleString()}
+                    {' · '}
+                    float {(till.openShift.openingCashPence / 100).toFixed(2)}
+                  </div>
+                ) : null}
+              </div>
               <button
                 type="button"
                 className="btn-ghost text-xs text-red-600 hover:text-red-700 disabled:opacity-40"
@@ -63,6 +80,7 @@ export default function TillManagement({ tills }: { tills: Till[] }) {
       )}
 
       <form ref={formRef} action={handleCreate} className="mt-3 flex items-center gap-2">
+        <input type="hidden" name="storeId" value={storeId} />
         <input
           className="input flex-1 text-sm"
           name="name"

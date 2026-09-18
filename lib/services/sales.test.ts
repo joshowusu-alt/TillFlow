@@ -25,7 +25,7 @@ const {
     user: { findFirst: vi.fn() },
     mobileMoneyCollection: { findFirst: vi.fn() },
     salesInvoice: { create: vi.fn(), aggregate: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() },
-    businessSequence: { create: vi.fn(), update: vi.fn() },
+    businessSequence: { create: vi.fn(), update: vi.fn(), upsert: vi.fn() },
     stockMovement: { createMany: vi.fn() },
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
@@ -79,6 +79,10 @@ vi.mock('./branches', () => ({
 }));
 vi.mock('@/lib/fraud/reason-codes', () => ({
   isDiscountReasonCode: vi.fn().mockReturnValue(true),
+}));
+
+vi.mock('./document-numbers', () => ({
+  reserveNextDocumentNumber: vi.fn().mockResolvedValue('RCPT-000001'),
 }));
 
 import { createSale, type SaleLineInput } from './sales';
@@ -243,6 +247,7 @@ beforeEach(() => {
   prismaMock.salesInvoice.findFirst.mockResolvedValue(null);
   prismaMock.businessSequence.create.mockResolvedValue({ nextVal: 1 });
   prismaMock.businessSequence.update.mockResolvedValue({ nextVal: 1 });
+  prismaMock.businessSequence.upsert.mockResolvedValue({ nextVal: 1 });
   prismaMock.salesInvoice.aggregate.mockResolvedValue({ _sum: { totalPence: 0 } });
   prismaMock.salesInvoice.findMany.mockResolvedValue([]);
   prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));

@@ -42,18 +42,20 @@ describe('inventory increase Phase 2 actions and UI contracts', () => {
   });
 
   it('restricts adjustments to Owner/Manager and excludes Cashier', () => {
-    expect(inventoryAction).toContain("withBusinessStoreContext(['MANAGER', 'OWNER'])");
+    expect(inventoryAction).toContain('requireSelectedStoreContext');
+    expect(inventoryAction).toContain("['MANAGER', 'OWNER']");
     expect(inventoryAction).not.toMatch(
-      /withBusinessStoreContext\(\s*\[[^\]]*['"]CASHIER['"]/,
+      /requireSelectedStoreContext\(\s*\[[^\]]*['"]CASHIER['"]/,
     );
   });
 
-  it('blocks automated reversal and value-only controls', () => {
-    expect(inventoryAction).toContain('Automated adjustment reversal is unavailable');
+  it('blocks value-only controls and uses controlled Reverse', () => {
+    expect(inventoryAction).toContain('reverseInventoryAdjustmentAction');
+    expect(inventoryAction).not.toContain('Automated adjustment reversal is unavailable');
     expect(formSrc).not.toContain('value-only');
     expect(formSrc).not.toContain('SYSTEM_CORRECTION');
     expect(formSrc).not.toContain('OTHER_APPROVED');
-    expect(reverseSrc).toContain('Automated reversal unavailable');
+    expect(reverseSrc).toContain('reverseInventoryAdjustmentAction');
   });
 
   it('UI exposes Record decrease and Record increase as named actions', () => {

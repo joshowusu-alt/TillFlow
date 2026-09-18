@@ -6,7 +6,8 @@ import { revalidateTag, revalidatePath } from 'next/cache';
 import { toInt, formString, formInt, formDate } from '@/lib/form-helpers';
 import { PaymentStatusEnum } from '@/lib/validation/enums';
 import { parseDiscountValue } from '@/lib/format';
-import { withBusinessContext, formAction, safeAction, UserError, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, requireSelectedStoreContext, formAction, safeAction, UserError, type ActionResult } from '@/lib/action-utils';
+import { resolveStoreFromTill } from '@/lib/reliability/selected-store';
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
@@ -66,10 +67,12 @@ function checkoutActionTimingMetadata({
 
 export async function createSaleAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { user, businessId } = await withBusinessContext();
-
     const storeId = formString(formData, 'storeId');
     const tillId = formString(formData, 'tillId');
+    const { user, businessId } = await requireSelectedStoreContext(undefined, storeId);
+    if (tillId) {
+      await resolveStoreFromTill(businessId, tillId, storeId);
+    }
     const productId = formString(formData, 'productId');
     const unitId = formString(formData, 'unitId');
     const qtyInUnit = formInt(formData, 'qtyInUnit');
@@ -258,7 +261,10 @@ export async function completeSaleAction(data: {
   loyaltyPointsToRedeem?: number;
 }): Promise<ActionResult<{ receiptId: string; totalPence: number; transactionNumber: string | null }>> {
   return safeAction(async () => {
-    const { user, businessId } = await withBusinessContext();
+    const { user, businessId } = await requireSelectedStoreContext(undefined, data.storeId);
+    if (data.tillId) {
+      await resolveStoreFromTill(businessId, data.tillId, data.storeId);
+    }
 
     const paymentStatus = (data.paymentStatus || 'PAID') as PaymentStatus;
     const completePsValidation = PaymentStatusEnum.safeParse(paymentStatus);
@@ -467,6 +473,14 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const salesInvoiceId = formString(formData, 'salesInvoiceId');
+    const existingInvoice = await prisma.salesInvoice.findFirst({
+      where: { id: salesInvoiceId, businessId },
+      select: { storeId: true },
+    });
+    if (!existingInvoice) {
+      throw new UserError('Sale not found.');
+    }
+    await requireSelectedStoreContext(['MANAGER', 'OWNER'], existingInvoice.storeId);
     const reason = formString(formData, 'reason') || 'Sale amended';
     const refundMethod = (formString(formData, 'refundMethod') || 'CASH') as 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
     const additionalPaymentMethod = (formString(formData, 'additionalPaymentMethod') || 'CASH') as 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';

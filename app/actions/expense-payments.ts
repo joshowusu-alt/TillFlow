@@ -4,12 +4,16 @@ import { recordExpensePayment } from '@/lib/services/expensePayments';
 import { CASH_EXPENSE_SHIFT_REQUIRED_MSG } from '@/lib/services/expenses';
 import { redirect } from 'next/navigation';
 import { formString, formPence, formOptionalString } from '@/lib/form-helpers';
-import { withBusinessStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
+import { requireSelectedStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
 import type { PaymentMethod } from '@/lib/services/shared';
 
 export async function recordExpensePaymentAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { user, businessId, storeId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const requestedStoreId = formString(formData, 'storeId');
+    const { user, businessId, storeId } = await requireSelectedStoreContext(
+      ['MANAGER', 'OWNER'],
+      requestedStoreId,
+    );
 
     const expenseId = formString(formData, 'expenseId');
     const method = (formString(formData, 'method') || 'CASH') as PaymentMethod;

@@ -309,7 +309,7 @@ export default async function BusinessMovementReportPage({
           />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-slate-600">Branch</span>
+          <span className="mb-1 block text-slate-600">Report branch filter</span>
           <select className="input w-full" name="storeId" defaultValue={selectedStoreId}>
             <option value="ALL">All branches</option>
             {stores.map((store) => (

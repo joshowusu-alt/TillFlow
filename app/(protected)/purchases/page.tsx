@@ -6,13 +6,18 @@ import InlinePaymentForm from '@/components/InlinePaymentForm';
 import IssueResolutionBanner from '@/components/IssueResolutionBanner';
 import LinkPurchaseSupplierForm from '@/components/LinkPurchaseSupplierForm';
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
+import RemainingBalance from '@/components/RemainingBalance';
 import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import PurchaseFormClient from './PurchaseFormClient';
 import DeletePurchaseButton from './DeletePurchaseButton';
 import RecordPurchaseButton from './RecordPurchaseButton';
 import { getBusinessStores } from '@/lib/services/stores';
+import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 import { listPurchasesNeedingSupplier } from '@/lib/improve-records-load';
 import {
   IMPROVE_RECORDS_ISSUE_DEFS,
@@ -31,7 +36,7 @@ export default async function PurchasesPage({
     issue?: string;
   };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, store: operationalStore, stores: authorisedStores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) {
     return (
       <div className="card p-6 text-center">
@@ -47,8 +52,8 @@ export default async function PurchasesPage({
   // Unknown issue keys must not fall through to the full unfiltered list.
   const invalidIssue = Boolean(searchParams?.issue?.trim()) && !missingSupplierIssue;
 
-  const { stores, selectedStoreId: rawStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
-  const selectedStoreId = (rawStoreId ?? stores[0]?.id) ?? '';
+  const { stores } = await getBusinessStores(business.id, operationalStore?.id ?? searchParams?.storeId);
+  const selectedStoreId = operationalStore?.id ?? resolveSoleOrSelectedStoreId(stores, searchParams?.storeId) ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
 
   const missingSupplierIds = missingSupplierIssue
@@ -102,6 +107,7 @@ export default async function PurchasesPage({
       where: purchaseWhere,
       select: {
         id: true,
+        transactionNumber: true,
         createdAt: true,
         paymentStatus: true,
         totalPence: true,
@@ -203,8 +209,9 @@ export default async function PurchasesPage({
         : lineCount > 1
           ? `${lineCount} lines`
           : qtyLabel;
-    const outstandingPence = purchase.totalPence - purchase.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-    const purchaseReference = `#${purchase.id.slice(0, 8)}`;
+    const paidPence = purchase.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+    const outstandingPence = purchase.totalPence - paidPence;
+    const purchaseReference = displayDocumentNumber('purchase', purchase.transactionNumber, purchase.id);
 
     return {
       purchase,
@@ -266,22 +273,19 @@ export default async function PurchasesPage({
         </div>
       )}
 
-      {!issueActive && stores.length > 1 && (
-        <form method="GET" className="card grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-          <div className="min-w-0">
-            <label className="label">Branch</label>
-            <select className="input w-full" name="storeId" defaultValue={selectedStoreId}>
-              {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button className="btn-secondary w-full sm:w-auto" type="submit">
-            Apply
-          </button>
-        </form>
+      {!issueActive && (
+        selectedStoreId ? (
+          <EffectiveStoreBanner
+            storeName={stores.find((row) => row.id === selectedStoreId)?.name ?? 'Selected branch'}
+            actionLabel="Purchases on this page are recorded in this branch. Switch branches from the header."
+          />
+        ) : (
+          <SelectOperationalStoreNotice
+            stores={authorisedStores}
+            canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+            title="Select a branch before recording a purchase"
+          />
+        )
       )}
 
       {!issueActive && (
@@ -322,6 +326,9 @@ export default async function PurchasesPage({
                 Add supplier
               </Link>
             </div>
+            {!selectedStoreId ? (
+              <p className="mt-4 text-sm text-amber-800">Select a store before recording a purchase.</p>
+            ) : (
             <PurchaseFormClient
               key={searchParams?.created ?? 'default'}
               storeId={selectedStoreId}
@@ -346,6 +353,7 @@ export default async function PurchasesPage({
                 })),
               }))}
             />
+            )}
           </div>
         </details>
       )}
@@ -385,7 +393,7 @@ export default async function PurchasesPage({
                 <div key={purchase.id} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-semibold text-ink">{purchaseReference}</div>
+                      <div className="font-mono text-sm font-semibold text-ink">{purchaseReference}</div>
                       {purchase.supplier?.name
                         ? <div className="mt-1 text-sm text-black/60">{purchase.supplier.name}</div>
                         : <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
@@ -404,13 +412,12 @@ export default async function PurchasesPage({
                       <div className="text-xs uppercase tracking-[0.16em] text-black/40">Items</div>
                       <div className="mt-1 text-black/70">{lineLabel}</div>
                     </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.16em] text-black/40">Total</div>
-                      <div className="mt-1 font-semibold text-ink">{formatMoney(purchase.totalPence, business.currency)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.16em] text-black/40">Outstanding</div>
-                      <div className="mt-1 text-black/70">{formatMoney(Math.max(0, outstandingPence), business.currency)}</div>
+                    <div className="col-span-2">
+                      <RemainingBalance
+                        amountPence={purchase.totalPence}
+                        paidPence={purchase.totalPence - outstandingPence}
+                        currency={business.currency}
+                      />
                     </div>
                   </div>
 
@@ -463,15 +470,14 @@ export default async function PurchasesPage({
                   <th>Date</th>
                   <th>Lines</th>
                   <th>Status</th>
-                  <th>Total</th>
-                  <th>Outstanding</th>
+                  <th>Balance</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {purchaseRows.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-3 py-10 text-center">
+                    <td colSpan={7} className="px-3 py-10 text-center">
                       <div className="text-sm font-semibold text-ink">
                         {missingSupplierIssue ? 'No purchases missing a supplier.' : 'No purchases recorded yet.'}
                       </div>
@@ -486,7 +492,7 @@ export default async function PurchasesPage({
                 {purchaseRows.map(({ purchase, lineLabel, outstandingPence, itemSummary, purchaseReference }) => {
                   return (
                     <tr key={purchase.id} className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
-                      <td className="px-3 py-3 text-sm">{purchaseReference.replace(/^#/, '')}</td>
+                      <td className="px-3 py-3 font-mono text-xs">{purchaseReference}</td>
                       <td className="px-3 py-3 text-sm">
                         {purchase.supplier?.name
                           ? purchase.supplier.name
@@ -500,10 +506,11 @@ export default async function PurchasesPage({
                         <span className={`pill-${purchase.paymentStatus.toLowerCase().replace('_', '-')}`}>{purchase.paymentStatus.replace('_', ' ')}</span>
                       </td>
                       <td className="px-3 py-3 text-sm font-semibold">
-                        {formatMoney(purchase.totalPence, business.currency)}
-                      </td>
-                      <td className="px-3 py-3 text-sm font-semibold">
-                        {formatMoney(Math.max(0, outstandingPence), business.currency)}
+                        <RemainingBalance
+                          amountPence={purchase.totalPence}
+                          paidPence={purchase.totalPence - outstandingPence}
+                          currency={business.currency}
+                        />
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex min-w-[14rem] flex-col gap-2">

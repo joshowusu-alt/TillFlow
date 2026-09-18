@@ -2,7 +2,8 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidateTag } from 'next/cache';
-import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { requireSelectedStoreContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { readOperationalStoreCookie } from '@/lib/reliability/operational-store-cookie';
 import { createPurchase } from '@/lib/services/purchases';
 import type { SupplierProductLinkSummary, SupplierProductLinkSkippedProduct } from '@/lib/services/purchases';
 import { recordOpeningInventory, type RecordOpeningInventoryResult } from '@/lib/services/opening-inventory';
@@ -268,14 +269,19 @@ async function _runImport(
   rows: ConfirmedImportRow[],
   meta: ImportStockMeta
 ): Promise<ActionResult<ImportStockResult>> {
-  // Auth resolved OUTSIDE safeAction so a redirect() from withBusinessContext
+  // Auth resolved OUTSIDE safeAction so a redirect() from requireSelectedStoreContext
   // is caught here and converted to a typed err() instead of escaping.
-  let authContext: Awaited<ReturnType<typeof withBusinessContext>>;
+  let authContext: Awaited<ReturnType<typeof requireSelectedStoreContext>>;
   try {
-    authContext = await withBusinessContext(['MANAGER', 'OWNER']);
+    authContext = await requireSelectedStoreContext(
+      ['MANAGER', 'OWNER'],
+      readOperationalStoreCookie(),
+    );
   } catch (_authErr) {
-    // Any failure here (redirect, role error, DB error) = session/auth problem.
+    // Any failure here (redirect, role error, store cookie, DB error) = session/store problem.
     console.error('[importStockAction] auth error:', _authErr);
+    const message = _authErr instanceof Error ? _authErr.message : '';
+    if (/branch|store|tab is out of date/i.test(message)) return err(message);
     return err('Your session has expired. Please refresh the page and sign in again.');
   }
 
@@ -289,19 +295,14 @@ async function _runImport(
     // Legacy spreadsheets with payment_status must still pick a mode explicitly
     // (UI enforces this). Opening stock ignores PAID/UNPAID entirely.
 
-    const { user, businessId } = authContext;
+    const { user, businessId, storeId } = authContext;
+    const store = { id: storeId };
 
     // Catalogue mode never posts stock — strip quantities before processing.
     const incomingRows: ConfirmedImportRow[] =
       importMode === 'CATALOGUE'
         ? rows.map((r) => ({ ...r, quantity: 0, paymentStatus: undefined, openingFunding: undefined }))
         : rows;
-
-    const store = await prisma.store.findFirst({
-      where: { businessId },
-      select: { id: true },
-    });
-    if (!store) return err('No store found. Complete business setup first.');
 
     // ── Resolve "new:UnitName" sentinels → create Unit records ──────────
     // The preview UI sets baseUnitId / packUnitId / qtyInUnitId to "new:Name"

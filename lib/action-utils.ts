@@ -110,20 +110,22 @@ export async function withBusinessContext(
   return { user, businessId: business.id };
 }
 
-export async function withBusinessStoreContext(
-  roles?: Role[],
-  preferredStoreId?: string,
+/**
+ * Financial, stock, shift and payment mutations must send an explicit store.
+ * Never falls back to the first business store.
+ */
+export async function requireSelectedStoreContext(
+  roles: Role[] | undefined,
+  storeId: string | null | undefined,
   options?: BusinessContextOptions,
 ): Promise<BusinessStoreContext> {
+  const { assertSelectedStoreForBusiness } = await import('@/lib/reliability/selected-store');
+  const { assertAuthoritativeMutationStore } = await import(
+    '@/lib/reliability/operational-store-cookie'
+  );
   const ctx = await withBusinessContext(roles, options);
-  const store = await prisma.store.findFirst({
-    where: {
-      businessId: ctx.businessId,
-      ...(preferredStoreId ? { id: preferredStoreId } : {}),
-    },
-    orderBy: { createdAt: 'asc' },
-  });
-  if (!store) redirect('/settings');
+  const store = await assertSelectedStoreForBusiness(ctx.businessId, storeId);
+  await assertAuthoritativeMutationStore(ctx.businessId, store.id);
   return { ...ctx, storeId: store.id };
 }
 

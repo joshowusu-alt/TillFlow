@@ -5,11 +5,20 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
 import { openShiftAction, closeShiftAction, closeShiftOwnerOverrideAction, addCashToTillAction } from '@/app/actions/shifts';
+import { withStoreQuery } from '@/lib/reliability/selected-store';
+import { displayShiftPresentationNumber } from '@/lib/reliability/walkthrough-contracts';
+import { computeCashHandover } from '@/lib/services/cash-handover';
+import { invalidLegacyCloseNote } from '@/lib/reliability/invalid-preview-shift-closures';
+import { isStaleOperationalStoreBlocked } from '@/lib/reliability/stale-operational-store-client';
+import { STALE_OPERATIONAL_STORE_MSG } from '@/lib/reliability/operational-store';
 
-type Till = { id: string; name: string };
+type Till = { id: string; name: string; active?: boolean };
 
 type OpenShift = {
   id: string;
+  tillId?: string;
+  userId?: string;
+  userName?: string;
   till: { name: string };
   openedAt: Date;
   openingCashPence: number;
@@ -20,7 +29,37 @@ type OpenShift = {
   transferTotal: number;
   momoTotal: number;
   cashByType?: Record<string, number>;
+  shiftNumber?: string | null;
 };
+
+type OccupiedTill = {
+  tillId: string;
+  tillName: string;
+  shiftId: string;
+  userId: string;
+  userName: string;
+  openedAt: string;
+  openingCashPence: number;
+  salesCount: number;
+  salesTotal: number;
+  expectedCash: number;
+  cardTotal: number;
+  transferTotal: number;
+  momoTotal: number;
+  cashByType?: Record<string, number>;
+  shiftNumber?: string | null;
+};
+
+const DRAWER_DRILLDOWN_TYPES = [
+  ['OPEN_FLOAT', 'Opening float'],
+  ['CASH_SALE', 'Cash sales'],
+  ['CASH_DEBTOR_PAYMENT', 'Customer payments received'],
+  ['PAID_OUT_SUPPLIER', 'Supplier payments'],
+  ['PAID_OUT_EXPENSE', 'Expenses paid from till'],
+  ['CASH_REFUND', 'Refunds paid'],
+  ['CASH_ADJUSTMENT', 'Cash added / adjustments'],
+  ['CLOSE_RECONCILIATION', 'Close reconciliation'],
+] as const;
 
 type RecentShift = {
   id: string;
@@ -34,13 +73,18 @@ type RecentShift = {
   expectedCashPence: number;
   actualCashPence: number | null;
   variance: number | null;
+  closureNumber?: string | null;
+  shiftNumber?: string | null;
   cardTotalPence: number;
   transferTotalPence: number;
   momoTotalPence: number;
+  investigationId?: string | null;
+  investigationStatus?: string | null;
 };
 
 type OtherOpenShift = {
   id: string;
+  tillId?: string;
   till: { name: string };
   userName: string;
   openedAt: string;
@@ -52,33 +96,93 @@ type OtherOpenShift = {
   transferTotal: number;
   momoTotal: number;
   cashByType?: Record<string, number>;
+  shiftNumber?: string | null;
 };
 
 type Props = {
+  storeId?: string | null;
+  storeName?: string | null;
   tills: Till[];
   openShifts?: OpenShift[];
   /** @deprecated compatibility for older callers; server page supplies openShifts. */
   openShift?: OpenShift | null;
+  occupiedTills?: OccupiedTill[];
   otherOpenShifts?: OtherOpenShift[];
   recentShifts: RecentShift[];
   currency: string;
   userRole?: string;
+  currentUserId?: string;
 };
 
+function resolveTillId(shift: { tillId?: string; till: { name: string } }, tills: Till[]) {
+  return shift.tillId ?? tills.find((till) => till.name === shift.till.name)?.id ?? '';
+}
+
+function drawerHref(params: { type: string; shiftId?: string; tillId?: string; storeId?: string | null }) {
+  const search = new URLSearchParams();
+  search.set('type', params.type);
+  if (params.shiftId) search.set('shiftId', params.shiftId);
+  if (params.tillId) search.set('tillId', params.tillId);
+  if (params.storeId) search.set('storeId', params.storeId);
+  return `/shifts/drawer?${search.toString()}`;
+}
+
 export default function ShiftClient({
+  storeId,
+  storeName,
   tills,
   openShifts: openShiftList,
   openShift: legacyOpenShift,
+  occupiedTills,
   otherOpenShifts = [],
   recentShifts,
   currency,
   userRole,
+  currentUserId,
 }: Props) {
   const openShifts = openShiftList ?? (legacyOpenShift ? [legacyOpenShift] : []);
+  const occupancy: OccupiedTill[] = occupiedTills ?? [
+    ...openShifts.map((shift) => ({
+      tillId: resolveTillId(shift, tills),
+      tillName: shift.till.name,
+      shiftId: shift.id,
+      userId: shift.userId ?? currentUserId ?? '',
+      userName: 'You',
+      openedAt: new Date(shift.openedAt).toISOString(),
+      openingCashPence: shift.openingCashPence,
+      salesCount: shift.salesCount,
+      salesTotal: shift.salesTotal,
+      expectedCash: shift.expectedCash,
+      cardTotal: shift.cardTotal,
+      transferTotal: shift.transferTotal,
+      momoTotal: shift.momoTotal,
+      cashByType: shift.cashByType,
+    })),
+    ...otherOpenShifts.map((shift) => ({
+      tillId: resolveTillId(shift, tills),
+      tillName: shift.till.name,
+      shiftId: shift.id,
+      userId: '',
+      userName: shift.userName,
+      openedAt: shift.openedAt,
+      openingCashPence: shift.openingCashPence,
+      salesCount: shift.salesCount,
+      salesTotal: shift.salesTotal,
+      expectedCash: shift.expectedCash,
+      cardTotal: shift.cardTotal,
+      transferTotal: shift.transferTotal,
+      momoTotal: shift.momoTotal,
+      cashByType: shift.cashByType,
+    })),
+  ];
+  const occupiedTillIds = new Set(occupancy.map((row) => row.tillId).filter(Boolean));
+  const freeTills = tills.filter((till) => till.active !== false && !occupiedTillIds.has(till.id));
+  const freeTillKey = freeTills.map((till) => till.id).join(',');
+  const occupiedKey = [...occupiedTillIds].sort().join(',');
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [selectedTill, setSelectedTill] = useState(tills[0]?.id ?? '');
+  const [selectedTill, setSelectedTill] = useState(freeTills[0]?.id ?? '');
   const [selectedOpenShiftId, setSelectedOpenShiftId] = useState(openShifts[0]?.id ?? '');
   const [openingCash, setOpeningCash] = useState('');
   const [actualCash, setActualCash] = useState('');
@@ -87,6 +191,8 @@ export default function ShiftClient({
   const [varianceReasonCode, setVarianceReasonCode] = useState('');
   const [varianceReason, setVarianceReason] = useState('');
   const [showCloseModal, setShowCloseModal] = useState(false);
+  const [closeFormKey, setCloseFormKey] = useState(0);
+  const [pinUnlocked, setPinUnlocked] = useState(false);
   const [selectedOtherShift, setSelectedOtherShift] = useState<OtherOpenShift | null>(null);
   const [showOwnerOverride, setShowOwnerOverride] = useState(false);
   const [ownerPassword, setOwnerPassword] = useState('');
@@ -94,6 +200,13 @@ export default function ShiftClient({
   const [overrideJustification, setOverrideJustification] = useState('');
   const isOwner = userRole === 'OWNER';
   const isManagerOrOwner = userRole === 'OWNER' || userRole === 'MANAGER';
+
+  useEffect(() => {
+    if (!selectedTill || occupiedKey.split(',').includes(selectedTill)) {
+      const next = freeTillKey.split(',').filter(Boolean)[0] ?? '';
+      if (next !== selectedTill) setSelectedTill(next);
+    }
+  }, [selectedTill, freeTillKey, occupiedKey]);
 
   const [showAddCash, setShowAddCash] = useState(false);
   const [addCashAmount, setAddCashAmount] = useState('');
@@ -126,7 +239,6 @@ export default function ShiftClient({
   const [closedSummary, setClosedSummary] = useState<ClosedSummary | null>(null);
 
   const resetCloseForm = () => {
-    setSelectedOtherShift(null);
     setActualCash('');
     setCloseNotes('');
     setManagerPin('');
@@ -136,9 +248,23 @@ export default function ShiftClient({
     setOverrideReasonCode('');
     setOverrideJustification('');
     setShowOwnerOverride(false);
+    setPinUnlocked(false);
+    setCloseFormKey((key) => key + 1);
+  };
+
+  const openCloseModal = (otherShift: OtherOpenShift | null = null) => {
+    setError(null);
+    setSelectedOtherShift(otherShift);
+    resetCloseForm();
+    if (otherShift) setShowOwnerOverride(true);
+    setShowCloseModal(true);
   };
 
   const handleAddCash = () => {
+    if (isStaleOperationalStoreBlocked()) {
+      setAddCashError(STALE_OPERATIONAL_STORE_MSG);
+      return;
+    }
     setAddCashError(null);
     if (!addCashAmount) { setAddCashError('Amount is required.'); return; }
     if (Number(addCashAmount) <= 0) { setAddCashError('Amount must be greater than zero.'); return; }
@@ -152,6 +278,7 @@ export default function ShiftClient({
     formData.set('reasonCode', addCashReasonCode);
     formData.set('note', addCashNote);
     if (openShift) formData.set('shiftId', openShift.id);
+    if (storeId) formData.set('storeId', storeId);
     startTransition(async () => {
       try {
         const result = await addCashToTillAction(formData);
@@ -169,10 +296,19 @@ export default function ShiftClient({
   };
 
   const handleOpenShift = () => {
+    if (isStaleOperationalStoreBlocked()) {
+      setError(STALE_OPERATIONAL_STORE_MSG);
+      return;
+    }
     setError(null);
+    if (!selectedTill || occupiedTillIds.has(selectedTill) || freeTills.length === 0) {
+      setError('A shift is already open for this till. Close or hand over that shift before opening another.');
+      return;
+    }
     const formData = new FormData();
     formData.set('tillId', selectedTill);
     formData.set('openingCash', openingCash);
+    if (storeId) formData.set('storeId', storeId);
 
     startTransition(async () => {
       try {
@@ -191,13 +327,22 @@ export default function ShiftClient({
 
   const handleCloseShift = () => {
     if (!shiftToClose) return;
+    if (isStaleOperationalStoreBlocked()) {
+      setError(STALE_OPERATIONAL_STORE_MSG);
+      return;
+    }
     setError(null);
+    if (!Number.isFinite(Number(actualCash)) || Number(actualCash) < 0) {
+      setError('Physical cash counted cannot be negative. Enter the amount actually in the drawer.');
+      return;
+    }
     const formData = new FormData();
     formData.set('shiftId', shiftToClose.id);
     formData.set('actualCash', actualCash);
     formData.set('notes', closeNotes);
     formData.set('varianceReasonCode', varianceReasonCode);
     formData.set('varianceReason', varianceReason);
+    if (storeId) formData.set('storeId', storeId);
 
     // Capture summary before data disappears on refresh
     const openedAtMs = new Date(shiftToClose.openedAt).getTime();
@@ -205,8 +350,16 @@ export default function ShiftClient({
       tillName: shiftToClose.till.name,
       salesCount: shiftToClose.salesCount,
       cashSalesPence: shiftToClose.cashByType?.CASH_SALE ?? 0,
-      floatRetainedPence: shiftToClose.openingCashPence,
-      handoverPence: Math.max(0, shiftToClose.expectedCash - shiftToClose.openingCashPence),
+      floatRetainedPence: computeCashHandover({
+        expectedCashPence: shiftToClose.expectedCash,
+        actualCashPence: Math.round(Number(actualCash) * 100),
+        openingFloatPence: shiftToClose.openingCashPence,
+      }).retainedPence ?? 0,
+      handoverPence: computeCashHandover({
+        expectedCashPence: shiftToClose.expectedCash,
+        actualCashPence: Math.round(Number(actualCash) * 100),
+        openingFloatPence: shiftToClose.openingCashPence,
+      }).handedOverPence ?? 0,
       actualCashPence: Math.round(Number(actualCash) * 100),
       variancePence: Math.round(Number(actualCash) * 100) - shiftToClose.expectedCash,
       durationMinutes: Math.round((Date.now() - openedAtMs) / 60000),
@@ -228,6 +381,9 @@ export default function ShiftClient({
 
         if (!result.success) {
           setError(result.error);
+          setManagerPin('');
+          setOwnerPassword('');
+          setPinUnlocked(false);
           return;
         }
 
@@ -237,6 +393,9 @@ export default function ShiftClient({
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to close shift');
+        setManagerPin('');
+        setOwnerPassword('');
+        setPinUnlocked(false);
       }
     });
   };
@@ -263,6 +422,7 @@ export default function ShiftClient({
     ? {
         id: selectedOtherShift.id,
         till: selectedOtherShift.till,
+        userName: selectedOtherShift.userName,
         openedAt: new Date(selectedOtherShift.openedAt),
         openingCashPence: selectedOtherShift.openingCashPence,
         salesCount: selectedOtherShift.salesCount,
@@ -272,11 +432,27 @@ export default function ShiftClient({
         transferTotal: selectedOtherShift.transferTotal,
         momoTotal: selectedOtherShift.momoTotal,
         cashByType: selectedOtherShift.cashByType,
+        shiftNumber: selectedOtherShift.shiftNumber,
       }
     : openShift;
 
-  const variancePence = actualCash ? Math.round(Number(actualCash) * 100) - (shiftToClose?.expectedCash ?? 0) : 0;
-  const varianceNeedsReason = variancePence !== 0;
+  const countedPence = actualCash === '' ? null : Math.round(Number(actualCash) * 100);
+  const handover = computeCashHandover({
+    expectedCashPence: shiftToClose?.expectedCash ?? 0,
+    actualCashPence: countedPence,
+    openingFloatPence: shiftToClose?.openingCashPence ?? 0,
+  });
+  const variancePence = handover.variancePence ?? 0;
+  const varianceNeedsReason = countedPence !== null && variancePence !== 0;
+  const closeShiftNumber = shiftToClose
+    ? displayShiftPresentationNumber({
+        shiftNumber: shiftToClose.shiftNumber,
+        status: 'OPEN',
+      })
+    : '';
+  const closeCashierName = selectedOtherShift?.userName
+    || (openShift && 'userName' in openShift ? openShift.userName : null)
+    || 'This cashier';
   const cashSalesPence = shiftToClose?.cashByType?.CASH_SALE ?? 0;
   const supplierPaymentsPence = shiftToClose?.cashByType?.PAID_OUT_SUPPLIER ?? 0;
   const adjustmentsPence = shiftToClose?.cashByType?.CASH_ADJUSTMENT ?? 0;
@@ -296,6 +472,75 @@ export default function ShiftClient({
           {error}
         </div>
       )}
+
+      <div className="card p-4 sm:p-5">
+        <h2 className="text-base font-display font-semibold text-ink sm:text-lg">Tills</h2>
+        <p className="mt-1 text-sm text-black/60">
+          Each till can have only one open shift. A cashier may hold open shifts on different tills.
+        </p>
+        <ul className="mt-3 divide-y divide-black/5">
+          {tills.map((till) => {
+            const occupied = occupancy.find((row) => row.tillId === till.id);
+            const isOwn = Boolean(
+              occupied &&
+                (occupied.userId === currentUserId ||
+                  openShifts.some((shift) => shift.id === occupied.shiftId)),
+            );
+            const canHandoverOrClose = Boolean(occupied && (isOwn || isManagerOrOwner));
+            return (
+              <li key={till.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="font-semibold text-ink">{till.name}</div>
+                  {occupied ? (
+                    <div className="mt-0.5 text-xs text-black/55">
+                      Open — {occupied.userName}
+                      {' · '}
+                      {new Date(occupied.openedAt).toLocaleString()}
+                      {' · '}
+                      float {formatMoney(occupied.openingCashPence, currency)}
+                    </div>
+                  ) : (
+                    <div className="mt-0.5 text-xs text-emerald-700">Available — no open shift</div>
+                  )}
+                </div>
+                {occupied ? (
+                  isOwn ? (
+                    <span className="text-xs font-semibold text-black/40">Close from your shift card</span>
+                  ) : canHandoverOrClose ? (
+                    <button
+                      type="button"
+                      className="btn-primary bg-rose-600 hover:bg-rose-700 text-sm"
+                      onClick={() => {
+                        openCloseModal({
+                          id: occupied.shiftId,
+                          tillId: occupied.tillId,
+                          till: { name: occupied.tillName },
+                          userName: occupied.userName,
+                          openedAt: occupied.openedAt,
+                          openingCashPence: occupied.openingCashPence,
+                          salesCount: occupied.salesCount,
+                          salesTotal: occupied.salesTotal,
+                          expectedCash: occupied.expectedCash,
+                          cardTotal: occupied.cardTotal,
+                          transferTotal: occupied.transferTotal,
+                          momoTotal: occupied.momoTotal,
+                          cashByType: occupied.cashByType,
+                        });
+                      }}
+                    >
+                      Handover / Close
+                    </button>
+                  ) : (
+                    <span className="text-xs font-semibold text-black/40">Open unavailable</span>
+                  )
+                ) : (
+                  <span className="text-xs font-semibold text-black/40">Use Open Shift below</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
       {openShift ? (
         <div className="space-y-3">
@@ -333,7 +578,7 @@ export default function ShiftClient({
             <button
               type="button"
               className="btn-primary bg-rose-600 hover:bg-rose-700"
-              onClick={() => setShowCloseModal(true)}
+              onClick={() => openCloseModal()}
             >
               Close Shift
             </button>
@@ -364,6 +609,27 @@ export default function ShiftClient({
                   )}
                 </div>
               )}
+              <div className="mt-3 space-y-1">
+                {DRAWER_DRILLDOWN_TYPES.map(([type, label]) => {
+                  const amount = openShift.cashByType?.[type] ?? 0;
+                  if (amount === 0 && type !== 'OPEN_FLOAT') return null;
+                  return (
+                    <Link
+                      key={type}
+                      href={drawerHref({
+                        type,
+                        shiftId: openShift.id,
+                        tillId: resolveTillId(openShift, tills),
+                        storeId,
+                      })}
+                      className="flex justify-between text-xs text-accent underline-offset-2 hover:underline"
+                    >
+                      <span>{label}</span>
+                      <span>{formatMoney(amount, currency)}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
             <div className="rounded-xl border border-black/10 bg-white p-4">
               <div className="text-xs uppercase tracking-wide text-black/40">Card / Transfer</div>
@@ -478,9 +744,9 @@ export default function ShiftClient({
           )}
         </div>
         </div>
-      ) : (
-        <>
-        {closedSummary && (
+      ) : null}
+
+      {closedSummary && (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
@@ -523,10 +789,11 @@ export default function ShiftClient({
             </div>
           </div>
         )}
+      {freeTills.length > 0 ? (
         <div className="card p-6">
           <h2 className="text-lg font-display font-semibold">Start New Shift</h2>
           <p className="mt-1 text-sm text-black/60">
-            Open a shift to track cash and reconcile at the end.
+            Open a shift to track cash and reconcile at the end. Occupied tills are not listed.
           </p>
 
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -538,7 +805,7 @@ export default function ShiftClient({
                 value={selectedTill}
                 onChange={(e) => setSelectedTill(e.target.value)}
               >
-                {tills.map((till) => (
+                {freeTills.map((till) => (
                   <option key={till.id} value={till.id}>
                     {till.name}
                   </option>
@@ -563,14 +830,17 @@ export default function ShiftClient({
                 type="button"
                 className="btn-primary w-full"
                 onClick={handleOpenShift}
-                disabled={isPending}
+                disabled={isPending || !selectedTill || occupiedTillIds.has(selectedTill)}
               >
                 {isPending ? 'Opening...' : 'Open Shift'}
               </button>
             </div>
           </div>
         </div>
-        </>
+      ) : (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          All tills already have an open shift. Close or hand over a till before opening another.
+        </div>
       )}
 
       <div className="card p-4 sm:p-5">
@@ -645,8 +915,11 @@ export default function ShiftClient({
                             ? `${(shift.variance ?? 0) >= 0 ? '+' : ''}${formatMoney(shift.variance!, currency)}`
                             : <span>&mdash;</span>}
                         </div>
-                        {shift.status === 'CLOSED' && shift.variance !== null && Math.abs(shift.variance) > 50000 && (
-                          <Link href="/reports/cash-drawer" className="ml-auto text-xs font-medium text-rose-600 underline">
+                        {shift.status === 'CLOSED' && shift.variance !== null && shift.variance !== 0 && (
+                          <Link
+                            href={withStoreQuery(shift.investigationId ? `/shifts/variance/${shift.investigationId}` : '/shifts/variance', storeId)}
+                            className="ml-auto text-xs font-medium text-rose-600 underline"
+                          >
                             Investigate →
                           </Link>
                         )}
@@ -696,6 +969,26 @@ export default function ShiftClient({
                         <span className={`rounded-full px-2 py-1 text-xs font-semibold ${shift.status === 'OPEN' ? 'bg-emerald-100 text-emerald-800' : 'bg-black/5 text-black/55'}`}>
                           {shift.status === 'OPEN' ? 'Open' : 'Closed'}
                         </span>
+                        <div className="mt-1 text-[11px] text-black/40">
+                          {displayShiftPresentationNumber({
+                            shiftNumber: shift.shiftNumber,
+                            closureNumber: shift.closureNumber,
+                            status: shift.status,
+                          })}
+                        </div>
+                        {invalidLegacyCloseNote(shift.actualCashPence) ? (
+                          <div className="mt-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-800">
+                            Invalid close. Counted cash is negative. Excluded from acceptance totals.
+                          </div>
+                        ) : null}
+                        {shift.status === 'CLOSED' && shift.variance !== null && shift.variance !== 0 ? (
+                          <Link
+                            href={withStoreQuery(shift.investigationId ? `/shifts/variance/${shift.investigationId}` : '/shifts/variance', storeId)}
+                            className="mt-1 block text-xs font-medium text-rose-600 underline"
+                          >
+                            Investigate
+                          </Link>
+                        ) : null}
                       </td>
                     </tr>
                   ))}
@@ -707,11 +1000,11 @@ export default function ShiftClient({
       </div>
 
       {/* Owner: other open shifts they can close */}
-      {isOwner && otherOpenShifts.length > 0 && (
+      {isManagerOrOwner && otherOpenShifts.length > 0 && (
         <div className="card p-6">
           <h2 className="text-lg font-display font-semibold">Other Open Shifts</h2>
           <p className="mt-1 text-sm text-black/60">
-            Shifts opened by other cashiers that you can close as owner.
+            Shifts opened by other cashiers that you can close or hand over.
           </p>
           <div className="mt-4 space-y-3">
             {otherOpenShifts.map((s) => {
@@ -745,11 +1038,7 @@ export default function ShiftClient({
                   <button
                     type="button"
                     className="btn-primary bg-rose-600 hover:bg-rose-700 text-sm"
-                    onClick={() => {
-                      setSelectedOtherShift(s);
-                      setShowCloseModal(true);
-                      setShowOwnerOverride(true);
-                    }}
+                    onClick={() => openCloseModal(s)}
                   >
                     Close
                   </button>
@@ -764,10 +1053,40 @@ export default function ShiftClient({
       {showCloseModal && shiftToClose && (
         <div className="overlay-shell fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl my-auto">
+            <form
+              key={closeFormKey}
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              data-form-type="other"
+              onSubmit={(event) => event.preventDefault()}
+            >
             <h3 className="text-lg font-display font-semibold">
               Close Shift{selectedOtherShift ? ` — ${selectedOtherShift.userName}` : ''}
             </h3>
-            <p className="mt-1 text-sm text-black/60">
+            <dl className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-accent/20 bg-accent/5 p-3 text-sm">
+              <div>
+                <dt className="text-[11px] uppercase tracking-wider text-black/45">Store</dt>
+                <dd className="font-semibold">{storeName || 'Selected branch'}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] uppercase tracking-wider text-black/45">Till</dt>
+                <dd className="font-semibold">{shiftToClose.till.name}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] uppercase tracking-wider text-black/45">Cashier</dt>
+                <dd className="font-semibold">{closeCashierName}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] uppercase tracking-wider text-black/45">Shift</dt>
+                <dd className="font-semibold">{closeShiftNumber}</dd>
+              </div>
+              <div className="col-span-2">
+                <dt className="text-[11px] uppercase tracking-wider text-black/45">Opened</dt>
+                <dd className="font-semibold">{formatTime(new Date(shiftToClose.openedAt).toISOString())}</dd>
+              </div>
+            </dl>
+            <p className="mt-2 text-sm text-black/60">
               Count the cash in your drawer and enter the total below.
             </p>
 
@@ -849,20 +1168,48 @@ export default function ShiftClient({
               </div>
             </div>
 
-            {/* Handover summary — float stays in drawer for the next shift */}
-            {shiftToClose.openingCashPence > 0 && (
-              <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 space-y-1.5">
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-500">Cash Handover</p>
-                <div className="flex justify-between text-sm text-black/60">
-                  <span>Retain in drawer (opening float)</span>
-                  <span className="font-semibold">&minus;&nbsp;{formatMoney(shiftToClose.openingCashPence, currency)}</span>
-                </div>
-                <div className="flex justify-between border-t border-blue-200 pt-1.5 text-sm font-bold text-blue-700">
-                  <span>Hand to safe / manager ↑</span>
-                  <span>{formatMoney(Math.max(0, shiftToClose.expectedCash - shiftToClose.openingCashPence), currency)}</span>
-                </div>
+            <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 space-y-1.5">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-500">Cash Handover</p>
+              <div className="flex justify-between text-sm text-black/60">
+                <span>Expected cash</span>
+                <span className="font-semibold">{formatMoney(handover.expectedCashPence, currency)}</span>
               </div>
-            )}
+              <div className="flex justify-between text-sm text-black/60">
+                <span>Actual cash counted</span>
+                <span className="font-semibold">
+                  {handover.actualCashPence === null ? 'Not counted yet' : formatMoney(handover.actualCashPence, currency)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm text-black/60">
+                <span>Variance</span>
+                <span className="font-semibold">
+                  {handover.variancePence === null ? '—' : formatMoney(handover.variancePence, currency)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm text-black/60">
+                <span>Amount retained in drawer</span>
+                <span className="font-semibold">
+                  {handover.retainedPence === null ? 'Count cash first' : formatMoney(handover.retainedPence, currency)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm text-black/60">
+                <span>Amount handed over</span>
+                <span className="font-semibold">
+                  {handover.handedOverPence === null ? 'Count cash first' : formatMoney(handover.handedOverPence, currency)}
+                </span>
+              </div>
+              {handover.floatShortfallPence ? (
+                <div className="flex justify-between border-t border-amber-200 pt-1.5 text-sm font-bold text-amber-800">
+                  <span>Float shortfall</span>
+                  <span>{formatMoney(handover.floatShortfallPence, currency)}</span>
+                </div>
+              ) : null}
+              {!handover.canRetainFullFloat && handover.actualCashPence !== null ? (
+                <p className="pt-1 text-xs text-amber-800">
+                  Counted cash is below the opening float, so the full float cannot be retained.
+                </p>
+              ) : null}
+            </div>
 
             <div className="mt-4">
               <label className="label" htmlFor="actual-cash-counted">Actual Cash Counted</label>
@@ -875,6 +1222,8 @@ export default function ShiftClient({
                 placeholder="0.00"
                 value={actualCash}
                 onChange={(e) => setActualCash(e.target.value)}
+                autoComplete="off"
+                inputMode="decimal"
                 autoFocus
               />
               {actualCash && (
@@ -899,13 +1248,16 @@ export default function ShiftClient({
             </div>
 
             <div className="mt-4">
-              <label className="label">Notes (optional)</label>
+              <label className="label" htmlFor="close-shift-notes">Notes (optional)</label>
               <textarea
+                id="close-shift-notes"
+                name="close-shift-notes"
                 className="input"
                 rows={2}
                 placeholder="Any discrepancies or notes..."
                 value={closeNotes}
                 onChange={(e) => setCloseNotes(e.target.value)}
+                autoComplete="off"
               />
             </div>
 
@@ -931,19 +1283,28 @@ export default function ShiftClient({
             </div>
 
             <div className="mt-4">
-              <label className="label">Variance Details</label>
+              <label className="label" htmlFor="close-shift-variance-details">Variance Details</label>
               <input
+                id="close-shift-variance-details"
+                name="close-shift-variance-details"
                 className="input"
                 value={varianceReason}
                 onChange={(e) => setVarianceReason(e.target.value)}
                 placeholder="Describe why counted cash differs"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
+                data-form-type="other"
               />
             </div>
 
             {!showOwnerOverride ? (
-              <div className="mt-4">
-                <label className="label">Manager PIN (required)</label>
+              <fieldset className="mt-4">
+                <label className="label" htmlFor="close-shift-manager-approval">Manager PIN (required)</label>
                 <input
+                  id="close-shift-manager-approval"
+                  name="close-shift-manager-approval"
                   className="input"
                   type="password"
                   inputMode="numeric"
@@ -951,8 +1312,16 @@ export default function ShiftClient({
                   value={managerPin}
                   onChange={(e) => setManagerPin(e.target.value)}
                   placeholder="Enter manager approval PIN"
+                  autoComplete="one-time-code"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
+                  readOnly={!pinUnlocked}
+                  onFocus={() => setPinUnlocked(true)}
+                  style={{ WebkitTextSecurity: 'disc' } as React.CSSProperties}
                 />
-              </div>
+              </fieldset>
             ) : (
               <div className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <div className="text-xs font-semibold uppercase tracking-wider text-amber-700">Owner Override</div>
@@ -960,11 +1329,15 @@ export default function ShiftClient({
                   <label className="label" htmlFor="owner-override-password">Your Password</label>
                   <input
                     id="owner-override-password"
+                    name="close-shift-owner-reauth"
                     className="input"
                     type="password"
                     value={ownerPassword}
                     onChange={(e) => setOwnerPassword(e.target.value)}
                     placeholder="Re-enter your login password"
+                    autoComplete="new-password"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
                   />
                 </div>
                 <div>
@@ -1020,6 +1393,7 @@ export default function ShiftClient({
                 className="btn-ghost flex-1"
                 onClick={() => {
                   setShowCloseModal(false);
+                  setSelectedOtherShift(null);
                   resetCloseForm();
                 }}
               >
@@ -1028,10 +1402,12 @@ export default function ShiftClient({
               <button
                 type="button"
                 className="btn-primary flex-1 bg-rose-600 hover:bg-rose-700"
+                data-close-shift=""
                 onClick={handleCloseShift}
                 disabled={
                   isPending ||
-                  !actualCash ||
+                  actualCash === '' ||
+                  Number(actualCash) < 0 ||
                   (!showOwnerOverride && !managerPin) ||
                   (showOwnerOverride && (!ownerPassword || !overrideReasonCode || !overrideJustification.trim())) ||
                   (varianceNeedsReason && !varianceReasonCode && !varianceReason.trim())
@@ -1040,6 +1416,7 @@ export default function ShiftClient({
                 {isPending ? 'Closing...' : 'Close Shift'}
               </button>
             </div>
+            </form>
           </div>
         </div>
       )}

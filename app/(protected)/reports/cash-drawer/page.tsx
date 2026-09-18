@@ -22,6 +22,7 @@ import {
   summarizeCashDrawerEntries,
 } from '@/lib/services/cash-drawer';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { isInvalidLegacyClose } from '@/lib/reliability/invalid-preview-shift-closures';
 
 const REASON_CODE_LABELS: Record<string, string> = {
   COUNT_ERROR: 'Count Error',
@@ -137,10 +138,11 @@ export default async function CashDrawerReportPage({
 
   const closedShifts = shifts.filter((s) => s.status === 'CLOSED');
   const openShiftCount = shifts.filter((s) => s.status === 'OPEN').length;
+  const acceptedClosed = closedShifts.filter((shift) => !isInvalidLegacyClose(shift.actualCashPence));
 
-  const totalExpected = shifts.reduce((sum, shift) => sum + shift.expectedCashPence, 0);
-  const totalActual = closedShifts.reduce((sum, shift) => sum + (shift.actualCashPence ?? 0), 0);
-  const totalVariance = closedShifts.reduce((sum, shift) => sum + (shift.variance ?? 0), 0);
+  const totalExpected = acceptedClosed.reduce((sum, shift) => sum + shift.expectedCashPence, 0);
+  const totalActual = acceptedClosed.reduce((sum, shift) => sum + (shift.actualCashPence ?? 0), 0);
+  const totalVariance = acceptedClosed.reduce((sum, shift) => sum + (shift.variance ?? 0), 0);
   const movementTotals = shifts.reduce<Record<string, number>>((acc, shift) => {
     const summary = summarizeCashDrawerEntries(shift.cashDrawerEntries);
     for (const [entryType, amount] of Object.entries(summary.byType)) {
@@ -154,6 +156,10 @@ export default async function CashDrawerReportPage({
       <PageHeader
         title="Cash Drawer Report"
         subtitle="Track cash expected and cash counted across all tills and shifts."
+        secondaryCta={{
+          label: 'Supporting cash rows',
+          href: `/shifts/drawer?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`,
+        }}
       />
 
       <section className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-relaxed text-blue-900 shadow-sm">
@@ -195,7 +201,7 @@ export default async function CashDrawerReportPage({
         submitTone="secondary"
       >
         <div>
-          <label className="label">Branch</label>
+          <label className="label">Report branch filter</label>
           <select className="input" name="storeId" defaultValue={selectedStoreId}>
             <option value="ALL">All branches</option>
             {stores.map((store) => (

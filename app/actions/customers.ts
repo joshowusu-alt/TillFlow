@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { formString, formOptionalString, formPence } from '@/lib/form-helpers';
-import { withBusinessContext, formAction, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, requireSelectedStoreContext, formAction, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import {
   createCustomer,
   updateCustomer,
@@ -15,13 +15,13 @@ import { audit } from '@/lib/audit';
 
 export async function createCustomerAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const storeId = formString(formData, 'storeId');
+    const { businessId } = await requireSelectedStoreContext(['MANAGER', 'OWNER'], storeId);
 
     const name = formString(formData, 'name');
     const phone = formOptionalString(formData, 'phone');
     const email = formOptionalString(formData, 'email');
     const creditLimitPence = formPence(formData, 'creditLimit');
-    const storeId = formOptionalString(formData, 'storeId');
     const notes = formOptionalString(formData, 'notes');
     const tags = normalizeTagInput(formOptionalString(formData, 'tags'));
 
@@ -100,9 +100,12 @@ export async function quickCreateCustomerAction(data: {
   phone: string | null;
   email: string | null;
   creditLimitPence: number;
+  storeId?: string | null;
 }): Promise<ActionResult<{ id: string; name: string }>> {
   return safeAction(async () => {
-    const { businessId } = await withBusinessContext();
+    // Customers are business-shared. Creation still requires a valid operational-store
+    // context and must not silently resolve the first store.
+    const { businessId } = await requireSelectedStoreContext(undefined, data.storeId);
 
     if (!data.name?.trim()) return err('Customer name is required.');
 
@@ -116,7 +119,7 @@ export async function quickCreateCustomerAction(data: {
       }
     }
 
-    const customer = await quickCreateCustomer(businessId, data);
+    const customer = await quickCreateCustomer(businessId, data, data.storeId);
     return ok(customer);
   });
 }

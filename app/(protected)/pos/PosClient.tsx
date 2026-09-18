@@ -2586,6 +2586,7 @@ export default function PosClient({
       {showQuickCustomer ? (
         <QuickAddCustomer
           currency={business.currency}
+          storeId={store.id}
           onCreated={(customer) => {
             addCustomerOption(customer);
             setCustomerId(customer.id);

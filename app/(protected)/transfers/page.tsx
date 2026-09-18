@@ -3,7 +3,9 @@ import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
+import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 import { prisma } from '@/lib/prisma';
 import { requestStockTransferAction, approveStockTransferAction } from '@/app/actions/transfers';
 import { formatDateTime } from '@/lib/format';
@@ -14,7 +16,17 @@ export default async function TransfersPage({
 }: {
   searchParams?: { error?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, store, stores: authorisedStores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
+
+  if (!store) {
+    return (
+      <SelectOperationalStoreNotice
+        stores={authorisedStores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch before requesting a transfer"
+      />
+    );
+  }
 
   if ((business as any).storeMode !== 'MULTI_STORE') {
     return (
@@ -67,8 +79,8 @@ export default async function TransfersPage({
     }),
   ]);
 
-  const defaultFromStoreId = stores[0]?.id ?? '';
-  const defaultToStoreId = stores.length > 1 ? stores[1].id : stores[0]?.id ?? '';
+  const defaultFromStoreId = store.id;
+  const defaultToStoreId = '';
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -78,28 +90,33 @@ export default async function TransfersPage({
       />
 
       <FormError error={searchParams?.error} />
+      <EffectiveStoreBanner
+        storeName={store.name}
+        actionLabel={`Transfers leave ${store.name}. The destination branch is selected below.`}
+      />
 
       <div className="card p-6">
         <h2 className="text-lg font-display font-semibold">Create Transfer Request</h2>
         <form action={requestStockTransferAction} className="mt-4 grid gap-4 md:grid-cols-2">
           <div>
             <label className="label">From Branch</label>
-            <select className="input" name="fromStoreId" defaultValue={defaultFromStoreId} required>
-              {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
-                </option>
-              ))}
-            </select>
+            <input type="hidden" name="fromStoreId" value={defaultFromStoreId} />
+            <div className="input bg-slate-50 font-medium">{store.name}</div>
+            <p className="mt-1 text-xs text-black/50">
+              Transfers leave the active header branch. Switch branch in the header to change the source.
+            </p>
           </div>
           <div>
             <label className="label">To Branch</label>
             <select className="input" name="toStoreId" defaultValue={defaultToStoreId} required>
-              {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
-                </option>
-              ))}
+              <option value="">Select a store</option>
+              {stores
+                .filter((candidate) => candidate.id !== store.id)
+                .map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.name}
+                  </option>
+                ))}
             </select>
           </div>
           <div>

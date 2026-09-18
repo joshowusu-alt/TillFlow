@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PaymentInput } from './shared';
 
-const { prismaMock, postJournalEntryMock, recordCashDrawerEntryTxMock } = vi.hoisted(() => ({
+const { prismaMock, postJournalEntryMock, recordCashDrawerEntryTxMock, reserveNextDocumentNumberMock } = vi.hoisted(() => ({
   prismaMock: {
     salesInvoice: {
       findFirst: vi.fn(),
@@ -13,6 +13,7 @@ const { prismaMock, postJournalEntryMock, recordCashDrawerEntryTxMock } = vi.hoi
     },
     salesPayment: {
       createMany: vi.fn(),
+      create: vi.fn(),
       findMany: vi.fn(),
     },
     purchasePayment: {
@@ -38,6 +39,11 @@ const { prismaMock, postJournalEntryMock, recordCashDrawerEntryTxMock } = vi.hoi
   },
   postJournalEntryMock: vi.fn(),
   recordCashDrawerEntryTxMock: vi.fn(),
+  reserveNextDocumentNumberMock: vi.fn(),
+}));
+
+vi.mock('./document-numbers', () => ({
+  reserveNextDocumentNumber: (...args: unknown[]) => reserveNextDocumentNumberMock(...args),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -100,9 +106,23 @@ describe('payments service', () => {
         .filter((r: any) => r.type === 'return')
         .map((r: any) => r.value),
     );
+    prismaMock.salesPayment.create.mockImplementation(async ({ data }: any) => ({
+      id: `sp-${data.method ?? 'PAY'}`,
+      amountPence: data.amountPence,
+      ...data,
+    }));
     prismaMock.salesPayment.findMany.mockImplementation(async () => {
+      const fromCreate = prismaMock.salesPayment.create.mock.results
+        .filter((r: any) => r.type === 'return')
+        .map((r: any) => r.value);
+      if (fromCreate.length > 0) return fromCreate;
       const created = prismaMock.salesPayment.createMany.mock.calls.at(-1)?.[0]?.data ?? [];
       return created.map((p: any, i: number) => ({ id: `sp-${i}`, amountPence: p.amountPence }));
+    });
+    reserveNextDocumentNumberMock.mockImplementation(async (_tx: unknown, _biz: string, seq: string) => {
+      if (seq === 'supplier_payment') return 'SPAY-000001';
+      if (seq === 'customer_receipt') return 'RCPT-000001';
+      return `${seq}-000001`;
     });
     recordCashDrawerEntryTxMock.mockResolvedValue({ entry: { id: 'cde-1' } });
     postJournalEntryMock.mockResolvedValue(undefined);
@@ -124,6 +144,7 @@ describe('payments service', () => {
     ).rejects.toThrow('Payment exceeds outstanding balance');
 
     expect(prismaMock.salesPayment.createMany).not.toHaveBeenCalled();
+    expect(prismaMock.salesPayment.create).not.toHaveBeenCalled();
     expect(prismaMock.salesInvoice.update).not.toHaveBeenCalled();
   });
 
@@ -580,13 +601,14 @@ describe('payments service', () => {
       { idempotencyKey: 'idem-cust-cash' },
     );
 
-    expect(prismaMock.salesPayment.createMany).toHaveBeenCalledWith({
-      data: [expect.objectContaining({
+    expect(prismaMock.salesPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
         salesInvoiceId: 'sale-1',
         method: 'CASH',
         amountPence: 200000,
         receiptOrigin: 'LATER_CREDIT_COLLECTION',
-      })],
+        transactionNumber: 'RCPT-000001',
+      }),
     });
     expect(recordCashDrawerEntryTxMock).toHaveBeenCalledWith(
       prismaMock,

@@ -2,11 +2,14 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  excludeBottomTabDuplicates,
   getCashierMenu,
   getManagerMenu,
   getOwnerLauncherMenu,
   MANAGER_MENU_SECTIONS,
+  MOBILE_TAB_NAV_HREFS_BY_ROLE,
   OWNER_BROWSE_AREAS,
+  OWNER_QUICK_ACTIONS,
 } from '@/lib/navigation/mobile-menu-config';
 import { NAV_GROUPS } from '@/lib/navigation-config';
 import { getFeatures } from '@/lib/features';
@@ -158,5 +161,29 @@ describe('P2 mobile navigation parity', () => {
   it('keeps route guards as the authority for Online Orders and Product Labels', () => {
     expect(read('app/(protected)/online-orders/page.tsx')).toContain("requireBusiness(['MANAGER', 'OWNER'])");
     expect(read('app/(protected)/products/labels/page.tsx')).toContain("requireBusiness(['CASHIER', 'MANAGER', 'OWNER'])");
+  });
+
+  it('keeps More and Quick Actions free of permanent bottom-tab duplicates', () => {
+    const ownerHidden = MOBILE_TAB_NAV_HREFS_BY_ROLE.OWNER;
+    const managerHidden = MOBILE_TAB_NAV_HREFS_BY_ROLE.MANAGER;
+    const ownerMenu = getOwnerLauncherMenu(ownerWithStorefront, ownerHidden);
+    const managerMenu = getManagerMenu(managerWithStorefront, managerHidden);
+
+    const ownerQuick = ownerMenu.quickActions.map((item) => item.href);
+    const ownerBrowse = ownerMenu.browseAreas.flatMap((area) => area.items.map((item) => item.href));
+    const managerHrefs = managerMenu.flatMap((section) => section.items.map((item) => item.href));
+
+    for (const href of ownerHidden) {
+      expect(ownerQuick).not.toContain(href);
+      expect(ownerBrowse).not.toContain(href);
+    }
+    for (const href of managerHidden) {
+      expect(managerHrefs).not.toContain(href);
+    }
+
+    expect(ownerQuick).toEqual(expect.arrayContaining(['/pos', '/purchases', '/settings']));
+    expect(
+      excludeBottomTabDuplicates(OWNER_QUICK_ACTIONS, ownerHidden).map((item) => item.href),
+    ).not.toEqual(expect.arrayContaining(['/sales', '/inventory', '/reports']));
   });
 });

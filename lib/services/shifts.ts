@@ -1,9 +1,33 @@
 import { prisma } from '@/lib/prisma';
 import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/services/cash-drawer';
+import { createCashVarianceInvestigationTx } from '@/lib/services/cash-variance';
+import { reserveNextDocumentNumber } from '@/lib/services/document-numbers';
+import { isPrismaUniqueConstraintOn } from '@/lib/services/money-idempotency';
 import { detectCashVarianceRisk } from '@/lib/services/risk-monitor';
 import { audit } from '@/lib/audit';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import { isSqliteDatabaseUrl } from '@/lib/database-runtime';
+
+export const TILL_ALREADY_OPEN_MSG =
+  'A shift is already open for this till. Close or hand over that shift before opening another.';
+
+export const NEGATIVE_ACTUAL_CASH_MSG =
+  'Physical cash counted cannot be negative. Enter the amount actually in the drawer.';
+
+export function assertNonNegativeActualCash(actualCash: number): number {
+  if (!Number.isFinite(actualCash) || actualCash < 0) {
+    throw new Error(NEGATIVE_ACTUAL_CASH_MSG);
+  }
+  return Math.round(actualCash);
+}
+
+function isOpenKeyUniqueConflict(error: unknown): boolean {
+  if (isPrismaUniqueConstraintOn(error, ['openKey'])) return true;
+  const e = error as { code?: string; message?: string; meta?: { target?: unknown } };
+  if (e?.code !== 'P2002') return false;
+  const target = JSON.stringify(e.meta?.target ?? e.message ?? '');
+  return target.includes('openKey');
+}
 
 export type CloseShiftApproval =
   | { mode: 'PIN'; approvingManagerId: string }
@@ -27,16 +51,22 @@ export type CloseShiftInput = {
 
 export type OpenShiftForUserRow = {
   id: string;
+  tillId: string;
+  userId: string;
   openedAt: Date;
   openingCashPence: number;
   expectedCashPence: number;
+  shiftNumber?: string | null;
   till: { name: string };
+  user: { name: string };
   cashDrawerEntries: Array<{ entryType: string; amountPence: number }>;
   salesInvoices: Array<{
     totalPence: number;
     payments: Array<{ method: string; amountPence: number }>;
   }>;
 };
+
+export type StoreTillOccupancyRow = OpenShiftForUserRow;
 
 export async function getOpenShiftsForUserInStore(
   userId: string,
@@ -51,10 +81,14 @@ export async function getOpenShiftsForUserInStore(
     },
     select: {
       id: true,
+      tillId: true,
+      userId: true,
       openedAt: true,
       openingCashPence: true,
       expectedCashPence: true,
+      shiftNumber: true,
       till: { select: { name: true } },
+      user: { select: { name: true } },
       cashDrawerEntries: {
         select: { entryType: true, amountPence: true },
       },
@@ -70,7 +104,149 @@ export async function getOpenShiftsForUserInStore(
   }) as Promise<OpenShiftForUserRow[]>;
 }
 
-export async function performShiftClose(input: CloseShiftInput): Promise<{ id: string }> {
+const STORE_OPEN_SHIFT_SELECT = {
+  id: true,
+  tillId: true,
+  userId: true,
+  openedAt: true,
+  openingCashPence: true,
+  expectedCashPence: true,
+  shiftNumber: true,
+  till: { select: { name: true } },
+  user: { select: { name: true } },
+  cashDrawerEntries: {
+    select: { entryType: true, amountPence: true },
+  },
+  salesInvoices: {
+    where: { paymentStatus: { notIn: ['VOID', 'RETURNED'] } },
+    select: {
+      totalPence: true,
+      payments: { select: { method: true, amountPence: true } },
+    },
+  },
+} as const;
+
+/** Every OPEN shift on the store's tills — occupancy, not just the current user. */
+export async function getStoreTillOccupancy(
+  storeId: string,
+  db: any = prisma,
+): Promise<StoreTillOccupancyRow[]> {
+  return db.shift.findMany({
+    where: {
+      status: 'OPEN',
+      till: { storeId },
+    },
+    select: STORE_OPEN_SHIFT_SELECT,
+    orderBy: { openedAt: 'asc' },
+  }) as Promise<StoreTillOccupancyRow[]>;
+}
+
+export type OpenShiftInput = {
+  businessId: string;
+  storeId: string;
+  actor: { userId: string; userName: string | null; userRole: string };
+  tillId: string;
+  openingCashPence: number;
+};
+
+export async function performShiftOpen(
+  input: OpenShiftInput,
+): Promise<{ id: string; tillId: string; storeId: string; openingCashPence: number }> {
+  return measureServerOperation(
+    'action.shift.open',
+    () => performShiftOpenImpl(input),
+    {
+      businessId: input.businessId,
+      storeId: input.storeId,
+      action: 'openShiftAction',
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function performShiftOpenImpl(
+  input: OpenShiftInput,
+): Promise<{ id: string; tillId: string; storeId: string; openingCashPence: number }> {
+  const openingCashPence = Math.max(0, Math.round(input.openingCashPence));
+
+  const till = await prisma.till.findFirst({
+    where: {
+      id: input.tillId,
+      active: true,
+      storeId: input.storeId,
+      store: { businessId: input.businessId },
+    },
+    select: { id: true, storeId: true, store: { select: { businessId: true } } },
+  });
+  if (!till || till.store.businessId !== input.businessId) {
+    throw new Error('Till not found for your business.');
+  }
+
+  const created = await prisma.$transaction(async (tx) => {
+    const existingShift = await tx.shift.findFirst({
+      where: { tillId: till.id, status: 'OPEN' },
+      select: { id: true },
+    });
+    if (existingShift) {
+      throw new Error(TILL_ALREADY_OPEN_MSG);
+    }
+
+    const shiftNumber = await reserveNextDocumentNumber(tx, input.businessId, 'shift');
+    let shift;
+    try {
+      shift = await tx.shift.create({
+        data: {
+          tillId: till.id,
+          userId: input.actor.userId,
+          openingCashPence,
+          expectedCashPence: 0,
+          status: 'OPEN',
+          openKey: till.id,
+          shiftNumber,
+        },
+      });
+    } catch (error) {
+      if (isOpenKeyUniqueConflict(error)) {
+        throw new Error(TILL_ALREADY_OPEN_MSG);
+      }
+      throw error;
+    }
+
+    await recordCashDrawerEntryTx(tx, {
+      businessId: input.businessId,
+      storeId: till.storeId,
+      tillId: till.id,
+      shiftId: shift.id,
+      createdByUserId: input.actor.userId,
+      cashierUserId: input.actor.userId,
+      entryType: 'OPEN_FLOAT',
+      amountPence: openingCashPence,
+      reasonCode: 'OPEN_FLOAT',
+      reason: 'Till opened with float',
+      referenceType: 'SHIFT',
+      referenceId: shift.id,
+      actor: {
+        userId: input.actor.userId,
+        userName: input.actor.userName ?? 'Unknown',
+        userRole: input.actor.userRole,
+      },
+    });
+
+    return shift;
+  });
+
+  return {
+    id: created.id,
+    tillId: till.id,
+    storeId: till.storeId,
+    openingCashPence,
+  };
+}
+
+export async function performShiftClose(
+  input: CloseShiftInput,
+): Promise<{ id: string; closureNumber: string | null; investigationId: string | null }> {
   return measureServerOperation(
     'action.shift.close',
     () => performShiftCloseImpl(input),
@@ -83,8 +259,11 @@ export async function performShiftClose(input: CloseShiftInput): Promise<{ id: s
   );
 }
 
-async function performShiftCloseImpl(input: CloseShiftInput): Promise<{ id: string }> {
-  const { businessId, actor, shiftId, actualCash, notes, varianceReasonCode, varianceReason, approval } = input;
+async function performShiftCloseImpl(
+  input: CloseShiftInput,
+): Promise<{ id: string; closureNumber: string | null; investigationId: string | null }> {
+  const { businessId, actor, shiftId, notes, varianceReasonCode, varianceReason, approval } = input;
+  const actualCash = assertNonNegativeActualCash(input.actualCash);
 
   const shift = await prisma.shift.findFirst({
     where: {
@@ -135,6 +314,7 @@ async function performShiftCloseImpl(input: CloseShiftInput): Promise<{ id: stri
     if (!lockedShift) {
       throw new Error('Shift was already closed by another request');
     }
+    assertNonNegativeActualCash(actualCash);
 
     let lockedCardTotal = 0;
     let lockedTransferTotal = 0;
@@ -207,6 +387,8 @@ async function performShiftCloseImpl(input: CloseShiftInput): Promise<{ id: stri
       actor: { userId: actor.userId, userName: actor.userName ?? 'Unknown', userRole: actor.userRole },
     });
 
+    const closureNumber = await reserveNextDocumentNumber(tx, businessId, 'shift_closure');
+
     const updateResult = await tx.shift.updateMany({
       where: { id: lockedShift.id, status: 'OPEN' },
       data: {
@@ -224,6 +406,7 @@ async function performShiftCloseImpl(input: CloseShiftInput): Promise<{ id: stri
         closeManagerApprovedByUserId: approval.approvingManagerId,
         closeManagerApprovalMode: approval.mode === 'PIN' ? 'PIN' : 'OWNER_OVERRIDE',
         closureSnapshotJson: JSON.stringify(lockedSnapshot),
+        closureNumber,
         status: 'CLOSED',
         openKey: null,
         ...(approval.mode === 'OWNER_OVERRIDE' && {
@@ -236,9 +419,21 @@ async function performShiftCloseImpl(input: CloseShiftInput): Promise<{ id: stri
     if (updateResult.count === 0) {
       throw new Error('Shift was already closed by another request');
     }
+
+    const investigation = await createCashVarianceInvestigationTx(tx as never, {
+      businessId,
+      shiftId: lockedShift.id,
+      variancePence: lockedVariance,
+      cashierExplanation: varianceReason,
+      actor,
+    });
+
     return {
       expectedCashPence: lockedExpectedCash,
+      actualCashPence: actualCash,
       variancePence: lockedVariance,
+      closureNumber,
+      investigationId: investigation?.id ?? null,
     };
   });
 
@@ -281,5 +476,9 @@ async function performShiftCloseImpl(input: CloseShiftInput): Promise<{ id: stri
     thresholdPence: business?.cashVarianceRiskThresholdPence ?? 2000,
   });
 
-  return { id: shift.id };
+  return {
+    id: shift.id,
+    closureNumber: closedState.closureNumber,
+    investigationId: closedState.investigationId,
+  };
 }

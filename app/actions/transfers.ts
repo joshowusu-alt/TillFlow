@@ -2,7 +2,8 @@
 
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
-import { formAction, withBusinessContext, err, ok, safeAction, type ActionResult } from '@/lib/action-utils';
+import { prisma } from '@/lib/prisma';
+import { formAction, withBusinessContext, requireSelectedStoreContext, err, ok, safeAction, type ActionResult } from '@/lib/action-utils';
 import { formInt, formOptionalString, formString } from '@/lib/form-helpers';
 import { audit } from '@/lib/audit';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
@@ -11,10 +12,9 @@ import { approveAndCompleteStockTransfer, requestStockTransfer } from '@/lib/ser
 
 export async function requestStockTransferAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
-
     const fromStoreId = formString(formData, 'fromStoreId');
     const toStoreId = formString(formData, 'toStoreId');
+    const { user, businessId } = await requireSelectedStoreContext(['MANAGER', 'OWNER'], fromStoreId);
     const productId = formString(formData, 'productId');
     const qtyBase = formInt(formData, 'qtyBase');
     const reason = formOptionalString(formData, 'reason');
@@ -67,6 +67,14 @@ export async function approveStockTransferActionSafe(input: {
 }): Promise<ActionResult<{ transferId: string }>> {
   return safeAction(async () => {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const existing = await prisma.stockTransfer.findFirst({
+      where: { id: input.transferId, businessId },
+      select: { fromStoreId: true, toStoreId: true, status: true },
+    });
+    if (!existing) {
+      return err('Transfer not found.');
+    }
+    await requireSelectedStoreContext(['MANAGER', 'OWNER'], existing.fromStoreId);
     const pin = input.managerPin.trim();
     if (!pin) {
       return err('Manager PIN is required to approve transfer.');

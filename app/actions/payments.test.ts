@@ -2,13 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   withBusinessContextMock,
+  requireSelectedStoreContextMock,
   recordSupplierPaymentMock,
   redirectMock,
   revalidateTagMock,
   revalidateOwnerDashboardCacheMock,
+  purchaseInvoiceFindFirstMock,
 } = vi.hoisted(() => ({
   withBusinessContextMock: vi.fn(),
+  requireSelectedStoreContextMock: vi.fn(),
   recordSupplierPaymentMock: vi.fn(),
+  purchaseInvoiceFindFirstMock: vi.fn(),
   redirectMock: vi.fn((url: string) => {
     const err = new Error(`NEXT_REDIRECT:${url}`);
     (err as any).digest = `NEXT_REDIRECT;replace;${url};303`;
@@ -23,8 +27,20 @@ vi.mock('@/lib/action-utils', async () => {
   return {
     ...actual,
     withBusinessContext: withBusinessContextMock,
+    requireSelectedStoreContext: requireSelectedStoreContextMock,
   };
 });
+
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    purchaseInvoice: {
+      findFirst: purchaseInvoiceFindFirstMock,
+    },
+    till: {
+      findFirst: vi.fn().mockResolvedValue({ id: 'till-1', storeId: 'store-1' }),
+    },
+  },
+}));
 
 vi.mock('@/lib/services/payments', () => ({
   recordCustomerPayment: vi.fn(),
@@ -54,6 +70,12 @@ function form(data: Record<string, string>) {
 describe('recordSupplierPaymentAction authorisation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    purchaseInvoiceFindFirstMock.mockResolvedValue({ storeId: 'store-1' });
+    requireSelectedStoreContextMock.mockResolvedValue({
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      user: { id: 'u-owner', role: 'OWNER' },
+    });
     recordSupplierPaymentMock.mockResolvedValue({
       invoice: { id: 'inv-1', payments: [] },
       replayed: false,
@@ -70,6 +92,7 @@ describe('recordSupplierPaymentAction authorisation', () => {
       recordSupplierPaymentAction(
         form({
           invoiceId: 'inv-1',
+          storeId: 'store-1',
           paymentMethod: 'TRANSFER',
           amount: '10.00',
           idempotencyKey: 'key-owner-1',
@@ -100,6 +123,7 @@ describe('recordSupplierPaymentAction authorisation', () => {
       recordSupplierPaymentAction(
         form({
           invoiceId: 'inv-1',
+          storeId: 'store-1',
           paymentMethod: 'CASH',
           amount: '5.00',
           tillId: 'till-1',

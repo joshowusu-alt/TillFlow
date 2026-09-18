@@ -978,7 +978,9 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
   const requestedStoreId = input.storeId?.trim() ?? '';
   const store = requestedStoreId
     ? business.stores.find((candidate) => candidate.id === requestedStoreId)
-    : business.stores[0];
+    : business.stores.length === 1
+      ? business.stores[0]
+      : undefined;
   if (!store) {
     throw new UserError('Choose a pickup store before checking out.');
   }

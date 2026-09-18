@@ -7,6 +7,7 @@ import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
 import { isInventoryIncreasePhase2EnabledForBusiness } from '@/lib/inventory-increase-flag';
 import { incrementInventoryBalanceQtyOnly } from './shared';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { reserveNextDocumentNumber } from '@/lib/services/document-numbers';
 
 export const INVENTORY_INCREASE_SCHEMA_VERSION = 1;
 
@@ -466,6 +467,11 @@ async function createInventoryIncreaseImpl(
       );
     }
     const afterQty = beforeQty + qtyBase;
+    const transactionNumber = await reserveNextDocumentNumber(
+      tx,
+      input.businessId,
+      'stock_adjustment',
+    );
 
     const created = await tx.stockAdjustment.create({
       data: {
@@ -482,6 +488,7 @@ async function createInventoryIncreaseImpl(
         unitCostBasePence,
         valuePence,
         schemaVersion: INVENTORY_INCREASE_SCHEMA_VERSION,
+        transactionNumber,
         userId: input.userId,
       },
       select: ADJUSTMENT_SELECT,

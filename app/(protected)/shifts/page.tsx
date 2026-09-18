@@ -1,22 +1,102 @@
+import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import { requireBusinessStore } from '@/lib/auth';
-import { getOpenShiftsForUserInStore } from '@/lib/services/shifts';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import { withStoreQuery } from '@/lib/reliability/selected-store';
+import {
+  FOREIGN_OPERATIONAL_STORE_MSG,
+  resolveOperationalStore,
+} from '@/lib/reliability/operational-store';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
+import StoreLinkConflictBanner from '@/components/StoreLinkConflictBanner';
+import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
+import { getOpenShiftsForUserInStore, getStoreTillOccupancy } from '@/lib/services/shifts';
 import ShiftClient from './ShiftClient';
 
-export default async function ShiftsPage() {
-  const { user, business, store: baseStore } = await requireBusinessStore();
+function summarizeOpenShift(openShift: {
+  id: string;
+  tillId: string;
+  userId: string;
+  openedAt: Date;
+  openingCashPence: number;
+  expectedCashPence: number;
+  till: { name: string };
+  user: { name: string };
+  cashDrawerEntries: Array<{ entryType: string; amountPence: number }>;
+  salesInvoices: Array<{
+    totalPence: number;
+    payments: Array<{ method: string; amountPence: number }>;
+  }>;
+}) {
+  let cardTotal = 0;
+  let transferTotal = 0;
+  let momoTotal = 0;
+  let salesTotal = 0;
 
-  const isOwner = user.role === 'OWNER';
+  for (const invoice of openShift.salesInvoices) {
+    salesTotal += invoice.totalPence;
+    for (const payment of invoice.payments) {
+      if (payment.method === 'CARD') cardTotal += payment.amountPence;
+      if (payment.method === 'TRANSFER') transferTotal += payment.amountPence;
+      if (payment.method === 'MOBILE_MONEY') momoTotal += payment.amountPence;
+    }
+  }
+
+  const cashByType = openShift.cashDrawerEntries.reduce<Record<string, number>>((acc, entry) => {
+    acc[entry.entryType] = (acc[entry.entryType] ?? 0) + entry.amountPence;
+    return acc;
+  }, {});
+
+  return {
+    ...openShift,
+    salesCount: openShift.salesInvoices.length,
+    salesTotal,
+    expectedCash: openShift.expectedCashPence,
+    cardTotal,
+    transferTotal,
+    momoTotal,
+    cashByType,
+  };
+}
+
+export default async function ShiftsPage({
+  searchParams,
+}: {
+  searchParams?: { storeId?: string };
+}) {
+  const { user, business, store, stores, operational } = await requireBusinessAndOptionalStore();
+  const urlResolution = resolveOperationalStore({
+    stores,
+    cookieStoreId: operational.cookieStoreId ?? store?.id,
+    urlStoreId: searchParams?.storeId,
+  });
+  if (urlResolution.reason === 'foreign-rejected') {
+    return (
+      <div className="card mx-auto max-w-xl p-6 text-sm text-rose-800">
+        {FOREIGN_OPERATIONAL_STORE_MSG}
+      </div>
+    );
+  }
+  if (!store) {
+    return (
+      <SelectOperationalStoreNotice
+        stores={stores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch to manage shifts"
+      />
+    );
+  }
+
+  const isManagerOrOwner = user.role === 'OWNER' || user.role === 'MANAGER';
 
   // Run all queries in parallel — tills, every current-user open shift, and recent shifts.
-  const [tills, openShifts, recentShifts] = await Promise.all([
+  const [tills, openShifts, recentShifts, storeOccupancy] = await Promise.all([
     prisma.till.findMany({
-      where: { storeId: baseStore.id },
+      where: { storeId: store.id },
       select: { id: true, name: true, active: true }
     }),
-    getOpenShiftsForUserInStore(user.id, baseStore.id),
+    getOpenShiftsForUserInStore(user.id, store.id),
     prisma.shift.findMany({
-      where: { till: { storeId: baseStore.id } },
+      where: { till: { storeId: store.id } },
       orderBy: { openedAt: 'desc' },
       take: 10,
       select: {
@@ -28,136 +108,105 @@ export default async function ShiftsPage() {
         expectedCashPence: true,
         actualCashPence: true,
         variance: true,
+        closureNumber: true,
+        shiftNumber: true,
         cardTotalPence: true,
         transferTotalPence: true,
         momoTotalPence: true,
         user: { select: { name: true } },
         till: { select: { name: true } },
+        cashVarianceInvestigation: {
+          select: { id: true, status: true, transactionNumber: true },
+        },
         _count: { select: { salesInvoices: { where: { paymentStatus: { notIn: ['VOID', 'RETURNED'] } } } } }
       }
     }),
+    getStoreTillOccupancy(store.id),
   ]);
 
-  const openShiftSummaries = openShifts.map((openShift) => {
-    let cardTotal = 0;
-    let transferTotal = 0;
-    let momoTotal = 0;
-    let salesCount = openShift.salesInvoices.length;
-    let salesTotal = 0;
-
-    for (const invoice of openShift.salesInvoices) {
-      salesTotal += invoice.totalPence;
-      for (const payment of invoice.payments) {
-        if (payment.method === 'CARD') cardTotal += payment.amountPence;
-        if (payment.method === 'TRANSFER') transferTotal += payment.amountPence;
-        if (payment.method === 'MOBILE_MONEY') momoTotal += payment.amountPence;
-      }
-    }
-
-    const cashByType = openShift.cashDrawerEntries.reduce<Record<string, number>>((acc, entry) => {
-      acc[entry.entryType] = (acc[entry.entryType] ?? 0) + entry.amountPence;
-      return acc;
-    }, {});
-
+  const openShiftSummaries = openShifts.map((row) => ({
+    ...summarizeOpenShift(row),
+    userName: row.user.name,
+    shiftNumber: row.shiftNumber,
+  }));
+  const occupiedTills = storeOccupancy.map((row) => {
+    const summary = summarizeOpenShift(row);
     return {
-      ...openShift,
-      salesCount,
-      salesTotal,
-      expectedCash: openShift.expectedCashPence,
-      cardTotal,
-      transferTotal,
-      momoTotal,
-      cashByType
+      tillId: row.tillId,
+      tillName: row.till.name,
+      shiftId: row.id,
+      userId: row.userId,
+      userName: row.user.name,
+      openedAt: row.openedAt.toISOString(),
+      openingCashPence: row.openingCashPence,
+      salesCount: summary.salesCount,
+      salesTotal: summary.salesTotal,
+      expectedCash: summary.expectedCash,
+      cardTotal: summary.cardTotal,
+      transferTotal: summary.transferTotal,
+      momoTotal: summary.momoTotal,
+      cashByType: summary.cashByType,
+      shiftNumber: row.shiftNumber,
     };
   });
 
-  // For owners: fetch open shifts belonging to other users on this store's tills
-  let otherOpenShiftSummaries: {
-    id: string;
-    till: { name: string };
-    userName: string;
-    openedAt: string;
-    openingCashPence: number;
-    salesCount: number;
-    salesTotal: number;
-    expectedCash: number;
-    cardTotal: number;
-    transferTotal: number;
-    momoTotal: number;
-    cashByType?: Record<string, number>;
-  }[] = [];
-
-  if (isOwner) {
-    const otherShifts = await prisma.shift.findMany({
-      where: {
-        status: 'OPEN',
-        userId: { not: user.id },
-        till: { storeId: baseStore.id },
-      },
-      select: {
-        id: true,
-        openedAt: true,
-        openingCashPence: true,
-        expectedCashPence: true,
-        user: { select: { name: true } },
-        till: { select: { name: true } },
-        cashDrawerEntries: {
-          select: { entryType: true, amountPence: true },
-        },
-        salesInvoices: {
-          select: {
-            totalPence: true,
-            payments: { select: { method: true, amountPence: true } },
-          },
-        },
-      },
-    });
-
-    otherOpenShiftSummaries = otherShifts.map((s) => {
-      let cardTotal = 0;
-      let transferTotal = 0;
-      let momoTotal = 0;
-      let salesTotal = 0;
-      for (const inv of s.salesInvoices) {
-        salesTotal += inv.totalPence;
-        for (const p of inv.payments) {
-          if (p.method === 'CARD') cardTotal += p.amountPence;
-          if (p.method === 'TRANSFER') transferTotal += p.amountPence;
-          if (p.method === 'MOBILE_MONEY') momoTotal += p.amountPence;
-        }
-      }
-      const cashByType = s.cashDrawerEntries.reduce<Record<string, number>>((acc, entry) => {
-        acc[entry.entryType] = (acc[entry.entryType] ?? 0) + entry.amountPence;
-        return acc;
-      }, {});
-      return {
-        id: s.id,
-        till: s.till,
-        userName: s.user.name,
-        openedAt: s.openedAt.toISOString(),
-        openingCashPence: s.openingCashPence,
-        salesCount: s.salesInvoices.length,
-        salesTotal,
-        expectedCash: s.expectedCashPence,
-        cardTotal,
-        transferTotal,
-        momoTotal,
-        cashByType,
-      };
-    });
-  }
+  const otherOpenShiftSummaries = isManagerOrOwner
+    ? occupiedTills
+        .filter((row) => row.userId !== user.id)
+        .map((row) => ({
+          id: row.shiftId,
+          tillId: row.tillId,
+          till: { name: row.tillName },
+          userName: row.userName,
+          openedAt: row.openedAt,
+          openingCashPence: row.openingCashPence,
+          salesCount: row.salesCount,
+          salesTotal: row.salesTotal,
+          expectedCash: row.expectedCash,
+          cardTotal: row.cardTotal,
+          transferTotal: row.transferTotal,
+          momoTotal: row.momoTotal,
+          cashByType: row.cashByType,
+          shiftNumber: row.shiftNumber,
+        }))
+    : [];
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 sm:space-y-5">
       <div className="flex flex-col gap-1 rounded-[1.5rem] border border-slate-200/80 bg-white/80 px-4 py-4 shadow-card backdrop-blur-xl sm:rounded-[1.75rem] sm:px-5 md:px-6 md:py-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-black/35">Cash Management</p>
         <h1 className="text-[1.6rem] font-display font-bold leading-tight text-ink sm:text-2xl md:text-[1.85rem]">Shift Reconciliation</h1>
-        <p className="text-sm font-medium text-slate-500">Open, monitor, and close till shifts. All cash counts are audited.</p>
+        <p className="text-sm font-medium text-slate-500">Open, monitor, and close till shifts. All cash counts are audited. One open shift per till.</p>
+        <div className="mt-2 flex flex-wrap gap-3 text-sm font-medium">
+          <Link href={withStoreQuery('/shifts/drawer', store.id)} className="text-accent underline underline-offset-2">
+            Cash drawer drill-down
+          </Link>
+          <Link href={withStoreQuery('/shifts/variance', store.id)} className="text-accent underline underline-offset-2">
+            Cash variance investigations
+          </Link>
+        </div>
+        <div className="mt-3 space-y-2">
+          <EffectiveStoreBanner
+            storeName={store.name}
+            actionLabel="Shift open, cash movement, and close will be recorded in this branch."
+          />
+          {urlResolution.conflict ? (
+            <StoreLinkConflictBanner
+              activeStoreName={store.name}
+              linkStoreName={urlResolution.conflict.urlStoreName}
+              linkStoreId={urlResolution.conflict.urlStoreId}
+              returnTo="/shifts"
+            />
+          ) : null}
+        </div>
       </div>
 
       <ShiftClient
+        storeId={store.id}
+        storeName={store.name}
         tills={tills}
         openShifts={openShiftSummaries}
+        occupiedTills={occupiedTills}
         otherOpenShifts={otherOpenShiftSummaries}
         recentShifts={recentShifts.map((s) => ({
           id: s.id,
@@ -171,12 +220,17 @@ export default async function ShiftsPage() {
           expectedCashPence: s.expectedCashPence,
           actualCashPence: s.actualCashPence,
           variance: s.variance,
+          closureNumber: s.closureNumber,
+          shiftNumber: s.shiftNumber,
           cardTotalPence: s.cardTotalPence,
           transferTotalPence: s.transferTotalPence,
-          momoTotalPence: s.momoTotalPence ?? 0
+          momoTotalPence: s.momoTotalPence ?? 0,
+          investigationId: s.cashVarianceInvestigation?.id ?? null,
+          investigationStatus: s.cashVarianceInvestigation?.status ?? null,
         }))}
         currency={business.currency}
         userRole={user.role}
+        currentUserId={user.id}
       />
     </div>
   );

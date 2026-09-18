@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
-import { requireBusinessStore } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
+import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
@@ -35,8 +36,8 @@ export default async function ReorderSuggestionsPage({
 }: {
   searchParams: QueryParams;
 }) {
-  const { business, store: defaultStore } = await requireBusinessStore(['MANAGER', 'OWNER']);
-  if (!business || !defaultStore) {
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  if (!business) {
     return <EmptyState icon="box" title="Business setup incomplete" subtitle="Complete your business setup to see reorder suggestions." cta={{ label: 'Complete Setup', href: '/onboarding' }} />;
   }
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
@@ -67,17 +68,57 @@ export default async function ReorderSuggestionsPage({
     }),
     {
       businessId: business.id,
-      storeId: defaultStore.id,
+      storeId: searchParams.storeId ?? 'unselected',
       route: '/reports/reorder-suggestions',
       cacheState: 'uncached-page-load',
     },
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'report' },
   );
 
-  const selectedStoreId =
-    searchParams.storeId && stores.some((candidate) => candidate.id === searchParams.storeId)
-      ? searchParams.storeId
-      : defaultStore.id;
+  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams.storeId);
+  if (!selectedStoreId) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Reorder Suggestions"
+          subtitle="Products that may need restocking based on recent sales and current stock."
+        />
+        <div className="card p-3.5 sm:p-4">
+          <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <label className="label">Store</label>
+              <select name="storeId" className="input" defaultValue="">
+                <option value="">Select a branch</option>
+                {stores.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Sales period</label>
+              <input name="days" type="number" min={7} max={90} className="input" defaultValue={lookbackDays} />
+            </div>
+            <div>
+              <label className="label">Supplier lead time</label>
+              <input name="lead" type="number" min={1} max={30} className="input" defaultValue={leadDays} />
+            </div>
+            <div className="flex items-end">
+              <button className="btn-primary w-full">Recalculate</button>
+            </div>
+          </form>
+        </div>
+        <div className="card p-6">
+          <EmptyState
+            icon="box"
+            title="Select a branch"
+            subtitle="Choose a store before viewing or marking reorder suggestions. TillFlow will not default to the first store."
+          />
+        </div>
+      </div>
+    );
+  }
 
   const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
 

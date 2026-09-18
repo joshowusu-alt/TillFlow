@@ -391,29 +391,34 @@ export async function createCustomer(
 /**
  * Quick-create a customer for use from the POS screen.
  *
- * When the business uses BRANCH scope the customer is automatically assigned
- * to the first store (mirrors the original quick-create behaviour).
- *
- * Returns only `{ id, name }` — the minimum the POS needs.
- *
- * Throws a descriptive `Error` when the business cannot be found.
+ * When the business uses BRANCH scope the customer is assigned to the
+ * explicit POS store, or the sole store. Multiple stores without a store
+ * fail closed.
  */
 export async function quickCreateCustomer(
   businessId: string,
-  data: CustomerWriteData
+  data: CustomerWriteData,
+  requestedStoreId?: string | null,
 ): Promise<{ id: string; name: string }> {
   const business = await prisma.business.findUnique({
     where: { id: businessId },
     select: {
       customerScope: true,
-      stores: { select: { id: true }, take: 1 },
+      stores: { select: { id: true } },
     },
   });
   if (!business) throw new Error('Business not found.');
 
   let storeId: string | null = null;
   if (business.customerScope === 'BRANCH') {
-    storeId = business.stores[0]?.id ?? null;
+    const requested = requestedStoreId?.trim() ?? '';
+    if (requested && business.stores.some((store) => store.id === requested)) {
+      storeId = requested;
+    } else if (business.stores.length === 1) {
+      storeId = business.stores[0].id;
+    } else {
+      throw new Error('Select a store before adding this customer.');
+    }
   }
 
   const created = await prisma.customer.create({

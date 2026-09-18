@@ -9,6 +9,7 @@ import ProductUnitPricingEditor, { type EditableProductUnitConfig } from '@/comp
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
 import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared';
 import type { PaymentStatus } from '@/lib/services/shared';
+import { creditPurchaseRequiresSupplier } from '@/lib/reliability/walkthrough-contracts';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import CameraScanner from '@/app/(protected)/pos/components/CameraScanner';
 import {
@@ -547,6 +548,9 @@ export default function PurchaseFormClient({
   const transferPaidPence = hasMethod('TRANSFER') ? parseCurrencyToPence(transferPaid) : 0;
   const totalPaid = cashPaidPence + cardPaidPence + transferPaidPence;
   const overpay = totals.total > 0 && totalPaid > totals.total;
+  const effectivePaid = paymentStatus === 'PAID' && totalPaid === 0 ? totals.total : totalPaid;
+  const supplierRequired = creditPurchaseRequiresSupplier(paymentStatus, effectivePaid, totals.total);
+  const missingRequiredSupplier = supplierRequired && !supplierId;
 
   const togglePaymentMethod = (method: PaymentMethod) => {
     const exists = paymentMethods.includes(method);
@@ -775,21 +779,32 @@ export default function PurchaseFormClient({
             </button>
             </div>
             <div>
-            <label className="label">Supplier</label>
-            <select className="input" name="supplierId" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-              <option value="">No supplier selected</option>
+            <label className="label">Supplier{supplierRequired ? ' (required for unpaid purchases)' : ''}</label>
+            <select
+              className="input"
+              name="supplierId"
+              value={supplierId}
+              required={supplierRequired}
+              onChange={(e) => setSupplierId(e.target.value)}
+            >
+              <option value="">{supplierRequired ? 'Select a supplier' : 'No supplier selected'}</option>
               {suppliers.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
                   {supplier.name}
                 </option>
               ))}
             </select>
-            {!supplierId && (
+            {missingRequiredSupplier ? (
+              <p className="mt-1 flex items-center gap-1 text-xs text-amber-700">
+                <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+                Credit purchases require a supplier.
+              </p>
+            ) : !supplierId ? (
               <p className="mt-1 flex items-center gap-1 text-xs text-amber-700">
                 <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
                 No supplier selected - recording as unattributed delivery.
               </p>
-            )}
+            ) : null}
             </div>
             <div className="sm:col-span-2 xl:col-span-1">
             <label className="label">Product</label>
@@ -1215,7 +1230,7 @@ export default function PurchaseFormClient({
             Ready to receive <span className="font-semibold text-ink">{cart.length}</span> line{cart.length === 1 ? '' : 's'} totaling{' '}
             <span className="font-semibold text-ink">{formatMoney(totals.total, currency)}</span>.
           </div>
-          <ReceivePurchaseButton disabled={cart.length === 0 || overpay} />
+          <ReceivePurchaseButton disabled={cart.length === 0 || overpay || missingRequiredSupplier} />
         </div>
       </form>
 

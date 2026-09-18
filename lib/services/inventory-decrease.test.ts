@@ -63,6 +63,9 @@ vi.mock('./shared', async () => {
 vi.mock('./risk-monitor', () => ({
   detectInventoryAdjustmentRisk: detectInventoryAdjustmentRiskMock,
 }));
+vi.mock('@/lib/services/document-numbers', () => ({
+  reserveNextDocumentNumber: vi.fn().mockResolvedValue('ADJ-000001'),
+}));
 const BIZ = 'biz-1';
 const STORE = 'store-1';
 const PRODUCT = 'prod-1';

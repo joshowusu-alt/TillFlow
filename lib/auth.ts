@@ -342,12 +342,23 @@ const _getBusiness = cache(async (businessId: string) => {
 
 /**
  * Cached store lookup — only hits DB once per request.
+ * Kept for compatibility. Multi-store writes must not use this first-store path.
  */
 const _getStore = cache(async (businessId: string) => {
   return withAuthReadP1017Retry('auth.store.findFirst', () =>
     prisma.store.findFirst({
       where: { businessId },
       select: { id: true, name: true, address: true, businessId: true },
+    }),
+  );
+});
+
+const _getStores = cache(async (businessId: string) => {
+  return withAuthReadP1017Retry('auth.store.findMany', () =>
+    prisma.store.findMany({
+      where: { businessId },
+      select: { id: true, name: true, address: true, businessId: true },
+      orderBy: { createdAt: 'asc' },
     }),
   );
 });
@@ -370,26 +381,42 @@ export async function requireBusiness(roles?: Role[]) {
 }
 
 /**
- * Authenticate and return user + Business + first Store.
- * Fetches business and store in parallel to reduce latency.
+ * Authenticate and return user + Business + the operational store.
+ * Redirects to settings only when the business has no stores at all.
  */
 export async function requireBusinessStore(roles?: Role[]) {
-  const { user, business, store } = await requireBusinessAndOptionalStore(roles);
-  if (!store) redirect('/settings');
-  return { user, business, store };
+  const result = await requireBusinessAndOptionalStore(roles);
+  if (result.stores.length === 0) redirect('/settings');
+  if (!result.store) redirect('/settings');
+  return { user: result.user, business: result.business, store: result.store };
 }
 
 /**
- * Authenticate and return user + Business + first Store (store may be null).
- * Fetches business and store in parallel for protected shell layout gates.
+ * Authenticate and return user + Business + the authoritative operational store.
+ * Never substitutes the first-created store among many.
  */
 export async function requireBusinessAndOptionalStore(roles?: Role[]) {
   const user = roles ? await requireRole(roles) : await requireUser();
-  const [business, store] = await Promise.all([
+  const [business, stores] = await Promise.all([
     _getBusiness(user.businessId),
-    _getStore(user.businessId),
+    _getStores(user.businessId),
   ]);
   if (!business) redirect('/login');
-  return { user, business, store };
+
+  const [{ resolveOperationalStore }, { readOperationalStoreCookie }] = await Promise.all([
+    import('@/lib/reliability/operational-store'),
+    import('@/lib/reliability/operational-store-cookie'),
+  ]);
+  const resolution = resolveOperationalStore({
+    stores,
+    cookieStoreId: readOperationalStoreCookie(),
+  });
+  return {
+    user,
+    business,
+    store: resolution.store,
+    stores,
+    operational: resolution,
+  };
 }
 

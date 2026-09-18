@@ -20,8 +20,25 @@ import {
   replayOrConflict,
   sumAmountPence,
 } from './money-idempotency';
+import { reserveNextDocumentNumber } from './document-numbers';
+import {
+  assertExpenseStateMatchesAmounts,
+  assertNoOverpayment,
+  remainingBalancePence,
+} from '@/lib/reliability/walkthrough-contracts';
+import {
+  assertInventoryLossExpenseAllowed,
+  assertInventoryLossOverrideAuthority,
+  assertSourceAdjustmentAvailable,
+  composeInventoryLossNotes,
+  INVENTORY_LOSS_ADJUSTMENT_NOT_FOUND_MSG,
+  INVENTORY_LOSS_DUPLICATE_ADJUSTMENT_MSG,
+  isSourceAdjustmentUniqueConflict,
+} from './inventory-loss-expense-guard';
 
 export const CASH_EXPENSE_SHIFT_REQUIRED_MSG = EXPLICIT_CASH_TILL_REQUIRED_MSG;
+export const EXPENSE_PAYMENT_METHOD_REQUIRED_MSG =
+  'Payment method is required when an amount is paid.';
 
 export type ExpenseInput = {
   businessId: string;
@@ -42,6 +59,10 @@ export type ExpenseInput = {
   notes?: string | null;
   /** Required for durable replay when the first payment is externally repeatable. */
   idempotencyKey?: string;
+  inventoryLossOverride?: boolean;
+  inventoryLossOverrideReason?: string | null;
+  sourceAdjustmentId?: string | null;
+  actorRole?: string | null;
 };
 
 export async function createExpense(input: ExpenseInput) {
@@ -80,10 +101,41 @@ async function createExpenseImpl(input: ExpenseInput) {
   if (!store) throw new Error('Store not found for your business');
 
   const amountPaid = Math.max(input.amountPaidPence ?? 0, 0);
-  if (amountPaid > input.amountPence) throw new Error('Paid amount cannot exceed expense total');
+  assertNoOverpayment(input.amountPence, amountPaid);
+  assertExpenseStateMatchesAmounts(input.paymentStatus, input.amountPence, amountPaid);
 
-  const method = input.method ?? 'CASH';
+  assertInventoryLossExpenseAllowed({
+    accountCode: account.code,
+    override: input.inventoryLossOverride,
+    reason: input.inventoryLossOverrideReason,
+  });
+  assertInventoryLossOverrideAuthority({
+    accountCode: account.code,
+    override: input.inventoryLossOverride,
+    role: input.actorRole,
+    sourceAdjustmentId: input.sourceAdjustmentId,
+  });
+
+  const sourceAdjustmentId = input.sourceAdjustmentId?.trim() || null;
+  if (sourceAdjustmentId) {
+    const adjustment = await prisma.stockAdjustment.findFirst({
+      where: {
+        id: sourceAdjustmentId,
+        store: { businessId: input.businessId },
+      },
+      select: { id: true },
+    });
+    if (!adjustment) throw new Error(INVENTORY_LOSS_ADJUSTMENT_NOT_FOUND_MSG);
+    await assertSourceAdjustmentAvailable(prisma as any, sourceAdjustmentId, input.businessId);
+  }
+
+  const persistedNotes = composeInventoryLossNotes(input.notes, input.inventoryLossOverrideReason);
+
   const hasFirstPayment = amountPaid > 0;
+  if (hasFirstPayment && !input.method) {
+    throw new Error(EXPENSE_PAYMENT_METHOD_REQUIRED_MSG);
+  }
+  const method = hasFirstPayment ? input.method! : null;
   const idempotencyKey = hasFirstPayment && input.idempotencyKey
     ? normalizeMoneyIdempotencyKey(input.idempotencyKey)
     : null;
@@ -94,7 +146,7 @@ async function createExpenseImpl(input: ExpenseInput) {
         accountId: input.accountId,
         amountPence: input.amountPence,
         amountPaidPence: amountPaid,
-        method,
+        method: method ?? '',
         vendorName: input.vendorName ?? '',
         reference: input.reference ?? '',
         userId: input.userId,
@@ -114,7 +166,7 @@ async function createExpenseImpl(input: ExpenseInput) {
 
   const runCreate = async (tx: typeof prisma | any) => {
     const split = splitPayments(
-      amountPaid > 0 ? [{ method, amountPence: amountPaid }] : []
+      hasFirstPayment && method ? [{ method, amountPence: amountPaid }] : []
     );
 
     const openShift =
@@ -139,6 +191,15 @@ async function createExpenseImpl(input: ExpenseInput) {
       shiftId: openShift?.id,
     });
 
+    const transactionNumber = await reserveNextDocumentNumber(tx, input.businessId, 'expense');
+    const paymentNumber = hasFirstPayment
+      ? await reserveNextDocumentNumber(tx, input.businessId, 'expense_payment')
+      : null;
+
+    if (sourceAdjustmentId) {
+      await assertSourceAdjustmentAvailable(tx, sourceAdjustmentId, input.businessId);
+    }
+
     const expense = await tx.expense.create({
       data: {
         businessId: input.businessId,
@@ -147,14 +208,16 @@ async function createExpenseImpl(input: ExpenseInput) {
         accountId: input.accountId,
         amountPence: input.amountPence,
         paymentStatus: 'UNPAID',
-        method: amountPaid > 0 ? method : null,
+        method: hasFirstPayment ? method : null,
         dueDate: input.dueDate ?? null,
         vendorName: input.vendorName ?? null,
         reference: input.reference ?? null,
         attachmentPath: input.attachmentPath ?? null,
-        notes: input.notes ?? null,
+        notes: persistedNotes,
+        transactionNumber,
+        sourceAdjustmentId,
         payments:
-          amountPaid > 0
+          hasFirstPayment && method
             ? {
                 create: [
                   {
@@ -163,7 +226,8 @@ async function createExpenseImpl(input: ExpenseInput) {
                     userId: input.userId,
                     method: method as string,
                     amountPence: amountPaid,
-                    reference: input.reference ?? null
+                    reference: input.reference ?? null,
+                    transactionNumber: paymentNumber,
                   }
                 ]
               }
@@ -203,7 +267,7 @@ async function createExpenseImpl(input: ExpenseInput) {
       }
     }
 
-    const apCredit = Math.max(input.amountPence - persistedPaid, 0);
+    const apCredit = remainingBalancePence(input.amountPence, persistedPaid);
 
     await postJournalEntry({
       businessId: input.businessId,
@@ -234,6 +298,9 @@ async function createExpenseImpl(input: ExpenseInput) {
   try {
     return await prisma.$transaction(async (tx) => runCreate(tx));
   } catch (error) {
+    if (isSourceAdjustmentUniqueConflict(error)) {
+      throw new Error(INVENTORY_LOSS_DUPLICATE_ADJUSTMENT_MSG);
+    }
     if (idempotencyKey && payloadHash && isPrismaUniqueConstraintOn(error, ['businessId', 'key'])) {
       const winner = await findMoneyIdempotency(prisma as any, input.businessId, idempotencyKey);
       if (winner) {

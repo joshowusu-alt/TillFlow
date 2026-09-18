@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { assertAuthoritativeMutationStore } from '@/lib/reliability/operational-store-cookie';
 import { findBusinessCommercialSnapshot } from '@/lib/billing-db-compat';
 import { getBillingEntitlement } from '@/lib/billing-entitlements';
 import { createSale, type DiscountType } from '@/lib/services/sales';
@@ -233,6 +234,12 @@ export async function processOfflineSale(
       return review('duplicate_local_sequence');
     }
     options?.seenSequences?.add(sequenceKey);
+  }
+
+  try {
+    await assertAuthoritativeMutationStore(user.businessId, payload.storeId);
+  } catch {
+    return reject('stale_operational_store');
   }
 
   const store = await prisma.store.findFirst({

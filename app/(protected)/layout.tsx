@@ -12,6 +12,7 @@ import { getOwnerSetupBannerState } from '@/lib/activation-setup-progress';
 import { getActivationStatusLabel } from '@/lib/activation-display';
 import BusinessNameSaver from '@/components/BusinessNameSaver';
 import LaunchSessionCompletion from '@/components/LaunchSessionCompletion';
+import StaleOperationalStoreGuard from '@/components/StaleOperationalStoreGuard';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 function formatDateLabel(value: Date | string | null | undefined) {
@@ -105,7 +106,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const headersList = headers();
   const pathname = headersList.get('x-pathname') || '';
 
-  const { user, business, store } = await measureServerOperation(
+  const { user, business, store, stores = [] } = await measureServerOperation(
     'app.protected.layout-gate',
     () => requireBusinessAndOptionalStore(),
     { route: pathname || 'protected-layout' },
@@ -131,12 +132,15 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     <div className="min-h-screen w-full max-w-full">
       <BusinessNameSaver name={business.name} businessId={business.id} />
       <ProtectedBusinessScope businessId={business.id} storeId={store?.id ?? null} />
+      <StaleOperationalStoreGuard storeId={store?.id ?? null} storeName={store?.name ?? null} />
       <PullToRefresh />
       <TopNav
         user={{ name: user.name, role: user.role as 'CASHIER' | 'MANAGER' | 'OWNER' }}
         plan={getBusinessPlan((business as any).plan ?? (business?.mode as any), ((business as any).storeMode as any) ?? 'SINGLE_STORE')}
         storeMode={((business as any).storeMode as any) ?? 'SINGLE_STORE'}
         storeName={store?.name}
+        storeId={store?.id ?? null}
+        stores={stores.map((row) => ({ id: row.id, name: row.name }))}
         businessName={business.name}
         merchantBranding={{
           businessName: business.name,

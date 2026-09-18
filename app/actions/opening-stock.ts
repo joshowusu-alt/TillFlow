@@ -2,7 +2,8 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidateTag } from 'next/cache';
-import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { requireSelectedStoreContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { readOperationalStoreCookie } from '@/lib/reliability/operational-store-cookie';
 import { recordOpeningInventory } from '@/lib/services/opening-inventory';
 import { createPurchase } from '@/lib/services/purchases';
 import { audit } from '@/lib/audit';
@@ -46,13 +47,11 @@ export async function createOpeningStockAction(
   cashAmountPence: number
 ): Promise<ActionResult<OpeningStockResult>> {
   return safeAction(async () => {
-    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
-
-    const store = await prisma.store.findFirst({
-      where: { businessId },
-      select: { id: true },
-    });
-    if (!store) return err('No store found. Complete business setup first.');
+    const { user, businessId, storeId } = await requireSelectedStoreContext(
+      ['MANAGER', 'OWNER'],
+      readOperationalStoreCookie(),
+    );
+    const store = { id: storeId };
 
     const validLines = lines.filter(
       (l) => l.productId && l.unitId && l.qtyInUnit > 0

@@ -278,7 +278,7 @@ describe('ShiftClient', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
-    expect(screen.getByText('Cash added / adjustments')).toBeInTheDocument();
+    expect(screen.getAllByText('Cash added / adjustments').length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows supplier payments and other cash movement categories in the close breakdown', () => {
@@ -317,11 +317,48 @@ describe('ShiftClient', () => {
 
     expect(screen.getByText('Opening Cash')).toBeInTheDocument();
     expect(screen.getByText('Cash Sales')).toBeInTheDocument();
-    expect(screen.getByText('Customer payments received')).toBeInTheDocument();
-    expect(screen.getByText('Supplier payments')).toBeInTheDocument();
-    expect(screen.getByText('Expenses paid from till')).toBeInTheDocument();
+    expect(screen.getAllByText('Customer payments received').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Supplier payments').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Expenses paid from till').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Expected Cash').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('GH₵2,600.00').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('does not offer a usable Open Shift action for an already-open till', () => {
+    render(
+      <ShiftClient
+        tills={[{ id: 'till-1', name: 'Till 1' }, { id: 'till-3', name: 'Till 3' }]}
+        openShifts={[]}
+        occupiedTills={[{
+          tillId: 'till-1',
+          tillName: 'Till 1',
+          shiftId: 'shift-other',
+          userId: 'user-2',
+          userName: 'Ama',
+          openedAt: '2026-09-17T08:00:00.000Z',
+          openingCashPence: 20000,
+          salesCount: 1,
+          salesTotal: 1000,
+          expectedCash: 21000,
+          cardTotal: 0,
+          transferTotal: 0,
+          momoTotal: 0,
+        }]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="CASHIER"
+        currentUserId="user-1"
+      />
+    );
+
+    expect(screen.getByText(/Open — Ama/)).toBeInTheDocument();
+    expect(screen.getByText(/float GH₵200.00/)).toBeInTheDocument();
+    expect(screen.getByText('Open unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Shift' })).toBeInTheDocument();
+    const tillSelect = screen.getByLabelText('Till') as HTMLSelectElement;
+    expect(tillSelect.value).toBe('till-3');
+    expect(screen.queryByRole('option', { name: 'Till 1' })).not.toBeInTheDocument();
   });
 
   it('opens a shift by navigating to POS for that till, not by remaining on Start New Shift', async () => {
@@ -347,5 +384,135 @@ describe('ShiftClient', () => {
       expect(openShiftActionMock).toHaveBeenCalledTimes(1);
     });
     expect(pushMock).toHaveBeenCalledWith('/pos?till=till-3');
+  });
+
+  it('sends the explicit store with open, close and add-cash writes', async () => {
+    openShiftActionMock.mockResolvedValue({ success: true, data: { id: 'shift-b', tillId: 'till-b' } });
+    addCashToTillActionMock.mockResolvedValue({ success: true, data: { id: 'cash-1' } });
+    closeShiftActionMock.mockResolvedValue({ success: true, data: { id: 'shift-1', investigationId: null } });
+
+    const { rerender } = render(
+      <ShiftClient
+        storeId="store-b"
+        tills={[{ id: 'till-b', name: 'Till B1' }]}
+        openShifts={[]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="OWNER"
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/Opening Cash/i), { target: { value: '40' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Open Shift' }));
+    await waitFor(() => expect(openShiftActionMock).toHaveBeenCalledTimes(1));
+    const openData = openShiftActionMock.mock.calls[0][0] as FormData;
+    expect(openData.get('storeId')).toBe('store-b');
+    expect(openData.get('tillId')).toBe('till-b');
+
+    rerender(
+      <ShiftClient
+        storeId="store-b"
+        tills={[{ id: 'till-b', name: 'Till B1' }]}
+        openShifts={[{ ...baseOpenShift, tillId: 'till-b', till: { name: 'Till B1' } }]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="OWNER"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '+ Add cash to till' }));
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '5' } });
+    fireEvent.change(screen.getByDisplayValue('Select reason'), { target: { value: 'SAFE' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add cash' }));
+    await waitFor(() => expect(addCashToTillActionMock).toHaveBeenCalledTimes(1));
+    expect((addCashToTillActionMock.mock.calls[0][0] as FormData).get('storeId')).toBe('store-b');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+    fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '865.50' } });
+    fireEvent.change(screen.getByPlaceholderText('Enter manager approval PIN'), { target: { value: '1234' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close Shift' }).at(-1)!);
+    await waitFor(() => expect(closeShiftActionMock).toHaveBeenCalledTimes(1));
+    expect((closeShiftActionMock.mock.calls[0][0] as FormData).get('storeId')).toBe('store-b');
+    expect((closeShiftActionMock.mock.calls[0][0] as FormData).get('shiftId')).toBe('shift-1');
+  });
+
+  it('shows close-shift identity and starts approval fields empty', async () => {
+    render(
+      <ShiftClient
+        storeId="store-b"
+        storeName="Walkthrough Store B"
+        tills={[{ id: 'till-b', name: 'Till B1' }]}
+        openShifts={[{ ...baseOpenShift, userName: 'Ama Cashier', till: { name: 'Till B1' } }]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="OWNER"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+    expect(screen.getByText('Walkthrough Store B')).toBeInTheDocument();
+    expect(screen.getAllByText('Till B1').length).toBeGreaterThan(0);
+    expect(screen.getByText('Ama Cashier')).toBeInTheDocument();
+    expect(screen.getAllByText(/Opened/i).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Variance Details')).toHaveValue('');
+    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveValue('');
+    expect(screen.getByLabelText('Variance Details')).toHaveAttribute('autoComplete', 'off');
+    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('name', 'close-shift-manager-approval');
+    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('type', 'password');
+    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('autoComplete', 'one-time-code');
+    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('type', 'password');
+  });
+
+  it('clears the manager PIN after a failed close without storing it', async () => {
+    closeShiftActionMock.mockResolvedValue({ success: false, error: 'Invalid manager PIN for till close.' });
+    render(
+      <ShiftClient
+        storeId="store-b"
+        storeName="Walkthrough Store B"
+        tills={[{ id: 'till-b', name: 'Till B1' }]}
+        openShifts={[{ ...baseOpenShift, userName: 'Ama Cashier', till: { name: 'Till B1' } }]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="OWNER"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+    const pin = screen.getByPlaceholderText('Enter manager approval PIN');
+    expect(pin).toHaveValue('');
+    fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '865.50' } });
+    fireEvent.change(pin, { target: { value: '1234' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close Shift' }).at(-1)!);
+    await waitFor(() => expect(closeShiftActionMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveValue('');
+    expect(screen.getByText('Invalid manager PIN for till close.')).toBeInTheDocument();
+  });
+
+  it('does not claim the full float can be retained when counted cash is below it', async () => {
+    render(
+      <ShiftClient
+        storeId="store-b"
+        storeName="Walkthrough Store B"
+        tills={[{ id: 'till-b', name: 'Till B1' }]}
+        openShifts={[{
+          ...baseOpenShift,
+          expectedCash: 20000,
+          openingCashPence: 20000,
+          cashByType: { OPEN_FLOAT: 20000 },
+        }]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="OWNER"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+    fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '5.00' } });
+    expect(screen.getByText('Float shortfall')).toBeInTheDocument();
+    expect(screen.getByText(/full float cannot be retained/i)).toBeInTheDocument();
   });
 });

@@ -25,7 +25,7 @@ const {
     user: { findFirst: vi.fn() },
     mobileMoneyCollection: { findFirst: vi.fn() },
     salesInvoice: { create: vi.fn(), aggregate: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() },
-    businessSequence: { create: vi.fn(), update: vi.fn() },
+    businessSequence: { create: vi.fn(), update: vi.fn(), upsert: vi.fn() },
     stockMovement: { createMany: vi.fn() },
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
@@ -162,6 +162,7 @@ beforeEach(() => {
   prismaMock.salesInvoice.findFirst.mockResolvedValue(null);
   prismaMock.businessSequence.update.mockResolvedValue({ nextVal: 1 });
   prismaMock.businessSequence.create.mockResolvedValue({ nextVal: 1 });
+  prismaMock.businessSequence.upsert.mockResolvedValue({ nextVal: 1 });
   prismaMock.salesInvoice.findMany.mockResolvedValue([]);
   prismaMock.salesInvoice.create.mockResolvedValue({ id: 'inv-1', totalPence: 500, lines: [], payments: [] });
   prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
@@ -297,13 +298,38 @@ describe('shift integrity — shifts page lists every user open shift', () => {
   it('queries findMany rather than findFirst for the current user open shifts', () => {
     const page = readFileSync(join(process.cwd(), 'app/(protected)/shifts/page.tsx'), 'utf8');
     const service = readFileSync(join(process.cwd(), 'lib/services/shifts.ts'), 'utf8');
-    expect(page).toContain('getOpenShiftsForUserInStore(user.id, baseStore.id)');
-    expect(page).toContain('const [tills, openShifts, recentShifts]');
+    expect(page).toContain('getOpenShiftsForUserInStore(user.id, store.id)');
+    expect(page).toMatch(/const \[tills, openShifts, recentShifts/);
     expect(page).not.toMatch(/const \[tills, openShift, recentShifts\]/);
     expect(service).toContain('export async function getOpenShiftsForUserInStore');
     expect(service).toContain('db.shift.findMany');
     expect(service).toContain("status: 'OPEN'");
     expect(service).toContain('return db.shift.findMany');
+  });
+
+  it('loads store-wide till occupancy so a second OPEN action is not offered', () => {
+    const page = readFileSync(join(process.cwd(), 'app/(protected)/shifts/page.tsx'), 'utf8');
+    const client = readFileSync(join(process.cwd(), 'app/(protected)/shifts/ShiftClient.tsx'), 'utf8');
+    const service = readFileSync(join(process.cwd(), 'lib/services/shifts.ts'), 'utf8');
+    expect(page).toContain('getStoreTillOccupancy(store.id)');
+    expect(page).toContain('occupiedTills={occupiedTills}');
+    expect(client).toContain('Open unavailable');
+    expect(client).toContain('Handover / Close');
+    expect(service).toContain('TILL_ALREADY_OPEN_MSG');
+    expect(service).toContain('isOpenKeyUniqueConflict');
+    expect(service).toContain('openKey: till.id');
+  });
+});
+
+describe('shift integrity — close assigns SHC and variance without rewriting cash later', () => {
+  it('assigns a closure number and opens a variance investigation on non-zero close', () => {
+    const source = readFileSync(join(process.cwd(), 'lib/services/shifts.ts'), 'utf8');
+    expect(source).toContain("reserveNextDocumentNumber(tx, input.businessId, 'shift')");
+    expect(source).toContain("reserveNextDocumentNumber(tx, businessId, 'shift_closure')");
+    expect(source).toContain('createCashVarianceInvestigationTx');
+    expect(source).toContain('closureNumber');
+    expect(source).toContain('actualCashPence: actualCash');
+    expect(source).toContain('expectedCashPence: lockedExpectedCash');
   });
 });
 
