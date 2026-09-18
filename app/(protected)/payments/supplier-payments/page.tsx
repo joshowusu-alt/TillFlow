@@ -8,6 +8,7 @@ import { formatMoney, formatDate } from '@/lib/format';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import DueDateBadge from '@/components/DueDateBadge';
+import RemainingBalance from '@/components/RemainingBalance';
 import SupplierPaymentForm from '@/components/SupplierPaymentForm';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
@@ -223,8 +224,12 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                             />
                           </div>
                         </td>
-                        <td className="px-3 py-3 text-sm font-semibold tabular-nums text-amber-700">
-                          {formatMoney(invoice.outstanding, business.currency)}
+                        <td className="px-3 py-3">
+                          <RemainingBalance
+                            amountPence={invoice.totalPence}
+                            paidPence={invoice.totalPence - invoice.outstanding}
+                            currency={business.currency}
+                          />
                           {invoice.payments.length > 0 && (
                             <div className="mt-0.5 text-xs font-normal text-black/40">
                               {invoice.payments.length} payment{invoice.payments.length > 1 ? 's' : ''} made
@@ -282,9 +287,14 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                           </div>
                           <div className="text-xs text-black/50">Purchased {formatDate(invoice.createdAt)}</div>
                         </div>
-                        <div className="text-right">
+                        <div className="min-w-[12rem] text-right">
                           <div className="text-xs text-black/50">What you owe</div>
-                          <div className="text-sm font-bold tabular-nums text-amber-700">{formatMoney(invoice.outstanding, business.currency)}</div>
+                          <RemainingBalance
+                            className="mt-1"
+                            amountPence={invoice.totalPence}
+                            paidPence={invoice.totalPence - invoice.outstanding}
+                            currency={business.currency}
+                          />
                         </div>
                       </div>
 
