@@ -136,6 +136,7 @@ test.describe('UI programme shell geometry (read-only)', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/pos', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
+    await expectPosSearchReady(page);
     await expect(page.getByLabel(/search products/i).first()).toBeVisible({ timeout: 20_000 });
     await attachShot(page, testInfo, 'pos-portrait');
     await page.setViewportSize({ width: 844, height: 390 });

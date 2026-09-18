@@ -1,14 +1,14 @@
 import type { Page } from '@playwright/test';
 
 /**
- * Select an authorised header branch the way a real user would.
+ * Select an authorised header/notice branch the way a real user would.
  * Does not inject Store A or write the operational-store cookie directly.
  */
 export async function selectAuthorisedOperationalStore(page: Page) {
   const search = page.getByLabel(/search products/i).or(page.locator('input[type="search"]')).first();
   if (await search.isVisible().catch(() => false)) return;
 
-  const switcher = page.locator('#operational-store-switcher');
+  const switcher = page.locator('#operational-store-switcher').last();
   if ((await switcher.count()) === 0) return;
 
   const optionValues = await switcher.locator('option').evaluateAll((options) =>
