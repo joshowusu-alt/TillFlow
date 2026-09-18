@@ -505,6 +505,7 @@ model Shift {
   cashDrawerEntries      CashDrawerEntry[]
   cashVarianceInvestigation CashVarianceInvestigation?
 
+  @@unique([tillId, closureNumber])
   @@index([userId, status])
   @@index([tillId, openedAt])
   @@index([closedByUserId, closedAt])
@@ -1261,6 +1262,7 @@ model StockAdjustment {
   user    User    @relation(fields: [userId], references: [id])
 
   @@unique([storeId, idempotencyKey])
+  @@unique([storeId, transactionNumber])
   @@index([storeId, createdAt])
   @@index([productId, createdAt])
 }
@@ -1402,10 +1404,13 @@ model SalesPayment {
   branchId       String?
   qaTag          String?
   qaRunId        String?
+  businessId     String?
+  transactionNumber String?
 
   salesInvoice SalesInvoice           @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
   collection   MobileMoneyCollection? @relation(fields: [collectionId], references: [id])
 
+  @@unique([businessId, transactionNumber])
   @@index([salesInvoiceId, receivedAt])
   @@index([receivedAt])
   @@index([collectionId, receivedAt])
@@ -1649,6 +1654,7 @@ model Stocktake {
   user  User            @relation(fields: [userId], references: [id])
   lines StocktakeLine[]
 
+  @@unique([storeId, transactionNumber])
   @@index([storeId, createdAt])
   @@index([status])
 }

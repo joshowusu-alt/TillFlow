@@ -28,6 +28,7 @@ import {
 } from '@/lib/reliability/walkthrough-contracts';
 import {
   assertInventoryLossExpenseAllowed,
+  assertInventoryLossOverrideAuthority,
   assertSourceAdjustmentAvailable,
   composeInventoryLossNotes,
   INVENTORY_LOSS_ADJUSTMENT_NOT_FOUND_MSG,
@@ -61,6 +62,7 @@ export type ExpenseInput = {
   inventoryLossOverride?: boolean;
   inventoryLossOverrideReason?: string | null;
   sourceAdjustmentId?: string | null;
+  actorRole?: string | null;
 };
 
 export async function createExpense(input: ExpenseInput) {
@@ -106,6 +108,12 @@ async function createExpenseImpl(input: ExpenseInput) {
     accountCode: account.code,
     override: input.inventoryLossOverride,
     reason: input.inventoryLossOverrideReason,
+  });
+  assertInventoryLossOverrideAuthority({
+    accountCode: account.code,
+    override: input.inventoryLossOverride,
+    role: input.actorRole,
+    sourceAdjustmentId: input.sourceAdjustmentId,
   });
 
   const sourceAdjustmentId = input.sourceAdjustmentId?.trim() || null;
