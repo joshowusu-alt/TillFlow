@@ -198,11 +198,12 @@ describe('P1 ResponsiveDataTable and operational mobile lists', () => {
 
   it('adapts expense payments for mobile cards', () => {
     const src = read('app/(protected)/payments/expense-payments/page.tsx');
+    const form = read('app/(protected)/payments/expense-payments/ExpensePaymentForm.tsx');
     expect(src).toContain('mode="cards"');
     expect(src).toContain('mobile={');
     expect(src).toContain('DataCard');
-    expect(src).toContain('Record payment');
-    expect(src).toContain('recordExpensePaymentAction');
+    expect(form).toContain('Record payment');
+    expect(form).toContain('recordExpensePaymentAction');
   });
 
   it('adapts customer invoice history for mobile cards', () => {

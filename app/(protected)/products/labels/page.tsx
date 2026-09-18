@@ -43,7 +43,12 @@ export default async function ProductLabelsPage({
         name: true,
         barcode: true,
         sku: true,
+        createdAt: true,
+        reorderPointBase: true,
         sellingPriceBasePence: true,
+        inventoryBalances: {
+          select: { qtyOnHandBase: true },
+        },
         category: {
           select: {
             id: true,
@@ -109,6 +114,9 @@ export default async function ProductLabelsPage({
           barcode: product.barcode,
           sku: product.sku,
           sellingPriceBasePence: product.sellingPriceBasePence,
+          createdAt: product.createdAt.toISOString(),
+          reorderPointBase: product.reorderPointBase,
+          qtyOnHandBase: product.inventoryBalances.reduce((sum, row) => sum + row.qtyOnHandBase, 0),
           category: product.category,
           unit: product.productUnits[0]?.unit.symbol ?? product.productUnits[0]?.unit.name ?? null,
         }))}
