@@ -383,6 +383,7 @@ async function run() {
     // working 6b/12 purchase below, so the purchase is created without a
     // cash-drawer dependency.
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
+    await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     // On success, createPurchaseAction redirects to the invoice detail page
     // (/purchases/{id}?created=1), not back to the list page, so wait for
@@ -418,6 +419,7 @@ async function run() {
     await page.getByRole('button', { name: /^Add line$/i }).click();
     await page.waitForTimeout(500);
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
+    await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
     step('6b/12 Create unpaid purchase OK');
