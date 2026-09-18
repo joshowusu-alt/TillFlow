@@ -8,6 +8,7 @@ import {
   readShellGeometry,
 } from './helpers/shell-geometry';
 import { isProductionPlaywrightTarget } from './helpers/env';
+import { expectPosSearchReady } from './helpers/select-authorised-branch';
 
 const VIEWPORTS = [
   { name: 'phone-portrait-320', width: 320, height: 568 },
@@ -74,6 +75,7 @@ test.describe('UI programme shell geometry (read-only)', () => {
 
     await page.goto('/pos', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
+    await expectPosSearchReady(page);
     await expect(page.getByLabel(/search products/i).or(page.locator('input[type="search"]')).first()).toBeVisible({
       timeout: 20_000,
     });

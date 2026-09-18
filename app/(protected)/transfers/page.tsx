@@ -100,23 +100,23 @@ export default async function TransfersPage({
         <form action={requestStockTransferAction} className="mt-4 grid gap-4 md:grid-cols-2">
           <div>
             <label className="label">From Branch</label>
-            <select className="input" name="fromStoreId" defaultValue={defaultFromStoreId} required>
-              {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
-                </option>
-              ))}
-            </select>
+            <input type="hidden" name="fromStoreId" value={defaultFromStoreId} />
+            <div className="input bg-slate-50 font-medium">{store.name}</div>
+            <p className="mt-1 text-xs text-black/50">
+              Transfers leave the active header branch. Switch branch in the header to change the source.
+            </p>
           </div>
           <div>
             <label className="label">To Branch</label>
             <select className="input" name="toStoreId" defaultValue={defaultToStoreId} required>
               <option value="">Select a store</option>
-              {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
-                </option>
-              ))}
+              {stores
+                .filter((candidate) => candidate.id !== store.id)
+                .map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.name}
+                  </option>
+                ))}
             </select>
           </div>
           <div>

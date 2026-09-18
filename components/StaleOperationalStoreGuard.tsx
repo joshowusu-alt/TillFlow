@@ -9,6 +9,16 @@ import {
   type OperationalStoreSignal,
 } from '@/lib/reliability/operational-store-sync';
 import { STALE_OPERATIONAL_STORE_MSG } from '@/lib/reliability/operational-store';
+import { setStaleOperationalStoreBlocked } from '@/lib/reliability/stale-operational-store-client';
+
+function isInteractiveMutationTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest(
+      'form, button, [type="submit"], [formaction], [data-close-shift], [data-stale-mutation]',
+    ),
+  );
+}
 
 export default function StaleOperationalStoreGuard({
   storeId,
@@ -41,13 +51,26 @@ export default function StaleOperationalStoreGuard({
   const stale = isStaleOperationalStore(storeId, signal) && Boolean(signal);
 
   useEffect(() => {
+    setStaleOperationalStoreBlocked(stale);
     if (!stale) return;
-    const blockSubmit = (event: Event) => {
+    const block = (event: Event) => {
+      if (event.type === 'keydown') {
+        const key = (event as KeyboardEvent).key;
+        if (key !== 'Enter' && key !== 'NumpadEnter') return;
+      }
+      if (event.type === 'click' && !isInteractiveMutationTarget(event.target)) return;
       event.preventDefault();
       event.stopPropagation();
     };
-    document.addEventListener('submit', blockSubmit, true);
-    return () => document.removeEventListener('submit', blockSubmit, true);
+    document.addEventListener('submit', block, true);
+    document.addEventListener('click', block, true);
+    document.addEventListener('keydown', block, true);
+    return () => {
+      setStaleOperationalStoreBlocked(false);
+      document.removeEventListener('submit', block, true);
+      document.removeEventListener('click', block, true);
+      document.removeEventListener('keydown', block, true);
+    };
   }, [stale]);
 
   if (!stale || !signal) return null;

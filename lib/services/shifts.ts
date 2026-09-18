@@ -56,6 +56,7 @@ export type OpenShiftForUserRow = {
   openedAt: Date;
   openingCashPence: number;
   expectedCashPence: number;
+  shiftNumber?: string | null;
   till: { name: string };
   user: { name: string };
   cashDrawerEntries: Array<{ entryType: string; amountPence: number }>;
@@ -85,6 +86,7 @@ export async function getOpenShiftsForUserInStore(
       openedAt: true,
       openingCashPence: true,
       expectedCashPence: true,
+      shiftNumber: true,
       till: { select: { name: true } },
       user: { select: { name: true } },
       cashDrawerEntries: {
@@ -109,6 +111,7 @@ const STORE_OPEN_SHIFT_SELECT = {
   openedAt: true,
   openingCashPence: true,
   expectedCashPence: true,
+  shiftNumber: true,
   till: { select: { name: true } },
   user: { select: { name: true } },
   cashDrawerEntries: {
@@ -189,6 +192,7 @@ async function performShiftOpenImpl(
       throw new Error(TILL_ALREADY_OPEN_MSG);
     }
 
+    const shiftNumber = await reserveNextDocumentNumber(tx, input.businessId, 'shift');
     let shift;
     try {
       shift = await tx.shift.create({
@@ -199,6 +203,7 @@ async function performShiftOpenImpl(
           expectedCashPence: 0,
           status: 'OPEN',
           openKey: till.id,
+          shiftNumber,
         },
       });
     } catch (error) {

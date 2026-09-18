@@ -109,6 +109,7 @@ export default async function ShiftsPage({
         actualCashPence: true,
         variance: true,
         closureNumber: true,
+        shiftNumber: true,
         cardTotalPence: true,
         transferTotalPence: true,
         momoTotalPence: true,
@@ -126,6 +127,7 @@ export default async function ShiftsPage({
   const openShiftSummaries = openShifts.map((row) => ({
     ...summarizeOpenShift(row),
     userName: row.user.name,
+    shiftNumber: row.shiftNumber,
   }));
   const occupiedTills = storeOccupancy.map((row) => {
     const summary = summarizeOpenShift(row);
@@ -144,6 +146,7 @@ export default async function ShiftsPage({
       transferTotal: summary.transferTotal,
       momoTotal: summary.momoTotal,
       cashByType: summary.cashByType,
+      shiftNumber: row.shiftNumber,
     };
   });
 
@@ -164,6 +167,7 @@ export default async function ShiftsPage({
           transferTotal: row.transferTotal,
           momoTotal: row.momoTotal,
           cashByType: row.cashByType,
+          shiftNumber: row.shiftNumber,
         }))
     : [];
 
@@ -217,6 +221,7 @@ export default async function ShiftsPage({
           actualCashPence: s.actualCashPence,
           variance: s.variance,
           closureNumber: s.closureNumber,
+          shiftNumber: s.shiftNumber,
           cardTotalPence: s.cardTotalPence,
           transferTotalPence: s.transferTotalPence,
           momoTotalPence: s.momoTotalPence ?? 0,

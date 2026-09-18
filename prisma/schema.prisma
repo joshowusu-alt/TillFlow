@@ -470,6 +470,8 @@ model Shift {
   ownerOverride              Boolean  @default(false)
   ownerOverrideReasonCode    String?
   ownerOverrideJustification String?
+  /// Presentation id for an opened shift. Null on historic rows opened before numbering.
+  shiftNumber                String?
   /// Presentation id for a closed shift. Null on open/historic rows.
   closureNumber              String?
 
@@ -481,6 +483,7 @@ model Shift {
   cashDrawerEntries      CashDrawerEntry[]
   cashVarianceInvestigation CashVarianceInvestigation?
 
+  @@unique([tillId, shiftNumber])
   @@unique([tillId, closureNumber])
   @@index([userId, status])
   @@index([tillId, openedAt])

@@ -121,6 +121,7 @@ export const DOCUMENT_NUMBER_PREFIXES = {
   expense_payment: 'EPAY',
   stock_adjustment: 'ADJ',
   stocktake: 'STK',
+  shift: 'SHF',
   shift_closure: 'SHC',
   cash_variance: 'VAR',
 } as const;
@@ -144,6 +145,19 @@ export function displayDocumentNumber(
   id: string,
 ): string {
   return transactionNumber?.trim() || fallbackDocumentNumber(sequenceName, id);
+}
+
+/** Assigned SHF/SHC only. Never masks or exposes a database id. */
+export function displayShiftPresentationNumber(input: {
+  shiftNumber?: string | null;
+  closureNumber?: string | null;
+  status?: string | null;
+}): string {
+  const closure = input.closureNumber?.trim() ?? '';
+  const shift = input.shiftNumber?.trim() ?? '';
+  if (input.status !== 'OPEN' && closure) return closure;
+  if (shift) return shift;
+  return input.status === 'OPEN' ? 'Unnumbered shift' : 'Unnumbered close';
 }
 
 export const CREDIT_PURCHASE_STATUSES = ['UNPAID', 'PART_PAID'] as const;

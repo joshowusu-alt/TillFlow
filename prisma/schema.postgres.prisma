@@ -469,6 +469,7 @@ model Shift {
   ownerOverride              Boolean  @default(false)
   ownerOverrideReasonCode    String?
   ownerOverrideJustification String?
+  shiftNumber                String?
   closureNumber              String?
 
   till                   Till              @relation(fields: [tillId], references: [id])
@@ -479,6 +480,7 @@ model Shift {
   cashDrawerEntries      CashDrawerEntry[]
   cashVarianceInvestigation CashVarianceInvestigation?
 
+  @@unique([tillId, shiftNumber])
   @@unique([tillId, closureNumber])
   @@index([userId, status])
   @@index([tillId, openedAt])

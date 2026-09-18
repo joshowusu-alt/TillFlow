@@ -120,12 +120,12 @@ export async function requireSelectedStoreContext(
   options?: BusinessContextOptions,
 ): Promise<BusinessStoreContext> {
   const { assertSelectedStoreForBusiness } = await import('@/lib/reliability/selected-store');
-  const { assertSubmittedStoreMatchesOperationalCookie } = await import(
+  const { assertAuthoritativeMutationStore } = await import(
     '@/lib/reliability/operational-store-cookie'
   );
   const ctx = await withBusinessContext(roles, options);
   const store = await assertSelectedStoreForBusiness(ctx.businessId, storeId);
-  assertSubmittedStoreMatchesOperationalCookie(store.id);
+  await assertAuthoritativeMutationStore(ctx.businessId, store.id);
   return { ...ctx, storeId: store.id };
 }
 

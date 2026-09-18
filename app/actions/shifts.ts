@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { formString, toPence } from '@/lib/form-helpers';
-import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, requireSelectedStoreContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { resolveStoreFromTill, STORE_MISMATCH_MSG, MISSING_STORE_CONTEXT_MSG } from '@/lib/reliability/selected-store';
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
@@ -66,6 +66,7 @@ export async function addCashToTillAction(
       return err(STORE_MISMATCH_MSG);
     }
     const storeId = openShift.till.storeId;
+    await requireSelectedStoreContext(['MANAGER', 'OWNER'], storeId);
 
     const reasonLabel = ADD_CASH_REASON_LABELS[reasonCode] ?? reasonCode;
     const fullReason = note?.trim()
@@ -120,6 +121,7 @@ export async function openShiftAction(
 
     if (!tillId) return err('Please select a till first.');
     const selected = await resolveStoreFromTill(businessId, tillId, requestedStoreId);
+    await requireSelectedStoreContext(undefined, selected.storeId);
 
     try {
       const shift = await performShiftOpen({
@@ -187,14 +189,7 @@ export async function closeShiftAction(
       return err(STORE_MISMATCH_MSG);
     }
     const storeId = closingShift.till.storeId;
-    try {
-      const { assertSubmittedStoreMatchesOperationalCookie } = await import(
-        '@/lib/reliability/operational-store-cookie'
-      );
-      assertSubmittedStoreMatchesOperationalCookie(storeId);
-    } catch (e) {
-      return err((e as Error).message);
-    }
+    await requireSelectedStoreContext(undefined, storeId);
     if (!managerPin) return err('Manager PIN is required to close till.');
 
     const manager = await verifyManagerPin({ businessId, pin: managerPin });
@@ -321,14 +316,7 @@ export async function closeShiftOwnerOverrideAction(
       return err(STORE_MISMATCH_MSG);
     }
     const storeId = overrideShift.till.storeId;
-    try {
-      const { assertSubmittedStoreMatchesOperationalCookie } = await import(
-        '@/lib/reliability/operational-store-cookie'
-      );
-      assertSubmittedStoreMatchesOperationalCookie(storeId);
-    } catch (e) {
-      return err((e as Error).message);
-    }
+    await requireSelectedStoreContext(['OWNER'], storeId);
     if (!ownerPassword) return err('Owner password is required for override.');
     if (!overrideReasonCode) return err('Override reason code is required.');
     if (!overrideJustification?.trim()) return err('Override justification is required.');

@@ -26,6 +26,7 @@ const SEQUENCES: Array<{ name: DocumentSequenceName; prefix: string }> = [
   { name: 'expense_payment', prefix: 'EPAY-' },
   { name: 'stock_adjustment', prefix: 'ADJ-' },
   { name: 'stocktake', prefix: 'STK-' },
+  { name: 'shift', prefix: 'SHF-' },
   { name: 'shift_closure', prefix: 'SHC-' },
   { name: 'cash_variance', prefix: 'VAR-' },
 ];

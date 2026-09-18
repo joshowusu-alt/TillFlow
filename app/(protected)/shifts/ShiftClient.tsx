@@ -6,9 +6,11 @@ import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
 import { openShiftAction, closeShiftAction, closeShiftOwnerOverrideAction, addCashToTillAction } from '@/app/actions/shifts';
 import { withStoreQuery } from '@/lib/reliability/selected-store';
-import { formatRecordNumber } from '@/lib/ui/document-label';
+import { displayShiftPresentationNumber } from '@/lib/reliability/walkthrough-contracts';
 import { computeCashHandover } from '@/lib/services/cash-handover';
-import { invalidPreviewShiftClosureNote } from '@/lib/reliability/invalid-preview-shift-closures';
+import { invalidLegacyCloseNote } from '@/lib/reliability/invalid-preview-shift-closures';
+import { isStaleOperationalStoreBlocked } from '@/lib/reliability/stale-operational-store-client';
+import { STALE_OPERATIONAL_STORE_MSG } from '@/lib/reliability/operational-store';
 
 type Till = { id: string; name: string; active?: boolean };
 
@@ -27,6 +29,7 @@ type OpenShift = {
   transferTotal: number;
   momoTotal: number;
   cashByType?: Record<string, number>;
+  shiftNumber?: string | null;
 };
 
 type OccupiedTill = {
@@ -44,6 +47,7 @@ type OccupiedTill = {
   transferTotal: number;
   momoTotal: number;
   cashByType?: Record<string, number>;
+  shiftNumber?: string | null;
 };
 
 const DRAWER_DRILLDOWN_TYPES = [
@@ -70,6 +74,7 @@ type RecentShift = {
   actualCashPence: number | null;
   variance: number | null;
   closureNumber?: string | null;
+  shiftNumber?: string | null;
   cardTotalPence: number;
   transferTotalPence: number;
   momoTotalPence: number;
@@ -91,6 +96,7 @@ type OtherOpenShift = {
   transferTotal: number;
   momoTotal: number;
   cashByType?: Record<string, number>;
+  shiftNumber?: string | null;
 };
 
 type Props = {
@@ -255,6 +261,10 @@ export default function ShiftClient({
   };
 
   const handleAddCash = () => {
+    if (isStaleOperationalStoreBlocked()) {
+      setAddCashError(STALE_OPERATIONAL_STORE_MSG);
+      return;
+    }
     setAddCashError(null);
     if (!addCashAmount) { setAddCashError('Amount is required.'); return; }
     if (Number(addCashAmount) <= 0) { setAddCashError('Amount must be greater than zero.'); return; }
@@ -286,6 +296,10 @@ export default function ShiftClient({
   };
 
   const handleOpenShift = () => {
+    if (isStaleOperationalStoreBlocked()) {
+      setError(STALE_OPERATIONAL_STORE_MSG);
+      return;
+    }
     setError(null);
     if (!selectedTill || occupiedTillIds.has(selectedTill) || freeTills.length === 0) {
       setError('A shift is already open for this till. Close or hand over that shift before opening another.');
@@ -313,6 +327,10 @@ export default function ShiftClient({
 
   const handleCloseShift = () => {
     if (!shiftToClose) return;
+    if (isStaleOperationalStoreBlocked()) {
+      setError(STALE_OPERATIONAL_STORE_MSG);
+      return;
+    }
     setError(null);
     if (!Number.isFinite(Number(actualCash)) || Number(actualCash) < 0) {
       setError('Physical cash counted cannot be negative. Enter the amount actually in the drawer.');
@@ -414,6 +432,7 @@ export default function ShiftClient({
         transferTotal: selectedOtherShift.transferTotal,
         momoTotal: selectedOtherShift.momoTotal,
         cashByType: selectedOtherShift.cashByType,
+        shiftNumber: selectedOtherShift.shiftNumber,
       }
     : openShift;
 
@@ -426,7 +445,10 @@ export default function ShiftClient({
   const variancePence = handover.variancePence ?? 0;
   const varianceNeedsReason = countedPence !== null && variancePence !== 0;
   const closeShiftNumber = shiftToClose
-    ? formatRecordNumber('shift_closure', null, shiftToClose.id)
+    ? displayShiftPresentationNumber({
+        shiftNumber: shiftToClose.shiftNumber,
+        status: 'OPEN',
+      })
     : '';
   const closeCashierName = selectedOtherShift?.userName
     || (openShift && 'userName' in openShift ? openShift.userName : null)
@@ -947,12 +969,16 @@ export default function ShiftClient({
                         <span className={`rounded-full px-2 py-1 text-xs font-semibold ${shift.status === 'OPEN' ? 'bg-emerald-100 text-emerald-800' : 'bg-black/5 text-black/55'}`}>
                           {shift.status === 'OPEN' ? 'Open' : 'Closed'}
                         </span>
-                        {shift.closureNumber ? (
-                          <div className="mt-1 text-[11px] text-black/40">{shift.closureNumber}</div>
-                        ) : null}
-                        {invalidPreviewShiftClosureNote(shift.closureNumber) ? (
+                        <div className="mt-1 text-[11px] text-black/40">
+                          {displayShiftPresentationNumber({
+                            shiftNumber: shift.shiftNumber,
+                            closureNumber: shift.closureNumber,
+                            status: shift.status,
+                          })}
+                        </div>
+                        {invalidLegacyCloseNote(shift.actualCashPence) ? (
                           <div className="mt-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-800">
-                            Invalid legacy Preview test data. Do not use in reconciliation.
+                            Invalid close. Counted cash is negative. Excluded from acceptance totals.
                           </div>
                         ) : null}
                         {shift.status === 'CLOSED' && shift.variance !== null && shift.variance !== 0 ? (
@@ -1376,6 +1402,7 @@ export default function ShiftClient({
               <button
                 type="button"
                 className="btn-primary flex-1 bg-rose-600 hover:bg-rose-700"
+                data-close-shift=""
                 onClick={handleCloseShift}
                 disabled={
                   isPending ||

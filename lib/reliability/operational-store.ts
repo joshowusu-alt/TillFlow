@@ -3,8 +3,15 @@ export const OPERATIONAL_STORE_COOKIE = 'tillflow_operational_store';
 export const MISSING_OPERATIONAL_STORE_MSG =
   'Select a branch in the header before recording this transaction.';
 
-export const INACTIVE_OPERATIONAL_STORE_MSG =
+/** Deleted or no-longer-authorised saved branch — not a Store.active flag. */
+export const UNAVAILABLE_OPERATIONAL_STORE_MSG =
   'The saved branch is no longer available. Select a branch in the header.';
+
+/** TillFlow does not model store/branch deactivation. Future capability. */
+export const STORE_DEACTIVATION_SUPPORTED = false;
+
+/** @deprecated TillFlow does not model store deactivation. Use UNAVAILABLE_OPERATIONAL_STORE_MSG. */
+export const INACTIVE_OPERATIONAL_STORE_MSG = UNAVAILABLE_OPERATIONAL_STORE_MSG;
 
 export const FOREIGN_OPERATIONAL_STORE_MSG =
   'That branch is not available for your business.';
@@ -43,6 +50,7 @@ export type OperationalStoreReason =
   | 'sole'
   | 'url-match'
   | 'unselected'
+  | 'unavailable-cleared'
   | 'inactive-cleared'
   | 'foreign-rejected';
 
@@ -56,8 +64,8 @@ export type OperationalStoreResolution = {
   shouldClearCookie: boolean;
 };
 
-function isActiveStore(store: OperationalStoreChoice) {
-  return store.active !== false;
+function isAuthorisedStore(store: OperationalStoreChoice) {
+  return Boolean(store.id);
 }
 
 export function isOperationalRoute(pathname: string | null | undefined): boolean {
@@ -100,7 +108,7 @@ export function resolveOperationalStore(input: {
   const urlIsAll = rawUrl === 'ALL';
 
   const byId = new Map(authorised.map((store) => [store.id, store]));
-  const activeStores = authorised.filter(isActiveStore);
+  const activeStores = authorised.filter(isAuthorisedStore);
 
   if (urlIsAll && !urlStoreId) {
     // ALL is ignored for operational resolution; cookie/sole still apply.
@@ -119,20 +127,20 @@ export function resolveOperationalStore(input: {
   }
 
   const cookieStore = cookieStoreId ? byId.get(cookieStoreId) ?? null : null;
-  if (cookieStoreId && (!cookieStore || !isActiveStore(cookieStore))) {
+  if (cookieStoreId && !cookieStore) {
     const sole = activeStores.length === 1 ? activeStores[0] : null;
     return {
       store: sole,
-      reason: sole ? 'sole' : 'inactive-cleared',
+      reason: sole ? 'sole' : 'unavailable-cleared',
       cookieStoreId,
       urlStoreId,
       conflict: null,
-      error: sole ? null : INACTIVE_OPERATIONAL_STORE_MSG,
+      error: sole ? null : UNAVAILABLE_OPERATIONAL_STORE_MSG,
       shouldClearCookie: true,
     };
   }
 
-  if (cookieStore && isActiveStore(cookieStore)) {
+  if (cookieStore) {
     const urlStore = urlStoreId ? byId.get(urlStoreId) ?? null : null;
     const conflict =
       urlStore && urlStore.id !== cookieStore.id

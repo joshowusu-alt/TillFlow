@@ -20,6 +20,11 @@ vi.mock('@/lib/action-utils', async () => {
   return {
     ...actual,
     withBusinessContext: (...args: unknown[]) => withBusinessContextMock(...args),
+    requireSelectedStoreContext: async () => ({
+      user: { id: 'owner-1', name: 'Owner', role: 'OWNER', email: 'owner@test', businessId: 'biz-1' },
+      businessId: 'biz-1',
+      storeId: 'store-b',
+    }),
   };
 });
 vi.mock('@/lib/services/shifts', async () => {

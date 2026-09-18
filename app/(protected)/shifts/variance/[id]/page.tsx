@@ -7,7 +7,7 @@ import { withStoreQuery } from '@/lib/reliability/selected-store';
 import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import { prisma } from '@/lib/prisma';
 import { VARIANCE_REVIEWER_ROLES } from '@/lib/services/cash-variance';
-import { invalidPreviewShiftClosureNote } from '@/lib/reliability/invalid-preview-shift-closures';
+import { invalidLegacyCloseNote } from '@/lib/reliability/invalid-preview-shift-closures';
 import VarianceWorkflowClient from '../VarianceWorkflowClient';
 
 export default async function CashVarianceDetailPage({
@@ -73,9 +73,9 @@ export default async function CashVarianceDetailPage({
         secondaryCta={{ label: 'All investigations', href: withStoreQuery('/shifts/variance', store.id) }}
       />
 
-      {invalidPreviewShiftClosureNote(investigation.shift.closureNumber) ? (
+      {invalidLegacyCloseNote(investigation.shift.actualCashPence) ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
-          {invalidPreviewShiftClosureNote(investigation.shift.closureNumber)}
+          {invalidLegacyCloseNote(investigation.shift.actualCashPence)}
         </div>
       ) : null}
 

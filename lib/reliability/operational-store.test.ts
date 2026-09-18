@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ALL_BRANCHES_NOT_OPERATIONAL_MSG,
   FOREIGN_OPERATIONAL_STORE_MSG,
-  INACTIVE_OPERATIONAL_STORE_MSG,
+  UNAVAILABLE_OPERATIONAL_STORE_MSG,
   MISSING_OPERATIONAL_STORE_MSG,
   MULTI_TAB_OPERATIONAL_STORE_CONTRACT,
   isOperationalRoute,
@@ -66,19 +66,15 @@ describe('resolveOperationalStore', () => {
     expect(result.error).toBe(FOREIGN_OPERATIONAL_STORE_MSG);
   });
 
-  it('clears an inactive saved store and does not pick the first remaining store', () => {
+  it('clears a cookie for a store that is no longer authorised and does not pick the first remaining store', () => {
     const result = resolveOperationalStore({
-      stores: [
-        { ...storeA, active: true },
-        { ...storeB, active: false },
-        { id: 'store-c', name: 'Walkthrough Store C', active: true },
-      ],
+      stores: [storeA, { id: 'store-c', name: 'Walkthrough Store C' }],
       cookieStoreId: 'store-b',
     });
     expect(result.store).toBeNull();
-    expect(result.reason).toBe('inactive-cleared');
+    expect(result.reason).toBe('unavailable-cleared');
     expect(result.shouldClearCookie).toBe(true);
-    expect(result.error).toBe(INACTIVE_OPERATIONAL_STORE_MSG);
+    expect(result.error).toBe(UNAVAILABLE_OPERATIONAL_STORE_MSG);
   });
 
   it('uses the sole remaining active store when the saved store is gone', () => {

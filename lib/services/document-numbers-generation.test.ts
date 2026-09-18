@@ -18,6 +18,7 @@ describe('document number generation coverage', () => {
   it('defines every contracted prefix', () => {
     expect(formatDocumentNumber('supplier_payment', 1)).toBe('SPAY-000001');
     expect(formatDocumentNumber('customer_receipt', 2)).toBe('RCPT-000002');
+    expect(formatDocumentNumber('shift', 123)).toBe('SHF-000123');
     expect(Object.keys(DOCUMENT_NUMBER_PREFIXES).sort()).toEqual([
       'cash_variance',
       'customer_receipt',
@@ -25,6 +26,7 @@ describe('document number generation coverage', () => {
       'expense_payment',
       'invoice',
       'purchase',
+      'shift',
       'shift_closure',
       'stock_adjustment',
       'stocktake',
@@ -43,6 +45,7 @@ describe('document number generation coverage', () => {
     expect(decrease).toContain("reserveNextDocumentNumber(");
     expect(increase).toContain("reserveNextDocumentNumber(");
     expect(stocktake).toContain("reserveNextDocumentNumber(tx, businessId, 'stocktake')");
+    expect(shifts).toContain("reserveNextDocumentNumber(tx, input.businessId, 'shift')");
     expect(shifts).toContain("reserveNextDocumentNumber(tx, businessId, 'shift_closure')");
     expect(variance).toContain("reserveNextDocumentNumber(tx, input.businessId, 'cash_variance')");
   });

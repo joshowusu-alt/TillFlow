@@ -12,6 +12,10 @@ const numbersMigration = readFileSync(
   join(process.cwd(), 'prisma/migrations/20260918140000_walkthrough_store_numbers/migration.sql'),
   'utf8',
 );
+const shiftNumberMigration = readFileSync(
+  join(process.cwd(), 'prisma/migrations/20260918230000_shift_presentation_numbers/migration.sql'),
+  'utf8',
+);
 
 describe('owner walkthrough additive schema', () => {
   it('keeps the migration additive (no DROP / destructive rewrite)', () => {
@@ -26,6 +30,9 @@ describe('owner walkthrough additive schema', () => {
     expect(numbersMigration).toContain('StockAdjustment_storeId_transactionNumber_key');
     expect(numbersMigration).toContain('Stocktake_storeId_transactionNumber_key');
     expect(numbersMigration).toContain('Shift_tillId_closureNumber_key');
+    expect(shiftNumberMigration).not.toMatch(/DROP TABLE/i);
+    expect(shiftNumberMigration).toContain('ADD COLUMN "shiftNumber"');
+    expect(shiftNumberMigration).toContain('Shift_tillId_shiftNumber_key');
   });
 
   it('mirrors presentation numbers, count state, and variance investigation on both schemas', () => {
@@ -35,6 +42,7 @@ describe('owner walkthrough additive schema', () => {
       expect(schema).toContain('countState');
       expect(schema).toContain('sourceAdjustmentId');
       expect(schema).toContain('closureNumber');
+      expect(schema).toContain('shiftNumber');
     }
   });
 });

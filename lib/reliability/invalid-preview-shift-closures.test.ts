@@ -1,15 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { invalidPreviewShiftClosureNote } from './invalid-preview-shift-closures';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  invalidLegacyCloseNote,
+  invalidPreviewShiftClosureNote,
+  isInvalidLegacyClose,
+} from './invalid-preview-shift-closures';
 
-describe('invalid Preview shift closures', () => {
-  it('marks SHC-000007 without rewriting the record', () => {
-    const note = invalidPreviewShiftClosureNote('SHC-000007');
-    expect(note).toMatch(/Invalid legacy Preview test data/i);
-    expect(note).toMatch(/-2\.50|GH₵-2.50/i);
+describe('invalid legacy shift closures', () => {
+  it('marks any closed shift whose counted cash is negative without using a record id', () => {
+    const note = invalidLegacyCloseNote(-250);
+    expect(note).toMatch(/Invalid close/i);
+    expect(note).toMatch(/negative/i);
     expect(note).not.toMatch(/delete|rewrite/i);
+    expect(isInvalidLegacyClose(-250)).toBe(true);
+    expect(isInvalidLegacyClose(0)).toBe(false);
+    expect(invalidPreviewShiftClosureNote('any-number', -250)).toBe(note);
   });
 
   it('leaves ordinary closures unmarked', () => {
-    expect(invalidPreviewShiftClosureNote('SHC-000008')).toBeNull();
+    expect(invalidLegacyCloseNote(250)).toBeNull();
+    expect(invalidLegacyCloseNote(null)).toBeNull();
+  });
+
+  it('does not hard-code a Preview closure number in product source', () => {
+    const src = readFileSync(join(process.cwd(), 'lib/reliability/invalid-preview-shift-closures.ts'), 'utf8');
+    expect(src).not.toMatch(/SHC-000007/);
+    expect(src).not.toMatch(/INVALID_PREVIEW_SHIFT_CLOSURES/);
   });
 });

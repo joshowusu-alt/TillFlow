@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { formString, formInt } from '@/lib/form-helpers';
 import { ReturnTypeEnum, PaymentMethodEnum } from '@/lib/validation/enums';
-import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, requireSelectedStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
@@ -21,6 +21,14 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const salesInvoiceId = formString(formData, 'salesInvoiceId');
+    const sourceInvoice = await prisma.salesInvoice.findFirst({
+      where: { id: salesInvoiceId, businessId },
+      select: { storeId: true },
+    });
+    if (!sourceInvoice) {
+      throw new Error('Sale not found.');
+    }
+    await requireSelectedStoreContext(['MANAGER', 'OWNER'], sourceInvoice.storeId);
     const refundMethod = formString(formData, 'refundMethod') as 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY' | '';
     const refundAmountPence = formInt(formData, 'refundAmountPence');
     const type = (formString(formData, 'type') || 'RETURN') as 'RETURN' | 'VOID';
@@ -126,6 +134,14 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const purchaseInvoiceId = formString(formData, 'purchaseInvoiceId');
+    const sourcePurchase = await prisma.purchaseInvoice.findFirst({
+      where: { id: purchaseInvoiceId, businessId },
+      select: { storeId: true },
+    });
+    if (!sourcePurchase) {
+      throw new Error('Purchase not found.');
+    }
+    await requireSelectedStoreContext(['MANAGER', 'OWNER'], sourcePurchase.storeId);
     const refundMethod = formString(formData, 'refundMethod') as 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY' | '';
     const refundAmountPence = formInt(formData, 'refundAmountPence');
     const type = (formString(formData, 'type') || 'RETURN') as 'RETURN' | 'VOID';

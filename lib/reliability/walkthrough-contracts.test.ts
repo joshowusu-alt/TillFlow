@@ -5,6 +5,7 @@ import {
   bucketForDueDate,
   creditPurchaseRequiresSupplier,
   displayDocumentNumber,
+  displayShiftPresentationNumber,
   expensePaymentState,
   formatDocumentNumber,
   remainingBalancePence,
@@ -49,5 +50,16 @@ describe('walkthrough contracts', () => {
     expect(formatDocumentNumber('purchase', 12)).toBe('PUR-000012');
     expect(displayDocumentNumber('purchase', null, 'clxyzab12cd')).toBe('PUR-••••ab12cd');
     expect(displayDocumentNumber('purchase', 'PUR-000012', 'clxyzab12cd')).toBe('PUR-000012');
+    expect(displayShiftPresentationNumber({ shiftNumber: 'SHF-000123', status: 'OPEN' })).toBe('SHF-000123');
+    expect(
+      displayShiftPresentationNumber({
+        shiftNumber: 'SHF-000123',
+        closureNumber: 'SHC-000123',
+        status: 'CLOSED',
+      }),
+    ).toBe('SHC-000123');
+    expect(displayShiftPresentationNumber({ status: 'OPEN', shiftNumber: null })).toBe('Unnumbered shift');
+    expect(displayShiftPresentationNumber({ status: 'CLOSED', closureNumber: null })).toBe('Unnumbered close');
+    expect(displayShiftPresentationNumber({ status: 'OPEN', shiftNumber: 'clxyz' })).not.toMatch(/••••/);
   });
 });

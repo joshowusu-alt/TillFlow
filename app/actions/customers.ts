@@ -103,7 +103,9 @@ export async function quickCreateCustomerAction(data: {
   storeId?: string | null;
 }): Promise<ActionResult<{ id: string; name: string }>> {
   return safeAction(async () => {
-    const { businessId } = await withBusinessContext();
+    // Customers are business-shared. Creation still requires a valid operational-store
+    // context and must not silently resolve the first store.
+    const { businessId } = await requireSelectedStoreContext(undefined, data.storeId);
 
     if (!data.name?.trim()) return err('Customer name is required.');
 

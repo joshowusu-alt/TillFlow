@@ -324,6 +324,7 @@ describe('shift integrity — shifts page lists every user open shift', () => {
 describe('shift integrity — close assigns SHC and variance without rewriting cash later', () => {
   it('assigns a closure number and opens a variance investigation on non-zero close', () => {
     const source = readFileSync(join(process.cwd(), 'lib/services/shifts.ts'), 'utf8');
+    expect(source).toContain("reserveNextDocumentNumber(tx, input.businessId, 'shift')");
     expect(source).toContain("reserveNextDocumentNumber(tx, businessId, 'shift_closure')");
     expect(source).toContain('createCashVarianceInvestigationTx');
     expect(source).toContain('closureNumber');
