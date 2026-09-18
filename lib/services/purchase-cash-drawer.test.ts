@@ -49,6 +49,9 @@ vi.mock('./cash-drawer', async () => {
     recordCashDrawerEntryTx: recordCashDrawerEntryTxMock,
   };
 });
+vi.mock('./document-numbers', () => ({
+  reserveNextDocumentNumber: vi.fn().mockResolvedValue('PUR-000001'),
+}));
 vi.mock('./shared', async () => {
   const actual = await vi.importActual<typeof import('./shared')>('./shared');
   return {

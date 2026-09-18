@@ -18,9 +18,13 @@ import ProductUnitPricingEditor from '@/components/ProductUnitPricingEditor';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
+import CompactMobileList, { CompactMobileListItem } from '@/components/CompactMobileList';
+import ShowingRange from '@/components/ShowingRange';
 import ProductImageInput from '@/components/ProductImageInput';
-import ProductCreateFormEnhancer from '@/components/products/ProductCreateFormEnhancer';
+import ProductCreateFormEnhancer, { OpeningStockFields } from '@/components/products/ProductCreateFormEnhancer';
 import ProductCreateHashOpener from '@/components/products/ProductCreateHashOpener';
+import ProductFormSection from '@/components/products/ProductFormSections';
+import ProductListStateSync from '@/components/products/ProductListStateSync';
 import GenerateMissingBarcodesButton from '@/components/products/GenerateMissingBarcodesButton';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import OperationalMetricCard from '@/components/OperationalMetricCard';
@@ -190,6 +194,12 @@ export default async function ProductsPage({
 
   return (
     <div className="operational-page space-y-4 sm:space-y-5">
+      <ProductListStateSync
+        q={q}
+        page={page}
+        tab={activeTab}
+        issue={issueQueryValue}
+      />
       <PageHeader
         title={pageTitle}
         subtitle={pageSubtitle}
@@ -354,86 +364,97 @@ export default async function ProductsPage({
                 createAction={createProductAction}
                 currencySymbol={getCurrencySymbol(business.currency)}
                 units={units}
+                includeOpeningStock={false}
               >
-                <div>
-                  <label className="label">Name</label>
-                  <input className="input" name="name" required />
-                </div>
-                <div>
-                  <label className="label">SKU</label>
-                  <input className="input" name="sku" />
-                </div>
-                <div>
-                  <label className="label">Barcode</label>
-                  <BarcodeScanInput name="barcode" />
-                </div>
-                <div>
-                  <div className="label">Product image</div>
-                  <ProductImageInput fileUploadEnabled={fileUploadEnabled} />
-                </div>
-                <div>
-                  <label className="label">Category</label>
-                  <select className="input" name="categoryId">
-                    <option value="">Uncategorised</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="mt-1 text-xs text-black/50">
-                    Don&apos;t see your category? <a href="/products?tab=categories" className="text-accent underline">Add one here</a>.
+                <ProductFormSection title="Essential" description="Name, identity, and the price you sell at.">
+                  <div>
+                    <label className="label">Name</label>
+                    <input className="input" name="name" required />
                   </div>
-                </div>
-                <div>
-                  <label className="label">Preferred supplier</label>
-                  <select className="input" name="preferredSupplierId">
-                    <option value="">No preferred supplier</option>
-                    {suppliers.map((supplier) => (
-                      <option key={supplier.id} value={supplier.id}>
-                        {supplier.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="mt-1 text-xs text-black/50">
-                    Used by Sales by Linked Supplier reporting. It does not track exact stock-batch origin.
+                  <div>
+                    <label className="label">SKU</label>
+                    <input className="input" name="sku" />
                   </div>
-                </div>
-                <div>
-                  <label className="label">Base Price ({getCurrencySymbol(business.currency)})</label>
-                  <input className="input" name="sellingPriceBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
-                  <div className="mt-1 text-xs text-black/50">Price per base unit, e.g. 5.00 for {getCurrencySymbol(business.currency)}5.00.</div>
-                </div>
-                <div>
-                  <label className="label">Base Cost ({getCurrencySymbol(business.currency)})</label>
-                  <input className="input" name="defaultCostBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
-                  <div className="mt-1 text-xs text-black/50">Cost per base unit, e.g. 3.50 for {getCurrencySymbol(business.currency)}3.50.</div>
-                </div>
-                <div>
-                  <label className="label">Target Margin Override (%)</label>
-                  <input className="input" name="minimumMarginThresholdPercent" type="number" min={0} max={100} step="0.01" placeholder={defaultMarginThresholdPercent} />
-                  <div className="mt-1 text-xs text-black/50">Optional. Leave blank to inherit the business default target of {defaultMarginThresholdPercent}%.</div>
-                </div>
-                <div>
-                  <label className="label">VAT Rate (bps)</label>
-                  <input className="input" name="vatRateBps" type="number" min={0} defaultValue={0} />
-                </div>
-                <div>
-                  <label className="label">Promo Buy Qty (base units)</label>
-                  <input className="input" name="promoBuyQty" type="number" min={0} defaultValue={0} />
-                  <div className="mt-1 text-xs text-black/50">Buy X units to trigger a promo.</div>
-                </div>
-                <div>
-                  <label className="label">Promo Get Qty (base units)</label>
-                  <input className="input" name="promoGetQty" type="number" min={0} defaultValue={0} />
-                  <div className="mt-1 text-xs text-black/50">Free units given when promo applies.</div>
-                </div>
-                <div className="md:col-span-3">
-                  <ProductUnitPricingEditor
-                    units={units}
+                  <div>
+                    <label className="label">Barcode</label>
+                    <BarcodeScanInput name="barcode" />
+                  </div>
+                  <div>
+                    <div className="label">Product image</div>
+                    <ProductImageInput fileUploadEnabled={fileUploadEnabled} />
+                  </div>
+                  <div>
+                    <label className="label">Category</label>
+                    <select className="input" name="categoryId">
+                      <option value="">Uncategorised</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="mt-1 text-xs text-black/50">
+                      Don&apos;t see your category? <a href="/products?tab=categories" className="text-accent underline">Add one here</a>.
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Base Price ({getCurrencySymbol(business.currency)})</label>
+                    <input className="input" name="sellingPriceBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
+                    <div className="mt-1 text-xs text-black/50">Price per base unit, e.g. 5.00 for {getCurrencySymbol(business.currency)}5.00.</div>
+                  </div>
+                  <div>
+                    <label className="label">Base Cost ({getCurrencySymbol(business.currency)})</label>
+                    <input className="input" name="defaultCostBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
+                    <div className="mt-1 text-xs text-black/50">Cost per base unit, e.g. 3.50 for {getCurrencySymbol(business.currency)}3.50.</div>
+                  </div>
+                </ProductFormSection>
+                <ProductFormSection title="Stock and purchasing" description="Supplier, units, and optional opening quantity.">
+                  <div>
+                    <label className="label">Preferred supplier</label>
+                    <select className="input" name="preferredSupplierId">
+                      <option value="">No preferred supplier</option>
+                      {suppliers.map((supplier) => (
+                        <option key={supplier.id} value={supplier.id}>
+                          {supplier.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="mt-1 text-xs text-black/50">
+                      Used by Sales by Linked Supplier reporting. It does not track exact stock-batch origin.
+                    </div>
+                  </div>
+                  <div className="md:col-span-3">
+                    <ProductUnitPricingEditor
+                      units={units}
+                      currencySymbol={getCurrencySymbol(business.currency)}
+                    />
+                  </div>
+                  <OpeningStockFields
                     currencySymbol={getCurrencySymbol(business.currency)}
+                    units={units}
                   />
-                </div>
+                </ProductFormSection>
+                <ProductFormSection title="Advanced" description="Margin target, tax, and promotions. Leave blank to use business defaults.">
+                  <div>
+                    <label className="label">Target Margin Override (%)</label>
+                    <input className="input" name="minimumMarginThresholdPercent" type="number" min={0} max={100} step="0.01" placeholder={defaultMarginThresholdPercent} />
+                    <div className="mt-1 text-xs text-black/50">Optional. Leave blank to inherit the business default target of {defaultMarginThresholdPercent}%.</div>
+                  </div>
+                  <div>
+                    <label className="label">VAT Rate (bps)</label>
+                    <input className="input" name="vatRateBps" type="number" min={0} defaultValue={0} />
+                  </div>
+                  <div>
+                    <label className="label">Promo Buy Qty (base units)</label>
+                    <input className="input" name="promoBuyQty" type="number" min={0} defaultValue={0} />
+                    <div className="mt-1 text-xs text-black/50">Buy X units to trigger a promo.</div>
+                  </div>
+                  <div>
+                    <label className="label">Promo Get Qty (base units)</label>
+                    <input className="input" name="promoGetQty" type="number" min={0} defaultValue={0} />
+                    <div className="mt-1 text-xs text-black/50">Free units given when promo applies.</div>
+                  </div>
+                </ProductFormSection>
                 <div className="md:col-span-3">
                   <SubmitButton className="btn-primary" loadingText="Creating…">Create product</SubmitButton>
                 </div>
@@ -443,8 +464,10 @@ export default async function ProductsPage({
             </>
           ) : null}
           <div className="card p-4 sm:p-5">
-            <div className="space-y-3 lg:hidden">
+            <ShowingRange page={page} pageSize={DEFAULT_PAGE_SIZE} total={totalProductCount} noun="products" />
+            <CompactMobileList className="mt-3">
               {products.length === 0 ? (
+                <CompactMobileListItem>
                 <div className="rounded-2xl border border-dashed border-black/10 px-5 py-7">
                   {q ? (
                     <>
@@ -470,8 +493,8 @@ export default async function ProductsPage({
                       </div>
                       {isManager ? (
                         <div className="mt-4 flex flex-wrap gap-2">
-                          <a href="#product-create" className="btn-primary text-xs px-3 py-1.5">Add first product</a>
-                          <Link href="/settings/import-stock" className="btn-ghost border border-black/10 rounded-lg px-3 py-1.5 text-xs">
+                          <a href="#product-create" className="btn-primary min-h-[44px] px-3 text-xs">Add first product</a>
+                          <Link href="/settings/import-stock" className="btn-ghost min-h-[44px] rounded-lg border border-black/10 px-3 text-xs">
                             Import from file
                           </Link>
                         </div>
@@ -479,6 +502,7 @@ export default async function ProductsPage({
                     </>
                   )}
                 </div>
+                </CompactMobileListItem>
               ) : products.map((product) => {
                 const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
                 const packaging = getPrimaryPackagingUnit(
@@ -494,10 +518,11 @@ export default async function ProductsPage({
                 });
 
                 return (
-                  <DataCard key={product.id} className="transition duration-150 hover:-translate-y-px hover:shadow-card active:scale-[0.98]">
+                  <CompactMobileListItem key={product.id}>
+                  <DataCard className="transition duration-150 hover:-translate-y-px hover:shadow-card active:scale-[0.98]">
                     <DataCardHeader
                       title={
-                        <div className="flex items-center gap-3">
+                        <div className="flex min-h-[44px] items-center gap-3">
                           {product.imageUrl ? (
                             <AdminProductImage
                               src={product.imageUrl}
@@ -511,7 +536,7 @@ export default async function ProductsPage({
                               {product.name.charAt(0)}
                             </div>
                           )}
-                          <Link href={`/products/${product.id}`} className="truncate hover:underline">
+                          <Link href={`/products/${product.id}`} className="min-h-[44px] truncate py-2 hover:underline">
                             {product.name}
                           </Link>
                         </div>
@@ -541,7 +566,7 @@ export default async function ProductsPage({
                             {issueDef?.recordStatusLabel}
                           </span>
                           {issueKey === 'MISSING_COST' ? (
-                            <Link href={`/products/${product.id}#cost`} className="btn-primary text-xs">
+                            <Link href={`/products/${product.id}#cost`} className="btn-primary min-h-[44px] text-xs">
                               Edit cost
                             </Link>
                           ) : null}
@@ -553,11 +578,11 @@ export default async function ProductsPage({
                                     ? `/setup/opening-stock?issue=STOCK_SETUP_GAP&productId=${product.id}`
                                     : `/setup/opening-stock?productId=${product.id}`
                                 }
-                                className="btn-primary text-xs"
+                                className="btn-primary min-h-[44px] text-xs"
                               >
                                 Add stock
                               </Link>
-                              <Link href={`/products/${product.id}`} className="btn-ghost text-xs">
+                              <Link href={`/products/${product.id}`} className="btn-ghost min-h-[44px] text-xs">
                                 Edit product
                               </Link>
                               {issueKey === 'UNUSED_CATALOGUE' ? (
@@ -571,15 +596,16 @@ export default async function ProductsPage({
                           ) : null}
                         </>
                       ) : (
-                        <Link href={`/products/${product.id}`} className="btn-ghost text-xs">
+                        <Link href={`/products/${product.id}`} className="btn-ghost min-h-[44px] text-xs">
                           Open product
                         </Link>
                       )}
                     </DataCardActions>
                   </DataCard>
+                  </CompactMobileListItem>
                 );
               })}
-            </div>
+            </CompactMobileList>
 
             <div className="responsive-table-shell hidden lg:block">
               <table className="table w-full border-separate border-spacing-y-1.5">

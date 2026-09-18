@@ -341,9 +341,20 @@ export function filterBrowseArea(area: MobileBrowseArea, context: MobileNavConte
   return items.length > 0 ? { ...area, items } : null;
 }
 
+/** Destinations already on the permanent bottom bar should not lead More / Quick Actions. */
+export function excludeBottomTabDuplicates<T extends { href: string }>(
+  items: readonly T[],
+  hiddenHrefs: readonly string[],
+): T[] {
+  return items.filter((item) => !hiddenHrefs.includes(item.href));
+}
+
 export function getOwnerLauncherMenu(context: MobileNavContext, hiddenHrefs: readonly string[] = []) {
   return {
-    quickActions: OWNER_QUICK_ACTIONS.filter((item) => itemIsVisible(item, context)),
+    quickActions: excludeBottomTabDuplicates(
+      OWNER_QUICK_ACTIONS.filter((item) => itemIsVisible(item, context)),
+      hiddenHrefs,
+    ),
     browseAreas: OWNER_BROWSE_AREAS.map((area) => filterBrowseArea(area, context, hiddenHrefs)).filter(
       (area): area is MobileBrowseArea => area !== null,
     ),

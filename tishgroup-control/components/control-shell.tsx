@@ -120,10 +120,12 @@ export default function ControlShell({
   children,
   staff,
   navCounts,
+  maintenance = false,
 }: {
   children: ReactNode;
   staff: ControlShellStaff;
   navCounts?: { urgent: number; collections: number; unreviewed: number };
+  maintenance?: boolean;
 }) {
   const pathname = usePathname() ?? '';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -365,6 +367,15 @@ export default function ControlShell({
           </div>
         </div>
 
+        {maintenance ? (
+          <div
+            role="status"
+            className="rounded-2xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-sm text-control-ink"
+          >
+            Changes are temporarily disabled. You can still sign in and view records. Commercial, staff,
+            support, payment, and subscription updates are blocked until normal operation is restored.
+          </div>
+        ) : null}
         {children}
       </div>
     </div>

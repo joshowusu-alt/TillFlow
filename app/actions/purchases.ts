@@ -8,7 +8,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { toPence, formString, formInt, formDate, formOptionalString } from '@/lib/form-helpers';
 import { PaymentStatusEnum } from '@/lib/validation/enums';
-import { withBusinessContext, formAction, type ActionResult, safeAction, ok, err } from '@/lib/action-utils';
+import { requireSelectedStoreContext, withBusinessContext, formAction, type ActionResult, safeAction, ok, err } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import type { PaymentStatus } from '@/lib/services/shared';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
@@ -22,9 +22,11 @@ import { revalidateImproveRecordsHome } from '@/lib/improve-records-revalidate';
 
 export async function createPurchaseAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
-
-    const storeId = formString(formData, 'storeId');
+    const requestedStoreId = formString(formData, 'storeId');
+    const { user, businessId, storeId } = await requireSelectedStoreContext(
+      ['MANAGER', 'OWNER'],
+      requestedStoreId,
+    );
     const supplierId = formString(formData, 'supplierId') || null;
     const paymentStatus = (formString(formData, 'paymentStatus') || 'PAID') as PaymentStatus;
     const psValidation = PaymentStatusEnum.safeParse(paymentStatus);

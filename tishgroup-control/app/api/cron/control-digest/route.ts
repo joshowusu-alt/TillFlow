@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { hasValidCronSecret } from '@/lib/cron-auth';
 import { computeControlDigest } from '@/lib/control-digest/service';
+import { isControlMaintenanceMode, maintenanceDeniedPayload } from '@/lib/control-maintenance';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,9 @@ export const dynamic = 'force-dynamic';
  * Protected with CRON_SECRET via Authorization: Bearer or x-cron-secret header.
  */
 export async function GET(request: Request) {
+  if (isControlMaintenanceMode()) {
+    return NextResponse.json(maintenanceDeniedPayload(), { status: 503 });
+  }
   if (!hasValidCronSecret(request)) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
   }

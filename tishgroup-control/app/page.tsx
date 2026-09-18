@@ -5,7 +5,8 @@ import KpiCard from '@/components/kpi-card';
 import SectionHeading from '@/components/section-heading';
 import { HealthPill, PlanPill, StatePill } from '@/components/status-pill';
 import { requireControlStaff } from '@/lib/control-auth';
-import { listManagedBusinesses } from '@/lib/control-service';
+import { listManagedPortfolio } from '@/lib/control-service';
+import { portfolioAvailabilityMessage } from '@/lib/control-data';
 import { formatCedi, getPortfolioSummaryFor, getRevenueByPlanFor } from '@/lib/control-metrics';
 import { getPortfolioSlaCounts } from '@/lib/sla';
 import { getCollectionsRhythm } from '@/lib/collections-trend';
@@ -15,31 +16,40 @@ export default async function PortfolioPage() {
   const staff = await requireControlStaff();
   const firstName = (staff.name ?? '').trim().split(/\s+/)[0] || staff.email.split('@')[0] || 'there';
   const roleLabel = staff.role.replace(/_/g, ' ').toLowerCase();
-  const businesses = await listManagedBusinesses();
+  const snapshot = await listManagedPortfolio();
+  const businesses = snapshot.businesses;
+  const availabilityNote = portfolioAvailabilityMessage(snapshot);
+  const unavailable = snapshot.availability === 'unavailable';
   const summary = getPortfolioSummaryFor(businesses);
   const revenueByPlan = getRevenueByPlanFor(businesses);
   const slaCounts = getPortfolioSlaCounts(businesses);
   const rhythm = await getCollectionsRhythm();
-  const urgentBusinesses = businesses.filter((business) => ['GRACE', 'STARTER_FALLBACK', 'READ_ONLY'].includes(business.state)).slice(0, 5);
+  const urgentBusinesses = businesses.filter((business) => [
+    'PAYMENT_OVERDUE_GRACE',
+    'PAYMENT_RESTRICTED',
+    'TRIAL_EXPIRED_GRACE',
+    'TRIAL_RESTRICTED',
+    'READ_ONLY',
+  ].includes(business.state)).slice(0, 5);
   const unreviewedBusinesses = businesses.filter((business) => business.needsReview).slice(0, 6);
   const workboardCards = [
     {
       title: 'Review new accounts',
-      value: String(unreviewedBusinesses.length),
+      value: unavailable ? '—' : String(unreviewedBusinesses.length),
       href: '/businesses?filter=unreviewed',
       note: 'Confirm owner, sold plan, and assignment before the queue grows stale.',
-      meta: `${unreviewedBusinesses.length} pending`,
+      meta: unavailable ? 'Unavailable' : `${unreviewedBusinesses.length} pending`,
     },
     {
       title: 'Run collections',
-      value: String(summary.dueSoon + summary.grace + summary.fallback + summary.readOnly),
+      value: unavailable ? '—' : String(summary.dueSoon + summary.grace + summary.fallback + summary.readOnly),
       href: '/collections',
-      note: 'Work due-soon, overdue, fallback, and locked accounts in operating order.',
+      note: 'Work due-soon, overdue, restricted, and locked accounts in operating order.',
       meta: 'Queue board',
     },
     {
       title: 'Watch revenue risk',
-      value: formatCedi(summary.expectedCollections),
+      value: unavailable ? '—' : formatCedi(summary.expectedCollections),
       href: '/revenue',
       note: 'See cash already exposed to payment delay, fallback, or restriction.',
       meta: 'Receivables',
@@ -47,40 +57,40 @@ export default async function PortfolioPage() {
   ];
   const headerStats = [
     {
-      label: 'Portfolio MRR',
-      value: formatCedi(summary.mrr),
-      hint: 'Monthly recurring base across active paid businesses.',
+      label: 'Paid MRR',
+      value: unavailable ? '—' : formatCedi(summary.mrr),
+      hint: 'Paid family only: active, renewal due soon, due today, and overdue grace. Trials are excluded.',
     },
     {
       label: 'Due this week',
-      value: String(summary.dueSoon),
+      value: unavailable ? '—' : String(summary.dueSoon),
       hint: 'Accounts that need reminder before they tip into overdue handling.',
     },
     {
       label: 'Locked / read-only',
-      value: String(summary.readOnly),
+      value: unavailable ? '—' : String(summary.readOnly),
       hint: 'Accounts already restricted and waiting on payment confirmation or decision.',
     },
     {
       label: 'SLA breaches',
-      value: slaCounts.total === 0 ? '0' : `${slaCounts.red}R · ${slaCounts.amber}A`,
+      value: unavailable ? '—' : slaCounts.total === 0 ? '0' : `${slaCounts.red}R · ${slaCounts.amber}A`,
       hint: 'Accounts ageing on the team\'s own queue (unreviewed or no contact).',
     },
   ];
   const focusOrder = [
     {
       label: 'Review new accounts',
-      value: `${unreviewedBusinesses.length} pending`,
+      value: unavailable ? 'Unavailable' : `${unreviewedBusinesses.length} pending`,
       href: '/businesses?filter=unreviewed',
     },
     {
       label: 'Run collections',
-      value: `${summary.dueSoon + summary.grace + summary.fallback + summary.readOnly} accounts`,
+      value: unavailable ? 'Unavailable' : `${summary.dueSoon + summary.grace + summary.fallback + summary.readOnly} accounts`,
       href: '/collections',
     },
     {
       label: 'Watch revenue risk',
-      value: formatCedi(summary.expectedCollections),
+      value: unavailable ? 'Unavailable' : formatCedi(summary.expectedCollections),
       href: '/revenue',
     },
   ];
@@ -93,7 +103,7 @@ export default async function PortfolioPage() {
       <ControlPageHeader
         eyebrow="Portfolio command"
         title="Portfolio posture and next move."
-        description="See the portfolio state, route the team into the next queue, and keep revenue risk explicit from the first viewport."
+        description={availabilityNote ?? 'See the portfolio state, route the team into the next queue, and keep revenue risk explicit from the first viewport.'}
         chips={[
           { label: 'Next move', href: '#today-workboard', tone: 'dark' },
           { label: 'New accounts', href: '#new-accounts' },
@@ -123,15 +133,17 @@ export default async function PortfolioPage() {
             </div>
 
             <div className="rounded-[18px] border border-white/10 bg-white/6 px-3.5 py-3 text-sm leading-6 text-white/74">
-              Revenue at risk now: <strong>{formatCedi(summary.expectedCollections)}</strong>. Active paid base: <strong>{summary.activePaid}</strong>.
+              {unavailable
+                ? 'Portfolio query failed. Revenue and paid-base counts are hidden so they are not mistaken for an empty book.'
+                : <>Revenue at risk now: <strong>{formatCedi(summary.expectedCollections)}</strong>. Active paid base: <strong>{summary.activePaid}</strong>.</>}
             </div>
 
             <div className="rounded-[18px] border border-white/10 bg-white/6 px-3.5 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="eyebrow text-white/55">Collections · 14d</div>
-                  <div className="mt-1 text-base font-semibold tracking-tight">{formatCedi(Math.round(rhythm.totalPence / 100))}</div>
-                  <div className="mt-0.5 text-xs text-white/60">Today {formatCedi(Math.round(rhythm.todayPence / 100))}</div>
+                  <div className="mt-1 text-base font-semibold tracking-tight">{formatCedi(rhythm.totalPence)}</div>
+                  <div className="mt-0.5 text-xs text-white/60">Today {formatCedi(rhythm.todayPence)}</div>
                 </div>
                 <Sparkline values={rhythm.daily} tone="teal" width={88} height={32} ariaLabel="Daily collections trend" />
               </div>
@@ -140,26 +152,32 @@ export default async function PortfolioPage() {
         )}
       />
 
+      {availabilityNote ? (
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${unavailable ? 'border-control-ember/20 bg-control-ember/8 text-control-ink' : 'border-control-teal/20 bg-control-teal/5 text-control-ink/70'}`}>
+          {availabilityNote}
+        </div>
+      ) : null}
+
       {/* Mobile urgency strip — tonal sprint view, hidden on desktop where the full header stats band is visible */}
       <section className="grid grid-cols-2 gap-2 md:hidden">
         <KpiCard
           tone="teal"
-          label="Portfolio MRR"
-          value={formatCedi(summary.mrr)}
-          hint="Monthly recurring base across active paid businesses."
+          label="Paid MRR"
+          value={unavailable ? '—' : formatCedi(summary.mrr)}
+          hint="Paid family only. Trials are excluded."
           accent="MRR"
         />
         <KpiCard
           tone="gold"
           label="Due soon"
-          value={String(summary.dueSoon)}
+          value={unavailable ? '—' : String(summary.dueSoon)}
           hint="Send reminders before these tip into overdue."
           accent="Reminder"
         />
         <KpiCard
           tone="ember"
           label="Overdue"
-          value={String(overdueCount)}
+          value={unavailable ? '—' : String(overdueCount)}
           hint="Same-day follow-up required."
           accent={overdueCount > 0 ? (
             <span className="flex items-center gap-1">
@@ -171,7 +189,7 @@ export default async function PortfolioPage() {
         <KpiCard
           tone="ember"
           label="Locked"
-          value={String(summary.readOnly)}
+          value={unavailable ? '—' : String(summary.readOnly)}
           hint="Payment confirmation or commercial decision needed."
           accent={summary.readOnly > 0 ? (
             <span className="flex items-center gap-1">
@@ -357,7 +375,7 @@ export default async function PortfolioPage() {
               description="Quick watchlist for accounts whose relationship quality needs a closer read."
             />
             <div className="mt-4 space-y-2.5">
-              {businesses.slice(0, 4).map((business) => (
+              {businesses.length > 0 ? businesses.slice(0, 4).map((business) => (
                 <div key={business.id} className="control-list-row control-list-row-muted">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -367,7 +385,9 @@ export default async function PortfolioPage() {
                     <HealthPill health={business.health} />
                   </div>
                 </div>
-              ))}
+              )) : (
+                <div className="control-inline-note">{unavailable ? 'Health watch is unavailable until the portfolio query succeeds.' : 'No live businesses to watch.'}</div>
+              )}
             </div>
           </div>
         </div>

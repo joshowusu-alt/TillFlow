@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { prismaMock } = vi.hoisted(() => ({
@@ -16,7 +18,10 @@ vi.mock('@/lib/accounting', () => ({
 
 import {
   bucketForDaysOverdue,
+  bucketForDueDate,
+  getSupplierAgingInvoices,
   getSupplierAgingReport,
+  parseAgingBucket,
   AGING_BUCKET_LABELS,
   AGING_BUCKETS,
 } from './supplier-aging';
@@ -33,6 +38,7 @@ function makeInvoice(
     totalPence?: number;
     paid?: number;
     paymentStatus?: string;
+    transactionNumber?: string | null;
   } = {},
 ) {
   const {
@@ -43,9 +49,11 @@ function makeInvoice(
     totalPence = 10_000,
     paid = 0,
     paymentStatus = 'UNPAID',
+    transactionNumber = null,
   } = overrides;
   return {
     id,
+    transactionNumber,
     dueDate: dueDate ? new Date(dueDate) : null,
     totalPence,
     paymentStatus,
@@ -60,11 +68,11 @@ beforeEach(() => {
 });
 
 describe('bucketForDaysOverdue', () => {
-  it('returns CURRENT for 0 days', () => {
-    expect(bucketForDaysOverdue(0)).toBe('CURRENT');
+  it('returns NOT_YET_DUE for 0 days', () => {
+    expect(bucketForDaysOverdue(0)).toBe('NOT_YET_DUE');
   });
-  it('returns CURRENT for negative days', () => {
-    expect(bucketForDaysOverdue(-5)).toBe('CURRENT');
+  it('returns NOT_YET_DUE for negative days', () => {
+    expect(bucketForDaysOverdue(-5)).toBe('NOT_YET_DUE');
   });
   it('returns D1_30 for 1 day', () => {
     expect(bucketForDaysOverdue(1)).toBe('D1_30');
@@ -78,19 +86,31 @@ describe('bucketForDaysOverdue', () => {
   it('returns D61_90 for 61 days', () => {
     expect(bucketForDaysOverdue(61)).toBe('D61_90');
   });
-  it('returns D90_PLUS for 91 days', () => {
-    expect(bucketForDaysOverdue(91)).toBe('D90_PLUS');
+  it('returns OVER_90 for 91 days', () => {
+    expect(bucketForDaysOverdue(91)).toBe('OVER_90');
   });
 });
 
 describe('AGING_BUCKETS / AGING_BUCKET_LABELS', () => {
-  it('exports exactly 5 buckets', () => {
-    expect(AGING_BUCKETS).toHaveLength(5);
+  it('exports the walkthrough contract buckets including missing due dates', () => {
+    expect(AGING_BUCKETS).toEqual([
+      'NOT_YET_DUE',
+      'D1_30',
+      'D31_60',
+      'D61_90',
+      'OVER_90',
+      'DUE_DATE_MISSING',
+    ]);
   });
   it('every bucket has a label', () => {
     for (const b of AGING_BUCKETS) {
       expect(AGING_BUCKET_LABELS[b]).toBeTypeOf('string');
     }
+  });
+  it('parses only known bucket query values', () => {
+    expect(parseAgingBucket('D1_30')).toBe('D1_30');
+    expect(parseAgingBucket('CURRENT')).toBeUndefined();
+    expect(parseAgingBucket('')).toBeUndefined();
   });
 });
 
@@ -103,14 +123,16 @@ describe('getSupplierAgingReport', () => {
     expect(report.totals.supplierCount).toBe(0);
   });
 
-  it('puts invoice with null dueDate in Current bucket', async () => {
+  it('puts invoice with null dueDate in DUE_DATE_MISSING, not current', async () => {
     prismaMock.purchaseInvoice.findMany.mockResolvedValue([
       makeInvoice({ dueDate: null, totalPence: 5_000 }),
     ]);
     const report = await getSupplierAgingReport(BIZ, now);
     expect(report.rows).toHaveLength(1);
-    expect(report.rows[0].buckets.CURRENT).toBe(5_000);
+    expect(report.rows[0].buckets.DUE_DATE_MISSING).toBe(5_000);
+    expect(report.rows[0].buckets.NOT_YET_DUE).toBe(0);
     expect(report.rows[0].oldestDueDate).toBeNull();
+    expect(bucketForDueDate(now, null)).toBe('DUE_DATE_MISSING');
   });
 
   it('puts invoice 5 days overdue in D1_30 bucket', async () => {
@@ -120,7 +142,7 @@ describe('getSupplierAgingReport', () => {
     ]);
     const report = await getSupplierAgingReport(BIZ, now);
     expect(report.rows[0].buckets.D1_30).toBe(8_000);
-    expect(report.rows[0].buckets.CURRENT).toBe(0);
+    expect(report.rows[0].buckets.NOT_YET_DUE).toBe(0);
   });
 
   it('correctly splits three invoices from one supplier across buckets', async () => {
@@ -145,7 +167,6 @@ describe('getSupplierAgingReport', () => {
   });
 
   it('excludes PAID and RETURNED invoices (balance 0)', async () => {
-    // computeOutstandingBalance mock returns 0 when total == paid
     prismaMock.purchaseInvoice.findMany.mockResolvedValue([
       makeInvoice({ id: 'i1', totalPence: 5_000, paid: 5_000 }),
     ]);
@@ -173,54 +194,61 @@ describe('getSupplierAgingReport', () => {
     expect(report.rows).toHaveLength(0);
   });
 
-  it('correctly uses past asOf — invoice not yet overdue on that date goes to Current', async () => {
-    // asOf = 2024-01-01, dueDate = 2024-01-15 → daysOverdue negative → CURRENT
+  it('correctly uses past asOf — invoice not yet overdue on that date goes to NOT_YET_DUE', async () => {
     const pastAsOf = new Date('2024-01-01T00:00:00Z');
     prismaMock.purchaseInvoice.findMany.mockResolvedValue([
       makeInvoice({ dueDate: '2024-01-15', totalPence: 5_000 }),
     ]);
     const report = await getSupplierAgingReport(BIZ, pastAsOf);
-    expect(report.rows[0].buckets.CURRENT).toBe(5_000);
-    for (const b of ['D1_30', 'D31_60', 'D61_90', 'D90_PLUS'] as const) {
+    expect(report.rows[0].buckets.NOT_YET_DUE).toBe(5_000);
+    for (const b of ['D1_30', 'D31_60', 'D61_90', 'OVER_90', 'DUE_DATE_MISSING'] as const) {
       expect(report.rows[0].buckets[b]).toBe(0);
     }
   });
 
-  it('correctly reports invoice 100+ days overdue in D90_PLUS', async () => {
+  it('correctly reports invoice 100+ days overdue in OVER_90', async () => {
     const d100 = new Date(now.getTime() - 100 * 86_400_000).toISOString().slice(0, 10);
     prismaMock.purchaseInvoice.findMany.mockResolvedValue([
       makeInvoice({ dueDate: d100, totalPence: 7_000 }),
     ]);
     const report = await getSupplierAgingReport(BIZ, now);
-    expect(report.rows[0].buckets.D90_PLUS).toBe(7_000);
-    expect(report.totals.buckets.D90_PLUS).toBe(7_000);
+    expect(report.rows[0].buckets.OVER_90).toBe(7_000);
+    expect(report.totals.buckets.OVER_90).toBe(7_000);
   });
 
   it('re-categorizes when dueDate is changed later on an existing invoice', async () => {
-    // First fetch: invoice has no due date (historical credit purchase) -> CURRENT
     prismaMock.purchaseInvoice.findMany.mockResolvedValueOnce([
       makeInvoice({ id: 'retro-1', dueDate: null, totalPence: 9_000 }),
     ]);
 
     const beforeEdit = await getSupplierAgingReport(BIZ, now);
-    expect(beforeEdit.rows[0].buckets.CURRENT).toBe(9_000);
+    expect(beforeEdit.rows[0].buckets.DUE_DATE_MISSING).toBe(9_000);
+    expect(beforeEdit.rows[0].buckets.NOT_YET_DUE).toBe(0);
     expect(beforeEdit.rows[0].buckets.D31_60).toBe(0);
 
-    // Second fetch: user later amends dueDate to 45 days ago -> D31_60
     const d45 = new Date(now.getTime() - 45 * 86_400_000).toISOString().slice(0, 10);
     prismaMock.purchaseInvoice.findMany.mockResolvedValueOnce([
       makeInvoice({ id: 'retro-1', dueDate: d45, totalPence: 9_000 }),
     ]);
 
     const afterEdit = await getSupplierAgingReport(BIZ, now);
-    expect(afterEdit.rows[0].buckets.CURRENT).toBe(0);
+    expect(afterEdit.rows[0].buckets.DUE_DATE_MISSING).toBe(0);
     expect(afterEdit.rows[0].buckets.D31_60).toBe(9_000);
   });
 
+  it('lists invoices for a drill-down bucket without changing asOf', async () => {
+    prismaMock.purchaseInvoice.findMany.mockResolvedValue([
+      makeInvoice({ id: 'missing', dueDate: null, totalPence: 4_000, transactionNumber: 'PUR-000009' }),
+      makeInvoice({ id: 'overdue', dueDate: '2024-06-01', totalPence: 2_000 }),
+    ]);
+    const invoices = await getSupplierAgingInvoices(BIZ, now, 'DUE_DATE_MISSING');
+    expect(invoices).toHaveLength(1);
+    expect(invoices[0].id).toBe('missing');
+    expect(invoices[0].bucket).toBe('DUE_DATE_MISSING');
+    expect(invoices[0].outstandingPence).toBe(4_000);
+  });
+
   it('reconciles a populated multi-supplier fixture across totals, buckets and partial payments', async () => {
-    // asOf 2024-06-15
-    // Alpha: current not-due + 1–30 overdue + partial payment
-    // Beta: 31–60 + 90+ with large digit amounts (truncation-sensitive)
     prismaMock.purchaseInvoice.findMany.mockResolvedValue([
       makeInvoice({
         id: 'alpha-current',
@@ -260,32 +288,47 @@ describe('getSupplierAgingReport', () => {
     expect(report.totals.supplierCount).toBe(2);
     expect(report.totals.invoiceCount).toBe(4);
 
-    // Alpha outstanding: 1_250_000 + (500_000 - 100_000) = 1_650_000
     const alpha = report.rows.find((row) => row.supplierId === 'sup-alpha');
     expect(alpha).toBeTruthy();
     expect(alpha!.totalPence).toBe(1_650_000);
-    expect(alpha!.buckets.CURRENT).toBe(1_250_000);
+    expect(alpha!.buckets.NOT_YET_DUE).toBe(1_250_000);
     expect(alpha!.buckets.D1_30).toBe(400_000);
 
-    // Beta outstanding: 2_345_678 + 9_876_543 = 12_222_221
     const beta = report.rows.find((row) => row.supplierId === 'sup-beta');
     expect(beta).toBeTruthy();
     expect(beta!.totalPence).toBe(12_222_221);
     expect(beta!.buckets.D31_60).toBe(2_345_678);
-    expect(beta!.buckets.D90_PLUS).toBe(9_876_543);
+    expect(beta!.buckets.OVER_90).toBe(9_876_543);
 
     expect(report.totals.totalPence).toBe(1_650_000 + 12_222_221);
-    expect(report.totals.buckets.CURRENT).toBe(1_250_000);
+    expect(report.totals.buckets.NOT_YET_DUE).toBe(1_250_000);
     expect(report.totals.buckets.D1_30).toBe(400_000);
     expect(report.totals.buckets.D31_60).toBe(2_345_678);
-    expect(report.totals.buckets.D90_PLUS).toBe(9_876_543);
+    expect(report.totals.buckets.OVER_90).toBe(9_876_543);
 
-    // Row totals must reconcile to headline totals (desktop/mobile/tiles/export share this report)
     const rowSum = report.rows.reduce((sum, row) => sum + row.totalPence, 0);
     expect(rowSum).toBe(report.totals.totalPence);
     for (const bucket of AGING_BUCKETS) {
       const bucketSum = report.rows.reduce((sum, row) => sum + row.buckets[bucket], 0);
       expect(bucketSum).toBe(report.totals.buckets[bucket]);
     }
+  });
+});
+
+describe('supplier aging export route scope', () => {
+  const exportSrc = readFileSync(
+    join(process.cwd(), 'app/(protected)/payments/supplier-aging/export/route.ts'),
+    'utf8',
+  );
+
+  it('keeps CSV scope on businessId, explicit asOf, and optional bucket', () => {
+    expect(exportSrc).toContain("['MANAGER', 'OWNER'].includes(user.role)");
+    expect(exportSrc).toContain('user.businessId');
+    expect(exportSrc).toContain("searchParams.get('asOf')");
+    expect(exportSrc).toContain("searchParams.get('bucket')");
+    expect(exportSrc).toContain('getSupplierAgingInvoices(user.businessId, asOf, bucket)');
+    expect(exportSrc).toContain('getSupplierAgingReport(user.businessId, asOf)');
+    expect(exportSrc).toContain('As Of,');
+    expect(exportSrc).toContain('Scope,');
   });
 });

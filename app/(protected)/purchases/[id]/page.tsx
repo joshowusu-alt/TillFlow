@@ -10,7 +10,9 @@ import { changePurchaseProductSupplierLinkAction } from '@/app/actions/purchases
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import DueDateBadge from '@/components/DueDateBadge';
 import PurchaseDraftClearer from '@/components/purchases/PurchaseDraftClearer';
+import RemainingBalance from '@/components/RemainingBalance';
 import SupplierPaymentForm from '@/components/SupplierPaymentForm';
+import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 
 export default async function PurchaseInvoicePage({
   params,
@@ -104,7 +106,7 @@ export default async function PurchaseInvoicePage({
     <div className="space-y-6">
       <PurchaseDraftClearer storeId={invoice.storeId} active={searchParams?.created === '1'} />
       <PageHeader
-        title={`Purchase Invoice`}
+        title={displayDocumentNumber('purchase', invoice.transactionNumber, invoice.id)}
         subtitle={invoice.supplier ? `Supplier: ${invoice.supplier.name}` : 'No supplier linked'}
         secondaryCta={{ label: '← Back to purchases', href: '/purchases' }}
       />
@@ -180,19 +182,12 @@ export default async function PurchaseInvoicePage({
           <div className="text-xs uppercase tracking-wider text-black/40">Store</div>
           <div className="text-sm">{invoice.store?.name ?? '—'}</div>
         </div>
-        <div className="space-y-1">
-          <div className="text-xs uppercase tracking-wider text-black/40">Invoice Total</div>
-          <div className="text-2xl font-semibold">{formatMoney(invoice.totalPence, business.currency)}</div>
-        </div>
-        <div className="space-y-1">
-          <div className="text-xs uppercase tracking-wider text-black/40">Total Paid</div>
-          <div className="text-2xl font-semibold text-emerald-700">{formatMoney(totalPaid, business.currency)}</div>
-        </div>
-        <div className="space-y-1">
-          <div className="text-xs uppercase tracking-wider text-black/40">Outstanding</div>
-          <div className={`text-2xl font-semibold ${outstanding > 0 ? 'text-red-600' : 'text-black/40'}`}>
-            {formatMoney(outstanding, business.currency)}
-          </div>
+        <div className="space-y-1 sm:col-span-2">
+          <RemainingBalance
+            amountPence={invoice.totalPence}
+            paidPence={totalPaid}
+            currency={business.currency}
+          />
         </div>
         {invoice.supplier && (
           <div className="space-y-1">

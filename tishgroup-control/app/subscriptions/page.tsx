@@ -3,8 +3,9 @@ import ControlPageHeader from '@/components/control-page-header';
 import SectionHeading from '@/components/section-heading';
 import { PlanPill, StatePill } from '@/components/status-pill';
 import { requireControlStaff } from '@/lib/control-auth';
-import { listManagedBusinesses } from '@/lib/control-service';
-import { formatCedi } from '@/lib/control-metrics';
+import { listManagedPortfolio } from '@/lib/control-service';
+import { portfolioAvailabilityMessage } from '@/lib/control-data';
+import { amountDueGhs, formatCedi, getPortfolioSummaryFor } from '@/lib/control-metrics';
 import type { ManagedBusiness, ManagedState } from '@/lib/control-data';
 import { readSearchParam as readParam, resolveSearchParams, type ControlSearchParams } from '@/lib/search-params';
 
@@ -110,7 +111,10 @@ export default async function SubscriptionsPage({
   const resolvedSearchParams = await resolveSearchParams(searchParams);
   const filter = (readParam(resolvedSearchParams.filter) ?? 'all') as FilterKey;
   const sort = (readParam(resolvedSearchParams.sort) ?? 'nearest-due') as SortKey;
-  const businesses = await listManagedBusinesses();
+  const snapshot = await listManagedPortfolio();
+  const businesses = snapshot.businesses;
+  const availabilityNote = portfolioAvailabilityMessage(snapshot);
+  const unavailable = snapshot.availability === 'unavailable';
   const filtered = sortBusinesses(businesses.filter((business) => matchesFilter(business, filter)), sort);
   const billableBusinesses = businesses.filter(isBillableBusiness);
   const dueThisWeek = billableBusinesses.filter((business) => {
@@ -125,8 +129,8 @@ export default async function SubscriptionsPage({
     dueToday: billableBusinesses.filter((business) => business.state === 'PAYMENT_DUE_TODAY' || business.state === 'TRIAL_DUE_TODAY' || daysUntil(business.nextDueAt) === 0).length,
     overdue: billableBusinesses.filter((business) => ['TRIAL_EXPIRED_GRACE', 'PAYMENT_OVERDUE_GRACE', 'TRIAL_RESTRICTED', 'PAYMENT_RESTRICTED'].includes(business.state) || (daysUntil(business.nextDueAt) ?? 0) < 0).length,
     suspended: billableBusinesses.filter((business) => business.state === 'READ_ONLY').length,
-    mrr: billableBusinesses.filter((business) => business.state === 'PAID_ACTIVE').reduce((sum, business) => sum + business.monthlyValue, 0),
-    weekCollections: dueThisWeek.reduce((sum, business) => sum + (business.outstandingAmount || business.monthlyValue), 0),
+    mrr: getPortfolioSummaryFor(businesses).mrr,
+    weekCollections: dueThisWeek.reduce((sum, business) => sum + amountDueGhs(business), 0),
   };
 
   const filterOptions: Array<{ key: FilterKey; label: string }> = [
@@ -149,15 +153,21 @@ export default async function SubscriptionsPage({
       <ControlPageHeader
         eyebrow="Subscription monitoring"
         title="Merchant billing command centre."
-        description="Track every TillFlow account by trial, due date, payment risk, and restriction status."
+        description={availabilityNote ?? 'Track every TillFlow account by trial, due date, payment risk, and restriction status.'}
         chips={[{ label: 'Filters', href: '#filters', tone: 'dark' }, { label: 'Roster', href: '#subscription-roster' }]}
         stats={[
-          { label: 'Active merchants', value: String(summary.active), hint: 'Paid accounts in good standing.' },
-          { label: 'Trials running', value: String(summary.trials), hint: 'Businesses still inside the trial window.' },
-          { label: 'Due today', value: String(summary.dueToday), hint: 'Accounts requiring same-day collection follow-up.' },
-          { label: 'MRR estimate', value: formatCedi(summary.mrr), hint: 'Current active monthly recurring value.' },
+          { label: 'Active merchants', value: unavailable ? '—' : String(summary.active), hint: 'Paid accounts in good standing.' },
+          { label: 'Trials running', value: unavailable ? '—' : String(summary.trials), hint: 'Businesses still inside the trial window.' },
+          { label: 'Due today', value: unavailable ? '—' : String(summary.dueToday), hint: 'Accounts requiring same-day collection follow-up.' },
+          { label: 'Paid MRR', value: unavailable ? '—' : formatCedi(summary.mrr), hint: 'Paid family only: active, due soon, due today, and overdue grace. Trials excluded.' },
         ]}
       />
+
+      {availabilityNote ? (
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${unavailable ? 'border-control-ember/20 bg-control-ember/8 text-control-ink' : 'border-control-teal/20 bg-control-teal/5 text-control-ink/70'}`}>
+          {availabilityNote}
+        </div>
+      ) : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
@@ -202,6 +212,9 @@ export default async function SubscriptionsPage({
 
       <section id="subscription-roster" className="panel overflow-hidden p-0">
         <div className="space-y-3 p-4 md:hidden">
+          {filtered.length === 0 ? (
+            <div className="control-inline-note">{unavailable ? 'Subscription roster is unavailable until the portfolio query succeeds.' : 'No businesses match this subscription view.'}</div>
+          ) : null}
           {filtered.map((business) => {
             const days = daysUntil(business.nextDueAt);
             return (
@@ -217,7 +230,7 @@ export default async function SubscriptionsPage({
                 <div className="mobile-card-grid">
                   <div><div className="mobile-card-label">Trial end</div><div className="mobile-card-value">{business.trialEndAt ?? 'Not active'}</div></div>
                   <div><div className="mobile-card-label">Next billing</div><div className="mobile-card-value">{business.nextDueAt}</div></div>
-                  <div><div className="mobile-card-label">Amount</div><div className="mobile-card-value">{formatCedi(business.monthlyValue)}</div></div>
+                  <div><div className="mobile-card-label">Amount due</div><div className="mobile-card-value">{formatCedi(amountDueGhs(business))}</div></div>
                   <div><div className="mobile-card-label">Last paid</div><div className="mobile-card-value">{business.lastPaymentAt ?? 'Not yet'}</div></div>
                   <div><div className="mobile-card-label">SMS</div><div className="mobile-card-value">{business.lastReminderStatus ?? 'None'}</div></div>
                 </div>
@@ -254,7 +267,7 @@ export default async function SubscriptionsPage({
                     <td><div className="text-sm text-black/66">{business.trialStartAt ?? 'Not active'} - {business.trialEndAt ?? 'Not active'}</div>{business.daysLeft != null ? <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">{daysBadgeLabel(business.daysLeft)}</div> : null}</td>
                     <td><StatePill state={business.state} /></td>
                     <td>{business.nextDueAt}</td>
-                    <td className="font-semibold text-control-ink">{formatCedi(business.monthlyValue)}</td>
+                    <td className="font-semibold text-control-ink">{formatCedi(amountDueGhs(business))}</td>
                     <td>{business.lastPaymentAt ?? 'Not yet'}</td>
                     <td>
                       <div className="text-sm text-black/66">Last: {business.lastReminderAt ?? 'None'}{business.lastReminderStatus ? ` (${business.lastReminderStatus})` : ''}</div>
@@ -265,7 +278,7 @@ export default async function SubscriptionsPage({
                   </tr>
                 );
               })}
-              {filtered.length === 0 ? <tr><td colSpan={10} className="text-sm text-black/58">No businesses match this subscription view.</td></tr> : null}
+              {filtered.length === 0 ? <tr><td colSpan={10} className="text-sm text-black/58">{unavailable ? 'Subscription roster is unavailable until the portfolio query succeeds.' : 'No businesses match this subscription view.'}</td></tr> : null}
             </tbody>
           </table>
         </div>

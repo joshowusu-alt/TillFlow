@@ -1,9 +1,19 @@
 'use server';
 
+import bcrypt from 'bcryptjs';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { canManageStaff, canManageSubscriptions, canRecordPayments, canWriteNotes, requireControlStaff } from '@/lib/control-auth';
+import {
+  canManageStaff,
+  canManageSubscriptions,
+  canRecordPayments,
+  canWriteNotes,
+  MIN_CONTROL_PASSWORD_LENGTH,
+  nextSessionVersion,
+  parseControlStaffRole,
+  requireControlStaffForMutation,
+} from '@/lib/control-auth';
 import { planRates, type ManagedPlan } from '@/lib/control-data';
 import {
   computeSubscriptionPricing,
@@ -12,13 +22,34 @@ import {
   resolveControlPaymentAmounts,
   resolveAddonForPlan,
 } from '@/lib/vendor/plan-pricing';
-import { recordAudit } from '@/lib/audit';
+import {
+  businessPlanStatusFromCanonical,
+  businessSubscriptionStatusFromCanonical,
+  coerceExistingStoredStatus,
+  isCancelledStatus,
+  isPaidAccessStatus,
+  isTrialStatus,
+  paidActivationAllowed,
+  shouldRevokeMerchantSessions,
+  type CanonicalStoredStatus,
+} from '@/lib/vendor/control-commercial-status';
+import { recordAuditInTransaction } from '@/lib/audit';
 import { captureError } from '@/lib/error-monitor';
 import { notifyStateTransition, notifyPaymentRecorded } from '@/lib/notify';
 import { activateSubscriptionAfterPayment, calculateNextBillingDate } from '@/lib/subscription-lifecycle';
+import { safeReturnPath, withRedirectParam } from '@/lib/safe-return-path';
+import {
+  hasQualifyingPaidSettlement,
+  parseExplicitPaymentAmountGhs,
+  parseRequiredCurrency,
+  parseRequiredIdempotencyKey,
+  parseSubscriptionEditorStatus,
+  preserveStatusWhenAssigningSoldPlan,
+  settleControlPayment,
+} from '@/lib/commercial-mutations';
 
 type BillingCadence = 'MONTHLY' | 'ANNUAL';
-type SubscriptionStatus = 'PAID_ACTIVE' | 'TRIAL_ACTIVE' | 'TRIAL_DUE_SOON' | 'TRIAL_DUE_TODAY' | 'TRIAL_EXPIRED_GRACE' | 'TRIAL_RESTRICTED' | 'RENEWAL_DUE_SOON' | 'PAYMENT_DUE_TODAY' | 'PAYMENT_OVERDUE_GRACE' | 'PAYMENT_RESTRICTED' | 'CANCELLED' | 'READ_ONLY';
+type SubscriptionStatus = CanonicalStoredStatus;
 
 function readRequired(formData: FormData, name: string) {
   return String(formData.get(name) ?? '').trim();
@@ -42,7 +73,9 @@ function parseOptionalInteger(value: string | null, fallback = 0) {
 }
 
 function normalizePlan(value: string): ManagedPlan {
-  return value === 'PRO' || value === 'GROWTH' ? value : 'STARTER';
+  const plan = value.trim().toUpperCase();
+  if (plan === 'STARTER' || plan === 'GROWTH' || plan === 'PRO') return plan;
+  throw new Error('Unknown plan. The existing plan was not changed.');
 }
 
 function normalizeCadence(value: string): BillingCadence {
@@ -50,40 +83,18 @@ function normalizeCadence(value: string): BillingCadence {
 }
 
 function normalizeSubscriptionStatus(value: string): SubscriptionStatus {
-  switch (value) {
-    case 'TRIAL_ACTIVE':
-    case 'TRIAL_DUE_SOON':
-    case 'TRIAL_DUE_TODAY':
-    case 'TRIAL_EXPIRED_GRACE':
-    case 'TRIAL_RESTRICTED':
-    case 'PAID_ACTIVE':
-    case 'RENEWAL_DUE_SOON':
-    case 'PAYMENT_DUE_TODAY':
-    case 'PAYMENT_OVERDUE_GRACE':
-    case 'PAYMENT_RESTRICTED':
-    case 'READ_ONLY':
-      return value;
-    case 'INACTIVE':
-    case 'DEACTIVATED':
-    case 'CANCELLED':
-      return 'CANCELLED';
-    case 'ACTIVE':
-    default:
-      return 'PAID_ACTIVE';
-  }
+  return parseSubscriptionEditorStatus(value);
 }
 
 function readReturnPath(formData: FormData, fallback: string) {
-  const value = String(formData.get('returnPath') ?? '').trim();
-  return value.startsWith('/') ? value : fallback;
+  return safeReturnPath(readOptional(formData, 'returnPath'), fallback);
 }
 
-function withRedirectParam(path: string, key: string, value: string) {
-  const [pathname, query = ''] = path.split('?');
-  const params = new URLSearchParams(query);
-  params.set(key, value);
-  const serialized = params.toString();
-  return serialized ? `${pathname}?${serialized}` : pathname;
+function customerFacingBillingPatch(existing: string | null | undefined, customerFacingNote: string | null) {
+  if (!customerFacingNote) return undefined;
+  const timestamp = new Date().toISOString();
+  const entry = `[${timestamp}] Billing update\n${customerFacingNote}`;
+  return [existing?.trim(), entry].filter(Boolean).join('\n\n');
 }
 
 function addBillingInterval(startDate: Date, cadence: BillingCadence) {
@@ -106,12 +117,6 @@ function resolveSubscriptionDates(args: {
   const startDate = args.startDate ?? args.fallbackStartDate ?? new Date();
   const nextDueDate = args.nextDueDate ?? args.fallbackNextDueDate ?? addBillingInterval(startDate, args.billingCadence);
   return { startDate, nextDueDate };
-}
-
-function appendBillingEntry(existing: string | null | undefined, heading: string, lines: Array<string | null>) {
-  const timestamp = new Date().toISOString();
-  const entry = [`[${timestamp}] ${heading}`, ...lines.filter(Boolean)].join('\n');
-  return [existing?.trim(), entry].filter(Boolean).join('\n\n');
 }
 
 function normalizeGhanaPhone(input: string | null | undefined): string | null {
@@ -178,65 +183,11 @@ async function enqueuePaymentConfirmedReminder(businessId: string) {
 }
 
 function businessStatusFromSubscription(status: SubscriptionStatus) {
-  switch (status) {
-    case 'TRIAL_ACTIVE':
-    case 'TRIAL_DUE_SOON':
-    case 'TRIAL_DUE_TODAY':
-    case 'TRIAL_EXPIRED_GRACE':
-    case 'TRIAL_RESTRICTED':
-      return 'TRIAL_ACTIVE';
-    case 'CANCELLED':
-      return 'CANCELLED';
-    case 'READ_ONLY':
-      return 'READ_ONLY';
-    case 'PAID_ACTIVE':
-    case 'RENEWAL_DUE_SOON':
-    case 'PAYMENT_DUE_TODAY':
-    case 'PAYMENT_OVERDUE_GRACE':
-    case 'PAYMENT_RESTRICTED':
-    default:
-      return 'PAID_ACTIVE';
-  }
+  return businessPlanStatusFromCanonical(status);
 }
 
 function billingStatusFromSubscription(status: SubscriptionStatus) {
-  switch (status) {
-    case 'TRIAL_ACTIVE':
-    case 'TRIAL_DUE_SOON':
-    case 'TRIAL_DUE_TODAY':
-    case 'TRIAL_EXPIRED_GRACE':
-    case 'TRIAL_RESTRICTED':
-      return status;
-    case 'CANCELLED':
-      return 'CANCELLED';
-    case 'READ_ONLY':
-      return 'READ_ONLY';
-    case 'PAID_ACTIVE':
-    case 'RENEWAL_DUE_SOON':
-    case 'PAYMENT_DUE_TODAY':
-    case 'PAYMENT_OVERDUE_GRACE':
-    case 'PAYMENT_RESTRICTED':
-    default:
-      return 'PAID_ACTIVE';
-  }
-}
-
-function isTrialStatus(status: SubscriptionStatus) {
-  return status.startsWith('TRIAL_');
-}
-
-function isCancelledStatus(status: SubscriptionStatus) {
-  return status === 'CANCELLED';
-}
-
-function isPaidAccessStatus(status: SubscriptionStatus) {
-  return (
-    status === 'PAID_ACTIVE' ||
-    status === 'RENEWAL_DUE_SOON' ||
-    status === 'PAYMENT_DUE_TODAY' ||
-    status === 'PAYMENT_OVERDUE_GRACE' ||
-    status === 'PAYMENT_RESTRICTED'
-  );
+  return businessSubscriptionStatusFromCanonical(status);
 }
 
 async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>, args: {
@@ -269,7 +220,7 @@ async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$discon
     fallbackStartDate: existingSubscription?.startDate ?? null,
     fallbackNextDueDate: existingSubscription?.nextDueDate ?? null,
   });
-  const status = normalizeSubscriptionStatus(existingSubscription?.status ?? args.currentBusinessPlanStatus ?? 'ACTIVE');
+  const status = preserveStatusWhenAssigningSoldPlan(existingSubscription?.status ?? args.currentBusinessPlanStatus);
   const businessAddon = await tx.business.findUnique({
     where: { id: args.businessId },
     select: { addonOnlineStorefront: true },
@@ -341,6 +292,10 @@ async function ensureControlBusinessProfile(tx: Omit<typeof prisma, '$connect' |
       name: true,
       plan: true,
       planSetAt: true,
+      planStatus: true,
+      subscriptionStatus: true,
+      trialEndsAt: true,
+      currentPeriodStartedAt: true,
       currentPeriodEndsAt: true,
       nextBillingDate: true,
       nextPaymentDueAt: true,
@@ -417,17 +372,29 @@ function ensureRole(condition: boolean, fallbackMessage: string, businessId: str
 }
 
 export async function updateControlSubscriptionAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const businessId = readRequired(formData, 'businessId');
   const returnPath = readReturnPath(formData, `/businesses/${businessId}`);
   ensureRole(canManageSubscriptions(staff.role), 'Your Control role cannot change subscriptions.', businessId);
 
-  const purchasedPlan = normalizePlan(readRequired(formData, 'purchasedPlan').toUpperCase());
+  let status: SubscriptionStatus;
+  try {
+    status = normalizeSubscriptionStatus(readRequired(formData, 'status').toUpperCase());
+  } catch (error) {
+    redirect(withRedirectParam(returnPath, 'error', error instanceof Error ? error.message : 'Unknown commercial status.'));
+  }
+
+  let purchasedPlan: ManagedPlan;
+  try {
+    purchasedPlan = normalizePlan(readRequired(formData, 'purchasedPlan').toUpperCase());
+  } catch (error) {
+    redirect(withRedirectParam(returnPath, 'error', error instanceof Error ? error.message : 'Unknown plan. The existing plan was not changed.'));
+  }
   const billingCadence = normalizeCadence(readRequired(formData, 'billingCadence').toUpperCase());
-  const status = normalizeSubscriptionStatus(readRequired(formData, 'status').toUpperCase());
   const requestedStartDate = parseOptionalDate(readOptional(formData, 'startDate'));
   const nextDueDate = parseOptionalDate(readOptional(formData, 'nextDueDate'));
   const trialEndsAt = parseOptionalDate(readOptional(formData, 'trialEndsAt'));
+  const customerFacingNote = readOptional(formData, 'customerFacingNote');
   const addonOnlineStorefront = resolveAddonForPlan(purchasedPlan, formData.get('addonOnlineStorefront') === 'on');
   const pricing = computeSubscriptionPricing({
     plan: purchasedPlan,
@@ -435,27 +402,44 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
     billingInterval: billingCadence,
   });
   const recommendedMonthlyGhs = controlMonthlyValueGhs(pricing);
-  const recommendedIntervalChargeGhs = controlIntervalChargeGhs(pricing);
   const submittedMonthlyGhs = parseOptionalInteger(readOptional(formData, 'monthlyValuePence'), recommendedMonthlyGhs);
-  const outstandingAmountPence = parseOptionalInteger(
-    readOptional(formData, 'outstandingAmountPence'),
-    recommendedIntervalChargeGhs,
-  );
+  const submittedOutstanding = readOptional(formData, 'outstandingAmountPence');
   const now = new Date();
   let monthlyValuePence = recommendedMonthlyGhs;
+  let outstandingAmountPence = 0;
 
   try {
     await prisma.$transaction(async (tx) => {
       const { business, profile } = await ensureControlBusinessProfile(tx, businessId);
       const existingSubscription = await tx.controlSubscription.findUnique({
         where: { controlBusinessId: profile.id },
-        select: { startDate: true, nextDueDate: true, monthlyValuePence: true },
+        select: { startDate: true, nextDueDate: true, monthlyValuePence: true, outstandingAmountPence: true, status: true },
       });
+      const recordedPayments = await tx.controlPayment.findMany({
+        where: { controlBusinessId: profile.id },
+        select: { amountPence: true },
+      });
+      const recommendedIntervalChargeGhs = controlIntervalChargeGhs(pricing);
+      if (!paidActivationAllowed({
+        requestedStatus: status,
+        hasQualifyingPaidSettlement: hasQualifyingPaidSettlement({
+          firstPaymentAt: business.firstPaymentAt,
+          paymentAmountsGhs: recordedPayments.map((payment) => payment.amountPence),
+          recommendedIntervalChargeGhs,
+        }),
+      })) {
+        throw new Error('Paid access requires a full qualifying payment. Partial payments, plan, date, or note changes do not activate paid access.');
+      }
+
+      const previousStatus = existingSubscription?.status ?? business.subscriptionStatus;
       const existingMonthlyGhs = existingSubscription?.monthlyValuePence ?? planRates[purchasedPlan];
       monthlyValuePence =
         submittedMonthlyGhs !== recommendedMonthlyGhs && submittedMonthlyGhs === existingMonthlyGhs
           ? submittedMonthlyGhs
           : recommendedMonthlyGhs;
+      outstandingAmountPence = submittedOutstanding
+        ? parseOptionalInteger(submittedOutstanding, existingSubscription?.outstandingAmountPence ?? 0)
+        : (existingSubscription?.outstandingAmountPence ?? 0);
       const { startDate, nextDueDate: resolvedNextDueDate } = resolveSubscriptionDates({
         billingCadence,
         startDate: requestedStartDate,
@@ -464,16 +448,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
         fallbackNextDueDate: existingSubscription?.nextDueDate ?? business.nextBillingDate ?? business.nextPaymentDueAt ?? business.currentPeriodEndsAt,
       });
       const paidAccess = isPaidAccessStatus(status);
-      const firstPaymentConfirmedAt = paidAccess
-        ? (business.firstPaymentAt ?? business.lastPaymentAt ?? requestedStartDate ?? startDate ?? now)
-        : null;
-
-      // Guard against a stale/past fallback next-due date. If a previously overdue
-      // business is reactivated as PAID_ACTIVE and no future nextDueDate was
-      // explicitly provided, resolvedNextDueDate may be in the past. TillFlow would
-      // then immediately compute PAYMENT_RESTRICTED (graceEndsAt is null + nextBillingDate
-      // already past). Advance to the next billing cycle from the current paid-cycle
-      // anchor so reactivations always land on a future billing date.
+      const firstPaymentConfirmedAt = paidAccess ? (business.firstPaymentAt ?? null) : null;
       const shouldResetPaidCycle = paidAccess && resolvedNextDueDate && resolvedNextDueDate < now;
       const paidCycleAnchorDate = shouldResetPaidCycle
         ? (requestedStartDate ?? now)
@@ -482,6 +457,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
         shouldResetPaidCycle
           ? calculateNextBillingDate(paidCycleAnchorDate, billingCadence)
           : resolvedNextDueDate;
+      const billingNotes = customerFacingBillingPatch(business.billingNotes, customerFacingNote);
 
       await tx.controlSubscription.upsert({
         where: { controlBusinessId: profile.id },
@@ -491,7 +467,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           billingCadence,
           startDate,
           nextDueDate: effectiveNextDueDate,
-          lastPaymentDate: status === 'PAID_ACTIVE' ? paidCycleAnchorDate : undefined,
+          lastPaymentDate: status === 'PAID_ACTIVE' ? existingSubscription?.nextDueDate : undefined,
           readOnlyAt: status === 'READ_ONLY' ? now : null,
           effectivePlanOverride: null,
           gracePolicyVersion: '2026-04-08',
@@ -505,7 +481,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           billingCadence,
           startDate,
           nextDueDate: effectiveNextDueDate,
-          lastPaymentDate: status === 'PAID_ACTIVE' ? paidCycleAnchorDate : null,
+          lastPaymentDate: null,
           readOnlyAt: status === 'READ_ONLY' ? now : null,
           gracePolicyVersion: '2026-04-08',
           monthlyValuePence,
@@ -513,54 +489,31 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
         },
       });
 
-      if (profile.supportStatus === 'UNREVIEWED') {
-        await tx.controlBusinessProfile.update({
-          where: { id: profile.id },
-          data: { supportStatus: 'HEALTHY' },
-        });
-      }
-
       await tx.business.update({
         where: { id: businessId },
         data: {
           plan: purchasedPlan,
           planStatus: businessStatusFromSubscription(status),
           subscriptionStatus: billingStatusFromSubscription(status),
-          trialEndsAt: isTrialStatus(status) ? trialEndsAt : null,
-          firstPaymentAt: paidAccess ? firstPaymentConfirmedAt : null,
-          lastPaymentAt: status === 'PAID_ACTIVE' ? paidCycleAnchorDate : business.lastPaymentAt,
+          trialEndsAt: isTrialStatus(status) ? trialEndsAt : business.trialEndsAt,
+          firstPaymentAt: paidAccess ? firstPaymentConfirmedAt : (isTrialStatus(status) ? null : business.firstPaymentAt),
+          lastPaymentAt: business.lastPaymentAt,
           planSetAt: startDate,
-          currentPeriodStartedAt: isCancelledStatus(status) || isTrialStatus(status) ? null : (paidAccess ? paidCycleAnchorDate : startDate),
+          currentPeriodStartedAt: isCancelledStatus(status) || isTrialStatus(status) ? business.currentPeriodStartedAt : (paidAccess ? (business.currentPeriodStartedAt ?? startDate) : startDate),
           nextPaymentDueAt: isCancelledStatus(status) ? null : effectiveNextDueDate,
           nextBillingDate: isCancelledStatus(status) ? null : effectiveNextDueDate,
           currentPeriodEndsAt: isCancelledStatus(status) ? null : effectiveNextDueDate,
           paymentGraceEndsAt: status === 'PAID_ACTIVE' ? null : undefined,
-          suspendedAt: status === 'PAID_ACTIVE' ? null : status === 'READ_ONLY' ? now : undefined,
+          suspendedAt: status === 'READ_ONLY' ? now : status === 'PAID_ACTIVE' ? null : undefined,
           cancelledAt: isCancelledStatus(status) ? now : null,
           addonOnlineStorefront,
           billingAmount: pricing.totalBillingAmount,
           billingInterval: billingCadence,
-          billingNotes: appendBillingEntry(business.billingNotes, 'Control subscription updated', [
-            `Updated by: ${staff.name} (${staff.role})`,
-            `Plan: ${purchasedPlan}`,
-            `Status: ${status}`,
-            `Cadence: ${billingCadence}`,
-            `Start date: ${startDate.toISOString().slice(0, 10)}`,
-            `Next due: ${effectiveNextDueDate ? effectiveNextDueDate.toISOString().slice(0, 10) : 'Not set'}`,
-            pricing.storefrontMode === 'included'
-              ? 'Online storefront: Included in Pro'
-              : pricing.storefrontMode === 'addon'
-                ? 'Online storefront add-on: Enabled (+GHS 200/month)'
-                : 'Online storefront add-on: Not selected',
-            `Monthly value: GHS ${monthlyValuePence}`,
-            billingCadence === 'ANNUAL'
-              ? `Annual charge: GHS ${recommendedIntervalChargeGhs.toLocaleString('en-GH')}`
-              : `Current charge: GHS ${recommendedIntervalChargeGhs}`,
-          ]),
+          ...(billingNotes ? { billingNotes } : {}),
         },
       });
 
-      if (isCancelledStatus(status)) {
+      if (shouldRevokeMerchantSessions(status)) {
         await tx.$executeRaw`
           DELETE FROM "Session"
           WHERE "userId" IN (
@@ -568,31 +521,28 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           )
         `;
       }
+
+      await recordAuditInTransaction(tx, {
+        staff,
+        action: 'SUBSCRIPTION_UPDATED',
+        businessId,
+        summary: `Subscription set to ${purchasedPlan} · ${status} · ${billingCadence}`,
+        metadata: {
+          previousStatus,
+          newStatus: status,
+          purchasedPlan,
+          billingCadence,
+          monthlyValuePence,
+          outstandingAmountPence,
+          addonOnlineStorefront,
+        },
+      });
     });
   } catch (error) {
     if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
     await captureError({ context: 'updateControlSubscriptionAction', error, staffId: staff.id, staffEmail: staff.email, staffRole: staff.role, businessId });
     redirect(withRedirectParam(returnPath, 'error', error instanceof Error ? error.message : 'Unable to update the subscription.'));
   }
-
-  await recordAudit({
-    staff,
-    action: 'SUBSCRIPTION_UPDATED',
-    businessId,
-    summary: `Subscription set to ${purchasedPlan} · ${status} · ${billingCadence}`,
-    metadata: {
-      purchasedPlan,
-      status,
-      billingCadence,
-      monthlyValuePence,
-      outstandingAmountPence,
-      addonOnlineStorefront,
-      recommendedMonthlyGhs,
-      recommendedIntervalChargeGhs,
-      storefrontMode: pricing.storefrontMode,
-      billingInterval: billingCadence,
-    },
-  });
 
   if (isCancelledStatus(status) || status === 'READ_ONLY') {
     const businessName = await prisma.business.findUnique({ where: { id: businessId }, select: { name: true } }).then((b) => b?.name ?? 'Unknown');
@@ -612,30 +562,56 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
 }
 
 export async function recordControlPaymentAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const businessId = readRequired(formData, 'businessId');
   ensureRole(canRecordPayments(staff.role), 'Your Control role cannot record payments.', businessId);
 
-  const amountPence = parseOptionalInteger(readOptional(formData, 'amountPence'), 0);
-  const method = readRequired(formData, 'method');
-  const reference = readOptional(formData, 'reference');
-  const note = readOptional(formData, 'note');
-  const paidAt = parseOptionalDate(readOptional(formData, 'paidAt')) ?? new Date();
-  const billingCadence = normalizeCadence(readRequired(formData, 'billingCadence').toUpperCase());
-  const explicitNextDueDate = parseOptionalDate(readOptional(formData, 'nextDueDate'));
-  let recordedAmountGhs = amountPence;
-  const nextDueDate =
-    explicitNextDueDate && explicitNextDueDate.getTime() > paidAt.getTime()
-      ? explicitNextDueDate
-      : calculateNextBillingDate(paidAt, billingCadence);
+  let recordedAmountGhs = 0;
+  let method = '';
+  let reference: string | null = null;
+  let note: string | null = null;
+  let paidAt = new Date();
+  let billingCadence: BillingCadence = 'MONTHLY';
+  let nextDueDate = new Date();
+  let customerFacingNote: string | null = null;
+  let idempotencyKey = '';
+  let grantsPaidAccess = false;
 
   try {
+    recordedAmountGhs = parseExplicitPaymentAmountGhs(readOptional(formData, 'amountPence'));
+    parseRequiredCurrency(readOptional(formData, 'currency') ?? 'GHS');
+    method = readRequired(formData, 'method');
+    reference = readOptional(formData, 'reference');
+    note = readOptional(formData, 'note');
+    customerFacingNote = readOptional(formData, 'customerFacingNote');
+    idempotencyKey = parseRequiredIdempotencyKey(readOptional(formData, 'idempotencyKey') ?? reference);
+    paidAt = parseOptionalDate(readOptional(formData, 'paidAt')) ?? new Date();
+    billingCadence = normalizeCadence(readRequired(formData, 'billingCadence').toUpperCase());
+    const explicitNextDueDate = parseOptionalDate(readOptional(formData, 'nextDueDate'));
+    nextDueDate =
+      explicitNextDueDate && explicitNextDueDate.getTime() > paidAt.getTime()
+        ? explicitNextDueDate
+        : calculateNextBillingDate(paidAt, billingCadence);
+
     await prisma.$transaction(async (tx) => {
       const { business, profile } = await ensureControlBusinessProfile(tx, businessId);
       const existingSubscription = await tx.controlSubscription.findUnique({
         where: { controlBusinessId: profile.id },
-        select: { purchasedPlan: true, startDate: true },
+        select: { purchasedPlan: true, startDate: true, outstandingAmountPence: true, status: true },
       });
+      const duplicate = await tx.controlPayment.findUnique({
+        where: { idempotencyKey },
+        select: { id: true },
+      });
+      const duplicateReference = reference
+        ? await tx.controlPayment.findFirst({
+          where: { controlBusinessId: profile.id, reference },
+          select: { id: true },
+        })
+        : null;
+      if (duplicate || duplicateReference) {
+        throw new Error('This payment reference was already recorded. Duplicate submission was ignored.');
+      }
       const purchasedPlan = normalizePlan(existingSubscription?.purchasedPlan ?? business.plan);
       const addonOnlineStorefront = business.addonOnlineStorefront ?? false;
       const pricing = computeSubscriptionPricing({
@@ -644,17 +620,27 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
         billingInterval: billingCadence,
       });
       const recommendedMonthlyGhs = controlMonthlyValueGhs(pricing);
-      const paymentAmounts = resolveControlPaymentAmounts(pricing, amountPence);
+      const recommendedIntervalChargeGhs = controlIntervalChargeGhs(pricing);
+      const paymentAmounts = resolveControlPaymentAmounts(pricing, recordedAmountGhs);
       recordedAmountGhs = paymentAmounts.recordedAmountGhs;
-      const activation = activateSubscriptionAfterPayment({
-        selectedPlan: purchasedPlan,
-        plan: purchasedPlan,
-        addonOnlineStorefront,
-        firstPaymentAt: (business as any).firstPaymentAt,
-        billingInterval: billingCadence,
-        paymentDate: paidAt,
-        amountPence: recordedAmountGhs,
+      const settlement = settleControlPayment({
+        amountGhs: recordedAmountGhs,
+        recommendedIntervalChargeGhs,
+        currentOutstandingGhs: existingSubscription?.outstandingAmountPence ?? 0,
       });
+      grantsPaidAccess = settlement.grantsPaidAccess;
+      const previousStatus = existingSubscription?.status ?? business.subscriptionStatus;
+      const activation = grantsPaidAccess
+        ? activateSubscriptionAfterPayment({
+          selectedPlan: purchasedPlan,
+          plan: purchasedPlan,
+          addonOnlineStorefront,
+          firstPaymentAt: business.firstPaymentAt,
+          billingInterval: billingCadence,
+          paymentDate: paidAt,
+          amountPence: recordedAmountGhs,
+        })
+        : null;
 
       await tx.controlPayment.create({
         data: {
@@ -663,6 +649,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
           paidAt,
           method,
           reference,
+          idempotencyKey,
           note,
           receivedByStaffId: staff.id,
         },
@@ -672,97 +659,99 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
         where: { controlBusinessId: profile.id },
         update: {
           purchasedPlan,
-          status: 'PAID_ACTIVE',
+          status: grantsPaidAccess ? 'PAID_ACTIVE' : coerceExistingStoredStatus(existingSubscription?.status ?? business.subscriptionStatus),
           billingCadence,
-          nextDueDate,
+          nextDueDate: grantsPaidAccess ? nextDueDate : undefined,
           lastPaymentDate: paidAt,
-          readOnlyAt: null,
+          readOnlyAt: grantsPaidAccess ? null : undefined,
           monthlyValuePence: recommendedMonthlyGhs,
-          outstandingAmountPence: 0,
+          outstandingAmountPence: settlement.outstandingAfterGhs,
           gracePolicyVersion: '2026-04-08',
         },
         create: {
           controlBusinessId: profile.id,
           purchasedPlan,
-          status: 'PAID_ACTIVE',
+          status: grantsPaidAccess ? 'PAID_ACTIVE' : 'TRIAL_ACTIVE',
           billingCadence,
           startDate: existingSubscription?.startDate ?? paidAt,
           nextDueDate,
           lastPaymentDate: paidAt,
           monthlyValuePence: recommendedMonthlyGhs,
-          outstandingAmountPence: 0,
+          outstandingAmountPence: settlement.outstandingAfterGhs,
           gracePolicyVersion: '2026-04-08',
         },
       });
 
-      if (profile.supportStatus === 'UNREVIEWED') {
-        await tx.controlBusinessProfile.update({
-          where: { id: profile.id },
-          data: { supportStatus: 'HEALTHY' },
-        });
-      }
-
+      const billingNotes = customerFacingBillingPatch(business.billingNotes, customerFacingNote);
       await tx.business.update({
         where: { id: businessId },
-        data: {
-          planStatus: activation.planStatus,
-          subscriptionStatus: activation.subscriptionStatus,
-          trialEndsAt: null,
-          firstPaymentAt: activation.firstPaymentAt,
-          currentPeriodStartedAt: activation.currentPeriodStartedAt,
-          currentPeriodEndsAt: nextDueDate,
-          nextBillingDate: nextDueDate,
-          lastPaymentAt: activation.lastPaymentAt,
-          nextPaymentDueAt: nextDueDate,
-          paymentGraceEndsAt: null,
-          suspendedAt: null,
-          cancelledAt: null,
-          billingAmount: paymentAmounts.businessBillingAmountPence,
-          billingCurrency: activation.billingCurrency,
-          billingInterval: activation.billingInterval,
-          billingNotes: appendBillingEntry(business.billingNotes, 'Control payment recorded', [
-            `Recorded by: ${staff.name} (${staff.role})`,
-            `Amount: GHc ${recordedAmountGhs.toLocaleString('en-GH')}`,
-            `Method: ${method}`,
-            reference ? `Reference: ${reference}` : null,
-            `Paid at: ${paidAt.toISOString().slice(0, 10)}`,
-            `Next due: ${nextDueDate.toISOString().slice(0, 10)}`,
-            note ? `Note: ${note}` : null,
-          ]),
+        data: grantsPaidAccess && activation
+          ? {
+            planStatus: activation.planStatus,
+            subscriptionStatus: activation.subscriptionStatus,
+            trialEndsAt: null,
+            firstPaymentAt: activation.firstPaymentAt,
+            currentPeriodStartedAt: activation.currentPeriodStartedAt,
+            currentPeriodEndsAt: nextDueDate,
+            nextBillingDate: nextDueDate,
+            lastPaymentAt: activation.lastPaymentAt,
+            nextPaymentDueAt: nextDueDate,
+            paymentGraceEndsAt: null,
+            suspendedAt: null,
+            cancelledAt: null,
+            billingAmount: paymentAmounts.businessBillingAmountPence,
+            billingCurrency: activation.billingCurrency,
+            billingInterval: activation.billingInterval,
+            ...(billingNotes ? { billingNotes } : {}),
+          }
+          : {
+            ...(billingNotes ? { billingNotes } : {}),
+          },
+      });
+
+      await recordAuditInTransaction(tx, {
+        staff,
+        action: 'PAYMENT_RECORDED',
+        businessId,
+        summary: `Payment GHS ${recordedAmountGhs.toLocaleString('en-GH')} via ${method}${grantsPaidAccess ? '' : ' (partial — paid access not granted)'}`,
+        metadata: {
+          amountGhs: recordedAmountGhs,
+          method,
+          reference,
+          idempotencyKey,
+          paidAt: paidAt.toISOString(),
+          grantsPaidAccess,
+          previousStatus,
+          outstandingAfterGhs: settlement.outstandingAfterGhs,
         },
+        idempotencyKey: `payment:${idempotencyKey}`,
       });
     });
   } catch (error) {
     if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
-    await captureError({ context: 'recordControlPaymentAction', error, staffId: staff.id, staffEmail: staff.email, staffRole: staff.role, businessId, metadata: { amountPence, method } });
+    await captureError({ context: 'recordControlPaymentAction', error, staffId: staff.id, staffEmail: staff.email, staffRole: staff.role, businessId, metadata: { method } });
     redirect(`/businesses/${businessId}?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to record the payment.')}`);
   }
 
-  const businessName = await prisma.business.findUnique({ where: { id: businessId }, select: { name: true } }).then((b) => b?.name ?? 'Unknown');
-  await recordAudit({
-    staff,
-    action: 'PAYMENT_RECORDED',
-    businessId,
-    summary: `Payment GHc ${recordedAmountGhs.toLocaleString('en-GH')} via ${method}`,
-    metadata: { amountGhs: recordedAmountGhs, method, reference, paidAt: paidAt.toISOString(), nextDueDate: nextDueDate.toISOString() },
-  });
-  await notifyPaymentRecorded({
-    businessId,
-    businessName,
-    amountGhs: recordedAmountGhs,
-    method,
-    recordedBy: { name: staff.name, email: staff.email },
-  });
-  await enqueuePaymentConfirmedReminder(businessId).catch((error) => {
-    captureError({ context: 'payment:sms_enqueue_failed', error, staffId: staff.id, staffEmail: staff.email, staffRole: staff.role, businessId });
-  });
+  if (grantsPaidAccess) {
+    const businessName = await prisma.business.findUnique({ where: { id: businessId }, select: { name: true } }).then((b) => b?.name ?? 'Unknown');
+    await notifyPaymentRecorded({
+      businessId,
+      businessName,
+      amountGhs: recordedAmountGhs,
+      method,
+      recordedBy: { name: staff.name, email: staff.email },
+    });
+    await enqueuePaymentConfirmedReminder(businessId).catch((error) => {
+      captureError({ context: 'payment:sms_enqueue_failed', error, staffId: staff.id, staffEmail: staff.email, staffRole: staff.role, businessId });
+    });
+  }
 
   revalidateControlViews(businessId);
   redirect(`/businesses/${businessId}?updated=payment`);
 }
-
 export async function addControlNoteAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const businessId = readRequired(formData, 'businessId');
   ensureRole(canWriteNotes(staff.role), 'Your Control role cannot add internal notes.', businessId);
 
@@ -786,40 +775,36 @@ export async function addControlNoteAction(formData: FormData): Promise<void> {
         where: { id: profile.id },
         data: {
           notes: note,
-          supportStatus: profile.supportStatus === 'UNREVIEWED' ? 'HEALTHY' : profile.supportStatus,
           lastActivityAt: new Date(),
         },
       });
 
-      await tx.business.update({
-        where: { id: businessId },
-        data: {
-          billingNotes: appendBillingEntry(business.billingNotes, 'Control note added', [
-            `Added by: ${staff.name} (${staff.role})`,
-            `Category: ${category}`,
-            note,
-          ]),
-        },
+      const billingNotes = customerFacingBillingPatch(business.billingNotes, readOptional(formData, 'customerFacingNote'));
+      if (billingNotes) {
+        await tx.business.update({
+          where: { id: businessId },
+          data: { billingNotes },
+        });
+      }
+
+      await recordAuditInTransaction(tx, {
+        staff,
+        action: 'NOTE_ADDED',
+        businessId,
+        summary: `Note added (${category}): ${note.slice(0, 80)}${note.length > 80 ? '…' : ''}`,
+        metadata: { category },
       });
     });
   } catch (error) {
     redirect(`/businesses/${businessId}?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to save the note.')}`);
   }
 
-  await recordAudit({
-    staff,
-    action: 'NOTE_ADDED',
-    businessId,
-    summary: `Note added (${category}): ${note.slice(0, 80)}${note.length > 80 ? '…' : ''}`,
-    metadata: { category },
-  });
-
   revalidateControlViews(businessId);
   redirect(`/businesses/${businessId}?updated=note`);
 }
 
 export async function resendSubscriptionReminderAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const businessId = readRequired(formData, 'businessId');
   const reminderId = readRequired(formData, 'reminderId');
   ensureRole(canRecordPayments(staff.role) || canManageSubscriptions(staff.role), 'Your Control role cannot resend subscription reminders.', businessId);
@@ -839,24 +824,26 @@ export async function resendSubscriptionReminderAction(formData: FormData): Prom
       throw new Error('Subscription reminder not found.');
     }
 
-    await prisma.messageOutbox.update({
-      where: { id: reminder.id },
-      data: {
-        status: 'PENDING',
-        attempts: 0,
-        lastError: null,
-        lockedAt: null,
-        nextAttemptAt: new Date(),
-        sentAt: null,
-      },
-    });
+    await prisma.$transaction(async (tx) => {
+      await tx.messageOutbox.update({
+        where: { id: reminder.id },
+        data: {
+          status: 'PENDING',
+          attempts: 0,
+          lastError: null,
+          lockedAt: null,
+          nextAttemptAt: new Date(),
+          sentAt: null,
+        },
+      });
 
-    await recordAudit({
-      staff,
-      action: 'SUBSCRIPTION_REMINDER_RESENT',
-      businessId,
-      summary: `Subscription SMS reminder queued for resend: ${reminder.eventType}`,
-      metadata: { reminderId, previousStatus: reminder.status },
+      await recordAuditInTransaction(tx, {
+        staff,
+        action: 'SUBSCRIPTION_REMINDER_RESENT',
+        businessId,
+        summary: `Subscription SMS reminder queued for resend: ${reminder.eventType}`,
+        metadata: { reminderId, previousStatus: reminder.status },
+      });
     });
   } catch (error) {
     redirect(`/businesses/${businessId}?tab=billing&error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to queue reminder resend.')}`);
@@ -867,19 +854,19 @@ export async function resendSubscriptionReminderAction(formData: FormData): Prom
 }
 
 export async function reviewControlBusinessAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const businessId = readRequired(formData, 'businessId');
   ensureRole(canWriteNotes(staff.role), 'Your Control role cannot review businesses.', businessId);
 
   const requestedManager = readOptional(formData, 'assignedManagerId');
   const reviewNote = readOptional(formData, 'reviewNote');
   const soldPlanRaw = readOptional(formData, 'purchasedPlan');
-  const soldPlan = soldPlanRaw && soldPlanRaw !== 'KEEP_CURRENT' ? normalizePlan(soldPlanRaw.toUpperCase()) : null;
-  const billingCadence = soldPlan ? normalizeCadence(readRequired(formData, 'billingCadence').toUpperCase()) : null;
-  const startDate = soldPlan ? parseOptionalDate(readOptional(formData, 'startDate')) : undefined;
-  const nextDueDate = soldPlan ? parseOptionalDate(readOptional(formData, 'nextDueDate')) : undefined;
 
   try {
+    const soldPlan = soldPlanRaw && soldPlanRaw !== 'KEEP_CURRENT' ? normalizePlan(soldPlanRaw.toUpperCase()) : null;
+    const billingCadence = soldPlan ? normalizeCadence(readRequired(formData, 'billingCadence').toUpperCase()) : null;
+    const startDate = soldPlan ? parseOptionalDate(readOptional(formData, 'startDate')) : undefined;
+    const nextDueDate = soldPlan ? parseOptionalDate(readOptional(formData, 'nextDueDate')) : undefined;
     const assignedManagerId = await resolveAssignedManagerId(requestedManager, staff.id);
 
     await prisma.$transaction(async (tx) => {
@@ -902,6 +889,7 @@ export async function reviewControlBusinessAction(formData: FormData): Promise<v
           profileId: profile.id,
           businessId,
           currentBusinessPlan: business.plan,
+          currentBusinessPlanStatus: business.subscriptionStatus ?? business.planStatus,
           purchasedPlan: soldPlan,
           billingCadence,
           startDate,
@@ -920,38 +908,24 @@ export async function reviewControlBusinessAction(formData: FormData): Promise<v
         });
       }
 
-      await tx.business.update({
-        where: { id: businessId },
-        data: {
-          billingNotes: appendBillingEntry(business.billingNotes, 'Control review completed', [
-            `Reviewed by: ${staff.name} (${staff.role})`,
-            assignedManagerId ? `Assigned manager id: ${assignedManagerId}` : 'Assigned manager: Unassigned',
-            soldPlan ? `Sold plan set: ${soldPlan}` : null,
-            soldPlan && billingCadence ? `Cadence: ${billingCadence}` : null,
-            soldPlan && startDate ? `Start date: ${startDate.toISOString().slice(0, 10)}` : null,
-            reviewNote ? `Review note: ${reviewNote}` : null,
-          ]),
-        },
+      await recordAuditInTransaction(tx, {
+        staff,
+        action: 'REVIEW_COMPLETED',
+        businessId,
+        summary: soldPlan ? `Review completed · sold plan set to ${soldPlan}` : 'Review completed',
+        metadata: { soldPlan, billingCadence, requestedManager },
       });
     });
   } catch (error) {
     redirect(`/businesses/${businessId}?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to review the business.')}`);
   }
 
-  await recordAudit({
-    staff,
-    action: 'REVIEW_COMPLETED',
-    businessId,
-    summary: soldPlan ? `Review completed · sold plan set to ${soldPlan}` : 'Review completed',
-    metadata: { soldPlan, billingCadence, requestedManager, reviewNote: reviewNote ?? null },
-  });
-
   revalidateControlViews(businessId);
   redirect(`/businesses/${businessId}?updated=review`);
 }
 
 export async function reopenControlBusinessReviewAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const businessId = readRequired(formData, 'businessId');
   ensureRole(canWriteNotes(staff.role), 'Your Control role cannot reopen business reviews.', businessId);
 
@@ -982,68 +956,71 @@ export async function reopenControlBusinessReviewAction(formData: FormData): Pro
         },
       });
 
-      await tx.business.update({
-        where: { id: businessId },
-        data: {
-          billingNotes: appendBillingEntry(business.billingNotes, 'Business returned to review queue', [
-            `Reopened by: ${staff.name} (${staff.role})`,
-            reviewNote ? `Reason: ${reviewNote}` : 'Reason: Returned for another commercial review.',
-          ]),
-        },
+      await recordAuditInTransaction(tx, {
+        staff,
+        action: 'REVIEW_REOPENED',
+        businessId,
+        summary: 'Returned to review queue',
+        metadata: { reviewNote: reviewNote ?? null },
       });
     });
   } catch (error) {
     redirect(`/businesses/${businessId}?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to return the business to the review queue.')}`);
   }
 
-  await recordAudit({
-    staff,
-    action: 'REVIEW_REOPENED',
-    businessId,
-    summary: 'Returned to review queue',
-    metadata: { reviewNote: reviewNote ?? null },
-  });
-
   revalidateControlViews(businessId);
   redirect(`/businesses/${businessId}?updated=reopened`);
 }
 
 export async function createControlStaffAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canManageStaff(staff.role)) {
     redirect('/staff?error=Only TG control admins can manage staff accounts.');
   }
 
   const name = readRequired(formData, 'name');
   const email = readRequired(formData, 'email').toLowerCase();
-  const role = readRequired(formData, 'role').toUpperCase();
+  const role = parseControlStaffRole(readRequired(formData, 'role'));
+  const password = String(formData.get('password') ?? '');
 
-  try {
-    await prisma.controlStaff.upsert({
-      where: { email },
-      update: {
-        name,
-        role,
-        active: true,
-      },
-      create: {
-        name,
-        email,
-        role,
-        active: true,
-      },
-    });
-  } catch (error) {
-    redirect(`/staff?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to save the staff account.')}`);
+  if (!name || !email || !role) {
+    redirect('/staff?error=Name, email, and an allowlisted role are required.');
+  }
+  if (password.length < MIN_CONTROL_PASSWORD_LENGTH) {
+    redirect(`/staff?error=New staff need a personal password of at least ${MIN_CONTROL_PASSWORD_LENGTH} characters.`);
   }
 
-  await recordAudit({
-    staff,
-    action: 'STAFF_CREATED',
-    businessId: null,
-    summary: `Staff account upserted: ${name} (${role})`,
-    metadata: { email, role },
-  });
+  try {
+    const existing = await prisma.controlStaff.findUnique({ where: { email } });
+    if (existing) {
+      redirect('/staff?error=A staff account with that email already exists. Re-submitting an email does not reactivate or change role.');
+    }
+
+    const hash = await bcrypt.hash(password, 12);
+    await prisma.$transaction(async (tx) => {
+      const created = await tx.controlStaff.create({
+        data: {
+          name,
+          email,
+          role,
+          active: true,
+          passwordHash: hash,
+          passwordSetAt: new Date(),
+          sessionVersion: 0,
+        },
+      });
+      await recordAuditInTransaction(tx, {
+        staff,
+        action: 'STAFF_CREATED',
+        businessId: null,
+        summary: `Staff account created: ${name} (${role})`,
+        metadata: { targetStaffId: created.id, role },
+      });
+    });
+  } catch (error) {
+    if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
+    redirect(`/staff?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to save the staff account.')}`);
+  }
 
   revalidateTag('control-portfolio');
   revalidatePath('/staff');
@@ -1051,7 +1028,7 @@ export async function createControlStaffAction(formData: FormData): Promise<void
 }
 
 export async function toggleControlStaffAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canManageStaff(staff.role)) {
     redirect('/staff?error=Only TG control admins can manage staff accounts.');
   }
@@ -1060,21 +1037,41 @@ export async function toggleControlStaffAction(formData: FormData): Promise<void
   const makeActive = readRequired(formData, 'makeActive') === 'true';
 
   try {
-    await prisma.controlStaff.update({
-      where: { id: staffId },
-      data: { active: makeActive },
+    await prisma.$transaction(async (tx) => {
+      const target = await tx.controlStaff.findUnique({
+        where: { id: staffId },
+        select: { id: true, role: true, active: true, sessionVersion: true },
+      });
+      if (!target) {
+        throw new Error('Staff member was not found.');
+      }
+      if (!makeActive && target.role === 'CONTROL_ADMIN') {
+        const remainingAdmins = await tx.controlStaff.count({
+          where: { active: true, role: 'CONTROL_ADMIN', id: { not: staffId } },
+        });
+        if (remainingAdmins === 0) {
+          throw new Error('The last active Control admin cannot be deactivated.');
+        }
+      }
+      await tx.controlStaff.update({
+        where: { id: staffId },
+        data: {
+          active: makeActive,
+          sessionVersion: nextSessionVersion(target.sessionVersion),
+        },
+      });
+      await recordAuditInTransaction(tx, {
+        staff,
+        action: makeActive ? 'STAFF_ACTIVATED' : 'STAFF_DEACTIVATED',
+        businessId: null,
+        summary: `Staff ${makeActive ? 'activated' : 'deactivated'} (id ${staffId})`,
+        metadata: { targetStaffId: staffId, makeActive, previousActive: target.active },
+      });
     });
   } catch (error) {
+    if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
     redirect(`/staff?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to update the staff account.')}`);
   }
-
-  await recordAudit({
-    staff,
-    action: makeActive ? 'STAFF_ACTIVATED' : 'STAFF_DEACTIVATED',
-    businessId: null,
-    summary: `Staff ${makeActive ? 'activated' : 'deactivated'} (id ${staffId})`,
-    metadata: { staffId, makeActive },
-  });
 
   revalidateTag('control-portfolio');
   revalidatePath('/staff');
@@ -1082,7 +1079,7 @@ export async function toggleControlStaffAction(formData: FormData): Promise<void
 }
 
 export async function bulkReviewControlBusinessesAction(formData: FormData): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   const returnPath = readReturnPath(formData, '/businesses?filter=unreviewed');
   if (!canWriteNotes(staff.role)) {
     redirect(withRedirectParam(returnPath, 'error', 'Your TG role cannot bulk review businesses.'));
@@ -1091,10 +1088,6 @@ export async function bulkReviewControlBusinessesAction(formData: FormData): Pro
   const requestedManager = readOptional(formData, 'assignedManagerId');
   const reviewNote = readOptional(formData, 'reviewNote');
   const soldPlanRaw = readOptional(formData, 'purchasedPlan');
-  const soldPlan = soldPlanRaw && soldPlanRaw !== 'KEEP_CURRENT' ? normalizePlan(soldPlanRaw.toUpperCase()) : null;
-  const billingCadence = soldPlan ? normalizeCadence(readRequired(formData, 'billingCadence').toUpperCase()) : null;
-  const startDate = soldPlan ? parseOptionalDate(readOptional(formData, 'startDate')) : undefined;
-  const nextDueDate = soldPlan ? parseOptionalDate(readOptional(formData, 'nextDueDate')) : undefined;
   // Accept either the legacy comma-separated `businessIds` (filled by the
   // server-rendered form for "review the whole page") or the new
   // multi-value `selectedId` (filled by the mobile bulk-select bar).
@@ -1110,6 +1103,10 @@ export async function bulkReviewControlBusinessesAction(formData: FormData): Pro
   }
 
   try {
+    const soldPlan = soldPlanRaw && soldPlanRaw !== 'KEEP_CURRENT' ? normalizePlan(soldPlanRaw.toUpperCase()) : null;
+    const billingCadence = soldPlan ? normalizeCadence(readRequired(formData, 'billingCadence').toUpperCase()) : null;
+    const startDate = soldPlan ? parseOptionalDate(readOptional(formData, 'startDate')) : undefined;
+    const nextDueDate = soldPlan ? parseOptionalDate(readOptional(formData, 'nextDueDate')) : undefined;
     const assignedManagerId = await resolveAssignedManagerId(requestedManager, staff.id);
 
     await prisma.$transaction(async (tx) => {
@@ -1133,6 +1130,7 @@ export async function bulkReviewControlBusinessesAction(formData: FormData): Pro
             profileId: profile.id,
             businessId,
             currentBusinessPlan: business.plan,
+            currentBusinessPlanStatus: business.subscriptionStatus ?? business.planStatus,
             purchasedPlan: soldPlan,
             billingCadence,
             startDate,
@@ -1150,33 +1148,20 @@ export async function bulkReviewControlBusinessesAction(formData: FormData): Pro
             },
           });
         }
-
-        await tx.business.update({
-          where: { id: businessId },
-          data: {
-            billingNotes: appendBillingEntry(business.billingNotes, 'Bulk TG review completed', [
-              `Reviewed by: ${staff.name} (${staff.role})`,
-              assignedManagerId ? `Assigned manager id: ${assignedManagerId}` : 'Assigned manager: Unassigned',
-              soldPlan ? `Sold plan set: ${soldPlan}` : null,
-              soldPlan && billingCadence ? `Cadence: ${billingCadence}` : null,
-              soldPlan && startDate ? `Start date: ${startDate.toISOString().slice(0, 10)}` : null,
-              reviewNote ? `Review note: ${reviewNote}` : null,
-            ]),
-          },
-        });
       }
+
+      await recordAuditInTransaction(tx, {
+        staff,
+        action: 'BULK_REVIEW',
+        businessId: null,
+        summary: `Bulk review: ${businessIds.length} businesses${soldPlan ? ` · sold plan ${soldPlan}` : ''}`,
+        metadata: { count: businessIds.length, soldPlan, billingCadence },
+      });
     });
   } catch (error) {
+    if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
     redirect(withRedirectParam(returnPath, 'error', error instanceof Error ? error.message : 'Unable to bulk review the selected businesses.'));
   }
-
-  await recordAudit({
-    staff,
-    action: 'BULK_REVIEW',
-    businessId: null,
-    summary: `Bulk review: ${businessIds.length} businesses${soldPlan ? ` · sold plan ${soldPlan}` : ''}`,
-    metadata: { count: businessIds.length, soldPlan, billingCadence, requestedManager },
-  });
 
   revalidateTag('control-portfolio');
   revalidatePath('/');
@@ -1185,7 +1170,7 @@ export async function bulkReviewControlBusinessesAction(formData: FormData): Pro
 }
 
 export async function bulkRemindDueSoonAction(): Promise<void> {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   ensureRole(canRecordPayments(staff.role) || canManageSubscriptions(staff.role), 'Your Control role cannot send subscription reminders.', null);
 
   const DUE_SOON_STATES = ['RENEWAL_DUE_SOON', 'PAYMENT_DUE_TODAY', 'TRIAL_DUE_SOON', 'TRIAL_DUE_TODAY'];
@@ -1207,62 +1192,66 @@ export async function bulkRemindDueSoonAction(): Promise<void> {
       redirect('/collections?toast_error=No due-soon accounts found to remind.');
     }
 
-    const queued = await Promise.all(dueSoonBusinesses.map(async (business) => {
-      const recipient = normalizeGhanaPhone(business.phone);
-      if (!recipient) return null;
+    await prisma.$transaction(async (tx) => {
+      let count = 0;
+      for (const business of dueSoonBusinesses) {
+        const recipient = normalizeGhanaPhone(business.phone);
+        if (!recipient) continue;
 
-      const dueDate = business.nextBillingDate ?? business.nextPaymentDueAt;
-      const periodKey = dueDate?.toISOString().slice(0, 10)
-        ?? business.currentPeriodStartedAt?.toISOString().slice(0, 10)
-        ?? new Date().toISOString().slice(0, 10);
-      const idempotencyKey = `${business.id}:SUBSCRIPTION_RENEWAL_REMINDER:bulk:${periodKey}`;
-      const dueText = dueDate?.toLocaleDateString('en-GB') ?? 'your renewal date';
+        const dueDate = business.nextBillingDate ?? business.nextPaymentDueAt;
+        const periodKey = dueDate?.toISOString().slice(0, 10)
+          ?? business.currentPeriodStartedAt?.toISOString().slice(0, 10)
+          ?? new Date().toISOString().slice(0, 10);
+        const idempotencyKey = `${business.id}:SUBSCRIPTION_RENEWAL_REMINDER:bulk:${periodKey}`;
+        const dueText = dueDate?.toLocaleDateString('en-GB') ?? 'your renewal date';
 
-      return prisma.messageOutbox.upsert({
-        where: { idempotencyKey },
-        update: {
-          status: 'PENDING',
-          attempts: 0,
-          lastError: null,
-          lockedAt: null,
-          nextAttemptAt: new Date(),
-          sentAt: null,
-        },
-        create: {
-          businessId: business.id,
-          eventType: 'SUBSCRIPTION_RENEWAL_REMINDER',
-          idempotencyKey,
-          channel: 'SMS',
-          recipient,
-          body: `Reminder: your TillFlow subscription payment is due on ${dueText}. Please pay to keep access active.`,
-          status: 'PENDING',
-          nextAttemptAt: new Date(),
-          payloadJson: JSON.stringify({
-            source: 'TISHGROUP_CONTROL_BULK_REMIND',
+        await tx.messageOutbox.upsert({
+          where: { idempotencyKey },
+          update: {
+            status: 'PENDING',
+            attempts: 0,
+            lastError: null,
+            lockedAt: null,
+            nextAttemptAt: new Date(),
+            sentAt: null,
+          },
+          create: {
             businessId: business.id,
-            businessName: business.name,
-            periodKey,
-            dueDate: dueDate?.toISOString() ?? null,
-          }),
-        },
+            eventType: 'SUBSCRIPTION_RENEWAL_REMINDER',
+            idempotencyKey,
+            channel: 'SMS',
+            recipient,
+            body: `Reminder: your TillFlow subscription payment is due on ${dueText}. Please pay to keep access active.`,
+            status: 'PENDING',
+            nextAttemptAt: new Date(),
+            payloadJson: JSON.stringify({
+              source: 'TISHGROUP_CONTROL_BULK_REMIND',
+              businessId: business.id,
+              periodKey,
+              dueDate: dueDate?.toISOString() ?? null,
+            }),
+          },
+        });
+        count += 1;
+      }
+
+      if (count === 0) {
+        throw new Error('NO_SMS_RECIPIENTS');
+      }
+
+      await recordAuditInTransaction(tx, {
+        staff,
+        action: 'BULK_REMINDER_SENT',
+        businessId: null,
+        summary: `Bulk SMS reminder queued for ${count} reminder${count === 1 ? '' : 's'} across ${dueSoonBusinesses.length} due-soon account${dueSoonBusinesses.length === 1 ? '' : 's'}.`,
+        metadata: { businessCount: dueSoonBusinesses.length, reminderCount: count },
       });
-    }));
-
-    const queuedCount = queued.filter(Boolean).length;
-
-    if (queuedCount === 0) {
-      redirect('/collections?toast_error=No due-soon accounts have valid SMS recipients.');
-    }
-
-    await recordAudit({
-      staff,
-      action: 'BULK_REMINDER_SENT',
-      businessId: null,
-      summary: `Bulk SMS reminder queued for ${queuedCount} reminder${queuedCount === 1 ? '' : 's'} across ${dueSoonBusinesses.length} due-soon account${dueSoonBusinesses.length === 1 ? '' : 's'}.`,
-      metadata: { businessCount: dueSoonBusinesses.length, reminderCount: queuedCount },
     });
   } catch (error) {
     if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
+    if (error instanceof Error && error.message === 'NO_SMS_RECIPIENTS') {
+      redirect('/collections?toast_error=No due-soon accounts have valid SMS recipients.');
+    }
     redirect(`/collections?toast_error=${encodeURIComponent(error instanceof Error ? error.message : 'Bulk remind failed.')}`);
   }
 

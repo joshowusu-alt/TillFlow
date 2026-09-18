@@ -35,7 +35,7 @@ describe('inventory adjustments page polish', () => {
 
   it('audit trail copy is present in history section', () => {
     expect(src).toContain('Every posting is permanently recorded');
-    expect(src).toContain('Automated reversal is unavailable');
+    expect(src).toContain('Owner Reverse posts the exact opposite');
   });
 
   it('adjustment form component remains present with Phase 1 and Phase 2 flags', () => {
@@ -66,10 +66,11 @@ describe('inventory adjustments page polish', () => {
     expect(src).toContain('Recent adjustments');
   });
 
-  it('automated reversal UI is unavailable', () => {
-    expect(src).not.toContain('ReverseStockAdjustmentForm');
-    expect(reverseSrc).toContain('Automated reversal unavailable');
-    expect(reverseSrc).not.toContain('reverseStockAdjustmentAction');
+  it('controlled Reverse is available for posted adjustments', () => {
+    expect(src).toContain('ReverseStockAdjustmentForm');
+    expect(reverseSrc).toContain('reverseInventoryAdjustmentAction');
+    expect(reverseSrc).toContain('Confirm reverse');
+    expect(reverseSrc).not.toContain('Automated reversal unavailable');
   });
 
   it('desktop table has row hover polish', () => {
@@ -90,14 +91,14 @@ describe('inventory adjustments page polish', () => {
     expect(src).toContain('bg-rose-100 text-rose-700');
   });
 
-  it('empty state copy forbids same-direction corrections', () => {
+  it('empty state copy points to Owner Reverse', () => {
     expect(src).toContain('No stock adjustments yet.');
-    expect(src).toContain('never correct a decrease with another decrease');
+    expect(src).toContain('Owner Reverse posts the exact opposite movement');
   });
 
   it('desktop table has an empty state', () => {
     expect(src).toContain('AdjustmentsEmptyState');
-    expect(src).toContain('colSpan={7}');
+    expect(src).toContain('colSpan={8}');
   });
 
   it('does not add pointer or touch handlers', () => {

@@ -205,6 +205,7 @@ model Business {
   controlProfile         ControlBusinessProfile?
   controlSupportIssues   ControlSupportIssue[]
   businessSequences      BusinessSequence[]
+  cashVarianceInvestigations CashVarianceInvestigation[]
 
   @@index([whatsappEnabled, isDemo])
   @@index([isDemo, createdAt])
@@ -218,6 +219,12 @@ model ControlStaff {
   email              String                  @unique
   role               String                  @default("ACCOUNT_MANAGER")
   active             Boolean                 @default(true)
+  passwordHash       String?
+  passwordSetAt      DateTime?
+  twoFactorSecret    String?
+  twoFactorEnabled   Boolean                 @default(false)
+  lastLoginAt        DateTime?
+  sessionVersion     Int                    @default(0)
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
   assignedBusinesses ControlBusinessProfile[] @relation("ControlBusinessAssignedManager")
@@ -335,7 +342,7 @@ model ControlSubscription {
   id                     String                 @id @default(cuid())
   controlBusinessId      String                 @unique
   purchasedPlan          String
-  status                 String                 @default("ACTIVE")
+  status                 String                 @default("TRIAL_ACTIVE")
   billingCadence         String                 @default("MONTHLY")
   startDate              DateTime               @default(now())
   nextDueDate            DateTime?
@@ -361,6 +368,7 @@ model ControlPayment {
   paidAt            DateTime
   method            String
   reference         String?
+  idempotencyKey    String?                @unique
   note              String?
   receivedByStaffId String?
   createdAt         DateTime               @default(now())
@@ -383,6 +391,23 @@ model ControlNote {
 
   @@index([controlBusinessId, createdAt])
   @@index([createdByStaffId])
+}
+
+model ControlAuditLog {
+  id             String   @id @default(cuid())
+  staffId        String?
+  staffEmail     String
+  staffRole      String
+  action         String
+  businessId     String?
+  summary        String
+  metadata       String?
+  idempotencyKey String?  @unique
+  createdAt      DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([staffId, createdAt])
+  @@index([action, createdAt])
 }
 
 model Store {
@@ -468,6 +493,7 @@ model Shift {
   ownerOverride              Boolean  @default(false)
   ownerOverrideReasonCode    String?
   ownerOverrideJustification String?
+  closureNumber              String?
 
   till                   Till              @relation(fields: [tillId], references: [id])
   user                   User              @relation("ShiftOpenedBy", fields: [userId], references: [id])
@@ -475,7 +501,9 @@ model Shift {
   closeManagerApprovedBy User?             @relation("ShiftCloseApprovedBy", fields: [closeManagerApprovedByUserId], references: [id])
   salesInvoices          SalesInvoice[]
   cashDrawerEntries      CashDrawerEntry[]
+  cashVarianceInvestigation CashVarianceInvestigation?
 
+  @@unique([tillId, closureNumber])
   @@index([userId, status])
   @@index([tillId, openedAt])
   @@index([closedByUserId, closedAt])
@@ -525,6 +553,9 @@ model User {
   acknowledgedRiskAlerts     RiskAlert[]             @relation("RiskAlertAcknowledgedBy")
   reorderActions             ReorderAction[]
   purchasePaymentsRecorded   PurchasePayment[]       @relation("PurchasePaymentRecordedBy")
+  countedStocktakeLines      StocktakeLine[]         @relation("StocktakeLineCountedBy")
+  assignedCashVariances      CashVarianceInvestigation[] @relation("CashVarianceAssignedTo")
+  approvedCashVariances      CashVarianceInvestigation[] @relation("CashVarianceApprovedBy")
   passwordResetTokens        PasswordResetToken[]
   reconciledPayments         PaymentReconciliation[] @relation("PaymentReconciledBy")
   productImports             ProductImport[]
@@ -1187,6 +1218,9 @@ model StockAdjustment {
   qaTag              String?
   qaRunId            String?
   createdAt          DateTime @default(now())
+  transactionNumber  String?
+  reversalOfId       String?  @unique
+  reversalReason     String?
 
   store   Store   @relation(fields: [storeId], references: [id])
   product Product @relation(fields: [productId], references: [id])
@@ -1194,6 +1228,7 @@ model StockAdjustment {
   user    User    @relation(fields: [userId], references: [id])
 
   @@unique([storeId, idempotencyKey])
+  @@unique([storeId, transactionNumber])
   @@index([storeId, createdAt])
   @@index([productId, createdAt])
 }
@@ -1335,10 +1370,13 @@ model SalesPayment {
   branchId       String?
   qaTag          String?
   qaRunId        String?
+  businessId     String?
+  transactionNumber String?
 
   salesInvoice SalesInvoice           @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
   collection   MobileMoneyCollection? @relation(fields: [collectionId], references: [id])
 
+  @@unique([businessId, transactionNumber])
   @@index([salesInvoiceId, receivedAt])
   @@index([receivedAt])
   @@index([collectionId, receivedAt])
@@ -1358,6 +1396,7 @@ model PurchaseInvoice {
   vatPence      Int
   totalPence    Int
   createdAt     DateTime  @default(now())
+  transactionNumber String?
 
   business       Business              @relation(fields: [businessId], references: [id])
   store          Store                 @relation(fields: [storeId], references: [id])
@@ -1366,6 +1405,7 @@ model PurchaseInvoice {
   payments       PurchasePayment[]
   purchaseReturn PurchaseReturn?
 
+  @@unique([businessId, transactionNumber])
   @@index([businessId, createdAt])
   @@index([storeId, createdAt])
   @@index([businessId, paymentStatus, createdAt])
@@ -1430,12 +1470,14 @@ model PurchasePayment {
   payloadHash       String?
   qaTag             String?
   qaRunId           String?
+  transactionNumber String?
 
   business        Business?       @relation(fields: [businessId], references: [id], onDelete: SetNull)
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
   recordedBy      User?           @relation("PurchasePaymentRecordedBy", fields: [recordedByUserId], references: [id])
 
   @@unique([businessId, idempotencyKey])
+  @@unique([businessId, transactionNumber])
   @@index([purchaseInvoiceId, paidAt])
   @@index([paidAt])
   @@index([businessId, paidAt])
@@ -1473,6 +1515,8 @@ model Expense {
   notes          String?
   qaTag          String?
   createdAt      DateTime  @default(now())
+  transactionNumber  String?
+  sourceAdjustmentId String?
 
   business Business         @relation(fields: [businessId], references: [id])
   store    Store            @relation(fields: [storeId], references: [id])
@@ -1480,6 +1524,8 @@ model Expense {
   account  Account          @relation(fields: [accountId], references: [id])
   payments ExpensePayment[]
 
+  @@unique([businessId, transactionNumber])
+  @@unique([sourceAdjustmentId])
   @@index([businessId, paymentStatus, createdAt])
   @@index([storeId, createdAt])
   @@index([accountId, createdAt])
@@ -1496,12 +1542,14 @@ model ExpensePayment {
   amountPence Int
   paidAt      DateTime @default(now())
   reference   String?
+  transactionNumber String?
 
   business Business @relation(fields: [businessId], references: [id])
   store    Store    @relation(fields: [storeId], references: [id])
   user     User     @relation(fields: [userId], references: [id])
   expense  Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
 
+  @@unique([businessId, transactionNumber])
   @@index([expenseId, paidAt])
   @@index([businessId, paidAt])
 }
@@ -1564,11 +1612,13 @@ model Stocktake {
   notes       String?
   createdAt   DateTime  @default(now())
   completedAt DateTime?
+  transactionNumber String?
 
   store Store           @relation(fields: [storeId], references: [id])
   user  User            @relation(fields: [userId], references: [id])
   lines StocktakeLine[]
 
+  @@unique([storeId, transactionNumber])
   @@index([storeId, createdAt])
   @@index([status])
 }
@@ -1583,13 +1633,43 @@ model StocktakeLine {
   adjusted     Boolean @default(false)
   /// e.g. SURPLUS_PENDING_REVIEW — surplus counted but not posted to inventory/GL.
   reviewStatus String?
+  countState   String?
+  countedAt    DateTime?
+  countedByUserId String?
 
   stocktake Stocktake @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
   product   Product   @relation(fields: [productId], references: [id])
+  countedBy User?     @relation("StocktakeLineCountedBy", fields: [countedByUserId], references: [id])
 
   @@unique([stocktakeId, productId])
   @@index([stocktakeId])
   @@index([productId])
+  @@index([countState])
+}
+
+model CashVarianceInvestigation {
+  id                      String    @id @default(cuid())
+  businessId              String
+  shiftId                 String    @unique
+  status                  String    @default("OPEN")
+  assignedReviewerUserId  String?
+  variancePence           Int
+  cashierExplanation      String?
+  evidencePath            String?
+  managerResolution       String?
+  approvedByUserId        String?
+  approvedAt              DateTime?
+  transactionNumber       String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  business         Business @relation(fields: [businessId], references: [id])
+  shift            Shift    @relation(fields: [shiftId], references: [id])
+  assignedReviewer User?    @relation("CashVarianceAssignedTo", fields: [assignedReviewerUserId], references: [id])
+  approvedBy       User?    @relation("CashVarianceApprovedBy", fields: [approvedByUserId], references: [id])
+
+  @@unique([businessId, transactionNumber])
+  @@index([businessId, status, createdAt])
 }
 
 model AuditLog {

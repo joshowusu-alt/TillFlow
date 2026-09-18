@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getUser } from '@/lib/auth';
-import { getSupplierAgingReport, AGING_BUCKETS, AGING_BUCKET_LABELS } from '@/lib/services/supplier-aging';
+import {
+  getSupplierAgingInvoices,
+  getSupplierAgingReport,
+  parseAgingBucket,
+  AGING_BUCKETS,
+  AGING_BUCKET_LABELS,
+} from '@/lib/services/supplier-aging';
+import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 
 const csvEscape = (value: string | number | null | undefined): string => {
   if (value === null || value === undefined) return '';
@@ -28,49 +35,70 @@ export async function GET(request: Request) {
   const rawAsOf = url.searchParams.get('asOf') ?? '';
   const asOfStr = rawAsOf && rawAsOf <= todayStr ? rawAsOf : todayStr;
   const asOf = utcStartOfDay(new Date(asOfStr + 'T00:00:00Z'));
-
-  const report = await getSupplierAgingReport(user.businessId, asOf);
+  const bucket = parseAgingBucket(url.searchParams.get('bucket'));
+  const scopeLabel = bucket ? AGING_BUCKET_LABELS[bucket] : 'All buckets';
 
   const rows: string[] = [];
   rows.push(`Supplier Aging Report`);
   rows.push(`As Of,${csvEscape(asOfStr)}`);
+  rows.push(`Scope,${csvEscape(scopeLabel)}`);
   rows.push(`Generated,${csvEscape(new Date().toISOString())}`);
   rows.push('');
 
-  // Header row
-  const headers = [
-    'Supplier',
-    'Invoice Count',
-    'Total',
-    ...AGING_BUCKETS.map((b) => AGING_BUCKET_LABELS[b]),
-    'Oldest Due Date',
-  ];
-  rows.push(headers.map(csvEscape).join(','));
-
-  // Data rows
-  for (const row of report.rows) {
-    const cells = [
-      csvEscape(row.supplierName),
-      csvEscape(row.invoiceCount),
-      csvEscape(formatPence(row.totalPence)),
-      ...AGING_BUCKETS.map((b) => csvEscape(formatPence(row.buckets[b]))),
-      csvEscape(row.oldestDueDate ? row.oldestDueDate.toISOString().slice(0, 10) : ''),
+  if (bucket) {
+    const invoices = await getSupplierAgingInvoices(user.businessId, asOf, bucket);
+    rows.push(
+      ['Purchase', 'Supplier', 'Due Date', 'Bucket', 'Original', 'Paid', 'Remaining']
+        .map(csvEscape)
+        .join(','),
+    );
+    for (const invoice of invoices) {
+      rows.push(
+        [
+          csvEscape(displayDocumentNumber('purchase', invoice.transactionNumber, invoice.id)),
+          csvEscape(invoice.supplierName),
+          csvEscape(invoice.dueDate ? invoice.dueDate.toISOString().slice(0, 10) : ''),
+          csvEscape(AGING_BUCKET_LABELS[invoice.bucket]),
+          csvEscape(formatPence(invoice.totalPence)),
+          csvEscape(formatPence(invoice.paidPence)),
+          csvEscape(formatPence(invoice.outstandingPence)),
+        ].join(','),
+      );
+    }
+  } else {
+    const report = await getSupplierAgingReport(user.businessId, asOf);
+    const headers = [
+      'Supplier',
+      'Invoice Count',
+      'Total',
+      ...AGING_BUCKETS.map((b) => AGING_BUCKET_LABELS[b]),
+      'Oldest Due Date',
     ];
-    rows.push(cells.join(','));
+    rows.push(headers.map(csvEscape).join(','));
+
+    for (const row of report.rows) {
+      const cells = [
+        csvEscape(row.supplierName),
+        csvEscape(row.invoiceCount),
+        csvEscape(formatPence(row.totalPence)),
+        ...AGING_BUCKETS.map((b) => csvEscape(formatPence(row.buckets[b]))),
+        csvEscape(row.oldestDueDate ? row.oldestDueDate.toISOString().slice(0, 10) : ''),
+      ];
+      rows.push(cells.join(','));
+    }
+
+    const totalCells = [
+      'TOTAL',
+      csvEscape(report.totals.invoiceCount),
+      csvEscape(formatPence(report.totals.totalPence)),
+      ...AGING_BUCKETS.map((b) => csvEscape(formatPence(report.totals.buckets[b]))),
+      '',
+    ];
+    rows.push(totalCells.join(','));
   }
 
-  // Footer totals
-  const totalCells = [
-    'TOTAL',
-    csvEscape(report.totals.invoiceCount),
-    csvEscape(formatPence(report.totals.totalPence)),
-    ...AGING_BUCKETS.map((b) => csvEscape(formatPence(report.totals.buckets[b]))),
-    '',
-  ];
-  rows.push(totalCells.join(','));
-
   const csv = rows.join('\n');
-  const filename = `supplier-aging-${asOfStr}.csv`;
+  const filename = `supplier-aging-${asOfStr}${bucket ? `-${bucket}` : ''}.csv`;
 
   return new Response(csv, {
     status: 200,

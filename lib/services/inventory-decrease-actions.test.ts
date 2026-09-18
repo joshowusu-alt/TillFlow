@@ -20,8 +20,9 @@ describe('inventory decrease Phase 1 actions', () => {
     expect(inventoryAction).toContain('isInventoryDecreaseReasonCode');
   });
 
-  it('blocks automated reversal', () => {
-    expect(inventoryAction).toContain('Automated adjustment reversal is unavailable');
+  it('delegates reversal to the controlled owner path', () => {
+    expect(inventoryAction).toContain('reverseInventoryAdjustmentAction');
+    expect(inventoryAction).not.toContain('Automated adjustment reversal is unavailable');
     expect(inventoryAction).not.toContain('createStockAdjustment({');
   });
 
@@ -32,9 +33,10 @@ describe('inventory decrease Phase 1 actions', () => {
   });
 
   it('create action restricts adjustments to Owner/Manager and excludes Cashier', () => {
-    expect(inventoryAction).toContain("withBusinessStoreContext(['MANAGER', 'OWNER'])");
+    expect(inventoryAction).toContain('requireSelectedStoreContext');
+    expect(inventoryAction).toContain("['MANAGER', 'OWNER']");
     expect(inventoryAction).not.toMatch(
-      /withBusinessStoreContext\(\s*\[[^\]]*['"]CASHIER['"]/,
+      /requireSelectedStoreContext\(\s*\[[^\]]*['"]CASHIER['"]/,
     );
   });
 

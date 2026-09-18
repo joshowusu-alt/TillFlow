@@ -4,8 +4,11 @@ import { redirect } from 'next/navigation';
 import { formString, formOptionalString, formPence } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, err } from '@/lib/action-utils';
 import { createSupplier, updateSupplier, deleteSupplier } from '@/lib/services/suppliers';
+import { assignOrphanPurchaseSupplier } from '@/lib/services/supplier-orphans';
 import { normalizeTagInput } from '@/lib/contact-tags';
 import { audit } from '@/lib/audit';
+import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 
 export async function createSupplierAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -68,4 +71,33 @@ export async function deleteSupplierAction(formData: FormData): Promise<void> {
 
     redirect('/suppliers');
   }, '/suppliers');
+}
+
+export async function assignOrphanPurchaseSupplierAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user, businessId } = await withBusinessContext(['OWNER']);
+
+    const invoiceId = formString(formData, 'invoiceId');
+    const supplierId = formString(formData, 'supplierId');
+    if (!invoiceId) return err('Purchase invoice is required.');
+    if (!supplierId) return err('Select a supplier to assign.');
+
+    const assigned = await assignOrphanPurchaseSupplier({
+      businessId,
+      invoiceId,
+      supplierId,
+      user,
+    });
+
+    revalidateTag('reports');
+    revalidateOwnerDashboardCache();
+    revalidatePath('/suppliers');
+    revalidatePath('/suppliers/orphans');
+    revalidatePath('/purchases');
+    revalidatePath(`/purchases/${assigned.id}`);
+    revalidatePath(`/suppliers/${assigned.supplierId}`);
+    revalidatePath('/payments/supplier-aging');
+
+    redirect('/suppliers/orphans?assigned=1');
+  }, '/suppliers/orphans');
 }

@@ -50,6 +50,9 @@ vi.mock('./cash-drawer', async () => {
     recordCashDrawerEntryTx: recordCashDrawerEntryTxMock,
   };
 });
+vi.mock('./document-numbers', () => ({
+  reserveNextDocumentNumber: vi.fn().mockResolvedValue('PUR-000001'),
+}));
 
 import { createPurchase, type PurchaseLineInput } from './purchases';
 import { MONEY_IDEMPOTENCY_ERROR, MoneyIdempotencyError } from './money-idempotency';
@@ -548,6 +551,7 @@ describe('purchase unit conversion', () => {
     await createPurchase({
       businessId: bizId,
       storeId,
+      supplierId: 'supplier-a',
       paymentStatus: 'UNPAID',
       payments: [],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
@@ -555,9 +559,61 @@ describe('purchase unit conversion', () => {
     });
 
     expect(prismaMock.purchaseInvoice.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.purchaseInvoice.create.mock.calls[0][0].data.transactionNumber).toBe('PUR-000001');
     expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
     expect(prismaMock.moneyIdempotency.create).not.toHaveBeenCalled();
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects a new credit purchase without a supplier', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([
+      {
+        productId: 'prod-1',
+        unitId: 'unit-piece',
+        conversionToBase: 1,
+        product: { defaultCostBasePence: 100, vatRateBps: 0 },
+        unit: { name: 'Piece' },
+      },
+    ]);
+
+    await expect(
+      createPurchase({
+        businessId: bizId,
+        storeId,
+        supplierId: null,
+        paymentStatus: 'UNPAID',
+        payments: [],
+        lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
+        userId,
+      }),
+    ).rejects.toThrow('Credit purchases require a supplier.');
+    expect(prismaMock.purchaseInvoice.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a part-paid purchase without a supplier', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([
+      {
+        productId: 'prod-1',
+        unitId: 'unit-piece',
+        conversionToBase: 1,
+        product: { defaultCostBasePence: 100, vatRateBps: 0 },
+        unit: { name: 'Piece' },
+      },
+    ]);
+
+    await expect(
+      createPurchase({
+        businessId: bizId,
+        storeId,
+        paymentStatus: 'PART_PAID',
+        payments: [{ method: 'CASH', amountPence: 40 }],
+        lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
+        userId,
+        tillId: 'till-1',
+        idempotencyKey: 'po-part-no-supplier',
+      }),
+    ).rejects.toThrow('Credit purchases require a supplier.');
+    expect(prismaMock.purchaseInvoice.create).not.toHaveBeenCalled();
   });
 
   it('commits keyed unpaid purchases in one transaction so inventory cannot lag the money row', async () => {
@@ -574,6 +630,7 @@ describe('purchase unit conversion', () => {
     await createPurchase({
       businessId: bizId,
       storeId,
+      supplierId: 'supplier-a',
       paymentStatus: 'UNPAID',
       payments: [],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],

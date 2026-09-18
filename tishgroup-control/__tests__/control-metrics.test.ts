@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getPortfolioSummaryFor, getCollectionQueuesFor, getActionChecklist, formatCedi } from '../lib/control-metrics';
+import { getPortfolioSummaryFor, getCollectionQueuesFor, getActionChecklist, formatCedi, getAccountMove } from '../lib/control-metrics';
 import type { ManagedBusiness } from '../lib/control-data';
 
 function makeBusiness(overrides: Partial<ManagedBusiness> = {}): ManagedBusiness {
@@ -41,6 +41,24 @@ describe('getPortfolioSummaryFor', () => {
     const summary = getPortfolioSummaryFor(businesses);
     expect(summary.mrr).toBe(800);
     expect(summary.arr).toBe(9600);
+  });
+
+  it('computes annual ARR as monthlyValue * 10, not * 12', () => {
+    const businesses = [
+      makeBusiness({ state: 'PAID_ACTIVE', monthlyValue: 349, billingCadence: 'ANNUAL' }),
+    ];
+    const summary = getPortfolioSummaryFor(businesses);
+    expect(summary.mrr).toBe(349);
+    expect(summary.arr).toBe(3490);
+    expect(summary.arr).not.toBe(349 * 12);
+  });
+
+  it('excludes trial states from paid MRR', () => {
+    const businesses = [
+      makeBusiness({ state: 'TRIAL_ACTIVE', monthlyValue: 349 }),
+      makeBusiness({ state: 'PAID_ACTIVE', monthlyValue: 199 }),
+    ];
+    expect(getPortfolioSummaryFor(businesses).mrr).toBe(199);
   });
 
   it('counts grace and fallback states separately', () => {
@@ -147,6 +165,15 @@ describe('getActionChecklist', () => {
   it('returns conversion steps for trial state', () => {
     const checklist = getActionChecklist(makeBusiness({ state: 'TRIAL_ACTIVE' }));
     expect(checklist[0]).toMatch(/conversion|meeting/i);
+  });
+});
+
+describe('getAccountMove', () => {
+  it('maps live overdue and restricted states away from good standing', () => {
+    expect(getAccountMove('PAYMENT_OVERDUE_GRACE', '2026-04-01')).not.toMatch(/good standing/i);
+    expect(getAccountMove('PAYMENT_RESTRICTED', '2026-04-01')).not.toMatch(/good standing/i);
+    expect(getAccountMove('RENEWAL_DUE_SOON', '2026-04-01')).not.toMatch(/good standing/i);
+    expect(getAccountMove('PAID_ACTIVE', '2026-06-01')).toMatch(/good standing/i);
   });
 });
 

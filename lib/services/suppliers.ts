@@ -43,7 +43,7 @@ export async function getSuppliers(businessId: string, opts: SupplierListOptions
 
   const where = {
     businessId,
-    ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
+    ...(search ? { name: { contains: search, mode: 'insensitive' as const } as any } : {}),
   };
 
   const [totalCount, suppliers] = await Promise.all([

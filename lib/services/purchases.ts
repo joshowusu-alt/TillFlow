@@ -18,6 +18,9 @@ import {
   recordCashDrawerEntryTx,
 } from './cash-drawer';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { UserError } from '@/lib/action-utils';
+import { creditPurchaseRequiresSupplier } from '@/lib/reliability/walkthrough-contracts';
+import { reserveNextDocumentNumber } from './document-numbers';
 import {
   assertMoneyMovementTenantChain,
   buildPurchaseCreatePayloadHash,
@@ -264,6 +267,7 @@ async function createPurchaseInvoicePayments(
   });
 
   for (const payment of input.payments) {
+    const transactionNumber = await reserveNextDocumentNumber(client, input.businessId, 'supplier_payment');
     const createdPayment = await client.purchasePayment.create({
       data: {
         businessId: input.businessId,
@@ -271,6 +275,7 @@ async function createPurchaseInvoicePayments(
         method: payment.method,
         amountPence: payment.amountPence,
         reference: payment.reference ?? null,
+        transactionNumber,
         ...(input.recordedByUserId ? { recordedByUserId: input.recordedByUserId } : {}),
       },
     });
@@ -423,6 +428,9 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     throw new Error('Payment exceeds total due');
   }
   const finalStatus = derivePaymentStatus(total, totalPaid);
+  if (creditPurchaseRequiresSupplier(finalStatus, totalPaid, total) && !supplier?.id) {
+    throw new UserError('Credit purchases require a supplier.');
+  }
 
   const productTotals = new Map<
     string,
@@ -507,7 +515,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   // For inventory: use array-form $transaction([...ops]) which sends all upserts
   // in a single HTTP batch to Turso (~30 ms total regardless of count).
   const _doInvoice = async (client: any) => {
-    // 1. Invoice header — 1 RTT
+    // 1. Invoice header — 1 RTT. New purchases get a PUR- presentation number.
+    const transactionNumber = await reserveNextDocumentNumber(client, input.businessId, 'purchase');
     const created = await client.purchaseInvoice.create({
       data: {
         businessId: input.businessId,
@@ -518,6 +527,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         subtotalPence: subtotal,
         vatPence: vatTotal,
         totalPence: total,
+        transactionNumber,
       }
     });
 

@@ -3,12 +3,93 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { getProductPriceWarnings } from '@/lib/product-price-guards';
 
+type OpeningStockFieldsProps = {
+  currencySymbol: string;
+  units: { id: string; name: string }[];
+  defaultBaseUnitId?: string;
+};
+
+export function OpeningStockFields({
+  currencySymbol,
+  units,
+  defaultBaseUnitId,
+}: OpeningStockFieldsProps) {
+  return (
+    <div className="md:col-span-3 rounded-xl border border-black/10 bg-black/[0.02] p-4 space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-ink">Opening stock (optional)</h3>
+        <p className="text-xs text-black/55 mt-0.5">
+          Shelf quantity is saved separately from the price. Add it here so POS can sell this product immediately.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <label className="label" htmlFor="openingStockQty">
+            Opening quantity
+          </label>
+          <input
+            id="openingStockQty"
+            className="input"
+            name="openingStockQty"
+            type="number"
+            min={0}
+            step="1"
+            inputMode="numeric"
+            placeholder="e.g. 48"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="openingStockUnitId">
+            Stock unit
+          </label>
+          <select
+            id="openingStockUnitId"
+            className="input"
+            name="openingStockUnitId"
+            defaultValue={defaultBaseUnitId ?? units[0]?.id ?? ''}
+          >
+            {units.map((unit) => (
+              <option key={unit.id} value={unit.id}>
+                {unit.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="openingStockCostPence">
+            Cost per unit ({currencySymbol})
+          </label>
+          <input
+            id="openingStockCostPence"
+            className="input"
+            name="openingStockCostPence"
+            type="number"
+            min={0}
+            step="0.01"
+            inputMode="decimal"
+            placeholder="Uses base cost if blank"
+          />
+        </div>
+      </div>
+      <p className="text-xs text-black/50">
+        Skip for now? You must{' '}
+        <a href="/setup/opening-stock" className="font-semibold text-accent underline">
+          add opening stock
+        </a>{' '}
+        before the till can sell this product.
+      </p>
+    </div>
+  );
+}
+
 type ProductCreateFormEnhancerProps = {
   children: ReactNode;
   currencySymbol: string;
   units: { id: string; name: string }[];
   defaultBaseUnitId?: string;
   createAction: (formData: FormData) => void | Promise<void>;
+  /** When false, render `OpeningStockFields` yourself inside Stock and purchasing. */
+  includeOpeningStock?: boolean;
 };
 
 function readDecimal(name: string, form: HTMLFormElement) {
@@ -22,6 +103,7 @@ export default function ProductCreateFormEnhancer({
   units,
   defaultBaseUnitId,
   createAction,
+  includeOpeningStock = true,
 }: ProductCreateFormEnhancerProps) {
   const [blocked, setBlocked] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -84,70 +166,13 @@ export default function ProductCreateFormEnhancer({
     >
       {children}
 
-      <div className="md:col-span-3 rounded-xl border border-black/10 bg-black/[0.02] p-4 space-y-3">
-        <div>
-          <h3 className="text-sm font-semibold text-ink">Opening stock (optional)</h3>
-          <p className="text-xs text-black/55 mt-0.5">
-            Shelf quantity is saved separately from the price. Add it here so POS can sell this product immediately.
-          </p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <label className="label" htmlFor="openingStockQty">
-              Opening quantity
-            </label>
-            <input
-              id="openingStockQty"
-              className="input"
-              name="openingStockQty"
-              type="number"
-              min={0}
-              step="1"
-              inputMode="numeric"
-              placeholder="e.g. 48"
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="openingStockUnitId">
-              Stock unit
-            </label>
-            <select
-              id="openingStockUnitId"
-              className="input"
-              name="openingStockUnitId"
-              defaultValue={defaultBaseUnitId ?? units[0]?.id ?? ''}
-            >
-              {units.map((unit) => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="label" htmlFor="openingStockCostPence">
-              Cost per unit ({currencySymbol})
-            </label>
-            <input
-              id="openingStockCostPence"
-              className="input"
-              name="openingStockCostPence"
-              type="number"
-              min={0}
-              step="0.01"
-              inputMode="decimal"
-              placeholder="Uses base cost if blank"
-            />
-          </div>
-        </div>
-        <p className="text-xs text-black/50">
-          Skip for now? You must{' '}
-          <a href="/setup/opening-stock" className="font-semibold text-accent underline">
-            add opening stock
-          </a>{' '}
-          before the till can sell this product.
-        </p>
-      </div>
+      {includeOpeningStock ? (
+        <OpeningStockFields
+          currencySymbol={currencySymbol}
+          units={units}
+          defaultBaseUnitId={defaultBaseUnitId}
+        />
+      ) : null}
 
       {blocked && warnings.length > 0 ? (
         <div className="md:col-span-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 space-y-2">

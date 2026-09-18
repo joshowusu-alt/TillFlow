@@ -2,14 +2,18 @@ import Link from 'next/link';
 import ControlPageHeader from '@/components/control-page-header';
 import SectionHeading from '@/components/section-heading';
 import { requireControlStaff } from '@/lib/control-auth';
-import { listManagedBusinesses } from '@/lib/control-service';
+import { listManagedPortfolio } from '@/lib/control-service';
+import { portfolioAvailabilityMessage } from '@/lib/control-data';
 import { formatCedi, getAgingBucketsFor, getPortfolioSummaryFor, getRevenueByPlanFor } from '@/lib/control-metrics';
 
 export const dynamic = 'force-dynamic';
 
 export default async function RevenuePage() {
   await requireControlStaff();
-  const businesses = await listManagedBusinesses();
+  const snapshot = await listManagedPortfolio();
+  const businesses = snapshot.businesses;
+  const availabilityNote = portfolioAvailabilityMessage(snapshot);
+  const unavailable = snapshot.availability === 'unavailable';
   const summary = getPortfolioSummaryFor(businesses);
   const revenueByPlan = getRevenueByPlanFor(businesses);
   const buckets = getAgingBucketsFor(businesses);
@@ -33,32 +37,32 @@ export default async function RevenuePage() {
       note: 'Revenue already exposed to same-day follow-up risk.',
     },
     {
-      label: 'Fallback and locked',
+      label: 'Restricted and locked',
       value: summary.fallback + summary.readOnly,
       href: '/collections#locked',
-      note: 'Accounts already degraded or blocked by billing state.',
+      note: 'Accounts already restricted (payment or trial) or locked read-only.',
     },
   ];
   const headerStats = [
     {
       label: 'Healthy accounts',
-      value: String(buckets.current.count),
+      value: unavailable ? '—' : String(buckets.current.count),
       hint: 'Current and active.',
     },
     {
       label: 'Due now',
-      value: formatCedi(buckets.approaching.amount),
+      value: unavailable ? '—' : formatCedi(buckets.approaching.amount),
       hint: 'Cash in the reminder window.',
     },
     {
       label: 'Overdue exposure',
-      value: formatCedi(buckets.overdue.amount),
-      hint: 'Outstanding across grace and fallback accounts.',
+      value: unavailable ? '—' : formatCedi(buckets.overdue.amount),
+      hint: 'Outstanding across overdue grace and restricted accounts.',
     },
     {
       label: 'Locked exposure',
-      value: formatCedi(buckets.locked.amount),
-      hint: 'Cash tied to restricted accounts.',
+      value: unavailable ? '—' : formatCedi(buckets.locked.amount),
+      hint: 'Cash tied to restricted or locked accounts.',
     },
   ];
 
@@ -67,7 +71,7 @@ export default async function RevenuePage() {
       <ControlPageHeader
         eyebrow="Receivables"
         title="Revenue posture and cash exposure."
-        description="See where the money sits, where the risk is building, and which protection step the team should run next."
+        description={availabilityNote ?? 'See where the money sits, where the risk is building, and which protection step the team should run next.'}
         chips={[
           { label: 'Revenue posture', href: '#aging-buckets' },
           { label: 'Protection sequence', href: '#protection-sequence', tone: 'dark' },
@@ -97,6 +101,12 @@ export default async function RevenuePage() {
           </div>
         )}
       />
+
+      {availabilityNote ? (
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${unavailable ? 'border-control-ember/20 bg-control-ember/8 text-control-ink' : 'border-control-teal/20 bg-control-teal/5 text-control-ink/70'}`}>
+          {availabilityNote}
+        </div>
+      ) : null}
 
       <MrrStackedBar buckets={buckets} />
 

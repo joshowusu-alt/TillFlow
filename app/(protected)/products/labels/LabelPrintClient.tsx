@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { generateLabelsHtmlAction } from '@/app/actions/labels';
 import Badge from '@/components/Badge';
+import CompactMobileList, { CompactMobileListItem } from '@/components/CompactMobileList';
 import EmptyState from '@/components/EmptyState';
 import FormError from '@/components/FormError';
 import LabelPreview from '@/components/LabelPreview';
@@ -15,6 +16,15 @@ import { formatMoney } from '@/lib/format';
 import { detectBarcodeFormat } from '@/lib/labels/detect-barcode-format';
 import type { LabelData, LabelPrintMode, LabelSize } from '@/lib/labels/types';
 import { isInternalBarcode } from '@/lib/products/internal-barcode';
+import { readListState } from '@/lib/ui/list-state';
+import { useListState } from '@/lib/ui/use-list-state';
+import { ListRefreshHint, useStaleWhileRevalidate } from '@/lib/ui/stale-while-revalidate';
+import {
+  matchesLabelShortcut,
+  mergeSelectedIds,
+  selectCategoryIds,
+  type LabelShortcut,
+} from '@/app/(protected)/products/labels/label-queue';
 
 const PAGE_SIZE = 12;
 
@@ -30,6 +40,9 @@ type ClientProduct = {
   barcode: string | null;
   sku: string | null;
   sellingPriceBasePence: number;
+  createdAt?: string | null;
+  reorderPointBase?: number | null;
+  qtyOnHandBase?: number | null;
   category: {
     id: string;
     name: string;
@@ -113,6 +126,7 @@ export default function LabelPrintClient({
   const [search, setSearch] = useState(initialSearch);
   const [barcodeSearch, setBarcodeSearch] = useState(initialBarcode);
   const [categoryId, setCategoryId] = useState(initialCategoryId);
+  const [shortcut, setShortcut] = useState<LabelShortcut>('all');
   const [template, setTemplate] = useState<LabelSize>(defaultTemplate);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -121,16 +135,44 @@ export default function LabelPrintClient({
   const [previewPending, startPreview] = useTransition();
   const selectAllMobileRef = useRef<HTMLInputElement>(null);
   const selectAllDesktopRef = useRef<HTMLInputElement>(null);
+  const restoredSelectionRef = useRef(false);
+  const catalogue = useStaleWhileRevalidate(products);
+
+  useListState('/products/labels', {
+    q: search,
+    page: currentPage,
+    filters: { barcode: barcodeSearch, category: categoryId === 'ALL' ? undefined : categoryId, shortcut },
+    extra: { selectedIds, quantities },
+    restoreOnBareRoute: !initialSearch && !initialBarcode && initialCategoryId === 'ALL' && initialPage === 1,
+    bareDefaults: { q: '', page: 1 },
+  });
+
+  useEffect(() => {
+    if (restoredSelectionRef.current) return;
+    restoredSelectionRef.current = true;
+    const stored = readListState('/products/labels');
+    const storedIds = stored?.extra?.selectedIds;
+    const storedQty = stored?.extra?.quantities;
+    if (Array.isArray(storedIds) && storedIds.length > 0) {
+      setSelectedIds(storedIds.filter((id): id is string => typeof id === 'string'));
+    }
+    if (storedQty && typeof storedQty === 'object' && !Array.isArray(storedQty)) {
+      setQuantities(storedQty as Record<string, number>);
+    }
+    if (!initialSearch && stored?.q) setSearch(stored.q);
+    if (!initialBarcode && stored?.filters?.barcode) setBarcodeSearch(stored.filters.barcode);
+    if (initialCategoryId === 'ALL' && stored?.filters?.category) setCategoryId(stored.filters.category);
+  }, [initialBarcode, initialCategoryId, initialSearch]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, barcodeSearch, categoryId]);
+  }, [search, barcodeSearch, categoryId, shortcut]);
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     const normalizedBarcode = barcodeSearch.trim().toLowerCase();
 
-    return products.filter((product) => {
+    return catalogue.data.filter((product) => {
       const matchesName =
         normalizedSearch.length === 0 ||
         product.name.toLowerCase().includes(normalizedSearch) ||
@@ -141,10 +183,23 @@ export default function LabelPrintClient({
         (categoryId === 'UNCATEGORISED' ? !product.category : product.category?.id === categoryId);
       const matchesBarcode =
         normalizedBarcode.length === 0 || (product.barcode ?? '').toLowerCase().includes(normalizedBarcode);
+      const matchesShortcut = matchesLabelShortcut(
+        {
+          id: product.id,
+          name: product.name,
+          barcode: product.barcode,
+          sku: product.sku,
+          categoryId: product.category?.id ?? null,
+          createdAt: product.createdAt,
+          reorderPointBase: product.reorderPointBase,
+          qtyOnHandBase: product.qtyOnHandBase,
+        },
+        shortcut,
+      );
 
-      return matchesName && matchesCategory && matchesBarcode;
+      return matchesName && matchesCategory && matchesBarcode && matchesShortcut;
     });
-  }, [barcodeSearch, categoryId, products, search]);
+  }, [barcodeSearch, catalogue.data, categoryId, search, shortcut]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -229,6 +284,60 @@ export default function LabelPrintClient({
 
     setSelectedIds((current) => current.filter((id) => !visibleIds.includes(id)));
   };
+
+  const filteredIds = filteredProducts.map((product) => product.id);
+
+  const selectAllFiltered = () => {
+    setPreviewError(undefined);
+    setSelectedIds((current) => mergeSelectedIds(current, filteredIds));
+    setQuantities((current) => {
+      const next = { ...current };
+      filteredIds.forEach((id) => {
+        next[id] = clampQuantity(next[id]);
+      });
+      return next;
+    });
+  };
+
+  const selectCurrentCategory = () => {
+    const ids = selectCategoryIds(
+      filteredProducts.map((product) => ({
+        id: product.id,
+        name: product.name,
+        barcode: product.barcode,
+        sku: product.sku,
+        categoryId: product.category?.id ?? null,
+      })),
+      categoryId,
+    );
+    setPreviewError(undefined);
+    setSelectedIds((current) => mergeSelectedIds(current, ids));
+    setQuantities((current) => {
+      const next = { ...current };
+      ids.forEach((id) => {
+        next[id] = clampQuantity(next[id]);
+      });
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setPreviewError(undefined);
+    setSelectedIds([]);
+  };
+
+  const shortcutCounts = useMemo(() => {
+    const recent = catalogue.data.filter((product) =>
+      matchesLabelShortcut({ ...product, categoryId: product.category?.id ?? null }, 'recent'),
+    ).length;
+    const lowStock = catalogue.data.filter((product) =>
+      matchesLabelShortcut({ ...product, categoryId: product.category?.id ?? null }, 'low-stock'),
+    ).length;
+    const missing = catalogue.data.filter((product) =>
+      matchesLabelShortcut({ ...product, categoryId: product.category?.id ?? null }, 'missing-label'),
+    ).length;
+    return { recent, lowStock, missing };
+  }, [catalogue.data]);
 
   const updateQuantity = (productId: string, rawValue: string) => {
     const parsed = Math.max(1, Math.min(500, parseInt(rawValue || '1', 10) || 1));
@@ -370,18 +479,57 @@ export default function LabelPrintClient({
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-black/50">
-              <span>Selection stays on this page until you change it.</span>
-              {search || barcodeSearch || categoryId !== 'ALL' ? (
+              <span>Selection is kept across pages and stored until you clear it.</span>
+              <ListRefreshHint updatedAt={catalogue.updatedAt} refreshing={catalogue.refreshing} />
+              {search || barcodeSearch || categoryId !== 'ALL' || shortcut !== 'all' ? (
                 <button
                   type="button"
-                  className="text-accent underline underline-offset-2"
+                  className="min-h-[44px] text-accent underline underline-offset-2"
                   onClick={() => {
                     setSearch('');
                     setBarcodeSearch('');
                     setCategoryId('ALL');
+                    setShortcut('all');
                   }}
                 >
                   Clear filters
+                </button>
+              ) : null}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2" data-label-shortcuts>
+              <button
+                type="button"
+                className={`btn-ghost min-h-[44px] text-xs ${shortcut === 'all' ? 'bg-black/5' : ''}`}
+                onClick={() => setShortcut('all')}
+              >
+                All products
+              </button>
+              {shortcutCounts.recent > 0 ? (
+                <button
+                  type="button"
+                  className={`btn-ghost min-h-[44px] text-xs ${shortcut === 'recent' ? 'bg-black/5' : ''}`}
+                  onClick={() => setShortcut('recent')}
+                >
+                  Recently added ({shortcutCounts.recent})
+                </button>
+              ) : null}
+              {shortcutCounts.lowStock > 0 ? (
+                <button
+                  type="button"
+                  className={`btn-ghost min-h-[44px] text-xs ${shortcut === 'low-stock' ? 'bg-black/5' : ''}`}
+                  onClick={() => setShortcut('low-stock')}
+                >
+                  Low stock ({shortcutCounts.lowStock})
+                </button>
+              ) : null}
+              {shortcutCounts.missing > 0 ? (
+                <button
+                  type="button"
+                  className={`btn-ghost min-h-[44px] text-xs ${shortcut === 'missing-label' ? 'bg-black/5' : ''}`}
+                  onClick={() => setShortcut('missing-label')}
+                >
+                  Missing label ({shortcutCounts.missing})
                 </button>
               ) : null}
             </div>
@@ -395,9 +543,38 @@ export default function LabelPrintClient({
                   Select items from the current page and set how many copies to print.
                 </p>
               </div>
-              <Badge tone={selectedProducts.length > 0 ? 'success' : 'neutral'}>
-                {selectedProducts.length} selected
-              </Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={selectedProducts.length > 0 ? 'success' : 'neutral'}>
+                  {selectedProducts.length} selected
+                </Badge>
+                <button
+                  type="button"
+                  className="btn-ghost min-h-[44px] text-xs"
+                  onClick={selectAllFiltered}
+                  disabled={filteredProducts.length === 0}
+                  data-select-all-filtered
+                >
+                  Select all filtered ({filteredProducts.length})
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost min-h-[44px] text-xs"
+                  onClick={selectCurrentCategory}
+                  disabled={filteredProducts.length === 0}
+                  data-select-category
+                >
+                  {categoryId === 'ALL' ? 'Select all categories' : 'Select category'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost min-h-[44px] text-xs"
+                  onClick={clearSelection}
+                  disabled={selectedIds.length === 0}
+                  data-clear-selection
+                >
+                  Clear selection
+                </button>
+              </div>
             </div>
 
             {filteredProducts.length === 0 ? (
@@ -408,7 +585,7 @@ export default function LabelPrintClient({
               />
             ) : (
               <>
-                <div className="mb-3 flex items-center gap-2 lg:hidden">
+                <div className="mb-3 flex min-h-[44px] items-center gap-2 lg:hidden">
                   <input
                     ref={selectAllMobileRef}
                     type="checkbox"
@@ -418,19 +595,19 @@ export default function LabelPrintClient({
                     aria-label="Select all products on this page"
                     id="label-select-all-mobile"
                   />
-                  <label htmlFor="label-select-all-mobile" className="text-sm font-medium text-ink">
+                  <label htmlFor="label-select-all-mobile" className="min-h-[44px] py-2 text-sm font-medium text-ink">
                     Select all on this page
                   </label>
                 </div>
 
-                <div className="space-y-3 lg:hidden" data-label-print-mobile-queue>
+                <CompactMobileList className="space-y-3" data-label-print-mobile-queue="queue">
                   {visibleProducts.map((product) => {
                     const isSelected = selectedIdSet.has(product.id);
                     const quantity = clampQuantity(quantities[product.id]);
 
                     return (
+                      <CompactMobileListItem key={product.id}>
                       <div
-                        key={product.id}
                         className={`rounded-2xl border px-4 py-4 shadow-sm ${
                           isSelected ? 'border-blue-200 bg-blue-50/70' : 'border-black/5 bg-white'
                         }`}
@@ -438,7 +615,7 @@ export default function LabelPrintClient({
                         <div className="flex items-start gap-3">
                           <input
                             type="checkbox"
-                            className="mt-1 h-5 w-5 shrink-0"
+                            className="mt-1 h-6 w-6 shrink-0"
                             checked={isSelected}
                             onChange={(event) => toggleProduct(product.id, event.target.checked)}
                             aria-label={`Select ${product.name}`}
@@ -487,9 +664,10 @@ export default function LabelPrintClient({
                           </div>
                         </div>
                       </div>
+                      </CompactMobileListItem>
                     );
                   })}
-                </div>
+                </CompactMobileList>
 
                 <div className="hidden overflow-x-auto lg:block">
                   <table className="table w-full border-separate border-spacing-y-2">

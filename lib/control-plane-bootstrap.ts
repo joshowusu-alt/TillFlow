@@ -1,5 +1,6 @@
 import type { BusinessPlan } from './features';
 import { computeSubscriptionPricing, controlMonthlyValueGhs } from './plan-pricing';
+import { canonicalTrialBootstrapStatus } from './control-commercial-status';
 
 type ControlPlaneClient = {
   controlBusinessProfile: {
@@ -46,19 +47,7 @@ function normalizePlan(value?: string | null): BusinessPlan {
 }
 
 function normalizeSubscriptionStatus(value?: string | null) {
-  switch (String(value ?? '').toUpperCase()) {
-    case 'TRIAL':
-    case 'TRIAL_ACTIVE':
-    case 'TRIAL_EXPIRING_SOON':
-      return 'TRIAL';
-    case 'READ_ONLY':
-      return 'READ_ONLY';
-    case 'SUSPENDED':
-      return 'SUSPENDED';
-    case 'ACTIVE':
-    default:
-      return 'ACTIVE';
-  }
+  return canonicalTrialBootstrapStatus(value);
 }
 
 function normalizeBillingCadence(value?: string | null) {

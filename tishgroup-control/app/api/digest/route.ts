@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { listManagedBusinesses } from '@/lib/control-service';
+import { listManagedPortfolio } from '@/lib/control-service';
 import { getPortfolioSummaryFor, getCollectionQueuesFor, formatCedi } from '@/lib/control-metrics';
 import { getPortfolioSlaCounts } from '@/lib/sla';
 import { getCollectionsRhythm } from '@/lib/collections-trend';
 import { captureError } from '@/lib/error-monitor';
+import { isControlMaintenanceMode, maintenanceDeniedPayload } from '@/lib/control-maintenance';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,9 @@ export const dynamic = 'force-dynamic';
 const SECRET = process.env.DIGEST_CRON_SECRET?.trim() || null;
 
 export async function GET(request: Request) {
+  if (isControlMaintenanceMode()) {
+    return NextResponse.json(maintenanceDeniedPayload(), { status: 503 });
+  }
   if (process.env.NODE_ENV === 'production' && !SECRET) {
     await captureError({
       context: 'digest:missing_secret',
@@ -53,19 +57,29 @@ export async function GET(request: Request) {
     }
   }
 
-  const businesses = await listManagedBusinesses();
+  const snapshot = await listManagedPortfolio();
+  if (snapshot.availability === 'unavailable') {
+    return NextResponse.json({
+      ok: false,
+      error: 'portfolio_unavailable',
+      errorKind: snapshot.errorKind,
+      generatedAt: new Date().toISOString(),
+    }, { status: 503 });
+  }
+
+  const businesses = snapshot.businesses;
   const summary = getPortfolioSummaryFor(businesses);
   const queues = getCollectionQueuesFor(businesses);
   const slaCounts = getPortfolioSlaCounts(businesses);
   const rhythm = await getCollectionsRhythm();
 
-  const headline = `Portfolio MRR ${formatCedi(summary.mrr)} · Due ${summary.dueSoon} · Locked ${summary.readOnly} · SLA ${slaCounts.red}R/${slaCounts.amber}A`;
+  const headline = `Paid MRR ${formatCedi(summary.mrr)} · Due ${summary.dueSoon} · Locked ${summary.readOnly} · SLA ${slaCounts.red}R/${slaCounts.amber}A`;
 
   const lines = [
     `Today's portfolio brief`,
     headline,
     ``,
-    `Collections (14d): ${formatCedi(Math.round(rhythm.totalPence / 100))} total · today ${formatCedi(Math.round(rhythm.todayPence / 100))}`,
+    `Collections (14d): ${formatCedi(rhythm.totalPence)} total · today ${formatCedi(rhythm.todayPence)}`,
     `Risk: ${queues.overdue.length} overdue · ${queues.locked.length} locked · ${queues.dueSoon.length} due-soon`,
     `Review queue: ${businesses.filter((b) => b.needsReview).length} unreviewed`,
   ];
@@ -73,6 +87,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     generatedAt: new Date().toISOString(),
+    availability: snapshot.availability,
     headline,
     text: lines.join('\n'),
     summary,
@@ -80,6 +95,8 @@ export async function GET(request: Request) {
     rhythm: {
       totalPence: rhythm.totalPence,
       todayPence: rhythm.todayPence,
+      totalGhs: rhythm.totalGhs,
+      todayGhs: rhythm.todayGhs,
       dailyPence: rhythm.daily,
     },
     queues: {

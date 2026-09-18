@@ -130,6 +130,50 @@ describeConcurrency('expense payment overlapping transactions (Postgres)', () =>
     expect(payments).toHaveLength(1);
     expect(payments[0]!.amountPence).toBe(6000);
   }, 60000);
+
+  it('allocates a later payment to the exact expenseId and leaves a sibling unpaid', async () => {
+    const [target, sibling] = await Promise.all([
+      prisma.expense.create({
+        data: {
+          businessId,
+          storeId,
+          userId,
+          accountId,
+          amountPence: 8000,
+          paymentStatus: 'UNPAID',
+        },
+      }),
+      prisma.expense.create({
+        data: {
+          businessId,
+          storeId,
+          userId,
+          accountId,
+          amountPence: 8000,
+          paymentStatus: 'UNPAID',
+        },
+      }),
+    ]);
+
+    const payment = await recordExpensePayment({
+      businessId,
+      storeId,
+      userId,
+      expenseId: target.id,
+      method: 'TRANSFER',
+      amountPence: 3000,
+      idempotencyKey: `alloc-${suffix}`,
+    });
+
+    expect(payment.expenseId).toBe(target.id);
+    const [targetPayments, siblingPayments] = await Promise.all([
+      prisma.expensePayment.findMany({ where: { expenseId: target.id } }),
+      prisma.expensePayment.findMany({ where: { expenseId: sibling.id } }),
+    ]);
+    expect(targetPayments).toHaveLength(1);
+    expect(targetPayments[0]!.amountPence).toBe(3000);
+    expect(siblingPayments).toHaveLength(0);
+  }, 60000);
 });
 
 describe('expense payment concurrency suite availability', () => {
