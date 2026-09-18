@@ -35,6 +35,12 @@ describe('selected-store mutation fail-closed', () => {
     expect(files.payments).toContain('assertRequestedStoreMatchesSource');
     expect(files.shifts).toContain('resolveStoreFromTill');
     expect(files.shifts).toContain('till: { store: { businessId } }');
+    expect(files.shifts).toContain('closeShiftAction');
+    expect(files.shifts).toContain('closeShiftOwnerOverrideAction');
+    expect(files.shifts.split('closeShiftAction')[1]).toContain('requestedStoreId');
+    expect(files.shifts.split('closeShiftOwnerOverrideAction')[1]).toContain('requestedStoreId');
+    expect(files.shifts.split('closeShiftAction')[1]).toContain('STORE_MISMATCH_MSG');
+    expect(files.shifts.split('closeShiftOwnerOverrideAction')[1]).toContain('STORE_MISMATCH_MSG');
   });
 
   it('mutation pages use sole-or-selected store resolution, not stores[0] fallback', () => {

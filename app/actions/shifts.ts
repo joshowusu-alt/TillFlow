@@ -169,11 +169,15 @@ export async function closeShiftAction(
     const varianceReason = formString(formData, 'varianceReason') || null;
 
     if (!shiftId) return err('Could not find the shift. Please refresh and try again.');
+    const requestedStoreId = formString(formData, 'storeId');
     const closingShift = await prisma.shift.findFirst({
       where: { id: shiftId, till: { store: { businessId } } },
       select: { till: { select: { storeId: true } } },
     });
     if (!closingShift) return err('Could not find the shift. Please refresh and try again.');
+    if (requestedStoreId && requestedStoreId !== closingShift.till.storeId) {
+      return err(STORE_MISMATCH_MSG);
+    }
     const storeId = closingShift.till.storeId;
     if (!managerPin) return err('Manager PIN is required to close till.');
 
@@ -285,11 +289,15 @@ export async function closeShiftOwnerOverrideAction(
     const varianceReason = formString(formData, 'varianceReason') || null;
 
     if (!shiftId) return err('Could not find the shift. Please refresh and try again.');
+    const requestedStoreId = formString(formData, 'storeId');
     const overrideShift = await prisma.shift.findFirst({
       where: { id: shiftId, till: { store: { businessId } } },
       select: { till: { select: { storeId: true } } },
     });
     if (!overrideShift) return err('Could not find the shift. Please refresh and try again.');
+    if (requestedStoreId && requestedStoreId !== overrideShift.till.storeId) {
+      return err(STORE_MISMATCH_MSG);
+    }
     const storeId = overrideShift.till.storeId;
     if (!ownerPassword) return err('Owner password is required for override.');
     if (!overrideReasonCode) return err('Override reason code is required.');

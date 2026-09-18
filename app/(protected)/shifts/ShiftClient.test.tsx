@@ -427,5 +427,13 @@ describe('ShiftClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add cash' }));
     await waitFor(() => expect(addCashToTillActionMock).toHaveBeenCalledTimes(1));
     expect((addCashToTillActionMock.mock.calls[0][0] as FormData).get('storeId')).toBe('store-b');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+    fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '865.50' } });
+    fireEvent.change(screen.getByPlaceholderText('Enter manager approval PIN'), { target: { value: '1234' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close Shift' }).at(-1)!);
+    await waitFor(() => expect(closeShiftActionMock).toHaveBeenCalledTimes(1));
+    expect((closeShiftActionMock.mock.calls[0][0] as FormData).get('storeId')).toBe('store-b');
+    expect((closeShiftActionMock.mock.calls[0][0] as FormData).get('shiftId')).toBe('shift-1');
   });
 });
