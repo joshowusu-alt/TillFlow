@@ -9,6 +9,7 @@ import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag'
 import { decrementInventoryBalance } from './shared';
 import { detectInventoryAdjustmentRisk } from './risk-monitor';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { reserveNextDocumentNumber } from '@/lib/services/document-numbers';
 
 export const INVENTORY_DECREASE_SCHEMA_VERSION = 1;
 
@@ -439,6 +440,11 @@ async function createInventoryDecreaseImpl(
     const valuePence = checkedMul(unitCostBasePence, qtyBase);
     const beforeQty = balance.qtyOnHandBase;
     const afterQty = beforeQty - qtyBase;
+    const transactionNumber = await reserveNextDocumentNumber(
+      tx,
+      input.businessId,
+      'stock_adjustment',
+    );
 
     const created = await tx.stockAdjustment.create({
       data: {
@@ -455,6 +461,7 @@ async function createInventoryDecreaseImpl(
         unitCostBasePence,
         valuePence,
         schemaVersion: INVENTORY_DECREASE_SCHEMA_VERSION,
+        transactionNumber,
         userId: input.userId,
       },
       select: ADJUSTMENT_SELECT,

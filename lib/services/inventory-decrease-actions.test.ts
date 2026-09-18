@@ -20,8 +20,9 @@ describe('inventory decrease Phase 1 actions', () => {
     expect(inventoryAction).toContain('isInventoryDecreaseReasonCode');
   });
 
-  it('blocks automated reversal', () => {
-    expect(inventoryAction).toContain('Automated adjustment reversal is unavailable');
+  it('delegates reversal to the controlled owner path', () => {
+    expect(inventoryAction).toContain('reverseInventoryAdjustmentAction');
+    expect(inventoryAction).not.toContain('Automated adjustment reversal is unavailable');
     expect(inventoryAction).not.toContain('createStockAdjustment({');
   });
 

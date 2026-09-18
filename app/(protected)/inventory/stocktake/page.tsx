@@ -4,11 +4,13 @@ import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { formatDateTime } from '@/lib/format';
+import { displayDocumentNumber, resolveStocktakeLineState } from '@/lib/reliability/walkthrough-contracts';
 import Link from 'next/link';
 import StocktakeClient from './StocktakeClient';
+import { isStaleInProgressStocktake } from './stocktake-state';
 
 export default async function StocktakePage() {
-  const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
+  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) {
     return <div className="card p-6">Seed data missing.</div>;
   }
@@ -39,6 +41,10 @@ export default async function StocktakePage() {
                 productUnits: {
                   where: { isBaseUnit: true },
                   select: { unit: { select: { name: true, pluralName: true } } },
+                },
+                inventoryBalances: {
+                  where: { storeId: store.id },
+                  select: { avgCostBasePence: true },
                 },
               },
             },
@@ -95,18 +101,33 @@ export default async function StocktakePage() {
       {inProgress ? (
         <StocktakeClient
           stocktakeId={inProgress.id}
-          lines={inProgress.lines.map((l) => ({
-            id: l.id,
-            productId: l.productId,
-            productName: l.product.name,
-            barcode: l.product.barcode,
-            baseUnit: l.product.productUnits[0]?.unit.name ?? 'unit',
-            baseUnitPlural: l.product.productUnits[0]?.unit.pluralName ?? 'units',
-            expectedBase: l.expectedBase,
-            countedBase: l.countedBase,
-          }))}
+          transactionNumber={displayDocumentNumber('stocktake', inProgress.transactionNumber, inProgress.id)}
+          lines={inProgress.lines.map((l) => {
+            const countState = resolveStocktakeLineState({
+              countState: l.countState,
+              countedAt: l.countedAt,
+              countedBase: l.countedBase,
+              stocktakeStatus: inProgress.status,
+              adjusted: l.adjusted,
+            });
+            return {
+              id: l.id,
+              productId: l.productId,
+              productName: l.product.name,
+              barcode: l.product.barcode,
+              baseUnit: l.product.productUnits[0]?.unit.name ?? 'unit',
+              baseUnitPlural: l.product.productUnits[0]?.unit.pluralName ?? 'units',
+              expectedBase: l.expectedBase,
+              countedBase: countState === 'UNCOUNTED' ? null : l.countedBase,
+              countState,
+              avgCostBasePence: l.product.inventoryBalances[0]?.avgCostBasePence ?? 0,
+            };
+          })}
           startedBy={inProgress.user.name ?? 'Unknown'}
           startedAt={inProgress.createdAt.toISOString()}
+          currency={business.currency}
+          isStale={isStaleInProgressStocktake(inProgress.createdAt, new Date(), (business as { timezone?: string | null }).timezone)}
+          actorRole={user.role}
         />
       ) : (
         <div className="card space-y-4 p-5 text-center sm:p-8">
@@ -144,7 +165,8 @@ export default async function StocktakePage() {
               <div key={st.id} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="font-semibold text-ink">{formatDateTime(st.createdAt)}</div>
+                    <div className="font-semibold text-ink">{displayDocumentNumber('stocktake', st.transactionNumber, st.id)}</div>
+                    <div className="mt-1 text-sm text-black/60">{formatDateTime(st.createdAt)}</div>
                     <div className="mt-1 text-sm text-black/60">By {st.user.name}</div>
                   </div>
                   {st.status === 'COMPLETED' ? (
@@ -170,7 +192,10 @@ export default async function StocktakePage() {
               <tbody>
                 {pastStocktakes.map((st) => (
                   <tr key={st.id}>
-                    <td className="px-3 py-2 text-sm">{formatDateTime(st.createdAt)}</td>
+                    <td className="px-3 py-2 text-sm">
+                      <div>{displayDocumentNumber('stocktake', st.transactionNumber, st.id)}</div>
+                      <div className="text-xs text-black/45">{formatDateTime(st.createdAt)}</div>
+                    </td>
                     <td className="px-3 py-2 text-sm">{st.user.name}</td>
                     <td className="px-3 py-2 text-sm">{st._count.lines}</td>
                     <td className="px-3 py-2 text-sm">

@@ -119,7 +119,9 @@ export default function StockAdjustmentClient({
   const qtyBase = selectedUnit ? qtyNumber * selectedUnit.conversionToBase : 0;
   const avgCost = selectedProduct?.avgCostBasePence ?? 0;
   const valueIncrease = qtyBase > 0 && avgCost > 0 ? qtyBase * avgCost : 0;
-  const resultingQty = (selectedProduct?.onHandBase ?? 0) + qtyBase;
+  const valueDecrease = qtyBase > 0 && avgCost > 0 ? qtyBase * avgCost : 0;
+  const resultingQtyIncrease = (selectedProduct?.onHandBase ?? 0) + qtyBase;
+  const resultingQtyDecrease = Math.max(0, (selectedProduct?.onHandBase ?? 0) - qtyBase);
   const isOwner = actorRole === 'OWNER';
 
   const onHandLabel = useMemo(() => {
@@ -229,7 +231,7 @@ export default function StockAdjustmentClient({
                   <li>Customer return → Return / refund</li>
                   <li>Store movement → Stock transfer</li>
                   <li>Incorrect sale → Void / amend / refund</li>
-                  <li>Incorrect previous adjustment → Owner-only opposite compensating entry</li>
+                  <li>Incorrect previous adjustment → Owner Reverse on the posted row</li>
                 </ul>
               </div>
             ) : null}
@@ -327,7 +329,7 @@ export default function StockAdjustmentClient({
                   <div>
                     <label className="label">Resulting quantity (base)</label>
                     <div className="input bg-emerald-50 tabular-nums text-emerald-900">
-                      {qtyNumber > 0 ? resultingQty : selectedProduct?.onHandBase ?? 0}
+                      {qtyNumber > 0 ? resultingQtyIncrease : selectedProduct?.onHandBase ?? 0}
                     </div>
                   </div>
                   <div>
@@ -401,9 +403,8 @@ export default function StockAdjustmentClient({
                     placeholder="Leave blank for ordinary postings"
                   />
                   <div className="mt-1 text-xs text-black/45">
-                    Interim compensating entries must reverse the opposite direction and link the
-                    original immutable posting. Never correct an increase with an increase, or a
-                    decrease with a decrease.
+                    Prefer Reverse on a posted adjustment. This optional link is only for a rare
+                    Owner correction that is not a formal reversal.
                   </div>
                 </div>
               ) : null}
@@ -412,20 +413,34 @@ export default function StockAdjustmentClient({
 
           {mode === 'INCREASE' ? (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <div className="text-sm font-semibold text-ink">Accounting preview</div>
+              <div className="text-sm font-semibold text-ink">Stock and value effect</div>
               <div className="mt-2 space-y-1 text-sm text-black/70">
                 <div>
-                  Debit <span className="font-semibold">1200 — Inventory</span>
-                  {valueIncrease > 0 ? ` · ${formatPence(valueIncrease, currency)}` : ''}
+                  Quantity: {(selectedProduct?.onHandBase ?? 0)} → {qtyNumber > 0 ? resultingQtyIncrease : selectedProduct?.onHandBase ?? 0} base
                 </div>
                 <div>
-                  Credit <span className="font-semibold">4100 — Inventory Gain &amp; Surplus</span>
-                  {valueIncrease > 0 ? ` · ${formatPence(valueIncrease, currency)}` : ''}
+                  Inventory value added:{' '}
+                  {valueIncrease > 0 ? formatPence(valueIncrease, currency) : '—'}
                 </div>
+                <div>Average cost stays unchanged.</div>
               </div>
-              <div className="mt-3 text-sm text-black/65">
-                Average cost stays unchanged. Quantity is increased at the locked average cost.
+              <div className="mt-3 text-sm text-emerald-950">
+                Confirm this is found stock or a physical-count surplus — not a purchase, return,
+                transfer, or sale correction.
               </div>
+              <details className="mt-3 rounded-xl border border-emerald-200 bg-white/70 px-3 py-2 text-sm text-black/70">
+                <summary className="cursor-pointer font-semibold text-ink">Accounting details</summary>
+                <div className="mt-2 space-y-1">
+                  <div>
+                    Debit <span className="font-semibold">1200 — Inventory</span>
+                    {valueIncrease > 0 ? ` · ${formatPence(valueIncrease, currency)}` : ''}
+                  </div>
+                  <div>
+                    Credit <span className="font-semibold">4100 — Inventory Gain &amp; Surplus</span>
+                    {valueIncrease > 0 ? ` · ${formatPence(valueIncrease, currency)}` : ''}
+                  </div>
+                </div>
+              </details>
               <label className="mt-4 flex items-start gap-2 text-sm text-emerald-950">
                 <input
                   type="checkbox"
@@ -444,10 +459,15 @@ export default function StockAdjustmentClient({
             </div>
           ) : (
             <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-              <div className="text-sm font-semibold text-ink">Decrease summary</div>
-              <div className="mt-1 text-sm text-black/65">
-                Stock will be reduced from the on-hand balance at the locked average cost. The journal
-                debits Inventory Loss &amp; Shrinkage (5100) and credits Inventory (1200).
+              <div className="text-sm font-semibold text-ink">Stock and value effect</div>
+              <div className="mt-2 space-y-1 text-sm text-black/70">
+                <div>
+                  Quantity: {(selectedProduct?.onHandBase ?? 0)} → {qtyNumber > 0 ? resultingQtyDecrease : selectedProduct?.onHandBase ?? 0} base
+                </div>
+                <div>
+                  Inventory value removed:{' '}
+                  {valueDecrease > 0 ? formatPence(valueDecrease, currency) : '—'}
+                </div>
               </div>
               {selectedUnit && qtyNumber > 0 ? (
                 <div className="mt-3 text-sm">
@@ -460,6 +480,19 @@ export default function StockAdjustmentClient({
                   ).
                 </div>
               ) : null}
+              <details className="mt-3 rounded-xl border border-rose-200 bg-white/70 px-3 py-2 text-sm text-black/70">
+                <summary className="cursor-pointer font-semibold text-ink">Accounting details</summary>
+                <div className="mt-2 space-y-1">
+                  <div>
+                    Debit <span className="font-semibold">5100 — Inventory Loss &amp; Shrinkage</span>
+                    {valueDecrease > 0 ? ` · ${formatPence(valueDecrease, currency)}` : ''}
+                  </div>
+                  <div>
+                    Credit <span className="font-semibold">1200 — Inventory</span>
+                    {valueDecrease > 0 ? ` · ${formatPence(valueDecrease, currency)}` : ''}
+                  </div>
+                </div>
+              </details>
             </div>
           )}
 

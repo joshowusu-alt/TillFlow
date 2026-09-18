@@ -168,14 +168,10 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
 }
 
 /**
- * Automated reversal is unavailable (payload-safe compensating entries are
- * Owner-only opposite postings until a dedicated reversal workflow lands).
+ * Legacy export. Controlled Reverse lives in inventory-reversal.
+ * Kept so any leftover form post still hits the owner-only, once-only path.
  */
-export async function reverseStockAdjustmentAction(_formData: FormData): Promise<void> {
-  return formAction(async () => {
-    await withBusinessStoreContext(['OWNER']);
-    throw new UserError(
-      'Automated adjustment reversal is unavailable. Use an Owner-only opposite compensating adjustment with a link to the original record.',
-    );
-  }, '/inventory/adjustments');
+export async function reverseStockAdjustmentAction(formData: FormData): Promise<void> {
+  const { reverseInventoryAdjustmentAction } = await import('@/app/actions/inventory-reversal');
+  return reverseInventoryAdjustmentAction(formData);
 }
