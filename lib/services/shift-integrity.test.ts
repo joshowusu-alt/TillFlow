@@ -298,7 +298,7 @@ describe('shift integrity — shifts page lists every user open shift', () => {
   it('queries findMany rather than findFirst for the current user open shifts', () => {
     const page = readFileSync(join(process.cwd(), 'app/(protected)/shifts/page.tsx'), 'utf8');
     const service = readFileSync(join(process.cwd(), 'lib/services/shifts.ts'), 'utf8');
-    expect(page).toContain('getOpenShiftsForUserInStore(user.id, baseStore.id)');
+    expect(page).toContain('getOpenShiftsForUserInStore(user.id, store.id)');
     expect(page).toMatch(/const \[tills, openShifts, recentShifts/);
     expect(page).not.toMatch(/const \[tills, openShift, recentShifts\]/);
     expect(service).toContain('export async function getOpenShiftsForUserInStore');
@@ -311,7 +311,7 @@ describe('shift integrity — shifts page lists every user open shift', () => {
     const page = readFileSync(join(process.cwd(), 'app/(protected)/shifts/page.tsx'), 'utf8');
     const client = readFileSync(join(process.cwd(), 'app/(protected)/shifts/ShiftClient.tsx'), 'utf8');
     const service = readFileSync(join(process.cwd(), 'lib/services/shifts.ts'), 'utf8');
-    expect(page).toContain('getStoreTillOccupancy(baseStore.id)');
+    expect(page).toContain('getStoreTillOccupancy(store.id)');
     expect(page).toContain('occupiedTills={occupiedTills}');
     expect(client).toContain('Open unavailable');
     expect(client).toContain('Handover / Close');
