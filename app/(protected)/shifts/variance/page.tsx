@@ -2,11 +2,38 @@ import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
-import { requireBusinessStore } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
+import { resolveSoleOrSelectedStoreId, withStoreQuery } from '@/lib/reliability/selected-store';
+import SelectedStorePicker from '@/components/SelectedStorePicker';
 import { prisma } from '@/lib/prisma';
 
-export default async function CashVarianceListPage() {
-  const { business, store } = await requireBusinessStore();
+export default async function CashVarianceListPage({
+  searchParams,
+}: {
+  searchParams?: { storeId?: string };
+}) {
+  const { business } = await requireBusiness();
+  const stores = await prisma.store.findMany({
+    where: { businessId: business.id },
+    select: { id: true, name: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
+  const store = stores.find((row) => row.id === selectedStoreId) ?? null;
+  if (!store) {
+    return (
+      <div className="mx-auto max-w-5xl space-y-5">
+        <PageHeader
+          title="Cash variance investigations"
+          subtitle="Select a store before reviewing variances. TillFlow will not default to the first store."
+          secondaryCta={{ label: 'Back to shifts', href: '/shifts' }}
+        />
+        <div className="card p-5">
+          <SelectedStorePicker stores={stores} selectedStoreId={selectedStoreId} action="/shifts/variance" />
+        </div>
+      </div>
+    );
+  }
 
   const investigations = await prisma.cashVarianceInvestigation.findMany({
     where: {
@@ -40,8 +67,12 @@ export default async function CashVarianceListPage() {
       <PageHeader
         title="Cash variance investigations"
         subtitle="Non-zero close variances stay on the original counted and expected cash. This workflow only records review."
-        secondaryCta={{ label: 'Back to shifts', href: '/shifts' }}
+        secondaryCta={{ label: 'Back to shifts', href: withStoreQuery('/shifts', store.id) }}
       />
+
+      <div className="card p-4">
+        <SelectedStorePicker stores={stores} selectedStoreId={store.id} action="/shifts/variance" />
+      </div>
 
       <div className="card overflow-hidden p-4">
         {investigations.length === 0 ? (
@@ -66,7 +97,7 @@ export default async function CashVarianceListPage() {
                 {investigations.map((row) => (
                   <tr key={row.id}>
                     <td className="px-3 py-2">
-                      <Link href={`/shifts/variance/${row.id}`} className="font-semibold text-accent underline">
+                      <Link href={withStoreQuery(`/shifts/variance/${row.id}`, store.id)} className="font-semibold text-accent underline">
                         {displayDocumentNumber('cash_variance', row.transactionNumber, row.id)}
                       </Link>
                       {row.shift.closureNumber ? (

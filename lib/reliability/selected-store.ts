@@ -25,6 +25,17 @@ export function resolveSoleOrSelectedStoreId(
   return stores.length === 1 ? stores[0].id : null;
 }
 
+/** Keep an explicit/sole store on shift navigation and refresh. */
+export function withStoreQuery(path: string, storeId: string | null | undefined): string {
+  const trimmed = storeId?.trim() ?? '';
+  if (!trimmed) return path;
+  const [pathname, query = ''] = path.split('?');
+  const params = new URLSearchParams(query);
+  params.set('storeId', trimmed);
+  const qs = params.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
+}
+
 export function requireExplicitStoreId(storeId: string | null | undefined): string {
   const trimmed = storeId?.trim() ?? '';
   if (!trimmed) {

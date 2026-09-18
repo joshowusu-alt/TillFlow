@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import { formatDateTime, formatMoney } from '@/lib/format';
-import { requireBusinessStore } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
+import { resolveSoleOrSelectedStoreId, withStoreQuery } from '@/lib/reliability/selected-store';
+import SelectedStorePicker from '@/components/SelectedStorePicker';
 import {
   CASH_DRAWER_DRILLDOWN_ORDER,
   CASH_DRAWER_ENTRY_LABELS,
@@ -41,9 +43,31 @@ export default async function CashDrawerDrilldownPage({
     to?: string;
     tillId?: string;
     shiftId?: string;
+    storeId?: string;
   };
 }) {
-  const { business, store } = await requireBusinessStore();
+  const { business } = await requireBusiness();
+  const stores = await prisma.store.findMany({
+    where: { businessId: business.id },
+    select: { id: true, name: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
+  const store = stores.find((row) => row.id === selectedStoreId) ?? null;
+  if (!store) {
+    return (
+      <div className="mx-auto max-w-5xl space-y-5">
+        <PageHeader
+          title="Cash drawer supporting rows"
+          subtitle="Select a store before reviewing drawer rows. TillFlow will not default to the first store."
+          secondaryCta={{ label: 'Back to shifts', href: '/shifts' }}
+        />
+        <div className="card p-5">
+          <SelectedStorePicker stores={stores} selectedStoreId={selectedStoreId} action="/shifts/drawer" />
+        </div>
+      </div>
+    );
+  }
   const requestedType = searchParams?.type;
   const entryType: CashDrawerEntryType = isCashDrawerDrilldownType(requestedType)
     ? requestedType
@@ -71,17 +95,28 @@ export default async function CashDrawerDrilldownPage({
 
   const fromValue = searchParams?.from ?? '';
   const toValue = searchParams?.to ?? '';
-  const scope = { from: fromValue, to: toValue, tillId: tillId ?? undefined, shiftId: shiftId ?? undefined };
+  const scope = {
+    from: fromValue,
+    to: toValue,
+    tillId: tillId ?? undefined,
+    shiftId: shiftId ?? undefined,
+    storeId: store.id,
+  };
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <PageHeader
         title="Cash drawer supporting rows"
         subtitle="Each cash event writes one drawer row. Totals stay scoped by date, till, and shift."
-        secondaryCta={{ label: 'Back to shifts', href: '/shifts' }}
+        secondaryCta={{ label: 'Back to shifts', href: withStoreQuery('/shifts', store.id) }}
       />
 
+      <div className="card p-4">
+        <SelectedStorePicker stores={stores} selectedStoreId={store.id} action="/shifts/drawer" />
+      </div>
+
       <form className="card grid gap-3 p-4 sm:grid-cols-5" method="GET">
+        <input type="hidden" name="storeId" value={store.id} />
         <div>
           <label className="label">Type</label>
           <select className="input" name="type" defaultValue={entryType}>

@@ -385,4 +385,47 @@ describe('ShiftClient', () => {
     });
     expect(pushMock).toHaveBeenCalledWith('/pos?till=till-3');
   });
+
+  it('sends the explicit store with open, close and add-cash writes', async () => {
+    openShiftActionMock.mockResolvedValue({ success: true, data: { id: 'shift-b', tillId: 'till-b' } });
+    addCashToTillActionMock.mockResolvedValue({ success: true, data: { id: 'cash-1' } });
+    closeShiftActionMock.mockResolvedValue({ success: true, data: { id: 'shift-1', investigationId: null } });
+
+    const { rerender } = render(
+      <ShiftClient
+        storeId="store-b"
+        tills={[{ id: 'till-b', name: 'Till B1' }]}
+        openShifts={[]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="OWNER"
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/Opening Cash/i), { target: { value: '40' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Open Shift' }));
+    await waitFor(() => expect(openShiftActionMock).toHaveBeenCalledTimes(1));
+    const openData = openShiftActionMock.mock.calls[0][0] as FormData;
+    expect(openData.get('storeId')).toBe('store-b');
+    expect(openData.get('tillId')).toBe('till-b');
+
+    rerender(
+      <ShiftClient
+        storeId="store-b"
+        tills={[{ id: 'till-b', name: 'Till B1' }]}
+        openShifts={[{ ...baseOpenShift, tillId: 'till-b', till: { name: 'Till B1' } }]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="OWNER"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '+ Add cash to till' }));
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '5' } });
+    fireEvent.change(screen.getByDisplayValue('Select reason'), { target: { value: 'SAFE' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add cash' }));
+    await waitFor(() => expect(addCashToTillActionMock).toHaveBeenCalledTimes(1));
+    expect((addCashToTillActionMock.mock.calls[0][0] as FormData).get('storeId')).toBe('store-b');
+  });
 });

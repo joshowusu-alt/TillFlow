@@ -2,17 +2,42 @@ import { notFound } from 'next/navigation';
 import PageHeader from '@/components/PageHeader';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
-import { requireBusinessStore } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
+import { resolveSoleOrSelectedStoreId, withStoreQuery } from '@/lib/reliability/selected-store';
+import SelectedStorePicker from '@/components/SelectedStorePicker';
 import { prisma } from '@/lib/prisma';
 import { VARIANCE_REVIEWER_ROLES } from '@/lib/services/cash-variance';
 import VarianceWorkflowClient from '../VarianceWorkflowClient';
 
 export default async function CashVarianceDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { storeId?: string };
 }) {
-  const { user, business, store } = await requireBusinessStore();
+  const { user, business } = await requireBusiness();
+  const stores = await prisma.store.findMany({
+    where: { businessId: business.id },
+    select: { id: true, name: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
+  const store = stores.find((row) => row.id === selectedStoreId) ?? null;
+  if (!store) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-5">
+        <PageHeader
+          title="Cash variance investigation"
+          subtitle="Select a store before opening this variance. TillFlow will not default to the first store."
+          secondaryCta={{ label: 'All investigations', href: '/shifts/variance' }}
+        />
+        <div className="card p-5">
+          <SelectedStorePicker stores={stores} selectedStoreId={selectedStoreId} action={`/shifts/variance/${params.id}`} />
+        </div>
+      </div>
+    );
+  }
 
   const investigation = await prisma.cashVarianceInvestigation.findFirst({
     where: {
@@ -56,7 +81,7 @@ export default async function CashVarianceDetailPage({
       <PageHeader
         title={displayDocumentNumber('cash_variance', investigation.transactionNumber, investigation.id)}
         subtitle="Review the variance. Counted and expected cash on the shift are not rewritten."
-        secondaryCta={{ label: 'All investigations', href: '/shifts/variance' }}
+        secondaryCta={{ label: 'All investigations', href: withStoreQuery('/shifts/variance', store.id) }}
       />
 
       <div className="card space-y-3 p-5">

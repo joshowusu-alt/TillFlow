@@ -8,6 +8,7 @@ import {
   requireExplicitStoreId,
   resolveSoleOrSelectedStoreId,
   resolveStoreFromTill,
+  withStoreQuery,
 } from './selected-store';
 
 describe('selected store enforcement', () => {
@@ -60,6 +61,15 @@ describe('selected store enforcement', () => {
     expect(() => assertRequestedStoreMatchesSource('store-a', 'store-b')).toThrow(STORE_MISMATCH_MSG);
     expect(assertRequestedStoreMatchesSource(undefined, 'store-b')).toBe('store-b');
     expect(assertRequestedStoreMatchesSource('store-b', 'store-b')).toBe('store-b');
+  });
+
+  it('preserves storeId on shift navigation and refresh paths', () => {
+    expect(withStoreQuery('/shifts', 'store-b')).toBe('/shifts?storeId=store-b');
+    expect(withStoreQuery('/shifts/drawer?type=CASH_SALE', 'store-b')).toBe(
+      '/shifts/drawer?type=CASH_SALE&storeId=store-b',
+    );
+    expect(withStoreQuery('/shifts', null)).toBe('/shifts');
+    expect(withStoreQuery('/shifts', '   ')).toBe('/shifts');
   });
 
   it('derives store from an explicit till and rejects a mismatched selected store', async () => {

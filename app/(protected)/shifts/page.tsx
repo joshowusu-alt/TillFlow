@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import { requireBusinessStore } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
+import { resolveSoleOrSelectedStoreId, withStoreQuery } from '@/lib/reliability/selected-store';
+import SelectedStorePicker from '@/components/SelectedStorePicker';
 import { getOpenShiftsForUserInStore, getStoreTillOccupancy } from '@/lib/services/shifts';
 import ShiftClient from './ShiftClient';
 
@@ -50,20 +52,49 @@ function summarizeOpenShift(openShift: {
   };
 }
 
-export default async function ShiftsPage() {
-  const { user, business, store: baseStore } = await requireBusinessStore();
+export default async function ShiftsPage({
+  searchParams,
+}: {
+  searchParams?: { storeId?: string };
+}) {
+  const { user, business } = await requireBusiness();
+  const storesInCreatedOrder = await prisma.store.findMany({
+    where: { businessId: business.id },
+    select: { id: true, name: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const selectedStoreId = resolveSoleOrSelectedStoreId(storesInCreatedOrder, searchParams?.storeId);
+  const store = storesInCreatedOrder.find((row) => row.id === selectedStoreId) ?? null;
+  const pickerStores = storesInCreatedOrder;
+
+  if (!store) {
+    return (
+      <div className="mx-auto max-w-4xl space-y-4 sm:space-y-5">
+        <div className="flex flex-col gap-1 rounded-[1.5rem] border border-slate-200/80 bg-white/80 px-4 py-4 shadow-card">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-black/35">Cash Management</p>
+          <h1 className="text-[1.6rem] font-display font-bold leading-tight text-ink">Shift Reconciliation</h1>
+          <p className="text-sm font-medium text-slate-500">
+            Select a store before opening or reviewing till shifts. TillFlow will not default to the first store.
+          </p>
+        </div>
+        <div className="card p-5">
+          <SelectedStorePicker stores={pickerStores} selectedStoreId={selectedStoreId} action="/shifts" />
+        </div>
+      </div>
+    );
+  }
 
   const isManagerOrOwner = user.role === 'OWNER' || user.role === 'MANAGER';
 
   // Run all queries in parallel — tills, every current-user open shift, and recent shifts.
   const [tills, openShifts, recentShifts, storeOccupancy] = await Promise.all([
     prisma.till.findMany({
-      where: { storeId: baseStore.id },
+      where: { storeId: store.id },
       select: { id: true, name: true, active: true }
     }),
-    getOpenShiftsForUserInStore(user.id, baseStore.id),
+    getOpenShiftsForUserInStore(user.id, store.id),
     prisma.shift.findMany({
-      where: { till: { storeId: baseStore.id } },
+      where: { till: { storeId: store.id } },
       orderBy: { openedAt: 'desc' },
       take: 10,
       select: {
@@ -87,7 +118,7 @@ export default async function ShiftsPage() {
         _count: { select: { salesInvoices: { where: { paymentStatus: { notIn: ['VOID', 'RETURNED'] } } } } }
       }
     }),
-    getStoreTillOccupancy(baseStore.id),
+    getStoreTillOccupancy(store.id),
   ]);
 
   const openShiftSummaries = openShifts.map(summarizeOpenShift);
@@ -138,16 +169,20 @@ export default async function ShiftsPage() {
         <h1 className="text-[1.6rem] font-display font-bold leading-tight text-ink sm:text-2xl md:text-[1.85rem]">Shift Reconciliation</h1>
         <p className="text-sm font-medium text-slate-500">Open, monitor, and close till shifts. All cash counts are audited. One open shift per till.</p>
         <div className="mt-2 flex flex-wrap gap-3 text-sm font-medium">
-          <Link href="/shifts/drawer" className="text-accent underline underline-offset-2">
+          <Link href={withStoreQuery('/shifts/drawer', store.id)} className="text-accent underline underline-offset-2">
             Cash drawer drill-down
           </Link>
-          <Link href="/shifts/variance" className="text-accent underline underline-offset-2">
+          <Link href={withStoreQuery('/shifts/variance', store.id)} className="text-accent underline underline-offset-2">
             Cash variance investigations
           </Link>
+        </div>
+        <div className="mt-3">
+          <SelectedStorePicker stores={pickerStores} selectedStoreId={store.id} action="/shifts" />
         </div>
       </div>
 
       <ShiftClient
+        storeId={store.id}
         tills={tills}
         openShifts={openShiftSummaries}
         occupiedTills={occupiedTills}

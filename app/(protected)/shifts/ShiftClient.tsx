@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
 import { openShiftAction, closeShiftAction, closeShiftOwnerOverrideAction, addCashToTillAction } from '@/app/actions/shifts';
+import { withStoreQuery } from '@/lib/reliability/selected-store';
 
 type Till = { id: string; name: string; active?: boolean };
 
@@ -89,6 +90,7 @@ type OtherOpenShift = {
 };
 
 type Props = {
+  storeId?: string | null;
   tills: Till[];
   openShifts?: OpenShift[];
   /** @deprecated compatibility for older callers; server page supplies openShifts. */
@@ -105,15 +107,17 @@ function resolveTillId(shift: { tillId?: string; till: { name: string } }, tills
   return shift.tillId ?? tills.find((till) => till.name === shift.till.name)?.id ?? '';
 }
 
-function drawerHref(params: { type: string; shiftId?: string; tillId?: string }) {
+function drawerHref(params: { type: string; shiftId?: string; tillId?: string; storeId?: string | null }) {
   const search = new URLSearchParams();
   search.set('type', params.type);
   if (params.shiftId) search.set('shiftId', params.shiftId);
   if (params.tillId) search.set('tillId', params.tillId);
+  if (params.storeId) search.set('storeId', params.storeId);
   return `/shifts/drawer?${search.toString()}`;
 }
 
 export default function ShiftClient({
+  storeId,
   tills,
   openShifts: openShiftList,
   openShift: legacyOpenShift,
@@ -247,6 +251,7 @@ export default function ShiftClient({
     formData.set('reasonCode', addCashReasonCode);
     formData.set('note', addCashNote);
     if (openShift) formData.set('shiftId', openShift.id);
+    if (storeId) formData.set('storeId', storeId);
     startTransition(async () => {
       try {
         const result = await addCashToTillAction(formData);
@@ -272,6 +277,7 @@ export default function ShiftClient({
     const formData = new FormData();
     formData.set('tillId', selectedTill);
     formData.set('openingCash', openingCash);
+    if (storeId) formData.set('storeId', storeId);
 
     startTransition(async () => {
       try {
@@ -297,6 +303,7 @@ export default function ShiftClient({
     formData.set('notes', closeNotes);
     formData.set('varianceReasonCode', varianceReasonCode);
     formData.set('varianceReason', varianceReason);
+    if (storeId) formData.set('storeId', storeId);
 
     // Capture summary before data disappears on refresh
     const openedAtMs = new Date(shiftToClose.openedAt).getTime();
@@ -545,6 +552,7 @@ export default function ShiftClient({
                         type,
                         shiftId: openShift.id,
                         tillId: resolveTillId(openShift, tills),
+                        storeId,
                       })}
                       className="flex justify-between text-xs text-accent underline-offset-2 hover:underline"
                     >
@@ -841,7 +849,7 @@ export default function ShiftClient({
                         </div>
                         {shift.status === 'CLOSED' && shift.variance !== null && shift.variance !== 0 && (
                           <Link
-                            href={shift.investigationId ? `/shifts/variance/${shift.investigationId}` : '/shifts/variance'}
+                            href={withStoreQuery(shift.investigationId ? `/shifts/variance/${shift.investigationId}` : '/shifts/variance', storeId)}
                             className="ml-auto text-xs font-medium text-rose-600 underline"
                           >
                             Investigate →
@@ -898,7 +906,7 @@ export default function ShiftClient({
                         ) : null}
                         {shift.status === 'CLOSED' && shift.variance !== null && shift.variance !== 0 ? (
                           <Link
-                            href={shift.investigationId ? `/shifts/variance/${shift.investigationId}` : '/shifts/variance'}
+                            href={withStoreQuery(shift.investigationId ? `/shifts/variance/${shift.investigationId}` : '/shifts/variance', storeId)}
                             className="mt-1 block text-xs font-medium text-rose-600 underline"
                           >
                             Investigate
