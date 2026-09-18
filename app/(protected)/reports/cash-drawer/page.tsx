@@ -154,6 +154,10 @@ export default async function CashDrawerReportPage({
       <PageHeader
         title="Cash Drawer Report"
         subtitle="Track cash expected and cash counted across all tills and shifts."
+        secondaryCta={{
+          label: 'Supporting cash rows',
+          href: `/shifts/drawer?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`,
+        }}
       />
 
       <section className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-relaxed text-blue-900 shadow-sm">
