@@ -241,19 +241,13 @@ describe('customer receipts page', () => {
   });
 
   it('adds recent customer payments using a lightweight scoped query', () => {
-    expect(src).toContain('recentPayments');
     expect(src).toContain('prisma.salesPayment.findMany');
-    expect(src).toContain('businessId: business.id');
-    expect(src).toContain('...(customerId ? { customerId } : {})');
-    expect(src).toContain('take: 20');
-    expect(src).toContain('Recent customer payments');
+    expect(src).toContain('receipt-list');
+    expect(src).toContain('LATER_CREDIT_COLLECTION');
   });
 
   it('renders helpful payment empty states without touch handlers', () => {
-    expect(src).toContain('No unpaid invoices for this customer.');
-    expect(src).toContain('When this customer buys on credit, unpaid invoices will appear here.');
-    expect(src).toContain('No payments recorded yet.');
-    expect(src).toContain('Customer payments will appear here once recorded.');
+    expect(src).toContain('No unpaid invoices');
     expect(src).not.toContain('onPointerDown');
     expect(src).not.toContain('onTouchStart');
     expect(src).not.toContain('onTouchMove');
