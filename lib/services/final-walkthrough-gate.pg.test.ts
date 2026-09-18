@@ -109,9 +109,11 @@ describeIsolated('final walkthrough isolated Postgres gate', () => {
       openingCashPence: 1000,
     });
     shiftId = opened.id;
-    expect(opened.shiftNumber ?? (await prisma.shift.findUnique({ where: { id: opened.id } }))?.shiftNumber).toMatch(
-      /^SHF-\d{6}$/,
-    );
+    const numbered = await prisma.shift.findUnique({
+      where: { id: opened.id },
+      select: { shiftNumber: true },
+    });
+    expect(numbered?.shiftNumber).toMatch(/^SHF-\d{6}$/);
 
     const before = await prisma.shift.findUnique({
       where: { id: opened.id },
