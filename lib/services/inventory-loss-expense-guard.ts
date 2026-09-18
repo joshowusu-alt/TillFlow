@@ -10,6 +10,27 @@ export const INVENTORY_LOSS_DUPLICATE_ADJUSTMENT_MSG =
 export const INVENTORY_LOSS_ADJUSTMENT_NOT_FOUND_MSG =
   'Stock adjustment not found for your business.';
 
+export const INVENTORY_LOSS_OWNER_ONLY_MSG =
+  'Only the owner can record an inventory-loss override expense.';
+
+export const INVENTORY_LOSS_SOURCE_REQUIRED_MSG =
+  'Link this override to the exact stock adjustment it relates to.';
+
+export function assertInventoryLossOverrideAuthority(input: {
+  accountCode: string;
+  override?: boolean;
+  role?: string | null;
+  sourceAdjustmentId?: string | null;
+}): void {
+  if (!isInventoryLossAccount(input.accountCode) || !input.override) return;
+  if (input.role !== 'OWNER') {
+    throw new Error(INVENTORY_LOSS_OWNER_ONLY_MSG);
+  }
+  if (!input.sourceAdjustmentId?.trim()) {
+    throw new Error(INVENTORY_LOSS_SOURCE_REQUIRED_MSG);
+  }
+}
+
 export function isInventoryLossAccount(accountCode: string | null | undefined): boolean {
   return accountCode === INVENTORY_LOSS_ACCOUNT_CODE;
 }

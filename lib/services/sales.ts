@@ -30,6 +30,7 @@ import { resolveBranchIdForStore } from './branches';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS, appLog } from '@/lib/observability';
 import { isSqliteDatabaseUrl } from '@/lib/database-runtime';
 import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
+import { reserveNextDocumentNumber } from './document-numbers';
 import { unstable_cache } from 'next/cache';
 import { checkoutContextTag } from '@/lib/cache/pos-tags';
 
@@ -1048,6 +1049,10 @@ async function createSaleImpl(input: CreateSaleInput) {
           CHECKOUT_STAGE_THRESHOLDS_MS.sequence,
         );
         const transactionNumber = `INV-${String(sequenceValue).padStart(6, '0')}`;
+        const receiptNumbers = [];
+        for (let i = 0; i < payments.length; i += 1) {
+          receiptNumbers.push(await reserveNextDocumentNumber(tx, input.businessId, 'customer_receipt'));
+        }
 
         try {
           return await measureCheckoutStage(
@@ -1057,6 +1062,22 @@ async function createSaleImpl(input: CreateSaleInput) {
               data: {
                 ...invoiceCreateData,
                 transactionNumber,
+                payments: {
+                  create: payments.map((payment, index) => ({
+                    method: payment.method,
+                    amountPence: payment.amountPence,
+                    branchId,
+                    reference: payment.reference ?? null,
+                    network: payment.network ?? null,
+                    payerMsisdn: payment.payerMsisdn ?? null,
+                    provider: payment.provider ?? null,
+                    status: payment.status ?? 'CONFIRMED',
+                    collectionId: payment.collectionId ?? null,
+                    receiptOrigin: RECEIPT_ORIGIN.RECEIVED_AT_SALE,
+                    businessId: input.businessId,
+                    transactionNumber: receiptNumbers[index],
+                  })),
+                },
               }
             }),
             { stage: 'invoice-create', rowCount: lineDetails.length },
@@ -1733,6 +1754,8 @@ export async function amendSale(input: AmendSaleInput) {
             // Amendment refund: direction is amount sign. Origin is UNCLASSIFIED —
             // the amend workflow does not establish sale-time vs later-collection.
             receiptOrigin: RECEIPT_ORIGIN.UNCLASSIFIED,
+            businessId: invoice.businessId,
+            transactionNumber: await reserveNextDocumentNumber(tx, invoice.businessId, 'customer_receipt'),
           },
         })
       );
@@ -1769,6 +1792,8 @@ export async function amendSale(input: AmendSaleInput) {
             // Amendment add: sale already existed; action is amend, not checkout or
             // debtor collection — persist UNCLASSIFIED rather than inventing meaning.
             receiptOrigin: RECEIPT_ORIGIN.UNCLASSIFIED,
+            businessId: invoice.businessId,
+            transactionNumber: await reserveNextDocumentNumber(tx, invoice.businessId, 'customer_receipt'),
           },
         })
       );

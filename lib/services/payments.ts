@@ -18,6 +18,7 @@ import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observa
 import { UserError } from '@/lib/action-utils';
 import type { Role } from '@/lib/auth';
 import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
+import { reserveNextDocumentNumber } from './document-numbers';
 import {
   assertMoneyMovementTenantChain,
   buildCustomerPaymentPayloadHash,
@@ -295,15 +296,20 @@ async function recordCustomerPaymentImpl(
         shiftId: openShift?.id,
       });
 
-      await tx.salesPayment.createMany({
-        data: newPayments.map((p) => ({
-          salesInvoiceId: invoice.id,
-          method: p.method,
-          amountPence: p.amountPence,
-          reference: p.reference ?? null,
-          receiptOrigin: RECEIPT_ORIGIN.LATER_CREDIT_COLLECTION,
-        })),
-      });
+      for (const payment of newPayments) {
+        const transactionNumber = await reserveNextDocumentNumber(tx, businessId, 'customer_receipt');
+        await tx.salesPayment.create({
+          data: {
+            salesInvoiceId: invoice.id,
+            businessId,
+            method: payment.method,
+            amountPence: payment.amountPence,
+            reference: payment.reference ?? null,
+            receiptOrigin: RECEIPT_ORIGIN.LATER_CREDIT_COLLECTION,
+            transactionNumber,
+          },
+        });
+      }
 
       if (openShift && actorUserId) {
         await recordCashDrawerEntryTx(tx, {
@@ -534,6 +540,7 @@ async function recordSupplierPaymentImpl(
       const createdPayments = [];
       for (let i = 0; i < newPayments.length; i++) {
         const p = newPayments[i]!;
+        const transactionNumber = await reserveNextDocumentNumber(tx, businessId, 'supplier_payment');
         const createdPayment = await tx.purchasePayment.create({
           data: {
             businessId,
@@ -541,6 +548,7 @@ async function recordSupplierPaymentImpl(
             method: p.method,
             amountPence: p.amountPence,
             reference: p.reference ?? null,
+            transactionNumber,
             ...(paidAt ? { paidAt } : {}),
             recordedByUserId,
             ...(notes ? { notes } : {}),

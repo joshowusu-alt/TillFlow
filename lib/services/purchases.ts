@@ -267,6 +267,7 @@ async function createPurchaseInvoicePayments(
   });
 
   for (const payment of input.payments) {
+    const transactionNumber = await reserveNextDocumentNumber(client, input.businessId, 'supplier_payment');
     const createdPayment = await client.purchasePayment.create({
       data: {
         businessId: input.businessId,
@@ -274,6 +275,7 @@ async function createPurchaseInvoicePayments(
         method: payment.method,
         amountPence: payment.amountPence,
         reference: payment.reference ?? null,
+        transactionNumber,
         ...(input.recordedByUserId ? { recordedByUserId: input.recordedByUserId } : {}),
       },
     });

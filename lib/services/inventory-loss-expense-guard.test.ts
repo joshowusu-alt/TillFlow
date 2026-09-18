@@ -7,6 +7,9 @@ import {
   INVENTORY_LOSS_DUPLICATE_ADJUSTMENT_MSG,
   INVENTORY_LOSS_OVERRIDE_REQUIRED_MSG,
   isInventoryLossAccount,
+  assertInventoryLossOverrideAuthority,
+  INVENTORY_LOSS_OWNER_ONLY_MSG,
+  INVENTORY_LOSS_SOURCE_REQUIRED_MSG,
   isSourceAdjustmentUniqueConflict,
 } from './inventory-loss-expense-guard';
 
@@ -73,6 +76,33 @@ describe('inventory-loss expense guard', () => {
       },
     };
     await expect(assertSourceAdjustmentAvailable(tx, 'adj-1')).resolves.toBeUndefined();
+  });
+
+  it('allows only the owner to post a 5100 override linked to one adjustment', () => {
+    expect(() =>
+      assertInventoryLossOverrideAuthority({
+        accountCode: INVENTORY_LOSS_ACCOUNT_CODE,
+        override: true,
+        role: 'MANAGER',
+        sourceAdjustmentId: 'adj-1',
+      }),
+    ).toThrow(INVENTORY_LOSS_OWNER_ONLY_MSG);
+    expect(() =>
+      assertInventoryLossOverrideAuthority({
+        accountCode: INVENTORY_LOSS_ACCOUNT_CODE,
+        override: true,
+        role: 'OWNER',
+        sourceAdjustmentId: '',
+      }),
+    ).toThrow(INVENTORY_LOSS_SOURCE_REQUIRED_MSG);
+    expect(() =>
+      assertInventoryLossOverrideAuthority({
+        accountCode: INVENTORY_LOSS_ACCOUNT_CODE,
+        override: true,
+        role: 'OWNER',
+        sourceAdjustmentId: 'adj-1',
+      }),
+    ).not.toThrow();
   });
 
   it('recognises the unique constraint on sourceAdjustmentId', () => {

@@ -8,6 +8,10 @@ const migration = readFileSync(
   join(process.cwd(), 'prisma/migrations/20260917180000_owner_walkthrough_integrity/migration.sql'),
   'utf8',
 );
+const numbersMigration = readFileSync(
+  join(process.cwd(), 'prisma/migrations/20260918140000_walkthrough_store_numbers/migration.sql'),
+  'utf8',
+);
 
 describe('owner walkthrough additive schema', () => {
   it('keeps the migration additive (no DROP / destructive rewrite)', () => {
@@ -17,6 +21,11 @@ describe('owner walkthrough additive schema', () => {
     expect(migration).toContain('CREATE TABLE "CashVarianceInvestigation"');
     expect(migration).toContain('ADD COLUMN "countState"');
     expect(migration).toContain('ADD COLUMN "reversalOfId"');
+    expect(numbersMigration).not.toMatch(/DROP TABLE/i);
+    expect(numbersMigration).toContain('SalesPayment');
+    expect(numbersMigration).toContain('StockAdjustment_storeId_transactionNumber_key');
+    expect(numbersMigration).toContain('Stocktake_storeId_transactionNumber_key');
+    expect(numbersMigration).toContain('Shift_tillId_closureNumber_key');
   });
 
   it('mirrors presentation numbers, count state, and variance investigation on both schemas', () => {
