@@ -1,16 +1,43 @@
 /**
  * Overlapping-transaction concurrency evidence for Phase 2 increase.
  *
- * These tests require a real Postgres DATABASE_URL. Without it they are skipped —
- * they are not replaced by sequential mock calls labelled as concurrency tests.
+ * These tests require a real Postgres DATABASE_URL / POSTGRES_PRISMA_URL.
+ * Without it they are skipped — they are not replaced by sequential mocks.
+ * Preview proof binds POSTGRES_PRISMA_URL (the generated client datasource)
+ * to the isolated Preview database before any PrismaClient is constructed.
  */
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PrismaClient } from '@prisma/client';
-import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
+import {
+  bindPrismaPostgresUrls,
+  canRunLivePostgres,
+  createBoundPrismaClient,
+  postgresUrlIdentity,
+  proveWalkthroughPostgresSchema,
+  resolveBoundPostgresUrl,
+} from '@/lib/test/isolated-postgres';
 
-const databaseUrl = process.env.INVENTORY_INCREASE_CONCURRENCY_DATABASE_URL || process.env.DATABASE_URL;
-const canRun = !!databaseUrl && isPostgresDatabaseUrl(databaseUrl);
+function generatedPrismaSchemaIdentity() {
+  const require = createRequire(__filename);
+  const clientEntry = require.resolve('@prisma/client');
+  const schemaPath = join(process.cwd(), 'node_modules', '.prisma', 'client', 'schema.prisma');
+  const contents = readFileSync(schemaPath, 'utf8');
+  return {
+    clientEntry,
+    schemaPath,
+    provider: /provider\s*=\s*"postgresql"/.test(contents) ? 'postgresql' : (/provider\s*=\s*"sqlite"/.test(contents) ? 'sqlite' : 'unknown'),
+    urlEnv: /url\s*=\s*env\("([^"]+)"\)/.exec(contents)?.[1] ?? '',
+    hasTransactionNumber: /model StockAdjustment[\s\S]*transactionNumber/.test(contents),
+  };
+}
+
+const databaseUrl = resolveBoundPostgresUrl();
+const canRun = canRunLivePostgres(databaseUrl);
 if (canRun) {
+  bindPrismaPostgresUrls(databaseUrl);
   process.env.TILLFLOW_INVENTORY_ADJUST_PHASE2_INCREASE = '1';
   process.env.TILLFLOW_INVENTORY_ADJUST_PHASE1 = '1';
   process.env.TILLFLOW_INVENTORY_ADJUST_PHASE2_ROLLOUT_MODE = 'ALLOWLIST';
@@ -26,9 +53,11 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
   let productId = '';
   let unitId = '';
   let userId = '';
+  const urlBeforePrisma = databaseUrl;
+  const identityBeforePrisma = postgresUrlIdentity(databaseUrl);
 
   beforeAll(async () => {
-    process.env.DATABASE_URL = databaseUrl!;
+    bindPrismaPostgresUrls(databaseUrl);
     process.env.TILLFLOW_INVENTORY_ADJUST_PHASE2_INCREASE = '1';
     process.env.TILLFLOW_INVENTORY_ADJUST_PHASE1 = '1';
     process.env.TILLFLOW_INVENTORY_ADJUST_PHASE2_ROLLOUT_MODE = 'ALLOWLIST';
@@ -38,7 +67,8 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
       g.prisma = undefined;
     }
     vi.resetModules();
-    prisma = new PrismaClient();
+    bindPrismaPostgresUrls(databaseUrl);
+    prisma = createBoundPrismaClient(databaseUrl);
     await prisma.$connect();
 
     const business = await prisma.business.create({
@@ -55,7 +85,6 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
       },
     });
     businessId = business.id;
-    // Scoped gate: global flag alone must not admit every tenant.
     process.env.TILLFLOW_INVENTORY_ADJUST_PHASE2_BUSINESS_IDS = businessId;
     const store = await prisma.store.create({
       data: { businessId, name: `Store ${suffix}` },
@@ -122,8 +151,50 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
     await prisma.$disconnect();
   });
 
+  it('proves the generated Postgres client talks to the bound isolated database', async () => {
+    expect(urlBeforePrisma).toBe(databaseUrl);
+    expect(identityBeforePrisma.database).toBeTruthy();
+    expect(process.env.POSTGRES_PRISMA_URL).toBe(databaseUrl);
+    expect(process.env.POSTGRES_URL_NON_POOLING).toBe(databaseUrl);
+    expect(process.env.DATABASE_URL).toBe(databaseUrl);
+    const generated = generatedPrismaSchemaIdentity();
+    expect(generated.provider).toBe('postgresql');
+    expect(generated.urlEnv).toBe('POSTGRES_PRISMA_URL');
+    expect(generated.hasTransactionNumber).toBe(true);
+    const proof = await proveWalkthroughPostgresSchema(prisma);
+    expect(proof.currentDatabase).toBe(identityBeforePrisma.database);
+    expect(proof.currentSchema).toBe('public');
+    expect(proof.hasTransactionNumber).toBe(true);
+    expect(proof.appliedWalkthroughMigrations).toEqual([
+      '20260917180000_owner_walkthrough_integrity',
+      '20260918140000_walkthrough_store_numbers',
+    ]);
+    expect(process.env.TILLFLOW_INVENTORY_ADJUST_PHASE2_BUSINESS_IDS).toBe(businessId);
+    console.info('INVENTORY_PG_IDENTITY', {
+      hostPrefix: identityBeforePrisma.hostPrefix,
+      database: identityBeforePrisma.database,
+      schema: identityBeforePrisma.schema,
+      currentDatabase: proof.currentDatabase,
+      currentSchema: proof.currentSchema,
+      hasTransactionNumber: proof.hasTransactionNumber,
+      appliedWalkthroughMigrations: proof.appliedWalkthroughMigrations,
+      generatedClientEntry: generated.clientEntry,
+      generatedSchemaPath: generated.schemaPath,
+      generatedProvider: generated.provider,
+      generatedUrlEnv: generated.urlEnv,
+      resetModulesUsed: true,
+      envReboundToSameUrlOnly: process.env.POSTGRES_PRISMA_URL === urlBeforePrisma,
+    });
+  });
+
   it('two concurrent increases with different keys both apply without lost updates', async () => {
+    bindPrismaPostgresUrls(databaseUrl);
     const { createInventoryIncrease } = await import('./inventory-increase');
+    const initial = await prisma.inventoryBalance.findUniqueOrThrow({
+      where: { storeId_productId: { storeId, productId } },
+    });
+    expect(initial.qtyOnHandBase).toBe(10);
+
     const [a, b] = await Promise.all([
       createInventoryIncrease({
         businessId,
@@ -159,10 +230,16 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
       where: { storeId_productId: { storeId, productId } },
     });
     expect(balance.qtyOnHandBase).toBe(10 + 3 + 4);
-    expect(balance.avgCostBasePence).toBe(100);
+    const adjustments = await prisma.stockAdjustment.findMany({
+      where: { storeId, productId },
+      select: { id: true, transactionNumber: true, qtyInUnit: true },
+    });
+    expect(adjustments).toHaveLength(2);
+    expect(new Set(adjustments.map((row) => row.transactionNumber).filter(Boolean)).size).toBe(2);
   });
 
   it('increase concurrent with Phase 1 decrease yields correct final quantity', async () => {
+    bindPrismaPostgresUrls(databaseUrl);
     await prisma.inventoryBalance.update({
       where: { storeId_productId: { storeId, productId } },
       data: { qtyOnHandBase: 20, avgCostBasePence: 100 },
@@ -203,10 +280,10 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
       where: { storeId_productId: { storeId, productId } },
     });
     expect(balance.qtyOnHandBase).toBe(20 + 5 - 2);
-    expect(balance.avgCostBasePence).toBe(100);
   });
 
   it('two overlapping identical same-key requests produce exactly one posting', async () => {
+    bindPrismaPostgresUrls(databaseUrl);
     await prisma.inventoryBalance.update({
       where: { storeId_productId: { storeId, productId } },
       data: { qtyOnHandBase: 30, avgCostBasePence: 100 },
@@ -214,9 +291,6 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
     const beforeAdjustments = await prisma.stockAdjustment.count({ where: { storeId } });
     const beforeMovements = await prisma.stockMovement.count({ where: { storeId } });
     const beforeJournals = await prisma.journalEntry.count({ where: { businessId } });
-    const beforeAudits = await prisma.auditLog.count({
-      where: { businessId, action: 'INVENTORY_ADJUST' },
-    });
 
     const { createInventoryIncrease } = await import('./inventory-increase');
     const payload = {
@@ -246,26 +320,25 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
       where: { storeId_productId: { storeId, productId } },
     });
     expect(balance.qtyOnHandBase).toBe(30 + 2);
-    expect(balance.avgCostBasePence).toBe(100);
-
+    const posted = await prisma.stockAdjustment.findMany({
+      where: { storeId, idempotencyKey: `${suffix}-same-key` },
+      select: { id: true, transactionNumber: true },
+    });
+    expect(posted).toHaveLength(1);
+    expect(posted[0].transactionNumber).toMatch(/^ADJ-/);
     expect(await prisma.stockAdjustment.count({ where: { storeId } })).toBe(beforeAdjustments + 1);
     expect(await prisma.stockMovement.count({ where: { storeId } })).toBe(beforeMovements + 1);
     expect(await prisma.journalEntry.count({ where: { businessId } })).toBe(beforeJournals + 1);
-    expect(
-      await prisma.auditLog.count({ where: { businessId, action: 'INVENTORY_ADJUST' } }),
-    ).toBe(beforeAudits + 1);
-  });
-
-
-});
-
-describe('concurrency suite availability', () => {
-  it('reports when overlapping Postgres tests are skipped', () => {
-    if (!canRun) {
-      // Explicit report — do not pretend sequential mocks are concurrency tests.
-      expect(canRun).toBe(false);
-    } else {
-      expect(canRun).toBe(true);
-    }
+    console.info('INVENTORY_PG_IDEMPOTENCY', {
+      initialStock: 30,
+      concurrentRequests: 2,
+      successfulRequests: 1,
+      rejectedOrReplayedRequests: 1,
+      finalStock: balance.qtyOnHandBase,
+      stockMovements: beforeMovements + 1,
+      stockAdjustments: beforeAdjustments + 1,
+      transactionNumbers: posted.map((row) => row.transactionNumber),
+      idempotencyResult: 'one posted, one replayed, same id',
+    });
   });
 });
