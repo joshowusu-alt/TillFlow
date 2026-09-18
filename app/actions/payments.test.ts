@@ -36,6 +36,9 @@ vi.mock('@/lib/prisma', () => ({
     purchaseInvoice: {
       findFirst: purchaseInvoiceFindFirstMock,
     },
+    till: {
+      findFirst: vi.fn().mockResolvedValue({ id: 'till-1', storeId: 'store-1' }),
+    },
   },
 }));
 
@@ -89,6 +92,7 @@ describe('recordSupplierPaymentAction authorisation', () => {
       recordSupplierPaymentAction(
         form({
           invoiceId: 'inv-1',
+          storeId: 'store-1',
           paymentMethod: 'TRANSFER',
           amount: '10.00',
           idempotencyKey: 'key-owner-1',
@@ -119,6 +123,7 @@ describe('recordSupplierPaymentAction authorisation', () => {
       recordSupplierPaymentAction(
         form({
           invoiceId: 'inv-1',
+          storeId: 'store-1',
           paymentMethod: 'CASH',
           amount: '5.00',
           tillId: 'till-1',

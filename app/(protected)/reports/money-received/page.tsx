@@ -219,7 +219,7 @@ export default async function MoneyReceivedReportPage({
       <ReportFilterCard columnsClassName="sm:grid-cols-5" submitLabel="Apply" submitTone="secondary">
         <div>
           <label className="label" htmlFor="storeId">
-            Branch
+            Report branch filter
           </label>
           <select id="storeId" className="input" name="storeId" defaultValue={selectedStoreId}>
             <option value="ALL">All branches</option>

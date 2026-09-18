@@ -9,7 +9,10 @@ import { computeOutstandingBalance } from '@/lib/accounting';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import DueDateBadge from '@/components/DueDateBadge';
 import RemainingBalance from '@/components/RemainingBalance';
-import SupplierPaymentForm from '@/components/SupplierPaymentForm';
+import SupplierPaymentDialog from '@/components/SupplierPaymentDialog';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
+import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
+import { formatRecordNumber } from '@/lib/ui/document-label';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -20,8 +23,17 @@ const PAYMENT_LABEL: Record<string, string> = {
 };
 
 export default async function SupplierPaymentsPage({ searchParams }: { searchParams?: { error?: string; supplierId?: string } }) {
-  const { business, store } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
+  const { business, store, stores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
+  if (!store) {
+    return (
+      <SelectOperationalStoreNotice
+        stores={stores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch to record supplier payments"
+      />
+    );
+  }
 
   const supplierId = searchParams?.supplierId?.trim() || undefined;
   const today = new Date().toISOString().slice(0, 10);
@@ -32,11 +44,13 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
       prisma.purchaseInvoice.findMany({
         where: {
           businessId: business.id,
+          storeId: store.id,
           paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
           ...(supplierId ? { supplierId } : {}),
         },
         select: {
           id: true,
+          transactionNumber: true,
           createdAt: true,
           dueDate: true,
           totalPence: true,
@@ -52,6 +66,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
         where: {
           purchaseInvoice: {
             businessId: business.id,
+            storeId: store.id,
             ...(supplierId ? { supplierId } : {}),
           }
         },
@@ -63,7 +78,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
           notes: true,
           recordedBy: { select: { name: true } },
           purchaseInvoice: {
-            select: { id: true, supplier: { select: { name: true } } }
+            select: { id: true, transactionNumber: true, storeId: true, supplier: { select: { name: true } } }
           }
         },
         orderBy: { paidAt: 'desc' },
@@ -113,10 +128,18 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
     shiftId: shift.id,
   }));
 
-  const renderPaymentForm = (invoiceId: string) => (
-    <SupplierPaymentForm
-      invoiceId={invoiceId}
+  const renderPaymentAction = (invoice: (typeof outstandingInvoices)[number]) => (
+    <SupplierPaymentDialog
+      invoiceId={invoice.id}
+      purchaseNumber={formatRecordNumber('purchase', invoice.transactionNumber, invoice.id)}
+      supplierName={invoice.supplier?.name ?? 'Supplier not set'}
+      storeName={store.name}
+      storeId={store.id}
       today={today}
+      currency={business.currency}
+      originalPence={invoice.totalPence}
+      paidPence={invoice.totalPence - invoice.outstanding}
+      remainingPence={invoice.outstanding}
       returnTo={linkedSupplier ? `/suppliers/${linkedSupplier.id}` : undefined}
       openTills={openTills}
     />
@@ -125,6 +148,10 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
   return (
     <div className="space-y-6">
       <PageHeader title="Record supplier payment" subtitle="Pay a supplier and reduce what your business owes." />
+      <EffectiveStoreBanner
+        storeName={store.name}
+        actionLabel="Supplier payments from this page are recorded only in this branch."
+      />
       <FormError error={searchParams?.error} />
 
       {linkedSupplier ? (
@@ -185,7 +212,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
           mode="cards"
           desktop={
             <div className="responsive-table-shell mt-4">
-              <table className="table w-full min-w-[68rem] border-separate border-spacing-y-2">
+              <table className="table w-full min-w-[56rem] border-separate border-spacing-y-2">
                 <thead>
                   <tr>
                     <th>Purchase</th>
@@ -202,8 +229,8 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                     return (
                       <tr key={invoice.id} className="rounded-xl bg-white align-top transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
                         <td className="px-3 py-3 text-sm">
-                          <Link href={`/purchases/${invoice.id}`} className="font-mono text-xs hover:underline">
-                            {invoice.id.slice(0, 8)}
+                          <Link href={`/purchases/${invoice.id}`} className="font-semibold hover:underline">
+                            {formatRecordNumber('purchase', invoice.transactionNumber, invoice.id)}
                           </Link>
                         </td>
                         <td className="px-3 py-3 text-sm">
@@ -237,7 +264,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                           )}
                         </td>
                         <td className="px-3 py-3">
-                          {renderPaymentForm(invoice.id)}
+                          {renderPaymentAction(invoice)}
                         </td>
                       </tr>
                     );
@@ -276,8 +303,8 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                     <div key={invoice.id} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card transition-transform duration-150 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <Link href={`/purchases/${invoice.id}`} className="font-mono text-xs text-black/50 hover:underline">
-                            {invoice.id.slice(0, 8)}
+                          <Link href={`/purchases/${invoice.id}`} className="text-xs font-semibold text-ink hover:underline">
+                            {formatRecordNumber('purchase', invoice.transactionNumber, invoice.id)}
                           </Link>
                           <div className="mt-1 text-sm font-semibold text-ink">
                             {invoice.supplier
@@ -304,7 +331,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                       </div>
 
                       <div className="mt-3 border-t border-black/5 pt-3">
-                        {renderPaymentForm(invoice.id)}
+                        {renderPaymentAction(invoice)}
                       </div>
                     </div>
                   );

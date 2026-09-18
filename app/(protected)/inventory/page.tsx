@@ -3,7 +3,8 @@ import RefreshIndicator from '@/components/RefreshIndicator';
 import SearchFilter from '@/components/SearchFilter';
 import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
-import { requireBusinessStore } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import { formatMoney, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import Link from 'next/link';
@@ -26,9 +27,18 @@ function InventoryEmptyState({ q }: { q: string }) {
 }
 
 export default async function InventoryPage({ searchParams }: { searchParams?: { q?: string; page?: string } }) {
-  const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
-  if (!business || !store) {
+  const { business, store, stores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
+  if (!business) {
     return <div className="card p-6">Seed data missing.</div>;
+  }
+  if (!store) {
+    return (
+      <SelectOperationalStoreNotice
+        stores={stores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch to view stock"
+      />
+    );
   }
 
   const q = searchParams?.q?.trim() ?? '';

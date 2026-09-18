@@ -67,12 +67,13 @@ describe('selected-store mutation fail-closed', () => {
     expect(read('app/(protected)/reports/reorder-suggestions/page.tsx')).not.toContain(
       'requireBusinessStore',
     );
-    expect(read('app/(protected)/shifts/page.tsx')).toContain('resolveSoleOrSelectedStoreId');
+    expect(read('app/(protected)/shifts/page.tsx')).toContain('requireBusinessAndOptionalStore');
+    expect(read('app/(protected)/shifts/page.tsx')).toContain('resolveOperationalStore');
     expect(read('app/(protected)/shifts/page.tsx')).not.toContain('requireBusinessStore');
-    expect(read('app/(protected)/shifts/drawer/page.tsx')).toContain('resolveSoleOrSelectedStoreId');
-    expect(read('app/(protected)/shifts/variance/page.tsx')).toContain('resolveSoleOrSelectedStoreId');
+    expect(read('app/(protected)/shifts/drawer/page.tsx')).toContain('requireBusinessAndOptionalStore');
+    expect(read('app/(protected)/shifts/variance/page.tsx')).toContain('requireBusinessAndOptionalStore');
     expect(read('app/(protected)/shifts/variance/[id]/page.tsx')).toContain(
-      'resolveSoleOrSelectedStoreId',
+      'requireBusinessAndOptionalStore',
     );
   });
 

@@ -38,7 +38,8 @@ describe('shift pages never fall back to the first store among many', () => {
     expect(shiftsPage).toContain('storeId={store.id}');
     expect(drawer).toContain('where: { storeId: store.id }');
     expect(drawer).toContain('storeId: store.id');
-    expect(drawer).toContain('SelectedStorePicker');
+    expect(drawer).not.toContain('SelectedStorePicker');
+    expect(drawer).toContain('requireBusinessAndOptionalStore');
     expect(variance).toContain("shift: { till: { storeId: store.id } }");
     expect(varianceDetail).toContain("shift: { till: { storeId: store.id } }");
     expect(shiftsPage).not.toContain('requireBusinessStore');

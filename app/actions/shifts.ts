@@ -4,11 +4,13 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { formString, toPence } from '@/lib/form-helpers';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
-import { resolveStoreFromTill, STORE_MISMATCH_MSG } from '@/lib/reliability/selected-store';
+import { resolveStoreFromTill, STORE_MISMATCH_MSG, MISSING_STORE_CONTEXT_MSG } from '@/lib/reliability/selected-store';
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/services/cash-drawer';
 import {
+  assertNonNegativeActualCash,
+  NEGATIVE_ACTUAL_CASH_MSG,
   performShiftClose,
   performShiftOpen,
   TILL_ALREADY_OPEN_MSG,
@@ -162,7 +164,12 @@ export async function closeShiftAction(
     const { user, businessId } = await withBusinessContext();
 
     const shiftId = formString(formData, 'shiftId');
-    const actualCash = Math.max(0, toPence(formData.get('actualCash')));
+    let actualCash: number;
+    try {
+      actualCash = assertNonNegativeActualCash(toPence(formData.get('actualCash')));
+    } catch (e) {
+      return err((e as Error).message || NEGATIVE_ACTUAL_CASH_MSG);
+    }
     const notes = formString(formData, 'notes') || null;
     const managerPin = formString(formData, 'managerPin');
     const varianceReasonCode = formString(formData, 'varianceReasonCode') || null;
@@ -170,12 +177,13 @@ export async function closeShiftAction(
 
     if (!shiftId) return err('Could not find the shift. Please refresh and try again.');
     const requestedStoreId = formString(formData, 'storeId');
+    if (!requestedStoreId) return err(MISSING_STORE_CONTEXT_MSG);
     const closingShift = await prisma.shift.findFirst({
       where: { id: shiftId, till: { store: { businessId } } },
       select: { till: { select: { storeId: true } } },
     });
     if (!closingShift) return err('Could not find the shift. Please refresh and try again.');
-    if (requestedStoreId && requestedStoreId !== closingShift.till.storeId) {
+    if (requestedStoreId !== closingShift.till.storeId) {
       return err(STORE_MISMATCH_MSG);
     }
     const storeId = closingShift.till.storeId;
@@ -280,7 +288,12 @@ export async function closeShiftOwnerOverrideAction(
     const { user, businessId } = await withBusinessContext(['OWNER']);
 
     const shiftId = formString(formData, 'shiftId');
-    const actualCash = Math.max(0, toPence(formData.get('actualCash')));
+    let actualCash: number;
+    try {
+      actualCash = assertNonNegativeActualCash(toPence(formData.get('actualCash')));
+    } catch (e) {
+      return err((e as Error).message || NEGATIVE_ACTUAL_CASH_MSG);
+    }
     const notes = formString(formData, 'notes') || null;
     const ownerPassword = formString(formData, 'ownerPassword');
     const overrideReasonCode = formString(formData, 'overrideReasonCode');
@@ -290,12 +303,13 @@ export async function closeShiftOwnerOverrideAction(
 
     if (!shiftId) return err('Could not find the shift. Please refresh and try again.');
     const requestedStoreId = formString(formData, 'storeId');
+    if (!requestedStoreId) return err(MISSING_STORE_CONTEXT_MSG);
     const overrideShift = await prisma.shift.findFirst({
       where: { id: shiftId, till: { store: { businessId } } },
       select: { till: { select: { storeId: true } } },
     });
     if (!overrideShift) return err('Could not find the shift. Please refresh and try again.');
-    if (requestedStoreId && requestedStoreId !== overrideShift.till.storeId) {
+    if (requestedStoreId !== overrideShift.till.storeId) {
       return err(STORE_MISMATCH_MSG);
     }
     const storeId = overrideShift.till.storeId;

@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import { formatDateTime, formatMoney } from '@/lib/format';
-import { requireBusiness } from '@/lib/auth';
-import { resolveSoleOrSelectedStoreId, withStoreQuery } from '@/lib/reliability/selected-store';
-import SelectedStorePicker from '@/components/SelectedStorePicker';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import { withStoreQuery } from '@/lib/reliability/selected-store';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import {
   CASH_DRAWER_DRILLDOWN_ORDER,
   CASH_DRAWER_ENTRY_LABELS,
@@ -46,26 +46,14 @@ export default async function CashDrawerDrilldownPage({
     storeId?: string;
   };
 }) {
-  const { business } = await requireBusiness();
-  const stores = await prisma.store.findMany({
-    where: { businessId: business.id },
-    select: { id: true, name: true },
-    orderBy: { createdAt: 'asc' },
-  });
-  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
-  const store = stores.find((row) => row.id === selectedStoreId) ?? null;
+  const { business, store, stores, user } = await requireBusinessAndOptionalStore();
   if (!store) {
     return (
-      <div className="mx-auto max-w-5xl space-y-5">
-        <PageHeader
-          title="Cash drawer supporting rows"
-          subtitle="Select a store before reviewing drawer rows. TillFlow will not default to the first store."
-          secondaryCta={{ label: 'Back to shifts', href: '/shifts' }}
-        />
-        <div className="card p-5">
-          <SelectedStorePicker stores={stores} selectedStoreId={selectedStoreId} action="/shifts/drawer" />
-        </div>
-      </div>
+      <SelectOperationalStoreNotice
+        stores={stores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch to review the drawer"
+      />
     );
   }
   const requestedType = searchParams?.type;
@@ -112,7 +100,8 @@ export default async function CashDrawerDrilldownPage({
       />
 
       <div className="card p-4">
-        <SelectedStorePicker stores={stores} selectedStoreId={store.id} action="/shifts/drawer" />
+        <p className="text-sm font-semibold text-ink">Active branch: {store.name}</p>
+        <p className="text-xs text-black/55">Switch branches from the header. This page will not use the first-created store.</p>
       </div>
 
       <form className="card grid gap-3 p-4 sm:grid-cols-5" method="GET">

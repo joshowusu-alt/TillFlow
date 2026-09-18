@@ -18,6 +18,8 @@ type Props = {
   /** Optional form layout class; defaults to supplier-payments grid. */
   formClassName?: string;
   openTills?: OpenTillOption[];
+  storeId?: string;
+  storeName?: string;
 };
 
 /**
@@ -31,10 +33,18 @@ export default function SupplierPaymentForm({
   amountPlaceholder = '0.00',
   formClassName = 'grid gap-2 md:grid-cols-2',
   openTills = [],
+  storeId,
+  storeName,
 }: Props) {
   return (
     <form action={recordSupplierPaymentAction} className={formClassName}>
       <input type="hidden" name="invoiceId" value={invoiceId} />
+      {storeId ? <input type="hidden" name="storeId" value={storeId} /> : null}
+      {storeName ? (
+        <p className="text-xs font-medium text-black/55 md:col-span-2">
+          This payment will be recorded in {storeName}.
+        </p>
+      ) : null}
       <StableIdempotencyKeyInput scope={`supplier-payment:${invoiceId}`} />
       {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
       <div>

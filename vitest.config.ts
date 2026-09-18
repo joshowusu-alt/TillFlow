@@ -2,6 +2,8 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
+const isolatedPreviewGates = process.env.TILLFLOW_REQUIRE_ISOLATED_PREVIEW === '1';
+
 export default defineConfig({
     plugins: [react()],
     test: {
@@ -9,7 +11,18 @@ export default defineConfig({
         globals: true,
         setupFiles: ['./vitest.setup.ts'],
         include: ['**/*.test.{ts,tsx}'],
-        exclude: ['**/node_modules/**', '.next', 'tishgroup-control/**'],
+        exclude: [
+          '**/node_modules/**',
+          '.next',
+          'tishgroup-control/**',
+          ...(isolatedPreviewGates
+            ? []
+            : [
+                '**/*.pg.test.ts',
+                '**/*pg*.test.ts',
+                'lib/services/inventory-increase-concurrency.test.ts',
+              ]),
+        ],
         // forks: avoid Prisma N-API "failed to delete napi ref" teardown under threads (CI exit 134)
         pool: 'forks',
         fileParallelism: false,

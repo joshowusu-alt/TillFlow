@@ -11,6 +11,16 @@ import { isSqliteDatabaseUrl } from '@/lib/database-runtime';
 export const TILL_ALREADY_OPEN_MSG =
   'A shift is already open for this till. Close or hand over that shift before opening another.';
 
+export const NEGATIVE_ACTUAL_CASH_MSG =
+  'Physical cash counted cannot be negative. Enter the amount actually in the drawer.';
+
+export function assertNonNegativeActualCash(actualCash: number): number {
+  if (!Number.isFinite(actualCash) || actualCash < 0) {
+    throw new Error(NEGATIVE_ACTUAL_CASH_MSG);
+  }
+  return Math.round(actualCash);
+}
+
 function isOpenKeyUniqueConflict(error: unknown): boolean {
   if (isPrismaUniqueConstraintOn(error, ['openKey'])) return true;
   const e = error as { code?: string; message?: string; meta?: { target?: unknown } };
@@ -247,7 +257,8 @@ export async function performShiftClose(
 async function performShiftCloseImpl(
   input: CloseShiftInput,
 ): Promise<{ id: string; closureNumber: string | null; investigationId: string | null }> {
-  const { businessId, actor, shiftId, actualCash, notes, varianceReasonCode, varianceReason, approval } = input;
+  const { businessId, actor, shiftId, notes, varianceReasonCode, varianceReason, approval } = input;
+  const actualCash = assertNonNegativeActualCash(input.actualCash);
 
   const shift = await prisma.shift.findFirst({
     where: {
@@ -298,6 +309,7 @@ async function performShiftCloseImpl(
     if (!lockedShift) {
       throw new Error('Shift was already closed by another request');
     }
+    assertNonNegativeActualCash(actualCash);
 
     let lockedCardTotal = 0;
     let lockedTransferTotal = 0;

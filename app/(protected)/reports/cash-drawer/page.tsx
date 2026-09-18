@@ -199,7 +199,7 @@ export default async function CashDrawerReportPage({
         submitTone="secondary"
       >
         <div>
-          <label className="label">Branch</label>
+          <label className="label">Report branch filter</label>
           <select className="input" name="storeId" defaultValue={selectedStoreId}>
             <option value="ALL">All branches</option>
             {stores.map((store) => (

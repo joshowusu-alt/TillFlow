@@ -436,4 +436,54 @@ describe('ShiftClient', () => {
     expect((closeShiftActionMock.mock.calls[0][0] as FormData).get('storeId')).toBe('store-b');
     expect((closeShiftActionMock.mock.calls[0][0] as FormData).get('shiftId')).toBe('shift-1');
   });
+
+  it('shows close-shift identity and starts approval fields empty', async () => {
+    render(
+      <ShiftClient
+        storeId="store-b"
+        storeName="Walkthrough Store B"
+        tills={[{ id: 'till-b', name: 'Till B1' }]}
+        openShifts={[{ ...baseOpenShift, userName: 'Ama Cashier', till: { name: 'Till B1' } }]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="OWNER"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+    expect(screen.getByText('Walkthrough Store B')).toBeInTheDocument();
+    expect(screen.getAllByText('Till B1').length).toBeGreaterThan(0);
+    expect(screen.getByText('Ama Cashier')).toBeInTheDocument();
+    expect(screen.getAllByText(/Opened/i).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Variance Details')).toHaveValue('');
+    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveValue('');
+    expect(screen.getByLabelText('Variance Details')).toHaveAttribute('autoComplete', 'off');
+    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('name', 'close-shift-manager-approval');
+  });
+
+  it('does not claim the full float can be retained when counted cash is below it', async () => {
+    render(
+      <ShiftClient
+        storeId="store-b"
+        storeName="Walkthrough Store B"
+        tills={[{ id: 'till-b', name: 'Till B1' }]}
+        openShifts={[{
+          ...baseOpenShift,
+          expectedCash: 20000,
+          openingCashPence: 20000,
+          cashByType: { OPEN_FLOAT: 20000 },
+        }]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="OWNER"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+    fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '5.00' } });
+    expect(screen.getByText('Float shortfall')).toBeInTheDocument();
+    expect(screen.getByText(/full float cannot be retained/i)).toBeInTheDocument();
+  });
 });

@@ -1,10 +1,11 @@
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { getBusinessStores } from '@/lib/services/stores';
 import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
-import SelectedStorePicker from '@/components/SelectedStorePicker';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
+import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
@@ -55,21 +56,20 @@ export default async function StockAdjustmentsPage({
     storeId?: string;
   };
 }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { user, business, store: operationalStore, stores: authorisedStores } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) {
     return <div className="card p-6">Seed data missing.</div>;
   }
-  const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
-  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
-  const store = stores.find((item) => item.id === selectedStoreId) ?? null;
+  const { stores } = await getBusinessStores(business.id, operationalStore?.id ?? searchParams?.storeId);
+  const selectedStoreId = operationalStore?.id ?? resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
+  const store = stores.find((item) => item.id === selectedStoreId) ?? operationalStore ?? null;
   if (!store) {
     return (
-      <div className="space-y-4">
-        <PageHeader title="Stock adjustments" subtitle="Select a store before recording or reversing an adjustment." />
-        <div className="card p-5">
-          <SelectedStorePicker stores={stores} selectedStoreId={selectedStoreId} action="/inventory/adjustments" />
-        </div>
-      </div>
+      <SelectOperationalStoreNotice
+        stores={authorisedStores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch before recording a stock adjustment"
+      />
     );
   }
 
@@ -187,7 +187,10 @@ export default async function StockAdjustmentsPage({
         title="Stock Adjustments"
         subtitle="Correct stock safely and keep a clear audit trail."
       />
-      <SelectedStorePicker stores={stores} selectedStoreId={store.id} action="/inventory/adjustments" />
+      <EffectiveStoreBanner
+        storeName={store.name}
+        actionLabel="Stock adjustments on this page are recorded in this branch."
+      />
 
       {searchParams?.error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">

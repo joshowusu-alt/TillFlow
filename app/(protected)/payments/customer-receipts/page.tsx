@@ -3,7 +3,7 @@ import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
 import { recordCustomerPaymentAction } from '@/app/actions/payments';
 import { computeOutstandingBalance } from '@/lib/accounting';
@@ -13,6 +13,9 @@ import Link from 'next/link';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import StableIdempotencyKeyInput from '@/components/StableIdempotencyKeyInput';
 import { RECEIPT_ORIGIN, resolveReceiptOrigin } from '@/lib/payments/receipt-origin';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
+import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
+import { formatRecordNumber } from '@/lib/ui/document-label';
 import {
   laterCreditCollectionWhere,
   RECEIPT_ORIGIN_LABELS,
@@ -34,7 +37,7 @@ type CustomerPaymentRow = {
   receivedAt: Date;
   reference: string | null;
   receiptOrigin: string | null;
-  salesInvoice: { id: string; customer: { id: string; name: string } | null };
+  salesInvoice: { id: string; transactionNumber: string | null; customer: { id: string; name: string } | null };
 };
 
 function CustomerPaymentList({
@@ -81,7 +84,7 @@ function CustomerPaymentList({
                   <tr key={payment.id} className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
                     <td className="px-3 py-2 text-sm text-black/60">{formatDate(payment.receivedAt)}</td>
                     <td className="px-3 py-2 text-sm">{payment.salesInvoice.customer?.name ?? 'Walk-in'}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-black/60">{payment.salesInvoice.id.slice(0, 8)}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-black/60">{formatRecordNumber('invoice', payment.salesInvoice.transactionNumber, payment.salesInvoice.id)}</td>
                     <td className="px-3 py-2 text-sm">{PAYMENT_LABEL[payment.method] ?? payment.method}</td>
                     <td className="px-3 py-2 text-sm font-semibold tabular-nums">
                       {formatMoney(payment.amountPence, currency)}
@@ -105,7 +108,7 @@ function CustomerPaymentList({
                   <div>
                     <div className="text-xs text-black/50">{formatDate(payment.receivedAt)}</div>
                     <div className="mt-1 text-sm font-semibold text-ink">{payment.salesInvoice.customer?.name ?? 'Walk-in'}</div>
-                    <div className="text-xs text-black/50">{PAYMENT_LABEL[payment.method] ?? payment.method} · invoice {payment.salesInvoice.id.slice(0, 8)}</div>
+                    <div className="text-xs text-black/50">{PAYMENT_LABEL[payment.method] ?? payment.method} · invoice {formatRecordNumber('invoice', payment.salesInvoice.transactionNumber, payment.salesInvoice.id)}</div>
                     <div className="mt-1 text-xs font-medium text-black/55">{RECEIPT_ORIGIN_LABELS[origin]}</div>
                   </div>
                   <div className="text-sm font-bold tabular-nums">{formatMoney(payment.amountPence, currency)}</div>
@@ -121,12 +124,22 @@ function CustomerPaymentList({
 }
 
 export default async function CustomerReceiptsPage({ searchParams }: { searchParams?: { error?: string; customerId?: string; paid?: string } }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, store, stores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
+  if (!store) {
+    return (
+      <SelectOperationalStoreNotice
+        stores={stores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch to record customer payments"
+      />
+    );
+  }
   const customerId = searchParams?.customerId?.trim() || undefined;
 
   const invoiceFilter = {
     businessId: business.id,
+    storeId: store.id,
     ...(customerId ? { customerId } : {}),
   };
   const paymentSelect = {
@@ -139,6 +152,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
     salesInvoice: {
       select: {
         id: true,
+        transactionNumber: true,
         customer: { select: { id: true, name: true } },
       },
     },
@@ -150,11 +164,13 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
       prisma.salesInvoice.findMany({
         where: {
           businessId: business.id,
+          storeId: store.id,
           paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
           ...(customerId ? { customerId } : {}),
         },
         select: {
           id: true,
+          transactionNumber: true,
           createdAt: true,
           dueDate: true,
           totalPence: true,
@@ -218,6 +234,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
   const renderPaymentForm = (invoiceId: string) => (
     <form action={recordCustomerPaymentAction} className="grid gap-2 md:grid-cols-2">
       <input type="hidden" name="invoiceId" value={invoiceId} />
+      <input type="hidden" name="storeId" value={store.id} />
       <StableIdempotencyKeyInput
         scope={`customer-receipt:${invoiceId}`}
         rotate={searchParams?.paid === invoiceId}
@@ -258,6 +275,10 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
   return (
     <div className="space-y-6">
       <PageHeader title="Record customer payment" subtitle="Take a payment from a customer and reduce what they owe." />
+      <EffectiveStoreBanner
+        storeName={store.name}
+        actionLabel={`Customer collections will be recorded in ${store.name}.`}
+      />
 
       <FormError error={searchParams?.error} />
 
@@ -341,7 +362,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
                     const now = new Date();
                     return (
                       <tr key={invoice.id} className="rounded-xl bg-white align-top transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
-                        <td className="px-3 py-3 text-sm font-mono text-xs">{invoice.id.slice(0, 8)}</td>
+                        <td className="px-3 py-3 text-sm font-mono text-xs">{formatRecordNumber('invoice', invoice.transactionNumber, invoice.id)}</td>
                         <td className="px-3 py-3 text-sm">
                           {invoice.customer ? (
                             <Link href={`/customers/${invoice.customer.id}`} className="hover:underline">
@@ -403,7 +424,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
                     <div key={invoice.id} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card transition-transform duration-150 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="font-mono text-xs text-black/50">{invoice.id.slice(0, 8)}</div>
+                          <div className="font-mono text-xs text-black/50">{formatRecordNumber('invoice', invoice.transactionNumber, invoice.id)}</div>
                           <div className="mt-1 text-sm font-semibold text-ink">
                             {invoice.customer ? (
                               <Link href={`/customers/${invoice.customer.id}`} className="hover:underline">

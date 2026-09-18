@@ -245,7 +245,7 @@ describe('supplier payments page — supplierId support', () => {
   });
 
   it('returns to the supplier profile after recording a filtered payment', () => {
-    expect(src).toContain('SupplierPaymentForm');
+    expect(src).toContain('SupplierPaymentDialog');
     expect(src).toContain('returnTo={linkedSupplier ? `/suppliers/${linkedSupplier.id}` : undefined}');
   });
 
@@ -262,8 +262,8 @@ describe('supplier payments page — supplierId support', () => {
     expect(src).toContain('mode="cards"');
     expect(src).toContain('active:scale-[0.98]');
     expect(src).toContain('hover:-translate-y-px');
-    expect(src).toContain('<SupplierPaymentForm');
-    expect(src).toContain('invoiceId={invoiceId}');
+    expect(src).toContain('<SupplierPaymentDialog');
+    expect(src).toContain('invoiceId={invoice.id}');
   });
 
   it('SupplierPaymentForm carries method/amount fields and idempotency key', () => {

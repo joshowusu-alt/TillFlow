@@ -2,9 +2,9 @@ import { notFound } from 'next/navigation';
 import PageHeader from '@/components/PageHeader';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
-import { requireBusiness } from '@/lib/auth';
-import { resolveSoleOrSelectedStoreId, withStoreQuery } from '@/lib/reliability/selected-store';
-import SelectedStorePicker from '@/components/SelectedStorePicker';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import { withStoreQuery } from '@/lib/reliability/selected-store';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import { prisma } from '@/lib/prisma';
 import { VARIANCE_REVIEWER_ROLES } from '@/lib/services/cash-variance';
 import VarianceWorkflowClient from '../VarianceWorkflowClient';
@@ -16,26 +16,14 @@ export default async function CashVarianceDetailPage({
   params: { id: string };
   searchParams?: { storeId?: string };
 }) {
-  const { user, business } = await requireBusiness();
-  const stores = await prisma.store.findMany({
-    where: { businessId: business.id },
-    select: { id: true, name: true },
-    orderBy: { createdAt: 'asc' },
-  });
-  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
-  const store = stores.find((row) => row.id === selectedStoreId) ?? null;
+  const { user, business, store, stores } = await requireBusinessAndOptionalStore();
   if (!store) {
     return (
-      <div className="mx-auto max-w-3xl space-y-5">
-        <PageHeader
-          title="Cash variance investigation"
-          subtitle="Select a store before opening this variance. TillFlow will not default to the first store."
-          secondaryCta={{ label: 'All investigations', href: '/shifts/variance' }}
-        />
-        <div className="card p-5">
-          <SelectedStorePicker stores={stores} selectedStoreId={selectedStoreId} action={`/shifts/variance/${params.id}`} />
-        </div>
-      </div>
+      <SelectOperationalStoreNotice
+        stores={stores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch to open this variance"
+      />
     );
   }
 

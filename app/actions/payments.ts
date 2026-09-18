@@ -7,7 +7,11 @@ import { revalidateTag } from 'next/cache';
 import { toPence } from '@/lib/form-helpers';
 import { formString } from '@/lib/form-helpers';
 import { requireSelectedStoreContext, withBusinessContext, formAction } from '@/lib/action-utils';
-import { assertRequestedStoreMatchesSource } from '@/lib/reliability/selected-store';
+import {
+  assertRequestedStoreMatchesSource,
+  MISSING_STORE_CONTEXT_MSG,
+  resolveStoreFromTill,
+} from '@/lib/reliability/selected-store';
 import { prisma } from '@/lib/prisma';
 import type { PaymentMethod, PaymentInput } from '@/lib/services/shared';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
@@ -62,6 +66,9 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
   return formAction(async () => {
     const requestedStoreId = formString(formData, 'storeId');
     const { businessId, user } = await withBusinessContext(['MANAGER', 'OWNER']);
+    if (!requestedStoreId) {
+      throw new Error(MISSING_STORE_CONTEXT_MSG);
+    }
 
     const invoiceId = formString(formData, 'invoiceId');
     const invoice = await prisma.purchaseInvoice.findFirst({
@@ -84,6 +91,9 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
     }
     if (payments.some((p) => p.method === 'CASH' && p.amountPence > 0) && !tillId) {
       throw new Error(EXPLICIT_CASH_TILL_REQUIRED_MSG);
+    }
+    if (tillId) {
+      await resolveStoreFromTill(businessId, tillId, storeId);
     }
 
     await recordSupplierPayment(businessId, invoiceId, payments, {

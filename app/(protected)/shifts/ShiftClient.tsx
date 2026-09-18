@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
 import { openShiftAction, closeShiftAction, closeShiftOwnerOverrideAction, addCashToTillAction } from '@/app/actions/shifts';
 import { withStoreQuery } from '@/lib/reliability/selected-store';
+import { formatRecordNumber } from '@/lib/ui/document-label';
+import { computeCashHandover } from '@/lib/services/cash-handover';
 
 type Till = { id: string; name: string; active?: boolean };
 
@@ -13,6 +15,7 @@ type OpenShift = {
   id: string;
   tillId?: string;
   userId?: string;
+  userName?: string;
   till: { name: string };
   openedAt: Date;
   openingCashPence: number;
@@ -91,6 +94,7 @@ type OtherOpenShift = {
 
 type Props = {
   storeId?: string | null;
+  storeName?: string | null;
   tills: Till[];
   openShifts?: OpenShift[];
   /** @deprecated compatibility for older callers; server page supplies openShifts. */
@@ -118,6 +122,7 @@ function drawerHref(params: { type: string; shiftId?: string; tillId?: string; s
 
 export default function ShiftClient({
   storeId,
+  storeName,
   tills,
   openShifts: openShiftList,
   openShift: legacyOpenShift,
@@ -179,6 +184,8 @@ export default function ShiftClient({
   const [varianceReasonCode, setVarianceReasonCode] = useState('');
   const [varianceReason, setVarianceReason] = useState('');
   const [showCloseModal, setShowCloseModal] = useState(false);
+  const [closeFormKey, setCloseFormKey] = useState(0);
+  const [pinUnlocked, setPinUnlocked] = useState(false);
   const [selectedOtherShift, setSelectedOtherShift] = useState<OtherOpenShift | null>(null);
   const [showOwnerOverride, setShowOwnerOverride] = useState(false);
   const [ownerPassword, setOwnerPassword] = useState('');
@@ -225,7 +232,6 @@ export default function ShiftClient({
   const [closedSummary, setClosedSummary] = useState<ClosedSummary | null>(null);
 
   const resetCloseForm = () => {
-    setSelectedOtherShift(null);
     setActualCash('');
     setCloseNotes('');
     setManagerPin('');
@@ -235,6 +241,16 @@ export default function ShiftClient({
     setOverrideReasonCode('');
     setOverrideJustification('');
     setShowOwnerOverride(false);
+    setPinUnlocked(false);
+    setCloseFormKey((key) => key + 1);
+  };
+
+  const openCloseModal = (otherShift: OtherOpenShift | null = null) => {
+    setError(null);
+    setSelectedOtherShift(otherShift);
+    resetCloseForm();
+    if (otherShift) setShowOwnerOverride(true);
+    setShowCloseModal(true);
   };
 
   const handleAddCash = () => {
@@ -297,6 +313,10 @@ export default function ShiftClient({
   const handleCloseShift = () => {
     if (!shiftToClose) return;
     setError(null);
+    if (!Number.isFinite(Number(actualCash)) || Number(actualCash) < 0) {
+      setError('Physical cash counted cannot be negative. Enter the amount actually in the drawer.');
+      return;
+    }
     const formData = new FormData();
     formData.set('shiftId', shiftToClose.id);
     formData.set('actualCash', actualCash);
@@ -311,8 +331,16 @@ export default function ShiftClient({
       tillName: shiftToClose.till.name,
       salesCount: shiftToClose.salesCount,
       cashSalesPence: shiftToClose.cashByType?.CASH_SALE ?? 0,
-      floatRetainedPence: shiftToClose.openingCashPence,
-      handoverPence: Math.max(0, shiftToClose.expectedCash - shiftToClose.openingCashPence),
+      floatRetainedPence: computeCashHandover({
+        expectedCashPence: shiftToClose.expectedCash,
+        actualCashPence: Math.round(Number(actualCash) * 100),
+        openingFloatPence: shiftToClose.openingCashPence,
+      }).retainedPence ?? 0,
+      handoverPence: computeCashHandover({
+        expectedCashPence: shiftToClose.expectedCash,
+        actualCashPence: Math.round(Number(actualCash) * 100),
+        openingFloatPence: shiftToClose.openingCashPence,
+      }).handedOverPence ?? 0,
       actualCashPence: Math.round(Number(actualCash) * 100),
       variancePence: Math.round(Number(actualCash) * 100) - shiftToClose.expectedCash,
       durationMinutes: Math.round((Date.now() - openedAtMs) / 60000),
@@ -369,6 +397,7 @@ export default function ShiftClient({
     ? {
         id: selectedOtherShift.id,
         till: selectedOtherShift.till,
+        userName: selectedOtherShift.userName,
         openedAt: new Date(selectedOtherShift.openedAt),
         openingCashPence: selectedOtherShift.openingCashPence,
         salesCount: selectedOtherShift.salesCount,
@@ -381,8 +410,20 @@ export default function ShiftClient({
       }
     : openShift;
 
-  const variancePence = actualCash ? Math.round(Number(actualCash) * 100) - (shiftToClose?.expectedCash ?? 0) : 0;
-  const varianceNeedsReason = variancePence !== 0;
+  const countedPence = actualCash === '' ? null : Math.round(Number(actualCash) * 100);
+  const handover = computeCashHandover({
+    expectedCashPence: shiftToClose?.expectedCash ?? 0,
+    actualCashPence: countedPence,
+    openingFloatPence: shiftToClose?.openingCashPence ?? 0,
+  });
+  const variancePence = handover.variancePence ?? 0;
+  const varianceNeedsReason = countedPence !== null && variancePence !== 0;
+  const closeShiftNumber = shiftToClose
+    ? formatRecordNumber('shift_closure', null, shiftToClose.id)
+    : '';
+  const closeCashierName = selectedOtherShift?.userName
+    || (openShift && 'userName' in openShift ? openShift.userName : null)
+    || 'This cashier';
   const cashSalesPence = shiftToClose?.cashByType?.CASH_SALE ?? 0;
   const supplierPaymentsPence = shiftToClose?.cashByType?.PAID_OUT_SUPPLIER ?? 0;
   const adjustmentsPence = shiftToClose?.cashByType?.CASH_ADJUSTMENT ?? 0;
@@ -441,7 +482,7 @@ export default function ShiftClient({
                       type="button"
                       className="btn-primary bg-rose-600 hover:bg-rose-700 text-sm"
                       onClick={() => {
-                        setSelectedOtherShift({
+                        openCloseModal({
                           id: occupied.shiftId,
                           tillId: occupied.tillId,
                           till: { name: occupied.tillName },
@@ -456,8 +497,6 @@ export default function ShiftClient({
                           momoTotal: occupied.momoTotal,
                           cashByType: occupied.cashByType,
                         });
-                        if (isOwner) setShowOwnerOverride(true);
-                        setShowCloseModal(true);
                       }}
                     >
                       Handover / Close
@@ -510,7 +549,7 @@ export default function ShiftClient({
             <button
               type="button"
               className="btn-primary bg-rose-600 hover:bg-rose-700"
-              onClick={() => setShowCloseModal(true)}
+              onClick={() => openCloseModal()}
             >
               Close Shift
             </button>
@@ -961,11 +1000,7 @@ export default function ShiftClient({
                   <button
                     type="button"
                     className="btn-primary bg-rose-600 hover:bg-rose-700 text-sm"
-                    onClick={() => {
-                      setSelectedOtherShift(s);
-                      setShowCloseModal(true);
-                      setShowOwnerOverride(true);
-                    }}
+                    onClick={() => openCloseModal(s)}
                   >
                     Close
                   </button>
@@ -980,10 +1015,40 @@ export default function ShiftClient({
       {showCloseModal && shiftToClose && (
         <div className="overlay-shell fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl my-auto">
+            <form
+              key={closeFormKey}
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              data-form-type="other"
+              onSubmit={(event) => event.preventDefault()}
+            >
             <h3 className="text-lg font-display font-semibold">
               Close Shift{selectedOtherShift ? ` — ${selectedOtherShift.userName}` : ''}
             </h3>
-            <p className="mt-1 text-sm text-black/60">
+            <dl className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-accent/20 bg-accent/5 p-3 text-sm">
+              <div>
+                <dt className="text-[11px] uppercase tracking-wider text-black/45">Store</dt>
+                <dd className="font-semibold">{storeName || 'Selected branch'}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] uppercase tracking-wider text-black/45">Till</dt>
+                <dd className="font-semibold">{shiftToClose.till.name}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] uppercase tracking-wider text-black/45">Cashier</dt>
+                <dd className="font-semibold">{closeCashierName}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] uppercase tracking-wider text-black/45">Shift</dt>
+                <dd className="font-semibold">{closeShiftNumber}</dd>
+              </div>
+              <div className="col-span-2">
+                <dt className="text-[11px] uppercase tracking-wider text-black/45">Opened</dt>
+                <dd className="font-semibold">{formatTime(new Date(shiftToClose.openedAt).toISOString())}</dd>
+              </div>
+            </dl>
+            <p className="mt-2 text-sm text-black/60">
               Count the cash in your drawer and enter the total below.
             </p>
 
@@ -1065,20 +1130,48 @@ export default function ShiftClient({
               </div>
             </div>
 
-            {/* Handover summary — float stays in drawer for the next shift */}
-            {shiftToClose.openingCashPence > 0 && (
-              <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 space-y-1.5">
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-500">Cash Handover</p>
-                <div className="flex justify-between text-sm text-black/60">
-                  <span>Retain in drawer (opening float)</span>
-                  <span className="font-semibold">&minus;&nbsp;{formatMoney(shiftToClose.openingCashPence, currency)}</span>
-                </div>
-                <div className="flex justify-between border-t border-blue-200 pt-1.5 text-sm font-bold text-blue-700">
-                  <span>Hand to safe / manager ↑</span>
-                  <span>{formatMoney(Math.max(0, shiftToClose.expectedCash - shiftToClose.openingCashPence), currency)}</span>
-                </div>
+            <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 space-y-1.5">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-500">Cash Handover</p>
+              <div className="flex justify-between text-sm text-black/60">
+                <span>Expected cash</span>
+                <span className="font-semibold">{formatMoney(handover.expectedCashPence, currency)}</span>
               </div>
-            )}
+              <div className="flex justify-between text-sm text-black/60">
+                <span>Actual cash counted</span>
+                <span className="font-semibold">
+                  {handover.actualCashPence === null ? 'Not counted yet' : formatMoney(handover.actualCashPence, currency)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm text-black/60">
+                <span>Variance</span>
+                <span className="font-semibold">
+                  {handover.variancePence === null ? '—' : formatMoney(handover.variancePence, currency)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm text-black/60">
+                <span>Amount retained in drawer</span>
+                <span className="font-semibold">
+                  {handover.retainedPence === null ? 'Count cash first' : formatMoney(handover.retainedPence, currency)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm text-black/60">
+                <span>Amount handed over</span>
+                <span className="font-semibold">
+                  {handover.handedOverPence === null ? 'Count cash first' : formatMoney(handover.handedOverPence, currency)}
+                </span>
+              </div>
+              {handover.floatShortfallPence ? (
+                <div className="flex justify-between border-t border-amber-200 pt-1.5 text-sm font-bold text-amber-800">
+                  <span>Float shortfall</span>
+                  <span>{formatMoney(handover.floatShortfallPence, currency)}</span>
+                </div>
+              ) : null}
+              {!handover.canRetainFullFloat && handover.actualCashPence !== null ? (
+                <p className="pt-1 text-xs text-amber-800">
+                  Counted cash is below the opening float, so the full float cannot be retained.
+                </p>
+              ) : null}
+            </div>
 
             <div className="mt-4">
               <label className="label" htmlFor="actual-cash-counted">Actual Cash Counted</label>
@@ -1091,6 +1184,8 @@ export default function ShiftClient({
                 placeholder="0.00"
                 value={actualCash}
                 onChange={(e) => setActualCash(e.target.value)}
+                autoComplete="off"
+                inputMode="decimal"
                 autoFocus
               />
               {actualCash && (
@@ -1115,13 +1210,16 @@ export default function ShiftClient({
             </div>
 
             <div className="mt-4">
-              <label className="label">Notes (optional)</label>
+              <label className="label" htmlFor="close-shift-notes">Notes (optional)</label>
               <textarea
+                id="close-shift-notes"
+                name="close-shift-notes"
                 className="input"
                 rows={2}
                 placeholder="Any discrepancies or notes..."
                 value={closeNotes}
                 onChange={(e) => setCloseNotes(e.target.value)}
+                autoComplete="off"
               />
             </div>
 
@@ -1147,28 +1245,43 @@ export default function ShiftClient({
             </div>
 
             <div className="mt-4">
-              <label className="label">Variance Details</label>
+              <label className="label" htmlFor="close-shift-variance-details">Variance Details</label>
               <input
+                id="close-shift-variance-details"
+                name="close-shift-variance-details"
                 className="input"
                 value={varianceReason}
                 onChange={(e) => setVarianceReason(e.target.value)}
                 placeholder="Describe why counted cash differs"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
+                data-form-type="other"
               />
             </div>
 
             {!showOwnerOverride ? (
-              <div className="mt-4">
-                <label className="label">Manager PIN (required)</label>
+              <fieldset className="mt-4">
+                <label className="label" htmlFor="close-shift-manager-approval">Manager PIN (required)</label>
                 <input
+                  id="close-shift-manager-approval"
+                  name="close-shift-manager-approval"
                   className="input"
-                  type="password"
+                  type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   value={managerPin}
                   onChange={(e) => setManagerPin(e.target.value)}
                   placeholder="Enter manager approval PIN"
+                  autoComplete="one-time-code"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  readOnly={!pinUnlocked}
+                  onFocus={() => setPinUnlocked(true)}
                 />
-              </div>
+              </fieldset>
             ) : (
               <div className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <div className="text-xs font-semibold uppercase tracking-wider text-amber-700">Owner Override</div>
@@ -1176,11 +1289,15 @@ export default function ShiftClient({
                   <label className="label" htmlFor="owner-override-password">Your Password</label>
                   <input
                     id="owner-override-password"
+                    name="close-shift-owner-reauth"
                     className="input"
                     type="password"
                     value={ownerPassword}
                     onChange={(e) => setOwnerPassword(e.target.value)}
                     placeholder="Re-enter your login password"
+                    autoComplete="new-password"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
                   />
                 </div>
                 <div>
@@ -1236,6 +1353,7 @@ export default function ShiftClient({
                 className="btn-ghost flex-1"
                 onClick={() => {
                   setShowCloseModal(false);
+                  setSelectedOtherShift(null);
                   resetCloseForm();
                 }}
               >
@@ -1247,7 +1365,8 @@ export default function ShiftClient({
                 onClick={handleCloseShift}
                 disabled={
                   isPending ||
-                  !actualCash ||
+                  actualCash === '' ||
+                  Number(actualCash) < 0 ||
                   (!showOwnerOverride && !managerPin) ||
                   (showOwnerOverride && (!ownerPassword || !overrideReasonCode || !overrideJustification.trim())) ||
                   (varianceNeedsReason && !varianceReasonCode && !varianceReason.trim())
@@ -1256,6 +1375,7 @@ export default function ShiftClient({
                 {isPending ? 'Closing...' : 'Close Shift'}
               </button>
             </div>
+            </form>
           </div>
         </div>
       )}

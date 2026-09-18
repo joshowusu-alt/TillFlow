@@ -1,8 +1,14 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
-import { resolveSoleOrSelectedStoreId, withStoreQuery } from '@/lib/reliability/selected-store';
-import SelectedStorePicker from '@/components/SelectedStorePicker';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import { withStoreQuery } from '@/lib/reliability/selected-store';
+import {
+  FOREIGN_OPERATIONAL_STORE_MSG,
+  resolveOperationalStore,
+} from '@/lib/reliability/operational-store';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
+import StoreLinkConflictBanner from '@/components/StoreLinkConflictBanner';
+import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 import { getOpenShiftsForUserInStore, getStoreTillOccupancy } from '@/lib/services/shifts';
 import ShiftClient from './ShiftClient';
 
@@ -57,30 +63,26 @@ export default async function ShiftsPage({
 }: {
   searchParams?: { storeId?: string };
 }) {
-  const { user, business } = await requireBusiness();
-  const storesInCreatedOrder = await prisma.store.findMany({
-    where: { businessId: business.id },
-    select: { id: true, name: true },
-    orderBy: { createdAt: 'asc' },
+  const { user, business, store, stores, operational } = await requireBusinessAndOptionalStore();
+  const urlResolution = resolveOperationalStore({
+    stores,
+    cookieStoreId: operational.cookieStoreId ?? store?.id,
+    urlStoreId: searchParams?.storeId,
   });
-  const selectedStoreId = resolveSoleOrSelectedStoreId(storesInCreatedOrder, searchParams?.storeId);
-  const store = storesInCreatedOrder.find((row) => row.id === selectedStoreId) ?? null;
-  const pickerStores = storesInCreatedOrder;
-
+  if (urlResolution.reason === 'foreign-rejected') {
+    return (
+      <div className="card mx-auto max-w-xl p-6 text-sm text-rose-800">
+        {FOREIGN_OPERATIONAL_STORE_MSG}
+      </div>
+    );
+  }
   if (!store) {
     return (
-      <div className="mx-auto max-w-4xl space-y-4 sm:space-y-5">
-        <div className="flex flex-col gap-1 rounded-[1.5rem] border border-slate-200/80 bg-white/80 px-4 py-4 shadow-card">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-black/35">Cash Management</p>
-          <h1 className="text-[1.6rem] font-display font-bold leading-tight text-ink">Shift Reconciliation</h1>
-          <p className="text-sm font-medium text-slate-500">
-            Select a store before opening or reviewing till shifts. TillFlow will not default to the first store.
-          </p>
-        </div>
-        <div className="card p-5">
-          <SelectedStorePicker stores={pickerStores} selectedStoreId={selectedStoreId} action="/shifts" />
-        </div>
-      </div>
+      <SelectOperationalStoreNotice
+        stores={stores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch to manage shifts"
+      />
     );
   }
 
@@ -121,7 +123,10 @@ export default async function ShiftsPage({
     getStoreTillOccupancy(store.id),
   ]);
 
-  const openShiftSummaries = openShifts.map(summarizeOpenShift);
+  const openShiftSummaries = openShifts.map((row) => ({
+    ...summarizeOpenShift(row),
+    userName: row.user.name,
+  }));
   const occupiedTills = storeOccupancy.map((row) => {
     const summary = summarizeOpenShift(row);
     return {
@@ -176,13 +181,25 @@ export default async function ShiftsPage({
             Cash variance investigations
           </Link>
         </div>
-        <div className="mt-3">
-          <SelectedStorePicker stores={pickerStores} selectedStoreId={store.id} action="/shifts" />
+        <div className="mt-3 space-y-2">
+          <EffectiveStoreBanner
+            storeName={store.name}
+            actionLabel="Shift open, cash movement, and close will be recorded in this branch."
+          />
+          {urlResolution.conflict ? (
+            <StoreLinkConflictBanner
+              activeStoreName={store.name}
+              linkStoreName={urlResolution.conflict.urlStoreName}
+              linkStoreId={urlResolution.conflict.urlStoreId}
+              returnTo="/shifts"
+            />
+          ) : null}
         </div>
       </div>
 
       <ShiftClient
         storeId={store.id}
+        storeName={store.name}
         tills={tills}
         openShifts={openShiftSummaries}
         occupiedTills={occupiedTills}

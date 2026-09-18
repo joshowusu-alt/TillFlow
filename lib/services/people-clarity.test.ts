@@ -127,7 +127,7 @@ describe('Customer and Supplier reporting clarity', () => {
   });
 
   it('27. recordSupplierPaymentAction remains wired through SupplierPaymentForm', () => {
-    expect(supplierPaymentsSrc).toContain('SupplierPaymentForm');
+    expect(supplierPaymentsSrc).toContain('SupplierPaymentDialog');
     expect(supplierPaymentFormSrc).toContain("from '@/app/actions/payments'");
     expect(supplierPaymentFormSrc).toContain('recordSupplierPaymentAction');
     expect(supplierPaymentFormSrc).toContain('StableIdempotencyKeyInput');

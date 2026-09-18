@@ -6,7 +6,9 @@ import InlinePaymentForm from '@/components/InlinePaymentForm';
 import IssueResolutionBanner from '@/components/IssueResolutionBanner';
 import LinkPurchaseSupplierForm from '@/components/LinkPurchaseSupplierForm';
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import RemainingBalance from '@/components/RemainingBalance';
 import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
@@ -34,7 +36,7 @@ export default async function PurchasesPage({
     issue?: string;
   };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, store: operationalStore, stores: authorisedStores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) {
     return (
       <div className="card p-6 text-center">
@@ -50,8 +52,8 @@ export default async function PurchasesPage({
   // Unknown issue keys must not fall through to the full unfiltered list.
   const invalidIssue = Boolean(searchParams?.issue?.trim()) && !missingSupplierIssue;
 
-  const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
-  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId) ?? '';
+  const { stores } = await getBusinessStores(business.id, operationalStore?.id ?? searchParams?.storeId);
+  const selectedStoreId = operationalStore?.id ?? resolveSoleOrSelectedStoreId(stores, searchParams?.storeId) ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
 
   const missingSupplierIds = missingSupplierIssue
@@ -271,22 +273,19 @@ export default async function PurchasesPage({
         </div>
       )}
 
-      {!issueActive && stores.length > 1 && (
-        <form method="GET" className="card grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-          <div className="min-w-0">
-            <label className="label">Branch</label>
-            <select className="input w-full" name="storeId" defaultValue={selectedStoreId}>
-              {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button className="btn-secondary w-full sm:w-auto" type="submit">
-            Apply
-          </button>
-        </form>
+      {!issueActive && (
+        selectedStoreId ? (
+          <EffectiveStoreBanner
+            storeName={stores.find((row) => row.id === selectedStoreId)?.name ?? 'Selected branch'}
+            actionLabel="Purchases on this page are recorded in this branch. Switch branches from the header."
+          />
+        ) : (
+          <SelectOperationalStoreNotice
+            stores={authorisedStores}
+            canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+            title="Select a branch before recording a purchase"
+          />
+        )
       )}
 
       {!issueActive && (

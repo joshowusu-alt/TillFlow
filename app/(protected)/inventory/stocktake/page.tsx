@@ -1,10 +1,11 @@
 import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { getBusinessStores } from '@/lib/services/stores';
 import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
-import SelectedStorePicker from '@/components/SelectedStorePicker';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
+import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 import { createStocktakeAction } from '@/app/actions/stocktake';
 import { getFeatures } from '@/lib/features';
 import { formatDateTime } from '@/lib/format';
@@ -18,21 +19,20 @@ export default async function StocktakePage({
 }: {
   searchParams?: { storeId?: string };
 }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { user, business, store: operationalStore, stores: authorisedStores } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) {
     return <div className="card p-6">Seed data missing.</div>;
   }
-  const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
-  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
-  const store = stores.find((item) => item.id === selectedStoreId) ?? null;
+  const { stores } = await getBusinessStores(business.id, operationalStore?.id ?? searchParams?.storeId);
+  const selectedStoreId = operationalStore?.id ?? resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
+  const store = stores.find((item) => item.id === selectedStoreId) ?? operationalStore ?? null;
   if (!store) {
     return (
-      <div className="space-y-4">
-        <PageHeader title="Stocktake" subtitle="Select a store before starting or continuing a count." />
-        <div className="card p-5">
-          <SelectedStorePicker stores={stores} selectedStoreId={selectedStoreId} action="/inventory/stocktake" />
-        </div>
-      </div>
+      <SelectOperationalStoreNotice
+        stores={authorisedStores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch before starting a stocktake"
+      />
     );
   }
 
@@ -103,7 +103,10 @@ export default async function StocktakePage({
           </Link>
         }
       />
-      <SelectedStorePicker stores={stores} selectedStoreId={store.id} action="/inventory/stocktake" />
+      <EffectiveStoreBanner
+        storeName={store.name}
+        actionLabel="This stocktake counts and posts stock for this branch."
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">

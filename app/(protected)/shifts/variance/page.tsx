@@ -2,9 +2,9 @@ import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
-import { requireBusiness } from '@/lib/auth';
-import { resolveSoleOrSelectedStoreId, withStoreQuery } from '@/lib/reliability/selected-store';
-import SelectedStorePicker from '@/components/SelectedStorePicker';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import { withStoreQuery } from '@/lib/reliability/selected-store';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import { prisma } from '@/lib/prisma';
 
 export default async function CashVarianceListPage({
@@ -12,26 +12,14 @@ export default async function CashVarianceListPage({
 }: {
   searchParams?: { storeId?: string };
 }) {
-  const { business } = await requireBusiness();
-  const stores = await prisma.store.findMany({
-    where: { businessId: business.id },
-    select: { id: true, name: true },
-    orderBy: { createdAt: 'asc' },
-  });
-  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
-  const store = stores.find((row) => row.id === selectedStoreId) ?? null;
+  const { business, store, stores, user } = await requireBusinessAndOptionalStore();
   if (!store) {
     return (
-      <div className="mx-auto max-w-5xl space-y-5">
-        <PageHeader
-          title="Cash variance investigations"
-          subtitle="Select a store before reviewing variances. TillFlow will not default to the first store."
-          secondaryCta={{ label: 'Back to shifts', href: '/shifts' }}
-        />
-        <div className="card p-5">
-          <SelectedStorePicker stores={stores} selectedStoreId={selectedStoreId} action="/shifts/variance" />
-        </div>
-      </div>
+      <SelectOperationalStoreNotice
+        stores={stores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch to review variances"
+      />
     );
   }
 
@@ -71,7 +59,7 @@ export default async function CashVarianceListPage({
       />
 
       <div className="card p-4">
-        <SelectedStorePicker stores={stores} selectedStoreId={store.id} action="/shifts/variance" />
+        <p className="text-sm font-semibold text-ink">Active branch: {store.name}</p>
       </div>
 
       <div className="card overflow-hidden p-4">

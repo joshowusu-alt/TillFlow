@@ -105,7 +105,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const headersList = headers();
   const pathname = headersList.get('x-pathname') || '';
 
-  const { user, business, store } = await measureServerOperation(
+  const { user, business, store, stores = [] } = await measureServerOperation(
     'app.protected.layout-gate',
     () => requireBusinessAndOptionalStore(),
     { route: pathname || 'protected-layout' },
@@ -137,6 +137,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         plan={getBusinessPlan((business as any).plan ?? (business?.mode as any), ((business as any).storeMode as any) ?? 'SINGLE_STORE')}
         storeMode={((business as any).storeMode as any) ?? 'SINGLE_STORE'}
         storeName={store?.name}
+        storeId={store?.id ?? null}
+        stores={stores.map((row) => ({ id: row.id, name: row.name }))}
         businessName={business.name}
         merchantBranding={{
           businessName: business.name,

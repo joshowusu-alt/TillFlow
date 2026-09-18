@@ -151,7 +151,7 @@ export default async function MoneyReceivedReceiptsPage({
         </div>
         {stores.length > 1 ? (
           <div>
-            <label className="label">Branch</label>
+            <label className="label">Report branch filter</label>
             <select className="input" name="storeId" defaultValue={scope.storeId}>
               <option value="ALL">All branches</option>
               {stores.map((store) => (

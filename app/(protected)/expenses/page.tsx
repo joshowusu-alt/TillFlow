@@ -3,10 +3,10 @@ import Pagination from '@/components/Pagination';
 import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
 import RemainingBalance from '@/components/RemainingBalance';
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
-import { getBusinessStores } from '@/lib/services/stores';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
-import SelectedStorePicker from '@/components/SelectedStorePicker';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
+import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
 import { ACCOUNT_CODES } from '@/lib/accounting';
@@ -18,11 +18,10 @@ export default async function ExpensesPage({
 }: {
   searchParams?: { error?: string; page?: string; recorded?: string; sourceAdjustmentId?: string; storeId?: string };
 }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { user, business, store: operationalStore, stores } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
-  const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
-  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
-  const store = stores.find((item) => item.id === selectedStoreId) ?? null;
+  const selectedStoreId = operationalStore?.id ?? resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
+  const store = stores.find((item) => item.id === selectedStoreId) ?? operationalStore ?? null;
 
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
@@ -91,8 +90,12 @@ export default async function ExpensesPage({
           </svg>
         </summary>
         <div className="card mt-2 p-4 sm:p-5">
-          <SelectedStorePicker stores={stores} selectedStoreId={selectedStoreId} action="/expenses" />
           {store ? (
+          <>
+          <EffectiveStoreBanner
+            storeName={store.name}
+            actionLabel="This expense will be recorded in this branch."
+          />
           <ExpenseForm
             businessId={business.id}
             currency={business.currency}
@@ -105,8 +108,13 @@ export default async function ExpensesPage({
             storeId={store.id}
             actorRole={user.role}
           />
+          </>
           ) : (
-            <p className="mt-3 text-sm text-amber-800">Select a store before recording an expense.</p>
+            <SelectOperationalStoreNotice
+              stores={stores}
+              canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+              title="Select a branch before recording an expense"
+            />
           )}
         </div>
       </details>
