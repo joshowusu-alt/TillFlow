@@ -1,6 +1,5 @@
 'use client';
 
-import { useTransition } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { switchOperationalStoreAction } from '@/app/actions/operational-store';
 
@@ -22,7 +21,6 @@ export default function OperationalStoreSwitcher({
 }) {
   const pathname = usePathname() ?? '/onboarding';
   const searchParams = useSearchParams();
-  const [pending, startTransition] = useTransition();
   const currentQuery = searchParams?.toString();
   const returnTo = currentQuery ? `${pathname}?${currentQuery}` : pathname;
   const label = selectedStoreName?.trim() || (stores.length > 1 ? 'Select branch' : 'No branch');
@@ -40,14 +38,7 @@ export default function OperationalStoreSwitcher({
   }
 
   return (
-    <form
-      action={(formData) => {
-        startTransition(() => {
-          void switchOperationalStoreAction(formData).then(() => undefined);
-        });
-      }}
-      className="inline-flex items-center"
-    >
+    <form action={switchOperationalStoreAction} className="inline-flex items-center">
       <input type="hidden" name="returnTo" value={returnTo} />
       <label className="sr-only" htmlFor="operational-store-switcher">
         Active branch
@@ -57,7 +48,6 @@ export default function OperationalStoreSwitcher({
         name="storeId"
         className="h-9 max-w-[13rem] truncate rounded-xl border border-slate-200/80 bg-white/90 px-2 text-xs font-semibold text-ink shadow-sm"
         defaultValue={selectedStoreId ?? ''}
-        disabled={pending}
         data-operational-store={selectedStoreId ?? ''}
         onChange={(event) => {
           event.currentTarget.form?.requestSubmit();

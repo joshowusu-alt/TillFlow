@@ -13,6 +13,8 @@ describe('authoritative operational store surfaces', () => {
     expect(layout).toContain('stores={stores.map');
     expect(topNav).toContain('OperationalStoreSwitcher');
     expect(topNav).toContain('withOperationalStoreQuery');
+    expect(read('components/OperationalStoreSwitcher.tsx')).toContain('action={switchOperationalStoreAction}');
+    expect(read('components/OperationalStoreSwitcher.tsx')).not.toContain('startTransition');
     expect(auth).toContain('resolveOperationalStore');
     expect(auth).toContain('_getStores');
     expect(read('lib/reliability/operational-store.ts')).not.toContain("from 'next/headers'");

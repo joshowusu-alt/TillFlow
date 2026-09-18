@@ -18,12 +18,7 @@ export default function StoreLinkConflictBanner({
         Your active branch is still <span className="font-semibold">{activeStoreName}</span>.
         Transactions will be recorded there until you switch in the header.
       </p>
-      <form
-        action={async (formData) => {
-          await switchOperationalStoreAction(formData);
-        }}
-        className="mt-3"
-      >
+      <form action={switchOperationalStoreAction} className="mt-3">
         <input type="hidden" name="storeId" value={linkStoreId} />
         <input type="hidden" name="returnTo" value={returnTo} />
         <button type="submit" className="btn-secondary text-xs">
