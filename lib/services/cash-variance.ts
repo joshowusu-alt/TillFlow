@@ -63,6 +63,7 @@ type VarianceTx = {
     findFirst: (args: unknown) => Promise<{ id: string; userId: string } | null>;
   };
   businessSequence: {
+    upsert: (args: unknown) => Promise<{ nextVal: number }>;
     update: (args: unknown) => Promise<{ nextVal: number }>;
     create: (args: unknown) => Promise<{ nextVal: number }>;
   };
