@@ -370,15 +370,33 @@ function varianceActor(user: { id: string; name: string | null; role: string }) 
   return { userId: user.id, userName: user.name, userRole: user.role };
 }
 
+async function requireVarianceOperationalStore(
+  roles: Parameters<typeof requireSelectedStoreContext>[0],
+  investigationId: string,
+) {
+  const { businessId } = await withBusinessContext(roles);
+  const investigation = await prisma.cashVarianceInvestigation.findFirst({
+    where: { id: investigationId, businessId },
+    select: { shift: { select: { till: { select: { storeId: true } } } } },
+  });
+  if (!investigation?.shift?.till.storeId) {
+    throw new Error('Investigation is required.');
+  }
+  return requireSelectedStoreContext(roles, investigation.shift.till.storeId);
+}
+
 export async function assignCashVarianceAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction(async () => {
-    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
     const investigationId = formString(formData, 'investigationId');
     const reviewerUserId = formString(formData, 'reviewerUserId');
     if (!investigationId) return err('Investigation is required.');
     if (!reviewerUserId) return err('Select a manager or owner to review this variance.');
+    const { user, businessId } = await requireVarianceOperationalStore(
+      ['MANAGER', 'OWNER'],
+      investigationId,
+    );
 
     try {
       const result = await assignCashVarianceReviewer({
@@ -401,12 +419,12 @@ export async function explainCashVarianceAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction(async () => {
-    const { user, businessId } = await withBusinessContext();
     const investigationId = formString(formData, 'investigationId');
     const explanation = formString(formData, 'explanation');
     const evidenceNote = formString(formData, 'evidenceNote') || null;
     if (!investigationId) return err('Investigation is required.');
     if (!explanation.trim()) return err('A cashier explanation is required.');
+    const { user, businessId } = await requireVarianceOperationalStore(undefined, investigationId);
 
     try {
       const result = await explainCashVariance({
@@ -430,11 +448,14 @@ export async function resolveCashVarianceAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction(async () => {
-    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
     const investigationId = formString(formData, 'investigationId');
     const resolution = formString(formData, 'resolution');
     if (!investigationId) return err('Investigation is required.');
     if (!resolution.trim()) return err('A manager resolution is required.');
+    const { user, businessId } = await requireVarianceOperationalStore(
+      ['MANAGER', 'OWNER'],
+      investigationId,
+    );
 
     try {
       const result = await resolveCashVariance({
@@ -457,9 +478,9 @@ export async function approveCashVarianceAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction(async () => {
-    const { user, businessId } = await withBusinessContext(['OWNER']);
     const investigationId = formString(formData, 'investigationId');
     if (!investigationId) return err('Investigation is required.');
+    const { user, businessId } = await requireVarianceOperationalStore(['OWNER'], investigationId);
 
     try {
       const result = await approveCashVariance({

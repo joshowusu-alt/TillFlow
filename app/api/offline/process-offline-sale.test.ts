@@ -1,19 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { hashOfflineSalePayload } from '@/lib/offline/payload-hash';
 
-const { prismaMock, mockCreateSale } = vi.hoisted(() => {
+const { prismaMock, mockCreateSale, cookieGet } = vi.hoisted(() => {
   const mockCreateSale = vi.fn();
+  const cookieGet = vi.fn();
   const prismaMock = {
-    store: { findFirst: vi.fn() },
+    store: { findFirst: vi.fn(), count: vi.fn() },
     till: { findFirst: vi.fn() },
     customer: { findFirst: vi.fn() },
     salesInvoice: { findFirst: vi.fn() },
     shift: { findFirst: vi.fn(), findMany: vi.fn() },
     user: { findFirst: vi.fn() },
   };
-  return { prismaMock, mockCreateSale };
+  return { prismaMock, mockCreateSale, cookieGet };
 });
 
+vi.mock('next/headers', () => ({
+  cookies: () => ({ get: cookieGet }),
+}));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/services/sales', () => ({ createSale: mockCreateSale }));
 vi.mock('@/lib/billing-db-compat', () => ({
@@ -79,7 +83,13 @@ async function makePayload(overrides: Partial<OfflineSalePayload> = {}): Promise
 }
 
 function setupHappyPath() {
-  prismaMock.store.findFirst.mockResolvedValue(STORE);
+  cookieGet.mockReturnValue({ value: STORE.id });
+  prismaMock.store.count.mockResolvedValue(2);
+  prismaMock.store.findFirst.mockImplementation(async ({ where }: { where: { id?: string; businessId?: string } }) => {
+    if (where.id && where.id !== STORE.id) return null;
+    if (where.businessId && where.businessId !== USER.businessId) return null;
+    return STORE;
+  });
   prismaMock.till.findFirst.mockResolvedValue(TILL);
   prismaMock.shift.findFirst.mockResolvedValue(OPEN_SHIFT);
   prismaMock.user.findFirst.mockResolvedValue(CASHIER);
@@ -513,11 +523,24 @@ describe('processOfflineSale — offline lifecycle', () => {
     mockCreateSale.mockResolvedValue({ id: 'inv-biz' });
     const customUser = { id: 'user-99', businessId: 'biz-correct' };
     prismaMock.store.findFirst.mockResolvedValue(STORE);
+    prismaMock.store.count.mockResolvedValue(2);
     prismaMock.user.findFirst.mockResolvedValue({ id: 'cashier-1', businessId: 'biz-correct', active: true });
     const payload = await makePayload({ businessId: 'biz-correct' });
 
     await processOfflineSale(payload, customUser);
 
     expect(mockCreateSale).toHaveBeenCalledWith(expect.objectContaining({ businessId: 'biz-correct' }));
+  });
+
+  it('rejects a stale operational-store cookie before writing the sale', async () => {
+    cookieGet.mockReturnValue({ value: 'store-other' });
+    prismaMock.store.findFirst.mockImplementation(async ({ where }: { where: { id?: string } }) => {
+      if (where.id === STORE.id || where.id === 'store-other') return { id: where.id };
+      return null;
+    });
+    const payload = await makePayload();
+    const result = await processOfflineSale(payload, USER);
+    expect(result).toEqual({ success: false, status: 'rejected', reason: 'stale_operational_store' });
+    expect(mockCreateSale).not.toHaveBeenCalled();
   });
 });

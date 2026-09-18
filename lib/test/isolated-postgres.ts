@@ -76,7 +76,8 @@ export async function proveWalkthroughPostgresSchema(prisma: PrismaClient) {
     FROM "_prisma_migrations"
     WHERE migration_name IN (
       '20260917180000_owner_walkthrough_integrity',
-      '20260918140000_walkthrough_store_numbers'
+      '20260918140000_walkthrough_store_numbers',
+      '20260918230000_shift_presentation_numbers'
     )
     ORDER BY migration_name
   `;

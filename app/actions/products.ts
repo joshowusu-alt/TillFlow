@@ -5,12 +5,14 @@ import { revalidateTag, revalidatePath } from 'next/cache';
 import { formString, formOptionalString, formInt, formPence } from '@/lib/form-helpers';
 import {
   withBusinessContext,
+  requireSelectedStoreContext,
   formAction,
   safeAction,
   ok,
   err,
   type ActionResult,
 } from '@/lib/action-utils';
+import { readOperationalStoreCookie } from '@/lib/reliability/operational-store-cookie';
 import { audit } from '@/lib/audit';
 import { prisma } from '@/lib/prisma';
 import {
@@ -152,31 +154,29 @@ export async function createProductAction(formData: FormData): Promise<void> {
 
     let openingStockStoreId: string | null = null;
     if (openingStockQty > 0 && openingStockUnitId) {
-      const store = await prisma.store.findFirst({
-        where: { businessId },
-        select: { id: true },
+      const selected = await requireSelectedStoreContext(
+        ['MANAGER', 'OWNER'],
+        readOperationalStoreCookie(),
+      );
+      await createPurchase({
+        businessId,
+        storeId: selected.storeId,
+        supplierId: null,
+        paymentStatus: 'UNPAID',
+        dueDate: null,
+        payments: [],
+        lines: [
+          {
+            productId: product.id,
+            unitId: openingStockUnitId,
+            qtyInUnit: openingStockQty,
+            unitCostPence: openingStockCostPence,
+          },
+        ],
+        userId: user.id,
+        stockMovementType: 'OPENING',
       });
-      if (store) {
-        await createPurchase({
-          businessId,
-          storeId: store.id,
-          supplierId: null,
-          paymentStatus: 'UNPAID',
-          dueDate: null,
-          payments: [],
-          lines: [
-            {
-              productId: product.id,
-              unitId: openingStockUnitId,
-              qtyInUnit: openingStockQty,
-              unitCostPence: openingStockCostPence,
-            },
-          ],
-          userId: user.id,
-          stockMovementType: 'OPENING',
-        });
-        openingStockStoreId = store.id;
-      }
+      openingStockStoreId = selected.storeId;
     }
 
     await persistActivationSnapshot(businessId).catch(() => {});

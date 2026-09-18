@@ -3,7 +3,8 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry, ensureChartOfAccounts } from '@/lib/accounting';
 import { requireRole } from '@/lib/auth';
-import { safeAction, ok, err, UserError, type ActionResult } from '@/lib/action-utils';
+import { requireSelectedStoreContext, safeAction, ok, err, UserError, type ActionResult } from '@/lib/action-utils';
+import { readOperationalStoreCookie } from '@/lib/reliability/operational-store-cookie';
 import { revalidatePath, revalidateTag } from 'next/cache';
 
 // ---------------------------------------------------------------------------
@@ -143,8 +144,11 @@ export async function saveOpeningAR(
   customers: CustomerDebt[],
 ): Promise<ActionResult> {
   return safeAction(async () => {
-    const user = await requireRole(['OWNER', 'MANAGER']);
-    const businessId = user.businessId;
+    const { user, businessId, storeId } = await requireSelectedStoreContext(
+      ['OWNER', 'MANAGER'],
+      readOperationalStoreCookie(),
+    );
+    const store = { id: storeId };
 
     // Validate
     for (const c of customers) {
@@ -154,13 +158,6 @@ export async function saveOpeningAR(
 
     // Only process customers with non-zero amounts
     const validEntries = customers.filter(c => c.amountPence > 0);
-
-    // Need a store and till for SalesInvoice creation
-    const store = await prisma.store.findFirst({
-      where: { businessId },
-      select: { id: true },
-    });
-    if (!store) throw new UserError('No store found. Please create a store first.');
 
     const till = await prisma.till.findFirst({
       where: { storeId: store.id },
@@ -256,8 +253,11 @@ export async function saveOpeningAP(
   suppliers: SupplierDebt[],
 ): Promise<ActionResult> {
   return safeAction(async () => {
-    const user = await requireRole(['OWNER', 'MANAGER']);
-    const businessId = user.businessId;
+    const { businessId, storeId } = await requireSelectedStoreContext(
+      ['OWNER', 'MANAGER'],
+      readOperationalStoreCookie(),
+    );
+    const store = { id: storeId };
 
     // Validate
     for (const s of suppliers) {
@@ -266,12 +266,6 @@ export async function saveOpeningAP(
     }
 
     const validEntries = suppliers.filter(s => s.amountPence > 0);
-
-    const store = await prisma.store.findFirst({
-      where: { businessId },
-      select: { id: true },
-    });
-    if (!store) throw new UserError('No store found. Please create a store first.');
 
     await ensureChartOfAccounts(businessId);
 

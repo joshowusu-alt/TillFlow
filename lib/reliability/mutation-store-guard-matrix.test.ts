@@ -17,8 +17,14 @@ const MATRIX: Array<{ path: string; writes: string[]; notes: string }> = [
   { path: 'app/actions/inventory-reversal.ts', writes: ['reverseInventoryAdjustmentAction'], notes: 'reversals' },
   { path: 'app/actions/stocktake.ts', writes: ['createStocktakeAction'], notes: 'stocktakes' },
   { path: 'app/actions/transfers.ts', writes: ['requestStockTransferAction', 'approveStockTransferActionSafe'], notes: 'transfers + approval' },
-  { path: 'app/actions/shifts.ts', writes: ['openShiftAction', 'addCashToTillAction', 'closeShiftAction', 'closeShiftOwnerOverrideAction'], notes: 'shift open/add/close' },
+  { path: 'app/actions/shifts.ts', writes: ['openShiftAction', 'addCashToTillAction', 'closeShiftAction', 'closeShiftOwnerOverrideAction', 'assignCashVarianceAction', 'explainCashVarianceAction', 'resolveCashVarianceAction', 'approveCashVarianceAction'], notes: 'shift open/add/close + variance' },
   { path: 'app/actions/returns.ts', writes: ['createSalesReturnAction', 'createPurchaseReturnAction'], notes: 'sale/purchase reversals' },
+  { path: 'app/actions/opening-stock.ts', writes: ['createOpeningStockAction'], notes: 'opening stock; no first-store inference' },
+  { path: 'app/actions/import-stock.ts', writes: ['importStockAction'], notes: 'import stock uses operational cookie, not stores[0]' },
+  { path: 'app/actions/stocktake.ts', writes: ['createStocktakeAction', 'saveStocktakeCountsAction', 'completeStocktakeAction', 'cancelStocktakeAction'], notes: 'stocktake lifecycle' },
+  { path: 'app/actions/reorder.ts', writes: ['markAsOrdered'], notes: 'reorder is store-scoped' },
+  { path: 'app/actions/products.ts', writes: ['createProductAction'], notes: 'product opening stock uses operational store' },
+  { path: 'app/actions/opening-balances.ts', writes: ['saveOpeningAR', 'saveOpeningAP'], notes: 'opening AR/AP invoices use operational store' },
 ];
 
 describe('authoritative mutation store guard matrix', () => {
@@ -30,13 +36,23 @@ describe('authoritative mutation store guard matrix', () => {
     for (const row of MATRIX) {
       const src = read(row.path);
       expect(src, row.path).toContain(MUTATION_GUARD);
+      expect(src, `${row.path} must not infer stores[0]`).not.toMatch(/stores\[0\]/);
       for (const write of row.writes) {
-        const start = src.indexOf(`export async function ${write}`);
+        const exported = src.indexOf(`export async function ${write}`);
+        const internal = src.indexOf(`async function ${write}`);
+        const start = exported === -1 ? internal : exported;
         expect(start, `${row.path} ${write}`).toBeGreaterThan(-1);
         const nextExport = src.indexOf('export async function', start + 10);
-        const body = nextExport === -1 ? src.slice(start) : src.slice(start, nextExport);
-        expect(body, `${row.path} ${write} uses ${MUTATION_GUARD}`).toContain(MUTATION_GUARD);
+        const body = write === 'importStockAction' ? src : nextExport === -1 ? src.slice(start) : src.slice(start, nextExport);
+        expect(
+          body.includes(MUTATION_GUARD) || body.includes('requireVarianceOperationalStore'),
+          `${row.path} ${write} uses ${MUTATION_GUARD}`,
+        ).toBe(true);
       }
     }
+
+    const offline = read('app/api/offline/process-offline-sale.ts');
+    expect(offline).toContain('assertAuthoritativeMutationStore');
+    expect(offline).toContain("reject('stale_operational_store')");
   });
 });

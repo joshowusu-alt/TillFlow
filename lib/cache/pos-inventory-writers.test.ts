@@ -57,7 +57,7 @@ describe('POS inventory writer source map', () => {
   it('products opening-stock path passes storeId; other sites stay product-only', () => {
     const products = read('app/actions/products.ts');
     expect(products).toContain('revalidatePosInventory(businessId, openingStockStoreId)');
-    expect(products).toMatch(/createPurchase\([\s\S]*storeId: store\.id[\s\S]*revalidatePosInventory\(businessId, openingStockStoreId\)/);
+    expect(products).toMatch(/createPurchase\([\s\S]*storeId: selected\.storeId[\s\S]*revalidatePosInventory\(businessId, openingStockStoreId\)/);
     expect(products).toContain('revalidatePosCatalog(businessId)');
     assertNoGlobalInventoryTag(products, 'products.ts');
   });
