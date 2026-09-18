@@ -14,7 +14,9 @@ import { parseTags } from '@/lib/contact-tags';
 import { updateSupplierAction } from '@/app/actions/suppliers';
 import DueDateBadge from '@/components/DueDateBadge';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
+import RemainingBalance from '@/components/RemainingBalance';
 import { getSupplierSalesReport } from '@/lib/reports/supplier-sales';
+import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 
 const PAYMENT_LABEL: Record<string, string> = {
   CASH: 'Cash',
@@ -85,6 +87,7 @@ export default async function SupplierDetailPage({
           },
           select: {
             id: true,
+            transactionNumber: true,
             createdAt: true,
             dueDate: true,
             paymentStatus: true,
@@ -423,22 +426,19 @@ export default async function SupplierDetailPage({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <Link href={`/purchases/${invoice.id}`} className="font-mono text-xs hover:underline">
-                        {invoice.id.slice(0, 8)}
+                        {displayDocumentNumber('purchase', invoice.transactionNumber, invoice.id)}
                       </Link>
                       <div className="mt-1 text-xs text-black/50">{formatDateTime(invoice.createdAt)}</div>
                     </div>
                     <span className="pill shrink-0 bg-black/5 text-black/60">{STATUS_LABEL[invoice.paymentStatus] ?? invoice.paymentStatus}</span>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-black/40">Total</div>
-                      <div className="font-semibold">{formatMoney(invoice.totalPence, business.currency)}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs uppercase tracking-wide text-black/40">Amount owed</div>
-                      <div className="font-semibold">{formatMoney(invoice.balance, business.currency)}</div>
-                    </div>
+                  <div className="mt-3">
+                    <RemainingBalance
+                      amountPence={invoice.totalPence}
+                      paidPence={invoice.paid}
+                      currency={business.currency}
+                    />
                   </div>
 
                   <div className="mt-3 flex items-center gap-2">
@@ -483,8 +483,7 @@ export default async function SupplierDetailPage({
                 <th>Purchased</th>
                 <th>Due Date</th>
                 <th>Status</th>
-                <th>Total</th>
-                <th>Amount owed</th>
+                <th>Balance</th>
                 <th></th>
               </tr>
             </thead>
@@ -496,7 +495,7 @@ export default async function SupplierDetailPage({
                     <tr className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
                       <td className="px-3 py-3 text-sm">
                         <Link href={`/purchases/${invoice.id}`} className="font-mono text-xs hover:underline">
-                          {invoice.id.slice(0, 8)}
+                          {displayDocumentNumber('purchase', invoice.transactionNumber, invoice.id)}
                         </Link>
                       </td>
                       <td className="px-3 py-3 text-sm text-black/60">{formatDateTime(invoice.createdAt)}</td>
@@ -512,10 +511,11 @@ export default async function SupplierDetailPage({
                         <span className="pill bg-black/5 text-black/60">{STATUS_LABEL[invoice.paymentStatus] ?? invoice.paymentStatus}</span>
                       </td>
                       <td className="px-3 py-3 text-sm font-semibold">
-                        {formatMoney(invoice.totalPence, business.currency)}
-                      </td>
-                      <td className="px-3 py-3 text-sm font-semibold">
-                        {formatMoney(invoice.balance, business.currency)}
+                        <RemainingBalance
+                          amountPence={invoice.totalPence}
+                          paidPence={invoice.paid}
+                          currency={business.currency}
+                        />
                       </td>
                       <td className="px-3 py-3 text-sm">
                         {!invoice.isClosed && invoice.balance > 0 && (
@@ -527,7 +527,7 @@ export default async function SupplierDetailPage({
                     </tr>
                     {invoice.payments.length > 0 && (
                       <tr className="bg-transparent">
-                        <td colSpan={7} className="px-3 pb-3 pt-0">
+                        <td colSpan={6} className="px-3 pb-3 pt-0">
                           <div className="rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2">
                             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-black/40">Payment history</div>
                             <div className="space-y-1">
@@ -549,7 +549,7 @@ export default async function SupplierDetailPage({
               })}
               {invoices.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-sm text-black/50">
+                  <td colSpan={6} className="px-3 py-8 text-center text-sm text-black/50">
                     <div className="font-semibold text-ink">No purchases yet.</div>
                     <div className="mt-1">When you record purchases from this supplier, unpaid items will appear here.</div>
                   </td>

@@ -5,6 +5,7 @@ const {
   postJournalEntryMock,
   recordCashDrawerEntryTxMock,
   getOpenCashShiftForPaymentMock,
+  reserveNextDocumentNumberMock,
 } = vi.hoisted(() => ({
   prismaMock: {
     account: { findFirst: vi.fn() },
@@ -12,6 +13,7 @@ const {
     user: { findFirst: vi.fn() },
     till: { findFirst: vi.fn() },
     shift: { findFirst: vi.fn() },
+    stockAdjustment: { findFirst: vi.fn() },
     expense: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
     expensePayment: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
     moneyIdempotency: { findUnique: vi.fn(), create: vi.fn() },
@@ -21,6 +23,7 @@ const {
   postJournalEntryMock: vi.fn(),
   recordCashDrawerEntryTxMock: vi.fn(),
   getOpenCashShiftForPaymentMock: vi.fn(),
+  reserveNextDocumentNumberMock: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -45,10 +48,18 @@ vi.mock('@/lib/observability', () => ({
   measureServerOperation: (_name: string, fn: () => unknown) => fn(),
   PERFORMANCE_THRESHOLDS_MS: { action: 5000 },
 }));
+vi.mock('./document-numbers', () => ({
+  reserveNextDocumentNumber: (...args: unknown[]) => reserveNextDocumentNumberMock(...args),
+}));
 
-import { createExpense, CASH_EXPENSE_SHIFT_REQUIRED_MSG } from './expenses';
+import { createExpense, CASH_EXPENSE_SHIFT_REQUIRED_MSG, EXPENSE_PAYMENT_METHOD_REQUIRED_MSG } from './expenses';
 import { recordExpensePayment } from './expensePayments';
 import { summarizeCashDrawerEntries, CASH_DRAWER_ENTRY_LABELS } from './cash-drawer';
+import {
+  INVENTORY_LOSS_DUPLICATE_ADJUSTMENT_MSG,
+  INVENTORY_LOSS_OVERRIDE_REQUIRED_MSG,
+} from './inventory-loss-expense-guard';
+import { INVENTORY_LOSS_ACCOUNT_CODE } from '@/lib/reliability/walkthrough-contracts';
 
 const bizId = 'biz-1';
 const storeId = 'store-1';
@@ -71,6 +82,8 @@ const baseExpenseInput = {
 describe('expense cash drawer linkage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    postJournalEntryMock.mockReset();
+    postJournalEntryMock.mockResolvedValue(undefined);
     prismaMock.account.findFirst.mockResolvedValue({ id: accountId, code: '5000' });
     prismaMock.store.findFirst.mockResolvedValue({ id: storeId });
     prismaMock.user.findFirst.mockResolvedValue({ id: userId });
@@ -81,6 +94,12 @@ describe('expense cash drawer linkage', () => {
       id: 'midem-exp-1',
       ...data,
     }));
+    prismaMock.stockAdjustment.findFirst.mockResolvedValue({ id: 'adj-1' });
+    reserveNextDocumentNumberMock.mockImplementation(async (_tx: unknown, _biz: string, seq: string) => {
+      if (seq === 'expense') return 'EXP-000001';
+      if (seq === 'expense_payment') return 'EPAY-000001';
+      return `${seq}-000001`;
+    });
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
     getOpenCashShiftForPaymentMock.mockResolvedValue({ id: 'shift-1', tillId: 'till-1' });
     recordCashDrawerEntryTxMock.mockResolvedValue({
@@ -100,12 +119,15 @@ describe('expense cash drawer linkage', () => {
           }))
         : [],
     }));
-    prismaMock.expense.findFirst.mockResolvedValue({
-      id: expenseId,
-      businessId: bizId,
-      storeId,
-      amountPence: 50000,
-      payments: [],
+    prismaMock.expense.findFirst.mockImplementation(async ({ where }: any) => {
+      if (where?.sourceAdjustmentId) return null;
+      return {
+        id: where?.id ?? expenseId,
+        businessId: bizId,
+        storeId,
+        amountPence: 50000,
+        payments: [],
+      };
     });
     prismaMock.expensePayment.create.mockImplementation(async ({ data }: any) => ({
       id: 'payment-follow-up',
@@ -487,6 +509,133 @@ describe('expense cash drawer linkage', () => {
       }),
     ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
     expect(prismaMock.expensePayment.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a claimed PAID status that contradicts amounts', async () => {
+    await expect(
+      createExpense({
+        ...baseExpenseInput,
+        paymentStatus: 'PAID',
+        amountPaidPence: 20000,
+      }),
+    ).rejects.toThrow(/contradicts/);
+    expect(prismaMock.expense.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects overpayment on create — there is no advance workflow', async () => {
+    await expect(
+      createExpense({
+        ...baseExpenseInput,
+        paymentStatus: 'PAID',
+        amountPaidPence: 60000,
+      }),
+    ).rejects.toThrow(/exceeds/);
+    expect(prismaMock.expense.create).not.toHaveBeenCalled();
+  });
+
+  it('requires a payment method when money is paid', async () => {
+    await expect(
+      createExpense({
+        ...baseExpenseInput,
+        method: null,
+      }),
+    ).rejects.toThrow(EXPENSE_PAYMENT_METHOD_REQUIRED_MSG);
+  });
+
+  it('assigns EXP- and EPAY- numbers on new paid expenses', async () => {
+    await createExpense(baseExpenseInput);
+
+    expect(reserveNextDocumentNumberMock).toHaveBeenCalledWith(prismaMock, bizId, 'expense');
+    expect(reserveNextDocumentNumberMock).toHaveBeenCalledWith(prismaMock, bizId, 'expense_payment');
+    expect(prismaMock.expense.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          transactionNumber: 'EXP-000001',
+          payments: expect.objectContaining({
+            create: [
+              expect.objectContaining({ transactionNumber: 'EPAY-000001' }),
+            ],
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('rejects a 5100 expense without an exceptional override', async () => {
+    prismaMock.account.findFirst.mockResolvedValue({ id: accountId, code: INVENTORY_LOSS_ACCOUNT_CODE });
+
+    await expect(createExpense(baseExpenseInput)).rejects.toThrow(INVENTORY_LOSS_OVERRIDE_REQUIRED_MSG);
+    expect(prismaMock.expense.create).not.toHaveBeenCalled();
+  });
+
+  it('persists a 5100 expense when override, reason, and sourceAdjustmentId are set', async () => {
+    prismaMock.account.findFirst.mockResolvedValue({ id: accountId, code: INVENTORY_LOSS_ACCOUNT_CODE });
+    prismaMock.expense.create.mockImplementation(async ({ data }: any) => ({
+      id: expenseId,
+      ...data,
+      account: { code: INVENTORY_LOSS_ACCOUNT_CODE },
+      payments: data.payments?.create?.map((p: any, i: number) => ({ id: `payment-${i}`, ...p })) ?? [],
+    }));
+
+    await createExpense({
+      ...baseExpenseInput,
+      inventoryLossOverride: true,
+      inventoryLossOverrideReason: 'Authorised recount of a missing journal',
+      sourceAdjustmentId: 'adj-1',
+    });
+
+    expect(prismaMock.expense.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sourceAdjustmentId: 'adj-1',
+          notes: 'Inventory-loss override: Authorised recount of a missing journal',
+        }),
+      }),
+    );
+  });
+
+  it('rejects a second expense for the same sourceAdjustmentId', async () => {
+    prismaMock.account.findFirst.mockResolvedValue({ id: accountId, code: INVENTORY_LOSS_ACCOUNT_CODE });
+    prismaMock.expense.findFirst.mockImplementation(async ({ where }: any) => {
+      if (where?.sourceAdjustmentId === 'adj-1') return { id: 'exp-existing' };
+      return { id: expenseId, businessId: bizId, storeId, amountPence: 50000, payments: [] };
+    });
+
+    await expect(
+      createExpense({
+        ...baseExpenseInput,
+        inventoryLossOverride: true,
+        inventoryLossOverrideReason: 'Authorised recount',
+        sourceAdjustmentId: 'adj-1',
+      }),
+    ).rejects.toThrow(INVENTORY_LOSS_DUPLICATE_ADJUSTMENT_MSG);
+    expect(prismaMock.expense.create).not.toHaveBeenCalled();
+  });
+
+  it('allocates a later payment to the exact expenseId', async () => {
+    await recordExpensePayment({
+      businessId: bizId,
+      storeId,
+      userId,
+      expenseId: 'expense-target',
+      method: 'CARD',
+      amountPence: 25000,
+      idempotencyKey: 'idem-exp-target',
+    });
+
+    expect(prismaMock.expensePayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          expenseId: 'expense-target',
+          transactionNumber: 'EPAY-000001',
+        }),
+      }),
+    );
+    expect(prismaMock.expense.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'expense-target' },
+      }),
+    );
   });
 });
 

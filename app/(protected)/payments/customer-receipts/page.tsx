@@ -11,6 +11,13 @@ import DueDateBadge from '@/components/DueDateBadge';
 import Link from 'next/link';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import StableIdempotencyKeyInput from '@/components/StableIdempotencyKeyInput';
+import { RECEIPT_ORIGIN, resolveReceiptOrigin } from '@/lib/payments/receipt-origin';
+import {
+  laterCreditCollectionWhere,
+  RECEIPT_ORIGIN_LABELS,
+  saleTimeReceiptWhere,
+  unclassifiedReceiptWhere,
+} from './receipt-list';
 
 const PAYMENT_LABEL: Record<string, string> = {
   CASH: 'Cash',
@@ -19,12 +26,124 @@ const PAYMENT_LABEL: Record<string, string> = {
   MOBILE_MONEY: 'Mobile Money (MoMo)',
 };
 
+type CustomerPaymentRow = {
+  id: string;
+  method: string;
+  amountPence: number;
+  receivedAt: Date;
+  reference: string | null;
+  receiptOrigin: string | null;
+  salesInvoice: { id: string; customer: { id: string; name: string } | null };
+};
+
+function CustomerPaymentList({
+  payments,
+  currency,
+  emptyTitle,
+  emptyDetail,
+}: {
+  payments: CustomerPaymentRow[];
+  currency: string;
+  emptyTitle: string;
+  emptyDetail: string;
+}) {
+  if (payments.length === 0) {
+    return (
+      <div className="mt-4 rounded-2xl border border-dashed border-black/15 bg-white px-5 py-6 text-center text-sm text-black/50">
+        <div className="font-semibold text-ink">{emptyTitle}</div>
+        <div className="mt-1">{emptyDetail}</div>
+      </div>
+    );
+  }
+
+  return (
+    <ResponsiveDataTable
+      mode="cards"
+      desktop={
+        <div className="responsive-table-shell mt-4">
+          <table className="table w-full min-w-[52rem] border-separate border-spacing-y-2">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Customer</th>
+                <th>Invoice</th>
+                <th>Method</th>
+                <th>Amount</th>
+                <th>Origin</th>
+                <th>Reference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payments.map((payment) => {
+                const origin = resolveReceiptOrigin(payment.receiptOrigin);
+                return (
+                  <tr key={payment.id} className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
+                    <td className="px-3 py-2 text-sm text-black/60">{formatDate(payment.receivedAt)}</td>
+                    <td className="px-3 py-2 text-sm">{payment.salesInvoice.customer?.name ?? 'Walk-in'}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-black/60">{payment.salesInvoice.id.slice(0, 8)}</td>
+                    <td className="px-3 py-2 text-sm">{PAYMENT_LABEL[payment.method] ?? payment.method}</td>
+                    <td className="px-3 py-2 text-sm font-semibold tabular-nums">
+                      {formatMoney(payment.amountPence, currency)}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-black/60">{RECEIPT_ORIGIN_LABELS[origin]}</td>
+                    <td className="px-3 py-2 text-xs text-black/60">{payment.reference ?? '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      }
+      mobile={
+        <div className="mt-4 space-y-3">
+          {payments.map((payment) => {
+            const origin = resolveReceiptOrigin(payment.receiptOrigin);
+            return (
+              <div key={payment.id} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card transition-transform duration-150 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs text-black/50">{formatDate(payment.receivedAt)}</div>
+                    <div className="mt-1 text-sm font-semibold text-ink">{payment.salesInvoice.customer?.name ?? 'Walk-in'}</div>
+                    <div className="text-xs text-black/50">{PAYMENT_LABEL[payment.method] ?? payment.method} · invoice {payment.salesInvoice.id.slice(0, 8)}</div>
+                    <div className="mt-1 text-xs font-medium text-black/55">{RECEIPT_ORIGIN_LABELS[origin]}</div>
+                  </div>
+                  <div className="text-sm font-bold tabular-nums">{formatMoney(payment.amountPence, currency)}</div>
+                </div>
+                <div className="mt-2 text-xs text-black/50">Reference: {payment.reference ?? '—'}</div>
+              </div>
+            );
+          })}
+        </div>
+      }
+    />
+  );
+}
+
 export default async function CustomerReceiptsPage({ searchParams }: { searchParams?: { error?: string; customerId?: string; paid?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const customerId = searchParams?.customerId?.trim() || undefined;
 
-  const [invoices, recentPayments, linkedCustomer] = await measureServerOperation(
+  const invoiceFilter = {
+    businessId: business.id,
+    ...(customerId ? { customerId } : {}),
+  };
+  const paymentSelect = {
+    id: true,
+    method: true,
+    amountPence: true,
+    receivedAt: true,
+    reference: true,
+    receiptOrigin: true,
+    salesInvoice: {
+      select: {
+        id: true,
+        customer: { select: { id: true, name: true } },
+      },
+    },
+  } as const;
+
+  const [invoices, laterCollections, saleTimePayments, unclassifiedPayments, linkedCustomer] = await measureServerOperation(
     'page.customer-receipts.load',
     () => Promise.all([
       prisma.salesInvoice.findMany({
@@ -45,24 +164,28 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
       }),
       prisma.salesPayment.findMany({
         where: {
-          salesInvoice: {
-            businessId: business.id,
-            ...(customerId ? { customerId } : {}),
-          },
+          salesInvoice: invoiceFilter,
+          ...laterCreditCollectionWhere(),
         },
-        select: {
-          id: true,
-          method: true,
-          amountPence: true,
-          receivedAt: true,
-          reference: true,
-          salesInvoice: {
-            select: {
-              id: true,
-              customer: { select: { id: true, name: true } },
-            },
-          },
+        select: paymentSelect,
+        orderBy: { receivedAt: 'desc' },
+        take: 20,
+      }),
+      prisma.salesPayment.findMany({
+        where: {
+          salesInvoice: invoiceFilter,
+          ...saleTimeReceiptWhere(),
         },
+        select: paymentSelect,
+        orderBy: { receivedAt: 'desc' },
+        take: 20,
+      }),
+      prisma.salesPayment.findMany({
+        where: {
+          salesInvoice: invoiceFilter,
+          ...unclassifiedReceiptWhere(),
+        },
+        select: paymentSelect,
         orderBy: { receivedAt: 'desc' },
         take: 20,
       }),
@@ -183,8 +306,8 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
           <div className="mt-2 text-xl font-bold tabular-nums text-ink">{unpaidInvoiceCount.toLocaleString()}</div>
         </div>
         <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-card max-lg:col-span-2">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Recent payments</div>
-          <div className="mt-2 text-xl font-bold tabular-nums text-ink">{recentPayments.length.toLocaleString()}</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Recent collections</div>
+          <div className="mt-2 text-xl font-bold tabular-nums text-ink">{laterCollections.length.toLocaleString()}</div>
         </div>
       </section>
 
@@ -318,65 +441,45 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
       </section>
 
       <section className="card p-5 sm:p-6">
-        <h2 className="text-lg font-display font-semibold">Recent customer payments</h2>
-        <p className="mt-1 text-sm text-black/50">Customer payments will appear here once recorded.</p>
-        {recentPayments.length > 0 ? (
-          <ResponsiveDataTable
-            mode="cards"
-            desktop={
-              <div className="responsive-table-shell mt-4">
-                <table className="table w-full min-w-[52rem] border-separate border-spacing-y-2">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Customer</th>
-                      <th>Invoice</th>
-                      <th>Method</th>
-                      <th>Amount</th>
-                      <th>Reference</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentPayments.map((payment) => (
-                      <tr key={payment.id} className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
-                        <td className="px-3 py-2 text-sm text-black/60">{formatDate(payment.receivedAt)}</td>
-                        <td className="px-3 py-2 text-sm">{payment.salesInvoice.customer?.name ?? 'Walk-in'}</td>
-                        <td className="px-3 py-2 font-mono text-xs text-black/60">{payment.salesInvoice.id.slice(0, 8)}</td>
-                        <td className="px-3 py-2 text-sm">{PAYMENT_LABEL[payment.method] ?? payment.method}</td>
-                        <td className="px-3 py-2 text-sm font-semibold tabular-nums">
-                          {formatMoney(payment.amountPence, business.currency)}
-                        </td>
-                        <td className="px-3 py-2 text-xs text-black/60">{payment.reference ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            }
-            mobile={
-              <div className="mt-4 space-y-3">
-                {recentPayments.map((payment) => (
-                  <div key={payment.id} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card transition-transform duration-150 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-xs text-black/50">{formatDate(payment.receivedAt)}</div>
-                        <div className="mt-1 text-sm font-semibold text-ink">{payment.salesInvoice.customer?.name ?? 'Walk-in'}</div>
-                        <div className="text-xs text-black/50">{PAYMENT_LABEL[payment.method] ?? payment.method} · invoice {payment.salesInvoice.id.slice(0, 8)}</div>
-                      </div>
-                      <div className="text-sm font-bold tabular-nums">{formatMoney(payment.amountPence, business.currency)}</div>
-                    </div>
-                    <div className="mt-2 text-xs text-black/50">Reference: {payment.reference ?? '—'}</div>
-                  </div>
-                ))}
-              </div>
-            }
-          />
-        ) : (
-          <div className="mt-4 rounded-2xl border border-dashed border-black/15 bg-white px-5 py-6 text-center text-sm text-black/50">
-            <div className="font-semibold text-ink">No payments recorded yet.</div>
-            <div className="mt-1">Customer payments will appear here once recorded.</div>
-          </div>
-        )}
+        <h2 className="text-lg font-display font-semibold">Recent customer collections</h2>
+        <p className="mt-1 text-sm text-black/50">
+          Later credit collections only ({RECEIPT_ORIGIN_LABELS[RECEIPT_ORIGIN.LATER_CREDIT_COLLECTION]}).
+          Walk-in cash and other sale-time payments are listed separately below.
+        </p>
+        <CustomerPaymentList
+          payments={laterCollections}
+          currency={business.currency}
+          emptyTitle="No later collections recorded yet."
+          emptyDetail="Payments taken after a credit sale will appear here. Sale-time cash is not a collection."
+        />
+      </section>
+
+      <section className="card p-5 sm:p-6">
+        <h2 className="text-lg font-display font-semibold">Sale-time payments</h2>
+        <p className="mt-1 text-sm text-black/50">
+          {RECEIPT_ORIGIN_LABELS[RECEIPT_ORIGIN.RECEIVED_AT_SALE]} — checkout tenders including walk-in cash.
+          These are not later debt collections.
+        </p>
+        <CustomerPaymentList
+          payments={saleTimePayments}
+          currency={business.currency}
+          emptyTitle="No sale-time payments in this list."
+          emptyDetail="Walk-in cash and other checkout payments stay here, not in collections."
+        />
+      </section>
+
+      <section className="card p-5 sm:p-6">
+        <h2 className="text-lg font-display font-semibold">Unclassified payments</h2>
+        <p className="mt-1 text-sm text-black/50">
+          {RECEIPT_ORIGIN_LABELS[RECEIPT_ORIGIN.UNCLASSIFIED]} historic or imported rows. Origin is read from
+          the stored receipt field, never inferred from time.
+        </p>
+        <CustomerPaymentList
+          payments={unclassifiedPayments}
+          currency={business.currency}
+          emptyTitle="No unclassified payments."
+          emptyDetail="Legacy rows without a stored origin appear here."
+        />
       </section>
     </div>
   );
