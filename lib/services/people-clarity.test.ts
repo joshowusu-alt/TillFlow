@@ -240,9 +240,11 @@ describe('Customer and Supplier reporting clarity', () => {
   });
 
   // ── Supplier aging service untouched ────────────────────────────────────
-  it('52. Supplier aging service calculations are unchanged', () => {
+  it('52. Supplier aging service uses walkthrough buckets including missing due dates', () => {
     expect(agingServiceSrc).toContain('getSupplierAgingReport');
     expect(agingServiceSrc).toContain('AGING_BUCKET_LABELS');
+    expect(agingServiceSrc).toContain('bucketForDueDate');
+    expect(agingServiceSrc).toContain('DUE_DATE_MISSING');
     expect(agingServiceSrc).toContain('bucketForDaysOverdue');
   });
 

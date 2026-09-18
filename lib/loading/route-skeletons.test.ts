@@ -74,7 +74,8 @@ describe('Phase 2a compact route skeletons', () => {
     expect(read('app/(protected)/expenses/loading.tsx')).toContain('CompactRouteLoading');
     expect(read('app/(protected)/expenses/loading.tsx')).toContain('variant="expenses"');
     expect(read('app/(protected)/customers/loading.tsx')).toContain('variant="list"');
-    expect(read('app/(protected)/products/loading.tsx')).toContain('variant="products"');
+    expect(read('app/(protected)/products/loading.tsx')).toContain('data-route-skeleton="products"');
+    expect(read('app/(protected)/products/loading.tsx')).toContain('data-products-soft-refresh');
     expect(read('app/(protected)/shifts/loading.tsx')).toContain('variant="shifts"');
     expect(read('app/(protected)/settings/loading.tsx')).toContain('variant="settings"');
     expect(read('app/(protected)/users/loading.tsx')).toContain('variant="people"');

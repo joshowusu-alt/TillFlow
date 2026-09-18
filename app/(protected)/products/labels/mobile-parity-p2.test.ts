@@ -16,6 +16,9 @@ describe('P2 product labels mobile workflow', () => {
     expect(client).toContain('--mobile-bottom-nav-height');
     expect(client).toContain('inputMode="numeric"');
     expect(client).toContain('Select all on this page');
+    expect(client).toContain('Select all filtered');
+    expect(client).toContain('Clear selection');
+    expect(client).toContain('min-h-[44px]');
   });
 
   it('preserves desktop table selection and print generation behaviour', () => {
