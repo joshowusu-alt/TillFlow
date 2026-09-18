@@ -579,6 +579,7 @@ describe('expense cash drawer linkage', () => {
 
     await createExpense({
       ...baseExpenseInput,
+      actorRole: 'OWNER',
       inventoryLossOverride: true,
       inventoryLossOverrideReason: 'Authorised recount of a missing journal',
       sourceAdjustmentId: 'adj-1',
@@ -604,6 +605,7 @@ describe('expense cash drawer linkage', () => {
     await expect(
       createExpense({
         ...baseExpenseInput,
+        actorRole: 'OWNER',
         inventoryLossOverride: true,
         inventoryLossOverrideReason: 'Authorised recount',
         sourceAdjustmentId: 'adj-1',

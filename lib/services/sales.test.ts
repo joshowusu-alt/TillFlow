@@ -81,6 +81,10 @@ vi.mock('@/lib/fraud/reason-codes', () => ({
   isDiscountReasonCode: vi.fn().mockReturnValue(true),
 }));
 
+vi.mock('./document-numbers', () => ({
+  reserveNextDocumentNumber: vi.fn().mockResolvedValue('RCPT-000001'),
+}));
+
 import { createSale, type SaleLineInput } from './sales';
 
 // ---------------------------------------------------------------------------

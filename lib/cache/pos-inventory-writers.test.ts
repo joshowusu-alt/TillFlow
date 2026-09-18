@@ -32,7 +32,7 @@ describe('POS inventory writer source map', () => {
     expect(read('app/actions/import-stock.ts')).toContain('revalidatePosCatalog(businessId, store.id)');
     expect(read('app/actions/opening-stock.ts')).toContain('revalidatePosCatalog(businessId, store.id)');
     expect(read('app/actions/inventory.ts')).toMatch(/revalidatePosCatalog\(businessId,\s*storeId\)/);
-    expect(read('app/actions/stocktake.ts')).toMatch(/revalidatePosCatalog\(businessId,\s*storeId\)/);
+    expect(read('app/actions/stocktake.ts')).toMatch(/revalidatePosCatalog\(businessId,\s*stocktake\.storeId\)/);
   });
 
   it('repair inventory qty paths use store-scoped invalidation', () => {

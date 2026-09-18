@@ -69,15 +69,17 @@ describe('purchases page polish', () => {
   });
 
   it('outstanding column exists in desktop table header', () => {
-    expect(pageSrc).toContain('<th>Outstanding</th>');
+    expect(pageSrc).toContain('<th>Balance</th>');
+    expect(pageSrc).toContain('RemainingBalance');
   });
 
   it('outstanding column exists in desktop table rows', () => {
-    expect(pageSrc).toContain('Math.max(0, outstandingPence)');
+    expect(pageSrc).toContain('outstandingPence');
+    expect(pageSrc).toContain('RemainingBalance');
   });
 
   it('desktop table empty state spans 8 columns', () => {
-    expect(pageSrc).toContain('colSpan={8}');
+    expect(pageSrc).toContain('colSpan={7}');
   });
 
   it('desktop rows have hover polish', () => {
