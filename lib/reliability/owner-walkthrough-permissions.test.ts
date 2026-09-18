@@ -41,7 +41,7 @@ describe('owner walkthrough permission matrix (server-side)', () => {
     expect(start).toBeGreaterThanOrEqual(0);
     const next = shiftActions.indexOf('export async function', start + 1);
     const approveBlock = shiftActions.slice(start, next === -1 ? undefined : next);
-    expect(approveBlock).toContain("withBusinessContext(['OWNER'])");
+    expect(approveBlock).toContain("requireVarianceOperationalStore(['OWNER']");
     expect(approveBlock).not.toContain("'MANAGER'");
     expect(approveBlock).not.toContain("'CASHIER'");
   });

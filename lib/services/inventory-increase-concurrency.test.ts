@@ -168,6 +168,7 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
     expect(proof.appliedWalkthroughMigrations).toEqual([
       '20260917180000_owner_walkthrough_integrity',
       '20260918140000_walkthrough_store_numbers',
+      '20260918230000_shift_presentation_numbers',
     ]);
     expect(process.env.TILLFLOW_INVENTORY_ADJUST_PHASE2_BUSINESS_IDS).toBe(businessId);
     console.info('INVENTORY_PG_IDENTITY', {
