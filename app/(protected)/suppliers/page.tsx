@@ -3,6 +3,7 @@ import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import SearchFilter from '@/components/SearchFilter';
 import Pagination from '@/components/Pagination';
+import ShowingRange from '@/components/ShowingRange';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import TagChips from '@/components/TagChips';
 import OperationalMetricCard from '@/components/OperationalMetricCard';
@@ -12,6 +13,11 @@ import { createSupplierAction } from '@/app/actions/suppliers';
 import { formatMoney, formatRelativeDate, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import { parseTags } from '@/lib/contact-tags';
+import {
+  buildSupplierListWhere,
+  getSupplierListKpis,
+  supplierKpiScopeHelper,
+} from '@/lib/services/supplier-kpis';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
@@ -62,22 +68,16 @@ function SuppliersEmptyState({ q, amountOwed }: { q: string; amountOwed: boolean
 }
 
 export default async function SuppliersPage({ searchParams }: { searchParams?: { error?: string; q?: string; page?: string; amountOwed?: string } }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const q = searchParams?.q?.trim() ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
   const amountOwed = searchParams?.amountOwed === '1';
 
-  const where = {
-    businessId: business.id,
-    ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
-    ...(amountOwed
-      ? { purchaseInvoices: { some: { paymentStatus: { in: ['UNPAID', 'PART_PAID'] as string[] } } } }
-      : {}),
-  };
+  const where = buildSupplierListWhere(business.id, { search: q, amountOwed });
 
-  const [totalCount, suppliers] = await measureServerOperation(
+  const [totalCount, suppliers, listKpis] = await measureServerOperation(
     'page.suppliers.load',
     () => Promise.all([
       prisma.supplier.count({ where }),
@@ -108,6 +108,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
         skip: (page - 1) * DEFAULT_PAGE_SIZE,
         take: DEFAULT_PAGE_SIZE,
       }),
+      getSupplierListKpis(business.id, { search: q, amountOwed }),
     ]),
     {
       businessId: business.id,
@@ -177,8 +178,9 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
       tags: parseTags(supplier.tagsJson),
     };
   });
-  const suppliersWithBalanceCount = suppliersWithData.filter((supplier) => supplier.balance > 0).length;
-  const totalApOutstandingPence = suppliersWithData.reduce((sum, supplier) => sum + supplier.balance, 0);
+  const suppliersWithBalanceCount = listKpis.suppliersWithBalanceCount;
+  const totalApOutstandingPence = listKpis.totalApOutstandingPence;
+  const kpiScopeHelper = supplierKpiScopeHelper(listKpis.scope);
 
   return (
     <div className="operational-page space-y-4 sm:space-y-5">
@@ -188,23 +190,34 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
         primaryCta={{ label: 'Add supplier', href: '#add-supplier' }}
       />
 
-      <p className="text-xs text-black/50">These are current supplier balances across recorded purchases and payments, not limited to a date range.</p>
+      <p className="text-xs text-black/50">These are current supplier balances across recorded purchases and payments, not limited to a date range. KPI totals use the full filtered supplier list, not the rows on screen.</p>
+
+      <div className="flex flex-wrap gap-2 text-sm">
+        <Link href="/suppliers/orphans" className="btn-secondary text-xs">
+          Purchases without a supplier
+        </Link>
+        {user.role === 'OWNER' ? (
+          <Link href="/suppliers/duplicates" className="btn-secondary text-xs">
+            Possible duplicate suppliers
+          </Link>
+        ) : null}
+      </div>
 
       <div className="operational-metric-grid operational-metric-grid--3">
         <SupplierStatCard
           label="Total suppliers"
           value={totalCount.toLocaleString('en-GH')}
-          helper={q || amountOwed ? 'Matching current filters' : 'Supplier accounts'}
+          helper={kpiScopeHelper}
         />
         <SupplierStatCard
           label="Suppliers with balance"
           value={suppliersWithBalanceCount.toLocaleString('en-GH')}
-          helper="Suppliers with unpaid purchase balances"
+          helper={kpiScopeHelper}
         />
         <SupplierStatCard
           label="What you owe suppliers"
           value={formatMoney(totalApOutstandingPence, business.currency)}
-          helper="Current balance across all supplier accounts"
+          helper={kpiScopeHelper}
         />
       </div>
 
@@ -370,6 +383,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
             </tbody>
           </table>
         </div>
+        <ShowingRange page={page} pageSize={DEFAULT_PAGE_SIZE} total={totalCount} noun="suppliers" />
         <Pagination
           currentPage={page}
           totalPages={totalPages}

@@ -18,15 +18,18 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
     const { user, businessId, storeId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
 
     const amountPence = formPence(formData, 'amount');
-    const method = (formString(formData, 'method') || 'CASH') as PaymentMethod;
-    const methodValidation = PaymentMethodEnum.safeParse(method);
-    if (!methodValidation.success) {
-      return err(methodValidation.error.issues[0].message);
-    }
     const paymentStatus = (formString(formData, 'paymentStatus') || 'PAID') as PaymentStatus;
     const psValidation = PaymentStatusEnum.safeParse(paymentStatus);
     if (!psValidation.success) {
       return err(psValidation.error.issues[0].message);
+    }
+    const methodRaw = formString(formData, 'method');
+    const method = (methodRaw || (paymentStatus === 'UNPAID' ? '' : 'CASH')) as PaymentMethod | '';
+    if (paymentStatus !== 'UNPAID') {
+      const methodValidation = PaymentMethodEnum.safeParse(method);
+      if (!methodValidation.success) {
+        return err(methodValidation.error.issues[0].message);
+      }
     }
     let amountPaidPence = formPence(formData, 'amountPaid');
     const notes = formOptionalString(formData, 'notes');
@@ -35,6 +38,11 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
     const vendorName = formOptionalString(formData, 'vendorName');
     const reference = formOptionalString(formData, 'reference');
     const dueDate = formDate(formData, 'dueDate');
+    const inventoryLossOverride =
+      formString(formData, 'inventoryLossOverride') === 'on' ||
+      formString(formData, 'inventoryLossOverride') === 'true';
+    const inventoryLossOverrideReason = formOptionalString(formData, 'inventoryLossOverrideReason');
+    const sourceAdjustmentId = formOptionalString(formData, 'sourceAdjustmentId');
 
     const attachmentResult = await saveExpenseAttachment(formData);
     if (attachmentResult !== null && typeof attachmentResult === 'object' && 'error' in attachmentResult) {
@@ -51,7 +59,9 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       resolvedAccountId = operating.id;
     }
 
-    if (paymentStatus === 'PAID' && amountPaidPence === 0) {
+    if (paymentStatus === 'UNPAID') {
+      amountPaidPence = 0;
+    } else if (paymentStatus === 'PAID' && amountPaidPence === 0) {
       amountPaidPence = amountPence;
     }
 
@@ -72,7 +82,7 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       accountId: resolvedAccountId,
       amountPence,
       paymentStatus,
-      method,
+      method: paymentStatus === 'UNPAID' || !method ? null : method,
       amountPaidPence,
       tillId: tillId || undefined,
       dueDate,
@@ -81,6 +91,9 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       attachmentPath,
       notes,
       idempotencyKey: idempotencyKey || undefined,
+      inventoryLossOverride,
+      inventoryLossOverrideReason,
+      sourceAdjustmentId,
     });
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_CREATE', entity: 'Expense', details: { amountPence, vendorName, notes } }).catch((e) => console.error('[audit] expense create failed', e));

@@ -49,7 +49,7 @@ describe('supplier list — payables filter and status', () => {
     expect(src).not.toContain('Vendors and payables.');
   });
 
-  it('renders the Suppliers stat strip using already-loaded page data', () => {
+  it('renders the Suppliers stat strip from the full filtered population, not page rows', () => {
     expect(src).toContain('SupplierStatCard');
     expect(src).toContain('OperationalMetricCard');
     expect(src).toContain('operational-metric-grid');
@@ -58,8 +58,15 @@ describe('supplier list — payables filter and status', () => {
     expect(src).toContain('Suppliers with balance');
     expect(src).toContain('What you owe suppliers');
     expect(src).toContain('totalCount.toLocaleString');
+    expect(src).toContain('getSupplierListKpis');
+    expect(src).toContain('supplierKpiScopeHelper');
     expect(src).toContain('suppliersWithBalanceCount');
     expect(src).toContain('totalApOutstandingPence');
+    expect(src).toContain('ShowingRange');
+    expect(src).toContain('noun="suppliers"');
+    expect(src).not.toContain('this page');
+    expect(src).not.toMatch(/suppliersWithData\.filter\(\(supplier\) => supplier\.balance > 0\)/);
+    expect(src).not.toMatch(/suppliersWithData\.reduce\(\(sum, supplier\) => sum \+ supplier\.balance/);
   });
 
   it('keeps the add supplier form closed by default', () => {
@@ -118,6 +125,8 @@ describe('supplier detail page', () => {
     expect(src).toContain('What you owe');
     expect(src).toContain('Amount owed');
     expect(src).toContain('outstanding');
+    expect(src).toContain('RemainingBalance');
+    expect(src).toContain("displayDocumentNumber('purchase'");
   });
 
   it('shows last payment in summary cards', () => {

@@ -1,39 +1,42 @@
 import PageHeader from '@/components/PageHeader';
-import FormError from '@/components/FormError';
-import SubmitButton from '@/components/SubmitButton';
 import Pagination from '@/components/Pagination';
 import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
+import RemainingBalance from '@/components/RemainingBalance';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
 import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
-import { createExpenseAction } from '@/app/actions/expenses';
 import { ACCOUNT_CODES } from '@/lib/accounting';
-import StableIdempotencyKeyInput from '@/components/StableIdempotencyKeyInput';
+import { displayDocumentNumber, remainingBalancePence } from '@/lib/reliability/walkthrough-contracts';
+import ExpenseForm from './ExpenseForm';
 
-export default async function ExpensesPage({ searchParams }: { searchParams?: { error?: string; page?: string; recorded?: string } }) {
+export default async function ExpensesPage({
+  searchParams,
+}: {
+  searchParams?: { error?: string; page?: string; recorded?: string; sourceAdjustmentId?: string };
+}) {
   const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
 
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
 
-  // Run all queries in parallel
   const [expenseAccounts, expenseCount, expenses, openShifts] = await Promise.all([
     prisma.account.findMany({
       where: {
         businessId: business.id,
         type: 'EXPENSE',
-        code: { not: ACCOUNT_CODES.cogs }
+        code: { not: ACCOUNT_CODES.cogs },
       },
       orderBy: { code: 'asc' },
-      select: { id: true, code: true, name: true }
+      select: { id: true, code: true, name: true },
     }),
     prisma.expense.count({ where: { businessId: business.id } }),
     prisma.expense.findMany({
       where: { businessId: business.id },
       select: {
         id: true,
+        transactionNumber: true,
         createdAt: true,
         amountPence: true,
         paymentStatus: true,
@@ -42,7 +45,8 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
         notes: true,
         attachmentPath: true,
         account: { select: { name: true } },
-        user: { select: { name: true } }
+        user: { select: { name: true } },
+        payments: { select: { amountPence: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * DEFAULT_PAGE_SIZE,
@@ -62,7 +66,11 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <PageHeader title="Expenses" subtitle="Track operating costs and cash outflows." primaryCta={{ label: 'Record expense', href: '#record-expense' }} />
+      <PageHeader
+        title="Expenses"
+        subtitle="Track operating costs and cash outflows."
+        primaryCta={{ label: 'Record expense', href: '#record-expense' }}
+      />
 
       <details className="details-mobile" id="record-expense" open>
         <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
@@ -77,148 +85,64 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
           </svg>
         </summary>
         <div className="card mt-2 p-4 sm:p-5">
-          <FormError error={searchParams?.error} />
-          <form action={createExpenseAction} className="grid gap-4 md:grid-cols-4" encType="multipart/form-data">
-          <StableIdempotencyKeyInput scope={`expense-create:${business.id}`} rotate={searchParams?.recorded === '1'} />
-          <input type="hidden" name="useSimple" value={features.detailedExpenseCategories ? 'false' : 'true'} />
-          {/* Section: What & How Much */}
-          <div className="md:col-span-4 border-t border-black/8 pt-3 mt-0">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/40">What &amp; How Much</div>
-          </div>
-          {features.detailedExpenseCategories ? (
-            <div>
-              <label className="label">Category</label>
-              <select className="input" name="accountId" required>
-                {expenseAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.code} — {account.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="md:col-span-2">
-              <label className="label">Category</label>
-              <div className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold">
-                Operating Expenses
-              </div>
-              <div className="mt-1 text-xs text-black/50">
-                Starter keeps one expense bucket. Growth and Pro unlock full expense categories.
-              </div>
-            </div>
-          )}
-          <div>
-            <label className="label">Amount</label>
-            <input className="input" name="amount" placeholder="0.00" required />
-          </div>
-          {/* Section: Payment */}
-          <div className="md:col-span-4 border-t border-black/8 pt-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/40">Payment</div>
-          </div>
-          <div>
-            <label className="label">Payment Status</label>
-            <select className="input" name="paymentStatus" defaultValue="PAID">
-              <option value="PAID">Paid</option>
-              <option value="PART_PAID">Part Paid</option>
-              <option value="UNPAID">Unpaid</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Paid Amount</label>
-            <input className="input" name="amountPaid" placeholder="0.00" />
-            <div className="mt-1 text-xs text-black/50">Leave empty for unpaid.</div>
-          </div>
-          <div>
-            <label className="label">Payment Method</label>
-            <select className="input" name="method" defaultValue="CASH">
-              <option value="CASH">Cash</option>
-              <option value="CARD">Card</option>
-              <option value="TRANSFER">Transfer</option>
-              <option value="MOBILE_MONEY">Mobile Money</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Till (cash from this drawer)</label>
-            <select className="input" name="tillId" required={openShifts.length > 0} defaultValue={openShifts.length === 1 ? openShifts[0].tillId : ''}>
-              {openShifts.length === 0 ? (
-                <option value="">No open till — open a till for cash</option>
-              ) : (
-                <>
-                  {openShifts.length > 1 ? <option value="">Select till…</option> : null}
-                  {openShifts.map((shift) => (
-                    <option key={shift.tillId} value={shift.tillId}>
-                      {shift.till.name}
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
-          </div>
-          {/* Section: Details */}
-          <div className="md:col-span-4 border-t border-black/8 pt-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/40">Details</div>
-          </div>
-          <div>
-            <label className="label">Vendor / Payee</label>
-            <input className="input" name="vendorName" placeholder="Supplier or payee" />
-          </div>
-          <div>
-            <label className="label">Due Date</label>
-            <input className="input" name="dueDate" type="date" />
-          </div>
-          <div>
-            <label className="label">Reference</label>
-            <input className="input" name="reference" placeholder="Invoice / receipt ref" />
-          </div>
-          <div>
-            <label className="label">Attachment</label>
-            <input className="input" name="attachment" type="file" accept="image/*,.pdf" />
-          </div>
-          <div className="md:col-span-4">
-            <label className="label">Notes</label>
-            <input className="input" name="notes" placeholder="Optional notes" />
-          </div>
-          <div className="md:col-span-4">
-            <SubmitButton className="btn-primary" loadingText="Recording…">Record expense</SubmitButton>
-          </div>
-        </form>
+          <ExpenseForm
+            businessId={business.id}
+            currency={business.currency}
+            accounts={expenseAccounts}
+            openShifts={openShifts.map((shift) => ({ tillId: shift.tillId, tillName: shift.till.name }))}
+            detailedCategories={features.detailedExpenseCategories}
+            error={searchParams?.error}
+            recorded={searchParams?.recorded === '1'}
+            sourceAdjustmentId={searchParams?.sourceAdjustmentId?.trim() || undefined}
+          />
         </div>
       </details>
 
       <div className="card p-4 sm:p-5">
         <h2 className="text-lg font-display font-semibold">Recent expenses</h2>
         <div className="mt-4 space-y-4 lg:hidden">
-          {expenses.map((expense) => (
-            <DataCard key={expense.id}>
-              <DataCardHeader
-                title={expense.account.name}
-                subtitle={formatDateTime(expense.createdAt)}
-                aside={<span className="pill bg-black/5 text-black/60 text-[11px]">{expense.paymentStatus}</span>}
-              />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <DataCardField label="Amount" value={formatMoney(expense.amountPence, business.currency)} />
-                <DataCardField label="Method" value={expense.method ?? '-'} />
-                <DataCardField label="Vendor" value={expense.vendorName ?? '-'} />
-                <DataCardField label="Recorded by" value={expense.user.name} />
-              </div>
-              {expense.notes ? <p className="text-sm text-black/60">{expense.notes}</p> : null}
-              {expense.attachmentPath ? (
-                <div>
-                  <a className="btn-ghost text-xs" href={expense.attachmentPath} target="_blank" rel="noreferrer">
-                    View attachment
-                  </a>
+          {expenses.map((expense) => {
+            const paidPence = expense.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+            return (
+              <DataCard key={expense.id}>
+                <DataCardHeader
+                  title={expense.account.name}
+                  subtitle={`${displayDocumentNumber('expense', expense.transactionNumber, expense.id)} · ${formatDateTime(expense.createdAt)}`}
+                  aside={<span className="pill bg-black/5 text-black/60 text-[11px]">{expense.paymentStatus}</span>}
+                />
+                <RemainingBalance
+                  amountPence={expense.amountPence}
+                  paidPence={paidPence}
+                  currency={business.currency}
+                />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <DataCardField label="Amount" value={formatMoney(expense.amountPence, business.currency)} />
+                  <DataCardField label="Method" value={expense.method ?? '-'} />
+                  <DataCardField label="Vendor" value={expense.vendorName ?? '-'} />
+                  <DataCardField label="Recorded by" value={expense.user.name} />
                 </div>
-              ) : null}
-            </DataCard>
-          ))}
+                {expense.notes ? <p className="text-sm text-black/60">{expense.notes}</p> : null}
+                {expense.attachmentPath ? (
+                  <div>
+                    <a className="btn-ghost text-xs" href={expense.attachmentPath} target="_blank" rel="noreferrer">
+                      View attachment
+                    </a>
+                  </div>
+                ) : null}
+              </DataCard>
+            );
+          })}
         </div>
         <div className="responsive-table-shell mt-4 hidden lg:block">
           <table className="table w-full border-separate border-spacing-y-2">
             <thead>
               <tr>
+                <th>Number</th>
                 <th>Date</th>
                 <th>Category</th>
                 <th>Amount</th>
+                <th>Paid</th>
+                <th>Remaining</th>
                 <th>Status</th>
                 <th className="hidden sm:table-cell">Method</th>
                 <th className="hidden sm:table-cell">Vendor</th>
@@ -228,31 +152,43 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
               </tr>
             </thead>
             <tbody>
-              {expenses.map((expense) => (
-                <tr key={expense.id} className="rounded-xl bg-white">
-                  <td className="px-3 py-3 text-sm">{formatDateTime(expense.createdAt)}</td>
-                  <td className="px-3 py-3 text-sm font-semibold">{expense.account.name}</td>
-                  <td className="px-3 py-3 text-sm font-semibold">
-                    {formatMoney(expense.amountPence, business.currency)}
-                  </td>
-                  <td className="px-3 py-3 text-sm">
-                    <span className="pill bg-black/5 text-black/60">{expense.paymentStatus}</span>
-                  </td>
-                  <td className="hidden sm:table-cell px-3 py-3 text-sm">{expense.method ?? '-'}</td>
-                  <td className="hidden sm:table-cell px-3 py-3 text-sm">{expense.vendorName ?? '-'}</td>
-                  <td className="hidden lg:table-cell px-3 py-3 text-sm">{expense.user.name}</td>
-                  <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">{expense.notes ?? '-'}</td>
-                  <td className="hidden sm:table-cell px-3 py-3 text-sm">
-                    {expense.attachmentPath ? (
-                      <a className="btn-ghost text-xs" href={expense.attachmentPath} target="_blank" rel="noreferrer">
-                        View
-                      </a>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {expenses.map((expense) => {
+                const paidPence = expense.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+                return (
+                  <tr key={expense.id} className="rounded-xl bg-white">
+                    <td className="px-3 py-3 font-mono text-xs">
+                      {displayDocumentNumber('expense', expense.transactionNumber, expense.id)}
+                    </td>
+                    <td className="px-3 py-3 text-sm">{formatDateTime(expense.createdAt)}</td>
+                    <td className="px-3 py-3 text-sm font-semibold">{expense.account.name}</td>
+                    <td className="px-3 py-3 text-sm font-semibold">
+                      {formatMoney(expense.amountPence, business.currency)}
+                    </td>
+                    <td className="px-3 py-3 text-sm tabular-nums">
+                      {formatMoney(paidPence, business.currency)}
+                    </td>
+                    <td className="px-3 py-3 text-sm font-semibold tabular-nums">
+                      {formatMoney(remainingBalancePence(expense.amountPence, paidPence), business.currency)}
+                    </td>
+                    <td className="px-3 py-3 text-sm">
+                      <span className="pill bg-black/5 text-black/60">{expense.paymentStatus}</span>
+                    </td>
+                    <td className="hidden sm:table-cell px-3 py-3 text-sm">{expense.method ?? '-'}</td>
+                    <td className="hidden sm:table-cell px-3 py-3 text-sm">{expense.vendorName ?? '-'}</td>
+                    <td className="hidden lg:table-cell px-3 py-3 text-sm">{expense.user.name}</td>
+                    <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">{expense.notes ?? '-'}</td>
+                    <td className="hidden sm:table-cell px-3 py-3 text-sm">
+                      {expense.attachmentPath ? (
+                        <a className="btn-ghost text-xs" href={expense.attachmentPath} target="_blank" rel="noreferrer">
+                          View
+                        </a>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

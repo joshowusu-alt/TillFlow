@@ -10,6 +10,28 @@ const actionSrc = readFileSync(
   path.join(process.cwd(), 'app/actions/purchases.ts'),
   'utf8'
 );
+const purchaseServiceSrc = readFileSync(
+  path.join(process.cwd(), 'lib/services/purchases.ts'),
+  'utf8'
+);
+const purchaseFormSrc = readFileSync(
+  path.join(process.cwd(), 'app/(protected)/purchases/PurchaseFormClient.tsx'),
+  'utf8'
+);
+
+describe('new credit purchases require a supplier', () => {
+  it('gates createPurchase with creditPurchaseRequiresSupplier', () => {
+    expect(purchaseServiceSrc).toContain('creditPurchaseRequiresSupplier');
+    expect(purchaseServiceSrc).toContain('Credit purchases require a supplier.');
+    expect(purchaseServiceSrc).toContain("reserveNextDocumentNumber(client, input.businessId, 'purchase')");
+  });
+
+  it('requires a supplier in the form when the purchase is unpaid or part-paid', () => {
+    expect(purchaseFormSrc).toContain('creditPurchaseRequiresSupplier');
+    expect(purchaseFormSrc).toContain('missingRequiredSupplier');
+    expect(purchaseFormSrc).toContain('Credit purchases require a supplier.');
+  });
+});
 
 describe('LinkPurchaseSupplierForm selection safety', () => {
   it('does not default to the first supplier id', () => {

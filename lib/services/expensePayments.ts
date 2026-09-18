@@ -17,6 +17,11 @@ import {
   replayOrConflict,
   sumAmountPence,
 } from './money-idempotency';
+import { reserveNextDocumentNumber } from './document-numbers';
+import {
+  assertNoOverpayment,
+  remainingBalancePence,
+} from '@/lib/reliability/walkthrough-contracts';
 
 export type ExpensePaymentInput = {
   businessId: string;
@@ -104,9 +109,13 @@ export async function recordExpensePayment(input: ExpensePaymentInput) {
       }
 
       const paidSoFar = sumAmountPence(locked.payments);
-      if (input.amountPence > locked.amountPence - paidSoFar) {
+      const remaining = remainingBalancePence(locked.amountPence, paidSoFar);
+      if (input.amountPence > remaining) {
         throw new Error('Payment exceeds outstanding balance');
       }
+      assertNoOverpayment(locked.amountPence, paidSoFar + input.amountPence);
+
+      const transactionNumber = await reserveNextDocumentNumber(tx, input.businessId, 'expense_payment');
 
       const openShift =
         input.method === 'CASH'
@@ -139,6 +148,7 @@ export async function recordExpensePayment(input: ExpensePaymentInput) {
           method: input.method,
           amountPence: input.amountPence,
           reference: input.reference ?? null,
+          transactionNumber,
         },
       });
 
