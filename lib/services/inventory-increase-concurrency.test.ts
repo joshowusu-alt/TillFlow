@@ -10,6 +10,11 @@ import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
 
 const databaseUrl = process.env.INVENTORY_INCREASE_CONCURRENCY_DATABASE_URL || process.env.DATABASE_URL;
 const canRun = !!databaseUrl && isPostgresDatabaseUrl(databaseUrl);
+if (canRun) {
+  process.env.TILLFLOW_INVENTORY_ADJUST_PHASE2_INCREASE = '1';
+  process.env.TILLFLOW_INVENTORY_ADJUST_PHASE1 = '1';
+  process.env.TILLFLOW_INVENTORY_ADJUST_PHASE2_ROLLOUT_MODE = 'ALLOWLIST';
+}
 
 const describeConcurrency = canRun ? describe : describe.skip;
 
@@ -26,6 +31,7 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
     process.env.DATABASE_URL = databaseUrl!;
     process.env.TILLFLOW_INVENTORY_ADJUST_PHASE2_INCREASE = '1';
     process.env.TILLFLOW_INVENTORY_ADJUST_PHASE1 = '1';
+    process.env.TILLFLOW_INVENTORY_ADJUST_PHASE2_ROLLOUT_MODE = 'ALLOWLIST';
     prisma = new PrismaClient();
     await prisma.$connect();
 

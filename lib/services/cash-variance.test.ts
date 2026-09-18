@@ -18,7 +18,7 @@ const {
     user: { findFirst: vi.fn() },
     shift: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn(), update: vi.fn() },
     till: { findFirst: vi.fn() },
-    businessSequence: { update: vi.fn(), create: vi.fn() },
+    businessSequence: { update: vi.fn(), create: vi.fn(), upsert: vi.fn().mockResolvedValue({ nextVal: 1 }) },
   },
   reserveNextDocumentNumberMock: vi.fn(),
 }));
