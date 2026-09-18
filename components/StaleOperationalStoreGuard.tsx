@@ -1,0 +1,82 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import {
+  OPERATIONAL_STORE_CHANNEL,
+  OPERATIONAL_STORE_SIGNAL_KEY,
+  isStaleOperationalStore,
+  parseOperationalStoreSignal,
+  type OperationalStoreSignal,
+} from '@/lib/reliability/operational-store-sync';
+import { STALE_OPERATIONAL_STORE_MSG } from '@/lib/reliability/operational-store';
+
+export default function StaleOperationalStoreGuard({
+  storeId,
+  storeName,
+}: {
+  storeId?: string | null;
+  storeName?: string | null;
+}) {
+  const [signal, setSignal] = useState<OperationalStoreSignal | null>(null);
+
+  useEffect(() => {
+    const apply = (next: OperationalStoreSignal | null) => {
+      if (next) setSignal(next);
+    };
+    apply(parseOperationalStoreSignal(window.localStorage.getItem(OPERATIONAL_STORE_SIGNAL_KEY)));
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === OPERATIONAL_STORE_SIGNAL_KEY) {
+        apply(parseOperationalStoreSignal(event.newValue));
+      }
+    };
+    const channel = new BroadcastChannel(OPERATIONAL_STORE_CHANNEL);
+    channel.onmessage = (event) => apply(event.data as OperationalStoreSignal);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      channel.close();
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
+  const stale = isStaleOperationalStore(storeId, signal) && Boolean(signal);
+
+  useEffect(() => {
+    if (!stale) return;
+    const blockSubmit = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    document.addEventListener('submit', blockSubmit, true);
+    return () => document.removeEventListener('submit', blockSubmit, true);
+  }, [stale]);
+
+  if (!stale || !signal) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4"
+      data-stale-operational-store={signal.id}
+      role="alertdialog"
+      aria-labelledby="stale-operational-store-title"
+    >
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+        <h2 id="stale-operational-store-title" className="text-lg font-display font-semibold text-ink">
+          Branch changed in another tab
+        </h2>
+        <p className="mt-2 text-sm text-black/70">{STALE_OPERATIONAL_STORE_MSG}</p>
+        <p className="mt-2 text-sm text-black/70">
+          This tab still shows {storeName || 'the previous branch'}. The active branch is now{' '}
+          <span className="font-semibold">{signal.name}</span>. Nothing will be recorded from this tab
+          until you reload.
+        </p>
+        <button
+          type="button"
+          className="btn-primary mt-4 w-full"
+          onClick={() => window.location.reload()}
+        >
+          Reload this tab
+        </button>
+      </div>
+    </div>
+  );
+}

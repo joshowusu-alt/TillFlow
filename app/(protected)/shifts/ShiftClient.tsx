@@ -8,6 +8,7 @@ import { openShiftAction, closeShiftAction, closeShiftOwnerOverrideAction, addCa
 import { withStoreQuery } from '@/lib/reliability/selected-store';
 import { formatRecordNumber } from '@/lib/ui/document-label';
 import { computeCashHandover } from '@/lib/services/cash-handover';
+import { invalidPreviewShiftClosureNote } from '@/lib/reliability/invalid-preview-shift-closures';
 
 type Till = { id: string; name: string; active?: boolean };
 
@@ -362,6 +363,9 @@ export default function ShiftClient({
 
         if (!result.success) {
           setError(result.error);
+          setManagerPin('');
+          setOwnerPassword('');
+          setPinUnlocked(false);
           return;
         }
 
@@ -371,6 +375,9 @@ export default function ShiftClient({
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to close shift');
+        setManagerPin('');
+        setOwnerPassword('');
+        setPinUnlocked(false);
       }
     });
   };
@@ -943,6 +950,11 @@ export default function ShiftClient({
                         {shift.closureNumber ? (
                           <div className="mt-1 text-[11px] text-black/40">{shift.closureNumber}</div>
                         ) : null}
+                        {invalidPreviewShiftClosureNote(shift.closureNumber) ? (
+                          <div className="mt-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-800">
+                            Invalid legacy Preview test data. Do not use in reconciliation.
+                          </div>
+                        ) : null}
                         {shift.status === 'CLOSED' && shift.variance !== null && shift.variance !== 0 ? (
                           <Link
                             href={withStoreQuery(shift.investigationId ? `/shifts/variance/${shift.investigationId}` : '/shifts/variance', storeId)}
@@ -1268,7 +1280,7 @@ export default function ShiftClient({
                   id="close-shift-manager-approval"
                   name="close-shift-manager-approval"
                   className="input"
-                  type="text"
+                  type="password"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   value={managerPin}
@@ -1278,8 +1290,10 @@ export default function ShiftClient({
                   data-lpignore="true"
                   data-1p-ignore="true"
                   data-bwignore="true"
+                  data-form-type="other"
                   readOnly={!pinUnlocked}
                   onFocus={() => setPinUnlocked(true)}
+                  style={{ WebkitTextSecurity: 'disc' } as React.CSSProperties}
                 />
               </fieldset>
             ) : (

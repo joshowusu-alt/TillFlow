@@ -2,6 +2,7 @@
 
 import { usePathname, useSearchParams } from 'next/navigation';
 import { switchOperationalStoreAction } from '@/app/actions/operational-store';
+import { publishOperationalStoreSignal } from '@/lib/reliability/operational-store-sync';
 
 export type OperationalStoreOption = {
   id: string;
@@ -50,6 +51,9 @@ export default function OperationalStoreSwitcher({
         defaultValue={selectedStoreId ?? ''}
         data-operational-store={selectedStoreId ?? ''}
         onChange={(event) => {
+          const nextId = event.currentTarget.value;
+          const nextName = stores.find((store) => store.id === nextId)?.name ?? nextId;
+          if (nextId) publishOperationalStoreSignal({ id: nextId, name: nextName });
           event.currentTarget.form?.requestSubmit();
         }}
       >

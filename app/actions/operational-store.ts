@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, safeAction, err } from '@/lib/action-utils';
 import { prisma } from '@/lib/prisma';
 import {
   ALL_BRANCHES_NOT_OPERATIONAL_MSG,
@@ -14,10 +14,8 @@ import {
 } from '@/lib/reliability/operational-store';
 import { operationalStoreCookieOptions } from '@/lib/reliability/operational-store-cookie';
 
-export async function switchOperationalStoreAction(
-  formData: FormData,
-): Promise<ActionResult<{ storeId: string }>> {
-  return safeAction(async () => {
+export async function switchOperationalStoreAction(formData: FormData): Promise<void> {
+  const result = await safeAction(async () => {
     const { businessId, user } = await withBusinessContext(undefined, { requireWrite: false });
     if (user.role !== 'OWNER' && user.role !== 'MANAGER') {
       return err('Only an owner or manager can switch the active branch.');
@@ -42,6 +40,7 @@ export async function switchOperationalStoreAction(
       : returnTo.split('?')[0] || returnTo;
     redirect(nextPath);
   });
+  if (!result.success) throw new Error(result.error);
 }
 
 export async function switchOperationalStore(storeId: string, returnTo: string) {

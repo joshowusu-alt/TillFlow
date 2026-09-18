@@ -187,6 +187,14 @@ export async function closeShiftAction(
       return err(STORE_MISMATCH_MSG);
     }
     const storeId = closingShift.till.storeId;
+    try {
+      const { assertSubmittedStoreMatchesOperationalCookie } = await import(
+        '@/lib/reliability/operational-store-cookie'
+      );
+      assertSubmittedStoreMatchesOperationalCookie(storeId);
+    } catch (e) {
+      return err((e as Error).message);
+    }
     if (!managerPin) return err('Manager PIN is required to close till.');
 
     const manager = await verifyManagerPin({ businessId, pin: managerPin });
@@ -313,6 +321,14 @@ export async function closeShiftOwnerOverrideAction(
       return err(STORE_MISMATCH_MSG);
     }
     const storeId = overrideShift.till.storeId;
+    try {
+      const { assertSubmittedStoreMatchesOperationalCookie } = await import(
+        '@/lib/reliability/operational-store-cookie'
+      );
+      assertSubmittedStoreMatchesOperationalCookie(storeId);
+    } catch (e) {
+      return err((e as Error).message);
+    }
     if (!ownerPassword) return err('Owner password is required for override.');
     if (!overrideReasonCode) return err('Override reason code is required.');
     if (!overrideJustification?.trim()) return err('Override justification is required.');

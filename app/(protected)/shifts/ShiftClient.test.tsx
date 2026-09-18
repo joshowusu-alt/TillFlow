@@ -460,6 +460,35 @@ describe('ShiftClient', () => {
     expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveValue('');
     expect(screen.getByLabelText('Variance Details')).toHaveAttribute('autoComplete', 'off');
     expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('name', 'close-shift-manager-approval');
+    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('type', 'password');
+    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('autoComplete', 'one-time-code');
+    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('type', 'password');
+  });
+
+  it('clears the manager PIN after a failed close without storing it', async () => {
+    closeShiftActionMock.mockResolvedValue({ success: false, error: 'Invalid manager PIN for till close.' });
+    render(
+      <ShiftClient
+        storeId="store-b"
+        storeName="Walkthrough Store B"
+        tills={[{ id: 'till-b', name: 'Till B1' }]}
+        openShifts={[{ ...baseOpenShift, userName: 'Ama Cashier', till: { name: 'Till B1' } }]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="OWNER"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+    const pin = screen.getByPlaceholderText('Enter manager approval PIN');
+    expect(pin).toHaveValue('');
+    fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '865.50' } });
+    fireEvent.change(pin, { target: { value: '1234' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close Shift' }).at(-1)!);
+    await waitFor(() => expect(closeShiftActionMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveValue('');
+    expect(screen.getByText('Invalid manager PIN for till close.')).toBeInTheDocument();
   });
 
   it('does not claim the full float can be retained when counted cash is below it', async () => {

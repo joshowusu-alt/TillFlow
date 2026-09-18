@@ -110,23 +110,6 @@ export async function withBusinessContext(
   return { user, businessId: business.id };
 }
 
-export async function withBusinessStoreContext(
-  roles?: Role[],
-  preferredStoreId?: string,
-  options?: BusinessContextOptions,
-): Promise<BusinessStoreContext> {
-  const ctx = await withBusinessContext(roles, options);
-  const store = await prisma.store.findFirst({
-    where: {
-      businessId: ctx.businessId,
-      ...(preferredStoreId ? { id: preferredStoreId } : {}),
-    },
-    orderBy: { createdAt: 'asc' },
-  });
-  if (!store) redirect('/settings');
-  return { ...ctx, storeId: store.id };
-}
-
 /**
  * Financial, stock, shift and payment mutations must send an explicit store.
  * Never falls back to the first business store.
@@ -137,8 +120,12 @@ export async function requireSelectedStoreContext(
   options?: BusinessContextOptions,
 ): Promise<BusinessStoreContext> {
   const { assertSelectedStoreForBusiness } = await import('@/lib/reliability/selected-store');
+  const { assertSubmittedStoreMatchesOperationalCookie } = await import(
+    '@/lib/reliability/operational-store-cookie'
+  );
   const ctx = await withBusinessContext(roles, options);
   const store = await assertSelectedStoreForBusiness(ctx.businessId, storeId);
+  assertSubmittedStoreMatchesOperationalCookie(store.id);
   return { ...ctx, storeId: store.id };
 }
 

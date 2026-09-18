@@ -3,7 +3,9 @@ import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
+import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 import { prisma } from '@/lib/prisma';
 import { requestStockTransferAction, approveStockTransferAction } from '@/app/actions/transfers';
 import { formatDateTime } from '@/lib/format';
@@ -14,7 +16,17 @@ export default async function TransfersPage({
 }: {
   searchParams?: { error?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, store, stores: authorisedStores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
+
+  if (!store) {
+    return (
+      <SelectOperationalStoreNotice
+        stores={authorisedStores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch before requesting a transfer"
+      />
+    );
+  }
 
   if ((business as any).storeMode !== 'MULTI_STORE') {
     return (
@@ -67,7 +79,7 @@ export default async function TransfersPage({
     }),
   ]);
 
-  const defaultFromStoreId = stores.length === 1 ? stores[0]?.id ?? '' : '';
+  const defaultFromStoreId = store.id;
   const defaultToStoreId = '';
 
   return (
@@ -78,6 +90,10 @@ export default async function TransfersPage({
       />
 
       <FormError error={searchParams?.error} />
+      <EffectiveStoreBanner
+        storeName={store.name}
+        actionLabel={`Transfers leave ${store.name}. The destination branch is selected below.`}
+      />
 
       <div className="card p-6">
         <h2 className="text-lg font-display font-semibold">Create Transfer Request</h2>
@@ -85,7 +101,6 @@ export default async function TransfersPage({
           <div>
             <label className="label">From Branch</label>
             <select className="input" name="fromStoreId" defaultValue={defaultFromStoreId} required>
-              {stores.length !== 1 ? <option value="">Select a store</option> : null}
               {stores.map((store) => (
                 <option key={store.id} value={store.id}>
                   {store.name}

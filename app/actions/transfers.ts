@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
-import { formAction, withBusinessContext, err, ok, safeAction, type ActionResult } from '@/lib/action-utils';
+import { formAction, withBusinessContext, requireSelectedStoreContext, err, ok, safeAction, type ActionResult } from '@/lib/action-utils';
 import { formInt, formOptionalString, formString } from '@/lib/form-helpers';
 import { audit } from '@/lib/audit';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
@@ -11,10 +11,9 @@ import { approveAndCompleteStockTransfer, requestStockTransfer } from '@/lib/ser
 
 export async function requestStockTransferAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
-
     const fromStoreId = formString(formData, 'fromStoreId');
     const toStoreId = formString(formData, 'toStoreId');
+    const { user, businessId } = await requireSelectedStoreContext(['MANAGER', 'OWNER'], fromStoreId);
     const productId = formString(formData, 'productId');
     const qtyBase = formInt(formData, 'qtyBase');
     const reason = formOptionalString(formData, 'reason');

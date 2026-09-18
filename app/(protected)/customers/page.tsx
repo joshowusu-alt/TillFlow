@@ -4,12 +4,13 @@ import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import Pagination from '@/components/Pagination';
 import SearchFilter from '@/components/SearchFilter';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
+import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 import { Suspense } from 'react';
 import { createCustomerAction } from '@/app/actions/customers';
 import { formatMoney, formatRelativeDate } from '@/lib/format';
 import { getCustomers } from '@/lib/services/customers';
-import { getBusinessStores } from '@/lib/services/stores';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import TagChips from '@/components/TagChips';
 import OperationalMetricCard from '@/components/OperationalMetricCard';
@@ -65,23 +66,22 @@ export default async function CustomersPage({
 }: {
   searchParams?: { error?: string; q?: string; page?: string; storeId?: string; balanceDue?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, store, stores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
+  if (!store) {
+    return (
+      <SelectOperationalStoreNotice
+        stores={stores}
+        canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'}
+        title="Select a branch before adding or reviewing customers"
+      />
+    );
+  }
 
   const q = searchParams?.q?.trim() ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
   const balanceDue = searchParams?.balanceDue === '1';
-  const { stores, selectedStoreId: rawStoreId } = await measureServerOperation(
-    'page.customers.stores-load',
-    () => getBusinessStores(business.id, searchParams?.storeId),
-    {
-      businessId: business.id,
-      route: '/customers',
-      cacheState: 'uncached-page-load',
-    },
-    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
-  );
-  const selectedStoreId = (rawStoreId ?? stores[0]?.id) ?? '';
+  const selectedStoreId = store.id;
 
   const { customers, totalCount, totalPages } = await measureServerOperation(
     'page.customers.load',
@@ -113,6 +113,10 @@ export default async function CustomersPage({
       />
 
       <p className="text-xs text-black/50">These are current customer balances across recorded sales and receipts, not limited to a date range.</p>
+      <EffectiveStoreBanner
+        storeName={store.name}
+        actionLabel={`Customer accounts and new customers on this page use ${store.name}.`}
+      />
 
       <div className="operational-metric-grid operational-metric-grid--4">
         <CustomerStatCard
@@ -143,19 +147,7 @@ export default async function CustomersPage({
           <Suspense><SearchFilter placeholder="Search customers by name..." /></Suspense>
         </div>
         {business.customerScope === 'BRANCH' ? (
-          <form method="GET" className="flex min-w-0 w-full flex-wrap items-end gap-3 sm:w-auto">
-            <div>
-              <label className="label">Branch</label>
-              <select className="input" name="storeId" defaultValue={selectedStoreId}>
-                {stores.map((store) => (
-                  <option key={store.id} value={store.id}>
-                    {store.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button className="btn-secondary" type="submit">Apply</button>
-          </form>
+          <p className="text-xs text-black/50">Switch branches from the header. This list is not a branch switcher.</p>
         ) : null}
         <div className="operational-filter-actions">
           {balanceDue ? (
@@ -196,6 +188,7 @@ export default async function CustomersPage({
         <div className="card mt-2 p-4 sm:p-5">
           <FormError error={searchParams?.error} />
           <form action={createCustomerAction} className="grid gap-4 md:grid-cols-3">
+            <input type="hidden" name="storeId" value={store.id} />
             <div>
               <label className="label">Name <span className="text-red-500">*</span></label>
               <input className="input" name="name" placeholder="e.g. Akosua Mensah" required />
@@ -212,15 +205,9 @@ export default async function CustomersPage({
               <label className="label">Credit Limit (GHS)</label>
               <input className="input" name="creditLimit" placeholder="0.00" />
             </div>
-            {business.customerScope === 'BRANCH' && stores.length > 0 ? (
-              <div>
-                <label className="label">Branch</label>
-                <select className="input" name="storeId">
-                  <option value="">All branches</option>
-                  {stores.map((store) => (
-                    <option key={store.id} value={store.id}>{store.name}</option>
-                  ))}
-                </select>
+            {business.customerScope === 'BRANCH' ? (
+              <div className="text-sm text-black/60">
+                New customers will be recorded in <span className="font-semibold">{store.name}</span>.
               </div>
             ) : null}
             <div className="md:col-span-2">

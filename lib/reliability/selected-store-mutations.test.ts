@@ -57,7 +57,10 @@ describe('selected-store mutation fail-closed', () => {
     expect(read('app/actions/settings.ts')).not.toContain('withBusinessStoreContext');
     expect(read('lib/services/customers.ts')).toContain('Select a store before adding this customer.');
     expect(read('lib/services/online-orders.ts')).toContain('business.stores.length === 1');
-    expect(read('app/(protected)/transfers/page.tsx')).toContain("stores.length === 1 ? stores[0]?.id ?? '' : ''");
+    expect(read('app/(protected)/transfers/page.tsx')).toContain('defaultFromStoreId = store.id');
+    expect(read('app/(protected)/transfers/page.tsx')).not.toContain('stores[0]');
+    expect(read('app/(protected)/customers/page.tsx')).toContain('requireBusinessAndOptionalStore');
+    expect(read('app/(protected)/customers/page.tsx')).not.toContain('stores[0]');
     expect(read('app/actions/reorder.ts')).toContain('requireSelectedStoreContext');
     expect(read('app/actions/reorder.ts')).not.toContain('withBusinessStoreContext');
     expect(read('app/actions/reorder.ts')).not.toContain('defaultStoreId');

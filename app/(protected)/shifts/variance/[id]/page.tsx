@@ -7,6 +7,7 @@ import { withStoreQuery } from '@/lib/reliability/selected-store';
 import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import { prisma } from '@/lib/prisma';
 import { VARIANCE_REVIEWER_ROLES } from '@/lib/services/cash-variance';
+import { invalidPreviewShiftClosureNote } from '@/lib/reliability/invalid-preview-shift-closures';
 import VarianceWorkflowClient from '../VarianceWorkflowClient';
 
 export default async function CashVarianceDetailPage({
@@ -71,6 +72,12 @@ export default async function CashVarianceDetailPage({
         subtitle="Review the variance. Counted and expected cash on the shift are not rewritten."
         secondaryCta={{ label: 'All investigations', href: withStoreQuery('/shifts/variance', store.id) }}
       />
+
+      {invalidPreviewShiftClosureNote(investigation.shift.closureNumber) ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+          {invalidPreviewShiftClosureNote(investigation.shift.closureNumber)}
+        </div>
+      ) : null}
 
       <div className="card space-y-3 p-5">
         <div className="text-xs uppercase tracking-wide text-black/40">Shift snapshot</div>

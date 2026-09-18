@@ -29,6 +29,8 @@ describe('authoritative operational store surfaces', () => {
     expect(read('app/(protected)/payments/customer-receipts/page.tsx')).toContain('storeId: store.id');
     expect(read('app/(protected)/pos/page.tsx')).toContain('SelectOperationalStoreNotice');
     expect(read('app/(protected)/pos/page.tsx')).toContain('EffectiveStoreBanner');
+    expect(read('app/(protected)/layout.tsx')).toContain('StaleOperationalStoreGuard');
+    expect(read('components/OperationalStoreSwitcher.tsx')).toContain('publishOperationalStoreSignal');
   });
 
   it('hides internal purchase ids on supplier payments', () => {

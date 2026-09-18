@@ -12,6 +12,7 @@ import { getOwnerSetupBannerState } from '@/lib/activation-setup-progress';
 import { getActivationStatusLabel } from '@/lib/activation-display';
 import BusinessNameSaver from '@/components/BusinessNameSaver';
 import LaunchSessionCompletion from '@/components/LaunchSessionCompletion';
+import StaleOperationalStoreGuard from '@/components/StaleOperationalStoreGuard';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 function formatDateLabel(value: Date | string | null | undefined) {
@@ -131,6 +132,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     <div className="min-h-screen w-full max-w-full">
       <BusinessNameSaver name={business.name} businessId={business.id} />
       <ProtectedBusinessScope businessId={business.id} storeId={store?.id ?? null} />
+      <StaleOperationalStoreGuard storeId={store?.id ?? null} storeName={store?.name ?? null} />
       <PullToRefresh />
       <TopNav
         user={{ name: user.name, role: user.role as 'CASHIER' | 'MANAGER' | 'OWNER' }}

@@ -15,6 +15,9 @@ export const ALL_BRANCHES_NOT_OPERATIONAL_MSG =
 export const OPERATIONAL_STORE_MISMATCH_MSG =
   'The selected branch does not match the store on this record, till, or form.';
 
+export const STALE_OPERATIONAL_STORE_MSG =
+  'This tab is out of date. Another tab changed the active branch. Reload before recording anything.';
+
 export const OPERATIONAL_ROUTE_PREFIXES = [
   '/pos',
   '/shifts',
@@ -24,6 +27,7 @@ export const OPERATIONAL_ROUTE_PREFIXES = [
   '/payments/supplier-payments',
   '/payments/customer-receipts',
   '/transfers',
+  '/customers',
 ] as const;
 
 export type OperationalStoreChoice = {
@@ -197,4 +201,4 @@ export function resolveOperationalStore(input: {
  * submitted store, till, and source record server-side.
  */
 export const MULTI_TAB_OPERATIONAL_STORE_CONTRACT =
-  'shared-cookie-last-write-wins-with-url-conflict-banner';
+  'shared-cookie-last-write-wins-with-stale-tab-block-and-server-mismatch-reject';
