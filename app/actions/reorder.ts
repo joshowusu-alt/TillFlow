@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import {
   withBusinessContext,
-  withBusinessStoreContext,
+  requireSelectedStoreContext,
   safeAction,
   ok,
   err,
@@ -15,13 +15,16 @@ import { audit } from '@/lib/audit';
 
 export async function markAsOrdered(formData: FormData): Promise<ActionResult> {
   return safeAction(async () => {
-    const { user, businessId, storeId: defaultStoreId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const requestedStoreId = (formData.get('storeId') as string) || null;
+    const { user, businessId, storeId } = await requireSelectedStoreContext(
+      ['MANAGER', 'OWNER'],
+      requestedStoreId,
+    );
 
     const productId = formData.get('productId') as string;
     const qtyBase = parseInt(formData.get('qtyBase') as string, 10);
     const supplierId = (formData.get('supplierId') as string) || null;
     const notes = (formData.get('notes') as string) || null;
-    const storeId = (formData.get('storeId') as string) || defaultStoreId;
 
     if (!productId || !qtyBase || qtyBase <= 0) {
       return err('Invalid product or quantity');
