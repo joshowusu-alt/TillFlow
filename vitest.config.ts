@@ -2,7 +2,9 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
-const isolatedPreviewGates = process.env.TILLFLOW_REQUIRE_ISOLATED_PREVIEW === '1';
+const includePgTests =
+  process.env.TILLFLOW_INCLUDE_PG_TESTS === '1' ||
+  process.env.TILLFLOW_REQUIRE_ISOLATED_PREVIEW === '1';
 
 export default defineConfig({
     plugins: [react()],
@@ -15,7 +17,7 @@ export default defineConfig({
           '**/node_modules/**',
           '.next',
           'tishgroup-control/**',
-          ...(isolatedPreviewGates
+          ...(includePgTests
             ? []
             : [
                 '**/*.pg.test.ts',

@@ -7,6 +7,7 @@ describe('default unit runner does not execute live Postgres tests', () => {
     const config = readFileSync(join(process.cwd(), 'vitest.config.ts'), 'utf8');
     expect(config).toContain("'**/*.pg.test.ts'");
     expect(config).toContain('inventory-increase-concurrency.test.ts');
+    expect(config).toContain("TILLFLOW_INCLUDE_PG_TESTS === '1'");
     expect(config).toContain("TILLFLOW_REQUIRE_ISOLATED_PREVIEW === '1'");
   });
 });
