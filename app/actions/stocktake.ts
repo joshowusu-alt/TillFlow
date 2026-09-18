@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
-import { requireSelectedStoreContext, safeAction, type ActionResult } from '@/lib/action-utils';
+import { requireSelectedStoreContext, formAction, safeAction, err, type ActionResult } from '@/lib/action-utils';
 import { formString } from '@/lib/form-helpers';
 import { audit } from '@/lib/audit';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
@@ -68,20 +68,20 @@ function countedLineWrite(
  * Start a new stocktake — snapshots current system quantities for all active
  * products so the user can enter physical counts.
  */
-export async function createStocktakeAction(formData?: FormData): Promise<ActionResult<{ id: string }>> {
-  return safeAction(async () => {
+export async function createStocktakeAction(formData?: FormData): Promise<void> {
+  return formAction(async () => {
     const { user, storeId, businessId } = await requireSelectedStoreContext(
       ['MANAGER', 'OWNER'],
       formData ? formString(formData, 'storeId') : '',
     );
     const plan = await assertGrowthStocktake(businessId);
-    if (!plan.allowed) return { success: false, error: plan.error };
+    if (!plan.allowed) return err(plan.error);
 
     const existing = await prisma.stocktake.findFirst({
       where: { storeId, status: 'IN_PROGRESS' },
     });
     if (existing) {
-      return { success: false, error: 'A stocktake is already in progress. Complete or cancel it first.' };
+      return err('A stocktake is already in progress. Complete or cancel it first.');
     }
 
     const products = await prisma.product.findMany({
@@ -128,7 +128,7 @@ export async function createStocktakeAction(formData?: FormData): Promise<Action
     });
 
     redirect(`/inventory/stocktake?storeId=${encodeURIComponent(storeId)}`);
-  });
+  }, '/inventory/stocktake');
 }
 
 /**

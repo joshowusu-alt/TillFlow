@@ -204,21 +204,33 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
       </div>
 
       <div className="operational-metric-grid operational-metric-grid--3">
-        <SupplierStatCard
-          label="Total suppliers"
-          value={totalCount.toLocaleString('en-GH')}
-          helper={kpiScopeHelper}
-        />
-        <SupplierStatCard
-          label="Suppliers with balance"
-          value={suppliersWithBalanceCount.toLocaleString('en-GH')}
-          helper={kpiScopeHelper}
-        />
-        <SupplierStatCard
-          label="What you owe suppliers"
-          value={formatMoney(totalApOutstandingPence, business.currency)}
-          helper={kpiScopeHelper}
-        />
+        <Link href={q ? `/suppliers?q=${encodeURIComponent(q)}` : '/suppliers'} className="block no-underline">
+          <SupplierStatCard
+            label="Total suppliers"
+            value={totalCount.toLocaleString('en-GH')}
+            helper={`${kpiScopeHelper}. Opens the supporting supplier list.`}
+          />
+        </Link>
+        <Link
+          href={`/suppliers?${q ? `q=${encodeURIComponent(q)}&` : ''}amountOwed=1`}
+          className="block no-underline"
+        >
+          <SupplierStatCard
+            label="Suppliers with balance"
+            value={suppliersWithBalanceCount.toLocaleString('en-GH')}
+            helper={`${kpiScopeHelper}. Opens suppliers with amount owed.`}
+          />
+        </Link>
+        <Link
+          href={`/suppliers?${q ? `q=${encodeURIComponent(q)}&` : ''}amountOwed=1`}
+          className="block no-underline"
+        >
+          <SupplierStatCard
+            label="What you owe suppliers"
+            value={formatMoney(totalApOutstandingPence, business.currency)}
+            helper={`${kpiScopeHelper}. Opens suppliers with amount owed.`}
+          />
+        </Link>
       </div>
 
       {/* Search and filter */}

@@ -63,7 +63,7 @@ describe('inventory-loss expense guard', () => {
       expect(args.where?.businessId).toBe('biz-1');
       return { id: 'exp-existing' };
     };
-    const tx = { expense: { findFirst } };
+    const tx = { expense: { findFirst } } as never;
     await expect(assertSourceAdjustmentAvailable(tx, 'adj-1', 'biz-1')).rejects.toThrow(
       INVENTORY_LOSS_DUPLICATE_ADJUSTMENT_MSG,
     );
