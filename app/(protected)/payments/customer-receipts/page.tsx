@@ -8,6 +8,7 @@ import { formatMoney, formatDate } from '@/lib/format';
 import { recordCustomerPaymentAction } from '@/app/actions/payments';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import DueDateBadge from '@/components/DueDateBadge';
+import RemainingBalance from '@/components/RemainingBalance';
 import Link from 'next/link';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import StableIdempotencyKeyInput from '@/components/StableIdempotencyKeyInput';
@@ -355,8 +356,12 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
                         <td className="px-3 py-3 text-sm font-semibold tabular-nums">
                           {formatMoney(invoice.totalPence, business.currency)}
                         </td>
-                        <td className="px-3 py-3 text-sm font-semibold tabular-nums text-amber-700">
-                          {formatMoney(invoice.outstanding, business.currency)}
+                        <td className="px-3 py-3">
+                          <RemainingBalance
+                            amountPence={invoice.totalPence}
+                            paidPence={invoice.totalPence - invoice.outstanding}
+                            currency={business.currency}
+                          />
                         </td>
                         <td className="px-3 py-3">
                           {renderPaymentForm(invoice.id)}
@@ -410,9 +415,12 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
                         </div>
                         <div className="text-right">
                           <div className="text-xs text-black/50">Balance</div>
-                          <div className="text-sm font-bold tabular-nums text-amber-700">
-                            {formatMoney(invoice.outstanding, business.currency)}
-                          </div>
+                          <RemainingBalance
+                            className="mt-1"
+                            amountPence={invoice.totalPence}
+                            paidPence={invoice.totalPence - invoice.outstanding}
+                            currency={business.currency}
+                          />
                         </div>
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-black/55">
