@@ -1049,7 +1049,7 @@ async function createSaleImpl(input: CreateSaleInput) {
           CHECKOUT_STAGE_THRESHOLDS_MS.sequence,
         );
         const transactionNumber = `INV-${String(sequenceValue).padStart(6, '0')}`;
-        const receiptNumbers = [];
+        const receiptNumbers: string[] = [];
         for (let i = 0; i < payments.length; i += 1) {
           receiptNumbers.push(await reserveNextDocumentNumber(tx, input.businessId, 'customer_receipt'));
         }

@@ -32,11 +32,7 @@ export function assertRequestedStoreMatchesSource(
 export async function assertSelectedStoreForBusiness(
   businessId: string,
   storeId: string | null | undefined,
-  db: {
-    store: {
-      findFirst: (args: unknown) => Promise<{ id: string } | null>;
-    };
-  } = prisma,
+  db: { store: { findFirst: (args: any) => Promise<{ id: string } | null> } } = prisma as any,
 ): Promise<{ id: string }> {
   const selectedStoreId = requireExplicitStoreId(storeId);
   const store = await db.store.findFirst({
@@ -53,11 +49,7 @@ export async function resolveStoreFromTill(
   businessId: string,
   tillId: string | null | undefined,
   requestedStoreId?: string | null,
-  db: {
-    till: {
-      findFirst: (args: unknown) => Promise<{ id: string; storeId: string } | null>;
-    };
-  } = prisma,
+  db: { till: { findFirst: (args: any) => Promise<{ id: string; storeId: string } | null> } } = prisma as any,
 ): Promise<{ tillId: string; storeId: string }> {
   const selectedTillId = tillId?.trim() ?? '';
   if (!selectedTillId) {
