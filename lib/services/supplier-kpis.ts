@@ -43,18 +43,20 @@ export function supplierKpiScopeHelper(scope: SupplierKpiScope): string {
   }
 }
 
+function supplierNameContains(search: string) {
+  // `mode: 'insensitive'` is Postgres-only. SQLite CI types reject it, so keep
+  // the runtime filter and widen the type the same way catalogue search does.
+  return { name: { contains: search, mode: 'insensitive' as const } as any };
+}
+
 export function buildSupplierListWhere(
   businessId: string,
   filter: SupplierKpiFilter,
-): {
-  businessId: string;
-  name?: { contains: string; mode: 'insensitive' };
-  purchaseInvoices?: { some: { paymentStatus: { in: string[] } } };
-} {
+) {
   const search = filter.search?.trim() ?? '';
   return {
     businessId,
-    ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
+    ...(search ? supplierNameContains(search) : {}),
     ...(filter.amountOwed
       ? { purchaseInvoices: { some: { paymentStatus: { in: ['UNPAID', 'PART_PAID'] } } } }
       : {}),
@@ -77,7 +79,7 @@ export async function getSupplierListKpis(
       paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
       supplier: {
         businessId,
-        ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
+        ...(search ? supplierNameContains(search) : {}),
         ...(filter.amountOwed
           ? { purchaseInvoices: { some: { paymentStatus: { in: ['UNPAID', 'PART_PAID'] } } } }
           : {}),
