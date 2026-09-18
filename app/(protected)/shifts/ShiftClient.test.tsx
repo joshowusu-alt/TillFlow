@@ -278,7 +278,7 @@ describe('ShiftClient', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
-    expect(screen.getByText('Cash added / adjustments')).toBeInTheDocument();
+    expect(screen.getAllByText('Cash added / adjustments').length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows supplier payments and other cash movement categories in the close breakdown', () => {
@@ -317,11 +317,48 @@ describe('ShiftClient', () => {
 
     expect(screen.getByText('Opening Cash')).toBeInTheDocument();
     expect(screen.getByText('Cash Sales')).toBeInTheDocument();
-    expect(screen.getByText('Customer payments received')).toBeInTheDocument();
-    expect(screen.getByText('Supplier payments')).toBeInTheDocument();
-    expect(screen.getByText('Expenses paid from till')).toBeInTheDocument();
+    expect(screen.getAllByText('Customer payments received').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Supplier payments').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Expenses paid from till').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Expected Cash').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('GH₵2,600.00').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('does not offer a usable Open Shift action for an already-open till', () => {
+    render(
+      <ShiftClient
+        tills={[{ id: 'till-1', name: 'Till 1' }, { id: 'till-3', name: 'Till 3' }]}
+        openShifts={[]}
+        occupiedTills={[{
+          tillId: 'till-1',
+          tillName: 'Till 1',
+          shiftId: 'shift-other',
+          userId: 'user-2',
+          userName: 'Ama',
+          openedAt: '2026-09-17T08:00:00.000Z',
+          openingCashPence: 20000,
+          salesCount: 1,
+          salesTotal: 1000,
+          expectedCash: 21000,
+          cardTotal: 0,
+          transferTotal: 0,
+          momoTotal: 0,
+        }]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="CASHIER"
+        currentUserId="user-1"
+      />
+    );
+
+    expect(screen.getByText(/Open — Ama/)).toBeInTheDocument();
+    expect(screen.getByText(/float GH₵200.00/)).toBeInTheDocument();
+    expect(screen.getByText('Open unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Shift' })).toBeInTheDocument();
+    const tillSelect = screen.getByLabelText('Till') as HTMLSelectElement;
+    expect(tillSelect.value).toBe('till-3');
+    expect(screen.queryByRole('option', { name: 'Till 1' })).not.toBeInTheDocument();
   });
 
   it('opens a shift by navigating to POS for that till, not by remaining on Start New Shift', async () => {

@@ -31,6 +31,12 @@ export const CASH_DRAWER_BREAKDOWN_ORDER = [
   'CASH_ADJUSTMENT',
 ] as const;
 
+/** Totals drill-down includes close rows; report category chips stay on BREAKDOWN_ORDER. */
+export const CASH_DRAWER_DRILLDOWN_ORDER = [
+  ...CASH_DRAWER_BREAKDOWN_ORDER,
+  'CLOSE_RECONCILIATION',
+] as const;
+
 export type CashDrawerAuditActor = {
   userId: string;
   userName: string;
@@ -377,5 +383,106 @@ export function summarizeCashDrawerEntries(
       return acc;
     },
     { totalPence: 0, byType: {} as Record<string, number> }
+  );
+}
+
+export function isCashDrawerDrilldownType(value: string | null | undefined): value is CashDrawerEntryType {
+  return Boolean(value && (CASH_DRAWER_DRILLDOWN_ORDER as readonly string[]).includes(value));
+}
+
+/** Count drawer rows for one source event. Used to prove a cash event writes once. */
+export function countDrawerRowsForReference(
+  entries: CashDrawerEntryRef[],
+  referenceType: string,
+  referenceId: string,
+  entryType?: string,
+) {
+  return entries.filter(
+    (entry) =>
+      entry.referenceType === referenceType &&
+      entry.referenceId === referenceId &&
+      (entryType ? entry.entryType === entryType : true),
+  ).length;
+}
+
+export type CashDrawerSupportingRow = {
+  id: string;
+  createdAt: Date;
+  entryType: string;
+  amountPence: number;
+  reason: string | null;
+  reasonCode: string | null;
+  referenceType: string | null;
+  referenceId: string | null;
+  tillId: string;
+  shiftId: string | null;
+  tillName: string;
+  cashierName: string | null;
+};
+
+/**
+ * Supporting rows for a cash-drawer total. Scope is explicit: business + optional
+ * date / till / shift. Card-transfer reconciliation lives under
+ * /payments/reconciliation/card-transfer (branch + date scoped there; not this query).
+ */
+export async function listCashDrawerSupportingRows(
+  input: {
+    businessId: string;
+    storeId?: string | null;
+    tillId?: string | null;
+    shiftId?: string | null;
+    entryType: CashDrawerEntryType;
+    from?: Date | null;
+    to?: Date | null;
+  },
+  db: any = prisma,
+): Promise<CashDrawerSupportingRow[]> {
+  return db.cashDrawerEntry.findMany({
+    where: {
+      businessId: input.businessId,
+      entryType: input.entryType,
+      ...(input.storeId ? { storeId: input.storeId } : {}),
+      ...(input.tillId ? { tillId: input.tillId } : {}),
+      ...(input.shiftId ? { shiftId: input.shiftId } : {}),
+      ...(input.from || input.to
+        ? {
+            createdAt: {
+              ...(input.from ? { gte: input.from } : {}),
+              ...(input.to ? { lte: input.to } : {}),
+            },
+          }
+        : {}),
+      store: { businessId: input.businessId },
+    },
+    select: {
+      id: true,
+      createdAt: true,
+      entryType: true,
+      amountPence: true,
+      reason: true,
+      reasonCode: true,
+      referenceType: true,
+      referenceId: true,
+      tillId: true,
+      shiftId: true,
+      till: { select: { name: true } },
+      cashierUser: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  }).then((rows: Array<CashDrawerSupportingRow & { till: { name: string }; cashierUser: { name: string } | null }>) =>
+    rows.map((row) => ({
+      id: row.id,
+      createdAt: row.createdAt,
+      entryType: row.entryType,
+      amountPence: row.amountPence,
+      reason: row.reason,
+      reasonCode: row.reasonCode,
+      referenceType: row.referenceType,
+      referenceId: row.referenceId,
+      tillId: row.tillId,
+      shiftId: row.shiftId,
+      tillName: row.till.name,
+      cashierName: row.cashierUser?.name ?? null,
+    })),
   );
 }

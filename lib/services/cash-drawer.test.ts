@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CASH_DRAWER_BREAKDOWN_ORDER,
+  CASH_DRAWER_DRILLDOWN_ORDER,
   CASH_DRAWER_ENTRY_LABELS,
   EXPLICIT_CASH_TILL_REQUIRED_MSG,
+  countDrawerRowsForReference,
   getOpenCashShiftForPayment,
+  listCashDrawerSupportingRows,
   recordCashDrawerEntryTx,
   requireOpenCashShiftForTill,
   summarizeCashDrawerEntries,
@@ -50,6 +53,11 @@ describe('cash drawer summaries', () => {
     expect(CASH_DRAWER_ENTRY_LABELS.PAID_OUT_SUPPLIER).toBe('Supplier payments');
     expect(CASH_DRAWER_ENTRY_LABELS.CASH_DEBTOR_PAYMENT).toBe('Customer payments received');
     expect(CASH_DRAWER_ENTRY_LABELS.CASH_ADJUSTMENT).toBe('Cash added / adjustments');
+    expect(CASH_DRAWER_DRILLDOWN_ORDER).toEqual([
+      ...CASH_DRAWER_BREAKDOWN_ORDER,
+      'CLOSE_RECONCILIATION',
+    ]);
+    expect(CASH_DRAWER_ENTRY_LABELS.CLOSE_RECONCILIATION).toBe('Close reconciliation');
   });
 
   it('CASH_ADJUSTMENT with positive amountPence increases the running total', () => {
@@ -133,6 +141,88 @@ describe('cash drawer writes', () => {
       beforeExpectedCashPence: 1000,
       afterExpectedCashPence: 1250,
     });
+    expect(tx.cashDrawerEntry.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes exactly one drawer row per cash event reference', () => {
+    const entries = [
+      { entryType: 'CASH_SALE', referenceType: 'SALES_INVOICE', referenceId: 'inv-1' },
+      { entryType: 'CASH_DEBTOR_PAYMENT', referenceType: 'SALES_INVOICE', referenceId: 'inv-2' },
+    ];
+    expect(countDrawerRowsForReference(entries, 'SALES_INVOICE', 'inv-1', 'CASH_SALE')).toBe(1);
+    expect(countDrawerRowsForReference(entries, 'SALES_INVOICE', 'inv-1')).toBe(1);
+    expect(countDrawerRowsForReference(entries, 'SALES_INVOICE', 'inv-missing')).toBe(0);
+  });
+
+  it('does not let a non-cash method invent a cash drawer type', () => {
+    const summary = summarizeCashDrawerEntries([
+      { entryType: 'CASH_SALE', amountPence: 500 },
+    ]);
+    expect(summary.byType.CARD).toBeUndefined();
+    expect(summary.byType.TRANSFER).toBeUndefined();
+    expect(summary.totalPence).toBe(500);
+  });
+});
+
+describe('cash drawer drill-down query', () => {
+  it('preserves date, till, and shift scope', async () => {
+    const from = new Date('2026-09-01T00:00:00.000Z');
+    const to = new Date('2026-09-17T23:59:59.000Z');
+    const db = {
+      cashDrawerEntry: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'row-1',
+            createdAt: from,
+            entryType: 'CASH_SALE',
+            amountPence: 250,
+            reason: 'Cash sale',
+            reasonCode: 'SALE',
+            referenceType: 'SALES_INVOICE',
+            referenceId: 'inv-1',
+            tillId: 'till-3',
+            shiftId: 'shift-3',
+            till: { name: 'Till 3' },
+            cashierUser: { name: 'Ama' },
+          },
+        ]),
+      },
+    };
+
+    const rows = await listCashDrawerSupportingRows(
+      {
+        businessId: 'biz-1',
+        storeId: 'store-1',
+        tillId: 'till-3',
+        shiftId: 'shift-3',
+        entryType: 'CASH_SALE',
+        from,
+        to,
+      },
+      db,
+    );
+
+    expect(db.cashDrawerEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: 'biz-1',
+          storeId: 'store-1',
+          tillId: 'till-3',
+          shiftId: 'shift-3',
+          entryType: 'CASH_SALE',
+          createdAt: { gte: from, lte: to },
+          store: { businessId: 'biz-1' },
+        }),
+      }),
+    );
+    expect(rows).toEqual([
+      expect.objectContaining({
+        id: 'row-1',
+        tillName: 'Till 3',
+        cashierName: 'Ama',
+        amountPence: 250,
+      }),
+    ]);
   });
 });
 

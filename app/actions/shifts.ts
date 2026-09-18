@@ -7,7 +7,17 @@ import { withBusinessContext, withBusinessStoreContext, safeAction, ok, err, typ
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/services/cash-drawer';
-import { performShiftClose } from '@/lib/services/shifts';
+import {
+  performShiftClose,
+  performShiftOpen,
+  TILL_ALREADY_OPEN_MSG,
+} from '@/lib/services/shifts';
+import {
+  approveCashVariance,
+  assignCashVarianceReviewer,
+  explainCashVariance,
+  resolveCashVariance,
+} from '@/lib/services/cash-variance';
 import { sendCashVarianceAlert } from '@/app/actions/stock-alerts';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS, appLog } from '@/lib/observability';
@@ -101,84 +111,45 @@ export async function openShiftAction(
 
     if (!tillId) return err('Please select a till first.');
 
-    const till = await prisma.till.findFirst({
-      where: { id: tillId, active: true, storeId, store: { businessId } },
-      select: { id: true, storeId: true, store: { select: { businessId: true } } },
-    });
-    if (!till || till.store.businessId !== businessId) return err('Till not found for your business.');
-
-    const shift = await measureServerOperation(
-      'action.shift.open',
-      () => prisma.$transaction(async (tx) => {
-        const existingShift = await tx.shift.findFirst({
-          where: { tillId: till.id, status: 'OPEN' },
-        });
-        if (existingShift) throw new Error('A shift is already open for this till');
-
-        const created = await tx.shift.create({
-          data: {
-            tillId: till.id,
-            userId: user.id,
-            openingCashPence: openingCash,
-            expectedCashPence: 0,
-            status: 'OPEN',
-            openKey: till.id,
-          },
-        });
-
-        await recordCashDrawerEntryTx(tx, {
-          businessId,
-          storeId: till.storeId,
-          tillId: till.id,
-          shiftId: created.id,
-          createdByUserId: user.id,
-          cashierUserId: user.id,
-          entryType: 'OPEN_FLOAT',
-          amountPence: openingCash,
-          reasonCode: 'OPEN_FLOAT',
-          reason: 'Till opened with float',
-          referenceType: 'SHIFT',
-          referenceId: created.id,
-          actor: { userId: user.id, userName: user.name ?? 'Unknown', userRole: user.role },
-        });
-
-        return created;
-      }),
-      {
+    try {
+      const shift = await performShiftOpen({
         businessId,
-        storeId: till.storeId,
-        action: 'openShiftAction',
-        cacheState: 'write-through',
-      },
-      { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
-    );
-
-    audit({
-      businessId,
-      userId: user.id,
-      userName: user.name,
-      userRole: user.role,
-      action: 'CASH_DRAWER_OPEN',
-      entity: 'Shift',
-      entityId: shift.id,
-      details: {
-        tillId: till.id,
+        storeId,
+        actor: { userId: user.id, userName: user.name, userRole: user.role },
+        tillId,
         openingCashPence: openingCash,
-        beforeExpectedCashPence: 0,
-        afterExpectedCashPence: openingCash,
-      },
-    });
+      });
 
-    revalidatePosTillShiftTags(businessId, storeId);
-    revalidatePath('/shifts');
-    revalidatePath('/pos');
-    return ok({ id: shift.id, tillId: till.id });
+      audit({
+        businessId,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        action: 'CASH_DRAWER_OPEN',
+        entity: 'Shift',
+        entityId: shift.id,
+        details: {
+          tillId: shift.tillId,
+          openingCashPence: shift.openingCashPence,
+          beforeExpectedCashPence: 0,
+          afterExpectedCashPence: shift.openingCashPence,
+        },
+      });
+
+      revalidatePosTillShiftTags(businessId, storeId);
+      revalidatePath('/shifts');
+      revalidatePath('/pos');
+      return ok({ id: shift.id, tillId: shift.tillId });
+    } catch (e) {
+      const message = (e as Error).message || TILL_ALREADY_OPEN_MSG;
+      return err(message);
+    }
   });
 }
 
 export async function closeShiftAction(
   formData: FormData
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string; investigationId: string | null }>> {
   return safeAction(async () => {
     const { user, businessId, storeId } = await withBusinessStoreContext();
 
@@ -214,9 +185,11 @@ export async function closeShiftAction(
       revalidateTag('reports');
       revalidateOwnerDashboardCache();
       revalidatePath('/shifts');
+      revalidatePath('/shifts/variance');
+      revalidatePath('/shifts/drawer');
       revalidatePath('/pos');
       revalidatePath('/reports', 'layout');
-      return ok({ id: result.id });
+      return ok({ id: result.id, investigationId: result.investigationId });
     } catch (e) {
       return err((e as Error).message);
     }
@@ -284,7 +257,7 @@ export async function getShiftSummary(shiftId: string) {
 
 export async function closeShiftOwnerOverrideAction(
   formData: FormData
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string; investigationId: string | null }>> {
   return safeAction(async () => {
     const { user, businessId, storeId } = await withBusinessStoreContext(['OWNER']);
 
@@ -336,8 +309,121 @@ export async function closeShiftOwnerOverrideAction(
       revalidateTag('reports');
       revalidateOwnerDashboardCache();
       revalidatePath('/shifts');
+      revalidatePath('/shifts/variance');
+      revalidatePath('/shifts/drawer');
       revalidatePath('/pos');
       revalidatePath('/reports', 'layout');
+      return ok({ id: result.id, investigationId: result.investigationId });
+    } catch (e) {
+      return err((e as Error).message);
+    }
+  });
+}
+
+function varianceActor(user: { id: string; name: string | null; role: string }) {
+  return { userId: user.id, userName: user.name, userRole: user.role };
+}
+
+export async function assignCashVarianceAction(
+  formData: FormData
+): Promise<ActionResult<{ id: string }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const investigationId = formString(formData, 'investigationId');
+    const reviewerUserId = formString(formData, 'reviewerUserId');
+    if (!investigationId) return err('Investigation is required.');
+    if (!reviewerUserId) return err('Select a manager or owner to review this variance.');
+
+    try {
+      const result = await assignCashVarianceReviewer({
+        businessId,
+        investigationId,
+        reviewerUserId,
+        actor: varianceActor(user),
+      });
+      revalidatePath('/shifts');
+      revalidatePath('/shifts/variance');
+      revalidatePath(`/shifts/variance/${investigationId}`);
+      return ok({ id: result.id });
+    } catch (e) {
+      return err((e as Error).message);
+    }
+  });
+}
+
+export async function explainCashVarianceAction(
+  formData: FormData
+): Promise<ActionResult<{ id: string }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext();
+    const investigationId = formString(formData, 'investigationId');
+    const explanation = formString(formData, 'explanation');
+    const evidenceNote = formString(formData, 'evidenceNote') || null;
+    if (!investigationId) return err('Investigation is required.');
+    if (!explanation.trim()) return err('A cashier explanation is required.');
+
+    try {
+      const result = await explainCashVariance({
+        businessId,
+        investigationId,
+        explanation,
+        evidenceNote,
+        actor: varianceActor(user),
+      });
+      revalidatePath('/shifts');
+      revalidatePath('/shifts/variance');
+      revalidatePath(`/shifts/variance/${investigationId}`);
+      return ok({ id: result.id });
+    } catch (e) {
+      return err((e as Error).message);
+    }
+  });
+}
+
+export async function resolveCashVarianceAction(
+  formData: FormData
+): Promise<ActionResult<{ id: string }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const investigationId = formString(formData, 'investigationId');
+    const resolution = formString(formData, 'resolution');
+    if (!investigationId) return err('Investigation is required.');
+    if (!resolution.trim()) return err('A manager resolution is required.');
+
+    try {
+      const result = await resolveCashVariance({
+        businessId,
+        investigationId,
+        resolution,
+        actor: varianceActor(user),
+      });
+      revalidatePath('/shifts');
+      revalidatePath('/shifts/variance');
+      revalidatePath(`/shifts/variance/${investigationId}`);
+      return ok({ id: result.id });
+    } catch (e) {
+      return err((e as Error).message);
+    }
+  });
+}
+
+export async function approveCashVarianceAction(
+  formData: FormData
+): Promise<ActionResult<{ id: string }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['OWNER']);
+    const investigationId = formString(formData, 'investigationId');
+    if (!investigationId) return err('Investigation is required.');
+
+    try {
+      const result = await approveCashVariance({
+        businessId,
+        investigationId,
+        actor: varianceActor(user),
+      });
+      revalidatePath('/shifts');
+      revalidatePath('/shifts/variance');
+      revalidatePath(`/shifts/variance/${investigationId}`);
       return ok({ id: result.id });
     } catch (e) {
       return err((e as Error).message);
