@@ -67,8 +67,8 @@ export default async function TransfersPage({
     }),
   ]);
 
-  const defaultFromStoreId = stores[0]?.id ?? '';
-  const defaultToStoreId = stores.length > 1 ? stores[1].id : stores[0]?.id ?? '';
+  const defaultFromStoreId = stores.length === 1 ? stores[0]?.id ?? '' : '';
+  const defaultToStoreId = '';
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -85,6 +85,7 @@ export default async function TransfersPage({
           <div>
             <label className="label">From Branch</label>
             <select className="input" name="fromStoreId" defaultValue={defaultFromStoreId} required>
+              {stores.length !== 1 ? <option value="">Select a store</option> : null}
               {stores.map((store) => (
                 <option key={store.id} value={store.id}>
                   {store.name}
@@ -95,6 +96,7 @@ export default async function TransfersPage({
           <div>
             <label className="label">To Branch</label>
             <select className="input" name="toStoreId" defaultValue={defaultToStoreId} required>
+              <option value="">Select a store</option>
               {stores.map((store) => (
                 <option key={store.id} value={store.id}>
                   {store.name}

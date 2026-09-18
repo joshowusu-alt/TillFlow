@@ -12,19 +12,22 @@ import { prisma } from '@/lib/prisma';
 import HelpRequestCard from '@/components/help/HelpRequestCard';
 import Link from 'next/link';
 import HashScroll from '@/components/HashScroll';
+import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 
-export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
+export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string; storeId?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const currencySymbol = getCurrencySymbol(business.currency);
   const qzSigningConfigured = isQzSigningConfigured();
 
   // Fetch opening balance data in parallel
-  const store = await prisma.store.findFirst({
+  const stores = await prisma.store.findMany({
     where: { businessId: business.id },
     orderBy: { createdAt: 'asc' },
-    select: { id: true },
+    select: { id: true, name: true },
   });
+  const storeId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
+  const store = storeId ? stores.find((row) => row.id === storeId) ?? null : null;
   const [openingBalances, customers, suppliers, arInvoices, apInvoices, activeTills] = await Promise.all([
     prisma.openingBalance.findMany({ where: { businessId: business.id } }),
     prisma.customer.findMany({
@@ -416,7 +419,25 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
         </div>
       </div>
       <CashDrawerSetup businessId={business.id} />
-      <TillManagement tills={activeTills} />
+      {stores.length > 1 ? (
+        <form className="card p-4" method="GET">
+          <label className="label">Till store</label>
+          <select className="input mt-1" name="storeId" defaultValue={storeId ?? ''} required>
+            <option value="">Select a store</option>
+            {stores.map((row) => (
+              <option key={row.id} value={row.id}>{row.name}</option>
+            ))}
+          </select>
+          <button className="btn-secondary mt-3" type="submit">Show tills</button>
+        </form>
+      ) : null}
+      {storeId ? (
+        <TillManagement tills={activeTills} storeId={storeId} />
+      ) : (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Select a store before adding or deactivating tills.
+        </div>
+      )}
 
       <HelpRequestCard relatedRoute="/settings" />
 

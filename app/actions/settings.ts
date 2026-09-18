@@ -5,7 +5,7 @@ import { findBusinessCommercialSnapshot } from '@/lib/billing-db-compat';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { formString, formOptionalString, toPence } from '@/lib/form-helpers';
-import { withBusinessContext, withBusinessStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, requireSelectedStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import { ensureChartOfAccounts } from '@/lib/accounting';
 import { getBusinessPlan, hasPlanAccess, type BusinessPlan } from '@/lib/features';
@@ -346,7 +346,11 @@ export async function updateLoyaltySettingsAction(formData: FormData): Promise<v
 }
 
 export async function createTillAction(formData: FormData): Promise<ActionResult> {
-  const { user, businessId, storeId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+  const requestedStoreId = formData.get('storeId')?.toString();
+  const { user, businessId, storeId } = await requireSelectedStoreContext(
+    ['MANAGER', 'OWNER'],
+    requestedStoreId,
+  );
   const name = formData.get('name')?.toString().trim() ?? '';
   if (!name) return { success: false, error: 'Till name is required.' };
   if (name.length > 50) return { success: false, error: 'Till name must be 50 characters or fewer.' };
@@ -372,10 +376,14 @@ export async function createTillAction(formData: FormData): Promise<ActionResult
 }
 
 export async function deactivateTillAction(tillId: string): Promise<ActionResult> {
-  const { user, businessId, storeId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+  const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
-  const till = await prisma.till.findFirst({ where: { id: tillId, storeId } });
+  const till = await prisma.till.findFirst({
+    where: { id: tillId, store: { businessId } },
+    select: { id: true, name: true, storeId: true },
+  });
   if (!till) return { success: false, error: 'Till not found.' };
+  const storeId = till.storeId;
 
   const activeCount = await prisma.till.count({ where: { storeId, active: true } });
   if (activeCount <= 1) return { success: false, error: 'Cannot deactivate the last active till.' };

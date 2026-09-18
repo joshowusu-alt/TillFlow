@@ -13,6 +13,7 @@ import {
   ReconcileForm,
   TransactionDrillDown,
 } from './ReconciliationClient';
+import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 
 function parseDate(value: string | undefined, fallback: Date) {
   if (!value) return fallback;
@@ -88,8 +89,7 @@ export default async function CardTransferReconciliationPage({
     }
   }
 
-  // For reconcile forms, pick the first store if only one
-  const resolvedStoreId = selectedStoreId ?? stores[0]?.id ?? '';
+  const resolvedStoreId = resolveSoleOrSelectedStoreId(stores, selectedStoreId) ?? '';
 
   return (
     <div className="space-y-6">
@@ -275,13 +275,17 @@ export default async function CardTransferReconciliationPage({
                         <span className={`pill ${statusTone}`}>{row.status}</span>
                       </td>
                       <td className="px-3 py-3">
-                        <ReconcileForm
-                          date={row.date}
-                          method={row.method}
-                          storeId={resolvedStoreId}
-                          systemTotalPence={row.systemTotalPence}
-                          currency={business.currency}
-                        />
+                        {resolvedStoreId ? (
+                          <ReconcileForm
+                            date={row.date}
+                            method={row.method}
+                            storeId={resolvedStoreId}
+                            systemTotalPence={row.systemTotalPence}
+                            currency={business.currency}
+                          />
+                        ) : (
+                          <span className="text-xs text-amber-800">Select a branch to reconcile.</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -367,13 +371,17 @@ export default async function CardTransferReconciliationPage({
                       <Link className="btn-ghost text-xs text-center" href={detailHref}>
                         View transactions
                       </Link>
-                      <ReconcileForm
-                        date={row.date}
-                        method={row.method}
-                        storeId={resolvedStoreId}
-                        systemTotalPence={row.systemTotalPence}
-                        currency={business.currency}
-                      />
+                      {resolvedStoreId ? (
+                        <ReconcileForm
+                          date={row.date}
+                          method={row.method}
+                          storeId={resolvedStoreId}
+                          systemTotalPence={row.systemTotalPence}
+                          currency={business.currency}
+                        />
+                      ) : (
+                        <span className="text-xs text-amber-800">Select a branch to reconcile.</span>
+                      )}
                     </DataCardActions>
                   </DataCard>
                 );

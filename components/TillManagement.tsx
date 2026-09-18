@@ -13,7 +13,7 @@ interface Till {
   } | null;
 }
 
-export default function TillManagement({ tills }: { tills: Till[] }) {
+export default function TillManagement({ tills, storeId }: { tills: Till[]; storeId: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState('');
   const [isPending, startTransition] = useTransition();
@@ -80,6 +80,7 @@ export default function TillManagement({ tills }: { tills: Till[] }) {
       )}
 
       <form ref={formRef} action={handleCreate} className="mt-3 flex items-center gap-2">
+        <input type="hidden" name="storeId" value={storeId} />
         <input
           className="input flex-1 text-sm"
           name="name"

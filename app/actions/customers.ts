@@ -100,6 +100,7 @@ export async function quickCreateCustomerAction(data: {
   phone: string | null;
   email: string | null;
   creditLimitPence: number;
+  storeId?: string | null;
 }): Promise<ActionResult<{ id: string; name: string }>> {
   return safeAction(async () => {
     const { businessId } = await withBusinessContext();
@@ -116,7 +117,7 @@ export async function quickCreateCustomerAction(data: {
       }
     }
 
-    const customer = await quickCreateCustomer(businessId, data);
+    const customer = await quickCreateCustomer(businessId, data, data.storeId);
     return ok(customer);
   });
 }
