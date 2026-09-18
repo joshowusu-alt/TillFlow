@@ -27,6 +27,14 @@ async function fillVisiblePaymentForm(page, amount) {
   const record = page.getByRole('button', { name: /Record payment/i }).first();
   await record.waitFor({ state: 'visible', timeout: 20000 });
   const form = record.locator('xpath=ancestor::form[1]');
+  if ((await form.count()) === 0) {
+    await record.click();
+    const dialogForm = page.locator('form').filter({ has: page.locator('input[name="amount"]') }).last();
+    await dialogForm.locator('input[name="amount"]').waitFor({ state: 'visible', timeout: 20000 });
+    await dialogForm.locator('input[name="amount"]').fill(amount);
+    await dialogForm.getByRole('button', { name: /Record payment/i }).click();
+    return;
+  }
   await form.locator('input[name="amount"]').fill(amount);
   await record.click();
 }
