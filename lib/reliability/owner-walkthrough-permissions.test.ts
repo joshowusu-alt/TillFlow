@@ -30,9 +30,10 @@ describe('owner walkthrough permission matrix (server-side)', () => {
 
   it('reverseInventoryAdjustmentAction uses OWNER', () => {
     expect(reversalActions).toContain('export async function reverseInventoryAdjustmentAction');
-    expect(reversalActions).toContain("withBusinessStoreContext(['OWNER'])");
-    expect(reversalActions).not.toMatch(/withBusinessStoreContext\(\[[^\]]*['"]CASHIER['"]/);
-    expect(reversalActions).not.toMatch(/withBusinessStoreContext\(\[[^\]]*['"]MANAGER['"]/);
+    expect(reversalActions).toContain("requireSelectedStoreContext(");
+    expect(reversalActions).toContain("['OWNER']");
+    expect(reversalActions).not.toMatch(/requireSelectedStoreContext\(\[[^\]]*['"]CASHIER['"]/);
+    expect(reversalActions).not.toMatch(/requireSelectedStoreContext\(\[[^\]]*['"]MANAGER['"]/);
   });
 
   it('approveCashVarianceAction uses OWNER', () => {
@@ -47,9 +48,10 @@ describe('owner walkthrough permission matrix (server-side)', () => {
 
   it('createExpenseAction uses MANAGER/OWNER', () => {
     expect(expenseActions).toContain('export async function createExpenseAction');
-    expect(expenseActions).toContain("withBusinessStoreContext(['MANAGER', 'OWNER'])");
+    expect(expenseActions).toContain('requireSelectedStoreContext');
+    expect(expenseActions).toContain("['MANAGER', 'OWNER']");
     expect(expenseActions).not.toMatch(
-      /createExpenseAction[\s\S]{0,250}withBusinessStoreContext\(\[[^\]]*['"]CASHIER['"]/,
+      /createExpenseAction[\s\S]{0,250}requireSelectedStoreContext\(\[[^\]]*['"]CASHIER['"]/,
     );
   });
 

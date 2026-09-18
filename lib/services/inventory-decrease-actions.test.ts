@@ -33,9 +33,10 @@ describe('inventory decrease Phase 1 actions', () => {
   });
 
   it('create action restricts adjustments to Owner/Manager and excludes Cashier', () => {
-    expect(inventoryAction).toContain("withBusinessStoreContext(['MANAGER', 'OWNER'])");
+    expect(inventoryAction).toContain('requireSelectedStoreContext');
+    expect(inventoryAction).toContain("['MANAGER', 'OWNER']");
     expect(inventoryAction).not.toMatch(
-      /withBusinessStoreContext\(\s*\[[^\]]*['"]CASHIER['"]/,
+      /requireSelectedStoreContext\(\s*\[[^\]]*['"]CASHIER['"]/,
     );
   });
 

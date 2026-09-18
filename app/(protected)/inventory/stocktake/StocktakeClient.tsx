@@ -40,6 +40,7 @@ interface Props {
   currency: string;
   isStale: boolean;
   actorRole: string;
+  storeId: string;
 }
 
 function unitLabel(line: StocktakeLineDto, qty: number) {
@@ -74,6 +75,7 @@ export default function StocktakeClient({
   currency,
   isStale,
   actorRole,
+  storeId,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -283,7 +285,7 @@ export default function StocktakeClient({
   const handleSave = () => {
     setError('');
     startTransition(async () => {
-      const result = await saveStocktakeCountsAction({ stocktakeId, counts: submittedCounts, clearedLineIds });
+      const result = await saveStocktakeCountsAction({ stocktakeId, storeId, counts: submittedCounts, clearedLineIds });
       if (result.success) {
         setSaveMsg(`Saved ${submittedCounts.length} counts`);
         setTimeout(() => setSaveMsg(''), 3000);
@@ -309,7 +311,7 @@ export default function StocktakeClient({
     }
 
     startTransition(async () => {
-      const saveResult = await saveStocktakeCountsAction({ stocktakeId, counts: submittedCounts, clearedLineIds });
+      const saveResult = await saveStocktakeCountsAction({ stocktakeId, storeId, counts: submittedCounts, clearedLineIds });
       if (!saveResult.success) {
         setError(saveResult.error);
         return;
@@ -317,6 +319,7 @@ export default function StocktakeClient({
 
       const completeResult = await completeStocktakeAction({
         stocktakeId,
+        storeId,
         counts: submittedCounts,
         reason: varianceReason.trim(),
         allowPartial: stats.uncounted > 0 && allowPartial,
@@ -329,7 +332,7 @@ export default function StocktakeClient({
             `Stocktake completed. ${surplus} surplus line(s) saved as pending review — authoritative on-hand balance was not increased.`,
           );
         }
-        router.push('/inventory/stocktake');
+        router.push(`/inventory/stocktake?storeId=${encodeURIComponent(storeId)}`);
         router.refresh();
       } else {
         setError(completeResult.error);
@@ -344,9 +347,9 @@ export default function StocktakeClient({
       return;
     }
     startTransition(async () => {
-      const result = await cancelStocktakeAction({ stocktakeId, reason: cancelReason.trim() });
+      const result = await cancelStocktakeAction({ stocktakeId, storeId, reason: cancelReason.trim() });
       if (result.success) {
-        router.push('/inventory/stocktake');
+        router.push(`/inventory/stocktake?storeId=${encodeURIComponent(storeId)}`);
         router.refresh();
       } else {
         setError(result.error);

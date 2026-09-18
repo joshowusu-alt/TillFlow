@@ -6,7 +6,7 @@ import { ACCOUNT_CODES } from '@/lib/accounting';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { formString, formOptionalString, formPence, formDate } from '@/lib/form-helpers';
-import { withBusinessStoreContext, withBusinessContext, formAction, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { requireSelectedStoreContext, withBusinessContext, formAction, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { PaymentStatusEnum, PaymentMethodEnum } from '@/lib/validation/enums';
 import { audit } from '@/lib/audit';
 import type { PaymentMethod, PaymentStatus } from '@/lib/services/shared';
@@ -15,7 +15,11 @@ import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation'
 
 export async function createExpenseAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { user, businessId, storeId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const requestedStoreId = formString(formData, 'storeId');
+    const { user, businessId, storeId } = await requireSelectedStoreContext(
+      ['MANAGER', 'OWNER'],
+      requestedStoreId,
+    );
 
     const amountPence = formPence(formData, 'amount');
     const paymentStatus = (formString(formData, 'paymentStatus') || 'PAID') as PaymentStatus;
@@ -94,6 +98,7 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       inventoryLossOverride,
       inventoryLossOverrideReason,
       sourceAdjustmentId,
+      actorRole: user.role,
     });
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_CREATE', entity: 'Expense', details: { amountPence, vendorName, notes } }).catch((e) => console.error('[audit] expense create failed', e));

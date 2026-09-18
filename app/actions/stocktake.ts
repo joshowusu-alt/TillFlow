@@ -1,8 +1,10 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
-import { withBusinessStoreContext, safeAction, type ActionResult } from '@/lib/action-utils';
+import { requireSelectedStoreContext, safeAction, type ActionResult } from '@/lib/action-utils';
+import { formString } from '@/lib/form-helpers';
 import { audit } from '@/lib/audit';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
@@ -66,9 +68,12 @@ function countedLineWrite(
  * Start a new stocktake — snapshots current system quantities for all active
  * products so the user can enter physical counts.
  */
-export async function createStocktakeAction(): Promise<ActionResult<{ id: string }>> {
+export async function createStocktakeAction(formData?: FormData): Promise<ActionResult<{ id: string }>> {
   return safeAction(async () => {
-    const { user, storeId, businessId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const { user, storeId, businessId } = await requireSelectedStoreContext(
+      ['MANAGER', 'OWNER'],
+      formData ? formString(formData, 'storeId') : '',
+    );
     const plan = await assertGrowthStocktake(businessId);
     if (!plan.allowed) return { success: false, error: plan.error };
 
@@ -122,7 +127,7 @@ export async function createStocktakeAction(): Promise<ActionResult<{ id: string
       details: { productCount: products.length, transactionNumber: stocktake.transactionNumber },
     });
 
-    return { success: true, data: { id: stocktake.id } };
+    redirect(`/inventory/stocktake?storeId=${encodeURIComponent(storeId)}`);
   });
 }
 
@@ -131,11 +136,15 @@ export async function createStocktakeAction(): Promise<ActionResult<{ id: string
  */
 export async function saveStocktakeCountsAction(data: {
   stocktakeId: string;
+  storeId: string;
   counts: SubmittedStocktakeCount[];
   clearedLineIds?: string[];
 }): Promise<ActionResult> {
   return safeAction(async () => {
-    const { user, businessId, storeId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const { user, businessId, storeId } = await requireSelectedStoreContext(
+      ['MANAGER', 'OWNER'],
+      data.storeId,
+    );
     const plan = await assertGrowthStocktake(businessId);
     if (!plan.allowed) return { success: false, error: plan.error };
 
@@ -192,14 +201,17 @@ export async function saveStocktakeCountsAction(data: {
  */
 export async function completeStocktakeAction(data: {
   stocktakeId: string;
+  storeId: string;
   counts: SubmittedStocktakeCount[];
   reason?: string;
   allowPartial?: boolean;
   partialReason?: string;
 }): Promise<ActionResult<{ surplusPendingReview: number; shortfallsAdjusted: number }>> {
   return safeAction(async () => {
-    const { user, businessId, storeId } =
-      await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const { user, businessId, storeId } = await requireSelectedStoreContext(
+      ['MANAGER', 'OWNER'],
+      data.storeId,
+    );
     const plan = await assertGrowthStocktake(businessId);
     if (!plan.allowed) return { success: false, error: plan.error };
 
@@ -447,10 +459,14 @@ export async function completeStocktakeAction(data: {
  */
 export async function cancelStocktakeAction(data: {
   stocktakeId: string;
+  storeId: string;
   reason: string;
 }): Promise<ActionResult> {
   return safeAction(async () => {
-    const { user, businessId, storeId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const { user, businessId, storeId } = await requireSelectedStoreContext(
+      ['MANAGER', 'OWNER'],
+      data.storeId,
+    );
     const plan = await assertGrowthStocktake(businessId);
     if (!plan.allowed) return { success: false, error: plan.error };
 

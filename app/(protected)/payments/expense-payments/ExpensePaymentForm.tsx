@@ -11,10 +11,12 @@ export default function ExpensePaymentForm({
   expenseId,
   openTills,
   remainingPence,
+  storeId,
 }: {
   expenseId: string;
   openTills: OpenTillOption[];
   remainingPence: number;
+  storeId: string;
 }) {
   const [method, setMethod] = useState('CASH');
   const showTill = method === 'CASH';
@@ -23,6 +25,7 @@ export default function ExpensePaymentForm({
   return (
     <form action={recordExpensePaymentAction} className="grid gap-2 sm:grid-cols-2">
       <input type="hidden" name="expenseId" value={expenseId} />
+      <input type="hidden" name="storeId" value={storeId} />
       <StableIdempotencyKeyInput scope={`expense-payment:${expenseId}`} />
       <div>
         <div className="text-xs text-black/50">Payment method</div>
