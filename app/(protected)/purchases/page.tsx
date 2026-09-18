@@ -15,6 +15,7 @@ import PurchaseFormClient from './PurchaseFormClient';
 import DeletePurchaseButton from './DeletePurchaseButton';
 import RecordPurchaseButton from './RecordPurchaseButton';
 import { getBusinessStores } from '@/lib/services/stores';
+import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 import { listPurchasesNeedingSupplier } from '@/lib/improve-records-load';
 import {
   IMPROVE_RECORDS_ISSUE_DEFS,
@@ -49,8 +50,8 @@ export default async function PurchasesPage({
   // Unknown issue keys must not fall through to the full unfiltered list.
   const invalidIssue = Boolean(searchParams?.issue?.trim()) && !missingSupplierIssue;
 
-  const { stores, selectedStoreId: rawStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
-  const selectedStoreId = rawStoreId ?? '';
+  const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
+  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId) ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
 
   const missingSupplierIds = missingSupplierIssue

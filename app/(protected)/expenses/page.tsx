@@ -5,6 +5,7 @@ import RemainingBalance from '@/components/RemainingBalance';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { getBusinessStores } from '@/lib/services/stores';
+import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 import SelectedStorePicker from '@/components/SelectedStorePicker';
 import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
@@ -19,7 +20,8 @@ export default async function ExpensesPage({
 }) {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
-  const { stores, selectedStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
+  const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
+  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);
   const store = stores.find((item) => item.id === selectedStoreId) ?? null;
 
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);

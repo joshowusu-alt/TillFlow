@@ -9,6 +9,22 @@ export const INVALID_STORE_CONTEXT_MSG =
 export const STORE_MISMATCH_MSG =
   'The selected store does not match the store on this record.';
 
+/**
+ * Resolve a mutation store without substituting the first store among many.
+ * A single authorised store is explicit by uniqueness. Multiple stores stay
+ * unselected until the user (or URL) names one.
+ */
+export function resolveSoleOrSelectedStoreId(
+  stores: { id: string }[],
+  selectedParam?: string | null,
+): string | null {
+  const requested = selectedParam?.trim() ?? '';
+  if (requested) {
+    return stores.some((store) => store.id === requested) ? requested : null;
+  }
+  return stores.length === 1 ? stores[0].id : null;
+}
+
 export function requireExplicitStoreId(storeId: string | null | undefined): string {
   const trimmed = storeId?.trim() ?? '';
   if (!trimmed) {
