@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { formatDateTime } from '@/lib/format';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { getBusinessStores, resolveStoreSelection } from '@/lib/services/stores';
+import { resolveSourceLink } from '@/lib/reliability/source-links';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 export const dynamic = 'force-dynamic';
@@ -64,19 +65,11 @@ function typeBadge(type: string) {
 }
 
 function stockMovementSourceHref(type: string, referenceType?: string | null, referenceId?: string | null): string | null {
-  if (!referenceType || !referenceId) return null;
-  const kind = `${type}:${referenceType}`.toUpperCase();
-  if (kind.includes('SALE') && (kind.includes('RETURN') || referenceType === 'SALES_RETURN')) {
-    return `/sales/return/${referenceId}`;
-  }
-  if (kind.includes('SALE')) return `/sales/amend/${referenceId}`;
-  if (kind.includes('PURCHASE') && kind.includes('RETURN')) return `/purchases/return/${referenceId}`;
-  if (kind.includes('PURCHASE')) return `/purchases/${referenceId}`;
-  if (kind.includes('STOCKTAKE')) return '/inventory/stocktake';
-  if (kind.includes('ADJUSTMENT')) return '/inventory/adjustments';
-  if (kind.includes('TRANSFER')) return '/transfers';
-  if (kind.includes('OPENING')) return '/setup/opening-stock';
-  return null;
+  return resolveSourceLink({ type, referenceType, referenceId }).href;
+}
+
+function stockMovementSourceLabel(type: string, referenceType?: string | null, referenceId?: string | null): string {
+  return resolveSourceLink({ type, referenceType, referenceId }).label;
 }
 
 export default async function StockMovementsPage({
@@ -294,10 +287,10 @@ export default async function StockMovementsPage({
                         href={stockMovementSourceHref(m.type, m.referenceType, m.referenceId)!}
                         className="mt-1 inline-flex font-semibold text-accent underline underline-offset-2"
                       >
-                        View source
+                        {stockMovementSourceLabel(m.type, m.referenceType, m.referenceId)}
                       </Link>
                     ) : (
-                      <p className="mt-1 text-black/50">No source linked</p>
+                      <p className="mt-1 text-black/50">{stockMovementSourceLabel(m.type, m.referenceType, m.referenceId)}</p>
                     )}
                   </div>
                 </div>
@@ -342,10 +335,10 @@ export default async function StockMovementsPage({
                             href={stockMovementSourceHref(m.type, m.referenceType, m.referenceId)!}
                             className="text-xs font-semibold text-accent underline underline-offset-2"
                           >
-                            View source
+                            {stockMovementSourceLabel(m.type, m.referenceType, m.referenceId)}
                           </Link>
                         ) : (
-                          <span className="text-xs text-black/45">No source linked</span>
+                          <span className="text-xs text-black/45">{stockMovementSourceLabel(m.type, m.referenceType, m.referenceId)}</span>
                         )}
                       </div>
                     </td>
