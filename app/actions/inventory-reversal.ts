@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { formString } from '@/lib/form-helpers';
-import { withBusinessStoreContext, formAction, UserError } from '@/lib/action-utils';
+import { requireSelectedStoreContext, formAction, UserError } from '@/lib/action-utils';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 import {
@@ -13,10 +13,10 @@ import {
 
 export async function reverseInventoryAdjustmentAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { user, businessId, storeId: defaultStoreId } =
-      await withBusinessStoreContext(['OWNER']);
-
-    const storeId = formString(formData, 'storeId') || defaultStoreId;
+    const { user, businessId, storeId } = await requireSelectedStoreContext(
+      ['OWNER'],
+      formString(formData, 'storeId'),
+    );
     const originalAdjustmentId = formString(formData, 'adjustmentId');
     const reason = formString(formData, 'reason') || '';
 

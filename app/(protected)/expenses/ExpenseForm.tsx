@@ -31,6 +31,8 @@ export default function ExpenseForm({
   error,
   recorded,
   sourceAdjustmentId,
+  storeId,
+  actorRole,
 }: {
   businessId: string;
   currency: string;
@@ -40,6 +42,8 @@ export default function ExpenseForm({
   error?: string;
   recorded?: boolean;
   sourceAdjustmentId?: string;
+  storeId: string;
+  actorRole: string;
 }) {
   const [amount, setAmount] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'PART_PAID' | 'UNPAID'>('PAID');
@@ -72,6 +76,7 @@ export default function ExpenseForm({
   return (
     <form action={createExpenseAction} className="grid gap-4 md:grid-cols-4" encType="multipart/form-data">
       <StableIdempotencyKeyInput scope={`expense-create:${businessId}`} rotate={recorded} />
+      <input type="hidden" name="storeId" value={storeId} />
       <input type="hidden" name="useSimple" value={detailedCategories ? 'false' : 'true'} />
       {sourceAdjustmentId ? <input type="hidden" name="sourceAdjustmentId" value={sourceAdjustmentId} /> : null}
       <div className="md:col-span-4">
@@ -143,6 +148,7 @@ export default function ExpenseForm({
 
       {isInventoryLoss ? (
         <div className="md:col-span-4 space-y-2 rounded-xl border border-amber-200 bg-white px-3 py-3">
+          {actorRole === 'OWNER' ? (
           <label className="flex items-start gap-2 text-sm">
             <input
               type="checkbox"
@@ -153,10 +159,17 @@ export default function ExpenseForm({
               className="mt-1"
             />
             <span>
-              Exceptional override — I am authorised to record inventory loss again (this will
-              post a second 5100 expense).
+              Owner override — this creates a second accounting effect on top of the original
+              stock adjustment (Dr 5100 / Cr cash or payable). Use only when that second posting
+              is intentional.
             </span>
           </label>
+          ) : (
+            <p className="text-sm text-amber-900">
+              Inventory-loss override is owner-only and server-enforced. Managers cannot post a
+              second 5100 expense against a stock adjustment.
+            </p>
+          )}
           {inventoryLossOverride ? (
             <div>
               <label className="label">Override reason</label>

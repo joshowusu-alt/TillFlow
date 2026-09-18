@@ -1,7 +1,9 @@
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
-import { requireBusinessStore } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
+import { getBusinessStores } from '@/lib/services/stores';
+import SelectedStorePicker from '@/components/SelectedStorePicker';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
@@ -49,11 +51,24 @@ export default async function StockAdjustmentsPage({
     value?: string;
     cost?: string;
     replayed?: string;
+    storeId?: string;
   };
 }) {
-  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
-  if (!business || !store) {
+  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  if (!business) {
     return <div className="card p-6">Seed data missing.</div>;
+  }
+  const { stores, selectedStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
+  const store = stores.find((item) => item.id === selectedStoreId) ?? null;
+  if (!store) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title="Stock adjustments" subtitle="Select a store before recording or reversing an adjustment." />
+        <div className="card p-5">
+          <SelectedStorePicker stores={stores} selectedStoreId={selectedStoreId} action="/inventory/adjustments" />
+        </div>
+      </div>
+    );
   }
 
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
@@ -170,6 +185,7 @@ export default async function StockAdjustmentsPage({
         title="Stock Adjustments"
         subtitle="Correct stock safely and keep a clear audit trail."
       />
+      <SelectedStorePicker stores={stores} selectedStoreId={store.id} action="/inventory/adjustments" />
 
       {searchParams?.error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">

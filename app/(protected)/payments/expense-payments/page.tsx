@@ -4,7 +4,7 @@ import ResponsiveDataTable from '@/components/ResponsiveDataTable';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import RemainingBalance from '@/components/RemainingBalance';
 import { prisma } from '@/lib/prisma';
-import { requireBusinessStore } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { displayDocumentNumber, remainingBalancePence } from '@/lib/reliability/walkthrough-contracts';
 import ExpensePaymentForm from './ExpensePaymentForm';
@@ -12,14 +12,15 @@ import ExpensePaymentForm from './ExpensePaymentForm';
 type OpenTillOption = { tillId: string; tillName: string; shiftId: string };
 
 export default async function ExpensePaymentsPage({ searchParams }: { searchParams?: { error?: string } }) {
-  const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
-  if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const [expenses, openShifts] = await Promise.all([
     prisma.expense.findMany({
       where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
       select: {
         id: true,
+        storeId: true,
         transactionNumber: true,
         createdAt: true,
         amountPence: true,
@@ -32,7 +33,7 @@ export default async function ExpensePaymentsPage({ searchParams }: { searchPara
     prisma.shift.findMany({
       where: {
         status: 'OPEN',
-        till: { storeId: store.id, active: true, store: { businessId: business.id } },
+        till: { active: true, store: { businessId: business.id } },
       },
       select: { id: true, tillId: true, till: { select: { name: true } } },
       orderBy: { openedAt: 'desc' },
@@ -88,6 +89,7 @@ export default async function ExpensePaymentsPage({ searchParams }: { searchPara
                         <td className="px-3 py-3">
                           <ExpensePaymentForm
                             expenseId={expense.id}
+                            storeId={expense.storeId}
                             openTills={openTills}
                             remainingPence={outstanding}
                           />
@@ -152,6 +154,7 @@ export default async function ExpensePaymentsPage({ searchParams }: { searchPara
                     <DataCardActions className="flex-col">
                       <ExpensePaymentForm
                         expenseId={expense.id}
+                        storeId={expense.storeId}
                         openTills={openTills}
                         remainingPence={outstanding}
                       />

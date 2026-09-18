@@ -6,7 +6,9 @@ import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { toPence } from '@/lib/form-helpers';
 import { formString } from '@/lib/form-helpers';
-import { withBusinessContext, formAction } from '@/lib/action-utils';
+import { requireSelectedStoreContext, withBusinessContext, formAction } from '@/lib/action-utils';
+import { assertRequestedStoreMatchesSource } from '@/lib/reliability/selected-store';
+import { prisma } from '@/lib/prisma';
 import type { PaymentMethod, PaymentInput } from '@/lib/services/shared';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 
@@ -27,9 +29,20 @@ function parsePayments(formData: FormData): PaymentInput[] {
 
 export async function recordCustomerPaymentAction(formData: FormData): Promise<void> {
   return formAction(async () => {
+    const requestedStoreId = formString(formData, 'storeId');
     const { businessId, user } = await withBusinessContext();
 
     const invoiceId = formString(formData, 'invoiceId');
+    const invoice = await prisma.salesInvoice.findFirst({
+      where: { id: invoiceId, businessId },
+      select: { storeId: true },
+    });
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+    const storeId = assertRequestedStoreMatchesSource(requestedStoreId, invoice.storeId);
+    await requireSelectedStoreContext(undefined, storeId);
+
     const payments = parsePayments(formData);
     const idempotencyKey = formString(formData, 'idempotencyKey');
     if (!idempotencyKey) {
@@ -47,9 +60,19 @@ export async function recordCustomerPaymentAction(formData: FormData): Promise<v
 
 export async function recordSupplierPaymentAction(formData: FormData): Promise<void> {
   return formAction(async () => {
+    const requestedStoreId = formString(formData, 'storeId');
     const { businessId, user } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const invoiceId = formString(formData, 'invoiceId');
+    const invoice = await prisma.purchaseInvoice.findFirst({
+      where: { id: invoiceId, businessId },
+      select: { storeId: true },
+    });
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+    const storeId = assertRequestedStoreMatchesSource(requestedStoreId, invoice.storeId);
+    await requireSelectedStoreContext(['MANAGER', 'OWNER'], storeId);
     const payments = parsePayments(formData);
     const tillId = formString(formData, 'tillId');
     const paidAtStr = formString(formData, 'paidAt');

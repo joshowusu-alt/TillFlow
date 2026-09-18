@@ -42,9 +42,10 @@ describe('inventory increase Phase 2 actions and UI contracts', () => {
   });
 
   it('restricts adjustments to Owner/Manager and excludes Cashier', () => {
-    expect(inventoryAction).toContain("withBusinessStoreContext(['MANAGER', 'OWNER'])");
+    expect(inventoryAction).toContain('requireSelectedStoreContext');
+    expect(inventoryAction).toContain("['MANAGER', 'OWNER']");
     expect(inventoryAction).not.toMatch(
-      /withBusinessStoreContext\(\s*\[[^\]]*['"]CASHIER['"]/,
+      /requireSelectedStoreContext\(\s*\[[^\]]*['"]CASHIER['"]/,
     );
   });
 

@@ -127,6 +127,21 @@ export async function withBusinessStoreContext(
   return { ...ctx, storeId: store.id };
 }
 
+/**
+ * Financial, stock, shift and payment mutations must send an explicit store.
+ * Never falls back to the first business store.
+ */
+export async function requireSelectedStoreContext(
+  roles: Role[] | undefined,
+  storeId: string | null | undefined,
+  options?: BusinessContextOptions,
+): Promise<BusinessStoreContext> {
+  const { assertSelectedStoreForBusiness } = await import('@/lib/reliability/selected-store');
+  const ctx = await withBusinessContext(roles, options);
+  const store = await assertSelectedStoreForBusiness(ctx.businessId, storeId);
+  return { ...ctx, storeId: store.id };
+}
+
 // ---------------------------------------------------------------------------
 // Safe action wrapper
 // ---------------------------------------------------------------------------

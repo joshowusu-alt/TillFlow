@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { formString, formInt } from '@/lib/form-helpers';
-import { withBusinessStoreContext, formAction, UserError } from '@/lib/action-utils';
+import { requireSelectedStoreContext, formAction, UserError } from '@/lib/action-utils';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
@@ -34,10 +34,10 @@ function mapAdjustmentError(error: unknown): never {
  */
 export async function createStockAdjustmentAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { user, businessId, storeId: defaultStoreId } =
-      await withBusinessStoreContext(['MANAGER', 'OWNER']);
-
-    const storeId = formString(formData, 'storeId') || defaultStoreId;
+    const { user, businessId, storeId } = await requireSelectedStoreContext(
+      ['MANAGER', 'OWNER'],
+      formString(formData, 'storeId'),
+    );
     const productId = formString(formData, 'productId');
     const unitId = formString(formData, 'unitId');
     const qtyInUnit = formInt(formData, 'qtyInUnit');

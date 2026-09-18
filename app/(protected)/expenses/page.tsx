@@ -3,7 +3,9 @@ import Pagination from '@/components/Pagination';
 import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
 import RemainingBalance from '@/components/RemainingBalance';
 import { prisma } from '@/lib/prisma';
-import { requireBusinessStore } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
+import { getBusinessStores } from '@/lib/services/stores';
+import SelectedStorePicker from '@/components/SelectedStorePicker';
 import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
 import { ACCOUNT_CODES } from '@/lib/accounting';
@@ -13,10 +15,12 @@ import ExpenseForm from './ExpenseForm';
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams?: { error?: string; page?: string; recorded?: string; sourceAdjustmentId?: string };
+  searchParams?: { error?: string; page?: string; recorded?: string; sourceAdjustmentId?: string; storeId?: string };
 }) {
-  const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
-  if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
+  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  if (!business) return <div className="card p-6">Seed data missing.</div>;
+  const { stores, selectedStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
+  const store = stores.find((item) => item.id === selectedStoreId) ?? null;
 
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
@@ -55,7 +59,7 @@ export default async function ExpensesPage({
     prisma.shift.findMany({
       where: {
         status: 'OPEN',
-        till: { storeId: store.id, active: true, store: { businessId: business.id } },
+        till: { ...(store ? { storeId: store.id } : {}), active: true, store: { businessId: business.id } },
       },
       select: { id: true, tillId: true, till: { select: { name: true } } },
       orderBy: { openedAt: 'desc' },
@@ -85,6 +89,8 @@ export default async function ExpensesPage({
           </svg>
         </summary>
         <div className="card mt-2 p-4 sm:p-5">
+          <SelectedStorePicker stores={stores} selectedStoreId={selectedStoreId} action="/expenses" />
+          {store ? (
           <ExpenseForm
             businessId={business.id}
             currency={business.currency}
@@ -94,7 +100,12 @@ export default async function ExpensesPage({
             error={searchParams?.error}
             recorded={searchParams?.recorded === '1'}
             sourceAdjustmentId={searchParams?.sourceAdjustmentId?.trim() || undefined}
+            storeId={store.id}
+            actorRole={user.role}
           />
+          ) : (
+            <p className="mt-3 text-sm text-amber-800">Select a store before recording an expense.</p>
+          )}
         </div>
       </details>
 

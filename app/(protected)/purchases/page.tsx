@@ -50,7 +50,7 @@ export default async function PurchasesPage({
   const invalidIssue = Boolean(searchParams?.issue?.trim()) && !missingSupplierIssue;
 
   const { stores, selectedStoreId: rawStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
-  const selectedStoreId = (rawStoreId ?? stores[0]?.id) ?? '';
+  const selectedStoreId = rawStoreId ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
 
   const missingSupplierIds = missingSupplierIssue
@@ -326,6 +326,9 @@ export default async function PurchasesPage({
                 Add supplier
               </Link>
             </div>
+            {!selectedStoreId ? (
+              <p className="mt-4 text-sm text-amber-800">Select a store before recording a purchase.</p>
+            ) : (
             <PurchaseFormClient
               key={searchParams?.created ?? 'default'}
               storeId={selectedStoreId}
@@ -350,6 +353,7 @@ export default async function PurchasesPage({
                 })),
               }))}
             />
+            )}
           </div>
         </details>
       )}

@@ -3,7 +3,8 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { formString, toPence } from '@/lib/form-helpers';
-import { withBusinessContext, withBusinessStoreContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { resolveStoreFromTill, STORE_MISMATCH_MSG } from '@/lib/reliability/selected-store';
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/services/cash-drawer';
@@ -34,10 +35,11 @@ export async function addCashToTillAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction(async () => {
-    const { user, businessId, storeId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const amountRaw = formData.get('amount');
     const shiftId = formString(formData, 'shiftId');
+    const requestedStoreId = formString(formData, 'storeId');
     const reasonCode = formString(formData, 'reasonCode');
     const note = formString(formData, 'note') || null;
 
@@ -46,18 +48,22 @@ export async function addCashToTillAction(
     if (amountPence <= 0) return err('Amount must be greater than zero.');
     if (!reasonCode) return err('A reason is required.');
     if (reasonCode === 'OTHER' && !note?.trim()) return err('Please describe the reason for adding cash.');
+    if (!shiftId) return err('Open shift is required before adding cash to till.');
 
     const openShift = await prisma.shift.findFirst({
       where: {
-        ...(shiftId ? { id: shiftId } : {}),
+        id: shiftId,
         status: 'OPEN',
         userId: user.id,
-        till: { storeId, store: { businessId } },
+        till: { store: { businessId } },
       },
       select: { id: true, tillId: true, till: { select: { storeId: true } } },
-      orderBy: { openedAt: 'desc' },
     });
     if (!openShift) return err('Open shift is required before adding cash to till.');
+    if (requestedStoreId && requestedStoreId !== openShift.till.storeId) {
+      return err(STORE_MISMATCH_MSG);
+    }
+    const storeId = openShift.till.storeId;
 
     const reasonLabel = ADD_CASH_REASON_LABELS[reasonCode] ?? reasonCode;
     const fullReason = note?.trim()
@@ -104,19 +110,21 @@ export async function openShiftAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string; tillId: string }>> {
   return safeAction(async () => {
-    const { user, businessId, storeId } = await withBusinessStoreContext();
+    const { user, businessId } = await withBusinessContext();
 
     const tillId = formString(formData, 'tillId');
+    const requestedStoreId = formString(formData, 'storeId');
     const openingCash = Math.max(0, toPence(formData.get('openingCash')));
 
     if (!tillId) return err('Please select a till first.');
+    const selected = await resolveStoreFromTill(businessId, tillId, requestedStoreId);
 
     try {
       const shift = await performShiftOpen({
         businessId,
-        storeId,
+        storeId: selected.storeId,
         actor: { userId: user.id, userName: user.name, userRole: user.role },
-        tillId,
+        tillId: selected.tillId,
         openingCashPence: openingCash,
       });
 
@@ -136,7 +144,7 @@ export async function openShiftAction(
         },
       });
 
-      revalidatePosTillShiftTags(businessId, storeId);
+      revalidatePosTillShiftTags(businessId, selected.storeId);
       revalidatePath('/shifts');
       revalidatePath('/pos');
       return ok({ id: shift.id, tillId: shift.tillId });
@@ -151,7 +159,7 @@ export async function closeShiftAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string; investigationId: string | null }>> {
   return safeAction(async () => {
-    const { user, businessId, storeId } = await withBusinessStoreContext();
+    const { user, businessId } = await withBusinessContext();
 
     const shiftId = formString(formData, 'shiftId');
     const actualCash = Math.max(0, toPence(formData.get('actualCash')));
@@ -161,6 +169,12 @@ export async function closeShiftAction(
     const varianceReason = formString(formData, 'varianceReason') || null;
 
     if (!shiftId) return err('Could not find the shift. Please refresh and try again.');
+    const closingShift = await prisma.shift.findFirst({
+      where: { id: shiftId, till: { store: { businessId } } },
+      select: { till: { select: { storeId: true } } },
+    });
+    if (!closingShift) return err('Could not find the shift. Please refresh and try again.');
+    const storeId = closingShift.till.storeId;
     if (!managerPin) return err('Manager PIN is required to close till.');
 
     const manager = await verifyManagerPin({ businessId, pin: managerPin });
@@ -197,9 +211,9 @@ export async function closeShiftAction(
 }
 
 export async function getOpenShift(tillId: string) {
-  const { businessId, storeId } = await withBusinessStoreContext(undefined, undefined, { requireWrite: false });
+  const { businessId } = await withBusinessContext(undefined, { requireWrite: false });
   return prisma.shift.findFirst({
-    where: { tillId, status: 'OPEN', till: { storeId, store: { businessId } } },
+    where: { tillId, status: 'OPEN', till: { store: { businessId } } },
     include: {
       user: { select: { name: true } },
       till: { select: { name: true } },
@@ -208,9 +222,9 @@ export async function getOpenShift(tillId: string) {
 }
 
 export async function getShiftSummary(shiftId: string) {
-  const { businessId, storeId } = await withBusinessStoreContext(undefined, undefined, { requireWrite: false });
+  const { businessId } = await withBusinessContext(undefined, { requireWrite: false });
   const shift = await prisma.shift.findFirst({
-    where: { id: shiftId, till: { storeId, store: { businessId } } },
+    where: { id: shiftId, till: { store: { businessId } } },
     include: {
       user: { select: { name: true } },
       till: { select: { name: true } },
@@ -259,7 +273,7 @@ export async function closeShiftOwnerOverrideAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string; investigationId: string | null }>> {
   return safeAction(async () => {
-    const { user, businessId, storeId } = await withBusinessStoreContext(['OWNER']);
+    const { user, businessId } = await withBusinessContext(['OWNER']);
 
     const shiftId = formString(formData, 'shiftId');
     const actualCash = Math.max(0, toPence(formData.get('actualCash')));
@@ -271,6 +285,12 @@ export async function closeShiftOwnerOverrideAction(
     const varianceReason = formString(formData, 'varianceReason') || null;
 
     if (!shiftId) return err('Could not find the shift. Please refresh and try again.');
+    const overrideShift = await prisma.shift.findFirst({
+      where: { id: shiftId, till: { store: { businessId } } },
+      select: { till: { select: { storeId: true } } },
+    });
+    if (!overrideShift) return err('Could not find the shift. Please refresh and try again.');
+    const storeId = overrideShift.till.storeId;
     if (!ownerPassword) return err('Owner password is required for override.');
     if (!overrideReasonCode) return err('Override reason code is required.');
     if (!overrideJustification?.trim()) return err('Override justification is required.');

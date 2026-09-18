@@ -1,7 +1,10 @@
 import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { prisma } from '@/lib/prisma';
-import { requireBusinessStore } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
+import { getBusinessStores } from '@/lib/services/stores';
+import SelectedStorePicker from '@/components/SelectedStorePicker';
+import { createStocktakeAction } from '@/app/actions/stocktake';
 import { getFeatures } from '@/lib/features';
 import { formatDateTime } from '@/lib/format';
 import { displayDocumentNumber, resolveStocktakeLineState } from '@/lib/reliability/walkthrough-contracts';
@@ -9,10 +12,26 @@ import Link from 'next/link';
 import StocktakeClient from './StocktakeClient';
 import { isStaleInProgressStocktake } from './stocktake-state';
 
-export default async function StocktakePage() {
-  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
-  if (!business || !store) {
+export default async function StocktakePage({
+  searchParams,
+}: {
+  searchParams?: { storeId?: string };
+}) {
+  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  if (!business) {
     return <div className="card p-6">Seed data missing.</div>;
+  }
+  const { stores, selectedStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
+  const store = stores.find((item) => item.id === selectedStoreId) ?? null;
+  if (!store) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title="Stocktake" subtitle="Select a store before starting or continuing a count." />
+        <div className="card p-5">
+          <SelectedStorePicker stores={stores} selectedStoreId={selectedStoreId} action="/inventory/stocktake" />
+        </div>
+      </div>
+    );
   }
 
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
@@ -82,6 +101,7 @@ export default async function StocktakePage() {
           </Link>
         }
       />
+      <SelectedStorePicker stores={stores} selectedStoreId={store.id} action="/inventory/stocktake" />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">
@@ -128,6 +148,7 @@ export default async function StocktakePage() {
           currency={business.currency}
           isStale={isStaleInProgressStocktake(inProgress.createdAt, new Date(), (business as { timezone?: string | null }).timezone)}
           actorRole={user.role}
+          storeId={store.id}
         />
       ) : (
         <div className="card space-y-4 p-5 text-center sm:p-8">
@@ -142,14 +163,8 @@ export default async function StocktakePage() {
               Snapshot system quantities for all {products.length} active products, then scan or search to count.
             </p>
           </div>
-          <form action={async () => {
-            'use server';
-            const { createStocktakeAction } = await import('@/app/actions/stocktake');
-            const result = await createStocktakeAction();
-            if (!result.success) throw new Error(result.error);
-            const { redirect } = await import('next/navigation');
-            redirect('/inventory/stocktake');
-          }}>
+          <form action={createStocktakeAction}>
+            <input type="hidden" name="storeId" value={store.id} />
             <button type="submit" className="btn-primary">
               Start Stocktake ({products.length} products)
             </button>
