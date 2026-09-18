@@ -17,12 +17,16 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 const MOVEMENT_TYPE_LABELS: Record<string, string> = {
   SALE: 'Sale',
+  SALE_AMENDMENT: 'Sale amendment',
+  SALE_VOID: 'Sale void',
+  SALES_RETURN: 'Sale return',
   SALE_RETURN: 'Sale return',
   PURCHASE: 'Purchase',
   PURCHASE_RETURN: 'Purchase return',
   ADJUSTMENT_INCREASE: 'Adjustment (+)',
   ADJUSTMENT_DECREASE: 'Adjustment (−)',
   ADJUSTMENT: 'Adjustment',
+  ADJUSTMENT_REVERSAL: 'Adjustment reversal',
   STOCKTAKE: 'Stocktake',
   TRANSFER_OUT: 'Transfer out',
   TRANSFER_IN: 'Transfer in',
@@ -37,6 +41,7 @@ const TYPE_BADGE: Record<string, string> = {
   ADJUSTMENT_INCREASE: 'bg-sky-100 text-sky-700',
   ADJUSTMENT_DECREASE: 'bg-red-100 text-red-700',
   ADJUSTMENT: 'bg-slate-100 text-slate-700',
+  ADJUSTMENT_REVERSAL: 'bg-violet-100 text-violet-700',
   STOCKTAKE: 'bg-purple-100 text-purple-700',
   TRANSFER_OUT: 'bg-pink-100 text-pink-700',
   TRANSFER_IN: 'bg-teal-100 text-teal-700',
@@ -45,8 +50,9 @@ const TYPE_BADGE: Record<string, string> = {
 
 const MOVEMENT_TYPES = [
   'SALE', 'SALE_RETURN', 'PURCHASE', 'PURCHASE_RETURN',
-  'ADJUSTMENT_INCREASE', 'ADJUSTMENT_DECREASE', 'ADJUSTMENT',
+  'ADJUSTMENT_INCREASE', 'ADJUSTMENT_DECREASE', 'ADJUSTMENT', 'ADJUSTMENT_REVERSAL',
   'STOCKTAKE', 'TRANSFER_OUT', 'TRANSFER_IN', 'OPENING',
+  'SALE_AMENDMENT', 'SALE_VOID', 'SALES_RETURN',
 ];
 
 function typeLabel(type: string) {
@@ -55,6 +61,22 @@ function typeLabel(type: string) {
 
 function typeBadge(type: string) {
   return TYPE_BADGE[type] ?? 'bg-gray-100 text-gray-700';
+}
+
+function stockMovementSourceHref(type: string, referenceType?: string | null, referenceId?: string | null): string | null {
+  if (!referenceType || !referenceId) return null;
+  const kind = `${type}:${referenceType}`.toUpperCase();
+  if (kind.includes('SALE') && (kind.includes('RETURN') || referenceType === 'SALES_RETURN')) {
+    return `/sales/return/${referenceId}`;
+  }
+  if (kind.includes('SALE')) return `/sales/amend/${referenceId}`;
+  if (kind.includes('PURCHASE') && kind.includes('RETURN')) return `/purchases/return/${referenceId}`;
+  if (kind.includes('PURCHASE')) return `/purchases/${referenceId}`;
+  if (kind.includes('STOCKTAKE')) return '/inventory/stocktake';
+  if (kind.includes('ADJUSTMENT')) return '/inventory/adjustments';
+  if (kind.includes('TRANSFER')) return '/transfers';
+  if (kind.includes('OPENING')) return '/setup/opening-stock';
+  return null;
 }
 
 export default async function StockMovementsPage({
@@ -114,6 +136,8 @@ export default async function StockMovementsPage({
           qtyBase: true,
           beforeQtyBase: true,
           afterQtyBase: true,
+          referenceType: true,
+          referenceId: true,
           createdAt: true,
           product: { select: { name: true } },
           user: { select: { name: true } },
@@ -263,6 +287,19 @@ export default async function StockMovementsPage({
                     <p className="text-xs uppercase tracking-wide text-black/40">After movement</p>
                     <p className="mt-1 tabular-nums text-black/60">{m.afterQtyBase ?? '—'}</p>
                   </div>
+                  <div className="col-span-2">
+                    <p className="text-xs uppercase tracking-wide text-black/40">Source</p>
+                    {stockMovementSourceHref(m.type, m.referenceType, m.referenceId) ? (
+                      <Link
+                        href={stockMovementSourceHref(m.type, m.referenceType, m.referenceId)!}
+                        className="mt-1 inline-flex font-semibold text-accent underline underline-offset-2"
+                      >
+                        View source
+                      </Link>
+                    ) : (
+                      <p className="mt-1 text-black/50">No source linked</p>
+                    )}
+                  </div>
                 </div>
               </div>
             ))
@@ -296,9 +333,21 @@ export default async function StockMovementsPage({
                     </td>
                     <td className="px-4 py-3 text-sm font-medium">{m.product.name}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${typeBadge(m.type)}`}>
-                        {typeLabel(m.type)}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-medium ${typeBadge(m.type)}`}>
+                          {typeLabel(m.type)}
+                        </span>
+                        {stockMovementSourceHref(m.type, m.referenceType, m.referenceId) ? (
+                          <Link
+                            href={stockMovementSourceHref(m.type, m.referenceType, m.referenceId)!}
+                            className="text-xs font-semibold text-accent underline underline-offset-2"
+                          >
+                            View source
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-black/45">No source linked</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm tabular-nums text-right">
                       {m.qtyBase > 0 ? (

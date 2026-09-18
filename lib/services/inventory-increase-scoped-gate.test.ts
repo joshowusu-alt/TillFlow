@@ -48,6 +48,9 @@ vi.mock('./shared', async () => {
     incrementInventoryBalanceQtyOnly: incrementInventoryBalanceQtyOnlyMock,
   };
 });
+vi.mock('@/lib/services/document-numbers', () => ({
+  reserveNextDocumentNumber: vi.fn().mockResolvedValue('ADJ-000001'),
+}));
 
 const FLAG = 'TILLFLOW_INVENTORY_ADJUST_PHASE2_INCREASE';
 const ALLOW = 'TILLFLOW_INVENTORY_ADJUST_PHASE2_BUSINESS_IDS';
