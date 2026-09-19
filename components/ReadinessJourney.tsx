@@ -13,6 +13,7 @@ import {
   countHomeAttentionActions,
   formatCloseShiftDescription,
   formatCommandCenterActionLabel,
+  formatExpectedCashFooter,
   formatHeroStatusPill,
   formatHomeAttentionActionSummary,
 } from '@/lib/home-attention-presentation';
@@ -493,12 +494,12 @@ function WelcomeDashboard({
     ? [
         { label: 'Products', displayLabel: 'Products', value: data.productCount.toLocaleString(), href: '/products', footer: `${data.productCount} listed`, primary: true },
         { label: "Today's Transactions", displayLabel: 'Transactions', value: data.todayTransactionCount.toLocaleString(), href: '/sales', footer: null, primary: false },
-        { label: 'Expected Cash', displayLabel: 'Expected Cash', value: formatCurrency(data.expectedCashPence), href: '/reports/cash-drawer', footer: data.openShiftCount > 0 ? 'Current open till balance' : 'No open till', primary: false },
+        { label: 'Expected Cash', displayLabel: 'Expected Cash', value: formatCurrency(data.expectedCashPence), href: '/reports/cash-drawer', footer: formatExpectedCashFooter({ openShiftCount: data.openShiftCount, tills: data.openShiftTills }), primary: false },
       ]
     : [
         { label: "Today's Sales Revenue", displayLabel: 'Sales revenue', value: formatCurrency(data.todayRevenuePence), href: '/reports/dashboard?period=today&storeId=ALL', footer: todayVsYesterdayText, primary: true },
         { label: "Today's Transactions", displayLabel: 'Transactions', value: data.todayTransactionCount.toLocaleString(), href: '/sales', footer: null, primary: false },
-        { label: 'Expected Cash', displayLabel: 'Expected Cash', value: formatCurrency(data.expectedCashPence), href: '/reports/cash-drawer', footer: data.openShiftCount > 0 ? 'Current open till balance' : 'No open till', primary: false },
+        { label: 'Expected Cash', displayLabel: 'Expected Cash', value: formatCurrency(data.expectedCashPence), href: '/reports/cash-drawer', footer: formatExpectedCashFooter({ openShiftCount: data.openShiftCount, tills: data.openShiftTills }), primary: false },
       ];
   const getStatValueSize = (value: string, primary: boolean) => {
     if (value.length > 11) return primary ? 'text-sm sm:text-sm lg:text-base' : 'text-xs sm:text-sm lg:text-base';
@@ -520,6 +521,7 @@ function WelcomeDashboard({
       desc: formatCloseShiftDescription({
         salesCount: data.openShiftSalesCount,
         openedAt: data.openShiftOpenedAt,
+        tills: data.openShiftTills,
       }),
       href: '/shifts',
       urgent: true,

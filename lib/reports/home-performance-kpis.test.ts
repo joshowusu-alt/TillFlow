@@ -55,7 +55,10 @@ describe('getHomePerformanceSummary parity with Home KPI fields', () => {
     } as never);
 
     vi.mocked(prisma.shift.findMany).mockResolvedValueOnce([
-      { expectedCashPence: 8_919_00 },
+      {
+        expectedCashPence: 8_919_00,
+        till: { name: 'Till B1', store: { name: 'Walkthrough Store B' } },
+      },
     ] as never);
     vi.mocked(prisma.product.count).mockResolvedValueOnce(1250);
 
@@ -70,6 +73,9 @@ describe('getHomePerformanceSummary parity with Home KPI fields', () => {
     expect(summary.yesterdayTransactionCount).toBe(85);
     expect(summary.expectedCashPence).toBe(8_919_00);
     expect(summary.openShiftCount).toBe(1);
+    expect(summary.openShiftTills).toEqual([
+      { storeName: 'Walkthrough Store B', tillName: 'Till B1' },
+    ]);
     expect(summary.productCount).toBe(1250);
     expect(summary.timeZone).toBe('Africa/Accra');
     expect(summary.todayScope.periodKey).toBe('today');

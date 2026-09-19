@@ -146,6 +146,7 @@ const baseReadinessData: ReadinessData = {
   openShiftCount: 0,
   openShiftSalesCount: 0,
   openShiftOpenedAt: null,
+  openShiftTills: [],
   reorderNeededCount: 0,
   overdueSupplierInvoiceCount: 0,
   expectedCashPence: 125_000,
@@ -547,6 +548,9 @@ describe('Owner Home Phase 1 control centre', () => {
     expect(screen.getAllByText('4 areas need your attention today.')).toHaveLength(1); // attention line only — pill is the sole hero summary
     expect(screen.getByRole('link', { name: /Close Shift/i })).toHaveAttribute('href', '/shifts');
     expect(screen.getByText(/Open since .+ · 3 sales in this open shift/)).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('link', { name: /Expected Cash:/ })).getByText('Current open till')
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /5 issues in Command Center/i })).toHaveAttribute(
       'href',
       '/reports/command-center'
@@ -560,6 +564,30 @@ describe('Owner Home Phase 1 control centre', () => {
       '/reports/reorder-suggestions'
     );
     expect(screen.queryByText('Follow up before close')).not.toBeInTheDocument();
+  });
+
+  it('names every open till on Close Shift and expected-cash copy', () => {
+    renderDashboard({
+      openShiftCount: 3,
+      openShiftSalesCount: 2,
+      openShiftOpenedAt: '2026-09-18T16:13:00.000Z',
+      openShiftTills: [
+        { storeName: 'Walkthrough Store A', tillName: 'Till A1' },
+        { storeName: 'Walkthrough Store A', tillName: 'Till A2' },
+        { storeName: 'Walkthrough Store B', tillName: 'Till B1' },
+      ],
+    });
+
+    expect(
+      screen.getByText(
+        /3 open tills · Walkthrough Store A Till A1, Walkthrough Store A Till A2, Walkthrough Store B Till B1 · Open since .+ · 2 sales across these shifts/
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('link', { name: /Expected Cash:/ })).getByText(
+        'All 3 open tills · all branches'
+      )
+    ).toBeInTheDocument();
   });
 
   it('hides reorder attention when the Growth report is unavailable', () => {

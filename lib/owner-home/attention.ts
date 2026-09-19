@@ -8,11 +8,13 @@ import { getTodayKPIs } from '@/lib/reports/today-kpis';
 import { countCommandCenterIssueFlags } from '@/lib/reports/home-issue-count';
 import { measureHomePerf } from '@/lib/performance/home-perf-instrumentation';
 import { assertHomeLoaderAllowed } from '@/lib/owner-home/force-fail';
+import { mapOpenShiftTills, type OpenShiftTillIdentity } from '@/lib/home-attention-presentation';
 
 export type OwnerHomeAttentionData = {
   openShiftCount: number;
   openShiftSalesCount: number;
   openShiftOpenedAt: string | null;
+  openShiftTills: OpenShiftTillIdentity[];
   openIssueCount: number;
   reorderNeededCount: number;
   overdueSupplierInvoiceCount: number;
@@ -40,6 +42,7 @@ export async function getOwnerHomeAttentionData(
         },
         select: {
           openedAt: true,
+          till: { select: { name: true, store: { select: { name: true } } } },
           _count: {
             select: {
               salesInvoices: {
@@ -72,6 +75,7 @@ export async function getOwnerHomeAttentionData(
             .sort((a, b) => a.getTime() - b.getTime())[0]
             ?.toISOString() ?? null
         : null,
+      openShiftTills: mapOpenShiftTills(openShifts),
       openIssueCount: todayKpis ? countCommandCenterIssueFlags(todayKpis) : 0,
       reorderNeededCount: todayKpis?.urgentReorderCount ?? 0,
       overdueSupplierInvoiceCount,

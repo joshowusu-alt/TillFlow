@@ -4,6 +4,7 @@ import type { HomePerformanceSummary } from '@/lib/reports/home-performance-kpis
 import { getStatValueSize } from '@/lib/owner-home/stat-value-size';
 import { HomePerformanceUnavailable } from '@/components/owner-home/section-errors';
 import { buildReportingScopeSearchParams } from '@/lib/reports/reporting-scope';
+import { formatExpectedCashFooter } from '@/lib/home-attention-presentation';
 
 export default async function HomePerformanceSlot({
   performancePromise,
@@ -55,7 +56,10 @@ export default async function HomePerformanceSlot({
             displayLabel: 'Expected Cash',
             value: formatCurrency(data.expectedCashPence),
             href: cashDrawerHref,
-            footer: data.openShiftCount > 0 ? 'Current open till balance' : 'No open till',
+            footer: formatExpectedCashFooter({
+              openShiftCount: data.openShiftCount,
+              tills: data.openShiftTills,
+            }),
             primary: false,
           },
         ]
@@ -81,7 +85,10 @@ export default async function HomePerformanceSlot({
             displayLabel: 'Expected Cash',
             value: formatCurrency(data.expectedCashPence),
             href: cashDrawerHref,
-            footer: data.openShiftCount > 0 ? 'Current open till balance' : 'No open till',
+            footer: formatExpectedCashFooter({
+              openShiftCount: data.openShiftCount,
+              tills: data.openShiftTills,
+            }),
             primary: false,
           },
         ];

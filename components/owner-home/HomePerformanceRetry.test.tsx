@@ -40,6 +40,7 @@ const zeroSummary: HomePerformanceSummary = {
   yesterdayTransactionCount: 0,
   expectedCashPence: 0,
   openShiftCount: 0,
+  openShiftTills: [],
   productCount: 812,
   timeZone: 'Africa/Accra',
   todayScope: {
@@ -58,6 +59,7 @@ const dataSummary: HomePerformanceSummary = {
   yesterdayTransactionCount: 30,
   expectedCashPence: 2_000_00,
   openShiftCount: 1,
+  openShiftTills: [{ storeName: 'Walkthrough Store B', tillName: 'Till B1' }],
   productCount: 812,
   timeZone: 'Africa/Accra',
   todayScope: {

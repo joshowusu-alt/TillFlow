@@ -42,6 +42,7 @@ export default async function HomeAttentionSlot({
             desc: formatCloseShiftDescription({
               salesCount: data.openShiftSalesCount,
               openedAt: data.openShiftOpenedAt,
+              tills: data.openShiftTills,
             }),
             href: '/shifts',
             urgent: true,

@@ -21,6 +21,7 @@ import {
 } from '@/lib/reports/reporting-scope';
 import { getSalesRevenueSummary } from '@/lib/reports/sales-revenue';
 import { REPORTING_EXCLUDED_SALE_STATUSES } from '@/lib/reports/reporting-scope';
+import { mapOpenShiftTills, type OpenShiftTillIdentity } from '@/lib/home-attention-presentation';
 
 export type HomePerformanceSummary = {
   todayRevenuePence: number;
@@ -29,6 +30,7 @@ export type HomePerformanceSummary = {
   yesterdayTransactionCount: number;
   expectedCashPence: number;
   openShiftCount: number;
+  openShiftTills: OpenShiftTillIdentity[];
   productCount: number;
   timeZone: string;
   todayScope: Pick<ReportingScope, 'periodKey' | 'fromInputValue' | 'toInputValue' | 'storeId'>;
@@ -103,7 +105,10 @@ export async function getHomePerformanceSummary(
           closedAt: null,
           till: { store: { businessId } },
         },
-        select: { expectedCashPence: true },
+        select: {
+          expectedCashPence: true,
+          till: { select: { name: true, store: { select: { name: true } } } },
+        },
       }),
       prisma.product.count({ where: { businessId } }),
     ]);
@@ -126,6 +131,7 @@ export async function getHomePerformanceSummary(
       yesterdayTransactionCount: yesterdayAgg._count.id,
       expectedCashPence,
       openShiftCount: openShifts.length,
+      openShiftTills: mapOpenShiftTills(openShifts),
       productCount,
       timeZone,
       todayScope: hrefScope,

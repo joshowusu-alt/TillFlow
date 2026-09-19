@@ -3,6 +3,7 @@ import {
   countHomeAttentionActions,
   formatCloseShiftDescription,
   formatCommandCenterActionLabel,
+  formatExpectedCashFooter,
   formatHeroAttentionSubtitle,
   formatHeroStatusPill,
   formatHomeAttentionActionSummary,
@@ -115,5 +116,47 @@ describe('home attention presentation', () => {
         openedAt: null,
       })
     ).toBe('1 sale in this open shift');
+  });
+
+  it('names the branch and till on Close Shift and expected-cash copy', () => {
+    expect(
+      formatCloseShiftDescription({
+        salesCount: 0,
+        openedAt: '2026-09-18T16:13:00.000Z',
+        tills: [{ storeName: 'Walkthrough Store B', tillName: 'Till B1' }],
+      })
+    ).toMatch(/^Walkthrough Store B · Till B1 · Open since .+ · 0 sales in this open shift$/);
+
+    expect(
+      formatCloseShiftDescription({
+        salesCount: 2,
+        openedAt: '2026-09-18T16:13:00.000Z',
+        tills: [
+          { storeName: 'Walkthrough Store A', tillName: 'Till A1' },
+          { storeName: 'Walkthrough Store A', tillName: 'Till A2' },
+          { storeName: 'Walkthrough Store B', tillName: 'Till B1' },
+        ],
+      })
+    ).toMatch(
+      /^3 open tills · Walkthrough Store A Till A1, Walkthrough Store A Till A2, Walkthrough Store B Till B1 · Open since .+ · 2 sales across these shifts$/
+    );
+
+    expect(formatExpectedCashFooter({ openShiftCount: 0 })).toBe('No open till');
+    expect(
+      formatExpectedCashFooter({
+        openShiftCount: 1,
+        tills: [{ storeName: 'Walkthrough Store B', tillName: 'Till B1' }],
+      })
+    ).toBe('Current open till · Walkthrough Store B Till B1');
+    expect(
+      formatExpectedCashFooter({
+        openShiftCount: 3,
+        tills: [
+          { storeName: 'Walkthrough Store A', tillName: 'Till A1' },
+          { storeName: 'Walkthrough Store A', tillName: 'Till A2' },
+          { storeName: 'Walkthrough Store B', tillName: 'Till B1' },
+        ],
+      })
+    ).toBe('All 3 open tills · all branches');
   });
 });

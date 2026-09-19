@@ -73,7 +73,8 @@ describe('Mobile dashboard sales consistency', () => {
     expect(commandCenter).toContain('kpis.todayReceiptsPence');
     expect(commandCenter).toContain("label: \"Today's sales\"");
     expect(readiness).toContain('Expected Cash');
-    expect(readiness).toContain('Current open till balance');
+    expect(readiness).toContain('formatExpectedCashFooter');
+    expect(readiness).not.toContain('Current open till balance');
     expect(readiness).not.toContain('expectedCashPence: kpis');
   });
 

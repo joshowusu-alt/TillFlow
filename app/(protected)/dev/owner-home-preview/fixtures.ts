@@ -67,6 +67,7 @@ function base(plan: BusinessPlan = 'GROWTH'): ReadinessData {
     openShiftCount: 0,
     openShiftSalesCount: 0,
     openShiftOpenedAt: null,
+    openShiftTills: [],
     reorderNeededCount: 0,
     overdueSupplierInvoiceCount: 0,
     expectedCashPence: 0,
@@ -92,6 +93,7 @@ export const HOME_PREVIEW_FIXTURES: Record<string, ReadinessData> = {
     openShiftCount: 1,
     openShiftSalesCount: 8,
     openShiftOpenedAt: new Date('2026-02-17T08:15:00').toISOString(),
+    openShiftTills: [{ storeName: 'Main Store', tillName: 'Till 1' }],
     overdueSupplierInvoiceCount: 2,
     reorderNeededCount: 4,
     expectedCashPence: 125_000,
@@ -177,6 +179,7 @@ export const HOME_PREVIEW_FIXTURES: Record<string, ReadinessData> = {
     openShiftCount: 1,
     openShiftSalesCount: 5,
     openShiftOpenedAt: new Date('2026-07-20T07:30:00').toISOString(),
+    openShiftTills: [{ storeName: 'Main Store', tillName: 'Till 1' }],
     expectedCashPence: 89_000,
   },
   'no-open-shift': {

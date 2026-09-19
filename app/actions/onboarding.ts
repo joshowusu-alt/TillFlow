@@ -34,6 +34,7 @@ import type { ImproveRecordsResult } from '@/lib/improve-records';
 import { getBusinessPlan, type BusinessPlan } from '@/lib/features';
 import { countCommandCenterIssueFlags } from '@/lib/reports/home-issue-count';
 import { resolveReadinessExpectedCashPence } from '@/lib/reports/home-expected-cash';
+import { mapOpenShiftTills, type OpenShiftTillIdentity } from '@/lib/home-attention-presentation';
 
 export type ReadinessStep = {
   key: ActivationStepKey | string;
@@ -92,6 +93,7 @@ export type ReadinessData = {
   openShiftSalesCount: number;
   /** Earliest open-shift `openedAt` (ISO), for Home wording only. */
   openShiftOpenedAt: string | null;
+  openShiftTills: OpenShiftTillIdentity[];
   reorderNeededCount: number;
   overdueSupplierInvoiceCount: number;
   expectedCashPence: number;
@@ -172,6 +174,7 @@ export async function getReadiness(): Promise<ReadinessData> {
             id: true,
             openedAt: true,
             expectedCashPence: true,
+            till: { select: { name: true, store: { select: { name: true } } } },
             _count: {
               select: {
                 salesInvoices: {
@@ -343,6 +346,7 @@ export async function getReadiness(): Promise<ReadinessData> {
               .sort((a, b) => a.getTime() - b.getTime())[0]
               ?.toISOString() ?? null
           : null,
+        openShiftTills: mapOpenShiftTills(openShifts),
         reorderNeededCount: todayKpis?.urgentReorderCount ?? 0,
         overdueSupplierInvoiceCount,
         expectedCashPence,

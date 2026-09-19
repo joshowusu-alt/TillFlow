@@ -70,26 +70,86 @@ export function formatCommandCenterActionLabel(issueCount: number): string {
   return `${issueCount} issue${issueCount === 1 ? '' : 's'} in Command Center`;
 }
 
+export type OpenShiftTillIdentity = {
+  storeName: string;
+  tillName: string;
+};
+
+export function mapOpenShiftTills(
+  shifts: Array<{ till?: { name: string; store: { name: string } } | null }>,
+): OpenShiftTillIdentity[] {
+  return shifts
+    .map((shift) => {
+      const storeName = shift.till?.store.name?.trim() ?? '';
+      const tillName = shift.till?.name?.trim() ?? '';
+      if (!storeName || !tillName) return null;
+      return { storeName, tillName };
+    })
+    .filter((row): row is OpenShiftTillIdentity => row !== null);
+}
+
+export function formatExpectedCashFooter(input: {
+  openShiftCount: number;
+  tills?: OpenShiftTillIdentity[];
+}): string {
+  const tills = input.tills ?? [];
+  if (tills.length === 1) {
+    return `Current open till · ${tills[0].storeName} ${tills[0].tillName}`;
+  }
+  if (tills.length > 1) {
+    return `All ${tills.length} open tills · all branches`;
+  }
+  if (input.openShiftCount > 1) {
+    return `All ${input.openShiftCount} open tills · all branches`;
+  }
+  if (input.openShiftCount === 1) {
+    return 'Current open till';
+  }
+  return 'No open till';
+}
+
+function formatOpenTillIdentity(tills: OpenShiftTillIdentity[]): string | null {
+  if (tills.length === 0) return null;
+  if (tills.length === 1) {
+    return `${tills[0].storeName} · ${tills[0].tillName}`;
+  }
+  const list = tills.map((till) => `${till.storeName} ${till.tillName}`).join(', ');
+  return `${tills.length} open tills · ${list}`;
+}
+
 export function formatCloseShiftDescription(input: {
   salesCount: number;
   openedAt: string | null;
+  tills?: OpenShiftTillIdentity[];
 }): string {
+  const tills = input.tills ?? [];
+  const pluralShifts = tills.length > 1;
   const salesPart =
     input.salesCount === 0
-      ? '0 sales in this open shift'
-      : `${input.salesCount} sale${input.salesCount === 1 ? '' : 's'} in this open shift`;
+      ? pluralShifts
+        ? '0 sales across these shifts'
+        : '0 sales in this open shift'
+      : `${input.salesCount} sale${input.salesCount === 1 ? '' : 's'} ${
+          pluralShifts ? 'across these shifts' : 'in this open shift'
+        }`;
 
-  if (!input.openedAt) return salesPart;
+  const parts: string[] = [];
+  const identity = formatOpenTillIdentity(tills);
+  if (identity) parts.push(identity);
 
-  const opened = new Date(input.openedAt);
-  if (Number.isNaN(opened.getTime())) return salesPart;
+  if (input.openedAt) {
+    const opened = new Date(input.openedAt);
+    if (!Number.isNaN(opened.getTime())) {
+      const dateLabel = opened.toLocaleString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      parts.push(`Open since ${dateLabel}`);
+    }
+  }
 
-  const dateLabel = opened.toLocaleString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  return `Open since ${dateLabel} · ${salesPart}`;
+  parts.push(salesPart);
+  return parts.join(' · ');
 }
