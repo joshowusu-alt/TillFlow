@@ -33,6 +33,10 @@ describe('authoritative operational store surfaces', () => {
     expect(read('components/OperationalStoreSwitcher.tsx')).toContain('publishOperationalStoreSignal');
     expect(read('components/OperationalStoreSwitcher.tsx')).toContain('data-switching-operational-store');
     expect(read('components/OperationalStoreSwitcher.tsx')).toContain('Wait until this branch is active');
+    expect(read('components/OperationalStoreSwitcher.tsx')).toContain('aria-modal="true"');
+    expect(read('components/OperationalStoreSwitcher.tsx')).toContain("document.addEventListener('click', block, true)");
+    expect(read('components/OperationalStoreSwitcher.tsx')).not.toContain('12_000');
+    expect(read('components/OperationalStoreSwitcher.tsx')).not.toContain('setPending(null)');
   });
 
   it('hides internal purchase ids on supplier payments', () => {

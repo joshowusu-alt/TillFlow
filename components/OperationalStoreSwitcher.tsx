@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { switchOperationalStoreAction } from '@/app/actions/operational-store';
 import { publishOperationalStoreSignal } from '@/lib/reliability/operational-store-sync';
@@ -27,11 +27,37 @@ export default function OperationalStoreSwitcher({
   const returnTo = currentQuery ? `${pathname}?${currentQuery}` : pathname;
   const label = selectedStoreName?.trim() || (stores.length > 1 ? 'Select branch' : 'No branch');
   const [pending, setPending] = useState<{ id: string; name: string } | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   useEffect(() => {
     if (!pending) return undefined;
-    const timeout = window.setTimeout(() => setPending(null), 12_000);
-    return () => window.clearTimeout(timeout);
+    const block = (event: Event) => {
+      if (event.type === 'keydown') {
+        const key = (event as KeyboardEvent).key;
+        if (key === 'Tab') {
+          event.preventDefault();
+          event.stopPropagation();
+          dialogRef.current?.focus();
+          return;
+        }
+        if (key !== 'Enter' && key !== 'NumpadEnter' && key !== ' ') return;
+      }
+      const target = event.target;
+      if (target instanceof Element && target.closest('[data-switching-operational-store]')) return;
+      if (event.type === 'submit' && target === formRef.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    document.addEventListener('submit', block, true);
+    document.addEventListener('click', block, true);
+    document.addEventListener('keydown', block, true);
+    dialogRef.current?.focus();
+    return () => {
+      document.removeEventListener('submit', block, true);
+      document.removeEventListener('click', block, true);
+      document.removeEventListener('keydown', block, true);
+    };
   }, [pending]);
 
   if (!canSwitch || stores.length <= 1) {
@@ -47,7 +73,7 @@ export default function OperationalStoreSwitcher({
   }
 
   return (
-    <form action={switchOperationalStoreAction} className="inline-flex items-center">
+    <form ref={formRef} action={switchOperationalStoreAction} className="inline-flex items-center">
       <input type="hidden" name="returnTo" value={returnTo} />
       <label className="sr-only" htmlFor="operational-store-switcher">
         Active branch
@@ -79,17 +105,27 @@ export default function OperationalStoreSwitcher({
       {pending ? <input type="hidden" name="storeId" value={pending.id} /> : null}
       {pending ? (
         <div
+          ref={dialogRef}
           data-switching-operational-store
           role="alertdialog"
+          aria-modal="true"
           aria-live="assertive"
           aria-label={`Switching to ${pending.name}`}
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4"
+          tabIndex={-1}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4"
         >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-center shadow-xl">
             <p className="text-sm font-semibold text-ink">Switching to {pending.name}</p>
             <p className="mt-2 text-sm leading-5 text-black/60">
               Wait until this branch is active before selling or recording money.
             </p>
+            <button
+              type="button"
+              className="btn-secondary mt-4 text-sm"
+              onClick={() => formRef.current?.requestSubmit()}
+            >
+              Retry switch
+            </button>
           </div>
         </div>
       ) : null}
