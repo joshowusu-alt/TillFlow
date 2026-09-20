@@ -31,6 +31,8 @@ describe('authoritative operational store surfaces', () => {
     expect(read('app/(protected)/pos/page.tsx')).toContain('EffectiveStoreBanner');
     expect(read('app/(protected)/layout.tsx')).toContain('StaleOperationalStoreGuard');
     expect(read('components/OperationalStoreSwitcher.tsx')).toContain('publishOperationalStoreSignal');
+    expect(read('components/OperationalStoreSwitcher.tsx')).toContain('data-switching-operational-store');
+    expect(read('components/OperationalStoreSwitcher.tsx')).toContain('Wait until this branch is active');
   });
 
   it('hides internal purchase ids on supplier payments', () => {
