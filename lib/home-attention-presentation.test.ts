@@ -157,6 +157,8 @@ describe('home attention presentation', () => {
           { storeName: 'Walkthrough Store B', tillName: 'Till B1' },
         ],
       })
-    ).toBe('All 3 open tills · all branches');
+    ).toBe(
+      'All 3 open tills · Walkthrough Store A Till A1, Walkthrough Store A Till A2, Walkthrough Store B Till B1',
+    );
   });
 });

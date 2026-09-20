@@ -97,7 +97,8 @@ export function formatExpectedCashFooter(input: {
     return `Current open till · ${tills[0].storeName} ${tills[0].tillName}`;
   }
   if (tills.length > 1) {
-    return `All ${tills.length} open tills · all branches`;
+    const list = tills.map((till) => `${till.storeName} ${till.tillName}`).join(', ');
+    return `All ${tills.length} open tills · ${list}`;
   }
   if (input.openShiftCount > 1) {
     return `All ${input.openShiftCount} open tills · all branches`;

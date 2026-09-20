@@ -585,7 +585,7 @@ describe('Owner Home Phase 1 control centre', () => {
     ).toBeInTheDocument();
     expect(
       within(screen.getByRole('link', { name: /Expected Cash:/ })).getByText(
-        'All 3 open tills · all branches'
+        'All 3 open tills · Walkthrough Store A Till A1, Walkthrough Store A Till A2, Walkthrough Store B Till B1'
       )
     ).toBeInTheDocument();
   });
