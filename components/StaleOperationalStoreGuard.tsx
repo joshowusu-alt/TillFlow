@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react';
 import {
   OPERATIONAL_STORE_CHANNEL,
   OPERATIONAL_STORE_SIGNAL_KEY,
+  getOperationalStoreTabId,
   isStaleOperationalStore,
   parseOperationalStoreSignal,
+  signalFromBroadcast,
   type OperationalStoreSignal,
 } from '@/lib/reliability/operational-store-sync';
 import { STALE_OPERATIONAL_STORE_MSG } from '@/lib/reliability/operational-store';
@@ -33,11 +35,13 @@ export default function StaleOperationalStoreGuard({
 }) {
   const [signal, setSignal] = useState<OperationalStoreSignal | null>(null);
   const [loadedAt] = useState(() => Date.now());
+  const [tabId, setTabId] = useState<string | null>(null);
 
   useEffect(() => {
-    const apply = (next: OperationalStoreSignal | null) => {
-      if (next) setSignal(next);
-    };
+    setTabId(getOperationalStoreTabId());
+    // A later signal always replaces the current one, including a clear
+    // (null) after a failed switch, so a tab is never left on a stale verdict.
+    const apply = (next: OperationalStoreSignal | null) => setSignal(next);
     apply(parseOperationalStoreSignal(window.localStorage.getItem(OPERATIONAL_STORE_SIGNAL_KEY)));
     const onStorage = (event: StorageEvent) => {
       if (event.key === OPERATIONAL_STORE_SIGNAL_KEY) {
@@ -45,7 +49,7 @@ export default function StaleOperationalStoreGuard({
       }
     };
     const channel = new BroadcastChannel(OPERATIONAL_STORE_CHANNEL);
-    channel.onmessage = (event) => apply(event.data as OperationalStoreSignal);
+    channel.onmessage = (event) => apply(signalFromBroadcast(event.data));
     window.addEventListener('storage', onStorage);
     return () => {
       channel.close();
@@ -53,7 +57,7 @@ export default function StaleOperationalStoreGuard({
     };
   }, []);
 
-  const stale = isStaleOperationalStore(storeId, signal, loadedAt) && Boolean(signal);
+  const stale = isStaleOperationalStore(storeId, signal, loadedAt, tabId) && Boolean(signal);
 
   useEffect(() => {
     setStaleOperationalStoreBlocked(stale);

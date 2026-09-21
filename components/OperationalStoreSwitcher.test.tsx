@@ -84,11 +84,16 @@ describe('OperationalStoreSwitcher', () => {
     expect(select.getAttribute('data-operational-store')).toBe('store-a');
     expect(select.disabled).toBe(true);
 
+    // Other tabs are handed back the branch that is still authoritative.
+    expect(window.localStorage.getItem('tillflow_operational_store_signal')).toContain('store-a');
+
     const retry = screen.getByRole('button', { name: /retry switch/i });
     expect(retry).not.toBeDisabled();
     fireEvent.click(retry);
     await waitFor(() => expect(switchOperationalStoreResultAction).toHaveBeenCalledTimes(2));
     expect(switchOperationalStoreResultAction.mock.calls[1][0].get('storeId')).toBe('store-b');
+    // Retry re-announces the intended branch while pending again.
+    expect(window.localStorage.getItem('tillflow_operational_store_signal')).toContain('store-b');
   });
 
   it('shows a server rejection inside the dialog instead of throwing', async () => {

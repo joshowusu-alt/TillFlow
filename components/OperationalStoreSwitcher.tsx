@@ -6,7 +6,10 @@ import {
   switchOperationalStoreAction,
   switchOperationalStoreResultAction,
 } from '@/app/actions/operational-store';
-import { publishOperationalStoreSignal } from '@/lib/reliability/operational-store-sync';
+import {
+  publishOperationalStoreSignal,
+  revertOperationalStoreSignal,
+} from '@/lib/reliability/operational-store-sync';
 
 export type OperationalStoreOption = {
   id: string;
@@ -118,12 +121,21 @@ export default function OperationalStoreSwitcher({
         const formData = new FormData(form);
         setInFlight(true);
         setFailure(null);
+        // Other tabs are told the intended branch while the switch is pending;
+        // a failure hands them back the branch that is still authoritative.
+        const previous = selectedStoreId
+          ? { id: selectedStoreId, name: selectedStoreName?.trim() || selectedStoreId }
+          : null;
+        const failed = (reason: unknown) => {
+          setFailure(describeSwitchFailure(reason));
+          revertOperationalStoreSignal(previous);
+        };
         void switchOperationalStoreResultAction(formData)
           .then((result) => {
-            if (result && !result.success) setFailure(describeSwitchFailure(result));
+            if (result && !result.success) failed(result);
           })
           .catch((error: unknown) => {
-            setFailure(describeSwitchFailure(error));
+            failed(error);
           })
           .finally(() => {
             setInFlight(false);
@@ -188,7 +200,11 @@ export default function OperationalStoreSwitcher({
               type="button"
               className="btn-secondary mt-4 text-sm"
               disabled={inFlight}
-              onClick={() => formRef.current?.requestSubmit()}
+              onClick={() => {
+                // Re-announce the intended branch so other tabs are blocked again while retrying.
+                publishOperationalStoreSignal(pending);
+                formRef.current?.requestSubmit();
+              }}
             >
               Retry switch
             </button>
