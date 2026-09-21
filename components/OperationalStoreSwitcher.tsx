@@ -32,6 +32,9 @@ export default function OperationalStoreSwitcher({
 
   useEffect(() => {
     if (!pending) return undefined;
+    // Submit only after the hidden `storeId` field has rendered with the
+    // intended branch; submitting inside onChange would send the old value.
+    formRef.current?.requestSubmit();
     const block = (event: Event) => {
       if (event.type === 'keydown') {
         const key = (event as KeyboardEvent).key;
@@ -96,7 +99,6 @@ export default function OperationalStoreSwitcher({
           const nextName = stores.find((store) => store.id === nextId)?.name ?? nextId;
           setPending({ id: nextId, name: nextName });
           publishOperationalStoreSignal({ id: nextId, name: nextName });
-          event.currentTarget.form?.requestSubmit();
         }}
       >
         {!selectedStoreId ? <option value="">Select branch</option> : null}

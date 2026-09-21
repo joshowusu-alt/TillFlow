@@ -47,6 +47,9 @@ describe('authoritative operational store surfaces', () => {
     // The select itself is not the submitted field; the intended branch is.
     expect(switcher).not.toMatch(/<select[^>]*name="storeId"/);
     expect(switcher).toContain('name="storeId" value={pending?.id ?? selectedStoreId ?? \'\'}');
+    // The submit happens after the pending branch has rendered into the hidden field.
+    expect(switcher).not.toContain('event.currentTarget.form?.requestSubmit()');
+    expect(switcher).toMatch(/if \(!pending\) return undefined;[\s\S]{0,300}formRef\.current\?\.requestSubmit\(\);/);
     // Empty-cookie tabs are covered by the stale guard once another tab switches.
     expect(read('components/StaleOperationalStoreGuard.tsx')).toContain('isStaleOperationalStore(storeId, signal, loadedAt)');
   });
