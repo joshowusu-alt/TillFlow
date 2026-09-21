@@ -1,6 +1,6 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 
 let params = new URLSearchParams('');
 vi.mock('next/navigation', () => ({
@@ -23,27 +23,55 @@ describe('StableIdempotencyKeyInput', () => {
   it('only rotates for the record named in ?paid=', () => {
     expect(shouldRotateMoneyOperationKey('expense-payment:exp1', 'exp1')).toBe(true);
     expect(shouldRotateMoneyOperationKey('expense-payment:exp1', 'exp2')).toBe(false);
+    expect(shouldRotateMoneyOperationKey('supplier-payment:inv1', 'inv1')).toBe(true);
+    expect(shouldRotateMoneyOperationKey('customer-receipt:sale1', 'sale1')).toBe(true);
     expect(shouldRotateMoneyOperationKey('expense-payment:exp1', null)).toBe(false);
     expect(shouldRotateMoneyOperationKey('expense-payment:exp1', '')).toBe(false);
   });
 
-  it('keeps the same key across remounts, then mints a new one after the paid redirect', () => {
+  it('keeps one key for a double submit, then mints a new key for the next intention', () => {
+    const view = render(
+      <form>
+        <StableIdempotencyKeyInput scope="supplier-payment:inv1" />
+        <button type="submit">Record payment</button>
+      </form>,
+    );
+    const first = keyOf(view.container);
+    fireEvent.submit(view.container.querySelector('form')!);
+    fireEvent.submit(view.container.querySelector('form')!);
+    expect(keyOf(view.container)).toBe(first);
+
+    cleanup();
+    const next = render(
+      <form>
+        <StableIdempotencyKeyInput scope="supplier-payment:inv1" />
+      </form>,
+    );
+    expect(keyOf(next.container)).not.toBe(first);
+  });
+
+  it('rotates on each successive ?pay= while ?paid= stays the same', () => {
+    params = new URLSearchParams('paid=exp1&pay=p1');
     const first = render(<StableIdempotencyKeyInput scope="expense-payment:exp1" />);
     const key1 = keyOf(first.container);
     cleanup();
+
+    params = new URLSearchParams('paid=exp1&pay=p2');
     const second = render(<StableIdempotencyKeyInput scope="expense-payment:exp1" />);
-    expect(keyOf(second.container)).toBe(key1);
+    const key2 = keyOf(second.container);
+    expect(key2).not.toBe(key1);
     cleanup();
 
-    params = new URLSearchParams('paid=exp1');
+    params = new URLSearchParams('paid=other&pay=p3');
     const third = render(<StableIdempotencyKeyInput scope="expense-payment:exp1" />);
-    const key3 = keyOf(third.container);
-    expect(key3).not.toBe(key1);
-    cleanup();
+    expect(keyOf(third.container)).toBe(key2);
+  });
 
-    // A paid marker for a different record leaves this scope's key alone.
-    params = new URLSearchParams('paid=other');
-    const fourth = render(<StableIdempotencyKeyInput scope="expense-payment:exp1" />);
-    expect(keyOf(fourth.container)).toBe(key3);
+  it('keeps the same key across a remount before any submit', () => {
+    const first = render(<StableIdempotencyKeyInput scope="customer-receipt:sale1" />);
+    const key1 = keyOf(first.container);
+    cleanup();
+    const second = render(<StableIdempotencyKeyInput scope="customer-receipt:sale1" />);
+    expect(keyOf(second.container)).toBe(key1);
   });
 });

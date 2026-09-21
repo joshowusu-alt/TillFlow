@@ -15,6 +15,7 @@ import {
 import { prisma } from '@/lib/prisma';
 import type { PaymentMethod, PaymentInput } from '@/lib/services/shared';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
+import { paymentIntentRedirect } from '@/lib/money/payment-intent';
 
 /** Build a payments array from FormData — supports both single-amount and split modes. */
 function parsePayments(formData: FormData): PaymentInput[] {
@@ -56,9 +57,18 @@ export async function recordCustomerPaymentAction(formData: FormData): Promise<v
     await recordCustomerPayment(businessId, invoiceId, payments, user.id, { idempotencyKey });
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
+    const marker = await prisma.moneyIdempotency.findFirst({
+      where: { businessId, key: idempotencyKey },
+      select: { resultJson: true },
+    });
+    let paymentId: string | null = null;
+    try {
+      paymentId = (JSON.parse(marker?.resultJson || '{}') as { paymentId?: string }).paymentId ?? null;
+    } catch {
+      paymentId = null;
+    }
     const returnTo = formString(formData, 'returnTo') || '/payments/customer-receipts';
-    const sep = returnTo.includes('?') ? '&' : '?';
-    redirect(`${returnTo}${sep}paid=${encodeURIComponent(invoiceId)}`);
+    redirect(paymentIntentRedirect(returnTo, invoiceId, paymentId));
   }, '/payments/customer-receipts');
 }
 
@@ -96,7 +106,7 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
       await resolveStoreFromTill(businessId, tillId, storeId);
     }
 
-    await recordSupplierPayment(businessId, invoiceId, payments, {
+    const result = await recordSupplierPayment(businessId, invoiceId, payments, {
       paidAt,
       recordedByUserId: user.id,
       actorRole: user.role,
@@ -107,9 +117,11 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
     });
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
+    const paymentId =
+      result.invoice?.payments.find(
+        (payment: { id: string; idempotencyKey?: string | null }) => payment.idempotencyKey === idempotencyKey,
+      )?.id ?? null;
     const returnTo = formString(formData, 'returnTo') || '/payments/supplier-payments';
-    // `paid=<invoiceId>` rotates the form's durable idempotency key for this invoice.
-    const sep = returnTo.includes('?') ? '&' : '?';
-    redirect(`${returnTo}${sep}paid=${encodeURIComponent(invoiceId)}`);
+    redirect(paymentIntentRedirect(returnTo, invoiceId, paymentId));
   }, '/payments/supplier-payments');
 }

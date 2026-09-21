@@ -13,6 +13,7 @@ import { getActivationStatusLabel } from '@/lib/activation-display';
 import BusinessNameSaver from '@/components/BusinessNameSaver';
 import LaunchSessionCompletion from '@/components/LaunchSessionCompletion';
 import StaleOperationalStoreGuard from '@/components/StaleOperationalStoreGuard';
+import MoneyOperationKeySync from '@/components/MoneyOperationKeySync';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 function formatDateLabel(value: Date | string | null | undefined) {
@@ -185,6 +186,9 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         </div>
       )}
 
+        <Suspense fallback={null}>
+          <MoneyOperationKeySync />
+        </Suspense>
         <main
           id="main-content"
           tabIndex={-1}

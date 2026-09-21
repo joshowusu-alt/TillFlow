@@ -5,6 +5,7 @@ import { CASH_EXPENSE_SHIFT_REQUIRED_MSG } from '@/lib/services/expenses';
 import { redirect } from 'next/navigation';
 import { formString, formPence, formOptionalString } from '@/lib/form-helpers';
 import { requireSelectedStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
+import { paymentIntentRedirect } from '@/lib/money/payment-intent';
 import type { PaymentMethod } from '@/lib/services/shared';
 
 export async function recordExpensePaymentAction(formData: FormData): Promise<void> {
@@ -28,7 +29,7 @@ export async function recordExpensePaymentAction(formData: FormData): Promise<vo
       throw new Error(CASH_EXPENSE_SHIFT_REQUIRED_MSG);
     }
 
-    await recordExpensePayment({
+    const payment = await recordExpensePayment({
       businessId,
       storeId,
       userId: user.id,
@@ -40,8 +41,8 @@ export async function recordExpensePaymentAction(formData: FormData): Promise<vo
       idempotencyKey,
     });
 
-    // `paid=<expenseId>` lets the form's durable idempotency key rotate, so a follow-up
-    // payment against the same expense from this tab is a new money operation.
-    redirect(`/payments/expense-payments?paid=${encodeURIComponent(expenseId)}`);
+    // `paid` retires this expense's key; `pay` changes on every payment so the next
+    // equal amount on this page is a new intention.
+    redirect(paymentIntentRedirect('/payments/expense-payments', expenseId, payment.id));
   }, '/payments/expense-payments');
 }

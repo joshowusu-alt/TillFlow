@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { recordCustomerPaymentAction } from '@/app/actions/payments';
 import { recordSupplierPaymentAction } from '@/app/actions/payments';
+import StableIdempotencyKeyInput from '@/components/StableIdempotencyKeyInput';
 
 type Props = {
   invoiceId: string;
@@ -12,16 +13,9 @@ type Props = {
   returnTo: string;
 };
 
-function newIdempotencyKey() {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `pay-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
 export default function InlinePaymentForm({ invoiceId, outstandingPence, currency, type, returnTo }: Props) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
   const formRef = useRef<HTMLFormElement>(null);
 
   const action = type === 'customer' ? recordCustomerPaymentAction : recordSupplierPaymentAction;
@@ -32,7 +26,6 @@ export default function InlinePaymentForm({ invoiceId, outstandingPence, currenc
       <button
         type="button"
         onClick={() => {
-          setIdempotencyKey(newIdempotencyKey());
           setSubmitting(false);
           setOpen(true);
         }}
@@ -52,9 +45,9 @@ export default function InlinePaymentForm({ invoiceId, outstandingPence, currenc
     >
       <input type="hidden" name="invoiceId" value={invoiceId} />
       <input type="hidden" name="returnTo" value={returnTo} />
-      {type === 'supplier' ? (
-        <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
-      ) : null}
+      <StableIdempotencyKeyInput
+        scope={type === 'customer' ? `customer-receipt:${invoiceId}` : `supplier-payment:${invoiceId}`}
+      />
       <select name="paymentMethod" className="input py-1 text-xs w-20" defaultValue="CASH">
         <option value="CASH">Cash</option>
         <option value="CARD">Card</option>

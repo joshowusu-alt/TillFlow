@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-  clearMoneyOperationKey,
+  consumeMoneyOperationKey,
   readOrCreateMoneyOperationKey,
 } from '@/lib/money/client-operation-key';
 
@@ -14,10 +14,14 @@ export function shouldRotateMoneyOperationKey(scope: string, paid: string | null
 }
 
 /**
- * Hidden durable key that survives retries; a new identity is minted after success.
- * Success is signalled either by the `rotate` prop or by the server redirecting back with
- * `?paid=<recordId>` for this scope, so a second payment against the same expense/invoice in
- * the same tab never collides with the first one's key.
+ * One hidden key per payment intention.
+ *
+ * The same key is reused for a double-click, a refresh before submit, and a remount of
+ * this form. Submitting consumes it, so the next time the form is rendered — including
+ * after a success redirect onto a page that does not mount this input, or Back onto
+ * the supplier — the next equal payment gets a new key. `?pay=` changes on every
+ * successful payment, so a form that stays on the success page rotates even when
+ * `?paid=` is unchanged.
  */
 export default function StableIdempotencyKeyInput({
   scope,
@@ -28,13 +32,31 @@ export default function StableIdempotencyKeyInput({
 }) {
   const searchParams = useSearchParams();
   const paid = searchParams?.get('paid') ?? null;
+  const payNonce = searchParams?.get('pay') ?? null;
   const shouldRotate = rotate || shouldRotateMoneyOperationKey(scope, paid);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
-    if (shouldRotate) clearMoneyOperationKey(scope);
-    setIdempotencyKey((current) => readOrCreateMoneyOperationKey(scope, current));
-  }, [scope, shouldRotate]);
+    if (shouldRotate) consumeMoneyOperationKey(scope);
+    setIdempotencyKey(readOrCreateMoneyOperationKey(scope));
+  }, [scope, shouldRotate, payNonce]);
 
-  return <input type="hidden" name="idempotencyKey" value={idempotencyKey} />;
+  useEffect(() => {
+    const form = inputRef.current?.form;
+    if (!form) return undefined;
+    const onSubmit = () => consumeMoneyOperationKey(scope);
+    form.addEventListener('submit', onSubmit);
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      setIdempotencyKey(readOrCreateMoneyOperationKey(scope));
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      form.removeEventListener('submit', onSubmit);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, [scope, idempotencyKey]);
+
+  return <input ref={inputRef} type="hidden" name="idempotencyKey" data-money-scope={scope} value={idempotencyKey} />;
 }

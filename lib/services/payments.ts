@@ -296,9 +296,10 @@ async function recordCustomerPaymentImpl(
         shiftId: openShift?.id,
       });
 
+      const createdPaymentIds: string[] = [];
       for (const payment of newPayments) {
         const transactionNumber = await reserveNextDocumentNumber(tx, businessId, 'customer_receipt');
-        await tx.salesPayment.create({
+        const created = await tx.salesPayment.create({
           data: {
             salesInvoiceId: invoice.id,
             businessId,
@@ -308,7 +309,9 @@ async function recordCustomerPaymentImpl(
             receiptOrigin: RECEIPT_ORIGIN.LATER_CREDIT_COLLECTION,
             transactionNumber,
           },
+          select: { id: true },
         });
+        createdPaymentIds.push(created.id);
       }
 
       if (openShift && actorUserId) {
@@ -361,7 +364,7 @@ async function recordCustomerPaymentImpl(
         key: idempotencyKey,
         payloadHash,
         commandKind: 'CUSTOMER_RECEIPT',
-        resultJson: JSON.stringify({ invoiceId: invoice.id }),
+        resultJson: JSON.stringify({ invoiceId: invoice.id, paymentId: createdPaymentIds[0] ?? null }),
       });
 
       return updatedInvoice;
