@@ -15,7 +15,7 @@ export default function MoneyOperationKeySync() {
   const pay = params?.get('pay') ?? '';
 
   useEffect(() => {
-    if (paid) consumeMoneyOperationKeysForRecord(paid);
+    if (paid) consumeMoneyOperationKeysForRecord(paid, pay);
   }, [paid, pay]);
 
   return null;

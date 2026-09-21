@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import {
   consumeMoneyOperationKey,
   readOrCreateMoneyOperationKey,
+  settleMoneyOperationKey,
 } from '@/lib/money/client-operation-key';
 
 /** `scope` is `<kind>:<recordId>`; a `?paid=<recordId>` redirect marks that record's last payment as done. */
@@ -16,12 +17,10 @@ export function shouldRotateMoneyOperationKey(scope: string, paid: string | null
 /**
  * One hidden key per payment intention.
  *
- * The same key is reused for a double-click, a refresh before submit, and a remount of
- * this form. Submitting consumes it, so the next time the form is rendered — including
- * after a success redirect onto a page that does not mount this input, or Back onto
- * the supplier — the next equal payment gets a new key. `?pay=` changes on every
- * successful payment, so a form that stays on the success page rotates even when
- * `?paid=` is unchanged.
+ * The same key is reused for a double-click, a refresh before submit, and a remount
+ * while that submission is still unresolved. The key is retired only after the
+ * success page is observed, so the next equal payment gets a new key. A refresh of
+ * the same `?pay=` keeps the key minted for that success.
  */
 export default function StableIdempotencyKeyInput({
   scope,
@@ -38,8 +37,8 @@ export default function StableIdempotencyKeyInput({
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
-    if (shouldRotate) consumeMoneyOperationKey(scope);
-    setIdempotencyKey(readOrCreateMoneyOperationKey(scope));
+    if (shouldRotate) settleMoneyOperationKey(scope, payNonce);
+    setIdempotencyKey(readOrCreateMoneyOperationKey(scope, undefined, shouldRotate ? payNonce : null));
   }, [scope, shouldRotate, payNonce]);
 
   useEffect(() => {
@@ -49,14 +48,15 @@ export default function StableIdempotencyKeyInput({
     form.addEventListener('submit', onSubmit);
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
-      setIdempotencyKey(readOrCreateMoneyOperationKey(scope));
+      if (shouldRotate) settleMoneyOperationKey(scope, payNonce);
+      setIdempotencyKey(readOrCreateMoneyOperationKey(scope, undefined, shouldRotate ? payNonce : null));
     };
     window.addEventListener('pageshow', onPageShow);
     return () => {
       form.removeEventListener('submit', onSubmit);
       window.removeEventListener('pageshow', onPageShow);
     };
-  }, [scope, idempotencyKey]);
+  }, [scope, idempotencyKey, shouldRotate, payNonce]);
 
   return <input ref={inputRef} type="hidden" name="idempotencyKey" data-money-scope={scope} value={idempotencyKey} />;
 }

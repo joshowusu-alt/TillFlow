@@ -42,12 +42,40 @@ describe('StableIdempotencyKeyInput', () => {
     expect(keyOf(view.container)).toBe(first);
 
     cleanup();
+    const remounted = render(
+      <form>
+        <StableIdempotencyKeyInput scope="supplier-payment:inv1" />
+      </form>,
+    );
+    expect(keyOf(remounted.container)).toBe(first);
+    cleanup();
+
+    params = new URLSearchParams('paid=inv1&pay=p1');
     const next = render(
       <form>
         <StableIdempotencyKeyInput scope="supplier-payment:inv1" />
       </form>,
     );
     expect(keyOf(next.container)).not.toBe(first);
+  });
+
+  it('reuses the in-flight key when the same success page is shown again before the retry is acknowledged', () => {
+    params = new URLSearchParams('paid=exp1&pay=p1');
+    const first = render(
+      <form>
+        <StableIdempotencyKeyInput scope="expense-payment:exp1" />
+      </form>,
+    );
+    const key1 = keyOf(first.container);
+    fireEvent.submit(first.container.querySelector('form')!);
+    cleanup();
+
+    const retry = render(
+      <form>
+        <StableIdempotencyKeyInput scope="expense-payment:exp1" />
+      </form>,
+    );
+    expect(keyOf(retry.container)).toBe(key1);
   });
 
   it('rotates on each successive ?pay= while ?paid= stays the same', () => {

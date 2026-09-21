@@ -79,7 +79,7 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       return err('This expense form is out of date. Refresh the page and try again.');
     }
 
-    await createExpense({
+    const created = await createExpense({
       businessId,
       storeId,
       userId: user.id,
@@ -128,7 +128,7 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
 
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
-    redirect('/expenses?recorded=1');
+    redirect(`/expenses?recorded=1&pay=${encodeURIComponent(created.id)}`);
   }, '/expenses');
 }
 
