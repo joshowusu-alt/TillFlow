@@ -37,6 +37,7 @@ type CustomerPaymentRow = {
   receivedAt: Date;
   reference: string | null;
   receiptOrigin: string | null;
+  transactionNumber: string | null;
   salesInvoice: { id: string; transactionNumber: string | null; customer: { id: string; name: string } | null };
 };
 
@@ -69,6 +70,7 @@ function CustomerPaymentList({
             <thead>
               <tr>
                 <th>Date</th>
+                <th>Receipt</th>
                 <th>Customer</th>
                 <th>Invoice</th>
                 <th>Method</th>
@@ -83,6 +85,7 @@ function CustomerPaymentList({
                 return (
                   <tr key={payment.id} className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
                     <td className="px-3 py-2 text-sm text-black/60">{formatDate(payment.receivedAt)}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-ink">{formatRecordNumber('customer_receipt', payment.transactionNumber, payment.id)}</td>
                     <td className="px-3 py-2 text-sm">{payment.salesInvoice.customer?.name ?? 'Walk-in'}</td>
                     <td className="px-3 py-2 font-mono text-xs text-black/60">{formatRecordNumber('invoice', payment.salesInvoice.transactionNumber, payment.salesInvoice.id)}</td>
                     <td className="px-3 py-2 text-sm">{PAYMENT_LABEL[payment.method] ?? payment.method}</td>
@@ -106,7 +109,7 @@ function CustomerPaymentList({
               <div key={payment.id} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card transition-transform duration-150 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-xs text-black/50">{formatDate(payment.receivedAt)}</div>
+                    <div className="text-xs text-black/50">{formatDate(payment.receivedAt)} · <span className="font-mono">{formatRecordNumber('customer_receipt', payment.transactionNumber, payment.id)}</span></div>
                     <div className="mt-1 text-sm font-semibold text-ink">{payment.salesInvoice.customer?.name ?? 'Walk-in'}</div>
                     <div className="text-xs text-black/50">{PAYMENT_LABEL[payment.method] ?? payment.method} · invoice {formatRecordNumber('invoice', payment.salesInvoice.transactionNumber, payment.salesInvoice.id)}</div>
                     <div className="mt-1 text-xs font-medium text-black/55">{RECEIPT_ORIGIN_LABELS[origin]}</div>
@@ -149,6 +152,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
     receivedAt: true,
     reference: true,
     receiptOrigin: true,
+    transactionNumber: true,
     salesInvoice: {
       select: {
         id: true,

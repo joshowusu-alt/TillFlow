@@ -40,6 +40,8 @@ export async function recordExpensePaymentAction(formData: FormData): Promise<vo
       idempotencyKey,
     });
 
-    redirect('/payments/expense-payments');
+    // `paid=<expenseId>` lets the form's durable idempotency key rotate, so a follow-up
+    // payment against the same expense from this tab is a new money operation.
+    redirect(`/payments/expense-payments?paid=${encodeURIComponent(expenseId)}`);
   }, '/payments/expense-payments');
 }

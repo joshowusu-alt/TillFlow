@@ -11,6 +11,14 @@ import {
   type ListStateSnapshot,
 } from './list-state';
 
+/** True while the browser URL still points at this list route (query string ignored). */
+export function isOnListRoute(route: string): boolean {
+  if (typeof window === 'undefined') return false;
+  const current = window.location.pathname.replace(/\/+$/, '') || '/';
+  const target = route.replace(/\/+$/, '') || '/';
+  return current === target;
+}
+
 export type UseListStateOptions = {
   q?: string;
   page?: number;
@@ -90,9 +98,14 @@ export function useListState(route: string, options: UseListStateOptions = {}): 
     let frame = 0;
     const onScroll = () => {
       if (scrollLockedRef.current) return;
+      // Leaving the list (e.g. opening a record) scrolls the window to the top
+      // of the new page while this hook is still mounted; that 0 belongs to the
+      // detail page, not to the list, so it must not overwrite the stored offset.
+      if (!isOnListRoute(route)) return;
       if (frame) return;
       frame = window.requestAnimationFrame(() => {
         frame = 0;
+        if (!isOnListRoute(route)) return;
         const stored = readListState(route);
         writeListState(route, { ...stored, ...snapshot, scrollY: window.scrollY });
       });

@@ -11,6 +11,10 @@ import {
 import { STALE_OPERATIONAL_STORE_MSG } from '@/lib/reliability/operational-store';
 import { setStaleOperationalStoreBlocked } from '@/lib/reliability/stale-operational-store-client';
 
+function isInsideGuard(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest('[data-stale-operational-store-guard]'));
+}
+
 function isInteractiveMutationTarget(target: EventTarget | null) {
   if (!(target instanceof Element)) return false;
   return Boolean(
@@ -55,6 +59,8 @@ export default function StaleOperationalStoreGuard({
     setStaleOperationalStoreBlocked(stale);
     if (!stale) return;
     const block = (event: Event) => {
+      // The overlay's own "Reload this tab" control must stay usable.
+      if (isInsideGuard(event.target)) return;
       if (event.type === 'keydown') {
         const key = (event as KeyboardEvent).key;
         if (key !== 'Enter' && key !== 'NumpadEnter') return;
@@ -80,6 +86,7 @@ export default function StaleOperationalStoreGuard({
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4"
       data-stale-operational-store={signal.id}
+      data-stale-operational-store-guard=""
       role="alertdialog"
       aria-labelledby="stale-operational-store-title"
     >

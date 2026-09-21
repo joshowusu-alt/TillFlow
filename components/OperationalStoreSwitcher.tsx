@@ -2,13 +2,27 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { switchOperationalStoreAction } from '@/app/actions/operational-store';
+import {
+  switchOperationalStoreAction,
+  switchOperationalStoreResultAction,
+} from '@/app/actions/operational-store';
 import { publishOperationalStoreSignal } from '@/lib/reliability/operational-store-sync';
 
 export type OperationalStoreOption = {
   id: string;
   name: string;
 };
+
+export const SWITCH_NETWORK_FAILURE_MSG =
+  'The branch switch did not reach the server. Your previous branch is still active — retry, or reselect a branch.';
+
+/** Message shown under the switching dialog for a failed attempt (network or server rejection). */
+export function describeSwitchFailure(error: unknown): string {
+  if (error && typeof error === 'object' && 'error' in error && typeof (error as { error: unknown }).error === 'string') {
+    return (error as { error: string }).error;
+  }
+  return SWITCH_NETWORK_FAILURE_MSG;
+}
 
 export default function OperationalStoreSwitcher({
   stores,
@@ -27,8 +41,21 @@ export default function OperationalStoreSwitcher({
   const returnTo = currentQuery ? `${pathname}?${currentQuery}` : pathname;
   const label = selectedStoreName?.trim() || (stores.length > 1 ? 'Select branch' : 'No branch');
   const [pending, setPending] = useState<{ id: string; name: string } | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [inFlight, setInFlight] = useState(false);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+
+  // The dialog clears only when the server-authoritative branch equals the
+  // intended one (the cookie has landed and the shell re-rendered) — never on
+  // a timer, so a slow or failed switch cannot fail open.
+  useEffect(() => {
+    if (pending && selectedStoreId === pending.id) {
+      setPending((current) => (current && current.id === selectedStoreId ? null : current));
+      setFailure(null);
+      setInFlight(false);
+    }
+  }, [pending, selectedStoreId]);
 
   useEffect(() => {
     if (!pending) return undefined;
@@ -76,7 +103,33 @@ export default function OperationalStoreSwitcher({
   }
 
   return (
-    <form ref={formRef} action={switchOperationalStoreAction} className="inline-flex items-center">
+    <form
+      ref={formRef}
+      action={switchOperationalStoreAction}
+      className="inline-flex items-center"
+      onSubmit={(event) => {
+        // With JS available the switch runs through the result action so a
+        // network failure or server rejection stays inside this dialog (Retry
+        // keeps the intended branch) instead of unmounting the shell into the
+        // route error boundary. The `action` prop remains the no-JS fallback.
+        event.preventDefault();
+        if (inFlight) return;
+        const form = event.currentTarget;
+        const formData = new FormData(form);
+        setInFlight(true);
+        setFailure(null);
+        void switchOperationalStoreResultAction(formData)
+          .then((result) => {
+            if (result && !result.success) setFailure(describeSwitchFailure(result));
+          })
+          .catch((error: unknown) => {
+            setFailure(describeSwitchFailure(error));
+          })
+          .finally(() => {
+            setInFlight(false);
+          });
+      }}
+    >
       <input type="hidden" name="returnTo" value={returnTo} />
       <label className="sr-only" htmlFor="operational-store-switcher">
         Active branch
@@ -126,9 +179,15 @@ export default function OperationalStoreSwitcher({
             <p className="mt-2 text-sm leading-5 text-black/60">
               Wait until this branch is active before selling or recording money.
             </p>
+            {failure ? (
+              <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm leading-5 text-rose-700" role="alert" data-switch-failure>
+                {failure}
+              </p>
+            ) : null}
             <button
               type="button"
               className="btn-secondary mt-4 text-sm"
+              disabled={inFlight}
               onClick={() => formRef.current?.requestSubmit()}
             >
               Retry switch

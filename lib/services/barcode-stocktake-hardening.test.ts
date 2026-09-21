@@ -29,7 +29,9 @@ describe('barcode + stocktake hardening source guards', () => {
     const stocktake = read('app/actions/stocktake.ts');
     expect(stocktake).toContain('assertGrowthStocktake');
     expect(stocktake).toContain('Enter a reason for the variance');
-    expect(stocktake).toContain('Stocktake:');
+    // Posted adjustments name their source stocktake by readable number.
+    expect(stocktake).toContain('`Stocktake ${sourceLabel}: ${reasonText.slice(0, 200)}`');
+    expect(stocktake).toContain("displayDocumentNumber('stocktake', stocktake.transactionNumber, stocktake.id)");
     expect(stocktake).toContain("countState: 'UNCOUNTED'");
     expect(stocktake).toContain("reserveNextDocumentNumber(tx, businessId, 'stocktake')");
     expect(stocktake).toContain('allowPartial');

@@ -7,6 +7,7 @@ import ShowingRange from '@/components/ShowingRange';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import TagChips from '@/components/TagChips';
 import OperationalMetricCard from '@/components/OperationalMetricCard';
+import SupplierListStateSync from '@/components/suppliers/SupplierListStateSync';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { createSupplierAction } from '@/app/actions/suppliers';
@@ -184,6 +185,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
 
   return (
     <div className="operational-page space-y-4 sm:space-y-5">
+      <SupplierListStateSync q={q} page={page} amountOwed={amountOwed} />
       <PageHeader
         title="Suppliers"
         subtitle="Track who you buy from, what you owe, and when supplier payments are due."

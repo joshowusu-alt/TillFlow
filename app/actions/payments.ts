@@ -108,6 +108,8 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
     const returnTo = formString(formData, 'returnTo') || '/payments/supplier-payments';
-    redirect(returnTo);
+    // `paid=<invoiceId>` rotates the form's durable idempotency key for this invoice.
+    const sep = returnTo.includes('?') ? '&' : '?';
+    redirect(`${returnTo}${sep}paid=${encodeURIComponent(invoiceId)}`);
   }, '/payments/supplier-payments');
 }

@@ -15,6 +15,10 @@ describe('authoritative operational store surfaces', () => {
     expect(topNav).toContain('withOperationalStoreQuery');
     expect(read('components/OperationalStoreSwitcher.tsx')).toContain('action={switchOperationalStoreAction}');
     expect(read('components/OperationalStoreSwitcher.tsx')).not.toContain('startTransition');
+    // With JS the submit goes through the result action so a failed POST stays
+    // in the dialog (Retry keeps the intended branch) instead of the error boundary.
+    expect(read('components/OperationalStoreSwitcher.tsx')).toContain('switchOperationalStoreResultAction(formData)');
+    expect(read('app/actions/operational-store.ts')).toContain('export async function switchOperationalStoreResultAction');
     expect(auth).toContain('resolveOperationalStore');
     expect(auth).toContain('_getStores');
     expect(read('lib/reliability/operational-store.ts')).not.toContain("from 'next/headers'");
@@ -36,7 +40,10 @@ describe('authoritative operational store surfaces', () => {
     expect(read('components/OperationalStoreSwitcher.tsx')).toContain('aria-modal="true"');
     expect(read('components/OperationalStoreSwitcher.tsx')).toContain("document.addEventListener('click', block, true)");
     expect(read('components/OperationalStoreSwitcher.tsx')).not.toContain('12_000');
+    // No timer-based fail-open: the dialog clears only when the authoritative branch equals the intended one.
     expect(read('components/OperationalStoreSwitcher.tsx')).not.toContain('setPending(null)');
+    expect(read('components/OperationalStoreSwitcher.tsx')).not.toMatch(/setTimeout\([^)]*setPending/);
+    expect(read('components/OperationalStoreSwitcher.tsx')).toContain('selectedStoreId === pending.id');
   });
 
   it('keeps the header on the authoritative branch until the cookie lands', () => {

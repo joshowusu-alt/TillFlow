@@ -509,9 +509,17 @@ textarea {
 }
 
 html[data-keyboard-open] .hide-when-keyboard-open,
-html[data-text-entry-active] .hide-when-keyboard-open,
-html:has(input:focus, textarea:focus, select:focus) .hide-when-keyboard-open {
+html[data-text-entry-active] .hide-when-keyboard-open {
   display: none !important;
+}
+
+/* The focus heuristic stands in for a soft keyboard, so it only applies on phone/tablet
+   widths. On desktop a focused field must not hide sticky submit bars (e.g. the purchase
+   "Record purchase" footer vanished while the due-date field had focus). */
+@media (max-width: 1023px) {
+  html:has(input:focus, textarea:focus, select:focus) .hide-when-keyboard-open {
+    display: none !important;
+  }
 }
 
 /* Restore header Sign out only for a real visual-viewport keyboard, not for

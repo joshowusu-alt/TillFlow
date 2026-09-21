@@ -101,7 +101,30 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       actorRole: user.role,
     });
 
-    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_CREATE', entity: 'Expense', details: { amountPence, vendorName, notes } }).catch((e) => console.error('[audit] expense create failed', e));
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'EXPENSE_CREATE',
+      entity: 'Expense',
+      details: {
+        amountPence,
+        vendorName,
+        notes,
+        accountId: resolvedAccountId,
+        paymentStatus,
+        // An inventory-loss (5100) override is an exceptional, owner-only posting; the
+        // audit row must say so on its own, not only via the expense notes.
+        ...(inventoryLossOverride
+          ? {
+              inventoryLossOverride: true,
+              inventoryLossOverrideReason,
+              sourceAdjustmentId,
+            }
+          : {}),
+      },
+    }).catch((e) => console.error('[audit] expense create failed', e));
 
     revalidateTag('reports');
     revalidateOwnerDashboardCache();

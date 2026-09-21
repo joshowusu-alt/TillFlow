@@ -15,7 +15,7 @@ import {
   InventoryDecreaseError,
 } from '@/lib/services/inventory-decrease';
 import { reserveNextDocumentNumber } from '@/lib/services/document-numbers';
-import { resolveStocktakeLineState } from '@/lib/reliability/walkthrough-contracts';
+import { displayDocumentNumber, resolveStocktakeLineState } from '@/lib/reliability/walkthrough-contracts';
 import {
   assertStocktakeReadyToComplete,
   submittedCountsFromPayload,
@@ -308,10 +308,13 @@ export async function completeStocktakeAction(data: {
       };
     }
 
+    // Carry the readable source document on every posted adjustment so the adjustments
+    // list shows which stocktake produced it.
+    const sourceLabel = displayDocumentNumber('stocktake', stocktake.transactionNumber, stocktake.id);
     const adjustmentReason =
       reasonText.length >= 3
-        ? `Stocktake: ${reasonText.slice(0, 200)}`
-        : 'Stocktake shortfall';
+        ? `Stocktake ${sourceLabel}: ${reasonText.slice(0, 200)}`
+        : `Stocktake ${sourceLabel} shortfall`;
 
     let shortfallsAdjusted = 0;
     let surplusPendingReview = 0;
