@@ -8,6 +8,7 @@ import RemainingBalance from '@/components/RemainingBalance';
 import { createExpenseAction } from '@/app/actions/expenses';
 import {
   INVENTORY_LOSS_ACCOUNT_CODE,
+  defaultExpenseAccountId,
   expensePaymentState,
   remainingBalancePence,
 } from '@/lib/reliability/walkthrough-contracts';
@@ -49,7 +50,10 @@ export default function ExpenseForm({
   const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'PART_PAID' | 'UNPAID'>('PAID');
   const [amountPaid, setAmountPaid] = useState('');
   const [method, setMethod] = useState('CASH');
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? '');
+  // Default to the ordinary operating-expenses account. Inventory loss (5100)
+  // is posted automatically from stock adjustments and must be chosen on
+  // purpose, never land as the pre-selected category.
+  const [accountId, setAccountId] = useState(() => defaultExpenseAccountId(accounts));
   const [inventoryLossOverride, setInventoryLossOverride] = useState(false);
 
   const selectedAccount = accounts.find((account) => account.id === accountId);

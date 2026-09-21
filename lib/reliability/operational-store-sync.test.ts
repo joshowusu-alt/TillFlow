@@ -14,6 +14,23 @@ describe('operational store multi-tab signal', () => {
     ).toBe(false);
   });
 
+  it('treats an empty-cookie tab as stale once another tab switches after it loaded', () => {
+    const loadedAt = 1_000;
+    expect(
+      isStaleOperationalStore(null, { id: 'store-b', name: 'Walkthrough Store B', ts: 1_500 }, loadedAt),
+    ).toBe(true);
+    expect(
+      isStaleOperationalStore('', { id: 'store-b', name: 'Walkthrough Store B', ts: 1_500 }, loadedAt),
+    ).toBe(true);
+  });
+
+  it('does not trap an empty-cookie tab on a leftover signal older than the tab', () => {
+    expect(
+      isStaleOperationalStore(null, { id: 'store-b', name: 'Walkthrough Store B', ts: 500 }, 1_000),
+    ).toBe(false);
+    expect(isStaleOperationalStore(null, { id: 'store-b', name: 'Store B', ts: 500 })).toBe(false);
+  });
+
   it('parses a stored signal and ignores junk', () => {
     expect(parseOperationalStoreSignal('{"id":"store-b","name":"Store B","ts":9}')).toEqual({
       id: 'store-b',

@@ -80,11 +80,45 @@ export function buildListHref(route: string, state: ListStateSnapshot): string {
   return qs ? `${route}?${qs}` : route;
 }
 
-export function restoreListScroll(route: string): void {
+export const SCROLL_RESTORE_MAX_FRAMES = 60;
+
+/**
+ * Restore the stored scroll position for a list route.
+ *
+ * Runs across animation frames until the document is tall enough to hold the
+ * stored offset (streamed / suspended list rows may land late) or the frame
+ * budget runs out. Resolves with the scroll position actually applied, or
+ * `null` when nothing was stored. Callers should pause scroll persistence
+ * until this settles so the framework's own scroll-to-top cannot overwrite
+ * the stored value with 0.
+ */
+export function restoreListScroll(route: string): Promise<number | null> {
+  if (typeof window === 'undefined') return Promise.resolve(null);
   const stored = readListState(route);
-  if (stored?.scrollY == null || typeof window === 'undefined') return;
+  if (stored?.scrollY == null) return Promise.resolve(null);
   const top = stored.scrollY;
-  window.requestAnimationFrame(() => {
-    window.scrollTo({ top, left: 0, behavior: 'auto' });
+  if (top <= 0) return Promise.resolve(0);
+  return new Promise((resolve) => {
+    let frames = 0;
+    const attempt = () => {
+      frames += 1;
+      const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      const reachable = maxScroll >= top;
+      if (reachable || frames >= SCROLL_RESTORE_MAX_FRAMES) {
+        const target = Math.min(top, maxScroll);
+        window.scrollTo({ top: target, left: 0, behavior: 'auto' });
+        // One more frame so any framework scroll reset that lands in the same
+        // tick is overridden by the restored position.
+        window.requestAnimationFrame(() => {
+          if (Math.abs(window.scrollY - target) > 1) {
+            window.scrollTo({ top: target, left: 0, behavior: 'auto' });
+          }
+          resolve(target);
+        });
+        return;
+      }
+      window.requestAnimationFrame(attempt);
+    };
+    window.requestAnimationFrame(attempt);
   });
 }

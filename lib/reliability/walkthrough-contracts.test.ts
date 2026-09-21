@@ -4,6 +4,7 @@ import {
   assertNoOverpayment,
   bucketForDueDate,
   creditPurchaseRequiresSupplier,
+  defaultExpenseAccountId,
   displayDocumentNumber,
   displayShiftPresentationNumber,
   expensePaymentState,
@@ -22,6 +23,18 @@ describe('walkthrough contracts', () => {
     expect(bucketForDueDate(asOf, new Date('2026-08-01T00:00:00.000Z'))).toBe('D31_60');
     expect(bucketForDueDate(asOf, new Date('2026-07-01T00:00:00.000Z'))).toBe('D61_90');
     expect(bucketForDueDate(asOf, new Date('2026-01-01T00:00:00.000Z'))).toBe('OVER_90');
+  });
+
+  it('never defaults a new expense to the inventory-loss account', () => {
+    const accounts = [
+      { id: 'loss', code: '5100' },
+      { id: 'op', code: '6000' },
+      { id: 'rent', code: '6100' },
+    ];
+    expect(defaultExpenseAccountId(accounts)).toBe('op');
+    expect(defaultExpenseAccountId([{ id: 'loss', code: '5100' }, { id: 'rent', code: '6100' }])).toBe('rent');
+    expect(defaultExpenseAccountId([{ id: 'loss', code: '5100' }])).toBe('loss');
+    expect(defaultExpenseAccountId([])).toBe('');
   });
 
   it('derives expense states from amounts and rejects contradictions', () => {

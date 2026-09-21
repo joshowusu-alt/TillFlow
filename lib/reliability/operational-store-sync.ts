@@ -32,10 +32,24 @@ export function publishOperationalStoreSignal(store: { id: string; name: string 
   channel.close();
 }
 
+/**
+ * A tab is stale when another tab has switched the operational branch away
+ * from the branch this tab was rendered with.
+ *
+ * A tab rendered with NO branch (empty operational-store cookie) is also stale
+ * once any other tab selects a branch after this tab loaded — otherwise an
+ * empty-cookie tab could keep interacting as if no switch had happened. A
+ * signal older than the tab's own load (for example a leftover value from a
+ * previous session) is not stale, so login never traps itself.
+ */
 export function isStaleOperationalStore(
   tabStoreId: string | null | undefined,
   signal: OperationalStoreSignal | null,
+  tabLoadedAt?: number,
 ): boolean {
-  if (!tabStoreId || !signal?.id) return false;
+  if (!signal?.id) return false;
+  if (!tabStoreId) {
+    return typeof tabLoadedAt === 'number' && signal.ts > tabLoadedAt;
+  }
   return signal.id !== tabStoreId;
 }

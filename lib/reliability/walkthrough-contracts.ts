@@ -174,6 +174,21 @@ export function creditPurchaseRequiresSupplier(
 }
 
 export const INVENTORY_LOSS_ACCOUNT_CODE = '5100';
+/** Ordinary operating-expenses account; the default category for a new expense. */
+export const OPERATING_EXPENSES_ACCOUNT_CODE = '6000';
+
+/**
+ * Pick the account a new expense form should start on. Never the inventory-loss
+ * account: that one is posted automatically from stock adjustments and must be
+ * chosen deliberately with the owner override.
+ */
+export function defaultExpenseAccountId<T extends { id: string; code: string }>(accounts: T[]): string {
+  return (
+    accounts.find((account) => account.code === OPERATING_EXPENSES_ACCOUNT_CODE) ??
+    accounts.find((account) => account.code !== INVENTORY_LOSS_ACCOUNT_CODE) ??
+    accounts[0]
+  )?.id ?? '';
+}
 
 export const CASH_VARIANCE_STATUSES = [
   'OPEN',

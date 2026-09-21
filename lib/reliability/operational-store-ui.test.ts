@@ -39,6 +39,24 @@ describe('authoritative operational store surfaces', () => {
     expect(read('components/OperationalStoreSwitcher.tsx')).not.toContain('setPending(null)');
   });
 
+  it('keeps the header on the authoritative branch until the cookie lands', () => {
+    const switcher = read('components/OperationalStoreSwitcher.tsx');
+    // Controlled by the server-rendered branch, not the just-clicked option.
+    expect(switcher).toContain("value={selectedStoreId ?? ''}");
+    expect(switcher).not.toContain('defaultValue={selectedStoreId');
+    // The select itself is not the submitted field; the intended branch is.
+    expect(switcher).not.toMatch(/<select[^>]*name="storeId"/);
+    expect(switcher).toContain('name="storeId" value={pending?.id ?? selectedStoreId ?? \'\'}');
+    // Empty-cookie tabs are covered by the stale guard once another tab switches.
+    expect(read('components/StaleOperationalStoreGuard.tsx')).toContain('isStaleOperationalStore(storeId, signal, loadedAt)');
+  });
+
+  it('never pre-selects the inventory-loss account on the expense form', () => {
+    const form = read('app/(protected)/expenses/ExpenseForm.tsx');
+    expect(form).toContain('defaultExpenseAccountId(accounts)');
+    expect(form).not.toContain('useState(accounts[0]?.id');
+  });
+
   it('hides internal purchase ids on supplier payments', () => {
     const page = read('app/(protected)/payments/supplier-payments/page.tsx');
     expect(page).toContain("formatRecordNumber('purchase'");

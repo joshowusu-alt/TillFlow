@@ -78,20 +78,24 @@ export default function OperationalStoreSwitcher({
       <label className="sr-only" htmlFor="operational-store-switcher">
         Active branch
       </label>
+      {/*
+        The visible select is controlled by the server-authoritative branch so the
+        header never shows the new branch before the cookie has landed. The chosen
+        branch travels in the hidden `storeId` field only.
+      */}
       <select
         id="operational-store-switcher"
-        name="storeId"
         className="h-9 max-w-[13rem] truncate rounded-xl border border-slate-200/80 bg-white/90 px-2 text-xs font-semibold text-ink shadow-sm"
-        defaultValue={selectedStoreId ?? ''}
+        value={selectedStoreId ?? ''}
         data-operational-store={selectedStoreId ?? ''}
         aria-busy={Boolean(pending)}
+        disabled={Boolean(pending)}
         onChange={(event) => {
           const nextId = event.currentTarget.value;
+          if (!nextId || nextId === selectedStoreId) return;
           const nextName = stores.find((store) => store.id === nextId)?.name ?? nextId;
-          if (nextId) {
-            setPending({ id: nextId, name: nextName });
-            publishOperationalStoreSignal({ id: nextId, name: nextName });
-          }
+          setPending({ id: nextId, name: nextName });
+          publishOperationalStoreSignal({ id: nextId, name: nextName });
           event.currentTarget.form?.requestSubmit();
         }}
       >
@@ -102,7 +106,8 @@ export default function OperationalStoreSwitcher({
           </option>
         ))}
       </select>
-      {pending ? <input type="hidden" name="storeId" value={pending.id} /> : null}
+      <input type="hidden" name="storeId" value={pending?.id ?? selectedStoreId ?? ''} />
+      {pending ? <input type="hidden" name="intendedStoreId" value={pending.id} /> : null}
       {pending ? (
         <div
           ref={dialogRef}

@@ -28,6 +28,7 @@ export default function StaleOperationalStoreGuard({
   storeName?: string | null;
 }) {
   const [signal, setSignal] = useState<OperationalStoreSignal | null>(null);
+  const [loadedAt] = useState(() => Date.now());
 
   useEffect(() => {
     const apply = (next: OperationalStoreSignal | null) => {
@@ -48,7 +49,7 @@ export default function StaleOperationalStoreGuard({
     };
   }, []);
 
-  const stale = isStaleOperationalStore(storeId, signal) && Boolean(signal);
+  const stale = isStaleOperationalStore(storeId, signal, loadedAt) && Boolean(signal);
 
   useEffect(() => {
     setStaleOperationalStoreBlocked(stale);
@@ -88,7 +89,7 @@ export default function StaleOperationalStoreGuard({
         </h2>
         <p className="mt-2 text-sm text-black/70">{STALE_OPERATIONAL_STORE_MSG}</p>
         <p className="mt-2 text-sm text-black/70">
-          This tab still shows {storeName || 'the previous branch'}. The active branch is now{' '}
+          This tab still shows {storeName || 'no selected branch'}. The active branch is now{' '}
           <span className="font-semibold">{signal.name}</span>. Nothing will be recorded from this tab
           until you reload.
         </p>
