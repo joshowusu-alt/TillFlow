@@ -46,8 +46,16 @@ export default function OperationalStoreSwitcher({
   const [pending, setPending] = useState<{ id: string; name: string } | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [inFlight, setInFlight] = useState(false);
+  // Until React has hydrated, the server-rendered <select> is a native control
+  // with no handler: a pick would display the new branch while no switch runs
+  // (seen on a cold Preview load). It stays disabled until interactive.
+  const [hydrated, setHydrated] = useState(false);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   // The dialog clears only when the server-authoritative branch equals the
   // intended one (the cookie has landed and the shell re-rendered) — never on
@@ -156,8 +164,9 @@ export default function OperationalStoreSwitcher({
         className="h-9 max-w-[13rem] truncate rounded-xl border border-slate-200/80 bg-white/90 px-2 text-xs font-semibold text-ink shadow-sm"
         value={selectedStoreId ?? ''}
         data-operational-store={selectedStoreId ?? ''}
-        aria-busy={Boolean(pending)}
-        disabled={Boolean(pending)}
+        aria-busy={Boolean(pending) || !hydrated}
+        disabled={Boolean(pending) || !hydrated}
+        data-hydrated={hydrated ? '1' : undefined}
         onChange={(event) => {
           const nextId = event.currentTarget.value;
           if (!nextId || nextId === selectedStoreId) return;

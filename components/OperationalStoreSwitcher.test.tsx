@@ -33,6 +33,22 @@ describe('OperationalStoreSwitcher', () => {
     window.localStorage.clear();
   });
 
+  it('server-renders the select disabled and enables it only once hydrated', async () => {
+    const { renderToString } = await import('react-dom/server');
+    const html = renderToString(
+      <OperationalStoreSwitcher stores={stores} selectedStoreId={null} selectedStoreName={null} canSwitch />,
+    );
+    // Pre-hydration a native pick would show the new branch without switching; keep it inert.
+    expect(html).toMatch(/<select[^>]*\sdisabled=""/);
+    expect(html).not.toContain('data-hydrated');
+
+    render(<OperationalStoreSwitcher stores={stores} selectedStoreId={null} selectedStoreName={null} canSwitch />);
+    const select = screen.getByLabelText('Active branch') as HTMLSelectElement;
+    await waitFor(() => expect(select.disabled).toBe(false));
+    expect(select.getAttribute('data-hydrated')).toBe('1');
+    expect(select.value).toBe('');
+  });
+
   it('submits the intended branch while the header keeps showing the authoritative one', async () => {
     // Never resolve: the cookie has not landed yet.
     switchOperationalStoreResultAction.mockImplementation(() => new Promise(() => {}));
