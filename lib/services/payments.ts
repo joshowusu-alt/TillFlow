@@ -309,7 +309,6 @@ async function recordCustomerPaymentImpl(
             receiptOrigin: RECEIPT_ORIGIN.LATER_CREDIT_COLLECTION,
             transactionNumber,
           },
-          select: { id: true },
         });
         createdPaymentIds.push(created.id);
       }
