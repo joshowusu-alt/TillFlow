@@ -107,6 +107,7 @@ export default async function PurchasesPage({
       where: purchaseWhere,
       select: {
         id: true,
+        storeId: true,
         transactionNumber: true,
         createdAt: true,
         paymentStatus: true,
@@ -446,6 +447,7 @@ export default async function PurchasesPage({
                               currency={business.currency}
                               type="supplier"
                               returnTo="/purchases"
+                              storeId={purchase.storeId}
                             />
                           )}
                           <Link className="btn-ghost text-xs" href={`/purchases/return/${purchase.id}`}>
@@ -538,6 +540,7 @@ export default async function PurchasesPage({
                                     currency={business.currency}
                                     type="supplier"
                                     returnTo="/purchases"
+                                    storeId={purchase.storeId}
                                   />
                                 )}
                                 <Link className="btn-ghost text-xs" href={`/purchases/return/${purchase.id}`}>

@@ -105,6 +105,7 @@ describe('purchases page polish', () => {
 
   it('inline payment form remains available', () => {
     expect(pageSrc).toContain('InlinePaymentForm');
+    expect(pageSrc).toContain('storeId={purchase.storeId}');
   });
 
   it('does not add pointer or touch handlers', () => {

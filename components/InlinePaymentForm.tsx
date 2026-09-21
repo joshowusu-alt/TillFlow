@@ -11,9 +11,10 @@ type Props = {
   currency: string;
   type: 'customer' | 'supplier';
   returnTo: string;
+  storeId?: string;
 };
 
-export default function InlinePaymentForm({ invoiceId, outstandingPence, currency, type, returnTo }: Props) {
+export default function InlinePaymentForm({ invoiceId, outstandingPence, currency, type, returnTo, storeId }: Props) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -44,6 +45,7 @@ export default function InlinePaymentForm({ invoiceId, outstandingPence, currenc
       className="flex flex-wrap items-end gap-2"
     >
       <input type="hidden" name="invoiceId" value={invoiceId} />
+      {storeId ? <input type="hidden" name="storeId" value={storeId} /> : null}
       <input type="hidden" name="returnTo" value={returnTo} />
       <StableIdempotencyKeyInput
         scope={type === 'customer' ? `customer-receipt:${invoiceId}` : `supplier-payment:${invoiceId}`}

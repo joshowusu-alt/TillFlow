@@ -397,6 +397,8 @@ export default async function PurchaseInvoicePage({
                 amountPlaceholder={(outstanding / 100).toFixed(2)}
                 formClassName="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
                 openTills={openTills}
+                storeId={invoice.storeId}
+                storeName={invoice.store?.name}
               />
             </div>
           </div>

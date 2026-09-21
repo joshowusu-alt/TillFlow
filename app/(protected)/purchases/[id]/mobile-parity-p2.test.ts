@@ -31,6 +31,7 @@ describe('P2 purchase-detail mobile presentation', () => {
 
   it('keeps SupplierPaymentForm / PR #78 controls intact on the detail page', () => {
     expect(src).toContain('SupplierPaymentForm');
+    expect(src).toContain('storeId={invoice.storeId}');
     expect(src).toContain('data-purchase-payment-form');
     expect(src).toContain('pb-28 lg:pb-6');
     expect(src).toContain('pb-24 lg:pb-0');
