@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { formatMoney } from '@/lib/format';
 import RemainingBalance from '@/components/RemainingBalance';
 import SupplierPaymentForm, { type OpenTillOption } from '@/components/SupplierPaymentForm';
@@ -35,6 +36,14 @@ export default function SupplierPaymentDialog({
   openTills = [],
 }: Props) {
   const [open, setOpen] = useState(false);
+  // The dialog is portalled to <body>: the trigger lives inside a table row whose
+  // hover transform would otherwise become the containing block of the
+  // `fixed` overlay, leaving the dialog under later page content and its
+  // "Record payment" button unreachable by pointer.
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setPortalTarget(document.body);
+  }, []);
   const tillLabel = openTills.length === 1 ? openTills[0].tillName : 'the selected till';
   const confirmation = useMemo(
     () => `Record a cash supplier payment from ${tillLabel} — ${storeName}.`,
@@ -46,8 +55,14 @@ export default function SupplierPaymentDialog({
       <button type="button" className="btn-primary text-xs sm:text-sm" onClick={() => setOpen(true)}>
         Record payment
       </button>
-      {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      {open && portalTarget ? createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Supplier payment ${purchaseNumber}`}
+          data-supplier-payment-dialog={invoiceId}
+        >
           <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -85,7 +100,8 @@ export default function SupplierPaymentDialog({
               />
             </div>
           </div>
-        </div>
+        </div>,
+        portalTarget,
       ) : null}
     </div>
   );

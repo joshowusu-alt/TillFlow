@@ -11,12 +11,36 @@ import {
   type ListStateSnapshot,
 } from './list-state';
 
+/** How long scroll persistence pauses after a click that leaves the list. */
+export const LEAVE_GRACE_MS = 3_000;
+
+function normalisePath(path: string): string {
+  return path.replace(/\/+$/, '') || '/';
+}
+
 /** True while the browser URL still points at this list route (query string ignored). */
 export function isOnListRoute(route: string): boolean {
   if (typeof window === 'undefined') return false;
-  const current = window.location.pathname.replace(/\/+$/, '') || '/';
-  const target = route.replace(/\/+$/, '') || '/';
-  return current === target;
+  return normalisePath(window.location.pathname) === normalisePath(route);
+}
+
+/** True when following `href` leaves the list route (a record page, another section, …). */
+export function leavesListRoute(route: string, href: string): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const target = new URL(href, window.location.href);
+    if (target.origin !== window.location.origin) return true;
+    return normalisePath(target.pathname) !== normalisePath(route);
+  } catch {
+    return false;
+  }
+}
+
+/** Whether the document is currently tall enough to be scrolled to `scrollY`. */
+export function canHoldScroll(scrollY: number): boolean {
+  if (typeof window === 'undefined') return false;
+  const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  return maxScroll >= scrollY;
 }
 
 export type UseListStateOptions = {
@@ -96,22 +120,45 @@ export function useListState(route: string, options: UseListStateOptions = {}): 
   useEffect(() => {
     if (options.persistScroll === false) return;
     let frame = 0;
+    let leavingUntil = 0;
+    const persist = (scrollY: number) => {
+      const stored = readListState(route);
+      writeListState(route, { ...stored, ...snapshot, scrollY });
+    };
+    // Opening a record: snapshot the offset at the click and stop listening
+    // for a moment. The loading state that follows shrinks the document and
+    // the browser clamps the scroll to 0 while the URL still says this list;
+    // that 0 belongs to the record page, not to the list.
+    const onNavigateAway = (event: MouseEvent) => {
+      const anchor = (event.target as Element | null)?.closest?.('a[href]');
+      if (!anchor) return;
+      const href = anchor.getAttribute('href') ?? '';
+      if (!href || href.startsWith('#')) return;
+      if (leavesListRoute(route, href)) {
+        persist(window.scrollY);
+        leavingUntil = Date.now() + LEAVE_GRACE_MS;
+      }
+    };
     const onScroll = () => {
       if (scrollLockedRef.current) return;
-      // Leaving the list (e.g. opening a record) scrolls the window to the top
-      // of the new page while this hook is still mounted; that 0 belongs to the
-      // detail page, not to the list, so it must not overwrite the stored offset.
+      if (Date.now() < leavingUntil) return;
       if (!isOnListRoute(route)) return;
       if (frame) return;
       frame = window.requestAnimationFrame(() => {
         frame = 0;
-        if (!isOnListRoute(route)) return;
+        if (Date.now() < leavingUntil || !isOnListRoute(route)) return;
+        const next = window.scrollY;
         const stored = readListState(route);
-        writeListState(route, { ...stored, ...snapshot, scrollY: window.scrollY });
+        // A jump to the very top while the document can no longer hold the
+        // stored offset is a content swap (loading skeleton), not the user.
+        if (next === 0 && stored?.scrollY && !canHoldScroll(stored.scrollY)) return;
+        persist(next);
       });
     };
+    document.addEventListener('click', onNavigateAway, true);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
+      document.removeEventListener('click', onNavigateAway, true);
       window.removeEventListener('scroll', onScroll);
       if (frame) window.cancelAnimationFrame(frame);
     };
