@@ -183,6 +183,7 @@ describeLive('cross-business and selected-store isolation (Postgres)', () => {
         () => prisma.inventoryBalance.deleteMany({ where: { storeId: { in: [storeFirst, storeSelected] } } }),
         () => prisma.productUnit.deleteMany({ where: { productId } }),
         () => prisma.product.deleteMany({ where: { id: productId } }),
+        () => prisma.unit.deleteMany({ where: { id: unitId } }),
         () => prisma.supplier.deleteMany({ where: { id: supplierId } }),
         () => prisma.till.deleteMany({ where: { store: { businessId: { in: [bizA, bizB] } } } }),
         () => prisma.user.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }),

@@ -56,6 +56,7 @@ describeConcurrency('stocktake completion idempotency (Postgres)', () => {
   let userId = '';
   let stocktakeId = '';
   let lineId = '';
+  let unitId = '';
 
   beforeAll(async () => {
     bindPrismaPostgresUrls(databaseUrl);
@@ -90,6 +91,7 @@ describeConcurrency('stocktake completion idempotency (Postgres)', () => {
     const unit = await prisma.unit.create({
       data: { name: `u-${suffix}`, pluralName: 'us', symbol: 'u' },
     });
+    unitId = unit.id;
     const product = await prisma.product.create({
       data: {
         businessId,
@@ -143,6 +145,7 @@ describeConcurrency('stocktake completion idempotency (Postgres)', () => {
         () => prisma.inventoryBalance.deleteMany({ where: { storeId } }),
         () => prisma.productUnit.deleteMany({ where: { productId } }),
         () => prisma.product.deleteMany({ where: { id: productId } }),
+        () => prisma.unit.deleteMany({ where: { id: unitId } }),
         () => prisma.user.deleteMany({ where: { id: userId } }),
         () => prisma.store.deleteMany({ where: { id: storeId } }),
         () => prisma.account.deleteMany({ where: { businessId } }),

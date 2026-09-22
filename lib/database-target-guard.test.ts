@@ -5,6 +5,7 @@ import {
   DatabaseTargetRefusedError,
   describeDatabaseUrl,
   evaluateDatabaseTarget,
+  knownIsolatedEndpointFragment,
   pinPrismaEnv,
   prepareTestDatabaseEnv,
   PRISMA_URL_ENV_KEYS,
@@ -60,6 +61,34 @@ describe('describeDatabaseUrl', () => {
     expect(id.redactedUrl).toContain('fancy-darkness');
   });
 
+  it('strips secret-bearing query parameters from the redacted URL (it rides on thrown errors)', () => {
+    const id = describeDatabaseUrl(
+      'postgresql://user:secret@localhost/tillflow_ci?sslpassword=pem-secret&SSLPASSWORD=pem-secret2&password=p%40ss&passfile=/tmp/pgpass&sslkey=/k&sslmode=require',
+    );
+    expect(id.redactedUrl).not.toContain('pem-secret');
+    expect(id.redactedUrl).not.toContain('p@ss');
+    expect(id.redactedUrl).not.toContain('pgpass');
+    expect(id.redactedUrl).not.toContain('/k');
+    expect(id.redactedUrl).toContain('sslmode=require');
+    expect(JSON.stringify(new DatabaseTargetRefusedError('x', id))).not.toContain('pem-secret');
+  });
+
+  it('decodes query values per pair so one malformed escape cannot hide an encoded endpoint id', () => {
+    const id = describeDatabaseUrl('postgresql://u:p@localhost/tillflow_ci?options=endpoint%3Dep-fancy%2Ddarkness-1&x=%zz');
+    expect(id.redactedUrl).toContain('endpoint=ep-fancy-darkness-1');
+  });
+
+  it('knownIsolatedEndpointFragment is anchored to `ep-<fragment>-<id>[-pooler].…neon.tech`', () => {
+    expect(knownIsolatedEndpointFragment('ep-late-cell-za9kodq1.c-2.eu-west-2.aws.neon.tech')).toBe('late-cell');
+    expect(knownIsolatedEndpointFragment('ep-late-cell-za9kodq1-pooler.c-2.eu-west-2.aws.neon.tech')).toBe('late-cell');
+    expect(knownIsolatedEndpointFragment('EP-OLD-SUNSET-abc123.eu-west-2.aws.neon.tech')).toBe('old-sunset');
+    expect(knownIsolatedEndpointFragment('late-cell.example.com')).toBeNull();
+    expect(knownIsolatedEndpointFragment('ep-late-cell-1.attacker.net')).toBeNull();
+    expect(knownIsolatedEndpointFragment('ep-late-cell-1.neon.tech.attacker.net')).toBeNull();
+    expect(knownIsolatedEndpointFragment('xep-late-cell-1.eu-west-2.aws.neon.tech')).toBeNull();
+    expect(knownIsolatedEndpointFragment('ep-fancy-darkness-abyuvjxt.eu-west-2.aws.neon.tech')).toBeNull();
+  });
+
   it('a different port is a different target', () => {
     expect(
       sameDatabaseTarget(describeDatabaseUrl('postgresql://u:p@localhost:5432/x'), describeDatabaseUrl('postgresql://u:p@localhost:5433/x')),
@@ -86,6 +115,15 @@ describe('evaluateDatabaseTarget — Production-like URLs fail closed', () => {
       'postgresql://u:p@ep-late-cell-1234.eu-west-2.aws.neon.tech/tillflow_preview?options=endpoint%3Dep-fancy-darkness-abyuvjxt',
     ],
     ['Production endpoint smuggled through options=endpoint (unencoded)', 'postgresql://u:p@localhost/tillflow_ci?options=endpoint=ep-fancy-darkness-abyuvjxt'],
+    // WS6 re-review: a malformed `%zz` elsewhere must not disable decoding of the encoded endpoint id
+    [
+      'encoded Production endpoint beside a poisoned percent-escape',
+      'postgresql://u:p@ep-late-cell-1.eu-west-2.aws.neon.tech/tillflow_preview?options=endpoint%3Dep-fancy%2Ddarkness-abyuvjxt&x=%zz',
+    ],
+    ['Production endpoint in the raw query with mixed case', 'postgresql://u:p@localhost/tillflow_ci?options=endpoint%3DEP-FANCY-DARKNESS-abyuvjxt'],
+    // WS6 re-review: the isolated-endpoint rule is anchored on the first host label
+    ['isolated fragment as an unrelated domain label', 'postgresql://u:p@late-cell.example.com/tillflow_ci'],
+    ['isolated fragment as a sub-domain of a foreign host', 'postgresql://u:p@ep-late-cell-1.evil.example.com.attacker.net/tillflow_preview'],
     // WS6 finding 3: an isolated-looking database name on an UNKNOWN remote endpoint is not enough
     ['tillflow_preview on an unknown Neon endpoint', 'postgresql://u:p@ep-quiet-sea-1234.eu-west-2.aws.neon.tech/tillflow_preview'],
     ['tillflow_ci on an unknown remote host', 'postgresql://u:p@db.example.com:5432/tillflow_ci'],
@@ -185,7 +223,7 @@ describe('scripts/lib/guarded-prisma.cjs mirrors the TypeScript guard', () => {
   const cjs = require('../scripts/lib/guarded-prisma.cjs') as {
     evaluateDatabaseTarget: (url: string, env: NodeJS.ProcessEnv) => { ok: boolean };
     isProductionTarget: (identity: unknown, env: NodeJS.ProcessEnv) => boolean;
-    describeDatabaseUrl: (url: string) => { kind: string; database: string; sanitized: string };
+    describeDatabaseUrl: (url: string) => { kind: string; database: string; sanitized: string; redactedUrl: string };
     openGuardedPrismaClient: (o: Record<string, unknown>) => Promise<unknown>;
     PRISMA_URL_ENV_KEYS: string[];
   };
@@ -199,6 +237,10 @@ describe('scripts/lib/guarded-prisma.cjs mirrors the TypeScript guard', () => {
     'postgresql://u:p@ep-late-cell-1234.eu-west-2.aws.neon.tech/tillflow_preview?options=endpoint%3Dep-fancy-darkness-abyuvjxt',
     'postgresql://u:p@ep-quiet-sea-1234.eu-west-2.aws.neon.tech/tillflow_preview',
     'postgresql://u:p@ep-old-sunset-1234.c-2.eu-west-2.aws.neon.tech/tillflow_preview',
+    'postgresql://u:p@ep-late-cell-1.eu-west-2.aws.neon.tech/tillflow_preview?options=endpoint%3Dep-fancy%2Ddarkness-abyuvjxt&x=%zz',
+    'postgresql://u:p@late-cell.example.com/tillflow_ci',
+    'postgresql://u:p@ep-late-cell-1.attacker.net/tillflow_preview',
+    'postgresql://u:p@EP-LATE-CELL-1234.EU-WEST-2.AWS.NEON.TECH/TILLFLOW_PREVIEW',
     '',
     CI,
     PREVIEW,
@@ -206,6 +248,18 @@ describe('scripts/lib/guarded-prisma.cjs mirrors the TypeScript guard', () => {
     SQLITE,
   ])('agrees with the TypeScript verdict for %s', (url) => {
     expect(cjs.evaluateDatabaseTarget(url, env({})).ok).toBe(evaluateDatabaseTarget(url, env({})).ok);
+  });
+
+  it('agrees on a case-folded allowlist pair', () => {
+    const url = 'postgresql://u:p@db.example.com:5432/TILLFLOW_QA';
+    const e = env({ [TEST_DATABASE_ALLOWLIST_KEY]: 'DB.example.com/tillflow_qa' });
+    expect(evaluateDatabaseTarget(url, e).ok).toBe(true);
+    expect(cjs.evaluateDatabaseTarget(url, e).ok).toBe(true);
+  });
+
+  it('never keeps secret query parameters in the redacted URL either', () => {
+    const id = cjs.describeDatabaseUrl('postgresql://u:p@localhost/tillflow_ci?sslpassword=pem-secret');
+    expect(id.redactedUrl).not.toContain('pem-secret');
   });
 
   it('pins the same set of environment keys', () => {

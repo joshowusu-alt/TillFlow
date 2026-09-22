@@ -11,8 +11,8 @@
 import type { PrismaClient } from '@prisma/client';
 import {
   DatabaseTargetRefusedError,
-  ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS,
   describeDatabaseUrl,
+  knownIsolatedEndpointFragment,
   evaluateDatabaseTarget,
   pinPrismaEnv,
   prepareTestDatabaseEnv,
@@ -22,6 +22,9 @@ import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
 import { openTestPrismaClient } from '@/lib/test/test-prisma';
 
 export type PostgresUrlIdentity = {
+  /** Full lower-cased hostname. */
+  host: string;
+  /** First host label (Neon endpoint id), kept for log lines and older call sites. */
   hostPrefix: string;
   database: string;
   schema: string;
@@ -39,6 +42,7 @@ export function resolveBoundPostgresUrl(): string {
 export function postgresUrlIdentity(url: string): PostgresUrlIdentity {
   const parsed = new URL(url);
   return {
+    host: parsed.hostname.toLowerCase(),
     hostPrefix: parsed.hostname.split('.')[0],
     database: describeDatabaseUrl(url).database,
     schema: parsed.searchParams.get('schema') || 'public',
@@ -56,8 +60,7 @@ export function canRunLivePostgres(url = resolveBoundPostgresUrl()): boolean {
  */
 export function isIsolatedPreviewIdentity(identity: PostgresUrlIdentity | null | undefined): boolean {
   if (!identity) return false;
-  const prefix = identity.hostPrefix.toLowerCase();
-  return ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS.some((fragment) => prefix.includes(fragment)) && identity.database === 'tillflow_preview';
+  return knownIsolatedEndpointFragment(identity.host) !== null && identity.database === 'tillflow_preview';
 }
 
 /**

@@ -44,6 +44,30 @@ function safeDecode(v) {
   }
 }
 
+const SECRET_QUERY_KEYS = new Set(['sslpassword', 'password', 'passfile', 'sslkey']);
+
+// Credential-free, lower-cased text for deny matching: host + path + per-pair-decoded query
+// (URLSearchParams never throws) + raw query. Secret-bearing params are dropped from both.
+function buildRedactedUrl(u, raw) {
+  const pairs = [];
+  for (const [k, v] of u.searchParams) {
+    if (SECRET_QUERY_KEYS.has(k.toLowerCase())) continue;
+    pairs.push(`${k}=${v}`);
+  }
+  const rawQuery = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
+  const rawNoSecrets = rawQuery.split('&').filter((p) => !SECRET_QUERY_KEYS.has(p.split('=')[0].toLowerCase())).join('&');
+  return `${u.hostname}${u.port ? ':' + u.port : ''}${u.pathname}?${pairs.join('&')}#${rawNoSecrets}`.toLowerCase();
+}
+
+// Host must end in `.neon.tech` and its first label must be `ep-<fragment>-<id>[-pooler]`;
+// neither `late-cell.example.com` nor `ep-late-cell-1.attacker.net` qualifies.
+function knownIsolatedEndpointFragment(host) {
+  const lower = String(host || '').toLowerCase();
+  if (!lower.endsWith('.neon.tech')) return null;
+  const label = lower.split('.')[0];
+  return ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS.find((f) => new RegExp(`^ep-${f}-[a-z0-9]+(-pooler)?$`).test(label)) || null;
+}
+
 function blank(kind, sanitized) {
   return { kind, host: '', endpoint: '', database: '', schema: '', sanitized, redactedUrl: '' };
 }
@@ -64,8 +88,6 @@ function describeDatabaseUrl(raw) {
       const database = safeDecode(u.pathname.replace(/^\//, '').split('/')[0].split('?')[0] || '');
       const schema = u.searchParams.get('schema') || 'public';
       const endpoint = `${host.replace(/-pooler(?=\.|$)/i, '')}${u.port ? ':' + u.port : ''}`;
-      u.username = '';
-      u.password = '';
       return {
         kind: 'postgres',
         host,
@@ -73,7 +95,7 @@ function describeDatabaseUrl(raw) {
         database,
         schema,
         sanitized: `postgres://${host}${u.port ? ':' + u.port : ''}/${database}?schema=${schema}`,
-        redactedUrl: safeDecode(u.toString()).toLowerCase(),
+        redactedUrl: buildRedactedUrl(u, value),
       };
     } catch {
       return blank('unknown', '<unparseable>');
@@ -102,11 +124,12 @@ function evaluateDatabaseTarget(raw, env = process.env) {
   if (isProductionTarget(identity, env)) return { ok: false, reason: `${identity.sanitized} is a Production target`, identity };
   const allow = splitList(env.TILLFLOW_TEST_DB_ALLOWLIST);
   const db = identity.database;
-  if (allow.includes(`${identity.host}/${db}`) || allow.includes(`${identity.endpoint}/${db}`) || allow.includes(`${identity.endpoint.split(':')[0]}/${db}`)) {
+  const pairs = [`${identity.host}/${db}`, `${identity.endpoint}/${db}`, `${identity.endpoint.split(':')[0]}/${db}`].map((p) => p.toLowerCase());
+  if (pairs.some((p) => allow.includes(p))) {
     return { ok: true, reason: 'allowlisted', identity };
   }
   if (LOCAL_HOSTS.has(identity.host)) return { ok: true, reason: 'local Postgres host', identity };
-  const knownIsolated = ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS.find((f) => identity.host.includes(f));
+  const knownIsolated = knownIsolatedEndpointFragment(identity.host);
   if (knownIsolated && ISOLATED_DATABASE_NAME.test(db)) {
     return { ok: true, reason: `known isolated Preview endpoint ${knownIsolated} with isolated database name ${db}`, identity };
   }

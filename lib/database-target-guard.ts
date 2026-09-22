@@ -49,6 +49,25 @@ export const PRODUCTION_HOST_FRAGMENTS = ['fancy-darkness'];
  */
 export const ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS = ['old-sunset', 'late-cell'];
 
+/** Every isolated branch we know lives under this Neon domain. */
+export const ISOLATED_PREVIEW_HOST_SUFFIX = '.neon.tech';
+
+/**
+ * True only when `host` is a Neon endpoint for a known isolated branch: first label
+ * `ep-<fragment>-<id>` with an optional `-pooler` suffix AND the host ends in `.neon.tech`.
+ * Anchored on purpose — neither `late-cell.example.com` nor `ep-late-cell-1.attacker.net` qualifies.
+ * Returns the matching fragment or null.
+ */
+export function knownIsolatedEndpointFragment(host: string): string | null {
+  const lower = host.toLowerCase();
+  if (!lower.endsWith(ISOLATED_PREVIEW_HOST_SUFFIX)) return null;
+  const label = lower.split('.')[0];
+  for (const fragment of ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS) {
+    if (new RegExp(`^ep-${fragment}-[a-z0-9]+(-pooler)?$`).test(label)) return fragment;
+  }
+  return null;
+}
+
 /** Database names that are, by convention, isolated test / Preview targets. */
 const ISOLATED_DATABASE_NAME = /^tillflow_(ci|preview|test|walkthrough|qa)([_-][a-z0-9_-]+)?$/i;
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', 'postgres', 'db', 'host.docker.internal']);
@@ -87,6 +106,29 @@ function safeDecode(value: string) {
   }
 }
 
+/** Query parameters that can carry secrets; never kept in anything that may be logged. */
+const SECRET_QUERY_KEYS = new Set(['sslpassword', 'password', 'passfile', 'sslkey']);
+
+/**
+ * Credential-free, lower-cased text used ONLY for deny-fragment matching. Built from the host,
+ * the path and the query decoded PER PAIR via URLSearchParams (which never throws and decodes
+ * each value independently), followed by the raw lower-cased query. A single malformed `%zz`
+ * elsewhere in the URL therefore cannot disable decoding of an `options=endpoint=…` value.
+ */
+function buildRedactedUrl(parsed: URL, raw: string): string {
+  const pairs: string[] = [];
+  for (const [key, val] of parsed.searchParams) {
+    if (SECRET_QUERY_KEYS.has(key.toLowerCase())) continue;
+    pairs.push(`${key}=${val}`);
+  }
+  const rawQuery = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
+  const rawQueryNoSecrets = rawQuery
+    .split('&')
+    .filter((part) => !SECRET_QUERY_KEYS.has(part.split('=')[0].toLowerCase()))
+    .join('&');
+  return `${parsed.hostname}${parsed.port ? ':' + parsed.port : ''}${parsed.pathname}?${pairs.join('&')}#${rawQueryNoSecrets}`.toLowerCase();
+}
+
 function blank(kind: DatabaseIdentity['kind'], sanitized: string): DatabaseIdentity {
   return { kind, host: '', endpoint: '', database: '', schema: '', sanitized, redactedUrl: '' };
 }
@@ -107,8 +149,6 @@ export function describeDatabaseUrl(raw: string | undefined | null): DatabaseIde
       const database = safeDecode(parsed.pathname.replace(/^\//, '').split('/')[0].split('?')[0] || '');
       const schema = parsed.searchParams.get('schema') || 'public';
       const endpoint = `${stripPoolerSuffix(host)}${parsed.port ? ':' + parsed.port : ''}`;
-      parsed.username = '';
-      parsed.password = '';
       return {
         kind: 'postgres',
         host,
@@ -116,7 +156,7 @@ export function describeDatabaseUrl(raw: string | undefined | null): DatabaseIde
         database,
         schema,
         sanitized: `postgres://${host}${parsed.port ? ':' + parsed.port : ''}/${database}?schema=${schema}`,
-        redactedUrl: safeDecode(parsed.toString()).toLowerCase(),
+        redactedUrl: buildRedactedUrl(parsed, value),
       };
     } catch {
       return blank('unknown', '<unparseable postgres url>');
@@ -179,7 +219,7 @@ export function evaluateDatabaseTarget(raw: string | undefined | null, env: Node
     return { ok: true, reason: 'local Postgres host', identity };
   }
   // Remote hosts: BOTH a known isolated endpoint AND an isolated database name are required.
-  const knownIsolatedEndpoint = ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS.find((fragment) => identity.host.includes(fragment));
+  const knownIsolatedEndpoint = knownIsolatedEndpointFragment(identity.host);
   if (knownIsolatedEndpoint && ISOLATED_DATABASE_NAME.test(identity.database)) {
     return {
       ok: true,
