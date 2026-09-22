@@ -71,6 +71,17 @@ describe('describeDatabaseUrl', () => {
     expect(id.redactedUrl).not.toContain('/k');
     expect(id.redactedUrl).toContain('sslmode=require');
     expect(JSON.stringify(new DatabaseTargetRefusedError('x', id))).not.toContain('pem-secret');
+    // percent-encoded key must not smuggle the value past the secret filter
+    const encodedKey = describeDatabaseUrl('postgresql://u:p@localhost/tillflow_ci?sslpasswor%64=pem-secret3');
+    expect(encodedKey.redactedUrl).not.toContain('pem-secret3');
+  });
+
+  it('never stores userinfo on the identity even though it is deny-matched', () => {
+    const url = 'postgresql://neondb_owner:endpoint%3Dep-fancy-darkness-abyuvjxt%24secret@ep-late-cell-1.eu-west-2.aws.neon.tech/tillflow_preview';
+    const verdict = evaluateDatabaseTarget(url, env({}));
+    expect(verdict.ok).toBe(false);
+    expect(JSON.stringify(verdict.identity)).not.toContain('secret');
+    expect(JSON.stringify(verdict.identity)).not.toContain('neondb_owner');
   });
 
   it('decodes query values per pair so one malformed escape cannot hide an encoded endpoint id', () => {
@@ -124,6 +135,12 @@ describe('evaluateDatabaseTarget — Production-like URLs fail closed', () => {
     // WS6 re-review: the isolated-endpoint rule is anchored on the first host label
     ['isolated fragment as an unrelated domain label', 'postgresql://u:p@late-cell.example.com/tillflow_ci'],
     ['isolated fragment as a sub-domain of a foreign host', 'postgresql://u:p@ep-late-cell-1.evil.example.com.attacker.net/tillflow_preview'],
+    // WS6 final check: Neon SNI-less workaround embeds the endpoint id in the PASSWORD
+    [
+      'Production endpoint id embedded in the password (Neon endpoint=… workaround)',
+      'postgresql://neondb_owner:endpoint%3Dep-fancy-darkness-abyuvjxt%24secret@ep-late-cell-1.eu-west-2.aws.neon.tech/tillflow_preview',
+    ],
+    ['Production endpoint id embedded in the username', 'postgresql://endpoint=ep-fancy-darkness-abyuvjxt:pw@localhost/tillflow_ci'],
     // WS6 finding 3: an isolated-looking database name on an UNKNOWN remote endpoint is not enough
     ['tillflow_preview on an unknown Neon endpoint', 'postgresql://u:p@ep-quiet-sea-1234.eu-west-2.aws.neon.tech/tillflow_preview'],
     ['tillflow_ci on an unknown remote host', 'postgresql://u:p@db.example.com:5432/tillflow_ci'],
@@ -241,6 +258,8 @@ describe('scripts/lib/guarded-prisma.cjs mirrors the TypeScript guard', () => {
     'postgresql://u:p@late-cell.example.com/tillflow_ci',
     'postgresql://u:p@ep-late-cell-1.attacker.net/tillflow_preview',
     'postgresql://u:p@EP-LATE-CELL-1234.EU-WEST-2.AWS.NEON.TECH/TILLFLOW_PREVIEW',
+    'postgresql://neondb_owner:endpoint%3Dep-fancy-darkness-abyuvjxt%24secret@ep-late-cell-1.eu-west-2.aws.neon.tech/tillflow_preview',
+    'postgresql://u:p@localhost/tillflow_ci?sslpasswor%64=pem-secret3',
     '',
     CI,
     PREVIEW,
@@ -258,8 +277,19 @@ describe('scripts/lib/guarded-prisma.cjs mirrors the TypeScript guard', () => {
   });
 
   it('never keeps secret query parameters in the redacted URL either', () => {
-    const id = cjs.describeDatabaseUrl('postgresql://u:p@localhost/tillflow_ci?sslpassword=pem-secret');
+    const id = cjs.describeDatabaseUrl('postgresql://u:p@localhost/tillflow_ci?sslpassword=pem-secret&sslpasswor%64=pem-secret3');
     expect(id.redactedUrl).not.toContain('pem-secret');
+  });
+
+  it('refuses a Production endpoint id hidden in the password, and the read-only opener sees it as Production', async () => {
+    const url = 'postgresql://neondb_owner:endpoint%3Dep-fancy-darkness-abyuvjxt%24secret@ep-late-cell-1.eu-west-2.aws.neon.tech/tillflow_preview';
+    expect(cjs.evaluateDatabaseTarget(url, env({})).ok).toBe(false);
+    class FakeClient {
+      constructor() {
+        throw new Error('must not construct');
+      }
+    }
+    await expect(cjs.openGuardedPrismaClient({ url, env: {}, PrismaClient: FakeClient, log: () => undefined })).rejects.toThrow(/Production/);
   });
 
   it('pins the same set of environment keys', () => {

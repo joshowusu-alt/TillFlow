@@ -124,9 +124,24 @@ function buildRedactedUrl(parsed: URL, raw: string): string {
   const rawQuery = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
   const rawQueryNoSecrets = rawQuery
     .split('&')
-    .filter((part) => !SECRET_QUERY_KEYS.has(part.split('=')[0].toLowerCase()))
+    // decode the key before the secret check so `sslpasswor%64=` cannot smuggle a value through
+    .filter((part) => !SECRET_QUERY_KEYS.has(safeDecode(part.split('=')[0]).toLowerCase()))
     .join('&');
   return `${parsed.hostname}${parsed.port ? ':' + parsed.port : ''}${parsed.pathname}?${pairs.join('&')}#${rawQueryNoSecrets}`.toLowerCase();
+}
+
+/**
+ * Decoded, lower-cased userinfo (username + password) for deny matching ONLY — never stored on the
+ * identity and never logged. Neon's SNI-less workaround embeds the endpoint id in the password
+ * (`password=endpoint=ep-…$secret`), so a Production endpoint id can hide there.
+ */
+function userinfoDenyText(raw: string): string {
+  try {
+    const parsed = new URL(raw.trim());
+    return `${safeDecode(parsed.username)} ${safeDecode(parsed.password)}`.toLowerCase();
+  } catch {
+    return '';
+  }
 }
 
 function blank(kind: DatabaseIdentity['kind'], sanitized: string): DatabaseIdentity {
@@ -203,7 +218,8 @@ export function evaluateDatabaseTarget(raw: string | undefined | null, env: Node
   }
   // Match deny fragments against the WHOLE redacted URL, not just the hostname: Neon also
   // routes on `options=endpoint=ep-…`, so a Production endpoint id anywhere in the URL is refused.
-  const denied = denyFragments.find((fragment) => identity.redactedUrl.includes(fragment));
+  const userinfo = userinfoDenyText(raw ?? '');
+  const denied = denyFragments.find((fragment) => identity.redactedUrl.includes(fragment) || userinfo.includes(fragment));
   if (denied) {
     return { ok: false, reason: `URL contains known Production endpoint fragment "${denied}"`, identity };
   }

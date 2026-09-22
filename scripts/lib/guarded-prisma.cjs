@@ -55,8 +55,18 @@ function buildRedactedUrl(u, raw) {
     pairs.push(`${k}=${v}`);
   }
   const rawQuery = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
-  const rawNoSecrets = rawQuery.split('&').filter((p) => !SECRET_QUERY_KEYS.has(p.split('=')[0].toLowerCase())).join('&');
+  const rawNoSecrets = rawQuery.split('&').filter((p) => !SECRET_QUERY_KEYS.has(safeDecode(p.split('=')[0]).toLowerCase())).join('&');
   return `${u.hostname}${u.port ? ':' + u.port : ''}${u.pathname}?${pairs.join('&')}#${rawNoSecrets}`.toLowerCase();
+}
+
+// Decoded userinfo for deny matching only (Neon `password=endpoint=ep-…$secret` workaround). Never stored or logged.
+function userinfoDenyText(raw) {
+  try {
+    const u = new URL(String(raw || '').trim());
+    return `${safeDecode(u.username)} ${safeDecode(u.password)}`.toLowerCase();
+  } catch {
+    return '';
+  }
 }
 
 // Host must end in `.neon.tech` and its first label must be `ep-<fragment>-<id>[-pooler]`;
@@ -108,11 +118,17 @@ function splitList(v) {
   return String(v || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 
-function isProductionTarget(identity, env = process.env) {
+/** @param {string} [raw] the original URL, so the (never stored) userinfo can be deny-matched too */
+function isProductionTarget(identity, env = process.env, raw = '') {
   if (identity.kind !== 'postgres') return false;
   const denyFragments = [...PRODUCTION_HOST_FRAGMENTS, ...splitList(env.TILLFLOW_PRODUCTION_DB_HOSTS)];
-  // Deny fragments are matched against the whole redacted URL (Neon `options=endpoint=…` routing included).
-  return PRODUCTION_DATABASE_NAMES.includes(identity.database.toLowerCase()) || denyFragments.some((f) => identity.redactedUrl.includes(f));
+  // Deny fragments are matched against the whole redacted URL (Neon `options=endpoint=…` routing included)
+  // and against the decoded userinfo (Neon `password=endpoint=…` workaround).
+  const userinfo = userinfoDenyText(raw);
+  return (
+    PRODUCTION_DATABASE_NAMES.includes(identity.database.toLowerCase()) ||
+    denyFragments.some((f) => identity.redactedUrl.includes(f) || userinfo.includes(f))
+  );
 }
 
 function evaluateDatabaseTarget(raw, env = process.env) {
@@ -121,7 +137,7 @@ function evaluateDatabaseTarget(raw, env = process.env) {
   if (identity.kind === 'missing') return { ok: false, reason: 'database URL is missing', identity };
   if (identity.kind === 'unknown') return { ok: false, reason: 'unrecognised scheme', identity };
   if (identity.kind === 'sqlite') return { ok: true, reason: 'sqlite file database', identity };
-  if (isProductionTarget(identity, env)) return { ok: false, reason: `${identity.sanitized} is a Production target`, identity };
+  if (isProductionTarget(identity, env, raw)) return { ok: false, reason: `${identity.sanitized} is a Production target`, identity };
   const allow = splitList(env.TILLFLOW_TEST_DB_ALLOWLIST);
   const db = identity.database;
   const pairs = [`${identity.host}/${db}`, `${identity.endpoint}/${db}`, `${identity.endpoint.split(':')[0]}/${db}`].map((p) => p.toLowerCase());
@@ -163,7 +179,7 @@ async function openGuardedPrismaClient(options = {}) {
   const log = options.log || ((line) => console.info(line));
   const url = (options.url || env.TILLFLOW_TEST_DATABASE_URL || env.DATABASE_URL || '').trim();
   const identity = describeDatabaseUrl(url);
-  const production = isProductionTarget(identity, env);
+  const production = isProductionTarget(identity, env, url);
   const readOnly = options.readOnly === true;
 
   if (production) {
