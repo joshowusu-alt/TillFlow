@@ -56,14 +56,31 @@ describe('till selectors are scoped to the authoritative store', () => {
       const source = readFileSync(file, 'utf8');
       for (const block of openShiftSelectorQueries(source)) {
         inspected++;
-        // Must scope tills to one store, not just to the business.
-        if (!/storeId:\s*(store\.id|selectedStoreId|invoice\.storeId|expense\.storeId)/.test(block)) {
+        // Tills must be scoped to one store as the first, unconditional `till` filter —
+        // never business-wide, never behind a conditional spread that can drop the store.
+        const scoped = /till:\s*\{\s*storeId:\s*(store\.id|selectedStoreId|operationalStore\.id|invoice\.storeId)\s*,/.test(block);
+        const conditional = /\.\.\.\s*\(/.test(block) || /storeId:\s*[^,}]*\?/.test(block);
+        if (!scoped || conditional) {
           offenders.push(relative(root, file));
         }
       }
     }
-    expect(inspected).toBeGreaterThanOrEqual(5);
+    expect(inspected).toBeGreaterThanOrEqual(6);
     expect(offenders).toEqual([]);
+  });
+
+  it('purchase detail and return pages only offer tills in the operational branch', () => {
+    const detail = read('app/(protected)/purchases/[id]/page.tsx');
+    expect(detail).toContain('requireBusinessAndOptionalStore');
+    expect(detail).toContain('operationalStore.id === invoice.storeId');
+    expect(detail).toContain('const openShifts = canPayHere');
+    expect(detail).toContain('outstanding > 0 && canPayHere && (');
+    expect(detail).toContain('Switch to that branch to record a payment.');
+    const ret = read('app/(protected)/purchases/return/[id]/page.tsx');
+    expect(ret).toContain('requireBusinessAndOptionalStore');
+    expect(ret).toContain('operationalStore.id !== invoice.storeId');
+    expect(ret).toContain('Switch to that branch to return or void it.');
+    expect(ret).toContain('till: { storeId: operationalStore.id, active: true');
   });
 
   it('expense payments is scoped to the operational store on expenses, tills and focus', () => {
@@ -94,12 +111,13 @@ describe('till selectors are scoped to the authoritative store', () => {
   });
 
   it('every action that accepts a tillId resolves it against the selected store', () => {
-    for (const rel of ['app/actions/expense-payments.ts', 'app/actions/payments.ts']) {
+    for (const rel of ['app/actions/expense-payments.ts', 'app/actions/payments.ts', 'app/actions/expenses.ts', 'app/actions/purchases.ts']) {
       const source = read(rel);
       expect(source, rel).toContain('resolveStoreFromTill(businessId, tillId, storeId)');
     }
-    // Purchases and new expenses pass the till into services that look the shift up
-    // under `till.storeId === storeId`, so a foreign till resolves to "no open shift".
+    expect(read('app/actions/returns.ts')).toContain('resolveStoreFromTill(businessId, tillId, sourcePurchase.storeId)');
+    // The services behind them look the shift up under `till.storeId === storeId`
+    // inside their transactions, so a foreign till can never reach a drawer write.
     expect(read('lib/services/expenses.ts')).toContain('getOpenCashShiftForPayment');
     expect(read('lib/services/purchases.ts')).toContain('getOpenCashShiftForPayment');
     expect(read('lib/services/payments.ts')).toContain('getOpenCashShiftForPayment');

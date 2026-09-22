@@ -1,12 +1,12 @@
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { createPurchaseReturnAction } from '@/app/actions/returns';
 
 export default async function PurchaseReturnPage({ params }: { params: { id: string } }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, store: operationalStore } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const invoice = await prisma.purchaseInvoice.findFirst({
@@ -17,6 +17,7 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
       totalPence: true,
       paymentStatus: true,
       storeId: true,
+      store: { select: { name: true } },
       payments: { select: { amountPence: true } },
       supplier: { select: { name: true } },
       purchaseReturn: { select: { id: true } }
@@ -27,6 +28,14 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
   if (invoice.purchaseReturn) {
     return <div className="card p-6">This purchase has already been returned.</div>;
   }
+  // Returns and refunds are recorded in the purchase's own branch, with that branch's tills.
+  if (!operationalStore || operationalStore.id !== invoice.storeId) {
+    return (
+      <div className="card p-6" data-testid="purchase-return-other-branch">
+        This purchase belongs to {invoice.store?.name ?? 'another branch'}. Switch to that branch to return or void it.
+      </div>
+    );
+  }
 
   const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
   const balance = Math.max(invoice.totalPence - paid, 0);
@@ -34,7 +43,7 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
   const openShifts = await prisma.shift.findMany({
     where: {
       status: 'OPEN',
-      till: { storeId: invoice.storeId, active: true, store: { businessId: business.id } },
+      till: { storeId: operationalStore.id, active: true, store: { businessId: business.id } },
     },
     select: { id: true, tillId: true, till: { select: { name: true } } },
     orderBy: { openedAt: 'desc' },

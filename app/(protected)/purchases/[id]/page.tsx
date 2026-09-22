@@ -4,7 +4,7 @@ import SubmitButton from '@/components/SubmitButton';
 import FormError from '@/components/FormError';
 import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatMoney, formatDateTime, formatDate } from '@/lib/format';
 import { changePurchaseProductSupplierLinkAction } from '@/app/actions/purchases';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
@@ -28,7 +28,7 @@ export default async function PurchaseInvoicePage({
     supplierLinkChanged?: string;
   };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, store: operationalStore } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const invoice = await prisma.purchaseInvoice.findFirst({
@@ -60,14 +60,19 @@ export default async function PurchaseInvoicePage({
 
   if (!invoice) return <div className="card p-6">Invoice not found.</div>;
 
-  const openShifts = await prisma.shift.findMany({
-    where: {
-      status: 'OPEN',
-      till: { storeId: invoice.storeId, active: true, store: { businessId: business.id } },
-    },
-    select: { id: true, tillId: true, till: { select: { name: true } } },
-    orderBy: { openedAt: 'desc' },
-  });
+  // Payments are only offered when the operational branch is the invoice's branch,
+  // and the tills offered are that branch's open tills. Viewing is unaffected.
+  const canPayHere = Boolean(operationalStore && operationalStore.id === invoice.storeId);
+  const openShifts = canPayHere
+    ? await prisma.shift.findMany({
+        where: {
+          status: 'OPEN',
+          till: { storeId: invoice.storeId, active: true, store: { businessId: business.id } },
+        },
+        select: { id: true, tillId: true, till: { select: { name: true } } },
+        orderBy: { openedAt: 'desc' },
+      })
+    : [];
   const openTills = openShifts.map((shift) => ({
     tillId: shift.tillId,
     tillName: shift.till.name,
@@ -385,8 +390,16 @@ export default async function PurchaseInvoicePage({
           </>
         )}
 
+        {!isClosed && outstanding > 0 && !canPayHere && (
+          <div
+            className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            data-testid="purchase-payment-other-branch"
+          >
+            This purchase belongs to {invoice.store?.name ?? 'another branch'}. Switch to that branch to record a payment.
+          </div>
+        )}
         {/* Record payment form — unchanged SupplierPaymentForm (PR #78 controls). */}
-        {!isClosed && outstanding > 0 && (
+        {!isClosed && outstanding > 0 && canPayHere && (
           <div className="mt-6 scroll-mb-28" data-purchase-payment-form>
             <h3 className="text-sm font-semibold">Record a payment</h3>
             <div className="mt-3">

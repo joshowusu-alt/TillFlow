@@ -7,6 +7,7 @@ import { revalidateTag } from 'next/cache';
 import { formString, formInt } from '@/lib/form-helpers';
 import { ReturnTypeEnum, PaymentMethodEnum } from '@/lib/validation/enums';
 import { withBusinessContext, requireSelectedStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
+import { resolveStoreFromTill } from '@/lib/reliability/selected-store';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
@@ -154,6 +155,10 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
     }
     const reason = formString(formData, 'reason') || null;
     const tillId = formString(formData, 'tillId');
+    // A refund till from another branch is refused by name before any write.
+    if (tillId) {
+      await resolveStoreFromTill(businessId, tillId, sourcePurchase.storeId);
+    }
 
     await createPurchaseReturn({
       businessId,

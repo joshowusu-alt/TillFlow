@@ -9,6 +9,7 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { toPence, formString, formInt, formDate, formOptionalString } from '@/lib/form-helpers';
 import { PaymentStatusEnum } from '@/lib/validation/enums';
 import { requireSelectedStoreContext, withBusinessContext, formAction, type ActionResult, safeAction, ok, err } from '@/lib/action-utils';
+import { resolveStoreFromTill } from '@/lib/reliability/selected-store';
 import { audit } from '@/lib/audit';
 import type { PaymentStatus } from '@/lib/services/shared';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
@@ -68,6 +69,11 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       cashPaid > 0 || (paymentStatus === 'PAID' && cashPaid + cardPaid + transferPaid === 0);
     if (willUseCash && !tillId) {
       return err(EXPLICIT_CASH_TILL_REQUIRED_MSG);
+    }
+    // A till from another branch is refused by name before any write; the service
+    // re-checks the same store → till → open-shift chain inside its transaction.
+    if (tillId) {
+      await resolveStoreFromTill(businessId, tillId, storeId);
     }
 
     const invoice = await createPurchase({

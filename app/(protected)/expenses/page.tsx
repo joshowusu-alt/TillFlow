@@ -59,14 +59,16 @@ export default async function ExpensesPage({
       skip: (page - 1) * DEFAULT_PAGE_SIZE,
       take: DEFAULT_PAGE_SIZE,
     }),
-    prisma.shift.findMany({
-      where: {
-        status: 'OPEN',
-        till: { ...(store ? { storeId: store.id } : {}), active: true, store: { businessId: business.id } },
-      },
-      select: { id: true, tillId: true, till: { select: { name: true } } },
-      orderBy: { openedAt: 'desc' },
-    }),
+    store
+      ? prisma.shift.findMany({
+          where: {
+            status: 'OPEN',
+            till: { storeId: store.id, active: true, store: { businessId: business.id } },
+          },
+          select: { id: true, tillId: true, till: { select: { name: true } } },
+          orderBy: { openedAt: 'desc' },
+        })
+      : Promise.resolve([]),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(expenseCount / DEFAULT_PAGE_SIZE));

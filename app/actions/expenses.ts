@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { formString, formOptionalString, formPence, formDate } from '@/lib/form-helpers';
 import { requireSelectedStoreContext, withBusinessContext, formAction, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { resolveStoreFromTill } from '@/lib/reliability/selected-store';
 import { PaymentStatusEnum, PaymentMethodEnum } from '@/lib/validation/enums';
 import { audit } from '@/lib/audit';
 import type { PaymentMethod, PaymentStatus } from '@/lib/services/shared';
@@ -72,6 +73,11 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
     const tillId = formString(formData, 'tillId');
     if (amountPaidPence > 0 && method === 'CASH' && !tillId) {
       return err(CASH_EXPENSE_SHIFT_REQUIRED_MSG);
+    }
+    // A till from another branch is refused by name before any write; the service
+    // re-checks the same store → till → open-shift chain inside its transaction.
+    if (tillId) {
+      await resolveStoreFromTill(businessId, tillId, storeId);
     }
 
     const idempotencyKey = formString(formData, 'idempotencyKey');

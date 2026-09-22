@@ -90,6 +90,7 @@ describeConcurrency('expense payment overlapping transactions (Postgres)', () =>
     await prisma.shift.deleteMany({ where: { till: { store: { businessId } } } }).catch(() => {});
     await prisma.till.deleteMany({ where: { store: { businessId } } }).catch(() => {});
     await prisma.businessSequence.deleteMany({ where: { businessId } }).catch(() => {});
+    await prisma.auditLog.deleteMany({ where: { businessId } }).catch(() => {});
     await prisma.user.deleteMany({ where: { businessId } }).catch(() => {});
     await prisma.account.deleteMany({ where: { businessId } }).catch(() => {});
     await prisma.store.deleteMany({ where: { businessId } }).catch(() => {});
