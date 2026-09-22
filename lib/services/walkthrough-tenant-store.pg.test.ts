@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import {
   bindPrismaPostgresUrls,
   canRunLivePostgres,
-  createBoundPrismaClient,
+  openBoundPrismaClient,
   resolveBoundPostgresUrl,
 } from '@/lib/test/isolated-postgres';
 import { createPurchase } from '@/lib/services/purchases';
@@ -71,8 +71,7 @@ describeLive('cross-business and selected-store isolation (Postgres)', () => {
 
   beforeAll(async () => {
     bindPrismaPostgresUrls(databaseUrl);
-    prisma = createBoundPrismaClient(databaseUrl);
-    await prisma.$connect();
+    prisma = await openBoundPrismaClient(databaseUrl);
     const business = await prisma.business.create({
       data: {
         name: `Tenant ${suffix}`,

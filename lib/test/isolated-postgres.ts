@@ -1,5 +1,24 @@
-import { PrismaClient } from '@prisma/client';
+/**
+ * Thin compatibility layer over the central test-client factory (`@/lib/test/test-prisma`)
+ * and the fail-closed target guard (`@/lib/database-target-guard`).
+ *
+ * Historical note: this module used to prefer `POSTGRES_URL_NON_POOLING` / `POSTGRES_PRISMA_URL`
+ * over `DATABASE_URL` and constructed clients synchronously without verifying the live
+ * database. Both behaviours are gone: the single permitted target is resolved by the guard
+ * (`TILLFLOW_TEST_DATABASE_URL`, else a non-contradictory `DATABASE_URL`), and clients are
+ * only handed out after the server-side identity has been proven.
+ */
+import type { PrismaClient } from '@prisma/client';
+import {
+  DatabaseTargetRefusedError,
+  describeDatabaseUrl,
+  evaluateDatabaseTarget,
+  pinPrismaEnv,
+  prepareTestDatabaseEnv,
+  sameDatabaseTarget,
+} from '@/lib/database-target-guard';
 import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
+import { openTestPrismaClient } from '@/lib/test/test-prisma';
 
 export type PostgresUrlIdentity = {
   hostPrefix: string;
@@ -7,15 +26,13 @@ export type PostgresUrlIdentity = {
   schema: string;
 };
 
+/**
+ * The one URL every Prisma client in this process may use. Refused or contradictory
+ * targets throw (loudly, at import time of the calling suite). In the SQLite unit run
+ * this returns the pinned SQLite URL and {@link canRunLivePostgres} is false.
+ */
 export function resolveBoundPostgresUrl(): string {
-  return (
-    process.env.POSTGRES_URL_NON_POOLING?.trim() ||
-    process.env.POSTGRES_PRISMA_URL?.trim() ||
-    process.env.INVENTORY_INCREASE_CONCURRENCY_DATABASE_URL?.trim() ||
-    process.env.SUPPLIER_PAYMENT_CONCURRENCY_DATABASE_URL?.trim() ||
-    process.env.DATABASE_URL?.trim() ||
-    ''
-  );
+  return prepareTestDatabaseEnv(process.env, { requirePostgres: false }).url;
 }
 
 export function postgresUrlIdentity(url: string): PostgresUrlIdentity {
@@ -31,10 +48,17 @@ export function canRunLivePostgres(url = resolveBoundPostgresUrl()): boolean {
   return isPostgresDatabaseUrl(url);
 }
 
+/**
+ * Optional stricter constraint used by the Preview walkthrough proofs: when
+ * `TILLFLOW_REQUIRE_ISOLATED_PREVIEW=1`, only the dedicated `tillflow_preview` database on
+ * the isolated Neon branch is accepted. The general guard still applies first.
+ */
 export function assertIsolatedPreviewHost(url: string): PostgresUrlIdentity {
+  const verdict = evaluateDatabaseTarget(url, process.env);
+  if (!verdict.ok) throw new DatabaseTargetRefusedError(verdict.reason, verdict.identity);
   const identity = postgresUrlIdentity(url);
   if (process.env.TILLFLOW_REQUIRE_ISOLATED_PREVIEW === '1') {
-    if (!/old-sunset/i.test(identity.hostPrefix) || identity.database !== 'tillflow_preview') {
+    if (!/old-sunset|late-cell/i.test(identity.hostPrefix) || identity.database !== 'tillflow_preview') {
       throw new Error(
         `Refusing non-isolated Postgres hostPrefix=${identity.hostPrefix} database=${identity.database}`,
       );
@@ -43,21 +67,35 @@ export function assertIsolatedPreviewHost(url: string): PostgresUrlIdentity {
   return identity;
 }
 
+/**
+ * Pin every Prisma URL variable to `url` (after guarding it). Kept for suites that re-pin
+ * between `vi.resetModules()` calls; it can never widen the target.
+ */
 export function bindPrismaPostgresUrls(url: string): PostgresUrlIdentity {
   const identity = assertIsolatedPreviewHost(url);
-  process.env.DATABASE_URL = url;
-  process.env.POSTGRES_PRISMA_URL = url;
-  process.env.POSTGRES_URL_NON_POOLING = url;
-  process.env.SUPPLIER_PAYMENT_CONCURRENCY_DATABASE_URL = url;
-  process.env.INVENTORY_INCREASE_CONCURRENCY_DATABASE_URL = url;
+  const guarded = prepareTestDatabaseEnv(process.env, { requirePostgres: true });
+  if (!sameDatabaseTarget(describeDatabaseUrl(url), guarded.identity)) {
+    throw new DatabaseTargetRefusedError(
+      `bindPrismaPostgresUrls(${describeDatabaseUrl(url).sanitized}) differs from the guarded target ${guarded.identity.sanitized}`,
+      guarded.identity,
+    );
+  }
+  pinPrismaEnv(process.env, url);
   return identity;
 }
 
-export function createBoundPrismaClient(url: string): PrismaClient {
+/**
+ * Open a connected, identity-verified client for `url` via the central factory.
+ * `url` must be the guarded target (it is only accepted as a cross-check).
+ */
+export async function openBoundPrismaClient(url: string): Promise<PrismaClient> {
   bindPrismaPostgresUrls(url);
-  return new PrismaClient({
-    datasources: { db: { url } },
-  });
+  const handle = await openTestPrismaClient();
+  if (handle.url !== url) {
+    await handle.prisma.$disconnect().catch(() => undefined);
+    throw new DatabaseTargetRefusedError('factory target differs from the requested url', handle.identity);
+  }
+  return handle.prisma;
 }
 
 export async function proveWalkthroughPostgresSchema(prisma: PrismaClient) {

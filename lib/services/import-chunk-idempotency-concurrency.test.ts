@@ -4,16 +4,15 @@
  * Requires a real Postgres DATABASE_URL. Without it these tests are skipped.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '@prisma/client';
-import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
+import type { PrismaClient } from '@prisma/client';
+import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
 import { buildImportChunkKey } from '@/lib/import/import-chunk-identity';
 import {
   findMoneyIdempotency,
   insertMoneyIdempotency,
 } from '@/lib/services/money-idempotency';
 
-const databaseUrl = process.env.DATABASE_URL;
-const canRun = !!databaseUrl && isPostgresDatabaseUrl(databaseUrl);
+const canRun = canRunLivePostgresTests();
 
 const describeConcurrency = canRun ? describe : describe.skip;
 
@@ -25,9 +24,7 @@ describeConcurrency('import chunk overlapping MoneyIdempotency (Postgres)', () =
   let sharedKey = '';
 
   beforeAll(async () => {
-    process.env.DATABASE_URL = databaseUrl!;
-    prisma = new PrismaClient();
-    await prisma.$connect();
+    ({ prisma } = await openTestPrismaClient());
 
     const home = await prisma.business.create({
       data: { name: `Imp Home ${suffix}`, currency: 'GHS' },
@@ -48,14 +45,14 @@ describeConcurrency('import chunk overlapping MoneyIdempotency (Postgres)', () =
   });
 
   afterAll(async () => {
-    if (!prisma) return;
-    await prisma.moneyIdempotency.deleteMany({
-      where: { businessId: { in: [homeBusinessId, otherBusinessId] } },
-    });
-    await prisma.business.deleteMany({
-      where: { id: { in: [homeBusinessId, otherBusinessId] } },
-    });
-    await prisma.$disconnect();
+    await runTestTeardown(prisma, [
+      () => prisma.moneyIdempotency.deleteMany({
+          where: { businessId: { in: [homeBusinessId, otherBusinessId] } },
+        }),
+      () => prisma.business.deleteMany({
+          where: { id: { in: [homeBusinessId, otherBusinessId] } },
+        }),
+    ], { label: 'import-chunk-idempotency-concurrency' });
   });
 
   it('scopes find by businessId so the same key string does not inject across tenants', async () => {

@@ -8,16 +8,12 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'crypto';
-import { PrismaClient } from '@prisma/client';
-import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
+import type { PrismaClient } from '@prisma/client';
+import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
 import { createMemoryMigrationObjectStorage } from '@/lib/services/migration/storage';
 import { MigrationServiceError } from '@/lib/services/migration/errors';
 
-const databaseUrl =
-  process.env.MIGRATION_SLICE2B_DATABASE_URL ||
-  process.env.POSTGRES_URL_NON_POOLING ||
-  process.env.DATABASE_URL;
-const canRun = !!databaseUrl && isPostgresDatabaseUrl(databaseUrl);
+const canRun = canRunLivePostgresTests();
 
 const describePg = canRun ? describe : describe.skip;
 
@@ -46,7 +42,6 @@ describePg('migration slice 2B PostgreSQL two-business isolation', () => {
   const storage = createMemoryMigrationObjectStorage();
 
   beforeAll(async () => {
-    process.env.DATABASE_URL = databaseUrl!;
     const g = globalThis as unknown as { prisma?: PrismaClient };
     if (g.prisma) {
       await g.prisma.$disconnect().catch(() => {});
@@ -57,8 +52,7 @@ describePg('migration slice 2B PostgreSQL two-business isolation', () => {
     validateMigrationPackage = mod.validateMigrationPackage;
     getMigrationValidationRun = mod.getMigrationValidationRun;
 
-    prisma = new PrismaClient();
-    await prisma.$connect();
+    ({ prisma } = await openTestPrismaClient());
 
     const a = await prisma.business.create({
       data: { name: `Slice2B A ${suffix}`, currency: 'GHS' },
@@ -174,26 +168,20 @@ describePg('migration slice 2B PostgreSQL two-business isolation', () => {
   }, 120_000);
 
   afterAll(async () => {
-    if (!prisma) return;
-    try {
-      await prisma.migrationPackage.updateMany({
-        where: { businessId: { in: [bizA, bizB] } },
-        data: { latestValidationRunId: null },
-      });
-      await prisma.migrationValidationRun.deleteMany({
-        where: { businessId: { in: [bizA, bizB] } },
-      });
-      await prisma.migrationFile.deleteMany({ where: { businessId: { in: [bizA, bizB] } } });
-      await prisma.migrationBranchMapping.deleteMany({
-        where: { businessId: { in: [bizA, bizB] } },
-      });
-      await prisma.migrationPackage.deleteMany({ where: { businessId: { in: [bizA, bizB] } } });
-      await prisma.store.deleteMany({ where: { businessId: { in: [bizA, bizB] } } });
-      await prisma.user.deleteMany({ where: { businessId: { in: [bizA, bizB] } } });
-      await prisma.business.deleteMany({ where: { id: { in: [bizA, bizB] } } });
-    } finally {
-      await prisma.$disconnect();
-    }
+    await runTestTeardown(prisma, [
+      () =>
+        prisma.migrationPackage.updateMany({
+          where: { businessId: { in: [bizA, bizB] } },
+          data: { latestValidationRunId: null },
+        }),
+      () => prisma.migrationValidationRun.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }),
+      () => prisma.migrationFile.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }),
+      () => prisma.migrationBranchMapping.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }),
+      () => prisma.migrationPackage.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }),
+      () => prisma.store.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }),
+      () => prisma.user.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }),
+      () => prisma.business.deleteMany({ where: { id: { in: [bizA, bizB] } } }),
+    ], { label: 'slice2b-pg.integration' });
   });
 
   it('Owner B can validate own package', async () => {

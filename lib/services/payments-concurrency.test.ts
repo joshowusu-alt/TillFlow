@@ -9,12 +9,10 @@
  *   npx vitest run lib/services/payments-concurrency.test.ts
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '@prisma/client';
-import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
+import type { PrismaClient } from '@prisma/client';
+import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
 
-const databaseUrl =
-  process.env.SUPPLIER_PAYMENT_CONCURRENCY_DATABASE_URL || process.env.DATABASE_URL;
-const canRun = !!databaseUrl && isPostgresDatabaseUrl(databaseUrl);
+const canRun = canRunLivePostgresTests();
 
 const describeConcurrency = canRun ? describe : describe.skip;
 
@@ -31,7 +29,6 @@ describeConcurrency('supplier payment overlapping transactions (Postgres)', () =
   let tillId = '';
 
   beforeAll(async () => {
-    process.env.DATABASE_URL = databaseUrl!;
     // Drop any prior SQLite-bound singleton so the service uses Postgres.
     const g = globalThis as unknown as { prisma?: PrismaClient };
     if (g.prisma) {
@@ -43,8 +40,7 @@ describeConcurrency('supplier payment overlapping transactions (Postgres)', () =
     recordSupplierPayment = payments.recordSupplierPayment;
     SUPPLIER_PAYMENT_ERROR = payments.SUPPLIER_PAYMENT_ERROR;
 
-    prisma = new PrismaClient();
-    await prisma.$connect();
+    ({ prisma } = await openTestPrismaClient());
 
     const business = await prisma.business.create({
       data: {
@@ -113,21 +109,21 @@ describeConcurrency('supplier payment overlapping transactions (Postgres)', () =
   }, 90000);
 
   afterAll(async () => {
-    if (!prisma) return;
-    await prisma.auditLog.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }).catch(() => {});
-    await prisma.journalEntry.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.cashDrawerEntry.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.purchasePayment.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.purchaseInvoice.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.shift.deleteMany({ where: { till: { storeId } } }).catch(() => {});
-    await prisma.till.deleteMany({ where: { storeId } }).catch(() => {});
-    await prisma.supplier.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.user.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.account.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.store.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.business.deleteMany({ where: { id: businessId } }).catch(() => {});
-    await prisma.$disconnect();
+    await runTestTeardown(prisma, [
+      () => prisma.auditLog.deleteMany({ where: { businessId } }),
+      () => prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }),
+      () => prisma.journalEntry.deleteMany({ where: { businessId } }),
+      () => prisma.cashDrawerEntry.deleteMany({ where: { businessId } }),
+      () => prisma.purchasePayment.deleteMany({ where: { businessId } }),
+      () => prisma.purchaseInvoice.deleteMany({ where: { businessId } }),
+      () => prisma.shift.deleteMany({ where: { till: { storeId } } }),
+      () => prisma.till.deleteMany({ where: { storeId } }),
+      () => prisma.supplier.deleteMany({ where: { businessId } }),
+      () => prisma.user.deleteMany({ where: { businessId } }),
+      () => prisma.account.deleteMany({ where: { businessId } }),
+      () => prisma.store.deleteMany({ where: { businessId } }),
+      () => prisma.business.deleteMany({ where: { id: businessId } }),
+    ], { label: 'payments-concurrency' });
   }, 90000);
 
   it('posts exactly once under concurrent identical idempotency keys (GH₵1,400)', async () => {

@@ -5,16 +5,15 @@
  * Requires DATABASE_URL (Postgres). Skipped otherwise.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '@prisma/client';
-import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
+import type { PrismaClient } from '@prisma/client';
+import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
 import {
   RECEIPT_METHOD_LABELS,
   sumMoneyReceivedByMethod,
   UNKNOWN_RECEIPT_METHOD,
 } from '@/lib/reports/money-received';
 
-const databaseUrl = process.env.DATABASE_URL;
-const canRun = !!databaseUrl && isPostgresDatabaseUrl(databaseUrl);
+const canRun = canRunLivePostgresTests();
 const describePg = canRun ? describe : describe.skip;
 
 describePg('money received unknown payment-method reconciliation (Postgres)', () => {
@@ -34,7 +33,6 @@ describePg('money received unknown payment-method reconciliation (Postgres)', ()
   const saleAt = new Date('2026-08-07T10:00:00.000Z');
 
   beforeAll(async () => {
-    process.env.DATABASE_URL = databaseUrl!;
     const g = globalThis as unknown as { prisma?: PrismaClient };
     if (g.prisma) {
       await g.prisma.$disconnect().catch(() => {});
@@ -48,8 +46,7 @@ describePg('money received unknown payment-method reconciliation (Postgres)', ()
     listMoneyReceivedPayments = money.listMoneyReceivedPayments;
     resolveReportingScope = scope.resolveReportingScope;
 
-    prisma = new PrismaClient();
-    await prisma.$connect();
+    ({ prisma } = await openTestPrismaClient());
 
     const business = await prisma.business.create({
       data: { name: `UnkM ${suffix}`, currency: 'GHS', timezone: 'Africa/Accra' },
@@ -230,26 +227,26 @@ describePg('money received unknown payment-method reconciliation (Postgres)', ()
   }, 60_000);
 
   afterAll(async () => {
-    if (!prisma) return;
-    await prisma.salesPayment.deleteMany({
-      where: { salesInvoice: { businessId: { in: [businessId, otherBusinessId] } } },
-    }).catch(() => {});
-    await prisma.salesInvoice.deleteMany({
-      where: { businessId: { in: [businessId, otherBusinessId] } },
-    }).catch(() => {});
-    await prisma.till.deleteMany({
-      where: { store: { businessId: { in: [businessId, otherBusinessId] } } },
-    }).catch(() => {});
-    await prisma.user.deleteMany({
-      where: { businessId: { in: [businessId, otherBusinessId] } },
-    }).catch(() => {});
-    await prisma.store.deleteMany({
-      where: { businessId: { in: [businessId, otherBusinessId] } },
-    }).catch(() => {});
-    await prisma.business.deleteMany({
-      where: { id: { in: [businessId, otherBusinessId] } },
-    }).catch(() => {});
-    await prisma.$disconnect().catch(() => {});
+    await runTestTeardown(prisma, [
+      () => prisma.salesPayment.deleteMany({
+          where: { salesInvoice: { businessId: { in: [businessId, otherBusinessId] } } },
+        }),
+      () => prisma.salesInvoice.deleteMany({
+          where: { businessId: { in: [businessId, otherBusinessId] } },
+        }),
+      () => prisma.till.deleteMany({
+          where: { store: { businessId: { in: [businessId, otherBusinessId] } } },
+        }),
+      () => prisma.user.deleteMany({
+          where: { businessId: { in: [businessId, otherBusinessId] } },
+        }),
+      () => prisma.store.deleteMany({
+          where: { businessId: { in: [businessId, otherBusinessId] } },
+        }),
+      () => prisma.business.deleteMany({
+          where: { id: { in: [businessId, otherBusinessId] } },
+        }),
+    ], { label: 'money-received-unknown-method.pg' });
   });
 
   function dayScope(store: string = 'ALL') {

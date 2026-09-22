@@ -3,13 +3,13 @@
  * Preview proof binds POSTGRES_PRISMA_URL before constructing PrismaClient.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import type { DocumentSequenceName } from '@/lib/reliability/walkthrough-contracts';
 import { reserveNextDocumentNumber } from './document-numbers';
 import {
   bindPrismaPostgresUrls,
   canRunLivePostgres,
-  createBoundPrismaClient,
+  openBoundPrismaClient,
   resolveBoundPostgresUrl,
 } from '@/lib/test/isolated-postgres';
 
@@ -39,8 +39,7 @@ describeConcurrency('document number reservation (Postgres)', () => {
 
   beforeAll(async () => {
     bindPrismaPostgresUrls(databaseUrl);
-    prisma = createBoundPrismaClient(databaseUrl);
-    await prisma.$connect();
+    prisma = await openBoundPrismaClient(databaseUrl);
     const business = await prisma.business.create({
       data: { name: `DocNum ${suffix}`, currency: 'GHS' },
     });

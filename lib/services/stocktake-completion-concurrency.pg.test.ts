@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import {
   bindPrismaPostgresUrls,
   canRunLivePostgres,
-  createBoundPrismaClient,
+  openBoundPrismaClient,
   resolveBoundPostgresUrl,
 } from '@/lib/test/isolated-postgres';
 
@@ -58,8 +58,7 @@ describeConcurrency('stocktake completion idempotency (Postgres)', () => {
 
   beforeAll(async () => {
     bindPrismaPostgresUrls(databaseUrl);
-    prisma = createBoundPrismaClient(databaseUrl);
-    await prisma.$connect();
+    prisma = await openBoundPrismaClient(databaseUrl);
     const business = await prisma.business.create({
       data: {
         name: `Stk Conc ${suffix}`,

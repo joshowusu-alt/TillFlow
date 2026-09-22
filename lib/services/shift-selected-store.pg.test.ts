@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import {
   bindPrismaPostgresUrls,
   canRunLivePostgres,
-  createBoundPrismaClient,
+  openBoundPrismaClient,
   resolveBoundPostgresUrl,
 } from '@/lib/test/isolated-postgres';
 import { performShiftOpen } from '@/lib/services/shifts';
@@ -26,8 +26,7 @@ describeLive('selected-store shift open stays on Store B', () => {
 
   beforeAll(async () => {
     bindPrismaPostgresUrls(databaseUrl);
-    prisma = createBoundPrismaClient(databaseUrl);
-    await prisma.$connect();
+    prisma = await openBoundPrismaClient(databaseUrl);
     const business = await prisma.business.create({
       data: {
         name: `Shift store ${suffix}`,

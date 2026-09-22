@@ -64,6 +64,11 @@ jobs:
       - name: Generate Prisma client for SQLite
         run: npm run db:prepare:ci
 
+      # Repository gate: no unguarded `new PrismaClient(` in tests or new write-capable
+      # scripts; guard/factory regression tests. Verbose so the sanitised DB identity is visible.
+      - name: Database-target guard tests
+        run: npm run guard:db
+
       - name: Unit tests
         run: npm test
 

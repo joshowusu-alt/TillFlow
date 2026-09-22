@@ -44,6 +44,12 @@ on:
       - 'lib/services/payments.ts'
       - 'lib/services/expensePayments.ts'
       - 'lib/services/expense-payments-concurrency.test.ts'
+      - 'lib/database-target-guard.ts'
+      - 'lib/test/**'
+      - 'lib/prisma.ts'
+      - 'vitest.config.ts'
+      - 'vitest.setup.ts'
+      - 'vitest.global-setup.ts'
       - 'lib/services/purchases.ts'
       - 'lib/services/purchases-concurrency.test.ts'
       - 'app/api/offline/**'
@@ -98,6 +104,16 @@ jobs:
 
       - name: Check migration status
         run: npx prisma migrate status --schema=prisma/schema.postgres.prisma
+
+      # Fail-closed database-target guard: prints the sanitised identity, proves the factory
+      # client and the @/lib/prisma singleton both hit the isolated CI database, and refuses
+      # Production-like targets. Runs before any suite that can write.
+      - name: Database-target guard (live identity, isolated Postgres)
+        run: npx vitest run --reporter=verbose lib/test/database-target-guard-live.pg.test.ts lib/database-target-guard.test.ts lib/test/test-prisma.test.ts lib/reliability/database-test-safety.test.ts
+        env:
+          TILLFLOW_INCLUDE_PG_TESTS: '1'
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+          POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
 
       - name: Migration P1 PostgreSQL behavioural suite
         run: node scripts/migration-p1-schema-pg-test.cjs

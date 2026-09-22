@@ -5,13 +5,11 @@
  * Requires a real Postgres DATABASE_URL (or SUPPLIER_PAYMENT_CONCURRENCY_DATABASE_URL).
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '@prisma/client';
-import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
+import type { PrismaClient } from '@prisma/client';
+import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
 import { MONEY_IDEMPOTENCY_ERROR } from '@/lib/services/money-idempotency';
 
-const databaseUrl =
-  process.env.SUPPLIER_PAYMENT_CONCURRENCY_DATABASE_URL || process.env.DATABASE_URL;
-const canRun = !!databaseUrl && isPostgresDatabaseUrl(databaseUrl);
+const canRun = canRunLivePostgresTests();
 
 const describeConcurrency = canRun ? describe : describe.skip;
 
@@ -30,7 +28,6 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
   const line = () => [{ productId, unitId, qtyInUnit: 1, unitCostPence: 1000 }];
 
   beforeAll(async () => {
-    process.env.DATABASE_URL = databaseUrl!;
     const g = globalThis as unknown as { prisma?: PrismaClient };
     if (g.prisma) {
       await g.prisma.$disconnect().catch(() => {});
@@ -40,8 +37,7 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
     const purchases = await import('@/lib/services/purchases');
     createPurchase = purchases.createPurchase;
 
-    prisma = new PrismaClient();
-    await prisma.$connect();
+    ({ prisma } = await openTestPrismaClient());
 
     const business = await prisma.business.create({
       data: {
@@ -104,27 +100,27 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
   }, 90000);
 
   afterAll(async () => {
-    if (!prisma) return;
-    await prisma.moneyIdempotency.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.cashDrawerEntry.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.stockMovement.deleteMany({ where: { storeId } }).catch(() => {});
-    await prisma.purchasePayment.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } }).catch(() => {});
-    await prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }).catch(() => {});
-    await prisma.journalEntry.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.purchaseInvoice.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.inventoryBalance.deleteMany({ where: { storeId } }).catch(() => {});
-    await prisma.productUnit.deleteMany({ where: { productId } }).catch(() => {});
-    await prisma.product.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.unit.deleteMany({ where: { id: unitId } }).catch(() => {});
-    await prisma.shift.deleteMany({ where: { userId } }).catch(() => {});
-    await prisma.till.deleteMany({ where: { storeId } }).catch(() => {});
-    await prisma.supplier.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.user.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.account.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.store.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.business.delete({ where: { id: businessId } }).catch(() => {});
-    await prisma.$disconnect();
+    await runTestTeardown(prisma, [
+      () => prisma.moneyIdempotency.deleteMany({ where: { businessId } }),
+      () => prisma.cashDrawerEntry.deleteMany({ where: { businessId } }),
+      () => prisma.stockMovement.deleteMany({ where: { storeId } }),
+      () => prisma.purchasePayment.deleteMany({ where: { businessId } }),
+      () => prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } }),
+      () => prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }),
+      () => prisma.journalEntry.deleteMany({ where: { businessId } }),
+      () => prisma.purchaseInvoice.deleteMany({ where: { businessId } }),
+      () => prisma.inventoryBalance.deleteMany({ where: { storeId } }),
+      () => prisma.productUnit.deleteMany({ where: { productId } }),
+      () => prisma.product.deleteMany({ where: { businessId } }),
+      () => prisma.unit.deleteMany({ where: { id: unitId } }),
+      () => prisma.shift.deleteMany({ where: { userId } }),
+      () => prisma.till.deleteMany({ where: { storeId } }),
+      () => prisma.supplier.deleteMany({ where: { businessId } }),
+      () => prisma.user.deleteMany({ where: { businessId } }),
+      () => prisma.account.deleteMany({ where: { businessId } }),
+      () => prisma.store.deleteMany({ where: { businessId } }),
+      () => prisma.business.delete({ where: { id: businessId } }),
+    ], { label: 'purchases-concurrency' });
   });
 
   it('rejects paid createPurchase without a key before writing', async () => {

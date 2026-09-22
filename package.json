@@ -14,6 +14,7 @@
     "lint": "cross-env ESLINT_USE_FLAT_CONFIG=false eslint app components hooks lib prisma scripts middleware.ts instrumentation.ts next.config.js postcss.config.js tailwind.config.ts vitest.config.ts vitest.setup.ts sentry.client.config.ts sentry.edge.config.ts sentry.server.config.ts --ext .js,.ts,.tsx --no-error-on-unmatched-pattern",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --reporter=dot",
+    "guard:db": "vitest run --reporter=verbose lib/database-target-guard.test.ts lib/test/test-prisma.test.ts lib/reliability/database-test-safety.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:pos-safety:unit": "vitest run --reporter=dot lib/services/checkout-shift-cashdrawer-rtx.test.ts lib/services/sales.test.ts lib/services/cash-drawer.test.ts lib/services/purchase-cash-drawer.test.ts lib/services/expenses-cash-drawer.test.ts lib/services/payments.test.ts lib/services/returns.test.ts",

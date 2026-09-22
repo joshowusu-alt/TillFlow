@@ -1,5 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
+import { prepareVitestDatabaseEnv } from './lib/test/vitest-database-env';
+
+// Database-target guard, in-worker, before this test file evaluates. Pins every Prisma URL
+// variable to the guarded target so `@/lib/prisma` / `new PrismaClient()` cannot reach `.env`.
+// A refused target throws here and the file fails before any code under test runs.
+prepareVitestDatabaseEnv(process.env);
 
 vi.mock('react', async () => {
     const actual = await vi.importActual<typeof import('react')>('react');

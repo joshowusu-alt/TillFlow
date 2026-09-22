@@ -10,11 +10,11 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import {
   bindPrismaPostgresUrls,
   canRunLivePostgres,
-  createBoundPrismaClient,
+  openBoundPrismaClient,
   postgresUrlIdentity,
   proveWalkthroughPostgresSchema,
   resolveBoundPostgresUrl,
@@ -68,8 +68,7 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
     }
     vi.resetModules();
     bindPrismaPostgresUrls(databaseUrl);
-    prisma = createBoundPrismaClient(databaseUrl);
-    await prisma.$connect();
+    prisma = await openBoundPrismaClient(databaseUrl);
 
     const business = await prisma.business.create({
       data: {

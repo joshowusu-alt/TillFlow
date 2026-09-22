@@ -4,11 +4,10 @@
  * Requires a real Postgres DATABASE_URL. Without it these tests are skipped.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '@prisma/client';
-import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
+import type { PrismaClient } from '@prisma/client';
+import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
 
-const databaseUrl = process.env.DATABASE_URL;
-const canRun = !!databaseUrl && isPostgresDatabaseUrl(databaseUrl);
+const canRun = canRunLivePostgresTests();
 
 const describeConcurrency = canRun ? describe : describe.skip;
 
@@ -21,14 +20,7 @@ describeConcurrency('expense payment overlapping transactions (Postgres)', () =>
   let userId = '';
   let accountId = '';
 
-  beforeAll(async () => {
-    // The generated client resolves `POSTGRES_PRISMA_URL` / `POSTGRES_URL_NON_POOLING`,
-    // not `DATABASE_URL`. Pin every URL the client can read to the suite's DATABASE_URL so
-    // neither this client nor `@/lib/prisma` can silently fall back to a `.env` database.
-    process.env.DATABASE_URL = databaseUrl!;
-    process.env.POSTGRES_PRISMA_URL = databaseUrl!;
-    process.env.POSTGRES_URL_NON_POOLING = databaseUrl!;
-    process.env.POSTGRES_URL = databaseUrl!;
+  beforeAll(async () => {
     const g = globalThis as unknown as { prisma?: PrismaClient };
     if (g.prisma) {
       await g.prisma.$disconnect().catch(() => {});
@@ -38,8 +30,7 @@ describeConcurrency('expense payment overlapping transactions (Postgres)', () =>
     const expensePayments = await import('@/lib/services/expensePayments');
     recordExpensePayment = expensePayments.recordExpensePayment;
 
-    prisma = new PrismaClient({ datasources: { db: { url: databaseUrl! } } });
-    await prisma.$connect();
+    ({ prisma } = await openTestPrismaClient());
 
     const business = await prisma.business.create({
       data: {
@@ -80,22 +71,22 @@ describeConcurrency('expense payment overlapping transactions (Postgres)', () =>
   }, 90000);
 
   afterAll(async () => {
-    if (!prisma) return;
-    await prisma.moneyIdempotency.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }).catch(() => {});
-    await prisma.journalEntry.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.cashDrawerEntry.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.expensePayment.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.expense.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.shift.deleteMany({ where: { till: { store: { businessId } } } }).catch(() => {});
-    await prisma.till.deleteMany({ where: { store: { businessId } } }).catch(() => {});
-    await prisma.businessSequence.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.auditLog.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.user.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.account.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.store.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.business.deleteMany({ where: { id: businessId } }).catch(() => {});
-    await prisma.$disconnect();
+    await runTestTeardown(prisma, [
+      () => prisma.moneyIdempotency.deleteMany({ where: { businessId } }),
+      () => prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }),
+      () => prisma.journalEntry.deleteMany({ where: { businessId } }),
+      () => prisma.cashDrawerEntry.deleteMany({ where: { businessId } }),
+      () => prisma.expensePayment.deleteMany({ where: { businessId } }),
+      () => prisma.expense.deleteMany({ where: { businessId } }),
+      () => prisma.shift.deleteMany({ where: { till: { store: { businessId } } } }),
+      () => prisma.till.deleteMany({ where: { store: { businessId } } }),
+      () => prisma.businessSequence.deleteMany({ where: { businessId } }),
+      () => prisma.auditLog.deleteMany({ where: { businessId } }),
+      () => prisma.user.deleteMany({ where: { businessId } }),
+      () => prisma.account.deleteMany({ where: { businessId } }),
+      () => prisma.store.deleteMany({ where: { businessId } }),
+      () => prisma.business.deleteMany({ where: { id: businessId } }),
+    ], { label: 'expense-payments-concurrency' });
   }, 90000);
 
   it('rejects two simultaneous expense payments that would overpay', async () => {

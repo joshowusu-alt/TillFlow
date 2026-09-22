@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import {
   bindPrismaPostgresUrls,
   canRunLivePostgres,
-  createBoundPrismaClient,
+  openBoundPrismaClient,
   postgresUrlIdentity,
   resolveBoundPostgresUrl,
 } from '@/lib/test/isolated-postgres';
@@ -38,8 +38,7 @@ describeIsolated('final walkthrough isolated Postgres gate', () => {
       throw new Error('Refusing Production');
     }
     bindPrismaPostgresUrls(databaseUrl);
-    prisma = createBoundPrismaClient(databaseUrl);
-    await prisma.$connect();
+    prisma = await openBoundPrismaClient(databaseUrl);
     const business = await prisma.business.create({
       data: {
         name: `Final gate ${suffix}`,
