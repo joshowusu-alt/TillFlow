@@ -41,6 +41,14 @@ export const PRODUCTION_DB_HOSTS_KEY = 'TILLFLOW_PRODUCTION_DB_HOSTS';
 export const PRODUCTION_DATABASE_NAMES = ['neondb'];
 export const PRODUCTION_HOST_FRAGMENTS = ['fancy-darkness'];
 
+/**
+ * Known isolated Neon branches used for Preview / walkthrough proofs. A REMOTE host is only
+ * allowed when its endpoint contains one of these fragments (or is explicitly allowlisted via
+ * `TILLFLOW_TEST_DB_ALLOWLIST`) AND its database name follows the isolated naming convention.
+ * A new Neon compute id — including a future Production one — is therefore refused by default.
+ */
+export const ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS = ['old-sunset', 'late-cell'];
+
 /** Database names that are, by convention, isolated test / Preview targets. */
 const ISOLATED_DATABASE_NAME = /^tillflow_(ci|preview|test|walkthrough|qa)([_-][a-z0-9_-]+)?$/i;
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', 'postgres', 'db', 'host.docker.internal']);
@@ -48,12 +56,14 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', 'postgres
 export type DatabaseIdentity = {
   kind: 'postgres' | 'sqlite' | 'unknown' | 'missing';
   host: string;
-  /** Neon endpoint id with any `-pooler` suffix removed, so pooled/direct URLs compare equal. */
+  /** Neon endpoint id (host with any `-pooler` suffix removed, plus port), so pooled/direct URLs compare equal. */
   endpoint: string;
   database: string;
   schema: string;
   /** Safe to log: never contains credentials. */
   sanitized: string;
+  /** Full URL, lower-cased, with credentials stripped — used for deny-fragment matching only. */
+  redactedUrl: string;
 };
 
 export class DatabaseTargetRefusedError extends Error {
@@ -69,23 +79,36 @@ function stripPoolerSuffix(host: string) {
   return host.replace(/-pooler(?=\.|$)/i, '');
 }
 
+function safeDecode(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function blank(kind: DatabaseIdentity['kind'], sanitized: string): DatabaseIdentity {
+  return { kind, host: '', endpoint: '', database: '', schema: '', sanitized, redactedUrl: '' };
+}
+
 export function describeDatabaseUrl(raw: string | undefined | null): DatabaseIdentity {
   const value = raw?.trim() ?? '';
-  if (!value) {
-    return { kind: 'missing', host: '', endpoint: '', database: '', schema: '', sanitized: '<missing>' };
-  }
+  if (!value) return blank('missing', '<missing>');
   const lower = value.toLowerCase();
   if (lower.startsWith('file:') || lower.startsWith('sqlite:')) {
     const database = value.replace(/^(file|sqlite):/i, '').split('?')[0];
-    return { kind: 'sqlite', host: '', endpoint: '', database, schema: '', sanitized: `sqlite:${database}` };
+    return { kind: 'sqlite', host: '', endpoint: '', database, schema: '', sanitized: `sqlite:${database}`, redactedUrl: lower };
   }
   if (lower.startsWith('postgres://') || lower.startsWith('postgresql://')) {
     try {
       const parsed = new URL(value);
       const host = parsed.hostname.toLowerCase();
-      const database = decodeURIComponent(parsed.pathname.replace(/^\//, '').split('?')[0] || '');
+      // Prisma (quaint) uses the FIRST path segment as the database name; so do we.
+      const database = safeDecode(parsed.pathname.replace(/^\//, '').split('/')[0].split('?')[0] || '');
       const schema = parsed.searchParams.get('schema') || 'public';
-      const endpoint = stripPoolerSuffix(host);
+      const endpoint = `${stripPoolerSuffix(host)}${parsed.port ? ':' + parsed.port : ''}`;
+      parsed.username = '';
+      parsed.password = '';
       return {
         kind: 'postgres',
         host,
@@ -93,12 +116,13 @@ export function describeDatabaseUrl(raw: string | undefined | null): DatabaseIde
         database,
         schema,
         sanitized: `postgres://${host}${parsed.port ? ':' + parsed.port : ''}/${database}?schema=${schema}`,
+        redactedUrl: safeDecode(parsed.toString()).toLowerCase(),
       };
     } catch {
-      return { kind: 'unknown', host: '', endpoint: '', database: '', schema: '', sanitized: '<unparseable postgres url>' };
+      return blank('unknown', '<unparseable postgres url>');
     }
   }
-  return { kind: 'unknown', host: '', endpoint: '', database: '', schema: '', sanitized: '<unknown scheme>' };
+  return blank('unknown', '<unknown scheme>');
 }
 
 export function sameDatabaseTarget(a: DatabaseIdentity, b: DatabaseIdentity) {
@@ -133,29 +157,39 @@ export function evaluateDatabaseTarget(raw: string | undefined | null, env: Node
   if (identity.kind === 'unknown') return { ok: false, reason: 'database URL has an unrecognised scheme', identity };
   if (identity.kind === 'sqlite') return { ok: true, reason: 'sqlite file database', identity };
 
-  const denyHosts = [...PRODUCTION_HOST_FRAGMENTS, ...splitList(env[PRODUCTION_DB_HOSTS_KEY])];
+  const denyFragments = [...PRODUCTION_HOST_FRAGMENTS, ...splitList(env[PRODUCTION_DB_HOSTS_KEY])];
   if (PRODUCTION_DATABASE_NAMES.includes(identity.database.toLowerCase())) {
     return { ok: false, reason: `database "${identity.database}" is the Production database name`, identity };
   }
-  if (denyHosts.some((fragment) => identity.host.includes(fragment))) {
-    return { ok: false, reason: `host "${identity.host}" matches a known Production endpoint`, identity };
+  // Match deny fragments against the WHOLE redacted URL, not just the hostname: Neon also
+  // routes on `options=endpoint=ep-…`, so a Production endpoint id anywhere in the URL is refused.
+  const denied = denyFragments.find((fragment) => identity.redactedUrl.includes(fragment));
+  if (denied) {
+    return { ok: false, reason: `URL contains known Production endpoint fragment "${denied}"`, identity };
   }
 
   const allowPairs = splitList(env[TEST_DATABASE_ALLOWLIST_KEY]);
   const pair = `${identity.host}/${identity.database}`.toLowerCase();
   const endpointPair = `${identity.endpoint}/${identity.database}`.toLowerCase();
-  if (allowPairs.includes(pair) || allowPairs.includes(endpointPair)) {
+  const endpointNoPortPair = `${identity.endpoint.split(':')[0]}/${identity.database}`.toLowerCase();
+  if (allowPairs.includes(pair) || allowPairs.includes(endpointPair) || allowPairs.includes(endpointNoPortPair)) {
     return { ok: true, reason: `explicitly allowlisted via ${TEST_DATABASE_ALLOWLIST_KEY}`, identity };
   }
   if (LOCAL_HOSTS.has(identity.host)) {
     return { ok: true, reason: 'local Postgres host', identity };
   }
-  if (ISOLATED_DATABASE_NAME.test(identity.database)) {
-    return { ok: true, reason: `isolated test database name "${identity.database}"`, identity };
+  // Remote hosts: BOTH a known isolated endpoint AND an isolated database name are required.
+  const knownIsolatedEndpoint = ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS.find((fragment) => identity.host.includes(fragment));
+  if (knownIsolatedEndpoint && ISOLATED_DATABASE_NAME.test(identity.database)) {
+    return {
+      ok: true,
+      reason: `known isolated Preview endpoint "${knownIsolatedEndpoint}" with isolated database name "${identity.database}"`,
+      identity,
+    };
   }
   return {
     ok: false,
-    reason: `"${identity.sanitized}" is not an allowlisted isolated test/Preview database`,
+    reason: `"${identity.sanitized}" is not an allowlisted isolated test/Preview database (remote hosts need a known isolated endpoint or ${TEST_DATABASE_ALLOWLIST_KEY})`,
     identity,
   };
 }

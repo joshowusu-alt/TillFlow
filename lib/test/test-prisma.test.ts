@@ -51,6 +51,22 @@ describe('openTestPrismaClient — the guard runs before any client exists', () 
     expect(client.$disconnect).toHaveBeenCalled();
   });
 
+  it('disconnects the constructed client when $connect itself fails (no leaked connections)', async () => {
+    const client = fakeClient();
+    (client.$connect as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('ECONNREFUSED'));
+    const env = envOf({ DATABASE_URL: CI });
+    await expect(openTestPrismaClient({ env, construct: () => client, log: () => undefined })).rejects.toThrow(/ECONNREFUSED/);
+    expect(client.$disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('disconnects when the identity query fails', async () => {
+    const client = fakeClient();
+    (client.$queryRaw as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('permission denied'));
+    const env = envOf({ DATABASE_URL: CI });
+    await expect(openTestPrismaClient({ env, construct: () => client, log: () => undefined })).rejects.toThrow(/permission denied/);
+    expect(client.$disconnect).toHaveBeenCalledTimes(1);
+  });
+
   it('reports the generated client datasource so callers can prove which env key Prisma reads', () => {
     const generated = generatedClientDatasource();
     expect(['postgresql', 'sqlite', 'unknown']).toContain(generated.provider);

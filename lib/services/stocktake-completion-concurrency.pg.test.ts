@@ -6,6 +6,7 @@ import {
   openBoundPrismaClient,
   resolveBoundPostgresUrl,
 } from '@/lib/test/isolated-postgres';
+import { runTestTeardown } from '@/lib/test/test-prisma';
 
 const databaseUrl = resolveBoundPostgresUrl();
 const canRun = canRunLivePostgres(databaseUrl);
@@ -130,21 +131,25 @@ describeConcurrency('stocktake completion idempotency (Postgres)', () => {
   }, 60000);
 
   afterAll(async () => {
-    if (!prisma) return;
-    await prisma.stocktakeLine.deleteMany({ where: { stocktakeId } }).catch(() => {});
-    await prisma.stocktake.deleteMany({ where: { id: stocktakeId } }).catch(() => {});
-    await prisma.stockMovement.deleteMany({ where: { storeId } }).catch(() => {});
-    await prisma.stockAdjustment.deleteMany({ where: { storeId } }).catch(() => {});
-    await prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }).catch(() => {});
-    await prisma.journalEntry.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.inventoryBalance.deleteMany({ where: { storeId } }).catch(() => {});
-    await prisma.productUnit.deleteMany({ where: { productId } }).catch(() => {});
-    await prisma.product.deleteMany({ where: { id: productId } }).catch(() => {});
-    await prisma.user.deleteMany({ where: { id: userId } }).catch(() => {});
-    await prisma.store.deleteMany({ where: { id: storeId } }).catch(() => {});
-    await prisma.account.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.business.deleteMany({ where: { id: businessId } }).catch(() => {});
-    await prisma.$disconnect();
+    await runTestTeardown(
+      prisma,
+      [
+        () => prisma.stocktakeLine.deleteMany({ where: { stocktakeId } }),
+        () => prisma.stocktake.deleteMany({ where: { id: stocktakeId } }),
+        () => prisma.stockMovement.deleteMany({ where: { storeId } }),
+        () => prisma.stockAdjustment.deleteMany({ where: { storeId } }),
+        () => prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }),
+        () => prisma.journalEntry.deleteMany({ where: { businessId } }),
+        () => prisma.inventoryBalance.deleteMany({ where: { storeId } }),
+        () => prisma.productUnit.deleteMany({ where: { productId } }),
+        () => prisma.product.deleteMany({ where: { id: productId } }),
+        () => prisma.user.deleteMany({ where: { id: userId } }),
+        () => prisma.store.deleteMany({ where: { id: storeId } }),
+        () => prisma.account.deleteMany({ where: { businessId } }),
+        () => prisma.business.deleteMany({ where: { id: businessId } }),
+      ],
+      { label: 'stocktake-completion-concurrency.pg.test.ts' },
+    );
   });
 
   it('posts stock once when two completions race', async () => {

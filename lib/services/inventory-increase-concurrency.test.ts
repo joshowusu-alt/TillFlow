@@ -19,6 +19,7 @@ import {
   proveWalkthroughPostgresSchema,
   resolveBoundPostgresUrl,
 } from '@/lib/test/isolated-postgres';
+import { runTestTeardown } from '@/lib/test/test-prisma';
 
 function generatedPrismaSchemaIdentity() {
   const require = createRequire(__filename);
@@ -131,23 +132,25 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
   }, 60000);
 
   afterAll(async () => {
-    if (!prisma) return;
-    await prisma.journalLine.deleteMany({
-      where: { journalEntry: { businessId } },
-    }).catch(() => {});
-    await prisma.journalEntry.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.auditLog.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.stockMovement.deleteMany({ where: { storeId } }).catch(() => {});
-    await prisma.stockAdjustment.deleteMany({ where: { storeId } }).catch(() => {});
-    await prisma.inventoryBalance.deleteMany({ where: { storeId } }).catch(() => {});
-    await prisma.productUnit.deleteMany({ where: { productId } }).catch(() => {});
-    await prisma.product.deleteMany({ where: { id: productId } }).catch(() => {});
-    await prisma.unit.deleteMany({ where: { id: unitId } }).catch(() => {});
-    await prisma.user.deleteMany({ where: { id: userId } }).catch(() => {});
-    await prisma.account.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.store.deleteMany({ where: { id: storeId } }).catch(() => {});
-    await prisma.business.deleteMany({ where: { id: businessId } }).catch(() => {});
-    await prisma.$disconnect();
+    await runTestTeardown(
+      prisma,
+      [
+        () => prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }),
+        () => prisma.journalEntry.deleteMany({ where: { businessId } }),
+        () => prisma.auditLog.deleteMany({ where: { businessId } }),
+        () => prisma.stockMovement.deleteMany({ where: { storeId } }),
+        () => prisma.stockAdjustment.deleteMany({ where: { storeId } }),
+        () => prisma.inventoryBalance.deleteMany({ where: { storeId } }),
+        () => prisma.productUnit.deleteMany({ where: { productId } }),
+        () => prisma.product.deleteMany({ where: { id: productId } }),
+        () => prisma.unit.deleteMany({ where: { id: unitId } }),
+        () => prisma.user.deleteMany({ where: { id: userId } }),
+        () => prisma.account.deleteMany({ where: { businessId } }),
+        () => prisma.store.deleteMany({ where: { id: storeId } }),
+        () => prisma.business.deleteMany({ where: { id: businessId } }),
+      ],
+      { label: 'inventory-increase-concurrency.test.ts' },
+    );
   });
 
   it('proves the generated Postgres client talks to the bound isolated database', async () => {

@@ -6,6 +6,7 @@ import {
   openBoundPrismaClient,
   resolveBoundPostgresUrl,
 } from '@/lib/test/isolated-postgres';
+import { runTestTeardown } from '@/lib/test/test-prisma';
 import { performShiftOpen } from '@/lib/services/shifts';
 import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 
@@ -64,13 +65,21 @@ describeLive('selected-store shift open stays on Store B', () => {
   }, 90000);
 
   afterAll(async () => {
-    if (!prisma) return;
-    await prisma.shift.deleteMany({ where: { till: { store: { businessId } } } }).catch(() => {});
-    await prisma.till.deleteMany({ where: { id: { in: [tillA, tillB] } } }).catch(() => {});
-    await prisma.user.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.store.deleteMany({ where: { id: { in: [storeA, storeB] } } }).catch(() => {});
-    await prisma.business.deleteMany({ where: { id: businessId } }).catch(() => {});
-    await prisma.$disconnect();
+    await runTestTeardown(
+      prisma,
+      [
+        // performShiftOpen writes an opening-float CashDrawerEntry (till + user FKs); it was never
+        // deleted while the old teardown swallowed the FK error, leaking the whole tenant each run.
+        () => prisma.cashDrawerEntry.deleteMany({ where: { businessId } }),
+        () => prisma.auditLog.deleteMany({ where: { businessId } }),
+        () => prisma.shift.deleteMany({ where: { till: { store: { businessId } } } }),
+        () => prisma.till.deleteMany({ where: { store: { businessId } } }),
+        () => prisma.user.deleteMany({ where: { businessId } }),
+        () => prisma.store.deleteMany({ where: { businessId } }),
+        () => prisma.business.deleteMany({ where: { id: businessId } }),
+      ],
+      { label: 'shift-selected-store.pg.test.ts' },
+    );
   });
 
   it('opens only on the explicit Store B till and leaves Store A unchanged', async () => {

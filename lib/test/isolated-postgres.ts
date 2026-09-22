@@ -11,6 +11,7 @@
 import type { PrismaClient } from '@prisma/client';
 import {
   DatabaseTargetRefusedError,
+  ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS,
   describeDatabaseUrl,
   evaluateDatabaseTarget,
   pinPrismaEnv,
@@ -39,13 +40,24 @@ export function postgresUrlIdentity(url: string): PostgresUrlIdentity {
   const parsed = new URL(url);
   return {
     hostPrefix: parsed.hostname.split('.')[0],
-    database: decodeURIComponent(parsed.pathname.replace(/^\//, '').split('?')[0] || ''),
+    database: describeDatabaseUrl(url).database,
     schema: parsed.searchParams.get('schema') || 'public',
   };
 }
 
 export function canRunLivePostgres(url = resolveBoundPostgresUrl()): boolean {
   return isPostgresDatabaseUrl(url);
+}
+
+/**
+ * True when `identity` is the dedicated `tillflow_preview` database on one of the known isolated
+ * Neon branches ({@link ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS}). Single source of truth for every
+ * "isolated Preview only" check so the walkthrough gate and this helper cannot drift apart.
+ */
+export function isIsolatedPreviewIdentity(identity: PostgresUrlIdentity | null | undefined): boolean {
+  if (!identity) return false;
+  const prefix = identity.hostPrefix.toLowerCase();
+  return ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS.some((fragment) => prefix.includes(fragment)) && identity.database === 'tillflow_preview';
 }
 
 /**
@@ -58,7 +70,7 @@ export function assertIsolatedPreviewHost(url: string): PostgresUrlIdentity {
   if (!verdict.ok) throw new DatabaseTargetRefusedError(verdict.reason, verdict.identity);
   const identity = postgresUrlIdentity(url);
   if (process.env.TILLFLOW_REQUIRE_ISOLATED_PREVIEW === '1') {
-    if (!/old-sunset|late-cell/i.test(identity.hostPrefix) || identity.database !== 'tillflow_preview') {
+    if (!isIsolatedPreviewIdentity(identity)) {
       throw new Error(
         `Refusing non-isolated Postgres hostPrefix=${identity.hostPrefix} database=${identity.database}`,
       );

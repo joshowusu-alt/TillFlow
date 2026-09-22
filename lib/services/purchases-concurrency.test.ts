@@ -119,7 +119,7 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
       () => prisma.user.deleteMany({ where: { businessId } }),
       () => prisma.account.deleteMany({ where: { businessId } }),
       () => prisma.store.deleteMany({ where: { businessId } }),
-      () => prisma.business.delete({ where: { id: businessId } }),
+      () => prisma.business.deleteMany({ where: { id: businessId } }),
     ], { label: 'purchases-concurrency' });
   });
 

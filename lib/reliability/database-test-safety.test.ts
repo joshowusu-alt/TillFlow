@@ -39,9 +39,48 @@ const SELF = 'lib/reliability/database-test-safety.test.ts';
 const testFiles = allFiles.filter((f) => /\.(test|spec)\.tsx?$/.test(f) && rel(f) !== SELF);
 const scriptFiles = allFiles.filter((f) => /^(scripts|prisma)\//.test(rel(f)) && /\.(ts|tsx|js|cjs|mjs)$/.test(f) && !/\.(test|spec)\./.test(f));
 
-const BARE_CLIENT = /new PrismaClient\s*\(/;
-const VALUE_IMPORT_PRISMA_CLIENT = /import\s*\{[^}]*\bPrismaClient\b[^}]*\}\s*from\s*['"]@prisma\/client['"]/;
-const ENV_ASSIGNMENT = /process\.env\.(DATABASE_URL|DIRECT_URL|POSTGRES_PRISMA_URL|POSTGRES_URL|POSTGRES_URL_NON_POOLING|POSTGRES_URL_NO_SSL|PRISMA_DATABASE_URL|[A-Z0-9_]+_DATABASE_URL)\s*=[^=]/;
+/** Non-test helper modules that tests import; a bare client here would be reachable from every suite. */
+const TEST_HELPER_FILES = allFiles.filter(
+  (f) => /^(lib\/test|tests)\//.test(rel(f)) && /\.(ts|tsx|js|cjs|mjs)$/.test(f) && !/\.(test|spec)\./.test(f) && rel(f) !== 'lib/test/test-prisma.ts',
+);
+
+// `new PrismaClient(`, `new P.PrismaClient(`, `new (PrismaClient)(`, `new  Prisma . PrismaClient (`
+const BARE_CLIENT = /new\s+\(?\s*(?:[\w$]+\s*\.\s*)*PrismaClient\s*\)?\s*\(/;
+// Any specifier that resolves to the generated client (root, sub-path, or the raw generated package).
+const PRISMA_CLIENT_SPECIFIER = /['"](?:@prisma\/client(?:\/[\w./-]+)?|\.prisma\/client(?:\/[\w./-]+)?)['"]/;
+const ENV_KEY = '(?:DATABASE_URL|DIRECT_URL|POSTGRES_PRISMA_URL|POSTGRES_URL|POSTGRES_URL_NON_POOLING|POSTGRES_URL_NO_SSL|PRISMA_DATABASE_URL|[A-Z0-9_]+_DATABASE_URL)';
+const ENV_ASSIGNMENT = new RegExp(
+  [
+    `process\\.env\\.${ENV_KEY}\\s*=[^=]`, // process.env.DATABASE_URL = …
+    `process\\.env\\[\\s*['"\`]${ENV_KEY}['"\`]\\s*\\]\\s*=[^=]`, // process.env['DATABASE_URL'] = …
+    `Object\\.assign\\(\\s*process\\.env\\b`, // Object.assign(process.env, …)
+    `vi\\.stubEnv\\(\\s*['"\`]${ENV_KEY}['"\`]`, // vi.stubEnv('DATABASE_URL', …)
+    `delete\\s+process\\.env(?:\\.${ENV_KEY}|\\[\\s*['"\`]${ENV_KEY}['"\`]\\s*\\])`, // delete process.env.DATABASE_URL
+  ].join('|'),
+);
+
+/**
+ * True when a file imports the Prisma client package in a way that exposes `PrismaClient` as a
+ * runtime VALUE: named import (not `type`), namespace import, default import, or `require`.
+ * Type-only forms (`import type { PrismaClient }`, `import { type PrismaClient }`) are fine.
+ */
+function importsPrismaClientValue(src: string): boolean {
+  const statements = src.match(/import\s[^;]*?from\s*['"][^'"]+['"]|import\s*\(\s*['"][^'"]+['"]\s*\)|require\s*\(\s*['"][^'"]+['"]\s*\)/g) ?? [];
+  for (const statement of statements) {
+    if (!PRISMA_CLIENT_SPECIFIER.test(statement)) continue;
+    if (/^import\s+type\b/.test(statement)) continue;
+    if (/^import\s*\(|^require\s*\(/.test(statement)) return true; // dynamic import / require: whole module as value
+    if (/import\s*\*\s*as\s+/.test(statement)) return true; // namespace import
+    const named = statement.match(/\{([^}]*)\}/);
+    if (!named) return true; // default import
+    const runtimeNames = named[1]
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s && !/^type\s+/.test(s));
+    if (runtimeNames.some((s) => /^PrismaClient\b/.test(s))) return true;
+  }
+  return false;
+}
 
 /** Test files that legitimately assign DB env vars to exercise SQL-dialect branches with a MOCKED prisma. */
 const ENV_ASSIGNMENT_ALLOWLIST = new Set([
@@ -85,8 +124,6 @@ const BARE_CLIENT_SCRIPT_BASELINE = new Set([
   // explicit-datasource scripts (still bare in the sense of no guard): frozen as well
   'scripts/assess-supplier-payment-orphans.ts',
   'scripts/perf/catalogue-scale-preview-pg.ts',
-  'scripts/seed-adom-retail-demo-runner.ts',
-  'scripts/test-backup.ts',
 ]);
 
 describe('database test safety — no unguarded Prisma clients', () => {
@@ -94,14 +131,52 @@ describe('database test safety — no unguarded Prisma clients', () => {
     expect(testFiles.length).toBeGreaterThan(50);
   });
 
-  it('no test file constructs `new PrismaClient(` directly', () => {
+  it('no test file constructs `new PrismaClient(` directly (any alias or namespace form)', () => {
     const offenders = testFiles.filter((f) => BARE_CLIENT.test(read(f))).map(rel);
     expect(offenders).toEqual([]);
   });
 
-  it('no test file imports PrismaClient as a value (type-only imports are fine)', () => {
-    const offenders = testFiles.filter((f) => VALUE_IMPORT_PRISMA_CLIENT.test(read(f))).map(rel);
+  it('no non-test helper under lib/test or tests/ constructs a bare client either', () => {
+    expect(TEST_HELPER_FILES.length).toBeGreaterThan(0);
+    const offenders = TEST_HELPER_FILES.filter((f) => BARE_CLIENT.test(read(f))).map(rel);
     expect(offenders).toEqual([]);
+  });
+
+  it('no test file imports PrismaClient as a value (type-only imports are fine)', () => {
+    const offenders = testFiles.filter((f) => importsPrismaClientValue(read(f))).map(rel);
+    expect(offenders).toEqual([]);
+  });
+
+  it('the scan regexes catch the evasions they are meant to catch', () => {
+    for (const sample of ['new PrismaClient(', 'new P.PrismaClient(', 'new (PrismaClient)(', 'new  Prisma . PrismaClient (']) {
+      expect(BARE_CLIENT.test(sample), sample).toBe(true);
+    }
+    for (const sample of [
+      "import { PrismaClient } from '@prisma/client'",
+      "import { Prisma, PrismaClient } from '@prisma/client/edge'",
+      "import * as P from '@prisma/client'",
+      "import Client from '.prisma/client'",
+      "const { PrismaClient } = require('@prisma/client')",
+    ]) {
+      expect(importsPrismaClientValue(sample), sample).toBe(true);
+    }
+    for (const sample of [
+      "import type { PrismaClient } from '@prisma/client'",
+      "import { type PrismaClient, Prisma } from '@prisma/client'",
+      "import { Prisma } from '@prisma/client'",
+    ]) {
+      expect(importsPrismaClientValue(sample), sample).toBe(false);
+    }
+    for (const sample of [
+      "process.env.DATABASE_URL = 'x'",
+      "process.env['POSTGRES_PRISMA_URL'] = 'x'",
+      'Object.assign(process.env, { DATABASE_URL: x })',
+      "vi.stubEnv('POSTGRES_URL_NON_POOLING', 'x')",
+      'delete process.env.DATABASE_URL',
+    ]) {
+      expect(ENV_ASSIGNMENT.test(sample), sample).toBe(true);
+    }
+    expect(ENV_ASSIGNMENT.test("process.env.DATABASE_URL === 'x'")).toBe(false);
   });
 
   it('every live-database test obtains its client from the central factory', () => {
@@ -130,8 +205,8 @@ describe('database test safety — no unguarded Prisma clients', () => {
     const bare = scriptFiles.filter((f) => BARE_CLIENT.test(read(f))).map(rel);
     const newOffenders = bare.filter((r) => !BARE_CLIENT_SCRIPT_BASELINE.has(r) && r !== 'scripts/lib/guarded-prisma.cjs');
     expect(newOffenders).toEqual([]);
-    // Baseline entries that disappeared should be removed from the list (keeps it honest).
-    const stale = [...BARE_CLIENT_SCRIPT_BASELINE].filter((r) => !allFiles.some((f) => rel(f) === r));
+    // Baseline entries that disappeared, or no longer construct a bare client, must be removed (keeps it honest).
+    const stale = [...BARE_CLIENT_SCRIPT_BASELINE].filter((r) => !bare.includes(r));
     expect(stale).toEqual([]);
   });
 

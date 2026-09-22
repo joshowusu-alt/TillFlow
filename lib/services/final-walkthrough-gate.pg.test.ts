@@ -3,10 +3,12 @@ import type { PrismaClient } from '@prisma/client';
 import {
   bindPrismaPostgresUrls,
   canRunLivePostgres,
+  isIsolatedPreviewIdentity,
   openBoundPrismaClient,
   postgresUrlIdentity,
   resolveBoundPostgresUrl,
 } from '@/lib/test/isolated-postgres';
+import { runTestTeardown } from '@/lib/test/test-prisma';
 import {
   NEGATIVE_ACTUAL_CASH_MSG,
   performShiftClose,
@@ -15,10 +17,9 @@ import {
 import { approveAndCompleteStockTransfer, requestStockTransfer } from '@/lib/services/stock-transfers';
 
 const databaseUrl = resolveBoundPostgresUrl();
-const identity = databaseUrl ? postgresUrlIdentity(databaseUrl) : null;
-const isolated =
-  canRunLivePostgres(databaseUrl) &&
-  Boolean(identity && /old-sunset/i.test(identity.hostPrefix) && identity.database === 'tillflow_preview');
+const identity = canRunLivePostgres(databaseUrl) ? postgresUrlIdentity(databaseUrl) : null;
+// Same rule as `assertIsolatedPreviewHost` (TILLFLOW_REQUIRE_ISOLATED_PREVIEW): one source of truth.
+const isolated = isIsolatedPreviewIdentity(identity);
 if (isolated) bindPrismaPostgresUrls(databaseUrl);
 const describeIsolated = isolated ? describe : describe.skip;
 
@@ -96,7 +97,31 @@ describeIsolated('final walkthrough isolated Postgres gate', () => {
   });
 
   afterAll(async () => {
-    await prisma?.$disconnect();
+    // Previously disconnect-only, which left the seeded tenant behind on the isolated Preview
+    // database after every run. Every step runs; any failure is reported, never swallowed.
+    await runTestTeardown(
+      prisma,
+      [
+        () => prisma.stockTransferLine.deleteMany({ where: { stockTransfer: { businessId } } }),
+        () => prisma.stockTransfer.deleteMany({ where: { businessId } }),
+        () => prisma.stockMovement.deleteMany({ where: { storeId: { in: [storeA, storeB] } } }),
+        () => prisma.cashDrawerEntry.deleteMany({ where: { businessId } }),
+        () => prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }),
+        () => prisma.journalEntry.deleteMany({ where: { businessId } }),
+        () => prisma.auditLog.deleteMany({ where: { businessId } }),
+        () => prisma.shift.deleteMany({ where: { till: { storeId: { in: [storeA, storeB] } } } }),
+        () => prisma.inventoryBalance.deleteMany({ where: { storeId: { in: [storeA, storeB] } } }),
+        () => prisma.productUnit.deleteMany({ where: { productId } }),
+        () => prisma.product.deleteMany({ where: { id: productId } }),
+        () => prisma.unit.deleteMany({ where: { name: `u-${suffix}` } }),
+        () => prisma.till.deleteMany({ where: { storeId: { in: [storeA, storeB] } } }),
+        () => prisma.user.deleteMany({ where: { businessId } }),
+        () => prisma.store.deleteMany({ where: { businessId } }),
+        () => prisma.account.deleteMany({ where: { businessId } }),
+        () => prisma.business.deleteMany({ where: { id: businessId } }),
+      ],
+      { label: 'final-walkthrough-gate.pg.test.ts' },
+    );
   });
 
   it('rejects actualCash=-2.50 on every close entry point with no writes', async () => {

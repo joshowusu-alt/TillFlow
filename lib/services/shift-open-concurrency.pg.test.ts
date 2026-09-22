@@ -6,6 +6,7 @@ import {
   openBoundPrismaClient,
   resolveBoundPostgresUrl,
 } from '@/lib/test/isolated-postgres';
+import { runTestTeardown } from '@/lib/test/test-prisma';
 import { performShiftOpen, TILL_ALREADY_OPEN_MSG } from '@/lib/services/shifts';
 
 const databaseUrl = resolveBoundPostgresUrl();
@@ -45,14 +46,18 @@ describeConcurrency('same-till shift open (Postgres)', () => {
   }, 60000);
 
   afterAll(async () => {
-    if (!prisma) return;
-    await prisma.cashDrawerEntry.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.shift.deleteMany({ where: { tillId } }).catch(() => {});
-    await prisma.till.deleteMany({ where: { id: tillId } }).catch(() => {});
-    await prisma.user.deleteMany({ where: { id: userId } }).catch(() => {});
-    await prisma.store.deleteMany({ where: { id: storeId } }).catch(() => {});
-    await prisma.business.deleteMany({ where: { id: businessId } }).catch(() => {});
-    await prisma.$disconnect();
+    await runTestTeardown(
+      prisma,
+      [
+        () => prisma.cashDrawerEntry.deleteMany({ where: { businessId } }),
+        () => prisma.shift.deleteMany({ where: { tillId } }),
+        () => prisma.till.deleteMany({ where: { id: tillId } }),
+        () => prisma.user.deleteMany({ where: { id: userId } }),
+        () => prisma.store.deleteMany({ where: { id: storeId } }),
+        () => prisma.business.deleteMany({ where: { id: businessId } }),
+      ],
+      { label: 'shift-open-concurrency.pg.test.ts' },
+    );
   });
 
   it('allows only one OPEN shift on the same till under concurrent open', async () => {

@@ -45,6 +45,26 @@ describe('describeDatabaseUrl', () => {
     expect(describeDatabaseUrl(undefined).kind).toBe('missing');
     expect(describeDatabaseUrl('mysql://x/y').kind).toBe('unknown');
   });
+
+  it('takes the database name from the FIRST path segment, exactly as Prisma does', () => {
+    expect(describeDatabaseUrl('postgresql://u:p@localhost/neondb/').database).toBe('neondb');
+    expect(describeDatabaseUrl('postgresql://u:p@localhost/neondb/extra').database).toBe('neondb');
+    expect(describeDatabaseUrl('postgresql://u:p@localhost/till%5Fflow_ci').database).toBe('till_flow_ci');
+    expect(describeDatabaseUrl('postgresql://u:p@localhost/bad%zz').database).toBe('bad%zz'); // malformed escapes do not throw
+  });
+
+  it('exposes a credential-free redacted URL for deny matching', () => {
+    const id = describeDatabaseUrl(PROD_POOLED);
+    expect(id.redactedUrl).not.toContain('secret');
+    expect(id.redactedUrl).not.toContain('user');
+    expect(id.redactedUrl).toContain('fancy-darkness');
+  });
+
+  it('a different port is a different target', () => {
+    expect(
+      sameDatabaseTarget(describeDatabaseUrl('postgresql://u:p@localhost:5432/x'), describeDatabaseUrl('postgresql://u:p@localhost:5433/x')),
+    ).toBe(false);
+  });
 });
 
 describe('evaluateDatabaseTarget — Production-like URLs fail closed', () => {
@@ -57,6 +77,19 @@ describe('evaluateDatabaseTarget — Production-like URLs fail closed', () => {
     ['un-allowlisted Neon database name', 'postgresql://u:p@ep-quiet-sea-1234.eu-west-2.aws.neon.tech/tillflow'],
     ['missing url', ''],
     ['unknown scheme', 'mysql://u:p@localhost/tillflow_ci'],
+    // WS6 finding 1: trailing-slash / extra-segment evasion of the name deny list
+    ['neondb hidden behind a trailing slash', 'postgresql://u:p@ep-late-cell-1234.eu-west-2.aws.neon.tech/neondb/'],
+    ['neondb hidden behind an extra path segment', 'postgresql://u:p@ep-late-cell-1234.eu-west-2.aws.neon.tech/neondb/tillflow_preview'],
+    // WS6 finding 2: Neon `options=endpoint=…` routing to the Production compute from a benign hostname
+    [
+      'Production endpoint smuggled through options=endpoint',
+      'postgresql://u:p@ep-late-cell-1234.eu-west-2.aws.neon.tech/tillflow_preview?options=endpoint%3Dep-fancy-darkness-abyuvjxt',
+    ],
+    ['Production endpoint smuggled through options=endpoint (unencoded)', 'postgresql://u:p@localhost/tillflow_ci?options=endpoint=ep-fancy-darkness-abyuvjxt'],
+    // WS6 finding 3: an isolated-looking database name on an UNKNOWN remote endpoint is not enough
+    ['tillflow_preview on an unknown Neon endpoint', 'postgresql://u:p@ep-quiet-sea-1234.eu-west-2.aws.neon.tech/tillflow_preview'],
+    ['tillflow_ci on an unknown remote host', 'postgresql://u:p@db.example.com:5432/tillflow_ci'],
+    ['tillflow_qa on a new Neon compute id', 'postgresql://u:p@ep-brand-new-9999.eu-west-2.aws.neon.tech/tillflow_qa'],
   ])('refuses %s', (_label, url) => {
     const verdict = evaluateDatabaseTarget(url, env({}));
     expect(verdict.ok).toBe(false);
@@ -88,16 +121,26 @@ describe('evaluateDatabaseTarget — approved isolated targets succeed', () => {
     ['isolated Preview branch database (pooled)', PREVIEW_POOLED],
     ['sqlite unit database', SQLITE],
     ['local docker service host', 'postgresql://postgres:postgres@postgres:5432/anything'],
+    ['the older isolated Preview branch (old-sunset)', 'postgresql://u:p@ep-old-sunset-1234.c-2.eu-west-2.aws.neon.tech/tillflow_preview'],
+    ['uppercase host and database on a known isolated endpoint', 'postgresql://u:p@EP-LATE-CELL-1234.EU-WEST-2.AWS.NEON.TECH/TILLFLOW_PREVIEW'],
   ])('allows %s', (_label, url) => {
     expect(evaluateDatabaseTarget(url, env({})).ok).toBe(true);
   });
 
-  it('allows an explicitly allowlisted host/database pair', () => {
+  it('a known isolated endpoint with a NON-isolated database name is still refused', () => {
+    expect(evaluateDatabaseTarget('postgresql://u:p@ep-late-cell-1234.eu-west-2.aws.neon.tech/tillflow', env({})).ok).toBe(false);
+    expect(evaluateDatabaseTarget('postgresql://u:p@ep-late-cell-1234.eu-west-2.aws.neon.tech/neondb', env({})).ok).toBe(false);
+  });
+
+  it('allows an explicitly allowlisted host/database pair (with or without the port)', () => {
     const url = 'postgresql://u:p@ep-quiet-sea-1234.eu-west-2.aws.neon.tech/tillflow';
     expect(evaluateDatabaseTarget(url, env({})).ok).toBe(false);
     expect(
       evaluateDatabaseTarget(url, env({ [TEST_DATABASE_ALLOWLIST_KEY]: 'ep-quiet-sea-1234.eu-west-2.aws.neon.tech/tillflow' })).ok,
     ).toBe(true);
+    const withPort = 'postgresql://u:p@db.example.com:5432/tillflow_ci';
+    expect(evaluateDatabaseTarget(withPort, env({ [TEST_DATABASE_ALLOWLIST_KEY]: 'db.example.com/tillflow_ci' })).ok).toBe(true);
+    expect(evaluateDatabaseTarget(withPort, env({ [TEST_DATABASE_ALLOWLIST_KEY]: 'db.example.com:5432/tillflow_ci' })).ok).toBe(true);
   });
 });
 
@@ -152,6 +195,10 @@ describe('scripts/lib/guarded-prisma.cjs mirrors the TypeScript guard', () => {
     PROD_DIRECT,
     'postgresql://u:p@ep-other-1234.eu-west-2.aws.neon.tech/neondb',
     'postgresql://u:p@db.example.com:5432/tillflow',
+    'postgresql://u:p@ep-late-cell-1234.eu-west-2.aws.neon.tech/neondb/',
+    'postgresql://u:p@ep-late-cell-1234.eu-west-2.aws.neon.tech/tillflow_preview?options=endpoint%3Dep-fancy-darkness-abyuvjxt',
+    'postgresql://u:p@ep-quiet-sea-1234.eu-west-2.aws.neon.tech/tillflow_preview',
+    'postgresql://u:p@ep-old-sunset-1234.c-2.eu-west-2.aws.neon.tech/tillflow_preview',
     '',
     CI,
     PREVIEW,

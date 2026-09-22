@@ -81,6 +81,13 @@ export type OpenTestPrismaOptions = {
   log?: (line: string) => void;
 };
 
+/**
+ * Disconnect and forget the `@/lib/prisma` singleton so the next import re-evaluates against the
+ * pinned env. Services imported by a suite BEFORE the factory ran keep a reference to the old
+ * instance; that is safe because it was constructed under the same pinned vitest env (setupFiles
+ * run first) and Prisma reconnects lazily on the next query — but suites should still prefer
+ * importing services after `openTestPrismaClient()` resolves.
+ */
 async function dropAppPrismaSingleton() {
   const g = globalThis as unknown as { prisma?: PrismaClient };
   if (g.prisma) {
@@ -119,18 +126,23 @@ export async function openTestPrismaClient(options: OpenTestPrismaOptions = {}):
 
   let live = { currentDatabase: prepared.identity.database, currentSchema: prepared.identity.schema };
   if (!options.skipLiveVerification) {
-    await prisma.$connect();
-    const [row] = await prisma.$queryRaw<Array<{ db: string; schema: string }>>`
-      SELECT current_database() AS db, current_schema() AS schema
-    `;
-    live = { currentDatabase: row?.db ?? '', currentSchema: row?.schema ?? '' };
-    const liveVerdict = describeDatabaseUrl(`postgresql://${prepared.identity.host}/${live.currentDatabase}`);
-    if (live.currentDatabase !== prepared.identity.database || liveVerdict.database.toLowerCase() === 'neondb') {
+    // Any failure between construction and the identity proof must release the client.
+    try {
+      await prisma.$connect();
+      const [row] = await prisma.$queryRaw<Array<{ db: string; schema: string }>>`
+        SELECT current_database() AS db, current_schema() AS schema
+      `;
+      live = { currentDatabase: row?.db ?? '', currentSchema: row?.schema ?? '' };
+      const liveVerdict = describeDatabaseUrl(`postgresql://${prepared.identity.host}/${live.currentDatabase}`);
+      if (live.currentDatabase !== prepared.identity.database || liveVerdict.database.toLowerCase() === 'neondb') {
+        throw new DatabaseTargetRefusedError(
+          `connected database "${live.currentDatabase}" does not match guarded target "${prepared.identity.database}"`,
+          prepared.identity,
+        );
+      }
+    } catch (error) {
       await prisma.$disconnect().catch(() => undefined);
-      throw new DatabaseTargetRefusedError(
-        `connected database "${live.currentDatabase}" does not match guarded target "${prepared.identity.database}"`,
-        prepared.identity,
-      );
+      throw error;
     }
     log(`[database-target-guard] live current_database=${live.currentDatabase} schema=${live.currentSchema}`);
   }

@@ -12,6 +12,7 @@ import {
   openBoundPrismaClient,
   resolveBoundPostgresUrl,
 } from '@/lib/test/isolated-postgres';
+import { runTestTeardown } from '@/lib/test/test-prisma';
 
 const databaseUrl = resolveBoundPostgresUrl();
 const canRun = canRunLivePostgres(databaseUrl);
@@ -51,12 +52,14 @@ describeConcurrency('document number reservation (Postgres)', () => {
   });
 
   afterAll(async () => {
-    if (!prisma) return;
-    await prisma.businessSequence.deleteMany({
-      where: { businessId: { in: [businessId, otherBusinessId] } },
-    }).catch(() => {});
-    await prisma.business.deleteMany({ where: { id: { in: [businessId, otherBusinessId] } } }).catch(() => {});
-    await prisma.$disconnect();
+    await runTestTeardown(
+      prisma,
+      [
+        () => prisma.businessSequence.deleteMany({ where: { businessId: { in: [businessId, otherBusinessId] } } }),
+        () => prisma.business.deleteMany({ where: { id: { in: [businessId, otherBusinessId] } } }),
+      ],
+      { label: 'document-numbers-concurrency.pg.test.ts' },
+    );
   });
 
   it('issues unique numbers for every contracted sequence without tenant leakage', async () => {

@@ -8,6 +8,7 @@ import {
   openBoundPrismaClient,
   resolveBoundPostgresUrl,
 } from '@/lib/test/isolated-postgres';
+import { runTestTeardown } from '@/lib/test/test-prisma';
 import { createPurchase } from '@/lib/services/purchases';
 import { createExpense } from '@/lib/services/expenses';
 import { createInventoryIncrease } from '@/lib/services/inventory-increase';
@@ -158,32 +159,39 @@ describeLive('cross-business and selected-store isolation (Postgres)', () => {
   }, 90000);
 
   afterAll(async () => {
-    if (!prisma) return;
-    await prisma.cashDrawerEntry.deleteMany({ where: { businessId: bizA } }).catch(() => {});
-    await prisma.salesPayment.deleteMany({ where: { salesInvoice: { businessId: bizA } } }).catch(() => {});
-    await prisma.salesInvoice.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }).catch(() => {});
-    await prisma.stocktakeLine.deleteMany({ where: { stocktake: { store: { businessId: bizA } } } }).catch(() => {});
-    await prisma.stocktake.deleteMany({ where: { store: { businessId: { in: [bizA, bizB] } } } }).catch(() => {});
-    await prisma.shift.deleteMany({ where: { till: { store: { businessId: bizA } } } }).catch(() => {});
-    await prisma.purchasePayment.deleteMany({ where: { businessId: bizA } }).catch(() => {});
-    await prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId: bizA } } }).catch(() => {});
-    await prisma.purchaseInvoice.deleteMany({ where: { businessId: bizA } }).catch(() => {});
-    await prisma.expensePayment.deleteMany({ where: { expense: { businessId: bizA } } }).catch(() => {});
-    await prisma.expense.deleteMany({ where: { businessId: bizA } }).catch(() => {});
-    await prisma.stockMovement.deleteMany({ where: { storeId: { in: [storeFirst, storeSelected] } } }).catch(() => {});
-    await prisma.stockAdjustment.deleteMany({ where: { storeId: { in: [storeFirst, storeSelected] } } }).catch(() => {});
-    await prisma.journalLine.deleteMany({ where: { journalEntry: { businessId: bizA } } }).catch(() => {});
-    await prisma.journalEntry.deleteMany({ where: { businessId: bizA } }).catch(() => {});
-    await prisma.inventoryBalance.deleteMany({ where: { storeId: { in: [storeFirst, storeSelected] } } }).catch(() => {});
-    await prisma.productUnit.deleteMany({ where: { productId } }).catch(() => {});
-    await prisma.product.deleteMany({ where: { id: productId } }).catch(() => {});
-    await prisma.supplier.deleteMany({ where: { id: supplierId } }).catch(() => {});
-    await prisma.till.deleteMany({ where: { storeId: { in: [storeFirst, storeSelected] } } }).catch(() => {});
-    await prisma.user.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }).catch(() => {});
-    await prisma.store.deleteMany({ where: { id: { in: [storeFirst, storeSelected, foreignStore] } } }).catch(() => {});
-    await prisma.account.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }).catch(() => {});
-    await prisma.business.deleteMany({ where: { id: { in: [bizA, bizB] } } }).catch(() => {});
-    await prisma.$disconnect();
+    await runTestTeardown(
+      prisma,
+      [
+        // The suite also creates a till on the foreign (bizB) store; scope every store-level delete
+        // to BOTH tenants, otherwise `store`/`business` deletes fail on Till_storeId_fkey.
+        () => prisma.cashDrawerEntry.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }),
+        () => prisma.auditLog.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }),
+        () => prisma.salesPayment.deleteMany({ where: { salesInvoice: { businessId: bizA } } }),
+        () => prisma.salesInvoice.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }),
+        () => prisma.stocktakeLine.deleteMany({ where: { stocktake: { store: { businessId: bizA } } } }),
+        () => prisma.stocktake.deleteMany({ where: { store: { businessId: { in: [bizA, bizB] } } } }),
+        () => prisma.shift.deleteMany({ where: { till: { store: { businessId: { in: [bizA, bizB] } } } } }),
+        () => prisma.purchasePayment.deleteMany({ where: { businessId: bizA } }),
+        () => prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId: bizA } } }),
+        () => prisma.purchaseInvoice.deleteMany({ where: { businessId: bizA } }),
+        () => prisma.expensePayment.deleteMany({ where: { expense: { businessId: bizA } } }),
+        () => prisma.expense.deleteMany({ where: { businessId: bizA } }),
+        () => prisma.stockMovement.deleteMany({ where: { storeId: { in: [storeFirst, storeSelected] } } }),
+        () => prisma.stockAdjustment.deleteMany({ where: { storeId: { in: [storeFirst, storeSelected] } } }),
+        () => prisma.journalLine.deleteMany({ where: { journalEntry: { businessId: bizA } } }),
+        () => prisma.journalEntry.deleteMany({ where: { businessId: bizA } }),
+        () => prisma.inventoryBalance.deleteMany({ where: { storeId: { in: [storeFirst, storeSelected] } } }),
+        () => prisma.productUnit.deleteMany({ where: { productId } }),
+        () => prisma.product.deleteMany({ where: { id: productId } }),
+        () => prisma.supplier.deleteMany({ where: { id: supplierId } }),
+        () => prisma.till.deleteMany({ where: { store: { businessId: { in: [bizA, bizB] } } } }),
+        () => prisma.user.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }),
+        () => prisma.store.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }),
+        () => prisma.account.deleteMany({ where: { businessId: { in: [bizA, bizB] } } }),
+        () => prisma.business.deleteMany({ where: { id: { in: [bizA, bizB] } } }),
+      ],
+      { label: 'walkthrough-tenant-store.pg.test.ts' },
+    );
   });
 
   it('rejects foreign business store, stocktake, adjustment and shift', async () => {

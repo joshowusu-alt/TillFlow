@@ -9,8 +9,9 @@
  * Rules
  *  - Production is refused: database `neondb`, host fragment `fancy-darkness`, VERCEL_ENV=production,
  *    plus anything in TILLFLOW_PRODUCTION_DB_HOSTS.
- *  - Only allowlisted targets pass: local hosts, `tillflow_(ci|preview|test|walkthrough|qa)*`
- *    database names, or TILLFLOW_TEST_DB_ALLOWLIST `host/db` pairs.
+ *  - Only allowlisted targets pass: local hosts; known isolated Preview endpoints (`old-sunset`,
+ *    `late-cell`) WITH a `tillflow_(ci|preview|test|walkthrough|qa)*` database name; or
+ *    TILLFLOW_TEST_DB_ALLOWLIST `host/db` pairs. Deny fragments are matched on the whole URL.
  *  - Read-only Production access is possible ONLY with `{ readOnly: true }` AND
  *    TILLFLOW_ALLOW_PRODUCTION_READ=1; the session is then forced READ ONLY server-side.
  *  - Every Prisma URL env variable is pinned to the chosen url, the client is constructed with
@@ -30,29 +31,55 @@ const PRISMA_URL_ENV_KEYS = [
 ];
 const PRODUCTION_DATABASE_NAMES = ['neondb'];
 const PRODUCTION_HOST_FRAGMENTS = ['fancy-darkness'];
+// Known isolated Neon branches (Preview / walkthrough). Remote hosts need one of these AND an isolated db name.
+const ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS = ['old-sunset', 'late-cell'];
 const ISOLATED_DATABASE_NAME = /^tillflow_(ci|preview|test|walkthrough|qa)([_-][a-z0-9_-]+)?$/i;
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', 'postgres', 'db', 'host.docker.internal']);
 
+function safeDecode(v) {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
+function blank(kind, sanitized) {
+  return { kind, host: '', endpoint: '', database: '', schema: '', sanitized, redactedUrl: '' };
+}
+
 function describeDatabaseUrl(raw) {
   const value = (raw || '').trim();
-  if (!value) return { kind: 'missing', host: '', database: '', sanitized: '<missing>' };
+  if (!value) return blank('missing', '<missing>');
   const lower = value.toLowerCase();
   if (lower.startsWith('file:') || lower.startsWith('sqlite:')) {
     const database = value.replace(/^(file|sqlite):/i, '').split('?')[0];
-    return { kind: 'sqlite', host: '', database, sanitized: `sqlite:${database}` };
+    return { kind: 'sqlite', host: '', endpoint: '', database, schema: '', sanitized: `sqlite:${database}`, redactedUrl: lower };
   }
   if (lower.startsWith('postgres://') || lower.startsWith('postgresql://')) {
     try {
       const u = new URL(value);
       const host = u.hostname.toLowerCase();
-      const database = decodeURIComponent(u.pathname.replace(/^\//, '').split('?')[0] || '');
+      // Prisma (quaint) uses the FIRST path segment as the database name; so do we.
+      const database = safeDecode(u.pathname.replace(/^\//, '').split('/')[0].split('?')[0] || '');
       const schema = u.searchParams.get('schema') || 'public';
-      return { kind: 'postgres', host, endpoint: host.replace(/-pooler(?=\.|$)/i, ''), database, schema, sanitized: `postgres://${host}${u.port ? ':' + u.port : ''}/${database}?schema=${schema}` };
+      const endpoint = `${host.replace(/-pooler(?=\.|$)/i, '')}${u.port ? ':' + u.port : ''}`;
+      u.username = '';
+      u.password = '';
+      return {
+        kind: 'postgres',
+        host,
+        endpoint,
+        database,
+        schema,
+        sanitized: `postgres://${host}${u.port ? ':' + u.port : ''}/${database}?schema=${schema}`,
+        redactedUrl: safeDecode(u.toString()).toLowerCase(),
+      };
     } catch {
-      return { kind: 'unknown', host: '', database: '', sanitized: '<unparseable>' };
+      return blank('unknown', '<unparseable>');
     }
   }
-  return { kind: 'unknown', host: '', database: '', sanitized: '<unknown scheme>' };
+  return blank('unknown', '<unknown scheme>');
 }
 
 function splitList(v) {
@@ -61,8 +88,9 @@ function splitList(v) {
 
 function isProductionTarget(identity, env = process.env) {
   if (identity.kind !== 'postgres') return false;
-  const denyHosts = [...PRODUCTION_HOST_FRAGMENTS, ...splitList(env.TILLFLOW_PRODUCTION_DB_HOSTS)];
-  return PRODUCTION_DATABASE_NAMES.includes(identity.database.toLowerCase()) || denyHosts.some((f) => identity.host.includes(f));
+  const denyFragments = [...PRODUCTION_HOST_FRAGMENTS, ...splitList(env.TILLFLOW_PRODUCTION_DB_HOSTS)];
+  // Deny fragments are matched against the whole redacted URL (Neon `options=endpoint=…` routing included).
+  return PRODUCTION_DATABASE_NAMES.includes(identity.database.toLowerCase()) || denyFragments.some((f) => identity.redactedUrl.includes(f));
 }
 
 function evaluateDatabaseTarget(raw, env = process.env) {
@@ -73,10 +101,16 @@ function evaluateDatabaseTarget(raw, env = process.env) {
   if (identity.kind === 'sqlite') return { ok: true, reason: 'sqlite file database', identity };
   if (isProductionTarget(identity, env)) return { ok: false, reason: `${identity.sanitized} is a Production target`, identity };
   const allow = splitList(env.TILLFLOW_TEST_DB_ALLOWLIST);
-  if (allow.includes(`${identity.host}/${identity.database}`) || allow.includes(`${identity.endpoint}/${identity.database}`)) return { ok: true, reason: 'allowlisted', identity };
+  const db = identity.database;
+  if (allow.includes(`${identity.host}/${db}`) || allow.includes(`${identity.endpoint}/${db}`) || allow.includes(`${identity.endpoint.split(':')[0]}/${db}`)) {
+    return { ok: true, reason: 'allowlisted', identity };
+  }
   if (LOCAL_HOSTS.has(identity.host)) return { ok: true, reason: 'local Postgres host', identity };
-  if (ISOLATED_DATABASE_NAME.test(identity.database)) return { ok: true, reason: `isolated database name ${identity.database}`, identity };
-  return { ok: false, reason: `${identity.sanitized} is not an allowlisted isolated test/Preview database`, identity };
+  const knownIsolated = ISOLATED_PREVIEW_ENDPOINT_FRAGMENTS.find((f) => identity.host.includes(f));
+  if (knownIsolated && ISOLATED_DATABASE_NAME.test(db)) {
+    return { ok: true, reason: `known isolated Preview endpoint ${knownIsolated} with isolated database name ${db}`, identity };
+  }
+  return { ok: false, reason: `${identity.sanitized} is not an allowlisted isolated test/Preview database (remote hosts need a known isolated endpoint or TILLFLOW_TEST_DB_ALLOWLIST)`, identity };
 }
 
 function pinPrismaEnv(env, url) {

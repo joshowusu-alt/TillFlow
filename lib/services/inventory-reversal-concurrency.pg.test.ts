@@ -6,6 +6,7 @@ import {
   openBoundPrismaClient,
   resolveBoundPostgresUrl,
 } from '@/lib/test/isolated-postgres';
+import { runTestTeardown } from '@/lib/test/test-prisma';
 import { createInventoryIncrease } from '@/lib/services/inventory-increase';
 import {
   INVENTORY_REVERSAL_ERROR,
@@ -98,21 +99,25 @@ describeConcurrency('adjustment reversal idempotency (Postgres)', () => {
   }, 60000);
 
   afterAll(async () => {
-    if (!prisma) return;
-    await prisma.stockMovement.deleteMany({ where: { storeId } }).catch(() => {});
-    await prisma.stockAdjustment.deleteMany({ where: { storeId } }).catch(() => {});
-    await prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }).catch(() => {});
-    await prisma.journalEntry.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.auditLog.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.inventoryBalance.deleteMany({ where: { storeId } }).catch(() => {});
-    await prisma.productUnit.deleteMany({ where: { productId } }).catch(() => {});
-    await prisma.product.deleteMany({ where: { id: productId } }).catch(() => {});
-    await prisma.unit.deleteMany({ where: { id: unitId } }).catch(() => {});
-    await prisma.user.deleteMany({ where: { id: userId } }).catch(() => {});
-    await prisma.store.deleteMany({ where: { id: storeId } }).catch(() => {});
-    await prisma.account.deleteMany({ where: { businessId } }).catch(() => {});
-    await prisma.business.deleteMany({ where: { id: businessId } }).catch(() => {});
-    await prisma.$disconnect();
+    await runTestTeardown(
+      prisma,
+      [
+        () => prisma.stockMovement.deleteMany({ where: { storeId } }),
+        () => prisma.stockAdjustment.deleteMany({ where: { storeId } }),
+        () => prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }),
+        () => prisma.journalEntry.deleteMany({ where: { businessId } }),
+        () => prisma.auditLog.deleteMany({ where: { businessId } }),
+        () => prisma.inventoryBalance.deleteMany({ where: { storeId } }),
+        () => prisma.productUnit.deleteMany({ where: { productId } }),
+        () => prisma.product.deleteMany({ where: { id: productId } }),
+        () => prisma.unit.deleteMany({ where: { id: unitId } }),
+        () => prisma.user.deleteMany({ where: { id: userId } }),
+        () => prisma.store.deleteMany({ where: { id: storeId } }),
+        () => prisma.account.deleteMany({ where: { businessId } }),
+        () => prisma.business.deleteMany({ where: { id: businessId } }),
+      ],
+      { label: 'inventory-reversal-concurrency.pg.test.ts' },
+    );
   });
 
   it('creates exactly one reversal under concurrent identical requests', async () => {
