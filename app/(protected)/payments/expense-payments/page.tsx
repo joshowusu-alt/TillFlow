@@ -1,5 +1,7 @@
+import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
+import HashScroll from '@/components/HashScroll';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import RemainingBalance from '@/components/RemainingBalance';
@@ -11,11 +13,18 @@ import ExpensePaymentForm from './ExpensePaymentForm';
 
 type OpenTillOption = { tillId: string; tillName: string; shiftId: string };
 
-export default async function ExpensePaymentsPage({ searchParams }: { searchParams?: { error?: string } }) {
+export default async function ExpensePaymentsPage({
+  searchParams,
+}: {
+  searchParams?: { error?: string; expenseId?: string; paid?: string };
+}) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
+  // "Record payment" on the Expenses list arrives here with the expense to settle.
+  // A success redirect (`?paid=`) keeps that same expense in focus after the payment.
+  const focusExpenseId = searchParams?.expenseId?.trim() || searchParams?.paid?.trim() || '';
 
-  const [expenses, openShifts] = await Promise.all([
+  const [unpaidExpenses, openShifts, focusedExpense] = await Promise.all([
     prisma.expense.findMany({
       where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
       select: {
@@ -38,7 +47,25 @@ export default async function ExpensePaymentsPage({ searchParams }: { searchPara
       select: { id: true, tillId: true, till: { select: { name: true } } },
       orderBy: { openedAt: 'desc' },
     }),
+    focusExpenseId
+      ? prisma.expense.findFirst({
+          where: { id: focusExpenseId, businessId: business.id },
+          select: { id: true, transactionNumber: true, paymentStatus: true },
+        })
+      : Promise.resolve(null),
   ]);
+
+  // The focused expense is listed first so it is the row the owner sees on arrival.
+  const expenses = focusedExpense
+    ? [
+        ...unpaidExpenses.filter((expense) => expense.id === focusedExpense.id),
+        ...unpaidExpenses.filter((expense) => expense.id !== focusedExpense.id),
+      ]
+    : unpaidExpenses;
+  const focusedLabel = focusedExpense
+    ? displayDocumentNumber('expense', focusedExpense.transactionNumber, focusedExpense.id)
+    : null;
+  const focusedIsSettled = Boolean(focusedExpense) && !unpaidExpenses.some((expense) => expense.id === focusedExpense?.id);
 
   const openTills: OpenTillOption[] = openShifts.map((shift) => ({
     tillId: shift.tillId,
@@ -48,7 +75,29 @@ export default async function ExpensePaymentsPage({ searchParams }: { searchPara
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Expense Payments" subtitle="Settle unpaid operating expenses." />
+      <HashScroll />
+      <PageHeader
+        title="Expense Payments"
+        subtitle="Settle unpaid operating expenses."
+        actions={
+          <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/expenses">
+            ← Back to Expenses
+          </Link>
+        }
+      />
+      {focusedLabel ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-accent/30 bg-accentSoft px-4 py-3 text-sm"
+          data-testid="expense-payment-focus"
+        >
+          <span className="font-semibold text-ink">
+            {focusedIsSettled ? `${focusedLabel} is fully paid.` : `Paying ${focusedLabel} — it is listed first below.`}
+          </span>
+          <Link className="text-xs font-semibold text-accent underline" href="/payments/expense-payments">
+            Show all unpaid expenses
+          </Link>
+        </div>
+      ) : null}
       <FormError error={searchParams?.error} />
       <ResponsiveDataTable
         mode="cards"
@@ -70,7 +119,11 @@ export default async function ExpensePaymentsPage({ searchParams }: { searchPara
                     const paid = expense.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
                     const outstanding = remainingBalancePence(expense.amountPence, paid);
                     return (
-                      <tr key={expense.id} className="rounded-xl bg-white align-top">
+                      <tr
+                        key={expense.id}
+                        id={`expense-${expense.id}`}
+                        className={`rounded-xl align-top ${expense.id === focusedExpense?.id ? 'bg-accentSoft' : 'bg-white'}`}
+                      >
                         <td className="px-3 py-3 font-mono text-xs">
                           {displayDocumentNumber('expense', expense.transactionNumber, expense.id)}
                         </td>
@@ -127,7 +180,8 @@ export default async function ExpensePaymentsPage({ searchParams }: { searchPara
                       : expense.paymentStatus;
 
                 return (
-                  <DataCard key={expense.id}>
+                  <div key={expense.id} id={`expense-${expense.id}`}>
+                  <DataCard className={expense.id === focusedExpense?.id ? 'border-accent/40 ring-1 ring-accent/30' : ''}>
                     <DataCardHeader
                       title={expense.account.name}
                       subtitle={`${displayDocumentNumber('expense', expense.transactionNumber, expense.id)} · ${formatDateTime(expense.createdAt)}`}
@@ -160,6 +214,7 @@ export default async function ExpensePaymentsPage({ searchParams }: { searchPara
                       />
                     </DataCardActions>
                   </DataCard>
+                  </div>
                 );
               })}
             </div>

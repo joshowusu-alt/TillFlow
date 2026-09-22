@@ -1,6 +1,7 @@
+import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
-import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
+import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import RemainingBalance from '@/components/RemainingBalance';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
@@ -68,6 +69,10 @@ export default async function ExpensesPage({
   ]);
 
   const totalPages = Math.max(1, Math.ceil(expenseCount / DEFAULT_PAGE_SIZE));
+  // Paying an existing expense happens on Expense payments; the list must say so
+  // on every unpaid or part-paid row, or the owner lands on "Record expense" instead.
+  const recordPaymentHref = (expenseId: string) =>
+    `/payments/expense-payments?expenseId=${encodeURIComponent(expenseId)}#expense-${expenseId}`;
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -143,12 +148,19 @@ export default async function ExpensesPage({
                   <DataCardField label="Recorded by" value={expense.user.name} />
                 </div>
                 {expense.notes ? <p className="text-sm text-black/60">{expense.notes}</p> : null}
-                {expense.attachmentPath ? (
-                  <div>
-                    <a className="btn-ghost text-xs" href={expense.attachmentPath} target="_blank" rel="noreferrer">
-                      View attachment
-                    </a>
-                  </div>
+                {remainingBalancePence(expense.amountPence, paidPence) > 0 || expense.attachmentPath ? (
+                  <DataCardActions>
+                    {remainingBalancePence(expense.amountPence, paidPence) > 0 ? (
+                      <Link className="btn-primary text-xs" href={recordPaymentHref(expense.id)}>
+                        Record payment
+                      </Link>
+                    ) : null}
+                    {expense.attachmentPath ? (
+                      <a className="btn-ghost text-xs" href={expense.attachmentPath} target="_blank" rel="noreferrer">
+                        View attachment
+                      </a>
+                    ) : null}
+                  </DataCardActions>
                 ) : null}
               </DataCard>
             );
@@ -170,6 +182,7 @@ export default async function ExpensesPage({
                 <th className="hidden lg:table-cell">Recorded By</th>
                 <th className="hidden lg:table-cell">Notes</th>
                 <th className="hidden sm:table-cell">Attachment</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -205,6 +218,15 @@ export default async function ExpensesPage({
                         </a>
                       ) : (
                         '-'
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-sm">
+                      {remainingBalancePence(expense.amountPence, paidPence) > 0 ? (
+                        <Link className="btn-primary text-xs" href={recordPaymentHref(expense.id)}>
+                          Record payment
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-black/40">Paid</span>
                       )}
                     </td>
                   </tr>
