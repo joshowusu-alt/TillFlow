@@ -42,6 +42,7 @@ export default async function ExpensesPage({
       where: { businessId: business.id },
       select: {
         id: true,
+        storeId: true,
         transactionNumber: true,
         createdAt: true,
         amountPence: true,
@@ -71,8 +72,28 @@ export default async function ExpensesPage({
   const totalPages = Math.max(1, Math.ceil(expenseCount / DEFAULT_PAGE_SIZE));
   // Paying an existing expense happens on Expense payments; the list must say so
   // on every unpaid or part-paid row, or the owner lands on "Record expense" instead.
+  // Expense payments is scoped to the operational store, so the action is only offered
+  // for expenses in the selected branch; other branches' expenses say which branch to switch to.
   const recordPaymentHref = (expenseId: string) =>
-    `/payments/expense-payments?expenseId=${encodeURIComponent(expenseId)}#expense-${expenseId}`;
+    `/payments/expense-payments?expenseId=${encodeURIComponent(expenseId)}`;
+  const storeNameById = new Map(stores.map((item) => [item.id, item.name]));
+  const renderPaymentAction = (expense: { id: string; storeId: string; amountPence: number }, paidPence: number) => {
+    if (remainingBalancePence(expense.amountPence, paidPence) <= 0) {
+      return <span className="text-xs text-black/40">Paid</span>;
+    }
+    if (store && expense.storeId === store.id) {
+      return (
+        <Link className="btn-primary text-xs" href={recordPaymentHref(expense.id)}>
+          Record payment
+        </Link>
+      );
+    }
+    return (
+      <span className="text-xs text-black/50" data-testid="expense-other-branch">
+        Switch to {storeNameById.get(expense.storeId) ?? 'its branch'} to pay
+      </span>
+    );
+  };
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -150,11 +171,9 @@ export default async function ExpensesPage({
                 {expense.notes ? <p className="text-sm text-black/60">{expense.notes}</p> : null}
                 {remainingBalancePence(expense.amountPence, paidPence) > 0 || expense.attachmentPath ? (
                   <DataCardActions>
-                    {remainingBalancePence(expense.amountPence, paidPence) > 0 ? (
-                      <Link className="btn-primary text-xs" href={recordPaymentHref(expense.id)}>
-                        Record payment
-                      </Link>
-                    ) : null}
+                    {remainingBalancePence(expense.amountPence, paidPence) > 0
+                      ? renderPaymentAction(expense, paidPence)
+                      : null}
                     {expense.attachmentPath ? (
                       <a className="btn-ghost text-xs" href={expense.attachmentPath} target="_blank" rel="noreferrer">
                         View attachment
@@ -220,15 +239,7 @@ export default async function ExpensesPage({
                         '-'
                       )}
                     </td>
-                    <td className="px-3 py-3 text-sm">
-                      {remainingBalancePence(expense.amountPence, paidPence) > 0 ? (
-                        <Link className="btn-primary text-xs" href={recordPaymentHref(expense.id)}>
-                          Record payment
-                        </Link>
-                      ) : (
-                        <span className="text-xs text-black/40">Paid</span>
-                      )}
-                    </td>
+                    <td className="px-3 py-3 text-sm">{renderPaymentAction(expense, paidPence)}</td>
                   </tr>
                 );
               })}

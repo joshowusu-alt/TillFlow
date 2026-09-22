@@ -5,6 +5,7 @@ import { CASH_EXPENSE_SHIFT_REQUIRED_MSG } from '@/lib/services/expenses';
 import { redirect } from 'next/navigation';
 import { formString, formPence, formOptionalString } from '@/lib/form-helpers';
 import { requireSelectedStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
+import { resolveStoreFromTill } from '@/lib/reliability/selected-store';
 import { paymentIntentRedirect } from '@/lib/money/payment-intent';
 import type { PaymentMethod } from '@/lib/services/shared';
 
@@ -27,6 +28,12 @@ export async function recordExpensePaymentAction(formData: FormData): Promise<vo
     }
     if (method === 'CASH' && amountPence > 0 && !tillId) {
       throw new Error(CASH_EXPENSE_SHIFT_REQUIRED_MSG);
+    }
+    // The till must belong to the authoritative selected store. A forged or stale
+    // foreign-store till is rejected here, before any financial write; the service
+    // re-checks the same chain (store → till → open shift) inside its transaction.
+    if (tillId) {
+      await resolveStoreFromTill(businessId, tillId, storeId);
     }
 
     const payment = await recordExpensePayment({

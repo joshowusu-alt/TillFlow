@@ -185,8 +185,19 @@ test.describe('UI programme shell geometry (read-only)', () => {
   test('error, empty and loading evidence stay inside the shell', async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 390, height: 844 });
 
+    // Pin the operational branch first. Earlier pos-safety steps (Phase 3A QA) add a
+    // second store to the seed business in the shared CI database, and this context
+    // starts from the login-only storage state with no branch cookie. Without a branch,
+    // /products/<id> (requireBusinessStore) streams a deferred redirect to /settings,
+    // which then raced the next goto ("interrupted by another navigation to /settings").
+    await page.goto('/pos', { waitUntil: 'domcontentloaded' });
+    await page.locator('#main-content').waitFor({ state: 'visible' });
+    await expectPosSearchReady(page);
+
     await page.goto('/products/ui-programme-missing-product', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
+    await expect(page).toHaveURL(/\/products\/ui-programme-missing-product/);
+    await expect(page.getByText(/product not found/i)).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await attachShot(page, testInfo, 'error-missing-product');
 

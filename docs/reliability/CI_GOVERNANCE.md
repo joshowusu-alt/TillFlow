@@ -56,7 +56,21 @@ When present, the workflow runs:
 
 `npx vitest run lib/services/checkout-shift-cashdrawer-rtx.test.ts lib/services/payments-concurrency.test.ts lib/services/sales.test.ts`
 
-with `DATABASE_URL` pointing at the workflow Postgres service. SQLite-mocked suites in that set must still pass. `payments-concurrency.test.ts` executes real overlapping transactions only when the URL is Postgres.
+with `DATABASE_URL` pointing at the workflow Postgres service. SQLite-mocked suites in that set must still pass. `payments-concurrency.test.ts` executes real overlapping transactions only when the URL is Postgres. `expense-payments-concurrency.test.ts` (overpayment race, foreign-store till rejected atomically, same-store cash payment once) is in the same step.
+
+### Running Postgres suites locally
+
+The generated client resolves `POSTGRES_PRISMA_URL` / `POSTGRES_URL_NON_POOLING`, **not** `DATABASE_URL`, and the repo `.env` carries the Production Neon URLs. Setting only `DATABASE_URL` therefore points the suite gate at one database while `new PrismaClient()` and `@/lib/prisma` silently connect to Production. On 22 Sep 2026 this created two inert `EP Conc ep-conc-*` businesses (stores + tills only, no users, no money rows) in Production before it was caught. `expense-payments-concurrency.test.ts` now pins all four URLs to `DATABASE_URL` and constructs its client with an explicit datasource; the other Postgres suites that call `new PrismaClient()` still need the same treatment. Until then, always export `DATABASE_URL`, `POSTGRES_PRISMA_URL` and `POSTGRES_URL_NON_POOLING` together when running any `*-concurrency.test.ts` / `*.pg.test.ts` locally.
+
+## pos-safety flake log
+
+### 2026-09-22 — `ui-programme-shell.spec.ts` › "error, empty and loading evidence stay inside the shell"
+
+Symptom: `page.goto: Navigation to "/customers" is interrupted by another navigation to "/settings"`. CI run 35727075123 failed on attempts 1 and 2 with this exact line and passed on attempt 3; the `ui-programme-chromium` project has `retries: 0`, so every attempt was a whole-job rerun.
+
+Root cause (deterministic cause, timing-dependent manifestation): the Phase 3A QA step that runs earlier in the same job adds a second store to the seed business in the shared CI SQLite file. The `seed-owner.json` storage state is login-only, so each test context starts with no operational-branch cookie. `/products/ui-programme-missing-product` goes through `requireBusinessStore()`, which `redirect('/settings')`s when several stores exist and none is selected. With route loading boundaries the redirect is streamed and applied client-side after `domcontentloaded`, so it fired during the test's next `goto('/customers')`. Whether it landed before or during that navigation depended on runner speed.
+
+Fix: the test now pins the authorised branch first (`expectPosSearchReady`, the same helper the other shell tests use), asserts the missing-product route stays on its own URL and renders "Product not found." inside the shell, and only then visits `/customers`. No application change; the `/settings` redirect for "no branch selected" is intended behaviour.
 
 ## Reliability Playwright journey
 

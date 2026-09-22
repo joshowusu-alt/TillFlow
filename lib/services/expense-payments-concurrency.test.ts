@@ -22,7 +22,13 @@ describeConcurrency('expense payment overlapping transactions (Postgres)', () =>
   let accountId = '';
 
   beforeAll(async () => {
+    // The generated client resolves `POSTGRES_PRISMA_URL` / `POSTGRES_URL_NON_POOLING`,
+    // not `DATABASE_URL`. Pin every URL the client can read to the suite's DATABASE_URL so
+    // neither this client nor `@/lib/prisma` can silently fall back to a `.env` database.
     process.env.DATABASE_URL = databaseUrl!;
+    process.env.POSTGRES_PRISMA_URL = databaseUrl!;
+    process.env.POSTGRES_URL_NON_POOLING = databaseUrl!;
+    process.env.POSTGRES_URL = databaseUrl!;
     const g = globalThis as unknown as { prisma?: PrismaClient };
     if (g.prisma) {
       await g.prisma.$disconnect().catch(() => {});
@@ -32,7 +38,7 @@ describeConcurrency('expense payment overlapping transactions (Postgres)', () =>
     const expensePayments = await import('@/lib/services/expensePayments');
     recordExpensePayment = expensePayments.recordExpensePayment;
 
-    prisma = new PrismaClient();
+    prisma = new PrismaClient({ datasources: { db: { url: databaseUrl! } } });
     await prisma.$connect();
 
     const business = await prisma.business.create({
@@ -78,8 +84,12 @@ describeConcurrency('expense payment overlapping transactions (Postgres)', () =>
     await prisma.moneyIdempotency.deleteMany({ where: { businessId } }).catch(() => {});
     await prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }).catch(() => {});
     await prisma.journalEntry.deleteMany({ where: { businessId } }).catch(() => {});
+    await prisma.cashDrawerEntry.deleteMany({ where: { businessId } }).catch(() => {});
     await prisma.expensePayment.deleteMany({ where: { businessId } }).catch(() => {});
     await prisma.expense.deleteMany({ where: { businessId } }).catch(() => {});
+    await prisma.shift.deleteMany({ where: { till: { store: { businessId } } } }).catch(() => {});
+    await prisma.till.deleteMany({ where: { store: { businessId } } }).catch(() => {});
+    await prisma.businessSequence.deleteMany({ where: { businessId } }).catch(() => {});
     await prisma.user.deleteMany({ where: { businessId } }).catch(() => {});
     await prisma.account.deleteMany({ where: { businessId } }).catch(() => {});
     await prisma.store.deleteMany({ where: { businessId } }).catch(() => {});
@@ -129,6 +139,83 @@ describeConcurrency('expense payment overlapping transactions (Postgres)', () =>
     const payments = await prisma.expensePayment.findMany({ where: { expenseId: expense.id } });
     expect(payments).toHaveLength(1);
     expect(payments[0]!.amountPence).toBe(6000);
+  }, 60000);
+
+  it('rejects a foreign-store till atomically, then pays once on the same-store till', async () => {
+    // Store A (expense + Till A1 open) and Store B (Till B1 open). Paying a Store A
+    // expense with Till B1 must fail before any write; Till A1 must succeed exactly once.
+    const storeB = await prisma.store.create({ data: { businessId, name: `Store B ${suffix}` } });
+    const [tillA1, tillB1] = await Promise.all([
+      prisma.till.create({ data: { storeId, name: `Till A1 ${suffix}` } }),
+      prisma.till.create({ data: { storeId: storeB.id, name: `Till B1 ${suffix}` } }),
+    ]);
+    const [shiftA1, shiftB1] = await Promise.all([
+      prisma.shift.create({ data: { tillId: tillA1.id, userId, openingCashPence: 10000, expectedCashPence: 10000, status: 'OPEN' } }),
+      prisma.shift.create({ data: { tillId: tillB1.id, userId, openingCashPence: 10000, expectedCashPence: 10000, status: 'OPEN' } }),
+    ]);
+    const expense = await prisma.expense.create({
+      data: { businessId, storeId, userId, accountId, amountPence: 5000, paymentStatus: 'UNPAID' },
+    });
+
+    const snapshot = async () => {
+      const [payments, drawerA, drawerB, journals, idem, shiftRows, exp] = await Promise.all([
+        prisma.expensePayment.count({ where: { expenseId: expense.id } }),
+        prisma.cashDrawerEntry.count({ where: { shiftId: shiftA1.id } }),
+        prisma.cashDrawerEntry.count({ where: { shiftId: shiftB1.id } }),
+        prisma.journalEntry.count({ where: { businessId, referenceType: 'EXPENSE_PAYMENT' } }),
+        prisma.moneyIdempotency.count({ where: { businessId, key: { startsWith: `foreign-till-${suffix}` } } }),
+        prisma.shift.findMany({ where: { id: { in: [shiftA1.id, shiftB1.id] } }, select: { id: true, expectedCashPence: true }, orderBy: { id: 'asc' } }),
+        prisma.expense.findUniqueOrThrow({ where: { id: expense.id }, select: { paymentStatus: true } }),
+      ]);
+      return { payments, drawerA, drawerB, journals, idem, shiftRows, status: exp.paymentStatus };
+    };
+
+    const before = await snapshot();
+    await expect(
+      recordExpensePayment({
+        businessId,
+        storeId,
+        userId,
+        expenseId: expense.id,
+        method: 'CASH',
+        amountPence: 1000,
+        tillId: tillB1.id,
+        idempotencyKey: `foreign-till-${suffix}`,
+      }),
+    ).rejects.toThrow();
+    const afterForged = await snapshot();
+    expect(afterForged).toEqual(before);
+    expect(afterForged.payments).toBe(0);
+    expect(afterForged.drawerB).toBe(0);
+    expect(afterForged.idem).toBe(0);
+    expect(afterForged.status).toBe('UNPAID');
+
+    const paid = await recordExpensePayment({
+      businessId,
+      storeId,
+      userId,
+      expenseId: expense.id,
+      method: 'CASH',
+      amountPence: 1000,
+      tillId: tillA1.id,
+      idempotencyKey: `same-store-till-${suffix}`,
+    });
+    expect(paid.expenseId).toBe(expense.id);
+    const afterValid = await snapshot();
+    expect(afterValid.payments).toBe(1);
+    expect(afterValid.drawerA).toBe(1);
+    expect(afterValid.drawerB).toBe(0);
+    expect(afterValid.status).toBe('PART_PAID');
+    const entry = await prisma.cashDrawerEntry.findFirstOrThrow({ where: { shiftId: shiftA1.id } });
+    expect(entry.tillId).toBe(tillA1.id);
+    expect(entry.amountPence).toBe(-1000);
+
+    await prisma.cashDrawerEntry.deleteMany({ where: { shiftId: { in: [shiftA1.id, shiftB1.id] } } });
+    await prisma.shift.deleteMany({ where: { id: { in: [shiftA1.id, shiftB1.id] } } });
+    await prisma.expensePayment.deleteMany({ where: { expenseId: expense.id } });
+    await prisma.expense.deleteMany({ where: { id: expense.id } });
+    await prisma.till.deleteMany({ where: { id: { in: [tillA1.id, tillB1.id] } } });
+    await prisma.store.deleteMany({ where: { id: storeB.id } });
   }, 60000);
 
   it('allocates a later payment to the exact expenseId and leaves a sibling unpaid', async () => {

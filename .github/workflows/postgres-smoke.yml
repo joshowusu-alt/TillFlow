@@ -43,6 +43,7 @@ on:
       - 'lib/services/returns.ts'
       - 'lib/services/payments.ts'
       - 'lib/services/expensePayments.ts'
+      - 'lib/services/expense-payments-concurrency.test.ts'
       - 'lib/services/purchases.ts'
       - 'lib/services/purchases-concurrency.test.ts'
       - 'app/api/offline/**'
@@ -140,6 +141,7 @@ jobs:
             lib/services/checkout-shift-cashdrawer-rtx.test.ts
             lib/services/payments-concurrency.test.ts
             lib/services/purchases-concurrency.test.ts
+            lib/services/expense-payments-concurrency.test.ts
             lib/services/sales.test.ts
           )
           present=()
