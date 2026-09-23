@@ -1,6 +1,6 @@
 # Report access and export contract
 
-Status: frozen for Joshua review (contract close-out, 2026-09-23). Not implemented. No schema and no permission UI in this close-out.
+Status: final correction applied (2026-09-23). Not implemented. No schema and no permission UI in this close-out.
 
 Covers permissions, files, empty states, downgrade, freshness, reconciliation, metric versions, and the entitlement test matrix. Plan numbers are in `PLAN_ENTITLEMENT_MATRIX.md`. Families are in `REPORT_CATALOGUE.md`.
 
@@ -65,9 +65,16 @@ If a cashier needs a drawer route, the server allows it only when the shift is t
 | `staff_activity` | Yes | `VIEW_STAFF_ACTIVITY` | No | Not Starter |
 | `branch_performance` | Yes | `VIEW_BRANCH_COMPARISON` and `VIEW_COMPANY_PERFORMANCE` | No | Pro only |
 | `owner_today` | Yes | Partial | No | All plans |
-| `management_pack` | Yes | No, unless the owner adds them as a Pro pack recipient | No | Growth: the one daily SMS to the owner. Pro: packs |
+| `owner_daily_summary` | Yes, when the plan allows the send | No | No | Starter: denied. Growth: one daily SMS to one verified owner destination. Pro: may receive the daily summary under the applicable Pro schedule entitlement. WhatsApp is not implemented. This row is not `management_pack` |
+| `management_pack` | Yes | No, unless the owner adds them as a Pro pack recipient | No | Pro file and schedule product only. Growth does not receive a management pack. Waves A–C do not build the pack experience |
 | Audit log | Yes | No | No | Pro |
 | Forecast | Yes | No | No | Pro |
+
+### Compiled financial statements
+
+Starter retains all underlying sales, expense, payment, stock, receivable and payable records for every retained date. Starter receives the truthful GP view with cost-quality handling. Starter does not receive the compiled Income Statement, Balance Sheet or Cashflow Statement screens. Growth receives single-store financial statements. Pro receives eligible multi-store and consolidated financial statements. Supplier-debt and margin fields inside statements still require the relevant staff permission. Restricting a compiled statement must never restrict access to its underlying source records.
+
+`GET /api/reports/financials` (S41) is a delivery of those compiled statements and uses the same plan and permission decision as the screens. It is not a Starter record export.
 
 ### Staff activity
 
@@ -124,7 +131,7 @@ Own-records file vs management pack:
 
 | | Own-records CSV | Management pack |
 |---|---|---|
-| Who | Every plan, with the row’s permission | Growth: the one daily summary only. Pro: daily, weekly, monthly packs |
+| Who | Every plan, with the row’s permission | Pro only. Not `owner_daily_summary`. Growth has no management pack |
 | What | Source rows the business already stored | A composed file: comparison, rankings, branch pages, narrative totals |
 | Margin math columns | Only with `VIEW_MARGIN` | Only with `VIEW_MARGIN` |
 | Date | Any stored date on Starter for **rows**. Growth analytical packs stay inside 13 months. Pro packs stay inside retained history | Same as the viewer’s analytics window |
@@ -164,11 +171,11 @@ Row caps:
 
 No file may return 200 with another tenant’s `businessId`. Money Received already enforces tenant and branch (`resolveMoneyReceivedAccess`). The shared entitlement function must do that for every route.
 
-PDF and HTML print use the same check as CSV. Owner Brief HTML export is a Pro management summary, owner only, which matches its current flag. It must call the same function.
+PDF and HTML print use the same check as CSV. The Owner Brief screen is owner-only (`requireBusiness(['OWNER'])` in `app/(protected)/reports/owner/page.tsx`). The current export route admits managers (`requireBusiness(['OWNER', 'MANAGER'])` in `app/(protected)/reports/owner/export/route.ts`) and then checks only `ownerIntelligence`. Screen and export must use the same entitlement and permission decision. A manager denied the screen must be denied the direct export. That mismatch is known-red B13. It is not a green pair.
 
-Share: there is no per-report share control today. Any later share uses the same function. The Growth daily summary is one SMS, and the cron route must call the same plan check the settings page uses. Do not add a WhatsApp send for that summary.
+Share: there is no per-report share control today. Any later share uses the same function. `owner_daily_summary` is one SMS to an explicitly verified SMS-capable phone. The cron route must call the same plan check the settings page uses. WhatsApp is not implemented. Do not add a WhatsApp provider, route, UI, copy, or test stub.
 
-`GET /api/debug-financials` is a financial extract. It takes the income-statement entitlement (Growth+, `VIEW_MARGIN`), not an open manager route.
+`GET /api/debug-financials` is outside the 49. It is not development-only and it is not fail-closed. Classification and the required negative test are in the out-of-49 appendix and known-red B12. It does not inherit the compiled-statement plan boundary by remaining open to every manager.
 
 ---
 
@@ -183,7 +190,7 @@ Use one pattern for plan locks on analytics: **More insights with Growth** or **
 | Hidden, feature irrelevant | Transfers on Starter or Growth; branch comparison when the plan is not Pro; a second store | The block is absent. Not a locked card |
 | Locked, plan | Starter opens a comparison, a staff table, a schedule, or a 13-month trend | **More insights with Growth** or **More insights with Pro**. Records on the same page stay visible |
 | Unavailable, permission | Manager lacks `VIEW_MARGIN`, `VIEW_SUPPLIER_DEBT`, `VIEW_STAFF_ACTIVITY`, `VIEW_BRANCH_COMPARISON`, or `VIEW_COMPANY_PERFORMANCE` | **You don’t have access to this report.** No numbers, including zeroes |
-| Blocked, data | Margin state Incomplete or Hidden; receipt query failed; tills unsynced for a cash close | The state name from the catalogue. Not a substituted zero |
+| Blocked, data | Margin state `INCOMPLETE_COSTS`; receipt query failed; open-shift expected cash while relevant data may be unsynced | The freshness sentence or the catalogue state. Not All synced, not Syncing N, and not a substituted zero |
 | Empty, real zero | Query succeeded and the sum is zero | The empty copy from `OWNER_TODAY_CONTRACT.md` or **No rows in this period** |
 
 ---
@@ -197,15 +204,17 @@ Pro → Growth, or Growth → Starter:
 - Invoices, payments, stock rows, customers, and suppliers are not deleted.
 - Transaction history and source drill-down stay available under the new plan’s record rules.
 - Branch screens, consolidated totals, extra schedules, staff tables, and comparison controls stop opening.
-- Saved views are kept and marked disabled when the new plan’s count or window does not allow them. They are not deleted. On a later upgrade they open again if they still fit.
-- The one Growth daily summary stops on downgrade to Starter, including the cron path.
+- There is no saved-view store. The 5 and 25 caps stay frozen product defaults for a later Reports phase. Waves A–C must not build schema, route, UI, or persistence for saved views. If that later phase creates them, downgrade disables views above the new cap and does not delete them.
+- `owner_daily_summary` stops on downgrade to Starter, including the cron path. A Pro daily summary follows the Pro schedule entitlement and stops when that entitlement no longer applies.
 - Files already downloaded are the customer’s copies. TillFlow does not reach into their inbox.
 
 ### Freshness
 
-Each canonical total shows **Last calculated** as the business-local time of the snapshot, and the sync line from Owner Today when any offline queue is non-empty: **All synced**, **Syncing N**, or **Last synced …**.
+Do not show All synced unless reliable device acknowledgement proves it. Do not show Syncing N unless the server genuinely knows N. Otherwise show: Based on data received by TillFlow as of [business-local time]. Open-shift expected cash must not be presented as finally reconciled while relevant data may be unsynced. An old counted-cash value must never be presented as the current comparison for an open shift. Any future acknowledgement mechanism is separate implementation work and must not be invented in this close-out.
 
-Pass A found report caches of 30s to 1 hour and no offline queue on report pages. The contract requires the sync line even when the cache is warm. A warm cache is not “all synced”.
+Unproven sync labels are not normal available chrome. **Last calculated** may show the business-local time of a snapshot. That time is not an acknowledgement that devices have synced.
+
+Pass A found report caches of 30s to 1 hour and no offline queue on report pages. A warm cache is not All synced.
 
 ### Reconciliation
 
@@ -239,21 +248,22 @@ For every canonical id, automated checks must hit **screen, CSV, PDF, schedule, 
 
 | ID | Screen | CSV | PDF | Schedule | Deep link | Share |
 |---|---|---|---|---|---|---|
-| `sales_activity` | Allow all plans, manager default | Own-records allow. Margin column deny without `VIEW_MARGIN` | Same as CSV | Deny Starter. Growth daily summary may include today’s sales total | Same as screen | Same as schedule |
-| `payment_flow` | Allow all plans | Allow all plans | Same | Growth daily may include method totals | Same | Same |
-| `cash_reconciliation` | Allow all plans | Allow (`eod` files) | Allow | Not in the Growth SMS unless it is the expected/counted pair with sync state | Same. `/shifts/drawer` included | Same |
-| `expense_activity` | Allow | Allow | Allow | Optional line on Growth daily | Same | Same |
+| `sales_activity` | Allow all plans, manager default | Own-records allow. Margin column deny without `VIEW_MARGIN` | Same as CSV | Deny Starter. `owner_daily_summary` may include today’s sales total on Growth and, under the Pro schedule entitlement, on Pro | Same as screen | Same as schedule |
+| `payment_flow` | Allow all plans | Allow all plans | Same | `owner_daily_summary` may include method totals when they fit | Same | Same |
+| `cash_reconciliation` | Allow all plans | Allow (`eod` files) | Allow | `owner_daily_summary` may include open expected cash and a labelled closed variance as separate figures. It must not present an open shift as finally reconciled | Same. `/shifts/drawer` included | Same |
+| `expense_activity` | Allow | Allow | Allow | Optional line on `owner_daily_summary` | Same | Same |
 | `inventory_position` | Allow | Allow, all entitled stores | Allow | No | Same | No |
 | `stock_movement` | Allow | Allow inside the records ZIP | Allow | No | Same | No |
 | `purchase_activity` | Allow | Allow | Allow | No | Same | No |
-| `customer_receivables` | Allow | Statement and ageing rows allow | Allow | Overdue total may appear on Growth daily | Same | Same |
+| `customer_receivables` | Allow | Statement and ageing rows allow | Allow | Overdue total may appear on `owner_daily_summary` | Same | Same |
 | `supplier_payables` | Deny without `VIEW_SUPPLIER_DEBT` | Same deny | Same deny | Omit amounts without the grant | Same deny | Same |
-| `margin_performance` | Allow the quality-state figure on all plans. Deny rankings on Starter. Deny without `VIEW_MARGIN` | Deny `/exports/margins` on Starter and without grant. Sales file margin column matches | Same | Growth SMS may include GP only in state Ready; otherwise the incomplete sentence | Same | Same |
+| `margin_performance` | Allow the quality-state figure on all plans. Deny rankings on Starter. Deny without `VIEW_MARGIN`. Compiled statement screens follow the financial-statement boundary | Deny `/exports/margins` on Starter and without grant. Sales file margin column matches. Starter still receives source rows | Same | `owner_daily_summary` may include GP only in state Ready; otherwise no GP figure | Same | Same |
 | `variance_signals` | Deny Starter | Deny Starter (`/exports/risk-summary` already Growth) | Same | No | Same | No |
-| `staff_activity` | Deny Starter. Deny without `VIEW_STAFF_ACTIVITY` | Deny on those plans and grants, including Weekly Digest and Business Movement files | Same | Do not include a cashier ranking in the Growth SMS | Same | No |
+| `staff_activity` | Deny Starter. Deny without `VIEW_STAFF_ACTIVITY` | Deny on those plans and grants, including Weekly Digest and Business Movement files | Same | Do not include a cashier ranking in `owner_daily_summary` | Same | No |
 | `branch_performance` | Deny unless Pro and `VIEW_BRANCH_COMPARISON` | Deny, including Business Movement CSV | Same | Pro packs only | Same | Pro packs only |
 | `owner_today` | Allow owner. Partial manager | No separate file | No | No | Widgets use the family rows above | No |
-| `management_pack` | Pro preview. Growth: settings for the one daily send only | Pro pack file. Growth: no analytical CSV | Pro | Growth 1/day. Pro within recipient caps. Starter deny, **including cron** | Same | Same |
+| `owner_daily_summary` | Settings for the one Growth send. Pro may configure it only under the Pro schedule entitlement | No analytical CSV | No pack PDF | Starter deny, including cron. Growth: one SMS, one verified SMS destination. Pro: within the daily recipient cap. Destination rules in B3 | Same | Same |
+| `management_pack` | Not built in Waves A–C. Entitlement reserved for Pro | Not built in Waves A–C | Not built in Waves A–C | Pro caps reserved. Starter and Growth deny. Not the daily SMS | Same | Same |
 | Audit log | Pro owner | No file today; if added, same gate | Same | No | Same | No |
 | Forecast | Pro owner | No file today; if added, same gate | Same | Pro monthly pack may include it | Same | Same |
 
@@ -265,7 +275,7 @@ From Pass A §9. Listed so the tests have a known-red baseline. Not fixed in thi
 |---|---|
 | `margin_performance` CSV on Starter | `GET /exports/margins` returns the file with no plan check |
 | `sales_activity` margin column on Starter | `GET /exports/sales` always writes Margin |
-| `management_pack` schedule on Starter | `GET /api/cron/eod-summary` enqueues the GP summary with no plan check |
+| `owner_daily_summary` schedule on Starter | `GET /api/cron/eod-summary` enqueues the GP summary with no plan check, gates on `whatsappEnabled`, and prefers `whatsappPhone` |
 | `branch_performance` screen and CSV on Starter or Growth | Business Movement renders and exports the branch table |
 | `staff_activity` screen and CSV on Starter | Weekly Digest and Business Movement cashier tables, and their CSVs |
 | `margin_performance` screen quality state | Trading Report and Command Center show a firm GP% with missing cost treated as a number |
@@ -274,10 +284,10 @@ From Pass A §9. Listed so the tests have a known-red baseline. Not fixed in thi
 | `sales_activity` cashier deep link | Nav today sales is business-wide |
 | Statement routes vs screen | Financial statement CSV matches the Growth screen (this one should stay green) |
 | Risk summary vs screen | Growth on both (should stay green) |
-| Owner export vs screen | Pro on both (should stay green) |
+| Owner Brief export vs screen | Screen is `OWNER` only. Export role list is `OWNER` and `MANAGER`, then Pro flag only. A Pro manager denied the screen can still download the export. This must fail until B13 |
 | Supplier-sales export vs screen | Growth on both (should stay green) |
 
-Debug financials (`GET /api/debug-financials`) has no plan check. The matrix puts it on the income-statement row.
+`GET /api/debug-financials` has no plan check and no environment gate. It is a Wave B security defect (B12), not an income-statement entitlement.
 
 ---
 
@@ -286,6 +296,23 @@ Debug financials (`GET /api/debug-financials`) has no plan check. The matrix put
 No test file and no application file is added in this close-out. Owners below are the one primary implementer, in series. Independent QA does not own these rows.
 
 Acceptance for every row: the cited behaviour no longer happens on the entitled path, the frozen contract holds, and the named test fails before the fix and passes after it.
+
+### Expected-cash discovery precondition
+
+Before Wave A changes expected-cash code, it must locate and document:
+
+- the live expected-cash calculator
+- the shift-close action or service
+- every writer of stored `expectedCashPence`
+- ordinary close
+- owner-override close
+- the retry or idempotency path
+- the offline close path, if one exists
+- any alternate close API or server action
+
+The beginning of Wave A must stop as blocked if these cannot be traced. Wave A must not create a new expected-cash engine beside an unidentified existing writer.
+
+Known at this close-out, and not a completed trace: `lib/reports/home-expected-cash.ts` sums open `Shift.expectedCashPence` and returns 0 when no shift is open. `lib/services/cash-drawer.ts` records entry types `OPEN_FLOAT`, `CASH_SALE`, `CASH_REFUND`, `CASH_DEBTOR_PAYMENT`, `PAID_OUT_SUPPLIER`, `PAID_OUT_EXPENSE`, `CLOSE_RECONCILIATION`, and `CASH_ADJUSTMENT`. The writer that stores `expectedCashPence` on close was not identified here. Files Wave A must inspect first are listed under Serial ownership.
 
 ### Wave A — owner-visible truth (11)
 
@@ -298,10 +325,10 @@ Acceptance for every row: the cited behaviour no longer happens on the entitled 
 | A5 | Command Center AR/AP ignore invoices older than 90 days | `lib/reports/today-kpis.ts` `ninetyDaysAgo` | `lib/reports/today-kpis-balances.contract.test.ts` | `lib/reports/today-kpis.ts` | Receivables and payables formulas | Open balance includes older open invoices |
 | A6 | Forecast trailing cash/MoMo does not require `CONFIRMED` | `lib/reports/forecast.ts` | `lib/reports/forecast.contract.test.ts` | `lib/reports/forecast.ts` | `payment_flow` | Trailing inflow uses confirmed payments only |
 | A7 | Several reports use server-local midnight or Accra plus server midnight | Pass A §2.1; `date-parsing.ts`; `today-kpis.ts` | `lib/reports/reporting-clock.contract.test.ts` | `lib/reports/date-parsing.ts`, `today-kpis.ts`, `owner-dashboard.ts`, pages that call `resolveReportDateRange` | Clock section of the catalogue | Ghana gate tests in the catalogue are green. UK DST is not required for this gate |
-| A8 | Home, Today KPIs, Owner Brief, and Cash Drawer do not share one expected-cash definition | Pass A §8.7 | `lib/reports/cash-expected.contract.test.ts` | `lib/reports/home-expected-cash.ts`, `lib/services/cash-drawer.ts`, `owner-dashboard.ts`, `today-kpis.ts` | `cash.expected.v1` | One function. Callers listed in the extraction note |
-| A9 | Stored shift expected cash is not proven equal to a live canonical result | No fixture compares them | `lib/reports/cash-expected.contract.test.ts` | `lib/services/cash-drawer.ts`, shift close writer (located in Wave A, not guessed here) | A8 | Same source rows produce the same expected pesewas live and at close |
+| A8 | Home, Today KPIs, Owner Brief, and Cash Drawer do not share one expected-cash definition | Pass A §8.7 | `lib/reports/cash-expected.contract.test.ts` | `lib/reports/home-expected-cash.ts`, `lib/services/cash-drawer.ts`, `owner-dashboard.ts`, `today-kpis.ts`, and the close writer once the discovery precondition names it | `cash.expected.v1` and the discovery precondition | Stop blocked if the writers cannot be traced. Otherwise one function. No second engine beside an unidentified writer |
+| A9 | Stored shift expected cash is not proven equal to a live canonical result | No fixture compares them | `lib/reports/cash-expected.contract.test.ts` | The close writer located by the discovery precondition. Not guessed in this close-out | A8 | Ordinary close, owner-override close, retry, and any offline or alternate close path that writes `expectedCashPence` match the live result for the same source rows |
 | A10 | Business Movement stock insights are hard-off and marked not reliable | `stockInsightsEmitted: false` in `lib/reports/business-movement` | `lib/reports/business-movement/business-movement.test.ts` (extend the existing stock-gate case; do not treat the current assertion of `false` as success) | `lib/reports/business-movement/sales-comparison.ts` | `stock_movement` | The block is absent or sourced from `stock_movement`. It does not emit a stock total of its own |
-| A11 | Daily SMS uses stored GP, has no segment cap, and does not use the frozen freshness sentence | `buildOwnerDailySummarySms` | `lib/notifications/owner-daily-summary-sms.contract.test.ts` | `lib/notifications/owner-daily-summary-sms.ts` | A2, A7, catalogue SMS rules | Formatter tests in `PLAN_ENTITLEMENT_MATRIX.md` pass. Plan check is Wave B on the cron route, not this row |
+| A11 | Daily SMS body uses stored GP, has no segment cap, and does not use the frozen freshness sentence. The same function also prefers `whatsappPhone` and gates on `whatsappEnabled` while writing `channel: 'SMS'` | `buildOwnerDailySummarySms`, `resolveOwnerRecipient` | `lib/notifications/owner-daily-summary-sms.contract.test.ts` | `lib/notifications/owner-daily-summary-sms.ts` | A2, A7, SMS payload section of `PLAN_ENTITLEMENT_MATRIX.md` | Formatter tests in that section pass, including 306 GSM-7 septets, `GHS`, mandatory fields, overflow order, freshness wording, open expected cash versus closed variance, incomplete-cost GP, and priority actions. No WhatsApp provider, route, UI, copy, or test stub. Destination resolution, consent, opt-out, and the cron plan check are B3 |
 
 ### Wave B — entitlement and store scope (11)
 
@@ -309,7 +336,7 @@ Acceptance for every row: the cited behaviour no longer happens on the entitled 
 |---|---|---|---|---|---|---|
 | B1 | `GET /exports/margins` has no plan check | `app/(protected)/exports/margins/route.ts` | `app/(protected)/exports/margins/entitlement.contract.test.ts` | that route | `VIEW_MARGIN`, Growth | Starter and a manager without the grant receive the same deny as the page |
 | B2 | `GET /exports/sales` always writes Margin | `app/(protected)/exports/sales/route.ts` | `app/(protected)/exports/sales/entitlement.contract.test.ts` | that route | A2 so the entitled column uses `margin.line.v1` | Starter file has stored cost and no computed margin. Entitled Ready lines may include margin |
-| B3 | Cron enqueues the summary with no plan check | `app/api/cron/eod-summary/route.ts` | `app/api/cron/eod-summary/entitlement.contract.test.ts` | that route | A11 formatter already frozen in the SMS lib | Starter is not enqueued. Growth still enqueues one SMS |
+| B3 | Cron enqueues the summary with no plan check. The live path uses `whatsappEnabled`, prefers `whatsappPhone`, and writes an SMS outbox record | `app/api/cron/eod-summary/route.ts`, `resolveOwnerRecipient`, outbox `channel: 'SMS'` | `app/api/cron/eod-summary/entitlement.contract.test.ts` | that route and the recipient resolver called from it. Wave B must not rewrite the A11 formatter | A11 | Starter is not enqueued. Growth enqueues one SMS. Pro may be enqueued only under the Pro daily schedule entitlement. Destination resolves to an explicitly verified SMS-capable phone. `whatsappPhone` is never used merely because it exists. WhatsApp preference is not treated as SMS consent. A WhatsApp-only identity cannot receive the SMS. Consent and opt-out rules are enforced. No WhatsApp provider, route, UI, copy, or test stub is introduced |
 | B4 | Business Movement shows and exports branch and cashier tables on every plan | page and `lib/reports/business-movement/export.ts` | `lib/reports/business-movement/business-movement-export-access.test.ts` (extend) | `app/(protected)/reports/business-movement/page.tsx`, `export.ts` | Pro, `VIEW_BRANCH_COMPARISON`, `VIEW_STAFF_ACTIVITY` | Starter and Growth responses omit both tables |
 | B5 | Weekly Digest screen and CSV include comparison, GP, and cashier tables on every plan | page and `app/api/reports/weekly-digest/route.ts` | `app/api/reports/weekly-digest/entitlement.contract.test.ts` | `weekly-digest/page.tsx`, `app/api/reports/weekly-digest/route.ts` | A1 for the GP math; this row is the gate | Starter does not receive comparison, staff, or a GP figure the plan does not allow |
 | B6 | Reports hub cards for a higher plan still navigate | `app/(protected)/reports/page.tsx` lines 362–365 change the badge only | `lib/reports/reports-index-polish.test.ts` (extend) | `app/(protected)/reports/page.tsx` | Plan matrix | A Starter click does not open a higher-plan calculation. Record links stay |
@@ -317,7 +344,9 @@ Acceptance for every row: the cited behaviour no longer happens on the entitled 
 | B8 | Starter or Growth can still query every store if two `Store` rows exist | Business Movement does not read `getFeatures().multiStore` | `lib/reports/reporting-store-scope-routes.test.ts` (extend) | report scope helper used by movement, today KPIs, weekly digest | Store boundary in the plan matrix | A second store is not operational and is not compared |
 | B9 | Downgrade behaviour for historical stores is not specified in code | No downgrade report path found in Pass A | `lib/reports/store-retention.contract.test.ts` | future store-activation guard. No deletion migration | B8 | After downgrade, prior store rows remain readable and are not operational |
 | B10 | Risk Monitor says “anti-fraud” | `app/(protected)/reports/risk-monitor/page.tsx` | `lib/services/risk-monitor-language.contract.test.ts` | that page | Language list in this file | Those strings are gone. Replacement labels are the permitted list |
-| B11 | Screen, file, and cron do not call one entitlement function | Pass A §9 | one contract test per route in B1–B5 | `assertReportEntitlement` introduced in Wave B, called from those routes | B1–B5 | Direct URL, CSV, and cron deny together |
+| B11 | Screen, file, and cron do not call one entitlement function | Pass A §9 | one contract test per route in B1–B5 and B13 | `assertReportEntitlement` introduced in Wave B, called from those routes | B1–B5, B13 | Direct URL, CSV, and cron deny together |
+| B12 | `GET /api/debug-financials` exposes purchase totals, journal counts, account codes, AP balance, and inventory GL balance to any owner or manager. It is not development-only and not fail-closed | `app/api/debug-financials/route.ts`. `middleware.ts` gates `/dev/` only | `app/api/debug-financials/security.contract.test.ts` | that route | None | In Preview and Production the route does not return financial aggregates. Unauthenticated, cashier, and cross-tenant requests are denied. A negative test fails closed when the environment is not an explicit local diagnostic |
+| B13 | Owner Brief screen is owner-only. The export route admits managers, then checks only the Pro flag | `app/(protected)/reports/owner/page.tsx` `requireBusiness(['OWNER'])`. `app/(protected)/reports/owner/export/route.ts` `requireBusiness(['OWNER', 'MANAGER'])` | `app/(protected)/reports/owner/export/entitlement.contract.test.ts` | the export route. Screen and export must share one decision | B11 | A manager denied the screen is denied `GET /reports/owner/export`, including a direct request on Pro |
 
 ### Wave C — permissions (12)
 
@@ -336,9 +365,9 @@ Acceptance for every row: the cited behaviour no longer happens on the entitled 
 | C11 | `/shifts/drawer` allows any signed-in role | `app/(protected)/shifts/drawer/page.tsx` | `app/(protected)/shifts/drawer/scope.contract.test.ts` | that page | Cashier scope | A cashier may open only their active shift, till, and store |
 | C12 | Cross-till and cross-store ids are not rejected on that drawer route | Same page, no role array | same test | that page | C11 | A changed shift, till, or store id is denied |
 
-Counts: Wave A 11, Wave B 11, Wave C 12. Total 34.
+Counts: Wave A 11, Wave B 13, Wave C 12. Total 36.
 
-Highest risk: A2 and A3 (a confident wrong profit figure), A8/A9 (cash close that does not match), B1/B2/B3 (files and SMS that skip the plan), C11 (cashier drawer not scoped).
+Highest risk: A2 and A3 (a confident wrong profit figure), A8/A9 (cash close that does not match, and Wave A blocked until the expected-cash writers are traced), B1/B2/B3 (files and SMS that skip the plan or the SMS destination), B12 (debug financials open in deployed environments), B13 (Owner Brief export), C11 (cashier drawer not scoped).
 
 ---
 
@@ -357,6 +386,8 @@ One primary implementer. No parallel workstream.
 9. Independent QA, separate session.
 10. Preview deployment.
 11. Owner walkthrough.
+
+Files Wave A must inspect first, before editing expected-cash code: `lib/reports/home-expected-cash.ts`, `lib/services/cash-drawer.ts`, and every assignment of `expectedCashPence`, including ordinary close, owner-override close, retry or idempotency, an offline close path if one exists, and any alternate close API or server action. If that trace is incomplete, Wave A stops blocked.
 
 Wave A files, exclusive to that phase (the same person may edit them in a later wave only after the prior gate):
 
@@ -389,6 +420,7 @@ Wave B files, not edited in Wave A:
 - `app/api/cron/eod-summary/route.ts`
 - `app/(protected)/reports/risk-monitor/page.tsx`
 - `app/api/debug-financials/route.ts`
+- `app/(protected)/reports/owner/export/route.ts` for B13 only. Wave A may still correct the brief’s calculations in `lib/reports/owner-dashboard.ts` and must not widen the export role list
 
 Wave C files, not edited in A or B:
 
@@ -404,7 +436,7 @@ Overlaps, still one person, serial, not two agents:
 | `lib/reports/weekly-digest.ts` | A1/A3 math, then B5 gate if the gate cannot live only on the route | Wave A. Wave B prefers the route and page. The lib is not edited again unless the route cannot enforce the gate |
 | `lib/notifications/owner-daily-summary-sms.ts` | A11 body, and the enqueue path is also how a Starter could be sent | Wave A owns the body. Wave B owns `app/api/cron/eod-summary/route.ts` and must not rewrite the formatter |
 | `lib/reports/business-movement/query.ts` | A4 product field and B4 branch rows are produced together | Wave A may change the product money field. Wave B hides branch and cashier at the page and export. Wave B does not fork a second product total |
-| Shift close writer | A9 equality. The file is not named until Wave A finds the writer | Wave A only, once located. It is not pre-assigned to a second person |
+| Shift close writer | A9 equality. The file is not named until the discovery precondition locates every `expectedCashPence` writer | Wave A only, once located. If it cannot be traced, Wave A stops blocked. It is not pre-assigned to a second person |
 
 If a later run uses more than one agent, the integration lead assigns these files exclusively and keeps the same gates. This close-out does not start that run.
 

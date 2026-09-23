@@ -1,6 +1,6 @@
 # Plan entitlement matrix
 
-Status: frozen for Joshua review (contract close-out, 2026-09-23). Not implemented.
+Status: final correction applied (2026-09-23). Not implemented.
 
 Evidence: `docs/reports/PASS_A_INVENTORY.md`. Plan flags today live in `lib/features.ts`. This matrix is the target. It is not what `getFeatures` returns today.
 
@@ -37,7 +37,7 @@ Available to `OWNER` and to a `MANAGER` who has the matching permission in `REPO
 
 - Sales invoices and lines, voids, returns, discounts (`sales_activity` list and totals).
 - Confirmed payments and unconfirmed MoMo queue (`payment_flow`).
-- Expected vs counted cash and shift rows (`cash_reconciliation`), including the not-final state when tills are unsynced.
+- Expected vs counted cash and shift rows (`cash_reconciliation`). Open-shift expected cash is not presented as finally reconciled while relevant data may be unsynced. An old counted-cash value is not the current comparison for an open shift. Do not show All synced unless reliable device acknowledgement proves it. Do not show Syncing N unless the server genuinely knows N. Otherwise show: Based on data received by TillFlow as of [business-local time].
 - Expenses and expense payments (`expense_activity`).
 - Stock on hand and low/out against reorder point (`inventory_position`).
 - Stock ledger rows (`stock_movement`), but transfer **analytics** and transfer actions on Today are Pro.
@@ -68,7 +68,8 @@ Promise: “Is my money and stock honest today?”
 | `staff_activity` | **0** |
 | 30/60/90 ageing **charts** | No. Overdue total and missing due date remain visible as records |
 | Velocity reorder list | No. Low/out from reorder point remains visible |
-| Income statement category depth, balance sheet, indirect cashflow, forecast | No |
+| Compiled Income Statement, Balance Sheet, and Cashflow Statement screens | No. Starter retains all underlying sales, expense, payment, stock, receivable and payable records for every retained date, and receives the truthful GP view with cost-quality handling |
+| Forecast | No |
 | Margin ranking, below-target list, margin trend | No. One GP figure with data-quality state remains |
 
 Pass A gaps this cap would close: Weekly Digest previous week, Business Movement comparison, Trading Report unbounded custom ranges used as trends, Analytics if the page gate is bypassed, and cashier tables on Weekly Digest.
@@ -87,30 +88,34 @@ Promise: “I can manage without standing at the till.”
 | Analytics window | **13 calendar months** ending today, business timezone |
 | Period comparison | **Two periods**, both inside that 13-month window, equal length or calendar month vs previous calendar month |
 | Saved analytical views | **5** |
-| Scheduled delivery | **1 per local day**, see replacement below |
+| Scheduled delivery | **1 per local day** of `owner_daily_summary`. Not `management_pack` |
 | Ageing | 30/60/90 summary **inside the 13-month window**, plus the all-plan overdue warnings |
 | `staff_activity` | Yes, with the safeguards in the access contract |
 | Stock movement value trend and reorder velocity | Yes, inside 13 months |
 | `margin_performance` dimensions | Product and category. Not branch. Preferred-supplier is a sales group-by, still not debt |
-| Statement products | Income statement, balance sheet, indirect cashflow |
-| `branch_performance`, consolidation, transfer reporting, forecast, management pack | **No** |
+| Compiled financial statements | Single-store Income Statement, Balance Sheet, and Cashflow Statement. Not multi-store. Not consolidated. Supplier-debt and margin fields inside those statements still require the relevant staff permission. Restricting a compiled statement must never restrict access to its underlying source records |
+| `branch_performance`, consolidation, transfer reporting, forecast, `management_pack` | **No** |
 
-### Growth schedule (frozen)
+### Daily owner summary (`owner_daily_summary`)
 
-Growth sends **exactly one** daily owner summary.
+`owner_daily_summary` is the daily SMS delivery product. It is not `management_pack`. `management_pack` remains the Pro file and schedule product. WhatsApp is not implemented.
 
-- Channel: **SMS only**. The current outbox insert already sets `channel: 'SMS'` (`lib/notifications/owner-daily-summary-sms.ts`).
-- Recipients: **one verified owner destination**.
-- No WhatsApp send for this summary. Do not add WhatsApp routes, tests, UI, copy, or provider stubs for it. WhatsApp is not the Growth schedule. Provider modules under `lib/notifications/providers/` are out of scope and are not evidence that this summary is a WhatsApp product.
-- No monthly management pack on Growth.
-- No external recipient list.
-- The cron path must apply the same Growth plan check as settings. It does not, on `b6e4bc8` (Pass A §6).
+- Starter: denied, including the cron path.
+- Growth: one daily SMS to one verified owner destination.
+- Pro: may receive the daily summary under the applicable Pro schedule entitlement (the frozen daily recipient cap). That send is still `owner_daily_summary`, not a management pack.
+- Channel: SMS. The current outbox insert sets `channel: 'SMS'` (`lib/notifications/owner-daily-summary-sms.ts`).
+- Growth recipients: one explicitly verified SMS-capable phone.
+- Do not add a WhatsApp provider, route, UI, copy, or test stub. Provider modules under `lib/notifications/providers/` are not evidence that this summary is a WhatsApp product.
+- Growth does not receive a management pack and has no external recipient list.
+- The cron path must apply the same plan check as settings. It does not, on `b6e4bc8` (Pass A §6).
 
-The earlier draft “1 monthly email summary” and the earlier note that allowed WhatsApp are withdrawn. The outbox channel on `b6e4bc8` is SMS. The recipient helper currently prefers `whatsappPhone` before `phone`; the frozen destination is one verified owner SMS number, not a WhatsApp identity.
+Live channel and destination defect on `b6e4bc8`: `enqueueOwnerDailySummarySms` returns early unless `whatsappEnabled` is set, `resolveOwnerRecipient` prefers `whatsappPhone` before `phone`, and the outbox row is still written with `channel: 'SMS'`. That is not SMS consent, and it is not a verified SMS destination. Acceptance is in `REPORT_ACCESS_AND_EXPORT_CONTRACT.md` rows A11 and B3.
+
+The earlier draft “1 monthly email summary” and the earlier note that allowed WhatsApp are withdrawn.
 
 ### Growth SMS payload (formatter specified, not built)
 
-Future formatter lives beside `buildOwnerDailySummarySms`. Future tests live in `lib/notifications/owner-daily-summary-sms.contract.test.ts`. Neither file change is part of this close-out.
+This section is the frozen SMS size and overflow contract for every `owner_daily_summary` body, including a Pro send under the Pro schedule entitlement. It is not a Growth-only exclusion of Pro. Future formatter lives beside `buildOwnerDailySummarySms`. Future tests live in `lib/notifications/owner-daily-summary-sms.contract.test.ts`. Neither file change is part of this close-out. SMS body and formatter work belongs to Wave A. Cron plan and delivery entitlement belongs to Wave B.
 
 Windows use `Business.timezone` and the half-open clock in `REPORT_CATALOGUE.md`.
 
@@ -118,9 +123,9 @@ Default freshness sentence, required:
 
 `Based on data received by TillFlow as of [YYYY-MM-DD HH:mm] [Business.timezone].`
 
-Do not say “All synced” unless a reliable acknowledgement proves it. Do not say “Syncing N” unless the server knows N.
+Do not show All synced unless reliable device acknowledgement proves it. Do not show Syncing N unless the server genuinely knows N. Otherwise show the freshness sentence above. Open-shift expected cash must not be presented as finally reconciled while relevant data may be unsynced. An old counted-cash value must never be presented as the current comparison for an open shift. Any future acknowledgement mechanism is separate implementation work and must not be invented in this close-out.
 
-Open expected cash and closed variance are separate. Never one combined cash figure.
+Open expected cash and closed variance are separate. Never one combined cash figure. The SMS may include open-shift expected physical cash only when an open shift exists, and a closed-shift variance only when it is labelled closed.
 
 Maximum size: **two concatenated GSM-7 segments**.
 
@@ -172,7 +177,11 @@ Future tests, not written now:
 - open cash and closed variance are not merged
 - a third segment is never produced
 
-Saved-view caps of 5 and 25 are new. Pass A found no saved-view model. The draft numbers are unchanged.
+### Saved views and unimplemented pack experience
+
+The 5 Growth and 25 Pro saved-view limits remain frozen product defaults. Pass A found no saved-view model. Waves A–C must not build a saved-view system. No schema, route, UI, or persistence for saved views is authorised. Saved views belong to the later Reports experience and product phase. Their absence does not block integrity remediation.
+
+The same principle applies to the unimplemented `management_pack` experience. Contracts may reserve the Pro entitlement. Waves A–C implement only the integrity defects explicitly authorised in the known-red list. They do not build pack files, pack schedules, or pack UI.
 
 ---
 
@@ -192,7 +201,9 @@ Promise: “I can control branches and receive management packs without hiring a
 | Scheduled packs | Daily, weekly, and monthly. Recipient caps below |
 | Margin dimensions | Product, category, preferred supplier, branch |
 | Forecast | Yes, using confirmed `payment_flow` only |
-| `management_pack` | Yes |
+| `management_pack` | Yes. File and schedule product only. Not the daily SMS |
+| Compiled financial statements | Eligible multi-store and consolidated Income Statement, Balance Sheet, and Cashflow Statement. Supplier-debt and margin fields still require the relevant staff permission. Restricting a compiled statement must never restrict access to its underlying source records |
+| `owner_daily_summary` | May be received under the Pro daily schedule entitlement, inside the daily recipient cap. WhatsApp is not implemented |
 
 ### Pro v1 recipient caps (frozen integers)
 
@@ -206,7 +217,7 @@ These change only by a numbered contract amendment.
 
 The cap is across all active schedules of that cadence, not per report. Each recipient is explicitly authorised. An alias or a distribution list does not add capacity. A removed or failed destination does not keep consuming a seat. On downgrade, excess schedules are disabled in a deterministic order (newest schedule first) and are not deleted. Schedule configuration and delivery history remain.
 
-Channel for Pro packs: email and in-app. Not WhatsApp. Not the Growth SMS.
+Pro management packs use email and in-app. The daily owner summary, when Pro sends it, is `owner_daily_summary` by SMS under the daily recipient cap. WhatsApp is not implemented for either product.
 
 ---
 
@@ -219,7 +230,8 @@ Channel for Pro packs: email and in-app. Not WhatsApp. Not the Growth SMS.
 | Trend | Today + 30 daily points of sales and money received | 13 months | Retained history |
 | Period compare | 0 | 2 periods inside 13 months | Any 2 in retained history |
 | Saved views | 0 | 5 | 25 |
-| Schedules | 0 | 1 daily owner SMS, 1 verified destination | Daily / weekly / monthly packs, caps 3 / 5 / 10 |
+| Schedules | 0. `owner_daily_summary` denied | 1 daily SMS (`owner_daily_summary`) to 1 verified owner SMS destination. No `management_pack` | Daily SMS under the daily cap, plus daily / weekly / monthly `management_pack`, caps 3 / 5 / 10 |
+| Compiled statements | No screen. Records and the GP view remain | Single-store Income Statement, Balance Sheet, Cashflow Statement | Eligible multi-store and consolidated statements |
 | Staff activity | No | Yes, permitted managers | Yes, permitted managers |
 | Branch comparison | No | No | Yes |
 | Transfers in reports | No | No | Yes, if the feature is on |

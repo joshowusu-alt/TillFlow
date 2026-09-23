@@ -1,6 +1,6 @@
 # Owner Today contract
 
-Status: frozen for Joshua review (contract close-out, 2026-09-23). Not implemented.
+Status: final correction applied (2026-09-23). Not implemented.
 
 `owner_today` is one dashboard composition. It is not a calculation family and it does not replace the canonical reports. Every number on it is computed by a family in `REPORT_CATALOGUE.md` and deep-links to that family. Pass A shows this is not true today: Home, Command Center, Trading Report, and Owner Brief each load their own snapshots (`home-performance-kpis.ts`, `today-kpis.ts`, `TradingDashboardContent.tsx`, `owner-dashboard.ts`).
 
@@ -14,9 +14,9 @@ Freshness, default:
 
 `Based on data received by TillFlow as of [business-local time].`
 
-**All synced** is allowed only when a reliable acknowledgement proves it. **Syncing N** is allowed only when the server knows N. Do not invent either label.
+Do not show All synced unless reliable device acknowledgement proves it. Do not show Syncing N unless the server genuinely knows N. Otherwise show: Based on data received by TillFlow as of [business-local time]. Open-shift expected cash must not be presented as finally reconciled while relevant data may be unsynced. An old counted-cash value must never be presented as the current comparison for an open shift. Any future acknowledgement mechanism is separate implementation work and must not be invented in this close-out.
 
-While that acknowledgement is missing, expected versus counted is not a finished close. The cash widget stays visible and says the close is not final. Open expected cash and closed variance stay separate.
+Unproven sync labels are not normal available chrome. Open expected cash and closed variance stay separate figures.
 
 Scope line: the single store name on Starter and Growth. On Pro: the selected store, or **Consolidated**. Pass A’s “Today · All branches” on a single-store home is retired with this contract.
 
@@ -32,7 +32,7 @@ Gross profit is not one of the seven widgets. If a later revision puts it on Tod
 - Drill-down: `sales_activity` filtered to today.
 - Empty: **No sales yet today** and a link to the till. Not a product-count substitution (Owner Home does that swap today).
 - Data-quality: none on this widget. Missing costs do not change the sales total.
-- Freshness: the sync line above. The figure is today’s synced sales; unsynced tickets are named in the sync line, not mixed in quietly.
+- Freshness: the page line above. The figure is sales in rows TillFlow has received. It is not labelled synced. Tickets the server has not received are absent from the figure. Do not invent a count of them.
 - Role: owner; manager with `sales_activity`.
 - Plan: all plans.
 
@@ -42,7 +42,7 @@ Gross profit is not one of the seven widgets. If a later revision puts it on Tod
 - Drill-down: `payment_flow` today. The MoMo count drills to the unconfirmed filter.
 - Empty: **No confirmed money received yet today**.
 - Data-quality: if the receipt query fails, show **Receipts unavailable** and a null amount. Do not show 0 (Pass A: `queryFailed` must not become a real zero).
-- Freshness: same sync line. Unsynced tenders are not in the total.
+- Freshness: the page line above. Confirmed receipts TillFlow has received are in the total. Do not label the total synced.
 - Role: owner; manager with `payment_flow`.
 - Plan: all plans.
 
@@ -51,8 +51,8 @@ Gross profit is not one of the seven widgets. If a later revision puts it on Tod
 - Calculation: `cash.expected.v1` for open shifts, plus the count of open shifts. Counted cash appears only for shifts that are closed. Variance uses `cash.variance.v1`.
 - Drill-down: `cash_reconciliation` for today.
 - Empty: **No shift open** when the open-shift count is 0. Do not print expected cash as 0 in that case (Owner Home does today).
-- Data-quality: **Not final — tills syncing** while any relevant till is unsynced. Do not show expected versus counted as the close.
-- Freshness: required.
+- Data-quality: while relevant data may be unsynced, open-shift expected cash is not presented as finally reconciled. An old counted-cash value is never the current comparison for an open shift. Do not show All synced or Syncing N unless the freshness rule above allows that label.
+- Freshness: required. Use the page line. Do not invent an acknowledgement.
 - Role: owner; manager with `cash_reconciliation`.
 - Plan: all plans.
 
@@ -89,7 +89,7 @@ Closed list. If none apply, the region says **Nothing needs you right now**. **V
 
 | Id | Include when | Drill-down |
 |---|---|---|
-| `unresolved_cash_variance` | A closed shift has an unreviewed non-zero `cash.variance.v1`, and tills in scope are synced | `cash_reconciliation` |
+| `unresolved_cash_variance` | A closed shift has an unreviewed non-zero `cash.variance.v1`. Do not show it as finally reconciled while relevant data may be unsynced | `cash_reconciliation` |
 | `overdue_customer_credit` | Overdue customer balance `> 0`. If several, the one with the largest overdue amount | `customer_receivables` filtered overdue |
 | `overdue_supplier_invoice` | Overdue supplier balance `> 0` | `supplier_payables` filtered overdue |
 | `open_shift_past_close` | A shift is still open after the store’s close window | `cash_reconciliation` |
@@ -97,7 +97,7 @@ Closed list. If none apply, the region says **Nothing needs you right now**. **V
 | `missing_supplier_due_date` | At least one open purchase has no due date | `supplier_payables` bucket `DUE_DATE_MISSING` |
 | `incomplete_stocktake` | A stocktake is in progress or was due and not posted | Stocktake record |
 | `pending_stock_transfer` | Pro, transfers enabled, and a transfer is pending | Transfer record |
-| `sync_or_data_quality` | Syncing N, or `margin.line.v1` is Incomplete costs, or a receipt query failed | The failing source |
+| `sync_or_data_quality` | Relevant data may be unsynced and no reliable acknowledgement exists, or `margin.line.v1` is Incomplete costs, or a receipt query failed. The label is the freshness sentence. It is not “Syncing N” unless the server genuinely knows N | The failing source |
 
 `pending_stock_transfer` is omitted entirely on Starter and Growth. It is not a locked row.
 

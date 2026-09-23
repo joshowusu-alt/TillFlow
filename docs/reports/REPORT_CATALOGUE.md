@@ -1,6 +1,6 @@
 # Report catalogue contract
 
-Status: frozen for Joshua review (contract close-out, 2026-09-23). Not implemented. `margin.line.v1`, `cash.expected.v1`, and `cash.variance.v1` name intended semantics. The current code is not an authoritative v1.
+Status: final correction applied (2026-09-23). Not implemented. `margin.line.v1`, `cash.expected.v1`, and `cash.variance.v1` name intended semantics. The current code is not an authoritative v1.
 
 Evidence base: `docs/reports/PASS_A_INVENTORY.md`. Where this file names a current screen, the behaviour is the behaviour Pass A recorded. Where it names a canonical family, that family does not exist as a single function yet.
 
@@ -36,7 +36,7 @@ Worked examples from the current app:
 - Opening customer invoices, recording a receipt, or downloading that customer’s statement (`/payments/customer-receipts`, `/customers/[id]/statement`) is a record.
 - Opening supplier ageing, including the missing-due-date bucket (`/payments/supplier-aging`), is a record. A chart of how the 30/60/90 mix moved over the year is analytics.
 - Money Received for a chosen day (`/reports/money-received`) is a record of confirmed receipts. Business Movement’s month-versus-month leakage narrative (`/reports/business-movement`) is analytics.
-- The income statement’s gross-profit line is a record view when it carries the incomplete-stock warning already implemented in `lib/reports/financials.ts`. A 13-month margin trend is analytics. Trading Report currently shows a firm gross-profit percentage without that warning (Pass A §2.5). That is a data-quality defect in a record view, not a reason to paywall the view.
+- The truthful gross-profit view, with cost-quality handling, is a record on every plan. The compiled Income Statement, Balance Sheet, and Cashflow Statement screens are not that view, and Starter does not receive them. A 13-month margin trend is analytics. Trading Report currently shows a firm gross-profit percentage without the incomplete-cost warning (Pass A §2.5). That is a data-quality defect in the GP view, not a reason to paywall the GP view or the underlying records.
 
 ---
 
@@ -51,7 +51,7 @@ The 13 ids below are frozen. An 11- or 12-family collapse is rejected:
 
 No fifteenth family is added for income statement, balance sheet, indirect cashflow, or cash forecast. Those are statement or forecast **products** that must call the families below. Today they do not (`lib/reports/financials.ts`, `lib/reports/forecast.ts`).
 
-`owner_today` is a dashboard composition. `management_pack` is an export and schedule product. Neither is a peer calculation.
+`owner_today` is a dashboard composition. `owner_daily_summary` is the daily SMS product. `management_pack` is the Pro file and schedule product. Neither composition is a peer calculation, and `owner_daily_summary` is not `management_pack`.
 
 ### Family index
 
@@ -59,7 +59,7 @@ No fifteenth family is added for income statement, balance sheet, indirect cashf
 |---|---|---|---|---|
 | `sales_activity` | What did we sell? | Σ `SalesInvoice.totalPence` where status is not `RETURNED` or `VOID`, `createdAt` in the business-timezone half-open window. Product, category, and hour are group-bys of the same lines. Invoice list is the drill-down. Voids and returns are counts of excluded or `SalesReturn` rows, not a second sales total | Record for any date. Trends and rankings are analytics | 1, and the sales half of 18 |
 | `payment_flow` | What confirmed money arrived, by method? | Σ `SalesPayment.amountPence` where `status = CONFIRMED` and `receivedAt` is in scope. Method, origin (`RECEIVED_AT_SALE`, `LATER_CREDIT_COLLECTION`), and unconfirmed MoMo are filters. Refunds stay a separate outflow | Record for any date. Method mix trend is analytics | 2. MoMo Confirmation and Receipt transactions are filters, not new engines |
-| `cash_reconciliation` | Does counted cash match expected cash for these shifts? | Closed-shift `expectedCashPence`, `actualCashPence`, and variance, plus `CashDrawerEntry` sums by type, as Cash Drawer does today. Not final while a till in scope is unsynced | Record | 9 and 10 |
+| `cash_reconciliation` | Does counted cash match expected cash for these shifts? | Closed-shift `expectedCashPence`, `actualCashPence`, and variance, plus `CashDrawerEntry` sums by type, as Cash Drawer does today. Open-shift expected cash is not a finished reconciliation while relevant data may be unsynced. An old counted-cash value is not the current comparison for an open shift | Record | 9 and 10 |
 | `expense_activity` | What expenses were recorded and paid? | Expense documents and `ExpensePayment` rows. Journal expense totals used by the income statement must tie to these documents or show a reconciling difference | Record | 13 |
 | `inventory_position` | What is on hand, and what is at or below its reorder point? | `InventoryBalance` quantity versus `Product.reorderPointBase`. Velocity reorder math stays an analytics layer on top of this position | On-hand and low/out flags are records. The velocity suggestion list is analytics | 16. Engine 15 is the analytics layer |
 | `stock_movement` | What ledger rows changed stock? | `StockMovement` rows, including adjustment and transfer types. No second shrinkage total | Ledger is a record. A trend of adjustment value is analytics | 14 |
@@ -75,7 +75,7 @@ No fifteenth family is added for income statement, balance sheet, indirect cashf
 
 These 13 ids are frozen. `staff_activity` stays separate from `variance_signals`. `branch_performance` stays separate from `sales_activity`. Income statement is not a family. This close-out adds no fourteenth family.
 
-`owner_today` is a dashboard composition. `management_pack` is an export and schedule product.
+`owner_today` is a dashboard composition. `owner_daily_summary` is the daily SMS product. `management_pack` is the Pro file and schedule product. `owner_daily_summary` is not `management_pack`.
 
 ### Formula identifiers (intended semantics, not current code)
 
@@ -121,7 +121,28 @@ Expected physical cash =
 
 The live result of this definition immediately before close must equal the stored shift-close expected-cash snapshot for the same source rows. That equality is not proven on `b6e4bc8`.
 
-If the server does not have a reliable acknowledgement that in-scope offline sales are in those source rows, the close is not final. Do not label it “All synced”. Do not label it “Syncing N” unless the server knows N.
+#### Expected-cash discovery precondition
+
+Before Wave A changes expected-cash code, it must locate and document:
+
+- the live expected-cash calculator
+- the shift-close action or service
+- every writer of stored `expectedCashPence`
+- ordinary close
+- owner-override close
+- the retry or idempotency path
+- the offline close path, if one exists
+- any alternate close API or server action
+
+The beginning of Wave A must stop as blocked if these cannot be traced. Wave A must not create a new expected-cash engine beside an unidentified existing writer.
+
+Known at this close-out, and not a completed trace: `lib/reports/home-expected-cash.ts` sums open `Shift.expectedCashPence` and returns 0 when no shift is open. `lib/services/cash-drawer.ts` records entry types `OPEN_FLOAT`, `CASH_SALE`, `CASH_REFUND`, `CASH_DEBTOR_PAYMENT`, `PAID_OUT_SUPPLIER`, `PAID_OUT_EXPENSE`, `CLOSE_RECONCILIATION`, and `CASH_ADJUSTMENT`. The writer that stores `expectedCashPence` on close was not identified here.
+
+#### Freshness labels
+
+Do not show All synced unless reliable device acknowledgement proves it. Do not show Syncing N unless the server genuinely knows N. Otherwise show: Based on data received by TillFlow as of [business-local time]. Open-shift expected cash must not be presented as finally reconciled while relevant data may be unsynced. An old counted-cash value must never be presented as the current comparison for an open shift. Any future acknowledgement mechanism is separate implementation work and must not be invented in this close-out.
+
+Unproven sync labels are not normal available chrome.
 
 #### `cash.variance.v1`
 
@@ -158,11 +179,15 @@ Each future extraction report must name the duplicated calculators replaced, the
 
 ### Statement and forecast products (not families)
 
+Frozen financial-statement boundary:
+
+Starter retains all underlying sales, expense, payment, stock, receivable and payable records for every retained date. Starter receives the truthful GP view with cost-quality handling. Starter does not receive the compiled Income Statement, Balance Sheet or Cashflow Statement screens. Growth receives single-store financial statements. Pro receives eligible multi-store and consolidated financial statements. Supplier-debt and margin fields inside statements still require the relevant staff permission. Restricting a compiled statement must never restrict access to its underlying source records.
+
 | Product | Calls | Plan |
 |---|---|---|
-| Income statement | `sales_activity` + `margin_performance` + `expense_activity` for the period | Record statement on every plan, with margin state. Category detail beyond the lines above is Growth |
-| Balance sheet | Positions: cash, inventory, `customer_receivables`, `supplier_payables`, equity. Inventory plug must be labelled as a plug until it ties to `inventory_position` | Growth and Pro. Starter keeps stock on hand and the two balance reports instead of this statement |
-| Indirect cashflow statement | Movements in those positions. Must not be labelled as money received | Growth and Pro |
+| Income statement | `sales_activity` + `margin_performance` + `expense_activity` for the period | Compiled screen: Growth, one store. Pro: eligible multi-store and consolidated. Starter: no compiled screen. Margin fields inside the statement require `VIEW_MARGIN`. Source sales, expenses, and the all-plan GP view stay available |
+| Balance sheet | Positions: cash, inventory, `customer_receivables`, `supplier_payables`, equity. Inventory plug must be labelled as a plug until it ties to `inventory_position` | Compiled screen: Growth, one store. Pro: eligible multi-store and consolidated. Starter: no compiled screen. Supplier-debt fields require `VIEW_SUPPLIER_DEBT`. Stock on hand and the receivable and payable records stay on every plan |
+| Indirect cashflow statement | Movements in those positions. Must not be labelled as money received | Compiled screen: Growth, one store. Pro: eligible multi-store and consolidated. Starter: no compiled screen. Underlying payment and expense records stay on every plan |
 | Cash forecast | Projected inflows from open receivables and trailing `payment_flow`, outflows from open payables and `expense_activity` | Pro. Inputs must use confirmed payments only. The current 14-day average does not (Pass A §3.15) |
 
 ### What is a filter, not an engine
@@ -177,4 +202,4 @@ Each future extraction report must name the duplicated calculators replaced, the
 
 Canonical calculation families: **13**.
 
-Compositions outside that count: `owner_today`, `management_pack`, and the four statement/forecast products.
+Compositions and products outside that count: `owner_today` (dashboard), `owner_daily_summary` (daily SMS), `management_pack` (Pro file and schedule only), and the four statement/forecast products. Waves A–C do not build a saved-view system or an unimplemented management-pack experience. Contracts may reserve those entitlements. Waves A–C implement only the integrity defects explicitly authorised in `REPORT_ACCESS_AND_EXPORT_CONTRACT.md`.

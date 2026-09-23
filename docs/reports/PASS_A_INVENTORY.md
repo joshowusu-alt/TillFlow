@@ -17,7 +17,7 @@
 
 SHA mixing: not mixed. Behaviour statements are about `b6e4bc8`. That SHA is also the GitHub Production deployment above. Older deployment notes in `docs/reporting/` (`dbf2d190`, `38ae81f8`, and their Vercel deployment ids) were not used as evidence. `tillflow.app` / `www.tillflow.app` were not fingerprinted. `/api/qa/deploy-sha` is disabled on Production, so the alias is not confirmed here. Pass A conclusions stay revisable if later evidence disproves them. Interpretation is not a frozen fact; frozen decisions are marked in the other five contract files.
 
-No production change, calculation change, migration, or report deletion was made. This close-out does not deploy and does not merge PR #111.
+No production change, calculation change, migration, or report deletion was made. This close-out does not deploy and does not merge PR #111. The final correction amends the six contract documents only. Application bytes stay at `b6e4bc8`. Production deployment `6604815196` is untouched.
 
 The 46-row map in `DUPLICATION_AND_RETIREMENT_MAP.md` mixes engines and symptoms. It is not the surface count. The 49 surfaces in §1 are reconciled one-for-one in that file’s bridge. 49 discovered surfaces = 49 bridge rows.
 
@@ -40,7 +40,7 @@ A **report surface** is a user-facing screen, download, or scheduled delivery th
 | Scheduled delivery | 1 | Cron owner daily summary. Outbox `channel` is `SMS` (`enqueueOwnerDailySummarySms`). The enable flag is named `whatsappEnabled` |
 | **Report surfaces found** | **49** | Sum of the rows above |
 
-`/demo/reports` is a marketing/demo page (`app/demo/reports/page.tsx`, fixtures in `lib/demo-fixtures/reports.ts`). It is not a live tenant report and is not in the 49.
+`/demo/reports` is a marketing/demo page (`app/demo/reports/page.tsx`, fixtures in `lib/demo-fixtures/reports.ts`). It is not a live tenant report and is not in the 49. The cashier nav today-sales metric, `GET /api/debug-financials`, the `/reports/sales` redirect, and the dead export-pack hrefs are also outside the 49. The close-out appendix in `DUPLICATION_AND_RETIREMENT_MAP.md` records reachability, auth, and disposition for each. The surface count stays 49.
 
 A **distinct calculation** is a numeric or ledger engine with its own filters, not a second page that calls the same function.
 
@@ -100,7 +100,7 @@ Feature flags used by reports (`lib/features.ts`):
 
 ### 2.4 Freshness
 
-No report loader reads offline outbox state or a “last synced” timestamp. Searches under `app/(protected)/reports` and `lib/reports` found no `offline`, `sync`, or `lastSynced` handling.
+No report loader reads offline outbox state or a “last synced” timestamp. Searches under `app/(protected)/reports` and `lib/reports` found no `offline`, `sync`, or `lastSynced` handling. This inventory does not treat All synced or Syncing N as existing chrome. No device-acknowledgement mechanism was found, and none is invented here.
 
 What does exist:
 
@@ -454,7 +454,7 @@ Desktop nav (`lib/navigation-config.ts`) repeats these gates and adds `/reports/
 
 - Files: `app/(protected)/reports/owner/page.tsx`, `OwnerDashboardBody.tsx`, `lib/reports/owner-dashboard.ts`, `lib/owner-intel.ts`.
 - Question: what is business health, leakage, stock pressure, and cash right now?
-- Gate: `ownerIntelligence` (Pro) and role `OWNER` before the snapshot. Export route returns 403 without the flag. Export auth list is `OWNER` and `MANAGER`, but the flag still blocks non-Pro.
+- Gate: `ownerIntelligence` (Pro) and role `OWNER` before the snapshot (`requireBusiness(['OWNER'])`). The export route’s role list is `OWNER` and `MANAGER`, then the Pro flag only. A Pro manager can be denied the screen and still be admitted by the export. That is a screen/export mismatch, not agreement. The flag still blocks non-Pro.
 - Snapshot calls `getTodayKPIs`, `getOwnerBrief`, `getCashflowForecast`, and its own yesterday comparisons using **server-local** `startOfDay` / `endOfDay`.
 - Overview cards: sales, gross profit, transactions, cash in till, debtors, payables due, low stock.
 - Cash in till prefers the sum of open-shift `expectedCashPence`, else Today KPI `paymentSplit.CASH`.
@@ -601,7 +601,7 @@ Auth shorthand: export routes use `requireExportUser` (`app/(protected)/exports/
 | `GET /customers/[id]/statement` | `app/(protected)/customers/[id]/statement/route.ts` | None | Invoice, date, status, total, paid, balance | None |
 | `GET /suppliers/[id]/statement` | `app/(protected)/suppliers/[id]/statement/route.ts` | None | Same shape for purchases | None |
 | `GET /payments/supplier-aging/export` | supplier-aging export | None | Ageing buckets or invoice detail | None |
-| `GET /api/debug-financials` | `app/api/debug-financials/route.ts` | **None**. Role `MANAGER`/`OWNER` | JSON GL diagnostic, not a file | n/a |
+| `GET /api/debug-financials` | `app/api/debug-financials/route.ts` | **None**. Role `MANAGER`/`OWNER`. No `NODE_ENV` or `VERCEL_ENV` gate. Not in the 49 | JSON: purchase totals by status, journal counts, all account codes, AP balance (account 2000), inventory GL balance (account 1200). Session `businessId`, no store filter | n/a |
 
 `GET /api/exports/labels` is label print (HTML/ZPL), capped at 200 products, any authenticated role. It is not a financial report.
 
@@ -718,7 +718,7 @@ These are not leaks (screen and endpoint agree):
 - `/api/reports/financials` and the three statement pages (Growth).
 - `/exports/risk-summary` and Risk Monitor (Growth).
 - `/reports/sales-by-supplier/export` and its page (Growth).
-- `/reports/owner/export` and Owner Brief (Pro).
+- `/reports/owner/export` and Owner Brief agree on the Pro flag. They do not agree on role: the screen is `OWNER` only and the export also lists `MANAGER` (§3.22).
 
 ### 9.2 Tier gaps where screen and export are both open
 
@@ -744,7 +744,7 @@ Reports hub badges do not stop a Starter user opening a Growth card. Gated **pag
 
 ### 9.4 Export leaks (screen entitlement ≠ file entitlement)
 
-Only `/exports/margins` is a hard mismatch: the page refuses to render and the file route does not. `/exports/sales` is a column mismatch: the file adds Cost and Margin on a route the Exports hub offers to every plan, while the dedicated margin report is Growth-only.
+`/exports/margins` is a hard plan mismatch: the page refuses to render and the file route does not. `/exports/sales` is a column mismatch: the file adds Cost and Margin on a route the Exports hub offers to every plan, while the dedicated margin report is Growth-only. Owner Brief is a role mismatch: the screen is owner-only and `GET /reports/owner/export` admits managers before the Pro check (§3.22).
 
 Inventory export is also factually wrong for multi-store businesses: it reads the first store only, with no plan or store parameter.
 
@@ -800,7 +800,7 @@ Judged only by absence in routes and nav, against the questions an owner would a
 
 | Confidence | Calculations |
 |---|---|
-| High | Recognised sales on the reporting-scope clock; Money Received confirmed definition and access checks; cash-drawer entry sums; reorder arithmetic; supplier-ageing bucket set; stock-movement list; audit list |
+| High | Money Received confirmed definition, access checks, and export reconciliation (`money-received.test.ts`, preview validation). The 49-row bridge is the rating used after the final correction. A readable list or an unresolved Paid/Balance is not High there |
 | Med | Income statement, balance sheet, indirect cashflow; Today KPIs; Owner Brief composite; Analytics; Trading Report GP; AR payment-status split; supplier ageing timezone; forecast inputs; product `lineTotal` vs `lineSubtotal` |
 | Low | Weekly Digest stored GP and top-margin `/100` formula; any server-local report when the server timezone is not the business timezone; Business Movement presented as branch truth on non-Pro; Command Center receipts vs Trading Report today |
 
