@@ -1,6 +1,6 @@
 # Owner Today contract
 
-Status: proposal for Joshua to freeze. Not implemented.
+Status: frozen for Joshua review (contract close-out, 2026-09-23). Not implemented.
 
 `owner_today` is one dashboard composition. It is not a calculation family and it does not replace the canonical reports. Every number on it is computed by a family in `REPORT_CATALOGUE.md` and deep-links to that family. Pass A shows this is not true today: Home, Command Center, Trading Report, and Owner Brief each load their own snapshots (`home-performance-kpis.ts`, `today-kpis.ts`, `TradingDashboardContent.tsx`, `owner-dashboard.ts`).
 
@@ -10,17 +10,17 @@ Owner Today is the owner’s landing surface on every plan. Command Center and O
 
 ## Chrome that is always visible
 
-Sync state, one of:
+Freshness, default:
 
-- **All synced**
-- **Syncing N** (N = offline sales or drawer events not yet acknowledged)
-- **Last synced** plus the business-local time
+`Based on data received by TillFlow as of [business-local time].`
 
-If the state is not **All synced**, expected versus counted is not shown as a finished result. The widget stays visible and is labelled **Not final — tills syncing**.
+**All synced** is allowed only when a reliable acknowledgement proves it. **Syncing N** is allowed only when the server knows N. Do not invent either label.
+
+While that acknowledgement is missing, expected versus counted is not a finished close. The cash widget stays visible and says the close is not final. Open expected cash and closed variance stay separate.
 
 Scope line: the single store name on Starter and Growth. On Pro: the selected store, or **Consolidated**. Pass A’s “Today · All branches” on a single-store home is retired with this contract.
 
-Gross profit is not one of the seven widgets. If a later revision puts it on Today, it uses only Ready / Incomplete costs / Hidden. It never prints a quiet wrong percentage. Command Center’s current GP% (Pass A §3.3) does not meet this rule.
+Gross profit is not one of the seven widgets. If a later revision puts it on Today, the calculation state is only `READY` or `INCOMPLETE_COSTS`. “Hidden until costs set” may be the sentence for `INCOMPLETE_COSTS`. It never prints a quiet wrong percentage. Command Center’s current GP% (Pass A §3.3) does not meet this rule.
 
 ---
 

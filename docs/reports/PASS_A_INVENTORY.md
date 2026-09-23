@@ -1,8 +1,27 @@
 # Pass A — Report catalogue inventory (facts only)
 
-Investigation date: 2026-09-23. Scope is the TillFlow application in this repository. This document records what the code does today. It does not propose a redesign. Pass B contracts are separate files and were written only after this inventory.
+## Identity of this evidence snapshot
 
-No production change, calculation change, migration, or report deletion was made.
+| Field | Value |
+|---|---|
+| Audited application SHA | `b6e4bc828eacac5077c39e4114561806f918a205` |
+| Branch that holds this write-up | `cursor/report-catalogue-entitlement-audit-35e2` |
+| Audit timestamp | 2026-09-23. Close-out identity recorded 2026-09-23T17:29:12Z |
+| Working tree at close-out start | Clean. `git status --porcelain` was empty. HEAD was `2f42dd349056273a587791990cfdc0dae6ed2944`, even with `origin/cursor/report-catalogue-entitlement-audit-35e2` |
+| PR #111 head at close-out start | `2f42dd349056273a587791990cfdc0dae6ed2944` (draft, base `master`) |
+| Production deployment | GitHub deployment `6604815196`, environment Production, state success, created 2026-09-23T02:08:52Z, SHA `b6e4bc828eacac5077c39e4114561806f918a205`, environment URL `https://supermarket-g96kisf9c-joshua-owusus-projects.vercel.app` |
+| Inventory method | Static read of report routes, `lib/reports`, export route handlers, the daily-summary cron, and navigation config on SHA `b6e4bc8`. No production database. No runtime probe. No Preview or Production deploy |
+| Evidence references | Files cited in the sections below. Calculation confidence in the 49-row bridge (`DUPLICATION_AND_RETIREMENT_MAP.md`) cites a test file, a reconciliation function, or the source query. It does not cite this prose |
+
+`git diff b6e4bc828eacac5077c39e4114561806f918a205..2f42dd349056273a587791990cfdc0dae6ed2944` touches only `docs/reports/*`. Application bytes at the audited SHA and at PR head `2f42dd3` are the same.
+
+SHA mixing: not mixed. Behaviour statements are about `b6e4bc8`. That SHA is also the GitHub Production deployment above. Older deployment notes in `docs/reporting/` (`dbf2d190`, `38ae81f8`, and their Vercel deployment ids) were not used as evidence. `tillflow.app` / `www.tillflow.app` were not fingerprinted. `/api/qa/deploy-sha` is disabled on Production, so the alias is not confirmed here. Pass A conclusions stay revisable if later evidence disproves them. Interpretation is not a frozen fact; frozen decisions are marked in the other five contract files.
+
+No production change, calculation change, migration, or report deletion was made. This close-out does not deploy and does not merge PR #111.
+
+The 46-row map in `DUPLICATION_AND_RETIREMENT_MAP.md` mixes engines and symptoms. It is not the surface count. The 49 surfaces in §1 are reconciled one-for-one in that file’s bridge. 49 discovered surfaces = 49 bridge rows.
+
+Investigation date: 2026-09-23. Scope is the TillFlow application in this repository. This document records what the code does today. It does not propose a redesign. Pass B contracts are separate files and were written only after this inventory.
 
 Engineering owner: not identifiable. There is no `CODEOWNERS` file and report modules do not name an owner.
 
@@ -18,7 +37,7 @@ A **report surface** is a user-facing screen, download, or scheduled delivery th
 | Owner Home dashboard | 1 | Completed owner home at `/onboarding` |
 | Record screens the catalogue or reports deep-link to | 5 | Sales history, customer receipts, supplier ageing, supplier payments, cash-drawer supporting rows |
 | Download endpoints | 20 | CSV, XLSX, HTML-PDF, or ZIP handlers listed in §6 |
-| Scheduled delivery | 1 | Cron owner daily summary SMS/WhatsApp |
+| Scheduled delivery | 1 | Cron owner daily summary. Outbox `channel` is `SMS` (`enqueueOwnerDailySummarySms`). The enable flag is named `whatsappEnabled` |
 | **Report surfaces found** | **49** | Sum of the rows above |
 
 `/demo/reports` is a marketing/demo page (`app/demo/reports/page.tsx`, fixtures in `lib/demo-fixtures/reports.ts`). It is not a live tenant report and is not in the 49.
