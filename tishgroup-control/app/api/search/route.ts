@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getControlStaffOptional } from '@/lib/control-auth';
-import { listManagedBusinesses } from '@/lib/control-service';
+import { listManagedPortfolio } from '@/lib/control-service';
+import { FORBIDDEN_MOCK_PORTFOLIO_IDS } from '@tillflow/lib/control-money';
 import { checkRateLimit, SEARCH_RATE_LIMIT } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
@@ -33,7 +34,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, results: [] });
   }
 
-  const businesses = await listManagedBusinesses();
+  const snapshot = await listManagedPortfolio();
+  if (snapshot.availability === 'unavailable') {
+    return NextResponse.json({
+      ok: false,
+      error: 'portfolio_unavailable',
+      errorKind: snapshot.errorKind,
+    }, { status: 503 });
+  }
+
+  const forbidden = new Set<string>(FORBIDDEN_MOCK_PORTFOLIO_IDS);
+  const businesses = snapshot.businesses.filter((business) => !forbidden.has(business.id));
   const phoneQuery = rawQuery.replace(/\s/g, '');
   const results = businesses
     .filter((b) => {

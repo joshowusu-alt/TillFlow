@@ -3,7 +3,7 @@ import Link from 'next/link';
 import ControlPageHeader from '@/components/control-page-header';
 import SectionHeading from '@/components/section-heading';
 import { requireControlStaff } from '@/lib/control-auth';
-import { listRecentErrors } from '@/lib/error-monitor';
+import { errorLogHealthCopy, listRecentErrors } from '@/lib/error-monitor';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,19 +36,25 @@ export default async function ErrorsPage() {
     redirect('/?error=Only Control admins can view the error log.');
   }
 
-  const errors = await listRecentErrors(100);
+  const result = await listRecentErrors(100);
+  const errors = result.errors;
+  const health = errorLogHealthCopy(result);
 
   return (
     <div className="space-y-4 lg:space-y-5">
       <ControlPageHeader
         eyebrow="System health"
         title="Error log"
-        description={errors.length === 0 ? 'No errors recorded. All critical operations are running cleanly.' : `Showing the ${errors.length} most recent system errors. Click any business link to investigate the account.`}
+        description={health.description}
       />
 
-      {errors.length === 0 ? (
+      {!result.ok ? (
+        <div className="rounded-2xl border border-control-ember/20 bg-control-ember/8 px-6 py-8 text-center text-sm text-control-ink/70">
+          {health.emptyMessage}
+        </div>
+      ) : errors.length === 0 ? (
         <div className="rounded-2xl border border-control-teal/20 bg-control-teal/5 px-6 py-8 text-center text-sm text-control-ink/60">
-          No system errors recorded. All critical operations are running cleanly.
+          {health.emptyMessage}
         </div>
       ) : (
         <div className="space-y-3">

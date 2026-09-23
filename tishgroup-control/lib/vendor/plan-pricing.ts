@@ -151,14 +151,12 @@ export function resolveControlPaymentAmounts(
   pricing: SubscriptionPricingResult,
   enteredAmountGhs?: number | null,
 ) {
-  const recommendedIntervalChargeGhs = controlIntervalChargeGhs(pricing);
-  const recordedAmountGhs =
-    enteredAmountGhs != null && enteredAmountGhs > 0
-      ? enteredAmountGhs
-      : recommendedIntervalChargeGhs;
+  if (enteredAmountGhs == null || enteredAmountGhs <= 0) {
+    throw new Error('Payment amount must be explicit and greater than zero. Blank amounts are rejected.');
+  }
 
   return {
-    recordedAmountGhs,
+    recordedAmountGhs: enteredAmountGhs,
     businessBillingAmountPence: pricing.totalBillingAmount,
   };
 }

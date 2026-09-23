@@ -37,6 +37,16 @@ describe('computeBillingAccessState', () => {
     expect(snapshot.accessState).toBe('PAYMENT_DUE_TODAY');
   });
 
+  it('does not treat lastPaymentAt as paid confirmation', () => {
+    const snapshot = computeBillingAccessState({
+      subscriptionStatus: 'TRIAL_ACTIVE',
+      trialEndsAt: '2026-06-15T00:00:00Z',
+      lastPaymentAt: '2026-04-15T00:00:00Z',
+    }, now);
+    expect(snapshot.accessState).toBe('TRIAL_ACTIVE');
+    expect(snapshot.isRestricted).toBe(false);
+  });
+
   it('respects explicit cancellation', () => {
     const snapshot = computeBillingAccessState({ subscriptionStatus: 'CANCELLED' }, now);
     expect(snapshot.accessState).toBe('CANCELLED');

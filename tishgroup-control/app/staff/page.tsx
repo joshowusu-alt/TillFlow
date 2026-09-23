@@ -10,7 +10,7 @@ export default async function StaffPage({
 }: {
   searchParams?: Promise<ControlSearchParams> | ControlSearchParams;
 }) {
-  const currentStaff = await requireControlStaff();
+  const currentStaff = await requireControlStaff(['CONTROL_ADMIN']);
   const staffDirectory = await listControlStaffDirectory();
   const resolvedSearchParams = await resolveSearchParams(searchParams);
   const error = readSearchParam(resolvedSearchParams.error);
@@ -24,6 +24,10 @@ export default async function StaffPage({
     <div className="space-y-4 lg:space-y-5">
       {error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">{error}</div>
+      ) : null}
+
+      {updated ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">Staff directory updated.</div>
       ) : null}
 
       <ControlPageHeader
@@ -54,8 +58,8 @@ export default async function StaffPage({
         <div id="create-staff" className="panel p-4 sm:p-5">
           <SectionHeading
             eyebrow="Create staff"
-            title="Add or reactivate a TG operator"
-            description="If the email already exists, saving here updates the name and role and reactivates the account."
+            title="Add a TG operator"
+            description="Create a new operator with a name, email, role, and personal password of at least 12 characters."
           />
 
           {canEditStaff ? (
@@ -80,13 +84,18 @@ export default async function StaffPage({
                 </select>
               </label>
 
+              <label className="block space-y-1 text-sm">
+                <span className="font-medium text-control-ink">Password</span>
+                <input type="password" name="password" className="control-field" minLength={12} required placeholder="At least 12 characters" autoComplete="new-password" />
+              </label>
+
               <button type="submit" className="inline-flex w-full items-center justify-center rounded-[18px] bg-control-dark px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-control-night sm:w-fit">
                 Save staff account
               </button>
             </form>
           ) : (
             <div className="mt-5 rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/56">
-              Your role can view the TG staff directory, but only Control admins can create or deactivate staff accounts.
+              Only Control admins can view or manage the TG staff directory.
             </div>
           )}
         </div>
@@ -117,6 +126,10 @@ export default async function StaffPage({
                   <div>
                     <div className="mobile-card-label">Role</div>
                     <div className="mobile-card-value">{entry.role.replace(/_/g, ' ')}</div>
+                  </div>
+                  <div>
+                    <div className="mobile-card-label">Auth</div>
+                    <div className="mobile-card-value">{entry.hasPassword ? 'Password set' : 'Password required'}</div>
                   </div>
                   <div>
                     <div className="mobile-card-label">Created</div>
@@ -166,7 +179,7 @@ export default async function StaffPage({
                     </td>
                     <td>
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${entry.hasPassword ? 'bg-teal-50 text-teal-800' : 'bg-amber-50 text-amber-800'}`}>
-                        {entry.hasPassword ? 'Password set' : 'Shared key'}
+                        {entry.hasPassword ? 'Password set' : 'Password required'}
                       </span>
                     </td>
                     <td className="text-sm text-black/66">{entry.createdAt}</td>
@@ -196,7 +209,7 @@ export default async function StaffPage({
           <SectionHeading
             eyebrow="Per-staff auth"
             title="Set a personal password"
-            description="Staff members using the shared access key should be migrated to individual passwords. Set a password here — the staff member uses it on their next login instead of the shared key."
+            description="Set or rotate a personal password for an operator. They will use this password on their next sign-in. Existing sessions for that operator are invalidated."
           />
           <form action={setStaffPasswordAction} className="mt-5 space-y-4 max-w-md">
             <label className="block space-y-1 text-sm">
@@ -205,17 +218,17 @@ export default async function StaffPage({
                 <option value="">Select a staff member…</option>
                 {staffDirectory.filter((e) => e.active).map((entry) => (
                   <option key={entry.id} value={entry.id}>
-                    {entry.name} · {entry.role.replace(/_/g, ' ')}{entry.hasPassword ? ' ✓' : ' (shared key)'}
+                    {entry.name} · {entry.role.replace(/_/g, ' ')}{entry.hasPassword ? ' ✓' : ' (password required)'}
                   </option>
                 ))}
               </select>
             </label>
             <label className="block space-y-1 text-sm">
               <span className="font-medium text-control-ink">New password</span>
-              <input type="password" name="password" className="control-field" minLength={10} required placeholder="At least 10 characters" autoComplete="new-password" />
+              <input type="password" name="password" className="control-field" minLength={12} required placeholder="At least 12 characters" autoComplete="new-password" />
             </label>
             <p className="text-xs text-black/55">
-              The staff member will use this password on their next sign-in. The shared access key stops working for them immediately.
+              The staff member will use this password on their next sign-in. Setting a password increments their session version and signs out existing sessions.
             </p>
             <button type="submit" className="inline-flex w-full items-center justify-center rounded-[18px] bg-control-dark px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-control-night sm:w-fit">
               Set password

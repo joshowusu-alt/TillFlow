@@ -2,4 +2,6 @@
 node_modules
 tsconfig.tsbuildinfo
 .vercel
+.env
 .env*.local
+/public/build-identity.json

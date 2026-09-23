@@ -36,6 +36,45 @@ function normalizePlan(value: string): BusinessPlan {
   return value === 'PRO' || value === 'GROWTH' ? value : 'STARTER';
 }
 
+export const SUBSCRIPTION_EDITOR_STATUSES = [
+  'TRIAL_ACTIVE',
+  'PAID_ACTIVE',
+  'TRIAL_RESTRICTED',
+  'PAYMENT_RESTRICTED',
+  'READ_ONLY',
+  'CANCELLED',
+] as const;
+
+export type SubscriptionEditorStatus = (typeof SUBSCRIPTION_EDITOR_STATUSES)[number];
+
+const CANONICAL_EDITOR_STATUS_SET = new Set<string>(SUBSCRIPTION_EDITOR_STATUSES);
+
+export function mapSubscriptionEditorStatus(value: string | null | undefined): SubscriptionEditorStatus {
+  const raw = String(value ?? '').trim().toUpperCase();
+  switch (raw) {
+    case 'TRIAL':
+    case 'TRIAL_DUE_SOON':
+    case 'TRIAL_DUE_TODAY':
+    case 'TRIAL_EXPIRED_GRACE':
+    case 'TRIAL_ACTIVE':
+      return 'TRIAL_ACTIVE';
+    case 'RENEWAL_DUE_SOON':
+    case 'PAYMENT_DUE_TODAY':
+    case 'PAYMENT_OVERDUE_GRACE':
+      return 'PAID_ACTIVE';
+    case 'SUSPENDED':
+      return 'READ_ONLY';
+    case 'INACTIVE':
+    case 'DEACTIVATED':
+      return 'CANCELLED';
+    default:
+      if (CANONICAL_EDITOR_STATUS_SET.has(raw)) {
+        return raw as SubscriptionEditorStatus;
+      }
+      return 'TRIAL_ACTIVE';
+  }
+}
+
 export default function SubscriptionForm({
   business,
   checkboxId = 'addonOnlineStorefront',
@@ -64,6 +103,7 @@ export default function SubscriptionForm({
   const summary = storefrontPricingSummary(pricing, Boolean(business.storefrontEnabled), plan);
   const addonDisabled = plan !== 'GROWTH';
 
+  const editorStatus = mapSubscriptionEditorStatus(business.subscriptionStatus);
   const [outstanding, setOutstanding] = useState(business.outstandingAmount);
   // Warn (do not auto-overwrite) when the stored/entered outstanding amount no
   // longer matches the recommended interval charge after a plan, add-on, or
@@ -160,14 +200,19 @@ export default function SubscriptionForm({
 
       <label className="block space-y-1 text-sm">
         <span className="font-medium text-control-ink">Subscription status</span>
-        <select name="status" defaultValue={business.subscriptionStatus} className="control-field">
+        <select name="status" defaultValue={editorStatus} className="control-field">
+          <option value="TRIAL_ACTIVE">Trial active</option>
           <option value="PAID_ACTIVE">Paid active</option>
-          <option value="TRIAL">Trial</option>
-          <option value="SUSPENDED">Suspended</option>
+          <option value="TRIAL_RESTRICTED">Trial restricted</option>
+          <option value="PAYMENT_RESTRICTED">Payment restricted</option>
           <option value="READ_ONLY">Read only</option>
-          <option value="INACTIVE">Deactivated</option>
+          <option value="CANCELLED">Cancelled</option>
         </select>
       </label>
+
+      <p className="text-sm text-black/60">
+        Changing plan or dates does not grant paid access. Paid access requires a recorded payment.
+      </p>
 
       <BillingScheduleFields
         defaultCadence={business.billingCadence}
@@ -232,9 +277,26 @@ export default function SubscriptionForm({
         ) : null}
       </label>
 
+      <label className="block space-y-1 text-sm">
+        <span className="font-medium text-control-ink">Customer-facing billing note (optional — merchants can see this)</span>
+        <textarea
+          name="customerFacingNote"
+          rows={3}
+          placeholder="Shown on the merchant billing page. Internal review status still uses the existing fields."
+          className="control-field"
+        />
+      </label>
+
       <ConfirmSubmitButton
         className="inline-flex w-full items-center justify-center rounded-2xl bg-control-ink px-4 py-3 text-sm font-semibold text-white transition hover:bg-control-night disabled:cursor-not-allowed disabled:opacity-65 sm:w-fit"
-        confirmMessage="Save this subscription state and mirror the commercial changes into Tillflow?"
+        confirmMessage={[
+          'Save this subscription state?',
+          '',
+          `Plan: ${business.plan} → ${plan}`,
+          `Editor status: ${editorStatus} (selected option is the stored/derived state, not the first dropdown item)`,
+          '',
+          'Changing plan or dates does not grant paid access. Paid access requires a recorded payment.',
+        ].join('\n')}
         pendingLabel="Saving..."
       >
         Save subscription state
