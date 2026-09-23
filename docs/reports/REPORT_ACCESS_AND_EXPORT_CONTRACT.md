@@ -1,6 +1,6 @@
 # Report access and export contract
 
-Status: final correction applied (2026-09-23). Not implemented. No schema and no permission UI in this close-out.
+Status: formula and balance amendment applied (2026-09-23). Not implemented. No schema and no permission UI in this close-out.
 
 Covers permissions, files, empty states, downgrade, freshness, reconciliation, metric versions, and the entitlement test matrix. Plan numbers are in `PLAN_ENTITLEMENT_MATRIX.md`. Families are in `REPORT_CATALOGUE.md`.
 
@@ -161,15 +161,19 @@ Own-records file vs management pack:
 
 `GET /api/exports/pack` is an own-records ZIP (sales ledger, purchases, VAT, debtors, stock movements) on every plan. It is not a management pack. It must not gain branch comparison or cashier ranking pages.
 
-Row caps:
+Export transport:
+
+Owned records are not cut short by plan entitlement or by a silent row limit. Analytical windows stay the plan windows in the table below. A large own-records export must stream, paginate, chunk, or provide an explicit continuation. Application memory must not scale with the entire retained history. If a transport limit is reached, the response is an explicit continuation or an explicit error. It is not a partial file labelled complete. Cross-tenant and store-scope checks apply to every chunk.
+
+Waves A–C do not build a new background-export product unless that is required to stop an existing endpoint from loading an unsafe history into memory. Streaming or bounded chunking is the preferred transport.
 
 | Plan | Own-records file | Analytical file or pack |
 |---|---|---|
-| Starter | No row cap for stored rows. Date filter optional | 30 local days, and only the two trend series. No margin ranking file |
-| Growth | No row cap for stored rows | 13 months |
-| Pro | No row cap for stored rows | Retained history |
+| Starter | No entitlement truncation and no silent truncation. Date filter optional. Transport rules above | 30 local days, and only the two trend series. No margin ranking file |
+| Growth | No entitlement truncation and no silent truncation. Transport rules above | 13 months |
+| Pro | No entitlement truncation and no silent truncation. Transport rules above | Retained history |
 
-No file may return 200 with another tenant’s `businessId`. Money Received already enforces tenant and branch (`resolveMoneyReceivedAccess`). The shared entitlement function must do that for every route.
+No file may return 200 with another tenant’s `businessId`. Money Received already enforces tenant and branch (`resolveMoneyReceivedAccess`). The shared entitlement function must do that for every chunk, not only the first page.
 
 PDF and HTML print use the same check as CSV. The Owner Brief screen is owner-only (`requireBusiness(['OWNER'])` in `app/(protected)/reports/owner/page.tsx`). The current export route admits managers (`requireBusiness(['OWNER', 'MANAGER'])` in `app/(protected)/reports/owner/export/route.ts`) and then checks only `ownerIntelligence`. Screen and export must use the same entitlement and permission decision. A manager denied the screen must be denied the direct export. That mismatch is known-red B13. It is not a green pair.
 
@@ -314,7 +318,7 @@ The beginning of Wave A must stop as blocked if these cannot be traced. Wave A m
 
 Known at this close-out, and not a completed trace: `lib/reports/home-expected-cash.ts` sums open `Shift.expectedCashPence` and returns 0 when no shift is open. `lib/services/cash-drawer.ts` records entry types `OPEN_FLOAT`, `CASH_SALE`, `CASH_REFUND`, `CASH_DEBTOR_PAYMENT`, `PAID_OUT_SUPPLIER`, `PAID_OUT_EXPENSE`, `CLOSE_RECONCILIATION`, and `CASH_ADJUSTMENT`. The writer that stores `expectedCashPence` on close was not identified here. Files Wave A must inspect first are listed under Serial ownership.
 
-### Wave A — owner-visible truth (11)
+### Wave A — owner-visible truth (12)
 
 | ID | Failing behaviour now | Evidence | Future test file | Future implementation files | Depends on | Acceptance |
 |---|---|---|---|---|---|---|
@@ -322,15 +326,16 @@ Known at this close-out, and not a completed trace: `lib/reports/home-expected-c
 | A2 | Trading Report and Command Center show a firm GP% when cost is missing | Pass A §2.5; `TradingDashboardContent.tsx`; command-center posture | `lib/reports/margin-quality.contract.test.ts` | `lib/reports/margin-analysis.ts`, `TradingDashboardContent.tsx`, `app/(protected)/reports/command-center/page.tsx` | A3 | `INCOMPLETE_COSTS` publishes no GP total |
 | A3 | Line GP and stored `grossMarginPence` disagree | Weekly Digest sums `grossMarginPence`; other screens sum lines | `lib/reports/margin-quality.contract.test.ts` | `lib/reports/weekly-digest.ts`, `lib/reports/financials.ts`, `lib/reports/today-kpis.ts` | Frozen formula | Display does not read `grossMarginPence` |
 | A4 | Product rank uses `lineSubtotalPence` on some screens and `lineTotalPence` on others | Pass A §8.4 | `lib/reports/product-rank.contract.test.ts` | `lib/reports/business-movement/query.ts`, `AnalyticsContent.tsx`, `lib/reports/supplier-sales.ts`, `weekly-digest.ts` | `sales_activity` group-by | One revenue field for product rank, documented as the family group-by |
-| A5 | Command Center AR/AP ignore invoices older than 90 days | `lib/reports/today-kpis.ts` `ninetyDaysAgo` | `lib/reports/today-kpis-balances.contract.test.ts` | `lib/reports/today-kpis.ts` | Receivables and payables formulas | Open balance includes older open invoices |
+| A5 | Command Center AR/AP ignore invoices older than 90 days | `lib/reports/today-kpis.ts` `ninetyDaysAgo` | `lib/reports/today-kpis-balances.contract.test.ts` | `lib/reports/today-kpis.ts` | A12 for the balance helper | Open balance includes invoices older than 90 days. Payment-status and statement equality are A12, not this row |
 | A6 | Forecast trailing cash/MoMo does not require `CONFIRMED` | `lib/reports/forecast.ts` | `lib/reports/forecast.contract.test.ts` | `lib/reports/forecast.ts` | `payment_flow` | Trailing inflow uses confirmed payments only |
 | A7 | Several reports use server-local midnight or Accra plus server midnight | Pass A §2.1; `date-parsing.ts`; `today-kpis.ts` | `lib/reports/reporting-clock.contract.test.ts` | `lib/reports/date-parsing.ts`, `today-kpis.ts`, `owner-dashboard.ts`, pages that call `resolveReportDateRange` | Clock section of the catalogue | Ghana gate tests in the catalogue are green. UK DST is not required for this gate |
 | A8 | Home, Today KPIs, Owner Brief, and Cash Drawer do not share one expected-cash definition | Pass A §8.7 | `lib/reports/cash-expected.contract.test.ts` | `lib/reports/home-expected-cash.ts`, `lib/services/cash-drawer.ts`, `owner-dashboard.ts`, `today-kpis.ts`, and the close writer once the discovery precondition names it | `cash.expected.v1` and the discovery precondition | Stop blocked if the writers cannot be traced. Otherwise one function. No second engine beside an unidentified writer |
 | A9 | Stored shift expected cash is not proven equal to a live canonical result | No fixture compares them | `lib/reports/cash-expected.contract.test.ts` | The close writer located by the discovery precondition. Not guessed in this close-out | A8 | Ordinary close, owner-override close, retry, and any offline or alternate close path that writes `expectedCashPence` match the live result for the same source rows |
 | A10 | Business Movement stock insights are hard-off and marked not reliable | `stockInsightsEmitted: false` in `lib/reports/business-movement` | `lib/reports/business-movement/business-movement.test.ts` (extend the existing stock-gate case; do not treat the current assertion of `false` as success) | `lib/reports/business-movement/sales-comparison.ts` | `stock_movement` | The block is absent or sourced from `stock_movement`. It does not emit a stock total of its own |
 | A11 | Daily SMS body uses stored GP, has no segment cap, and does not use the frozen freshness sentence. The same function also prefers `whatsappPhone` and gates on `whatsappEnabled` while writing `channel: 'SMS'` | `buildOwnerDailySummarySms`, `resolveOwnerRecipient` | `lib/notifications/owner-daily-summary-sms.contract.test.ts` | `lib/notifications/owner-daily-summary-sms.ts` | A2, A7, SMS payload section of `PLAN_ENTITLEMENT_MATRIX.md` | Formatter tests in that section pass, including 306 GSM-7 septets, `GHS`, mandatory fields, overflow order, freshness wording, open expected cash versus closed variance, incomplete-cost GP, and priority actions. No WhatsApp provider, route, UI, copy, or test stub. Destination resolution, consent, opt-out, and the cron plan check are B3 |
+| A12 | Customer and supplier statements sum payments with no authoritative payment-status filter. `computeOutstandingBalance` in `lib/reports/operational-metrics.ts` takes `{ amountPence }` only. `lib/accounting.ts` returns 0 when the invoice status is `RETURNED`, `VOID`, or `PAID`, and otherwise sums every payment amount with no payment-status filter. A5 only removes the 90-day cutoff | Statement routes under `app/(protected)/customers/[id]/statement/route.ts` and `app/(protected)/suppliers/[id]/statement/route.ts`. Both helpers. `PurchasePayment` has no `status` column in `prisma/schema.prisma` | `lib/reports/balance-integrity.contract.test.ts` | One new receivables helper and one new payables helper, consumed by both statement routes and by `lib/reports/today-kpis.ts`. Retire the two current outstanding-balance helpers as the callers move. Do not add a supplier-payment status column in this row | Catalogue receivables and payables rules | Eligible customer payments are `SalesPayment.status = CONFIRMED` only. `FAILED`, `CANCELLED`, `VOID`, `PENDING`, `PENDING_MANUAL`, and any other status are excluded. There is no `REVERSED` status on `SalesPayment`; those three excluded strings are the reversal statuses found in the reporting lists. Supplier payments have no status: every stored `PurchasePayment.amountPence` counts, and a `PurchaseReturn` refund is not subtracted again when the invoice is `RETURNED` or `VOID`. Partial payments stay `PART_PAID` (and a stored `PARTIAL` invoice status stays open). A new payment that would exceed the invoice total is rejected. A stored eligible sum that already exceeds the total is shown as a reconciling excess, not capped into a silent zero balance. `RETURNED` and `VOID` invoices contribute 0. Invoices older than 90 days are included. Customer statement Paid and Balance, and supplier statement Paid and Balance, equal the helpers. A list total equals the sum of those source-document balances |
 
-### Wave B — entitlement and store scope (11)
+### Wave B — entitlement and store scope (13)
 
 | ID | Failing behaviour now | Evidence | Future test file | Future implementation files | Depends on | Acceptance |
 |---|---|---|---|---|---|---|
@@ -365,9 +370,9 @@ Known at this close-out, and not a completed trace: `lib/reports/home-expected-c
 | C11 | `/shifts/drawer` allows any signed-in role | `app/(protected)/shifts/drawer/page.tsx` | `app/(protected)/shifts/drawer/scope.contract.test.ts` | that page | Cashier scope | A cashier may open only their active shift, till, and store |
 | C12 | Cross-till and cross-store ids are not rejected on that drawer route | Same page, no role array | same test | that page | C11 | A changed shift, till, or store id is denied |
 
-Counts: Wave A 11, Wave B 13, Wave C 12. Total 36.
+Counts: Wave A 12, Wave B 13, Wave C 12. Total 37.
 
-Highest risk: A2 and A3 (a confident wrong profit figure), A8/A9 (cash close that does not match, and Wave A blocked until the expected-cash writers are traced), B1/B2/B3 (files and SMS that skip the plan or the SMS destination), B12 (debug financials open in deployed environments), B13 (Owner Brief export), C11 (cashier drawer not scoped).
+Highest risk: A2 and A3 (a confident wrong profit figure), A8/A9 (cash close that does not match, and Wave A blocked until the expected-cash writers are traced), A12 (statement balances that ignore payment status), B1/B2/B3 (files and SMS that skip the plan or the SMS destination), B12 (debug financials open in deployed environments), B13 (Owner Brief export), C11 (cashier drawer not scoped).
 
 ---
 
@@ -406,6 +411,8 @@ Wave A files, exclusive to that phase (the same person may edit them in a later 
 - `app/(protected)/reports/command-center/page.tsx`
 - `app/(protected)/reports/analytics/AnalyticsContent.tsx`
 - `lib/reports/supplier-sales.ts` for the A4 field alignment
+- `lib/reports/operational-metrics.ts` and `lib/accounting.ts` for A12, replaced by one receivables helper and one payables helper
+- `app/(protected)/customers/[id]/statement/route.ts` and `app/(protected)/suppliers/[id]/statement/route.ts` for A12 Paid and Balance only. Wave C still owns the supplier-debt grant on the supplier statement
 
 Wave B files, not edited in Wave A:
 

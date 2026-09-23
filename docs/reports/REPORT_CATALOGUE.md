@@ -1,6 +1,6 @@
 # Report catalogue contract
 
-Status: final correction applied (2026-09-23). Not implemented. `margin.line.v1`, `cash.expected.v1`, and `cash.variance.v1` name intended semantics. The current code is not an authoritative v1.
+Status: formula and balance amendment applied (2026-09-23). Not implemented. `margin.line.v1`, `cash.expected.v1`, and `cash.variance.v1` name intended semantics. The current code is not an authoritative v1.
 
 Evidence base: `docs/reports/PASS_A_INVENTORY.md`. Where this file names a current screen, the behaviour is the behaviour Pass A recorded. Where it names a canonical family, that family does not exist as a single function yet.
 
@@ -64,8 +64,8 @@ No fifteenth family is added for income statement, balance sheet, indirect cashf
 | `inventory_position` | What is on hand, and what is at or below its reorder point? | `InventoryBalance` quantity versus `Product.reorderPointBase`. Velocity reorder math stays an analytics layer on top of this position | On-hand and low/out flags are records. The velocity suggestion list is analytics | 16. Engine 15 is the analytics layer |
 | `stock_movement` | What ledger rows changed stock? | `StockMovement` rows, including adjustment and transfer types. No second shrinkage total | Ledger is a record. A trend of adjustment value is analytics | 14 |
 | `purchase_activity` | What did we buy? | `PurchaseInvoice` / lines, not `RETURNED`/`VOID` equivalents on the purchase status. Preferred-supplier **sales** are not this family | Record | Purchase exports and supplier payment workflow lists |
-| `customer_receivables` | Who owes us, and what is overdue? | Open sales invoices: `max(total − Σ payments that are not FAILED, CANCELLED, or VOID, 0)`. Age from due date, else missing-due-date. No 90-day createdAt cutoff | Balances, overdue, missing due date are records. 30/60/90 mix over time is analytics | 11 |
-| `supplier_payables` | Who do we owe, and what is overdue or missing a due date? | Same shape on `PurchaseInvoice`, as supplier ageing already buckets, including `DUE_DATE_MISSING` | Balances and those warnings are records. Ageing mix over time is analytics | 12. Sales by Linked Supplier is **not** this family |
+| `customer_receivables` | Who owes us, and what is overdue? | One helper. Eligible `SalesPayment` rows are `status = CONFIRMED` only. `FAILED`, `CANCELLED`, `VOID`, `PENDING`, `PENDING_MANUAL`, and any other status do not reduce the balance. `RETURNED` and `VOID` invoices contribute 0. No 90-day `createdAt` cutoff. Paid and Balance on the customer statement use this helper. Known-red A12 | Balances, overdue, missing due date are records. 30/60/90 mix over time is analytics | 11 |
+| `supplier_payables` | Who do we owe, and what is overdue or missing a due date? | One helper. `PurchasePayment` has no status column, so there is no supplier-payment status to include or exclude. Every stored `PurchasePayment.amountPence` is the current paid sum. `RETURNED` and `VOID` purchase invoices contribute 0. A `PurchaseReturn.refundAmountPence` is not a second subtraction on an invoice already zeroed by that status. No 90-day cutoff. Known-red A12 | Balances and those warnings are records. Ageing mix over time is analytics | 12. Sales by Linked Supplier is **not** this family |
 | `margin_performance` | What profit did these sales earn, and are costs complete? | See formula version below | A single-period GP figure with a data-quality state is a record. Trends, below-target rankings, and extra dimensions are analytics | 3, 4, 5, 6 |
 | `variance_signals` | Which control differences need a source look? | Stored signals that each link to source rows. Allowed labels only: cash variance; stocktake difference; unusual void activity; high adjustment value; repeated discounts; unresolved shift difference | The underlying shift, void, discount, and adjustment rows are records. The ranked signal list is analytics | Risk alert rows. Not a staff ranking |
 | `staff_activity` | What till activity is attached to this person, with context? | Formula and warning in `REPORT_ACCESS_AND_EXPORT_CONTRACT.md`. Never sorted by sales first | Analytics. Growth and Pro, explicit permission | Weekly Digest cashier tables, Risk Monitor cashier table, Business Movement cashier table |
@@ -93,17 +93,71 @@ Calculation states are only `READY` and `INCOMPLETE_COSTS`. “Hidden until cost
 | Revenue basis | Per line, net of line discount and promo discount, before tax: `lineSubtotalPence - lineDiscountPence - promoDiscountPence`. `lineSubtotalPence` in the sale writer is the pre-discount line amount (`lib/services/sales.ts` `buildLinePricing`) |
 | Line discounts | `lineDiscountPence` and `promoDiscountPence` reduce that line’s revenue. They are not a cost |
 | Invoice discount | `SalesInvoice.discountPence` is allocated across lines in proportion to each line’s net above. Rounding is half-up to the nearest pesewa. The largest line takes any remainder so the allocated sum equals `discountPence`. If every line net is 0, nothing is allocated |
-| Returns and refunds | `RETURNED` and `VOID` invoices contribute no revenue and no cost. A `SalesReturn` row does not by itself drop a line whose invoice is still recognised. Payment refunds stay in `payment_flow` and, when they are physical drawer cash, in `cash.expected.v1`. They are not negative margin revenue in v1 |
+| Returns and refunds | See the partial-return rules below. Full `VOID` and full `RETURN` remove the attributable recognised revenue and cost. A partial goods return reverses only the attributable returned revenue and cost. A payment-only refund is not automatically a goods return. Do not ignore a `SalesReturn` merely because the parent invoice remains recognised. Payment refunds that are physical drawer cash stay in `cash.expected.v1` |
 | Tax | `lineVatPence` and the NHIL / GETFund components are not revenue and not cost |
-| Quantity | Revenue uses the stored line money fields, not `unitPrice * qty` recomputed at report time. Cost fallback uses `qtyBase`. If `qtyBase` is 0 while `qtyInUnit` is positive, the line is `INCOMPLETE_COSTS` |
-| Cost hierarchy | 1. `lineCostPence` when `> 0`. 2. Else `Product.defaultCostBasePence * qtyBase` when that default is `> 0`. Average on-hand cost is an `inventory_position` figure and is not a substitute for a missing sale-line cost |
-| Missing cost | State `INCOMPLETE_COSTS`. Do not treat the missing cost as zero. Do not publish a gross-profit total for a set that contains an incomplete line. Show the recognised sales total and the incomplete line count |
-| Ready | Every in-scope line has a cost from the hierarchy. Gross profit = revenue − cost, in integer pesewas |
+| Quantity | Revenue uses the stored line money fields, not `unitPrice * qty` recomputed at report time. Cost uses `qtyBase` only when the cost itself is authoritative. If `qtyBase` is 0 while `qtyInUnit` is positive, the line is `INCOMPLETE_COSTS` |
+| Cost authority | Zero cost may be a legitimate authoritative cost. Missing cost and authoritative zero cost are different states. A check of `> 0` is not the authority rule. Wave A must identify the field or source evidence that proves cost authority before it treats a zero as authoritative. Average on-hand cost is an `inventory_position` figure and is not a substitute for a missing sale-line cost |
+| Missing or ambiguous cost | If current data cannot distinguish missing cost from authoritative zero, the line is `INCOMPLETE_COSTS`. Do not classify every zero-cost line as missing. Do not treat every zero as authoritative. Do not publish a gross-profit total for a set that contains an incomplete line. Show the recognised sales total and the incomplete line count |
+| Ready | Every in-scope line has authoritative cost, and line-level return attribution is proven for any `SalesReturn` that touches the set. Gross profit = revenue − cost, in integer pesewas. Otherwise the set is not `READY` |
 | Rounding | Money results are integer minor units. Percentage display is presentation and is not the stored result |
 | Currency | Integer minor units. For GHS, pesewas. No floating currency in the formula |
 | Not a source | Do not read `SalesInvoice.grossMarginPence`. Do not use the Weekly Digest division of `defaultCostBasePence` by 100 |
 
 Starter still receives this view, with the state. The view is not paywalled.
+
+#### Partial returns, before `margin.line.v1` is implemented
+
+Wave A must trace and record these before it changes `margin.line.v1` code:
+
+- `SalesReturn` and any return-line model
+- returned quantities
+- returned revenue and refund amounts
+- original sale-line linkage
+- cost attributable to returned quantities
+- inventory restoration or write-off
+- full return, partial return, exchange, void, and payment-only refund paths
+
+This close-out already records the following from `prisma/schema.prisma` and `lib/services/returns.ts`. It is the starting evidence, not a completed trace of every caller:
+
+- `SalesReturn.salesInvoiceId` is unique. There is no `SalesReturnLine` model and no per-line returned quantity.
+- `createSalesReturn` accepts only `type: 'RETURN' | 'VOID'`. Exchange is not a type on that function.
+- `RETURN` sets the invoice to `RETURNED`. `VOID` sets it to `VOID`. Both restore every invoice line’s `qtyBase` and write `SALES_RETURN` stock movements for the full lines.
+- `VOID` stores `refundAmountPence` 0. `RETURN` stores `min(requested refund, sum of payment amounts)`, with no payment-status filter on that sum.
+- A second call throws `Sale already returned`. Replay cannot be a second partial return on the same invoice.
+- `app/actions/backup.ts` can insert a `SalesReturn` row from a backup payload. That path was not re-traced here.
+
+Frozen margin treatment:
+
+- Full `VOID` or full `RETURN` removes the attributable recognised revenue and cost.
+- A partial goods return reverses only the attributable returned revenue and cost.
+- A payment-only refund is not automatically a goods return. Its margin treatment must follow the recorded commercial event.
+- If line-level return attribution cannot be proven, the affected margin set cannot be stamped `READY`.
+- Do not ignore a `SalesReturn` merely because the parent invoice remains recognised.
+
+On the current writer, a refund below the amount paid still marks the whole invoice `RETURNED` and restores every quantity. That is not proof of a partial goods return and not proof of a payment-only refund. Until line attribution is proven, that set cannot be `READY`.
+
+This amendment does not authorise a `SalesReturnLine` model or any other schema change. Wave A records the trace. It does not invent an exchange path or a return-line table in order to stamp the set `READY`.
+
+Future tests, not written now, in `lib/reports/margin-returns.contract.test.ts`:
+
+- full return removes attributable revenue and cost
+- partial return reverses only the attributed quantity’s revenue and cost
+- payment-only refund follows the recorded commercial event and does not reverse goods cost by itself
+- exchange, if the trace finds no supported exchange path, is asserted unsupported and is not classified as a goods return
+- replay does not reverse the same revenue and cost twice
+
+#### Zero-cost authority
+
+`SalesInvoiceLine.lineCostPence` is a non-null integer defaulting to 0. `InventoryBalance.avgCostBasePence` defaults to 0. `resolveAvgCost` in `lib/services/shared/inventory-utils.ts` keeps average cost only when it is `> 0`, otherwise it uses `Product.defaultCostBasePence`. Report GP paths use the same `> 0` test. No column found in this close-out records that a zero was an authoritative cost rather than an unfilled default.
+
+Limitation: current stored zeros cannot be split into authoritative zero and missing cost. Ambiguous lines are `INCOMPLETE_COSTS`. A positive `lineCostPence` remains stored cost evidence. A positive `defaultCostBasePence` is used only when the line cost is proven missing, not when the line cost is an undistinguished 0. Wave A must name the field or source that would prove authority. If it cannot, it documents that limitation and does not add a new cost column in order to force zeros through as authoritative.
+
+Future tests, not written now, in `lib/reports/margin-cost-authority.contract.test.ts`:
+
+- authoritative positive cost is `READY`
+- authoritative zero cost is `READY` with gross profit equal to revenue, and only when the cited authority evidence is present
+- missing line cost with a valid authoritative default uses that default
+- fully missing or ambiguous cost, including a stored 0 with no authority evidence, is `INCOMPLETE_COSTS` and publishes no gross-profit total
 
 #### `cash.expected.v1`
 
