@@ -1,6 +1,7 @@
 import { getOwnerBrief, type OwnerBrief } from '@/lib/owner-intel';
 import { prisma } from '@/lib/prisma';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { getTodayKPIs } from './today-kpis';
@@ -8,9 +9,11 @@ import { getCashflowForecast } from './forecast';
 import { classifyInventoryState, summarizeInventoryRisk } from './operational-metrics';
 import {
 	ensureSqliteReportDateColumnsNormalized,
-	isDateWithinRange,
 	isSqliteRuntime,
 } from './sqlite-report-date-normalization';
+import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
+import { businessDayWindow } from '@/lib/reports/reporting-clock';
+import { resolveAuthoritativeLineCost } from '@/lib/reports/margin-line';
 import { unstable_cache } from 'next/cache';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
@@ -25,7 +28,7 @@ export type DashboardTrend = {
 export type BusinessHealthCard = {
 	id: string;
 	label: string;
-	value: number;
+	value: number | null;
 	kind: 'money' | 'count';
 	subtitle: string;
 	trend: DashboardTrend;
@@ -107,15 +110,11 @@ export type OwnerDashboardSnapshot = {
 };
 
 function startOfDay(date = new Date()) {
-	const value = new Date(date);
-	value.setHours(0, 0, 0, 0);
-	return value;
+	return businessDayWindow(date, DEFAULT_BUSINESS_TIMEZONE).startInclusive;
 }
 
 function endOfDay(date = new Date()) {
-	const value = new Date(date);
-	value.setHours(23, 59, 59, 999);
-	return value;
+	return businessDayWindow(date, DEFAULT_BUSINESS_TIMEZONE).endExclusive;
 }
 
 function daysFromToday(date: Date) {
@@ -189,7 +188,7 @@ async function _getOwnerDashboardSnapshot(
 	const todayEnd = endOfDay();
 	const yesterdayStart = startOfDay(new Date(todayStart.getTime() - 86_400_000));
 	const yesterdayEnd = endOfDay(new Date(todayStart.getTime() - 86_400_000));
-	const sevenDaysOut = endOfDay(new Date(todayEnd.getTime() + 7 * 86_400_000));
+	const sevenDaysOut = endOfDay(new Date(todayStart.getTime() + 7 * 86_400_000));
 	const thirtyDaysAgo = new Date(todayStart.getTime() - 30 * 86_400_000);
 
 	const storeFilter = storeId ? { storeId } : {};
@@ -208,7 +207,7 @@ async function _getOwnerDashboardSnapshot(
 				where: {
 					businessId,
 					...storeFilter,
-					createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
+					createdAt: { gte: yesterdayStart, lt: yesterdayEnd },
 					paymentStatus: { notIn: ['RETURNED', 'VOID'] },
 				},
 				_sum: { totalPence: true },
@@ -220,7 +219,7 @@ async function _getOwnerDashboardSnapshot(
 				salesInvoice: {
 					businessId,
 					...(storeId ? { storeId } : {}),
-					createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
+					createdAt: { gte: yesterdayStart, lt: yesterdayEnd },
 					paymentStatus: { notIn: ['RETURNED', 'VOID'] },
 				},
 			},
@@ -247,7 +246,7 @@ async function _getOwnerDashboardSnapshot(
 			: prisma.salesPayment.aggregate({
 				where: {
 					method: 'CASH',
-					receivedAt: { gte: yesterdayStart, lte: yesterdayEnd },
+					receivedAt: { gte: yesterdayStart, lt: yesterdayEnd },
 					salesInvoice: {
 						businessId,
 						...(storeId ? { storeId } : {}),
@@ -269,15 +268,16 @@ async function _getOwnerDashboardSnapshot(
 				businessId,
 				...storeFilter,
 				paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-				dueDate: { lte: todayEnd },
+				dueDate: { lt: todayEnd },
 			},
 			select: {
 				id: true,
+				paymentStatus: true,
 				totalPence: true,
 				dueDate: true,
 				createdAt: true,
 				customer: { select: { id: true, name: true } },
-				payments: { select: { amountPence: true } },
+				payments: { select: { amountPence: true, status: true } },
 			},
 			take: 20,
 			orderBy: { dueDate: 'asc' },
@@ -287,10 +287,11 @@ async function _getOwnerDashboardSnapshot(
 				businessId,
 				...storeFilter,
 				paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-				dueDate: { lte: sevenDaysOut },
+				dueDate: { lt: sevenDaysOut },
 			},
 			select: {
 				id: true,
+				paymentStatus: true,
 				totalPence: true,
 				dueDate: true,
 				createdAt: true,
@@ -446,7 +447,7 @@ async function _getOwnerDashboardSnapshot(
 	const normalizedYesterdaySales = sqliteRuntime
 		? (yesterdaySales as Array<{ totalPence: number; createdAt: Date; paymentStatus: string }>).reduce(
 			(acc, sale) => {
-				if (!isDateWithinRange(sale.createdAt, yesterdayStart, yesterdayEnd)) return acc;
+				if (!(sale.createdAt >= yesterdayStart && sale.createdAt < yesterdayEnd)) return acc;
 				if (['RETURNED', 'VOID'].includes(sale.paymentStatus)) return acc;
 				acc._sum.totalPence += sale.totalPence;
 				acc._count.id += 1;
@@ -460,7 +461,7 @@ async function _getOwnerDashboardSnapshot(
 		? {
 			_sum: {
 				amountPence: (yesterdayCashPayments as Array<{ amountPence: number; receivedAt: Date }>).reduce(
-					(sum, payment) => sum + (isDateWithinRange(payment.receivedAt, yesterdayStart, yesterdayEnd) ? payment.amountPence : 0),
+					(sum, payment) => sum + (payment.receivedAt >= yesterdayStart && payment.receivedAt < yesterdayEnd ? payment.amountPence : 0),
 					0,
 				),
 			},
@@ -470,14 +471,14 @@ async function _getOwnerDashboardSnapshot(
 	const overdueBalances = overdueDebtors
 		.map((invoice) => ({
 			...invoice,
-			balancePence: computeOutstandingBalance(invoice),
+			balancePence: receivableDocumentBalance(invoice).balancePence,
 		}))
 		.filter((invoice) => invoice.balancePence > 0 && invoice.customer);
 
 	const duePurchaseBalances = duePurchases
 		.map((invoice) => ({
 			...invoice,
-			balancePence: computeOutstandingBalance(invoice),
+			balancePence: payableDocumentBalance(invoice).balancePence,
 			dueInDays: invoice.dueDate ? daysFromToday(invoice.dueDate) : null,
 		}))
 		.filter((invoice) => invoice.balancePence > 0);
@@ -534,21 +535,29 @@ async function _getOwnerDashboardSnapshot(
 	}>).reduce((sum, line) => {
 		// SQLite path may include lines outside yesterday range; filter if needed
 		if (sqliteRuntime && line.salesInvoice) {
-			if (!isDateWithinRange(line.salesInvoice.createdAt, yesterdayStart, yesterdayEnd)) return sum;
+			if (!(line.salesInvoice.createdAt >= yesterdayStart && line.salesInvoice.createdAt < yesterdayEnd)) return sum;
 			if (['RETURNED', 'VOID'].includes(line.salesInvoice.paymentStatus)) return sum;
 		}
-		const cost = line.lineCostPence > 0
-			? line.lineCostPence
-			: (line.product.defaultCostBasePence * line.qtyBase);
-		return sum + line.lineSubtotalPence - cost;
+		const resolvedCost = resolveAuthoritativeLineCost({
+			lineSubtotalPence: line.lineSubtotalPence,
+			lineDiscountPence: 0,
+			promoDiscountPence: 0,
+			lineCostPence: line.lineCostPence,
+			qtyBase: line.qtyBase,
+			defaultCostBasePence: line.product.defaultCostBasePence,
+		});
+		if (!resolvedCost.authoritative) return sum;
+		return sum + line.lineSubtotalPence - resolvedCost.costPence;
 	}, 0);
 
 	const salesTrend = describeChange(kpis.totalSalesPence, normalizedYesterdaySales._sum.totalPence ?? 0);
-	const grossProfitTrend = describeChange(kpis.grossMarginPence, yesterdayGrossProfit);
+	const grossProfitTrend = kpis.grossMarginPence == null
+		? { label: 'Costs incomplete', direction: 'flat' as const, tone: 'neutral' as const }
+		: describeChange(kpis.grossMarginPence, yesterdayGrossProfit);
 	const transactionTrend = describeChange(kpis.txCount, normalizedYesterdaySales._count.id);
-	const cashTodayPence = openTillCash._sum.expectedCashPence && openTillCash._sum.expectedCashPence > 0
-		? openTillCash._sum.expectedCashPence
-		: kpis.paymentSplit.CASH ?? 0;
+	const cashTodayPence = openTillCash._count.id > 0
+		? (openTillCash._sum.expectedCashPence ?? 0)
+		: 0;
 	const cashTrend = describeChange(kpis.paymentSplit.CASH ?? 0, normalizedYesterdayCashPayments._sum.amountPence ?? 0);
 
 	const overviewCards: BusinessHealthCard[] = [
@@ -567,11 +576,13 @@ async function _getOwnerDashboardSnapshot(
 		{
 			id: 'gross-profit',
 			label: 'Gross Profit',
-			value: kpis.grossMarginPence,
+			value: kpis.marginState === 'READY' ? kpis.grossMarginPence : null,
 			kind: 'money',
-			subtitle: `${kpis.gpPercent}% gross margin on today's sales`,
+			subtitle: kpis.marginState === 'READY' && kpis.gpPercent != null
+				? `${kpis.gpPercent}% gross margin on today's sales`
+				: `Costs incomplete (${kpis.incompleteLineCount} lines). Recognised sales are still shown.`,
 			trend: grossProfitTrend,
-			tone: kpis.gpPercent >= 20 ? 'success' : kpis.gpPercent >= 10 ? 'warning' : 'danger',
+			tone: kpis.marginState !== 'READY' ? 'warning' : kpis.gpPercent != null && kpis.gpPercent >= 20 ? 'success' : kpis.gpPercent != null && kpis.gpPercent >= 10 ? 'warning' : 'danger',
 			href: '/reports/margins',
 		},
 		{
@@ -591,7 +602,7 @@ async function _getOwnerDashboardSnapshot(
 			kind: 'money',
 			subtitle: openTillCash._count.id > 0
 				? `${openTillCash._count.id} open till${openTillCash._count.id === 1 ? '' : 's'} reporting expected cash`
-				: 'Estimated from cash takings recorded today',
+				: 'No open shift. Expected cash is not taken from closed tills.',
 			trend: cashTrend,
 			tone: cashTodayPence > 0 ? 'success' : 'neutral',
 			href: '/reports/cash-drawer',

@@ -6,6 +6,7 @@ import {
   getIncompleteStockSnapshot,
   incompleteStockDisclosureMessage,
 } from '@/lib/reports/incomplete-stock';
+import { evaluateMarginSet, type MarginReturnKind } from '@/lib/reports/margin-line';
 
 type AccountType = 'ASSET' | 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'EQUITY';
 
@@ -27,28 +28,33 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
   const start = new Date(startIso);
   const end = new Date(endIso);
 
-  const [saleLines, grouped, accounts] = await Promise.all([
-    // Revenue and COGS from sale lines — single source of truth
-    prisma.salesInvoiceLine.findMany({
+  const [saleInvoices, grouped, accounts] = await Promise.all([
+    prisma.salesInvoice.findMany({
       where: {
-        salesInvoice: {
-          businessId,
-          createdAt: { gte: start, lte: end },
-          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-        },
+        businessId,
+        createdAt: { gte: start, lt: end },
       },
       select: {
-        lineSubtotalPence: true,
-        lineCostPence: true,
-        qtyBase: true,
-        product: { select: { defaultCostBasePence: true } },
+        paymentStatus: true,
+        discountPence: true,
+        salesReturn: { select: { type: true } },
+        lines: {
+          select: {
+            lineSubtotalPence: true,
+            lineDiscountPence: true,
+            promoDiscountPence: true,
+            lineCostPence: true,
+            qtyBase: true,
+            product: { select: { defaultCostBasePence: true } },
+          },
+        },
       },
     }),
     // Journals still needed for non-COGS expenses
     prisma.journalLine.groupBy({
       by: ['accountId'],
       where: {
-        journalEntry: { businessId, entryDate: { gte: start, lte: end } }
+        journalEntry: { businessId, entryDate: { gte: start, lt: end } }
       },
       _sum: { debitPence: true, creditPence: true },
     }),
@@ -60,16 +66,28 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
 
   const accountMap = new Map(accounts.map(a => [a.id, a]));
 
-  // Revenue and COGS from sale lines (consistent with dashboard/margins/analytics)
-  let revenue = 0;
-  let cogs = 0;
-  for (const line of saleLines) {
-    revenue += line.lineSubtotalPence;
-    const cost = line.lineCostPence > 0
-      ? line.lineCostPence
-      : (line.product.defaultCostBasePence * line.qtyBase);
-    cogs += cost;
-  }
+  const margin = evaluateMarginSet(saleInvoices.map((invoice) => {
+    let returnKind: MarginReturnKind = 'NONE';
+    if (invoice.salesReturn?.type === 'VOID' && invoice.paymentStatus === 'VOID') returnKind = 'FULL_VOID';
+    else if (invoice.salesReturn?.type === 'RETURN' && invoice.paymentStatus === 'RETURNED') returnKind = 'FULL_RETURN';
+    else if (invoice.salesReturn) returnKind = 'BACKUP_OR_REPLAY';
+    return {
+      paymentStatus: invoice.paymentStatus,
+      discountPence: invoice.discountPence,
+      returnKind,
+      lines: invoice.lines.map((line) => ({
+        lineSubtotalPence: line.lineSubtotalPence,
+        lineDiscountPence: line.lineDiscountPence,
+        promoDiscountPence: line.promoDiscountPence,
+        lineCostPence: line.lineCostPence,
+        qtyBase: line.qtyBase,
+        defaultCostBasePence: line.product.defaultCostBasePence,
+      })),
+    };
+  }));
+  const revenue = margin.recognisedSalesPence;
+  const grossProfit = margin.grossProfitPence;
+  const cogs = grossProfit == null ? null : revenue - grossProfit;
 
   // Other expenses from journals (excluding COGS which is derived above)
   let otherExpenses = 0;
@@ -90,8 +108,6 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
     }
   }
 
-  const grossProfit = revenue - cogs;
-
   const incomplete = await getIncompleteStockSnapshot(businessId);
 
   return {
@@ -100,7 +116,9 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
     otherExpenses,
     otherOperatingIncome,
     grossProfit,
-    netProfit: grossProfit - otherExpenses + otherOperatingIncome,
+    netProfit: grossProfit == null ? null : grossProfit - otherExpenses + otherOperatingIncome,
+    marginState: margin.state,
+    incompleteLineCount: margin.incompleteLineCount,
     stockValueIncomplete: incomplete.stockValueIncomplete,
     profitMayBeIncomplete: incomplete.profitMayBeIncomplete,
     incompleteStockMessage: incompleteStockDisclosureMessage(incomplete),
@@ -176,7 +194,7 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
 
   // Adjustment: sale-line NP vs journal NP — applied to inventory to keep BS balanced
   const journalNP = journalIncomeTotal - journalExpenseTotal;
-  const npAdjustment = income.netProfit - journalNP;
+  const npAdjustment = income.netProfit == null ? 0 : income.netProfit - journalNP;
 
   const assets: StatementLine[] = [];
   const liabilities: StatementLine[] = [];
@@ -217,7 +235,7 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
   }
 
   // Use sale-line-based NP (matches Income Statement)
-  if (income.netProfit !== 0) {
+  if (income.netProfit != null && income.netProfit !== 0) {
     equity.push({
       accountCode: 'CURRENT_PROFIT',
       name: 'Net Profit to Date',
@@ -308,10 +326,12 @@ async function _getCashflow(businessId: string, startIso: string, endIso: string
   const apChange = endAp - startAp;
   const invChange = endInv - startInv;
 
-  const netCashFromOps = income.netProfit - arChange - invChange + apChange;
+  const netCashFromOps = income.netProfit == null
+    ? null
+    : income.netProfit - arChange - invChange + apChange;
   // Legacy path uses openingCapitalPence; new path uses journal-based balances
   const beginningCash = startCash + legacyCapital;
-  const endingCash = beginningCash + netCashFromOps;
+  const endingCash = netCashFromOps == null ? null : beginningCash + netCashFromOps;
 
   return {
     netProfit: income.netProfit,

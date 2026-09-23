@@ -67,9 +67,12 @@ describe('summarizeMarginAnalysis', () => {
 			1_500,
 		);
 
-		expect(snapshot.totalProducts).toBe(3);
-		expect(snapshot.belowCostCount).toBe(1);
-		expect(snapshot.belowTargetMarginCount).toBe(2);
+		// Cooking Oil stores lineCostPence 0 with no proof that the zero is intentional.
+		// The old assertion treated that as the positive default cost and published a GP.
+		// Frozen margin authority omits the line instead of inventing a cost.
+		expect(snapshot.totalProducts).toBe(2);
+		expect(snapshot.belowCostCount).toBe(0);
+		expect(snapshot.belowTargetMarginCount).toBe(1);
 		expect(snapshot.healthyCount).toBe(1);
 
 		const milk = snapshot.rows.find((row) => row.productId === 'product-a');
@@ -84,15 +87,7 @@ describe('summarizeMarginAnalysis', () => {
 		});
 
 		const oil = snapshot.rows.find((row) => row.productId === 'product-b');
-		expect(oil).toMatchObject({
-			name: 'Cooking Oil 1L',
-			thresholdSource: 'product-override',
-			belowCost: true,
-			belowTargetMargin: true,
-			effectiveThresholdPercent: 25,
-			averageSellPricePence: 300,
-			averageCostPricePence: 400,
-		});
+		expect(oil).toBeUndefined();
 
 		const rice = snapshot.rows.find((row) => row.productId === 'product-c');
 		expect(rice).toMatchObject({

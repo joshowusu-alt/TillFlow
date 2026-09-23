@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { productRankRevenuePence } from '@/lib/reports/product-rank';
 
 import {
   businessMovementSalesInvoiceWhere,
@@ -65,7 +66,7 @@ async function loadProductBuckets(
   const grouped = await db.salesInvoiceLine.groupBy({
     by: ['productId'],
     where: { salesInvoice: where },
-    _sum: { lineTotalPence: true, qtyBase: true },
+    _sum: { lineSubtotalPence: true, lineDiscountPence: true, promoDiscountPence: true, qtyBase: true },
   });
 
   if (grouped.length === 0) return [];
@@ -79,7 +80,11 @@ async function loadProductBuckets(
   return grouped.map((g) => ({
     id: g.productId,
     name: nameById.get(g.productId) ?? g.productId,
-    salesValuePence: g._sum.lineTotalPence ?? 0,
+    salesValuePence: productRankRevenuePence({
+      lineSubtotalPence: g._sum.lineSubtotalPence ?? 0,
+      lineDiscountPence: g._sum.lineDiscountPence ?? 0,
+      promoDiscountPence: g._sum.promoDiscountPence ?? 0,
+    }),
     qtyBase: g._sum.qtyBase ?? 0,
   }));
 }

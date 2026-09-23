@@ -28,6 +28,12 @@ export async function GET(request: Request) {
 
   const data = await getWeeklyDigestData(business.id, wStart, wEnd);
   const currency = business.currency;
+  const moneyOrIncomplete = (pence: number | null) => (
+    pence == null ? 'Costs incomplete' : formatMoney(pence, currency)
+  );
+  const percentOrIncomplete = (value: number | null) => (
+    value == null ? 'Costs incomplete' : `${value}%`
+  );
 
   const rows: string[][] = [
     ['Weekly Digest', `${wStart.toDateString()} - ${wEnd.toDateString()}`],
@@ -35,8 +41,8 @@ export async function GET(request: Request) {
     [],
     ['Metric', 'Value'],
     ['Total Sales', formatMoney(data.totalSalesPence, currency)],
-    ['Gross Profit', formatMoney(data.grossProfitPence, currency)],
-    ['GP %', `${data.gpPercent}%`],
+    ['Gross Profit', moneyOrIncomplete(data.grossProfitPence)],
+    ['GP %', percentOrIncomplete(data.gpPercent)],
     ['Transactions', String(data.txCount)],
     ['Voids', String(data.voidCount)],
     ['Returns', String(data.returnCount)],
@@ -45,7 +51,7 @@ export async function GET(request: Request) {
     [],
     ['Previous Week Comparison'],
     ['Prev Sales', formatMoney(data.prevTotalSalesPence, currency)],
-    ['Prev GP', formatMoney(data.prevGrossProfitPence, currency)],
+    ['Prev GP', moneyOrIncomplete(data.prevGrossProfitPence)],
     ['Prev Transactions', String(data.prevTxCount)],
     [],
     ['Total Receipts', formatMoney(data.totalReceiptsPence, currency)],

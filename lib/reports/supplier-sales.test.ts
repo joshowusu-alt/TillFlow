@@ -28,8 +28,13 @@ describe('getSupplierSalesReport — service layer', () => {
     expect(src).toContain("notIn: ['RETURNED', 'VOID']");
   });
 
-  it('aggregates lineTotalPence as revenue', () => {
-    expect(src).toContain('lineTotalPence');
+  it('aggregates sales_activity line net before tax as revenue', () => {
+    // lineTotalPence included tax. Product rank is lineSubtotal minus line and promo discounts.
+    expect(src).toContain('productRankRevenuePence');
+    expect(src).toContain('lineSubtotalPence');
+    expect(src).toContain('lineDiscountPence');
+    expect(src).toContain('promoDiscountPence');
+    expect(src).not.toContain('lineTotalPence');
     expect(src).toContain('revenuePence');
   });
 
@@ -384,8 +389,9 @@ describe('getTopLinkedSupplierForMonth — service helper', () => {
     expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('aggregates qtyBase and lineTotalPence at supplier level', () => {
-    expect(src).toContain('acc.revenuePence += line.lineTotalPence');
+  it('aggregates qtyBase and the shared product-rank revenue at supplier level', () => {
+    // Replaces line.lineTotalPence so this helper cannot drift from sales_activity.
+    expect(src).toContain('acc.revenuePence += productRankRevenuePence(line)');
     expect(src).toContain('acc.qtyBase += line.qtyBase');
   });
 

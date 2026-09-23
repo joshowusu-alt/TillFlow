@@ -12,6 +12,8 @@ import { computeBusinessAlerts } from './reports/alerts';
 import { getCashflowForecast } from './reports/forecast';
 import { getMarginAnalysisSnapshot } from './reports/margin-analysis';
 import { prisma } from './prisma';
+import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
+import { businessDayWindow } from '@/lib/reports/reporting-clock';
 
 // ─── Priority Action ─────────────────────────────────────────────────────────
 
@@ -172,11 +174,12 @@ export async function getOwnerBrief(
   currency: string,
   storeId?: string
 ): Promise<OwnerBrief> {
-  const marginWindowEnd = new Date();
-  marginWindowEnd.setHours(23, 59, 59, 999);
-  const marginWindowStart = new Date(marginWindowEnd);
-  marginWindowStart.setDate(marginWindowStart.getDate() - 13);
-  marginWindowStart.setHours(0, 0, 0, 0);
+  const todayWindow = businessDayWindow(new Date(), DEFAULT_BUSINESS_TIMEZONE);
+  const marginWindowEnd = todayWindow.endExclusive;
+  const marginWindowStart = businessDayWindow(
+    new Date(todayWindow.startInclusive.getTime() - 13 * 86_400_000),
+    DEFAULT_BUSINESS_TIMEZONE,
+  ).startInclusive;
 
   const [kpis, forecast, arAp, marginSnapshot] = await Promise.all([
     getTodayKPIs(businessId, storeId),

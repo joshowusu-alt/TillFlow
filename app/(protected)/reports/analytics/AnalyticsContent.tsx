@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { productRankRevenuePence } from '@/lib/reports/product-rank';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import AnalyticsClient from './AnalyticsClient';
 
@@ -37,6 +38,8 @@ export default async function AnalyticsContent({
                 productId: true,
                 qtyBase: true,
                 lineSubtotalPence: true,
+                lineDiscountPence: true,
+                promoDiscountPence: true,
                 lineCostPence: true,
                 product: {
                   select: {
@@ -140,7 +143,7 @@ export default async function AnalyticsContent({
             revenue: 0,
             cost: 0,
           };
-          existing.revenue += line.lineSubtotalPence;
+          existing.revenue += productRankRevenuePence(line);
           existing.cost +=
             line.lineCostPence > 0
               ? line.lineCostPence

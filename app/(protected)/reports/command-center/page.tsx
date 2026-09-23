@@ -408,9 +408,15 @@ function PostureStrip({ kpis, currency }: {
     },
     {
       label: 'Gross margin',
-      value: kpis ? `${kpis.gpPercent.toFixed(1)}%` : '—',
-      sub: kpis ? formatMoney(kpis.grossMarginPence, currency) : 'No cost data',
-      tone: kpis && kpis.gpPercent < 10 ? 'danger' : kpis && kpis.gpPercent < 20 ? 'warning' : 'ok' as const,
+      value: kpis?.marginState === 'READY' && kpis.gpPercent != null ? `${kpis.gpPercent.toFixed(1)}%` : '—',
+      sub: kpis?.marginState === 'READY' && kpis.grossMarginPence != null
+        ? formatMoney(kpis.grossMarginPence, currency)
+        : kpis ? `Costs incomplete (${kpis.incompleteLineCount})` : 'No cost data',
+      tone: kpis?.marginState === 'READY' && kpis.gpPercent != null && kpis.gpPercent < 10
+        ? 'danger'
+        : kpis?.marginState === 'READY' && kpis.gpPercent != null && kpis.gpPercent < 20
+          ? 'warning'
+          : 'ok' as const,
     },
     {
       label: "Today's receipts",

@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 import { unstable_cache } from 'next/cache';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
+import { businessDayWindow } from '@/lib/reports/reporting-clock';
 
 export type ForecastDay = {
   date: string;
@@ -235,15 +237,18 @@ async function _getCashflowForecast(
   const totalExpenses30d = recentExpenses.reduce((s, e) => s + e.amountPence, 0);
   const avgDailyExpenses = Math.round(totalExpenses30d / 30);
 
-  // 5. Avg daily cash sales (trailing 14 days, cash + mobile money only)
-  const fourteenDaysAgo = new Date(now);
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-
+  // 5. Avg daily confirmed cash and MoMo (trailing 14 business days)
+  const trailingEnd = businessDayWindow(now, DEFAULT_BUSINESS_TIMEZONE).endExclusive;
+  const trailingStart = businessDayWindow(
+    new Date(trailingEnd.getTime() - 14 * 86_400_000),
+    DEFAULT_BUSINESS_TIMEZONE,
+  ).startInclusive;
   const recentCashPayments = await prisma.salesPayment.findMany({
     where: {
-      receivedAt: { gte: fourteenDaysAgo },
+      receivedAt: { gte: trailingStart, lt: trailingEnd },
+      status: 'CONFIRMED',
       method: { in: ['CASH', 'MOBILE_MONEY'] },
-      salesInvoice: { businessId, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
+      salesInvoice: { businessId },
     },
     select: { amountPence: true },
   });

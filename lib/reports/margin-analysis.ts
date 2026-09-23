@@ -1,9 +1,12 @@
 import { prisma } from '@/lib/prisma';
+import { resolveAuthoritativeLineCost } from '@/lib/reports/margin-line';
 
 type MarginAnalysisLine = {
 	productId: string;
 	qtyBase: number;
 	lineSubtotalPence: number;
+	lineDiscountPence?: number;
+	promoDiscountPence?: number;
 	lineCostPence: number;
 	createdAt: Date;
 	product: {
@@ -87,9 +90,16 @@ export function summarizeMarginAnalysis(
 	for (const line of lines) {
 		const effectiveThresholdBps = line.product.minimumMarginThresholdBps ?? businessDefaultThresholdBps;
 		const thresholdSource = line.product.minimumMarginThresholdBps != null ? 'product-override' : 'business-default';
-		const lineCost = line.lineCostPence > 0
-			? line.lineCostPence
-			: line.product.defaultCostBasePence * line.qtyBase;
+		const resolvedCost = resolveAuthoritativeLineCost({
+			lineSubtotalPence: line.lineSubtotalPence,
+			lineDiscountPence: line.lineDiscountPence ?? 0,
+			promoDiscountPence: line.promoDiscountPence ?? 0,
+			lineCostPence: line.lineCostPence,
+			qtyBase: line.qtyBase,
+			defaultCostBasePence: line.product.defaultCostBasePence,
+		});
+		if (!resolvedCost.authoritative) continue;
+		const lineCost = resolvedCost.costPence;
 
 		const existing = productStats.get(line.productId) ?? {
 			productId: line.productId,

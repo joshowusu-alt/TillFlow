@@ -7,7 +7,7 @@ export type BusinessAlert = {
 };
 
 export type AlertInputs = {
-  gpPercent: number;
+  gpPercent: number | null;
   totalSalesPence: number;
   arTotalPence: number;
   arOver60Pence: number;
@@ -37,7 +37,7 @@ const rules: AlertRule[] = [
   {
     id: 'MARGIN_FALLING',
     evaluate: (inputs) => {
-      if (inputs.totalSalesPence === 0) return null;
+      if (inputs.gpPercent == null || inputs.totalSalesPence === 0) return null;
       if (inputs.gpPercent >= 15) return null;
       return {
         id: 'MARGIN_FALLING',

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
 const csvEscape = (value: string | number | null | undefined) => {
   if (value === null || value === undefined) return '';
@@ -49,10 +50,13 @@ export async function GET(
   }
 
   const invoices = supplier.purchaseInvoices.map((invoice) => {
-    const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+    const document = payableDocumentBalance({
+      paymentStatus: invoice.paymentStatus,
+      totalPence: invoice.totalPence,
+      payments: invoice.payments,
+    });
     const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
-    const balance = isClosed ? 0 : Math.max(invoice.totalPence - paid, 0);
-    return { ...invoice, paid, balance, isClosed };
+    return { ...invoice, paid: document.paidPence, balance: document.balancePence, excess: document.excessPence, isClosed };
   });
 
   const activeInvoices = invoices.filter((invoice) => !invoice.isClosed);

@@ -1,135 +1,142 @@
+import {
+  DEFAULT_BUSINESS_TIMEZONE,
+  formatBusinessLocalDateKey,
+  getBusinessDayBounds,
+  type LocalDateParts,
+} from '@/lib/notifications/utils';
+import {
+  addLocalDays,
+  businessLocalDateWindow,
+  localDateKey,
+  windowForLocalDates,
+  type HalfOpenWindow,
+} from '@/lib/reports/reporting-clock';
+
+/**
+ * Report date inputs are business-local calendar dates.
+ * Returned `end` is exclusive (half-open [start, end)). Callers must filter with `lt: end`.
+ */
 export function parseReportDate(value: string | undefined, fallback: Date) {
-	if (!value) return fallback;
-	const parsed = new Date(value);
-	if (Number.isNaN(parsed.getTime())) return fallback;
-	return parsed;
-}
-
-function toInputDateValue(value: Date) {
-	return value.toISOString().slice(0, 10);
-}
-
-function startOfDay(value: Date) {
-	const date = new Date(value);
-	date.setHours(0, 0, 0, 0);
-	return date;
-}
-
-function endOfDay(value: Date) {
-	const date = new Date(value);
-	date.setHours(23, 59, 59, 999);
-	return date;
+  if (!value) return fallback;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return fallback;
+  return parsed;
 }
 
 type PeriodPreset = {
-	key: string;
-	start: Date;
-	end: Date;
+  key: string;
+  from: LocalDateParts;
+  to: LocalDateParts;
 };
 
-function resolvePeriodPreset(period: string | undefined, now: Date): PeriodPreset {
-	const normalized = (period ?? '').toLowerCase();
-	const todayStart = startOfDay(now);
+function todayParts(now: Date, timeZone: string): LocalDateParts {
+  return getBusinessDayBounds(now, timeZone).localDate;
+}
 
-	switch (normalized) {
-		case 'today':
-			return { key: 'today', start: todayStart, end: endOfDay(now) };
-		case '7':
-		case '7d': {
-			const start = new Date(todayStart);
-			start.setDate(start.getDate() - 6);
-			return { key: '7d', start, end: endOfDay(now) };
-		}
-		case '14':
-		case '14d': {
-			const start = new Date(todayStart);
-			start.setDate(start.getDate() - 13);
-			return { key: '14d', start, end: endOfDay(now) };
-		}
-		case '30':
-		case '30d': {
-			const start = new Date(todayStart);
-			start.setDate(start.getDate() - 29);
-			return { key: '30d', start, end: endOfDay(now) };
-		}
-		case '90':
-		case '90d': {
-			const start = new Date(todayStart);
-			start.setDate(start.getDate() - 89);
-			return { key: '90d', start, end: endOfDay(now) };
-		}
-		case '365':
-		case '365d': {
-			const start = new Date(todayStart);
-			start.setDate(start.getDate() - 364);
-			return { key: '365d', start, end: endOfDay(now) };
-		}
-		case 'mtd':
-		case 'month-to-date':
-			return {
-				key: 'mtd',
-				start: new Date(now.getFullYear(), now.getMonth(), 1),
-				end: endOfDay(now),
-			};
-		case 'last-month': {
-			const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-			const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-			return { key: 'last-month', start, end };
-		}
-		case 'ytd':
-		case 'this-year': {
-			const start = new Date(now.getFullYear(), 0, 1);
-			return { key: 'ytd', start, end: endOfDay(now) };
-		}
-		default: {
-			const fallbackStart = new Date(todayStart);
-			fallbackStart.setDate(fallbackStart.getDate() - 29);
-			return { key: '30d', start: fallbackStart, end: endOfDay(now) };
-		}
-	}
+function presetFor(period: string | undefined, now: Date, timeZone: string): PeriodPreset {
+  const today = todayParts(now, timeZone);
+  const normalized = (period ?? '').toLowerCase();
+  const endingToday = (daysBack: number, key: string): PeriodPreset => ({
+    key,
+    from: addLocalDays(today, -daysBack),
+    to: today,
+  });
+
+  switch (normalized) {
+    case 'today':
+      return { key: 'today', from: today, to: today };
+    case '7':
+    case '7d':
+      return endingToday(6, '7d');
+    case '14':
+    case '14d':
+      return endingToday(13, '14d');
+    case '30':
+    case '30d':
+      return endingToday(29, '30d');
+    case '90':
+    case '90d':
+      return endingToday(89, '90d');
+    case '365':
+    case '365d':
+      return endingToday(364, '365d');
+    case 'mtd':
+    case 'month-to-date':
+      return {
+        key: 'mtd',
+        from: { year: today.year, month: today.month, day: 1 },
+        to: today,
+      };
+    case 'last-month': {
+      const lastPrev = addLocalDays({ year: today.year, month: today.month, day: 1 }, -1);
+      return {
+        key: 'last-month',
+        from: { year: lastPrev.year, month: lastPrev.month, day: 1 },
+        to: lastPrev,
+      };
+    }
+    case 'ytd':
+    case 'this-year':
+      return {
+        key: 'ytd',
+        from: { year: today.year, month: 1, day: 1 },
+        to: today,
+      };
+    default:
+      return endingToday(29, '30d');
+  }
+}
+
+function inputValues(window: HalfOpenWindow) {
+  return {
+    fromInputValue: formatBusinessLocalDateKey(window.startInclusive, window.timeZone),
+    toInputValue: formatBusinessLocalDateKey(new Date(window.endExclusive.getTime() - 1), window.timeZone),
+  };
 }
 
 export function resolveReportDateRange(
-	params: { from?: string; to?: string } | undefined,
-	fallbackStart: Date,
-	fallbackEnd: Date,
+  params: { from?: string; to?: string } | undefined,
+  fallbackStart: Date,
+  fallbackEnd: Date,
+  timeZone: string = DEFAULT_BUSINESS_TIMEZONE,
 ) {
-	const start = parseReportDate(params?.from, fallbackStart);
-	const end = parseReportDate(params?.to, fallbackEnd);
-	end.setHours(23, 59, 59, 999);
-
-	return {
-		start,
-		end,
-		fromInputValue: start.toISOString().slice(0, 10),
-		toInputValue: end.toISOString().slice(0, 10),
-	};
+  const fromKey = /^\d{4}-\d{2}-\d{2}$/.test(params?.from ?? '') ? params!.from! : undefined;
+  const toKey = /^\d{4}-\d{2}-\d{2}$/.test(params?.to ?? '') ? params!.to! : undefined;
+  const parsed = fromKey && toKey ? businessLocalDateWindow(fromKey, toKey, timeZone) : null;
+  const window = parsed ?? windowForLocalDates(
+    todayParts(fallbackStart, timeZone),
+    todayParts(fallbackEnd, timeZone),
+    timeZone,
+  );
+  return {
+    start: window.startInclusive,
+    end: window.endExclusive,
+    ...inputValues(window),
+  };
 }
 
 export function resolveSelectableReportDateRange(
-	params: { from?: string; to?: string; period?: string } | undefined,
-	defaultPeriod: string,
-	now = new Date(),
+  params: { from?: string; to?: string; period?: string } | undefined,
+  defaultPeriod: string,
+  now = new Date(),
+  timeZone: string = DEFAULT_BUSINESS_TIMEZONE,
 ) {
-	const preset = resolvePeriodPreset(params?.period ?? defaultPeriod, now);
-	const normalizedPeriod = (params?.period ?? '').toLowerCase();
-	const submittedFrom = params?.from?.trim();
-	const submittedTo = params?.to?.trim();
-	const hasCustomRange = normalizedPeriod === 'custom'
-		|| (!normalizedPeriod && Boolean(submittedFrom || submittedTo));
-	const start = hasCustomRange
-		? startOfDay(parseReportDate(params?.from, preset.start))
-		: startOfDay(preset.start);
-	const end = hasCustomRange
-		? endOfDay(parseReportDate(params?.to, preset.end))
-		: endOfDay(preset.end);
+  const preset = presetFor(params?.period ?? defaultPeriod, now, timeZone);
+  const normalizedPeriod = (params?.period ?? '').toLowerCase();
+  const submittedFrom = params?.from?.trim();
+  const submittedTo = params?.to?.trim();
+  const hasCustomRange = normalizedPeriod === 'custom'
+    || (!normalizedPeriod && Boolean(submittedFrom || submittedTo));
+  const from = hasCustomRange && submittedFrom ? submittedFrom : localDateKey(preset.from);
+  const to = hasCustomRange && submittedTo ? submittedTo : localDateKey(preset.to);
+  const window = businessLocalDateWindow(from, to, timeZone)
+    ?? windowForLocalDates(preset.from, preset.to, timeZone);
 
-	return {
-		start,
-		end,
-		fromInputValue: toInputDateValue(start),
-		toInputValue: toInputDateValue(end),
-		periodInputValue: hasCustomRange ? 'custom' : preset.key,
-		isCustomRange: hasCustomRange,
-	};
+  return {
+    start: window.startInclusive,
+    end: window.endExclusive,
+    ...inputValues(window),
+    periodInputValue: hasCustomRange ? 'custom' : preset.key,
+    isCustomRange: hasCustomRange,
+  };
 }

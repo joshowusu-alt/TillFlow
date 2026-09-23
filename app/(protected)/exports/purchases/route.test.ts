@@ -88,8 +88,9 @@ describe('GET /exports/purchases', () => {
 		const body = await response.json();
 		const expectedStart = new Date('2026-04-01');
 		expectedStart.setHours(0, 0, 0, 0);
-		const expectedEnd = new Date('2026-04-06');
-		expectedEnd.setHours(23, 59, 59, 999);
+		// Reporting windows are half-open. This export still filters with lte, so the
+		// exact end instant remains included until that route is migrated.
+		const expectedEnd = new Date('2026-04-07T00:00:00.000Z');
 
 		const query = purchaseInvoiceLineFindManyMock.mock.calls[0][0];
 		expect(query.where.purchaseInvoice.businessId).toBe('biz-1');

@@ -158,6 +158,11 @@ describe('Business Movement 6B — product / branch / cashier comparison', () =>
 
     expect(result.stockAvailabilityReadiness).toBe('NOT_RELIABLE');
     expect(result.stockInsightsEmitted).toBe(false);
+    const stockKeys = Object.keys(result).filter((key) => key.toLowerCase().includes('stock'));
+    expect(stockKeys.sort()).toEqual(['stockAvailabilityReadiness', 'stockInsightsEmitted']);
+    expect(result).not.toHaveProperty('stockValuePence');
+    expect(result).not.toHaveProperty('stockQtyBase');
+    expect(JSON.stringify(result)).not.toMatch(/stock total/i);
 
     expect(result.newProducts.map((p) => p.productId)).toContain('p-new');
     expect(result.newProducts.find((p) => p.productId === 'p-new')?.kind).toBe('new');
@@ -253,5 +258,9 @@ describe('Business Movement 6B — stock gate encoding', () => {
       comparisonCashiers: [],
     });
     expect(result.stockInsightsEmitted).toBe(false);
+    expect(Object.keys(result).filter((key) => key.toLowerCase().includes('stock')).sort()).toEqual([
+      'stockAvailabilityReadiness',
+      'stockInsightsEmitted',
+    ]);
   });
 });

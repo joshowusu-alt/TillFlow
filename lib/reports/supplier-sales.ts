@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { productRankRevenuePence } from '@/lib/reports/product-rank';
 
 // ---------------------------------------------------------------------------
 // Output types
@@ -86,7 +87,7 @@ export async function getSupplierSalesReport(
             productId: { in: linkedProducts.map((p) => p.id) },
             salesInvoice: {
               businessId,
-              createdAt: { gte: start, lte: end },
+              createdAt: { gte: start, lt: end },
               paymentStatus: { notIn: ['RETURNED', 'VOID'] },
             },
           },
@@ -94,7 +95,9 @@ export async function getSupplierSalesReport(
             productId: true,
             salesInvoiceId: true,
             qtyBase: true,
-            lineTotalPence: true,
+            lineSubtotalPence: true,
+            lineDiscountPence: true,
+            promoDiscountPence: true,
           },
         })
       : [];
@@ -140,13 +143,13 @@ export async function getSupplierSalesReport(
     const supplier = supplierAcc.get(sid);
     if (!supplier) continue;
 
-    supplier.totalRevenuePence += line.lineTotalPence;
+    supplier.totalRevenuePence += productRankRevenuePence(line);
     supplier.totalQtyBase += line.qtyBase;
     supplier.invoiceIds.add(line.salesInvoiceId);
 
     const existing = supplier.products.get(line.productId);
     if (existing) {
-      existing.revenuePence += line.lineTotalPence;
+      existing.revenuePence += productRankRevenuePence(line);
       existing.qtyBase += line.qtyBase;
       existing.invoiceIds.add(line.salesInvoiceId);
     } else {
@@ -154,7 +157,7 @@ export async function getSupplierSalesReport(
         productId: product.id,
         name: product.name,
         sku: product.sku,
-        revenuePence: line.lineTotalPence,
+        revenuePence: productRankRevenuePence(line),
         qtyBase: line.qtyBase,
         invoiceIds: new Set([line.salesInvoiceId]),
       });
@@ -234,11 +237,11 @@ export async function getTopLinkedSupplierForMonth(
       productId: { in: linkedProducts.map((p) => p.id) },
       salesInvoice: {
         businessId,
-        createdAt: { gte: start, lte: end },
+        createdAt: { gte: start, lt: end },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
     },
-    select: { productId: true, qtyBase: true, lineTotalPence: true },
+    select: { productId: true, qtyBase: true, lineSubtotalPence: true, lineDiscountPence: true, promoDiscountPence: true },
   });
 
   if (salesLines.length === 0) return null;
@@ -255,12 +258,12 @@ export async function getTopLinkedSupplierForMonth(
     if (!supplier) continue;
     const acc = supplierAcc.get(supplier.id);
     if (acc) {
-      acc.revenuePence += line.lineTotalPence;
+      acc.revenuePence += productRankRevenuePence(line);
       acc.qtyBase += line.qtyBase;
     } else {
       supplierAcc.set(supplier.id, {
         name: supplier.name,
-        revenuePence: line.lineTotalPence,
+        revenuePence: productRankRevenuePence(line),
         qtyBase: line.qtyBase,
       });
     }

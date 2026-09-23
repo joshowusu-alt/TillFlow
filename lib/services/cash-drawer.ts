@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { isExpectedCashEntryType } from '@/lib/reports/expected-cash';
 
 export type CashDrawerEntryType =
   | 'OPEN_FLOAT'
@@ -283,7 +284,7 @@ export async function recordCashDrawerEntryTx(
       status: 'OPEN',
     },
     data: {
-      expectedCashPence: { increment: input.amountPence },
+      expectedCashPence: { increment: isExpectedCashEntryType(input.entryType) ? input.amountPence : 0 },
     },
   });
   if (updateResult.count !== 1) {
@@ -297,8 +298,9 @@ export async function recordCashDrawerEntryTx(
   if (!updatedShift) {
     throw new Error('Shift disappeared while recording the cash movement.');
   }
+  const countedAmountPence = isExpectedCashEntryType(input.entryType) ? input.amountPence : 0;
   const afterExpectedCashPence = updatedShift.expectedCashPence;
-  const beforeExpectedCashPence = afterExpectedCashPence - input.amountPence;
+  const beforeExpectedCashPence = afterExpectedCashPence - countedAmountPence;
 
   const entry = await tx.cashDrawerEntry.create({
     data: {

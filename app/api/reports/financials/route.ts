@@ -27,6 +27,9 @@ export async function GET(request: Request) {
 
   let rows: string[][] = [];
   let filename = '';
+  const moneyOrIncomplete = (pence: number | null) => (
+    pence == null ? 'Costs incomplete' : formatMoney(pence, currency)
+  );
 
   if (type === 'income-statement') {
     const data = await getIncomeStatement(business.id, from, to);
@@ -37,11 +40,11 @@ export async function GET(request: Request) {
       [],
       ['Line Item', 'Amount'],
       ['Revenue', formatMoney(data.revenue, currency)],
-      ['Cost of Goods Sold', formatMoney(data.cogs, currency)],
-      ['Gross Profit', formatMoney(data.grossProfit, currency)],
+      ['Cost of Goods Sold', moneyOrIncomplete(data.cogs)],
+      ['Gross Profit', moneyOrIncomplete(data.grossProfit)],
       ['Other Operating Income', formatMoney(data.otherOperatingIncome, currency)],
       ['Operating Expenses', formatMoney(data.otherExpenses, currency)],
-      ['Net Profit', formatMoney(data.netProfit, currency)],
+      ['Net Profit', moneyOrIncomplete(data.netProfit)],
     ];
   } else if (type === 'balance-sheet') {
     const data = await getBalanceSheet(business.id, to);
@@ -70,14 +73,14 @@ export async function GET(request: Request) {
       ['Currency', currency],
       [],
       ['Line Item', 'Amount'],
-      ['Net Profit', formatMoney(data.netProfit, currency)],
+      ['Net Profit', moneyOrIncomplete(data.netProfit)],
       ['AR Change', formatMoney(data.arChange, currency)],
       ['AP Change', formatMoney(data.apChange, currency)],
       ['Inventory Change', formatMoney(data.invChange, currency)],
-      ['Net Cash from Operations', formatMoney(data.netCashFromOps, currency)],
+      ['Net Cash from Operations', moneyOrIncomplete(data.netCashFromOps)],
       [],
       ['Beginning Cash', formatMoney(data.beginningCash, currency)],
-      ['Ending Cash', formatMoney(data.endingCash, currency)],
+      ['Ending Cash', moneyOrIncomplete(data.endingCash)],
     ];
   } else {
     return NextResponse.json({ error: 'Unknown report type' }, { status: 400 });
