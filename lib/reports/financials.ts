@@ -152,7 +152,7 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
     prisma.openingBalance.findMany({ where: { businessId } }),
     prisma.journalLine.groupBy({
       by: ['accountId'],
-      where: { journalEntry: { businessId, entryDate: { lte: asOf } } },
+      where: { journalEntry: { businessId, entryDate: { lt: asOf } } },
       _sum: { debitPence: true, creditPence: true },
     }),
     prisma.account.findMany({

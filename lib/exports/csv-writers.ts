@@ -25,7 +25,7 @@ interface DateRange {
 // ---------------------------------------------------------------------------
 export async function buildSalesLedgerCsv(businessId: string, range: DateRange): Promise<string> {
   const rows = await prisma.salesInvoice.findMany({
-    where: { businessId, createdAt: { gte: range.from, lte: range.to } },
+    where: { businessId, createdAt: { gte: range.from, lt: range.to } },
     orderBy: { createdAt: 'asc' },
     select: {
       id: true, transactionNumber: true, createdAt: true, paymentStatus: true,
@@ -58,7 +58,7 @@ export async function buildSalesLedgerCsv(businessId: string, range: DateRange):
 // ---------------------------------------------------------------------------
 export async function buildPurchasesLedgerCsv(businessId: string, range: DateRange): Promise<string> {
   const rows = await prisma.purchaseInvoice.findMany({
-    where: { businessId, createdAt: { gte: range.from, lte: range.to } },
+    where: { businessId, createdAt: { gte: range.from, lt: range.to } },
     orderBy: { createdAt: 'asc' },
     select: {
       id: true, createdAt: true, paymentStatus: true,
@@ -89,12 +89,12 @@ export async function buildPurchasesLedgerCsv(businessId: string, range: DateRan
 export async function buildVatReportCsv(businessId: string, range: DateRange): Promise<string> {
   const [salesVat, purchasesVat] = await Promise.all([
     prisma.salesInvoice.aggregate({
-      where: { businessId, createdAt: { gte: range.from, lte: range.to } },
+      where: { businessId, createdAt: { gte: range.from, lt: range.to } },
       _sum: { vatPence: true, subtotalPence: true, totalPence: true },
       _count: { id: true },
     }),
     prisma.purchaseInvoice.aggregate({
-      where: { businessId, createdAt: { gte: range.from, lte: range.to } },
+      where: { businessId, createdAt: { gte: range.from, lt: range.to } },
       _sum: { vatPence: true, subtotalPence: true, totalPence: true },
       _count: { id: true },
     }),
@@ -156,7 +156,7 @@ export async function buildStockMovementsCsv(businessId: string, range: DateRang
   ).map((s) => s.id);
 
   const adjs = await prisma.stockAdjustment.findMany({
-    where: { storeId: { in: storeIds }, createdAt: { gte: range.from, lte: range.to } },
+    where: { storeId: { in: storeIds }, createdAt: { gte: range.from, lt: range.to } },
     orderBy: { createdAt: 'asc' },
     select: {
       id: true, createdAt: true, direction: true, qtyBase: true, reason: true,

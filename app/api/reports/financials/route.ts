@@ -3,6 +3,7 @@ import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { getIncomeStatement, getBalanceSheet, getCashflow } from '@/lib/reports/financials';
 import { formatMoney } from '@/lib/format';
+import { businessMonthWindow, localDateInstant } from '@/lib/reports/reporting-clock';
 
 export async function GET(request: Request) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -20,10 +21,9 @@ export async function GET(request: Request) {
   }
 
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const from = url.searchParams.get('from') ? new Date(url.searchParams.get('from')!) : monthStart;
-  const to = url.searchParams.get('to') ? new Date(url.searchParams.get('to')!) : now;
-  to.setHours(23, 59, 59, 999);
+  const month = businessMonthWindow(now, business.timezone);
+  const from = localDateInstant(url.searchParams.get('from'), 'start', business.timezone) ?? month.startInclusive;
+  const to = localDateInstant(url.searchParams.get('to'), 'endExclusive', business.timezone) ?? month.endExclusive;
 
   let rows: string[][] = [];
   let filename = '';

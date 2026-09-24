@@ -16,7 +16,7 @@ import {
  */
 export const JUSTIFIED_LTE_EXCLUSIONS: Array<{ file: string; reason: string }> = [
   { file: 'lib/reports/today-kpis.ts', reason: 'paidAt lte asOf is a point-in-time balance, not a period end' },
-  { file: 'lib/reports/financials.ts', reason: 'entryDate lte asOf is a balance-sheet instant' },
+  { file: 'lib/reports/financials.ts', reason: 'getAccountBalance entryDate lte asOf is a point-in-time balance; period statements use lt endExclusive' },
   { file: 'lib/reports/forecast.ts', reason: 'entryDate lte now is cash on hand as of now' },
   { file: 'lib/reports/money-received/query.ts', reason: 'receivedAt lte asOf is confirmed receipts through an instant' },
   { file: 'lib/owner-intel.ts', reason: 'dueDate lte sevenDays is an as-of attention cutoff, not a report period' },

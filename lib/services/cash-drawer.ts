@@ -435,7 +435,8 @@ export async function listCashDrawerSupportingRows(
     shiftId?: string | null;
     entryType: CashDrawerEntryType;
     from?: Date | null;
-    to?: Date | null;
+    /** Exclusive end of the reporting window. */
+    endExclusive?: Date | null;
   },
   db: any = prisma,
 ): Promise<CashDrawerSupportingRow[]> {
@@ -446,11 +447,11 @@ export async function listCashDrawerSupportingRows(
       ...(input.storeId ? { storeId: input.storeId } : {}),
       ...(input.tillId ? { tillId: input.tillId } : {}),
       ...(input.shiftId ? { shiftId: input.shiftId } : {}),
-      ...(input.from || input.to
+      ...(input.from || input.endExclusive
         ? {
             createdAt: {
               ...(input.from ? { gte: input.from } : {}),
-              ...(input.to ? { lte: input.to } : {}),
+              ...(input.endExclusive ? { lt: input.endExclusive } : {}),
             },
           }
         : {}),

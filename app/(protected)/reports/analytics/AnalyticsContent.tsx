@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { businessDayWindow } from '@/lib/reports/reporting-clock';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import AnalyticsClient from './AnalyticsClient';
@@ -7,17 +8,20 @@ type AnalyticsContentProps = {
   businessId: string;
   currency: string;
   periodDays: number;
+  timeZone?: string | null;
 };
 
 export default async function AnalyticsContent({
   businessId,
   currency,
   periodDays,
+  timeZone,
 }: AnalyticsContentProps) {
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const periodAgo = new Date(today.getTime() - periodDays * 24 * 60 * 60 * 1000);
-  const previousPeriodAgo = new Date(periodAgo.getTime() - periodDays * 24 * 60 * 60 * 1000);
+  const today = businessDayWindow(now, timeZone);
+  const periodAgo = new Date(today.startInclusive.getTime() - periodDays * 86_400_000);
+  const previousPeriodAgo = new Date(periodAgo.getTime() - periodDays * 86_400_000);
+  const endExclusive = new Date(now.getTime() + 1);
 
   const analyticsData = await measureServerOperation(
     'report.analytics.snapshot',
@@ -27,7 +31,7 @@ export default async function AnalyticsContent({
         prisma.salesInvoice.findMany({
           where: {
             businessId,
-            createdAt: { gte: periodAgo, lte: now },
+            createdAt: { gte: periodAgo, lt: endExclusive },
             paymentStatus: { notIn: ['RETURNED', 'VOID'] },
           },
           select: {
@@ -76,7 +80,7 @@ export default async function AnalyticsContent({
       // Limit chart labels based on period
       const maxLabels = periodDays <= 14 ? periodDays : Math.min(periodDays, 30);
       for (let i = maxLabels - 1; i >= 0; i--) {
-        const date = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
+        const date = new Date(today.startInclusive.getTime() - i * 24 * 60 * 60 * 1000);
         const key =
           periodDays <= 14
             ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })

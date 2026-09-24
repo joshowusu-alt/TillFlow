@@ -13,6 +13,9 @@ vi.mock('@/lib/database-runtime', async () => {
   return {
     ...actual,
     isPostgresRuntimeEnv: isPostgresRuntimeEnvMock,
+    // The suite may point DATABASE_URL at disposable Postgres. This case still
+    // has to prove the sequential fallback when the runtime detector says no.
+    isPostgresDatabaseUrl: () => false,
   };
 });
 

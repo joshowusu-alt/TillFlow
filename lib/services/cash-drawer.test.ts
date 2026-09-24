@@ -167,7 +167,7 @@ describe('cash drawer writes', () => {
 describe('cash drawer drill-down query', () => {
   it('preserves date, till, and shift scope', async () => {
     const from = new Date('2026-09-01T00:00:00.000Z');
-    const to = new Date('2026-09-17T23:59:59.000Z');
+    const endExclusive = new Date('2026-09-18T00:00:00.000Z');
     const db = {
       cashDrawerEntry: {
         findMany: vi.fn().mockResolvedValue([
@@ -197,7 +197,7 @@ describe('cash drawer drill-down query', () => {
         shiftId: 'shift-3',
         entryType: 'CASH_SALE',
         from,
-        to,
+        endExclusive,
       },
       db,
     );
@@ -210,7 +210,7 @@ describe('cash drawer drill-down query', () => {
           tillId: 'till-3',
           shiftId: 'shift-3',
           entryType: 'CASH_SALE',
-          createdAt: { gte: from, lte: to },
+          createdAt: { gte: from, lt: endExclusive },
           store: { businessId: 'biz-1' },
         }),
       }),

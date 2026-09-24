@@ -19,6 +19,7 @@ if (canRun) bindPrismaPostgresUrls(databaseUrl);
 describe('A9 closed-shift cleanup is non-mutating on real Postgres', () => {
   let prisma: PrismaClient;
   const suffix = `a9-cleanup-${Date.now()}`;
+  const businessIds: string[] = [];
 
   beforeAll(async () => {
     expect(canRun, 'isolated Postgres is required for A9').toBe(true);
@@ -43,7 +44,7 @@ describe('A9 closed-shift cleanup is non-mutating on real Postgres', () => {
         () => prisma.stockMovement.deleteMany({ where: { store: { business: { name: { contains: suffix } } } } }),
         () => prisma.journalLine.deleteMany({ where: { journalEntry: { business: { name: { contains: suffix } } } } }),
         () => prisma.journalEntry.deleteMany({ where: { business: { name: { contains: suffix } } } }),
-        () => prisma.auditLog.deleteMany({ where: { business: { name: { contains: suffix } } } }),
+        () => prisma.auditLog.deleteMany({ where: { businessId: { in: businessIds } } }),
         () => prisma.cashVarianceInvestigation.deleteMany({ where: { shift: { till: { store: { business: { name: { contains: suffix } } } } } } }),
         () => prisma.shift.deleteMany({ where: { till: { store: { business: { name: { contains: suffix } } } } } }),
         () => prisma.inventoryBalance.deleteMany({ where: { store: { business: { name: { contains: suffix } } } } }),
@@ -76,6 +77,7 @@ describe('A9 closed-shift cleanup is non-mutating on real Postgres', () => {
         },
       },
     });
+    businessIds.push(business.id);
     const store = await prisma.store.create({
       data: { businessId: business.id, name: `${label} store ${suffix}` },
     });

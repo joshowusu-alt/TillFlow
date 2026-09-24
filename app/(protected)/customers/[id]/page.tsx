@@ -12,6 +12,7 @@ import { parseTags } from '@/lib/contact-tags';
 import Link from 'next/link';
 import { updateCustomerAction } from '@/app/actions/customers';
 import { getFeatures } from '@/lib/features';
+import { localDateInstant } from '@/lib/reports/reporting-clock';
 import type { ReactNode } from 'react';
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -77,8 +78,8 @@ export default async function CustomerDetailPage({
   const storefrontSlug = ((business as any).storefrontSlug as string | null) ?? null;
   const loyaltyEnabled = features.loyaltyPoints && (business as any).loyaltyEnabled;
 
-  const start = searchParams?.from ? new Date(searchParams.from) : undefined;
-  const end = searchParams?.to ? new Date(searchParams.to) : undefined;
+  const start = localDateInstant(searchParams?.from, 'start', business.timezone);
+  const endExclusive = localDateInstant(searchParams?.to, 'endExclusive', business.timezone);
 
   const customer = await prisma.customer.findFirst({
     where: { id: params.id, businessId: business.id },
@@ -86,7 +87,7 @@ export default async function CustomerDetailPage({
       salesInvoices: {
         where: {
           ...(start ? { createdAt: { gte: start } } : {}),
-          ...(end ? { createdAt: { lte: end } } : {})
+          ...(endExclusive ? { createdAt: { lt: endExclusive } } : {})
         },
         select: {
           id: true,
@@ -134,7 +135,7 @@ export default async function CustomerDetailPage({
           customerId: { in: linkedStorefrontCustomers.map((s) => s.id) },
           status: { notIn: ['CANCELLED', 'PAYMENT_FAILED'] },
           ...(start ? { createdAt: { gte: start } } : {}),
-          ...(end ? { createdAt: { lte: end } } : {}),
+          ...(endExclusive ? { createdAt: { lt: endExclusive } } : {}),
         },
         select: {
           id: true,
@@ -426,11 +427,11 @@ export default async function CustomerDetailPage({
         <form className="mt-4 grid gap-4 md:grid-cols-4">
           <div>
             <label className="label">From</label>
-            <input className="input" name="from" type="date" defaultValue={start?.toISOString().slice(0, 10)} />
+            <input className="input" name="from" type="date" defaultValue={searchParams?.from ?? ''} />
           </div>
           <div>
             <label className="label">To</label>
-            <input className="input" name="to" type="date" defaultValue={end?.toISOString().slice(0, 10)} />
+            <input className="input" name="to" type="date" defaultValue={searchParams?.to ?? ''} />
           </div>
           <div className="flex items-end">
             <button className="btn-primary w-full">Filter</button>
@@ -438,8 +439,8 @@ export default async function CustomerDetailPage({
           <div className="flex items-end">
             <DownloadLink
               className="btn-ghost w-full text-xs"
-              href={`/customers/${customer.id}/statement?from=${start?.toISOString().slice(0, 10) ?? ''}&to=${
-                end?.toISOString().slice(0, 10) ?? ''
+              href={`/customers/${customer.id}/statement?from=${searchParams?.from ?? ''}&to=${
+                searchParams?.to ?? ''
               }`}
               fallbackFilename={`customer-statement-${customer.id.slice(0, 8)}.csv`}
             >

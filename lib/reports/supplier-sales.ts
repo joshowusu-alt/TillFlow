@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
+import { businessMonthWindow } from '@/lib/reports/reporting-clock';
 
 // ---------------------------------------------------------------------------
 // Output types
@@ -237,10 +238,13 @@ export type TopLinkedSupplierResult = {
 export async function getTopLinkedSupplierForMonth(
   businessId: string,
 ): Promise<TopLinkedSupplierResult | null> {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now);
-  end.setHours(23, 59, 59, 999);
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { timezone: true },
+  });
+  const month = businessMonthWindow(new Date(), business?.timezone);
+  const start = month.startInclusive;
+  const endExclusive = month.endExclusive;
 
   // Step 1: Products that have a preferred supplier
   const linkedProducts = await prisma.product.findMany({
@@ -260,7 +264,7 @@ export async function getTopLinkedSupplierForMonth(
       productId: { in: linkedProducts.map((p) => p.id) },
       salesInvoice: {
         businessId,
-        createdAt: { gte: start, lt: end },
+        createdAt: { gte: start, lt: endExclusive },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
     },

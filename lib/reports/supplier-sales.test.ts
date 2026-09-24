@@ -369,8 +369,11 @@ describe('getTopLinkedSupplierForMonth — service helper', () => {
     expect(src).toContain('export type TopLinkedSupplierResult');
   });
 
-  it('uses current month date range: first day of month as start', () => {
-    expect(src).toContain('now.getFullYear(), now.getMonth(), 1');
+  it('uses the business-local calendar month with an exclusive end', () => {
+    expect(src).toContain('businessMonthWindow');
+    expect(src).toContain('lt: endExclusive');
+    expect(src).not.toContain('now.getFullYear(), now.getMonth(), 1');
+    expect(src).not.toContain('23, 59, 59, 999');
   });
 
   it('filters out RETURNED and VOID invoices (same as full report)', () => {

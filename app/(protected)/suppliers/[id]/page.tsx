@@ -16,6 +16,7 @@ import DueDateBadge from '@/components/DueDateBadge';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import RemainingBalance from '@/components/RemainingBalance';
 import { getSupplierSalesReport } from '@/lib/reports/supplier-sales';
+import { businessMonthWindow, localDateInstant } from '@/lib/reports/reporting-clock';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -68,13 +69,12 @@ export default async function SupplierDetailPage({
     (business as any).storeMode as any,
   );
 
-  const start = searchParams?.from ? new Date(searchParams.from) : undefined;
-  const end = searchParams?.to ? new Date(searchParams.to) : undefined;
+  const start = localDateInstant(searchParams?.from, 'start', business.timezone);
+  const endExclusive = localDateInstant(searchParams?.to, 'endExclusive', business.timezone);
 
-  const now = new Date();
-  const mtdStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const mtdEnd = new Date(now);
-  mtdEnd.setHours(23, 59, 59, 999);
+  const month = businessMonthWindow(new Date(), business.timezone);
+  const mtdStart = month.startInclusive;
+  const mtdEndExclusive = month.endExclusive;
 
   const [supplier, linkedProducts, supplierSales] = await Promise.all([
     prisma.supplier.findFirst({
@@ -83,7 +83,7 @@ export default async function SupplierDetailPage({
         purchaseInvoices: {
           where: {
             ...(start ? { createdAt: { gte: start } } : {}),
-            ...(end ? { createdAt: { lte: end } } : {})
+            ...(endExclusive ? { createdAt: { lt: endExclusive } } : {})
           },
           select: {
             id: true,
@@ -121,7 +121,7 @@ export default async function SupplierDetailPage({
       take: 50,
     }),
     features.advancedReports
-      ? getSupplierSalesReport(business.id, { start: mtdStart, end: mtdEnd, supplierId: params.id })
+      ? getSupplierSalesReport(business.id, { start: mtdStart, end: mtdEndExclusive, supplierId: params.id })
       : Promise.resolve(null),
   ]);
 
@@ -380,11 +380,11 @@ export default async function SupplierDetailPage({
         <form className="mt-4 grid gap-4 md:grid-cols-4">
           <div>
             <label className="label">From</label>
-            <input className="input" name="from" type="date" defaultValue={start?.toISOString().slice(0, 10)} />
+            <input className="input" name="from" type="date" defaultValue={searchParams?.from ?? ''} />
           </div>
           <div>
             <label className="label">To</label>
-            <input className="input" name="to" type="date" defaultValue={end?.toISOString().slice(0, 10)} />
+            <input className="input" name="to" type="date" defaultValue={searchParams?.to ?? ''} />
           </div>
           <div className="flex items-end">
             <button className="btn-primary w-full">Filter</button>
@@ -392,8 +392,8 @@ export default async function SupplierDetailPage({
           <div className="flex items-end">
             <DownloadLink
               className="btn-ghost w-full text-xs"
-              href={`/suppliers/${supplier.id}/statement?from=${start?.toISOString().slice(0, 10) ?? ''}&to=${
-                end?.toISOString().slice(0, 10) ?? ''
+              href={`/suppliers/${supplier.id}/statement?from=${searchParams?.from ?? ''}&to=${
+                searchParams?.to ?? ''
               }`}
               fallbackFilename={`supplier-statement-${supplier.id.slice(0, 8)}.csv`}
             >

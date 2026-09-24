@@ -7,6 +7,8 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { getBusinessStores } from '@/lib/services/stores';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
+import { localDateInstant } from '@/lib/reports/reporting-clock';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 
 export default async function SalesPage({
@@ -27,22 +29,18 @@ export default async function SalesPage({
 
   const q = searchParams?.q?.trim() ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = formatBusinessLocalDateKey(new Date(), business.timezone);
   const fromParam = searchParams?.from ?? todayIso;
   const toParam   = searchParams?.to   ?? todayIso;
   const { stores, selectedStoreId: rawStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
   const selectedStoreId = rawStoreId ?? 'ALL';
 
   // Build date range filter
-  const dateFilter: { gte?: Date; lte?: Date } = {};
-  if (fromParam) {
-    const d = new Date(fromParam);
-    if (!isNaN(d.getTime())) dateFilter.gte = d;
-  }
-  if (toParam) {
-    const d = new Date(toParam + 'T23:59:59.999');
-    if (!isNaN(d.getTime())) dateFilter.lte = d;
-  }
+  const dateFilter: { gte?: Date; lt?: Date } = {};
+  const rangeStart = localDateInstant(fromParam, 'start', business.timezone);
+  const rangeEnd = localDateInstant(toParam, 'endExclusive', business.timezone);
+  if (rangeStart) dateFilter.gte = rangeStart;
+  if (rangeEnd) dateFilter.lt = rangeEnd;
 
   const where = {
     businessId: business.id,

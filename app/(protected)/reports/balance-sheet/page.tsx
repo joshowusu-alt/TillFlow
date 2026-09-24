@@ -5,6 +5,8 @@ import EmptyState from '@/components/EmptyState';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
 import { getBalanceSheet } from '@/lib/reports/financials';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
+import { businessDayWindow, localDateInstant } from '@/lib/reports/reporting-clock';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import PlanFeatureBadge from '@/components/PlanFeatureBadge';
 import { getFeatures } from '@/lib/features';
@@ -37,16 +39,17 @@ export default async function BalanceSheetPage({
     );
   }
 
-  const asOfRaw = searchParams?.asOf ? new Date(searchParams.asOf) : new Date();
-  // Normalize to end-of-day so same-day entries are included
-  const asOf = new Date(asOfRaw.getFullYear(), asOfRaw.getMonth(), asOfRaw.getDate(), 23, 59, 59, 999);
+  const asOfKey = searchParams?.asOf
+    ?? formatBusinessLocalDateKey(new Date(), business.timezone);
+  const asOf = localDateInstant(asOfKey, 'endExclusive', business.timezone)
+    ?? businessDayWindow(new Date(), business.timezone).endExclusive;
   const sheet = await getBalanceSheet(business.id, asOf);
   // Check if any individual account line has activity, not just the net total.
   // (Buying inventory with cash nets totalAssets to 0, but data still exists.)
   const hasData = sheet.assets.some(l => l.balancePence !== 0)
     || sheet.liabilities.some(l => l.balancePence !== 0)
     || sheet.equity.some(l => l.balancePence !== 0);
-  const asOfStr = asOf.toISOString().slice(0, 10);
+  const asOfStr = asOfKey;
 
   // Detect negative cash: cash from journals before opening capital was added.
   // openingCapital is already baked into the Cash on Hand line by getBalanceSheet,

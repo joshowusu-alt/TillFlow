@@ -95,7 +95,7 @@ describe('getBalanceSheet asOf filtering', () => {
         where: {
           journalEntry: {
             businessId: bizId,
-            entryDate: { lte: asOf },
+            entryDate: { lt: asOf },
           },
         },
       })

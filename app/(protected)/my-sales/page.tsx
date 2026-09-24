@@ -12,6 +12,7 @@ import {
   CASHIER_MY_SALES_ROUTE,
   summarizePaymentMethods,
 } from '@/lib/services/cashier-my-sales';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 
 function formatPaymentLabel(method: string) {
   return method.replace(/_/g, ' ');
@@ -38,7 +39,7 @@ export default async function MySalesPage({
   }
 
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = formatBusinessLocalDateKey(new Date(), business.timezone);
   const fromParam = searchParams?.from ?? '';
   const toParam = searchParams?.to ?? todayIso;
 
@@ -47,6 +48,7 @@ export default async function MySalesPage({
     cashierUserId: user.id,
     from: fromParam || undefined,
     to: toParam || undefined,
+    timeZone: business.timezone,
   });
 
   const [totalCount, sales] = await Promise.all([

@@ -310,7 +310,7 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
 export async function getCustomer(
   id: string,
   businessId: string,
-  opts: { from?: Date; to?: Date } = {}
+  opts: { from?: Date; endExclusive?: Date } = {}
 ) {
   return prisma.customer.findFirst({
     where: { id, businessId },
@@ -318,7 +318,7 @@ export async function getCustomer(
       salesInvoices: {
         where: {
           ...(opts.from ? { createdAt: { gte: opts.from } } : {}),
-          ...(opts.to ? { createdAt: { lte: opts.to } } : {}),
+          ...(opts.endExclusive ? { createdAt: { lt: opts.endExclusive } } : {}),
         },
         select: {
           id: true,

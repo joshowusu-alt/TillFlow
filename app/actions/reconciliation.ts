@@ -11,6 +11,8 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { formString, formPence, formOptionalString } from '@/lib/form-helpers';
 import type { ActionResult } from '@/lib/action-utils';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
+import { localDateInstant } from '@/lib/reports/reporting-clock';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,6 +50,12 @@ export async function getReconciliationSummary(params: {
   return safeAction(async () => {
     const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
     const { from, to, storeId } = params;
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { timezone: true },
+    });
+    const start = localDateInstant(formatBusinessLocalDateKey(from, business?.timezone), 'start', business?.timezone) ?? from;
+    const endExclusive = localDateInstant(formatBusinessLocalDateKey(to, business?.timezone), 'endExclusive', business?.timezone) ?? to;
 
     // Get all stores for this business if no specific store
     const stores = storeId
@@ -66,7 +74,7 @@ export async function getReconciliationSummary(params: {
         salesInvoice: {
           businessId,
           storeId: { in: storeIds },
-          createdAt: { gte: from, lte: to },
+          createdAt: { gte: start, lt: endExclusive },
         },
       },
       select: {
@@ -91,7 +99,7 @@ export async function getReconciliationSummary(params: {
       where: {
         businessId,
         storeId: { in: storeIds },
-        date: { gte: from, lte: to },
+        date: { gte: start, lt: endExclusive },
       },
     });
 
@@ -149,8 +157,12 @@ export async function reconcilePaymentAction(formData: FormData): Promise<void> 
       return err('Invalid payment method');
     }
 
-    const date = new Date(dateStr + 'T00:00:00.000Z');
-    const dayEnd = new Date(dateStr + 'T23:59:59.999Z');
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { timezone: true },
+    });
+    const date = localDateInstant(dateStr, 'start', business?.timezone) ?? new Date(dateStr);
+    const dayEndExclusive = localDateInstant(dateStr, 'endExclusive', business?.timezone) ?? date;
 
     // Calculate system total for that date/method/store
     const payments = await prisma.salesPayment.findMany({
@@ -159,7 +171,7 @@ export async function reconcilePaymentAction(formData: FormData): Promise<void> 
         salesInvoice: {
           businessId,
           storeId,
-          createdAt: { gte: date, lte: dayEnd },
+          createdAt: { gte: date, lt: dayEndExclusive },
         },
       },
       select: { amountPence: true },
@@ -220,10 +232,13 @@ export async function getPaymentTransactions(params: {
     const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
     const { date, method, storeId } = params;
 
-    const dayStart = new Date(date);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(date);
-    dayEnd.setHours(23, 59, 59, 999);
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { timezone: true },
+    });
+    const dayKey = formatBusinessLocalDateKey(date, business?.timezone);
+    const dayStart = localDateInstant(dayKey, 'start', business?.timezone) ?? date;
+    const dayEndExclusive = localDateInstant(dayKey, 'endExclusive', business?.timezone) ?? date;
 
     const storeFilter = storeId
       ? { storeId }
@@ -235,7 +250,7 @@ export async function getPaymentTransactions(params: {
         salesInvoice: {
           businessId,
           ...storeFilter,
-          createdAt: { gte: dayStart, lte: dayEnd },
+          createdAt: { gte: dayStart, lt: dayEndExclusive },
         },
       },
       select: {

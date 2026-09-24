@@ -77,6 +77,35 @@ export function addLocalDays(parts: LocalDateParts, days: number): LocalDatePart
 }
 
 /** Monday-start business week. End is the next Monday, exclusive. */
+/** Calendar month containing `instant`. End is the next local month at 00:00, exclusive. */
+export function businessMonthWindow(instant: Date, timeZone?: string | null): HalfOpenWindow {
+  const zone = resolveBusinessTimeZone(timeZone);
+  const local = getBusinessDayBounds(instant, zone).localDate;
+  const start = { year: local.year, month: local.month, day: 1 };
+  const nextMonth = local.month === 12
+    ? { year: local.year + 1, month: 1, day: 1 }
+    : { year: local.year, month: local.month + 1, day: 1 };
+  const startBounds = getBusinessCalendarDayBounds(start, zone);
+  const endBounds = getBusinessCalendarDayBounds(nextMonth, zone);
+  return {
+    timeZone: zone,
+    startInclusive: startBounds.dayStart,
+    endExclusive: endBounds.dayStart,
+  };
+}
+
+/** Business-local midnight, or the following local midnight when `edge` is exclusive. */
+export function localDateInstant(
+  key: string | null | undefined,
+  edge: 'start' | 'endExclusive',
+  timeZone?: string | null,
+): Date | undefined {
+  const parts = parseBusinessLocalDateKey(key);
+  if (!parts) return undefined;
+  const bounds = getBusinessCalendarDayBounds(parts, timeZone);
+  return edge === 'start' ? bounds.dayStart : bounds.dayEndExclusive;
+}
+
 export function businessWeekWindow(now: Date, timeZone?: string | null, offsetWeeks = 0): HalfOpenWindow {
   const zone = resolveBusinessTimeZone(timeZone);
   const local = getBusinessDayBounds(now, zone).localDate;

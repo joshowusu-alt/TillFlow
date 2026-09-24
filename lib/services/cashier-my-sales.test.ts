@@ -31,8 +31,8 @@ describe('cashier My Sales access', () => {
 
     expect(where.businessId).toBe('biz-1');
     expect(where.cashierUserId).toBe('cashier-1');
-    expect(where.createdAt?.gte).toEqual(new Date('2026-07-01'));
-    expect(where.createdAt?.lte).toEqual(new Date('2026-07-03T23:59:59.999'));
+    expect(where.createdAt?.gte).toEqual(new Date('2026-07-01T00:00:00.000Z'));
+    expect(where.createdAt?.lt).toEqual(new Date('2026-07-04T00:00:00.000Z'));
     expect(mySalesPage).toContain('cashierUserId: user.id');
     expect(mySalesPage).toContain('buildCashierMySalesWhere');
   });

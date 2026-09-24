@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
+import { localDateInstant } from '@/lib/reports/reporting-clock';
 
 const csvEscape = (value: string | number | null | undefined) => {
   if (value === null || value === undefined) return '';
@@ -26,10 +27,12 @@ export async function GET(
   const url = new URL(request.url);
   const from = url.searchParams.get('from');
   const to = url.searchParams.get('to');
-  const start = from ? new Date(from) : undefined;
-  const end = to ? new Date(to) : undefined;
-  if (start) start.setHours(0, 0, 0, 0);
-  if (end) end.setHours(23, 59, 59, 999);
+  const business = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { timezone: true },
+  });
+  const start = localDateInstant(from, 'start', business?.timezone);
+  const endExclusive = localDateInstant(to, 'endExclusive', business?.timezone);
 
   const supplier = await prisma.supplier.findFirst({
     where: { id: params.id, businessId: user.businessId },
@@ -37,7 +40,7 @@ export async function GET(
       purchaseInvoices: {
         where: {
           ...(start ? { createdAt: { gte: start } } : {}),
-          ...(end ? { createdAt: { lte: end } } : {})
+          ...(endExclusive ? { createdAt: { lt: endExclusive } } : {})
         },
         include: { payments: true },
         orderBy: { createdAt: 'asc' }
