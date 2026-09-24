@@ -7,6 +7,7 @@
  * Expected cash uses open-shift sum semantics via resolveReadinessExpectedCashPence.
  */
 import { prisma } from '@/lib/prisma';
+import { expectedCashPenceFromEntries } from '@/lib/reports/expected-cash';
 import { resolveReadinessExpectedCashPence } from '@/lib/reports/home-expected-cash';
 import { measureHomePerf } from '@/lib/performance/home-perf-instrumentation';
 import { assertHomeLoaderAllowed } from '@/lib/owner-home/force-fail';
@@ -28,7 +29,7 @@ export type HomePerformanceSummary = {
   todayTransactionCount: number;
   yesterdayRevenuePence: number;
   yesterdayTransactionCount: number;
-  expectedCashPence: number;
+  expectedCashPence: number | null;
   openShiftCount: number;
   openShiftTills: OpenShiftTillIdentity[];
   productCount: number;
@@ -106,16 +107,50 @@ export async function getHomePerformanceSummary(
           till: { store: { businessId } },
         },
         select: {
-          expectedCashPence: true,
-          till: { select: { name: true, store: { select: { name: true } } } },
+          id: true,
+          tillId: true,
+          till: { select: { storeId: true, name: true, store: { select: { name: true } } } },
+          cashDrawerEntries: {
+            select: {
+              entryType: true,
+              amountPence: true,
+              businessId: true,
+              storeId: true,
+              tillId: true,
+              shiftId: true,
+            },
+          },
         },
       }),
       prisma.product.count({ where: { businessId } }),
     ]);
 
     const expectedCashPence = await resolveReadinessExpectedCashPence({
-      openShiftExpectedCashPence: openShifts.map((s) => s.expectedCashPence),
+      openShifts: openShifts.map((shift) => ({
+        businessId,
+        storeId: shift.till.storeId,
+        tillId: shift.tillId,
+        shiftId: shift.id,
+        entries: shift.cashDrawerEntries,
+      })),
     });
+    if (
+      expectedCashPence !== null &&
+      expectedCashPence !==
+        openShifts.reduce(
+          (sum, shift) =>
+            sum +
+            expectedCashPenceFromEntries(shift.cashDrawerEntries, {
+              businessId,
+              storeId: shift.till.storeId,
+              tillId: shift.tillId,
+              shiftId: shift.id,
+            }),
+          0,
+        )
+    ) {
+      throw new Error('Home expected cash diverged from drawer entries');
+    }
 
     const hrefScope = {
       periodKey: todayScope.periodKey,

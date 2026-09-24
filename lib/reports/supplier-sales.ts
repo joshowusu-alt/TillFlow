@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { productRankRevenuePence } from '@/lib/reports/product-rank';
+import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
 
 // ---------------------------------------------------------------------------
 // Output types
@@ -80,24 +80,32 @@ export async function getSupplierSalesReport(
   }
 
   // Step 2: Sales lines for those products, in the date range, excluding void/returned.
-  const salesLines =
+  const salesInvoices =
     linkedProducts.length > 0
-      ? await prisma.salesInvoiceLine.findMany({
+      ? await prisma.salesInvoice.findMany({
           where: {
-            productId: { in: linkedProducts.map((p) => p.id) },
-            salesInvoice: {
-              businessId,
-              createdAt: { gte: start, lt: end },
-              paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-            },
+            businessId,
+            createdAt: { gte: start, lt: end },
+            paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+            lines: { some: { productId: { in: linkedProducts.map((p) => p.id) } } },
           },
           select: {
-            productId: true,
-            salesInvoiceId: true,
-            qtyBase: true,
-            lineSubtotalPence: true,
-            lineDiscountPence: true,
-            promoDiscountPence: true,
+            id: true,
+            paymentStatus: true,
+            discountPence: true,
+            vatPence: true,
+            totalPence: true,
+            lines: {
+              select: {
+                productId: true,
+                qtyBase: true,
+                lineSubtotalPence: true,
+                lineDiscountPence: true,
+                promoDiscountPence: true,
+                lineVatPence: true,
+                lineTotalPence: true,
+              },
+            },
           },
         })
       : [];
@@ -136,32 +144,47 @@ export async function getSupplierSalesReport(
     });
   }
 
-  for (const line of salesLines) {
-    const product = productMap.get(line.productId);
-    if (!product) continue;
-    const sid = product.preferredSupplierId!;
-    const supplier = supplierAcc.get(sid);
-    if (!supplier) continue;
-
-    supplier.totalRevenuePence += productRankRevenuePence(line);
-    supplier.totalQtyBase += line.qtyBase;
-    supplier.invoiceIds.add(line.salesInvoiceId);
-
-    const existing = supplier.products.get(line.productId);
-    if (existing) {
-      existing.revenuePence += productRankRevenuePence(line);
-      existing.qtyBase += line.qtyBase;
-      existing.invoiceIds.add(line.salesInvoiceId);
-    } else {
-      supplier.products.set(line.productId, {
-        productId: product.id,
-        name: product.name,
-        sku: product.sku,
-        revenuePence: productRankRevenuePence(line),
-        qtyBase: line.qtyBase,
-        invoiceIds: new Set([line.salesInvoiceId]),
-      });
-    }
+  for (const invoice of salesInvoices) {
+    const ranked = rankRecognisedProductSales({
+      paymentStatus: invoice.paymentStatus,
+      discountPence: invoice.discountPence,
+      vatPence: invoice.vatPence,
+      totalPence: invoice.totalPence,
+      lines: invoice.lines.map((line) => ({
+        productId: line.productId,
+        lineSubtotalPence: line.lineSubtotalPence,
+        lineDiscountPence: line.lineDiscountPence,
+        promoDiscountPence: line.promoDiscountPence,
+        lineVatPence: line.lineVatPence,
+        lineTotalPence: line.lineTotalPence,
+      })),
+    });
+    if (!ranked.ok) continue;
+    ranked.lines.forEach((rankedLine, index) => {
+      const line = invoice.lines[index];
+      const product = productMap.get(line.productId);
+      if (!product?.preferredSupplierId) return;
+      const supplier = supplierAcc.get(product.preferredSupplierId);
+      if (!supplier) return;
+      supplier.totalRevenuePence += rankedLine.amountPence;
+      supplier.totalQtyBase += line.qtyBase;
+      supplier.invoiceIds.add(invoice.id);
+      const existing = supplier.products.get(line.productId);
+      if (existing) {
+        existing.revenuePence += rankedLine.amountPence;
+        existing.qtyBase += line.qtyBase;
+        existing.invoiceIds.add(invoice.id);
+      } else {
+        supplier.products.set(line.productId, {
+          productId: product.id,
+          name: product.name,
+          sku: product.sku,
+          revenuePence: rankedLine.amountPence,
+          qtyBase: line.qtyBase,
+          invoiceIds: new Set([invoice.id]),
+        });
+      }
+    });
   }
 
   // Step 4: Convert to output shape, sorted revenue desc.
@@ -241,7 +264,34 @@ export async function getTopLinkedSupplierForMonth(
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
     },
-    select: { productId: true, qtyBase: true, lineSubtotalPence: true, lineDiscountPence: true, promoDiscountPence: true },
+    select: {
+      productId: true,
+      qtyBase: true,
+      lineSubtotalPence: true,
+      lineDiscountPence: true,
+      promoDiscountPence: true,
+      lineVatPence: true,
+      lineTotalPence: true,
+      salesInvoice: {
+        select: {
+          id: true,
+          paymentStatus: true,
+          discountPence: true,
+          vatPence: true,
+          totalPence: true,
+          lines: {
+            select: {
+              productId: true,
+              lineSubtotalPence: true,
+              lineDiscountPence: true,
+              promoDiscountPence: true,
+              lineVatPence: true,
+              lineTotalPence: true,
+            },
+          },
+        },
+      },
+    },
   });
 
   if (salesLines.length === 0) return null;
@@ -253,20 +303,35 @@ export async function getTopLinkedSupplierForMonth(
 
   const supplierAcc = new Map<string, { name: string; revenuePence: number; qtyBase: number }>();
 
+  const rankedByInvoice = new Map<string, Map<string, number>>();
+  for (const line of salesLines) {
+    if (rankedByInvoice.has(line.salesInvoice.id)) continue;
+    const ranked = rankRecognisedProductSales(line.salesInvoice);
+    const amounts = new Map<string, number>();
+    if (ranked.ok) {
+      for (const row of ranked.lines) {
+        amounts.set(row.productId, (amounts.get(row.productId) ?? 0) + row.amountPence);
+      }
+    }
+    rankedByInvoice.set(line.salesInvoice.id, amounts);
+  }
+
   for (const line of salesLines) {
     const supplier = productToSupplier.get(line.productId);
     if (!supplier) continue;
+    const rankedAmount = rankedByInvoice.get(line.salesInvoice.id)?.get(line.productId) ?? 0;
     const acc = supplierAcc.get(supplier.id);
     if (acc) {
-      acc.revenuePence += productRankRevenuePence(line);
+      acc.revenuePence += rankedAmount;
       acc.qtyBase += line.qtyBase;
     } else {
       supplierAcc.set(supplier.id, {
         name: supplier.name,
-        revenuePence: productRankRevenuePence(line),
+        revenuePence: rankedAmount,
         qtyBase: line.qtyBase,
       });
     }
+    rankedByInvoice.get(line.salesInvoice.id)?.set(line.productId, 0);
   }
 
   // Step 4: Find the supplier with highest MTD revenue

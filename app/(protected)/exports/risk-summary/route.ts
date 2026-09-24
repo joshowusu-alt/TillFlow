@@ -22,13 +22,14 @@ export async function GET(request: Request) {
 
   const from = parseDate(url.searchParams.get('from'), weekAgo);
   const to = parseDate(url.searchParams.get('to'), today);
-  to.setHours(23, 59, 59, 999);
+  const endExclusive = new Date(to);
+  endExclusive.setHours(24, 0, 0, 0);
   const storeId = url.searchParams.get('storeId') || 'ALL';
   const status = url.searchParams.get('status') || 'OPEN';
 
   const where: any = {
     businessId: user.businessId,
-    occurredAt: { gte: from, lte: to },
+    occurredAt: { gte: from, lt: endExclusive },
   };
   if (storeId !== 'ALL') {
     where.storeId = storeId;
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
     prisma.salesInvoice.findMany({
       where: {
         businessId: user.businessId,
-        createdAt: { gte: from, lte: to },
+        createdAt: { gte: from, lt: to },
         ...(storeId !== 'ALL' ? { storeId } : {}),
         OR: [
           { discountPence: { gt: 0 } },

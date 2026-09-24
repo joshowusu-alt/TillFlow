@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { productRankRevenuePence } from '@/lib/reports/product-rank';
+import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import AnalyticsClient from './AnalyticsClient';
 
@@ -32,6 +32,9 @@ export default async function AnalyticsContent({
           },
           select: {
             createdAt: true,
+            paymentStatus: true,
+            discountPence: true,
+            vatPence: true,
             totalPence: true,
             lines: {
               select: {
@@ -40,6 +43,8 @@ export default async function AnalyticsContent({
                 lineSubtotalPence: true,
                 lineDiscountPence: true,
                 promoDiscountPence: true,
+                lineVatPence: true,
+                lineTotalPence: true,
                 lineCostPence: true,
                 product: {
                   select: {
@@ -137,13 +142,21 @@ export default async function AnalyticsContent({
       const productStats = new Map<string, { name: string; revenue: number; cost: number }>();
 
       recentSales.forEach((sale) => {
+        const ranked = rankRecognisedProductSales(sale);
+        if (!ranked.ok) return;
+        const amountByProduct = new Map<string, number>();
+        for (const row of ranked.lines) {
+          amountByProduct.set(row.productId, (amountByProduct.get(row.productId) ?? 0) + row.amountPence);
+        }
         sale.lines.forEach((line) => {
           const existing = productStats.get(line.productId) || {
             name: line.product.name,
             revenue: 0,
             cost: 0,
           };
-          existing.revenue += productRankRevenuePence(line);
+          const rankedAmount = amountByProduct.get(line.productId) ?? 0;
+          existing.revenue += rankedAmount;
+          amountByProduct.set(line.productId, 0);
           existing.cost +=
             line.lineCostPence > 0
               ? line.lineCostPence

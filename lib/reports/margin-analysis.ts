@@ -180,7 +180,7 @@ export async function getMarginAnalysisSnapshot({
 				salesInvoice: {
 					businessId,
 					...(storeId ? { storeId } : {}),
-					createdAt: { gte: start, lte: end },
+					createdAt: { gte: start, lt: end },
 					paymentStatus: { notIn: ['RETURNED', 'VOID'] },
 				},
 			},

@@ -76,6 +76,17 @@ export function addLocalDays(parts: LocalDateParts, days: number): LocalDatePart
   };
 }
 
+/** Monday-start business week. End is the next Monday, exclusive. */
+export function businessWeekWindow(now: Date, timeZone?: string | null, offsetWeeks = 0): HalfOpenWindow {
+  const zone = resolveBusinessTimeZone(timeZone);
+  const local = getBusinessDayBounds(now, zone).localDate;
+  const weekday = new Date(Date.UTC(local.year, local.month - 1, local.day)).getUTCDay();
+  const mondayOffset = (weekday === 0 ? -6 : 1 - weekday) + offsetWeeks * 7;
+  const start = addLocalDays(local, mondayOffset);
+  const sunday = addLocalDays(start, 6);
+  return windowForLocalDates(start, sunday, zone);
+}
+
 export function localDateKey(parts: LocalDateParts): string {
   return [
     parts.year,

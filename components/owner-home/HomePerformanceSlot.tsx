@@ -54,7 +54,7 @@ export default async function HomePerformanceSlot({
           {
             label: 'Expected Cash',
             displayLabel: 'Expected Cash',
-            value: formatCurrency(data.expectedCashPence),
+            value: data.expectedCashPence == null ? 'No open shift' : formatCurrency(data.expectedCashPence),
             href: cashDrawerHref,
             footer: formatExpectedCashFooter({
               openShiftCount: data.openShiftCount,
@@ -83,7 +83,7 @@ export default async function HomePerformanceSlot({
           {
             label: 'Expected Cash',
             displayLabel: 'Expected Cash',
-            value: formatCurrency(data.expectedCashPence),
+            value: data.expectedCashPence == null ? 'No open shift' : formatCurrency(data.expectedCashPence),
             href: cashDrawerHref,
             footer: formatExpectedCashFooter({
               openShiftCount: data.openShiftCount,

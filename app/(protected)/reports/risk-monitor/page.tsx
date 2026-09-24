@@ -55,7 +55,7 @@ export default async function RiskMonitorPage({
 
   const alertWhere: any = {
     businessId: business.id,
-    occurredAt: { gte: from, lte: to },
+    occurredAt: { gte: from, lt: to },
   };
   if (storeId !== 'ALL') {
     alertWhere.storeId = storeId;
@@ -77,7 +77,7 @@ export default async function RiskMonitorPage({
     prisma.salesInvoice.findMany({
       where: {
         businessId: business.id,
-        createdAt: { gte: from, lte: to },
+        createdAt: { gte: from, lt: to },
         ...(storeId !== 'ALL' ? { storeId } : {}),
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         OR: [

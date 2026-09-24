@@ -26,7 +26,8 @@ export async function GET(request: Request) {
 
   const from = parseDate(url.searchParams.get('from'), weekAgo);
   const to = parseDate(url.searchParams.get('to'), today);
-  to.setHours(23, 59, 59, 999);
+  const endExclusive = new Date(to);
+  endExclusive.setHours(24, 0, 0, 0);
   const storeId = url.searchParams.get('storeId') || 'ALL';
 
   const [shifts, business] = await Promise.all([
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
             ...(storeId === 'ALL' ? {} : { id: storeId }),
           },
         },
-        openedAt: { gte: from, lte: to },
+        openedAt: { gte: from, lt: endExclusive },
       },
       orderBy: { openedAt: 'desc' },
       select: {

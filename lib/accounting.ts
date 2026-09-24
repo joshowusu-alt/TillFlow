@@ -204,24 +204,3 @@ export function sum(lines: { debitPence: number; creditPence: number }[]) {
   );
 }
 
-/**
- * Computes the outstanding (unpaid) balance for a single invoice.
- *
- * Returns 0 for RETURNED or VOID invoices. When `paymentStatus` is absent the
- * check is skipped, which is safe when the calling query already filters those
- * statuses at the DB level.
- */
-export function computeOutstandingBalance(invoice: {
-  totalPence: number;
-  paymentStatus?: string;
-  payments: { amountPence: number }[];
-}): number {
-  if (invoice.paymentStatus && ['RETURNED', 'VOID'].includes(invoice.paymentStatus)) {
-    return 0;
-  }
-  if (invoice.paymentStatus === 'PAID') {
-    return 0;
-  }
-  const paid = invoice.payments.reduce((sum, p) => sum + p.amountPence, 0);
-  return Math.max(invoice.totalPence - paid, 0);
-}

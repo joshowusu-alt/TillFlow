@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import DueDateBadge from '@/components/DueDateBadge';
 import RemainingBalance from '@/components/RemainingBalance';
@@ -53,6 +53,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
           transactionNumber: true,
           createdAt: true,
           dueDate: true,
+          paymentStatus: true,
           totalPence: true,
           supplier: { select: { id: true, name: true } },
           payments: { select: { amountPence: true, paidAt: true, method: true } }
@@ -112,7 +113,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
   const outstandingInvoices = invoices
     .map((invoice) => ({
       ...invoice,
-      outstanding: computeOutstandingBalance(invoice),
+      outstanding: payableDocumentBalance(invoice).balancePence,
     }))
     .filter((invoice) => invoice.outstanding > 0);
 

@@ -1,5 +1,6 @@
 import { getOwnerBrief, type OwnerBrief } from '@/lib/owner-intel';
 import { prisma } from '@/lib/prisma';
+import { expectedCashPenceFromEntries } from '@/lib/reports/expected-cash';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import { formatMoney } from '@/lib/format';
@@ -255,13 +256,27 @@ async function _getOwnerDashboardSnapshot(
 				},
 				_sum: { amountPence: true },
 			}),
-		prisma.shift.aggregate({
+		prisma.shift.findMany({
 			where: {
 				closedAt: null,
+				status: 'OPEN',
 				till: { store: { businessId, ...tillStoreFilter } },
 			},
-			_sum: { expectedCashPence: true },
-			_count: { id: true },
+			select: {
+				id: true,
+				tillId: true,
+				till: { select: { storeId: true, store: { select: { businessId: true } } } },
+				cashDrawerEntries: {
+					select: {
+						entryType: true,
+						amountPence: true,
+						businessId: true,
+						storeId: true,
+						tillId: true,
+						shiftId: true,
+					},
+				},
+			},
 		}),
 		prisma.salesInvoice.findMany({
 			where: {
@@ -555,9 +570,19 @@ async function _getOwnerDashboardSnapshot(
 		? { label: 'Costs incomplete', direction: 'flat' as const, tone: 'neutral' as const }
 		: describeChange(kpis.grossMarginPence, yesterdayGrossProfit);
 	const transactionTrend = describeChange(kpis.txCount, normalizedYesterdaySales._count.id);
-	const cashTodayPence = openTillCash._count.id > 0
-		? (openTillCash._sum.expectedCashPence ?? 0)
-		: 0;
+	const cashTodayPence = openTillCash.length === 0
+		? null
+		: openTillCash.reduce(
+			(sum, shift) =>
+				sum +
+				expectedCashPenceFromEntries(shift.cashDrawerEntries, {
+					businessId: shift.till.store.businessId,
+					storeId: shift.till.storeId,
+					tillId: shift.tillId,
+					shiftId: shift.id,
+				}),
+			0,
+		);
 	const cashTrend = describeChange(kpis.paymentSplit.CASH ?? 0, normalizedYesterdayCashPayments._sum.amountPence ?? 0);
 
 	const overviewCards: BusinessHealthCard[] = [
@@ -598,13 +623,13 @@ async function _getOwnerDashboardSnapshot(
 		{
 			id: 'cash-in-till',
 			label: 'Cash in Till',
-			value: cashTodayPence,
+			value: cashTodayPence ?? 0,
 			kind: 'money',
-			subtitle: openTillCash._count.id > 0
-				? `${openTillCash._count.id} open till${openTillCash._count.id === 1 ? '' : 's'} reporting expected cash`
+			subtitle: openTillCash.length > 0
+				? `${openTillCash.length} open till${openTillCash.length === 1 ? '' : 's'} reporting expected cash`
 				: 'No open shift. Expected cash is not taken from closed tills.',
 			trend: cashTrend,
-			tone: cashTodayPence > 0 ? 'success' : 'neutral',
+			tone: (cashTodayPence ?? 0) > 0 ? 'success' : 'neutral',
 			href: '/reports/cash-drawer',
 		},
 		{

@@ -86,16 +86,13 @@ describe('GET /exports/purchases', () => {
 
 		const response = await GET(new Request('https://example.com/exports/purchases?period=custom&from=2026-04-01&to=2026-04-06'));
 		const body = await response.json();
-		const expectedStart = new Date('2026-04-01');
-		expectedStart.setHours(0, 0, 0, 0);
-		// Reporting windows are half-open. This export still filters with lte, so the
-		// exact end instant remains included until that route is migrated.
+		const expectedStart = new Date('2026-04-01T00:00:00.000Z');
 		const expectedEnd = new Date('2026-04-07T00:00:00.000Z');
 
 		const query = purchaseInvoiceLineFindManyMock.mock.calls[0][0];
 		expect(query.where.purchaseInvoice.businessId).toBe('biz-1');
 		expect(query.where.purchaseInvoice.createdAt.gte.toISOString()).toBe(expectedStart.toISOString());
-		expect(query.where.purchaseInvoice.createdAt.lte.toISOString()).toBe(expectedEnd.toISOString());
+		expect(query.where.purchaseInvoice.createdAt.lt.toISOString()).toBe(expectedEnd.toISOString());
 
 		expect(body.exportOptions.reportTitle).toBe('Purchases Report — Product Detail');
 		expect(body.exportOptions.rows).toHaveLength(1);

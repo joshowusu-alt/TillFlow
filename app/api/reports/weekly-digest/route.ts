@@ -2,15 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireBusiness } from '@/lib/auth';
 import { getWeeklyDigestData } from '@/lib/reports/weekly-digest';
 import { formatMoney } from '@/lib/format';
-
-function weekStart(offsetWeeks = 0) {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = (day === 0 ? -6 : 1 - day) + offsetWeeks * 7;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+import { businessWeekWindow } from '@/lib/reports/reporting-clock';
 
 export async function GET(request: Request) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -21,12 +13,11 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const weekOffset = Number(url.searchParams.get('week') ?? -1);
 
-  const wStart = weekStart(weekOffset);
-  const wEnd = new Date(wStart);
-  wEnd.setDate(wEnd.getDate() + 6);
-  wEnd.setHours(23, 59, 59, 999);
+  const week = businessWeekWindow(new Date(), business.timezone, weekOffset);
+  const wStart = week.startInclusive;
+  const wEnd = new Date(week.endExclusive.getTime() - 1);
 
-  const data = await getWeeklyDigestData(business.id, wStart, wEnd);
+  const data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive);
   const currency = business.currency;
   const moneyOrIncomplete = (pence: number | null) => (
     pence == null ? 'Costs incomplete' : formatMoney(pence, currency)

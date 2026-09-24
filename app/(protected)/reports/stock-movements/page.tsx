@@ -109,7 +109,7 @@ export default async function StockMovementsPage({
 
   const where = {
     storeId: storeFilter,
-    createdAt: { gte: from, lte: to },
+    createdAt: { gte: from, lt: to },
     ...(typeFilter ? { type: typeFilter } : {}),
     ...(q ? { product: { name: { contains: q, mode: 'insensitive' as const } } } : {}),
   };

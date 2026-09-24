@@ -2,21 +2,30 @@ import { describe, expect, it } from 'vitest';
 import { resolveReadinessExpectedCashPence } from '@/lib/reports/home-expected-cash';
 
 describe('resolveReadinessExpectedCashPence', () => {
-  it('uses open shift expected cash as the source of truth', async () => {
+  it('sums scoped open-shift drawer entries', async () => {
     await expect(resolveReadinessExpectedCashPence({
-      openShiftExpectedCashPence: [7_480_00, 125_00],
+      openShifts: [
+        {
+          businessId: 'biz',
+          storeId: 'store',
+          tillId: 'till-1',
+          shiftId: 'shift-1',
+          entries: [{ entryType: 'OPEN_FLOAT', amountPence: 7_480_00, businessId: 'biz', storeId: 'store', tillId: 'till-1', shiftId: 'shift-1' }],
+        },
+        {
+          businessId: 'biz',
+          storeId: 'store',
+          tillId: 'till-2',
+          shiftId: 'shift-2',
+          entries: [{ entryType: 'CASH_SALE', amountPence: 125_00, businessId: 'biz', storeId: 'store', tillId: 'till-2', shiftId: 'shift-2' }],
+        },
+      ],
     })).resolves.toBe(7_605_00);
   });
 
-  it('returns zero when no shift is open instead of showing a stale closed shift', async () => {
+  it('returns null when no shift is open', async () => {
     await expect(resolveReadinessExpectedCashPence({
-      openShiftExpectedCashPence: [],
-    })).resolves.toBe(0);
-  });
-
-  it('keeps expected cash at zero until a till is opened', async () => {
-    await expect(resolveReadinessExpectedCashPence({
-      openShiftExpectedCashPence: [],
-    })).resolves.toBe(0);
+      openShifts: [],
+    })).resolves.toBeNull();
   });
 });

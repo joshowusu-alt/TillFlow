@@ -14,7 +14,7 @@ export async function GET(request: Request) {
       where: {
         salesInvoice: {
           businessId: user.businessId,
-          createdAt: { gte: dateRange.start, lte: dateRange.end },
+          createdAt: { gte: dateRange.start, lt: dateRange.end },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
       },

@@ -1,4 +1,4 @@
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import { bucketForDueDate, type AgingBucket } from '@/lib/reliability/walkthrough-contracts';
 
 export type SnapshotInvoice = {
@@ -42,7 +42,10 @@ export function reconcileSupplierSnapshot(
   };
 
   for (const invoice of invoices) {
-    const outstanding = computeOutstandingBalance(invoice);
+    const outstanding = payableDocumentBalance({
+      ...invoice,
+      paymentStatus: invoice.paymentStatus ?? 'UNPAID',
+    }).balancePence;
     if (outstanding <= 0) continue;
     if (!invoice.supplierId) {
       orphanCreditOutstandingPence += outstanding;

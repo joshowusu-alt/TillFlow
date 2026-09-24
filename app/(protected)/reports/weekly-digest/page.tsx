@@ -6,17 +6,9 @@ import EmptyState from '@/components/EmptyState';
 import { formatMoney } from '@/lib/format';
 import { requireBusiness } from '@/lib/auth';
 import { getWeeklyDigestData } from '@/lib/reports/weekly-digest';
+import { businessWeekWindow } from '@/lib/reports/reporting-clock';
 
 export const dynamic = 'force-dynamic';
-
-function weekStart(offsetWeeks = 0) {
-  const d = new Date();
-  const day = d.getDay(); // 0=Sun
-  const diff = (day === 0 ? -6 : 1 - day) + offsetWeeks * 7;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function pctChange(current: number, previous: number): string {
   if (previous === 0) return current > 0 ? '+100%' : '—';
@@ -46,13 +38,12 @@ export default async function WeeklyDigestPage({
   }
 
   const weekOffset = Number(searchParams?.week ?? -1);
-  const wStart = weekStart(weekOffset);
-  const wEnd = new Date(wStart);
-  wEnd.setDate(wEnd.getDate() + 6);
-  wEnd.setHours(23, 59, 59, 999);
+  const week = businessWeekWindow(new Date(), business.timezone, weekOffset);
+  const wStart = week.startInclusive;
+  const wEnd = new Date(week.endExclusive.getTime() - 1);
 
   const currency = business.currency;
-  const data = await getWeeklyDigestData(business.id, wStart, wEnd);
+  const data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive);
   const dateLabel = `${wStart.toDateString()} – ${wEnd.toDateString()}`;
 
   const salesChange = pctChange(data.totalSalesPence, data.prevTotalSalesPence);

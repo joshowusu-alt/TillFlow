@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import { audit } from '@/lib/audit';
 import { UserError } from '@/lib/action-utils';
 
@@ -50,7 +50,7 @@ export async function listOrphanCreditPurchases(businessId: string): Promise<Orp
       paymentStatus: invoice.paymentStatus,
       totalPence: invoice.totalPence,
       paidPence,
-      outstandingPence: computeOutstandingBalance(invoice),
+      outstandingPence: payableDocumentBalance(invoice).balancePence,
     };
   });
 }

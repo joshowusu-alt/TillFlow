@@ -54,7 +54,7 @@ export default async function SaleCostCorrectionsPage({
         {
           salesInvoice: {
             businessId: business.id,
-            createdAt: { gte: start, lte: end },
+            createdAt: { gte: start, lt: end },
             paymentStatus: { notIn: ['RETURNED', 'VOID'] },
           },
         },

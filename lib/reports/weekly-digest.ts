@@ -6,9 +6,8 @@ import {
   resolveMoneyReceivedScope,
 } from '@/lib/reports/money-received';
 import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
-import { businessDayWindow } from '@/lib/reports/reporting-clock';
-import { evaluateMarginSet, resolveAuthoritativeLineCost, type MarginInvoiceInput, type MarginReturnKind } from '@/lib/reports/margin-line';
-import { productRankRevenuePence } from '@/lib/reports/product-rank';
+import { evaluateMarginLines, evaluateMarginSet, type MarginInvoiceInput, type MarginReturnKind } from '@/lib/reports/margin-line';
+import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
 
 export type WeeklyDigestData = {
   totalSalesPence: number;
@@ -40,12 +39,16 @@ type DigestLine = {
   lineDiscountPence: number;
   promoDiscountPence: number;
   lineCostPence: number;
+  lineVatPence: number;
+  lineTotalPence: number;
   product: { name: string; defaultCostBasePence: number };
 };
 
 type DigestInvoice = {
   paymentStatus: string;
   discountPence: number;
+  totalPence: number;
+  vatPence: number;
   salesReturn: { type: string } | null;
   lines: DigestLine[];
 };
@@ -69,6 +72,8 @@ function toMarginInvoices(invoices: DigestInvoice[]): MarginInvoiceInput[] {
       lineCostPence: line.lineCostPence,
       qtyBase: line.qtyBase,
       defaultCostBasePence: line.product.defaultCostBasePence,
+      productId: line.productId,
+      name: line.product.name,
     })),
   }));
 }
@@ -78,11 +83,9 @@ async function _getWeeklyDigestData(
   weekStartIso: string,
   weekEndIso: string
 ): Promise<WeeklyDigestData> {
-  const callerStart = new Date(weekStartIso);
-  const callerEnd = new Date(weekEndIso);
-  const weekStart = businessDayWindow(callerStart, DEFAULT_BUSINESS_TIMEZONE).startInclusive;
-  const weekEnd = businessDayWindow(callerEnd, DEFAULT_BUSINESS_TIMEZONE).endExclusive;
-  const prevStart = businessDayWindow(new Date(weekStart.getTime() - 7 * 86_400_000), DEFAULT_BUSINESS_TIMEZONE).startInclusive;
+  const weekStart = new Date(weekStartIso);
+  const weekEnd = new Date(weekEndIso);
+  const prevStart = new Date(weekStart.getTime() - 7 * 86_400_000);
   const prevEnd = weekStart;
 
   const [
@@ -154,6 +157,8 @@ async function _getWeeklyDigestData(
       select: {
         paymentStatus: true,
         discountPence: true,
+        totalPence: true,
+        vatPence: true,
         salesReturn: { select: { type: true } },
         lines: {
           select: {
@@ -162,8 +167,10 @@ async function _getWeeklyDigestData(
             lineSubtotalPence: true,
             lineDiscountPence: true,
             promoDiscountPence: true,
-            lineCostPence: true,
-            product: { select: { name: true, defaultCostBasePence: true } },
+        lineCostPence: true,
+        lineVatPence: true,
+        lineTotalPence: true,
+        product: { select: { name: true, defaultCostBasePence: true } },
           },
         },
       },
@@ -173,6 +180,8 @@ async function _getWeeklyDigestData(
       select: {
         paymentStatus: true,
         discountPence: true,
+        totalPence: true,
+        vatPence: true,
         salesReturn: { select: { type: true } },
         lines: {
           select: {
@@ -181,8 +190,10 @@ async function _getWeeklyDigestData(
             lineSubtotalPence: true,
             lineDiscountPence: true,
             promoDiscountPence: true,
-            lineCostPence: true,
-            product: { select: { name: true, defaultCostBasePence: true } },
+        lineCostPence: true,
+        lineVatPence: true,
+        lineTotalPence: true,
+        product: { select: { name: true, defaultCostBasePence: true } },
           },
         },
       },
@@ -211,48 +222,54 @@ async function _getWeeklyDigestData(
   }
   const totalReceiptsPence = Object.values(paymentSplit).reduce((sum, amount) => sum + amount, 0);
 
-  const productMap = new Map<string, { name: string; qty: number; revenue: number; profit: number; incomplete: boolean }>();
+  const sellerMap = new Map<string, { name: string; qty: number; revenue: number }>();
   for (const invoice of marginInvoices) {
-    if (invoice.paymentStatus === 'RETURNED' || invoice.paymentStatus === 'VOID') continue;
-    if (digestReturnKind(invoice) !== 'NONE' && digestReturnKind(invoice) !== 'FULL_RETURN' && digestReturnKind(invoice) !== 'FULL_VOID') {
-      continue;
-    }
-    for (const line of invoice.lines) {
-      const revenue = productRankRevenuePence(line);
-      const entry = productMap.get(line.productId) ?? {
-        name: line.product.name,
-        qty: 0,
-        revenue: 0,
-        profit: 0,
-        incomplete: false,
-      };
-      entry.qty += line.qtyBase;
-      entry.revenue += revenue;
-      const cost = resolveAuthoritativeLineCost({
+    const ranked = rankRecognisedProductSales({
+      paymentStatus: invoice.paymentStatus,
+      discountPence: invoice.discountPence,
+      vatPence: invoice.vatPence,
+      totalPence: invoice.totalPence,
+      lines: invoice.lines.map((line) => ({
+        productId: line.productId,
         lineSubtotalPence: line.lineSubtotalPence,
         lineDiscountPence: line.lineDiscountPence,
         promoDiscountPence: line.promoDiscountPence,
-        lineCostPence: line.lineCostPence,
-        qtyBase: line.qtyBase,
-        defaultCostBasePence: line.product.defaultCostBasePence,
-      });
-      if (cost.authoritative) entry.profit += revenue - cost.costPence;
-      else entry.incomplete = true;
-      productMap.set(line.productId, entry);
+        lineVatPence: line.lineVatPence,
+        lineTotalPence: line.lineTotalPence,
+      })),
+    });
+    if (!ranked.ok) continue;
+    ranked.lines.forEach((rankedLine, index) => {
+      const source = invoice.lines[index];
+      const entry = sellerMap.get(rankedLine.productId) ?? { name: source?.product.name ?? rankedLine.productId, qty: 0, revenue: 0 };
+      entry.qty += source?.qtyBase ?? 0;
+      entry.revenue += rankedLine.amountPence;
+      sellerMap.set(rankedLine.productId, entry);
+    });
+  }
+  const topSellers = Array.from(sellerMap.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  const evaluatedLines = evaluateMarginLines(toMarginInvoices(marginInvoices));
+  const marginByProduct = new Map<string, { name: string; revenue: number; profit: number }>();
+  if (margin.state === 'READY') {
+    for (const line of evaluatedLines.lines) {
+      if (!line.ready || line.profitPence == null || !line.productId) continue;
+      const entry = marginByProduct.get(line.productId) ?? { name: line.name ?? line.productId, revenue: 0, profit: 0 };
+      entry.revenue += line.revenuePence;
+      entry.profit += line.profitPence;
+      marginByProduct.set(line.productId, entry);
     }
   }
-  const topSellers = Array.from(productMap.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
-  const topMargin = margin.state === 'READY'
-    ? Array.from(productMap.values())
-      .filter((product) => !product.incomplete && product.revenue > 0)
+  const topMargin = margin.state !== 'READY'
+    ? []
+    : Array.from(marginByProduct.values())
+      .filter((product) => product.revenue > 0)
       .map((product) => ({
         name: product.name,
         revenue: product.revenue,
         marginPct: Math.round((product.profit / product.revenue) * 100),
       }))
       .sort((a, b) => b.marginPct - a.marginPct)
-      .slice(0, 5)
-    : [];
+      .slice(0, 5);
 
   // Risk by cashier
   const cashierRiskMap = new Map<string, { name: string; voids: number; discounts: number; cashVar: number }>();

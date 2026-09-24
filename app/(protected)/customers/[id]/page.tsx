@@ -7,7 +7,7 @@ import TagChips from '@/components/TagChips';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime, formatDate, formatRelativeDate } from '@/lib/format';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { parseTags } from '@/lib/contact-tags';
 import Link from 'next/link';
 import { updateCustomerAction } from '@/app/actions/customers';
@@ -95,7 +95,7 @@ export default async function CustomerDetailPage({
           paymentStatus: true,
           totalPence: true,
           payments: {
-            select: { id: true, amountPence: true, receivedAt: true, method: true, reference: true },
+            select: { id: true, amountPence: true, status: true, receivedAt: true, method: true, reference: true },
             orderBy: { receivedAt: 'asc' }
           }
         },
@@ -178,10 +178,11 @@ export default async function CustomerDetailPage({
     .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
 
   const invoices = customer.salesInvoices.map((invoice) => {
-    const balance = computeOutstandingBalance(invoice);
+    const document = receivableDocumentBalance(invoice);
     const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
-    const paid = invoice.payments.reduce((sum, p) => sum + p.amountPence, 0);
-    const effectivePaid = !isClosed && invoice.paymentStatus === 'PAID' ? invoice.totalPence : paid;
+    const paid = document.paidPence;
+    const effectivePaid = document.paidPence;
+    const balance = document.balancePence;
     return { ...invoice, paid, effectivePaid, balance, isClosed };
   });
 

@@ -9,7 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { formatMoney, formatDateTime, formatDate, formatRelativeDate } from '@/lib/format';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import { parseTags } from '@/lib/contact-tags';
 import { updateSupplierAction } from '@/app/actions/suppliers';
 import DueDateBadge from '@/components/DueDateBadge';
@@ -133,10 +133,11 @@ export default async function SupplierDetailPage({
   const supplierNotes = ((supplier as any).notes as string | null) ?? '';
 
   const invoices = supplier.purchaseInvoices.map((invoice) => {
-    const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+    const document = payableDocumentBalance(invoice);
+    const paid = document.paidPence;
     const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
-    const effectivePaid = !isClosed && invoice.paymentStatus === 'PAID' ? invoice.totalPence : paid;
-    const balance = computeOutstandingBalance(invoice);
+    const effectivePaid = document.paidPence;
+    const balance = document.balancePence;
     return { ...invoice, paid, effectivePaid, balance, isClosed };
   });
 

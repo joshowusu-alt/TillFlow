@@ -1,12 +1,14 @@
+import { receivableDocumentBalance } from './receivables-balance';
 import { coerceReportDate } from './sqlite-report-date-normalization';
 
 export type ReceivableAgeBucket = '0–30 d' | '31–60 d' | '61–90 d' | '90+ d';
 
 export type ReceivableLike = {
+	paymentStatus?: string;
 	totalPence: number;
 	dueDate?: Date | string | number | null;
 	createdAt: Date | string | number | null | undefined;
-	payments: Array<{ amountPence: number }>;
+	payments: Array<{ amountPence: number; status?: string }>;
 };
 
 export type InventoryRiskState = 'healthy' | 'low' | 'critical' | 'stockout';
@@ -33,11 +35,6 @@ export type InventoryRiskSummary = {
 	stockoutCount: number;
 };
 
-export function computeOutstandingBalance(totalPence: number, payments: Array<{ amountPence: number }>) {
-	const paid = payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-	return Math.max(totalPence - paid, 0);
-}
-
 export function getReceivableAgeBucket(
 	dueDate: Date | string | number | null | undefined,
 	createdAt: Date | string | number | null | undefined,
@@ -63,7 +60,14 @@ export function summarizeReceivables(invoices: ReceivableLike[], referenceDate =
 	let outstandingTotalPence = 0;
 
 	for (const invoice of invoices) {
-		const balancePence = computeOutstandingBalance(invoice.totalPence, invoice.payments);
+		const balancePence = receivableDocumentBalance({
+			paymentStatus: invoice.paymentStatus ?? 'UNPAID',
+			totalPence: invoice.totalPence,
+			payments: invoice.payments.map((payment) => ({
+				amountPence: payment.amountPence,
+				status: payment.status ?? 'CONFIRMED',
+			})),
+		}).balancePence;
 		if (balancePence <= 0) continue;
 
 		outstandingTotalPence += balancePence;

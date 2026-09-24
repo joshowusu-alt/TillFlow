@@ -187,8 +187,8 @@ describe('Phase B: cache revalidation and dashboard performance hardening', () =
     expect(forecastSrc).toContain('0.6');
     expect(forecastSrc).toContain('1.1');
     expect(forecastSrc).toContain('0.8');
-    expect(customerSvcSrc).toContain('computeOutstandingBalance');
-    expect(supplierSvcSrc).toContain('computeOutstandingBalance');
+    expect(customerSvcSrc).toContain('receivableDocumentBalance');
+    expect(supplierSvcSrc).toContain('payableDocumentBalance');
     expect(salesSvcSrc).toContain('export async function createSale');
   });
 

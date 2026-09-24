@@ -8,6 +8,7 @@ import {
   isSqliteRuntime,
 } from './sqlite-report-date-normalization';
 import { getReceivableAgeBucket, summarizeInventoryRisk } from './operational-metrics';
+import { expectedCashPenceFromEntries } from '@/lib/reports/expected-cash';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
@@ -38,6 +39,7 @@ export type TodayKPIs = {
   paymentSplit: Record<string, number>;
   avgDailyExpensesPence: number;
   cashOnHandEstimatePence: number; // cash + bank/MoMo/card/transfer, with payment-ledger fallback
+  openExpectedCashPence: number | null;
   todayReceiptsPence: number;
   negativeMarginProductCount: number;
   momoPendingCount: number;
@@ -47,6 +49,43 @@ export type TodayKPIs = {
   fourWeekAvgExpensesPence: number;
   discountOverrideCount: number;
 };
+
+async function openExpectedCashFromEntries(businessId: string, storeId?: string): Promise<number | null> {
+  const shifts = await prisma.shift.findMany({
+    where: {
+      status: 'OPEN',
+      closedAt: null,
+      till: { store: { businessId, ...(storeId ? { id: storeId } : {}) } },
+    },
+    select: {
+      id: true,
+      tillId: true,
+      till: { select: { storeId: true, store: { select: { businessId: true } } } },
+      cashDrawerEntries: {
+        select: {
+          entryType: true,
+          amountPence: true,
+          businessId: true,
+          storeId: true,
+          tillId: true,
+          shiftId: true,
+        },
+      },
+    },
+  });
+  if (shifts.length === 0) return null;
+  return shifts.reduce(
+    (sum, shift) =>
+      sum +
+      expectedCashPenceFromEntries(shift.cashDrawerEntries, {
+        businessId: shift.till.store.businessId,
+        storeId: shift.till.storeId,
+        tillId: shift.tillId,
+        shiftId: shift.id,
+      }),
+    0,
+  );
+}
 
 function marginFromSaleLines(lines: Array<{
   lineSubtotalPence: number;
@@ -377,6 +416,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     paymentSplit,
     avgDailyExpensesPence,
     cashOnHandEstimatePence: Math.max(0, cashOnHandEstimatePence),
+    openExpectedCashPence: await openExpectedCashFromEntries(businessId, storeId),
     todayReceiptsPence,
     negativeMarginProductCount,
     momoPendingCount: momoPending,
@@ -656,6 +696,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     paymentSplit,
     avgDailyExpensesPence,
     cashOnHandEstimatePence: Math.max(0, cashOnHandEstimatePence),
+    openExpectedCashPence: await openExpectedCashFromEntries(businessId, storeId),
     todayReceiptsPence,
     negativeMarginProductCount,
     momoPendingCount: momoPending,

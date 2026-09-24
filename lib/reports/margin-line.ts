@@ -31,6 +31,8 @@ export type MarginLineInput = {
   qtyInUnit?: number;
   defaultCostBasePence?: number | null;
   costEvidence?: MarginCostEvidence;
+  productId?: string;
+  name?: string;
 };
 
 export type MarginInvoiceInput = {
@@ -118,6 +120,52 @@ function isUnsupported(invoice: MarginInvoiceInput): boolean {
   return false;
 }
 
+export type EvaluatedMarginLine = {
+  productId: string | null;
+  name: string | null;
+  revenuePence: number;
+  allocatedDiscountPence: number;
+  costPence: number | null;
+  profitPence: number | null;
+  ready: boolean;
+  incompleteReason: string | null;
+};
+
+export function evaluateMarginLines(invoices: MarginInvoiceInput[]): {
+  state: MarginState;
+  lines: EvaluatedMarginLine[];
+} {
+  const lines: EvaluatedMarginLine[] = [];
+  let unsupportedReturn = false;
+  for (const invoice of invoices) {
+    if (isUnsupported(invoice)) unsupportedReturn = true;
+    if (isFullRemoval(invoice)) continue;
+    if (invoice.paymentStatus === 'RETURNED' || invoice.paymentStatus === 'VOID') continue;
+    const nets = invoice.lines.map((line) => lineNetBeforeTaxPence(line));
+    const allocated = allocateInvoiceDiscountHalfUp(nets, invoice.discountPence);
+    invoice.lines.forEach((line, index) => {
+      const revenuePence = nets[index] - allocated[index];
+      const cost = resolveAuthoritativeLineCost(line);
+      const blocked = !cost.authoritative || isUnsupported(invoice);
+      lines.push({
+        productId: line.productId ?? null,
+        name: line.name ?? null,
+        revenuePence,
+        allocatedDiscountPence: allocated[index],
+        costPence: cost.authoritative ? cost.costPence : null,
+        profitPence: blocked || !cost.authoritative ? null : revenuePence - cost.costPence,
+        ready: !blocked,
+        incompleteReason: blocked ? (isUnsupported(invoice) ? 'UNSUPPORTED_RETURN' : 'INCOMPLETE_COSTS') : null,
+      });
+    });
+  }
+  const incompleteLineCount = lines.filter((line) => !line.ready).length;
+  return {
+    state: !unsupportedReturn && incompleteLineCount === 0 ? 'READY' : 'INCOMPLETE_COSTS',
+    lines,
+  };
+}
+
 export function evaluateMarginSet(invoices: MarginInvoiceInput[]): MarginSetResult {
   let recognisedSalesPence = 0;
   let grossProfitPence = 0;
@@ -125,27 +173,20 @@ export function evaluateMarginSet(invoices: MarginInvoiceInput[]): MarginSetResu
   let unsupportedReturn = false;
   let sawRecognisedLine = false;
 
+  const evaluated = evaluateMarginLines(invoices);
   for (const invoice of invoices) {
-    if (isUnsupported(invoice)) {
-      unsupportedReturn = true;
-    }
-    if (isFullRemoval(invoice)) continue;
-    if (invoice.paymentStatus === 'RETURNED' || invoice.paymentStatus === 'VOID') continue;
-
-    const nets = invoice.lines.map((line) => lineNetBeforeTaxPence(line));
-    const allocated = allocateInvoiceDiscountHalfUp(nets, invoice.discountPence);
-    invoice.lines.forEach((line, index) => {
-      sawRecognisedLine = true;
-      const revenue = nets[index] - allocated[index];
-      recognisedSalesPence += revenue;
-      const cost = resolveAuthoritativeLineCost(line);
-      if (!cost.authoritative || isUnsupported(invoice)) {
-        incompleteLineCount += 1;
-        return;
-      }
-      grossProfitPence += revenue - cost.costPence;
-    });
+    if (isUnsupported(invoice)) unsupportedReturn = true;
   }
+  for (const line of evaluated.lines) {
+    sawRecognisedLine = true;
+    recognisedSalesPence += line.revenuePence;
+    if (!line.ready || line.profitPence == null) {
+      incompleteLineCount += 1;
+      continue;
+    }
+    grossProfitPence += line.profitPence;
+  }
+  if (evaluated.state === 'INCOMPLETE_COSTS') unsupportedReturn = unsupportedReturn || evaluated.lines.some((line) => line.incompleteReason === 'UNSUPPORTED_RETURN');
 
   const ready = !unsupportedReturn && incompleteLineCount === 0;
   void sawRecognisedLine;

@@ -6,7 +6,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { normalizeGhanaPhone } from '@/lib/storefront-phone';
 import { parseTags, serializeTags } from '@/lib/contact-tags';
@@ -495,8 +495,9 @@ export async function deleteCustomer(id: string, businessId: string) {
       salesInvoices: {
         where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
         select: {
+          paymentStatus: true,
           totalPence: true,
-          payments: { select: { amountPence: true } },
+          payments: { select: { amountPence: true, status: true } },
         },
       },
     },
@@ -504,7 +505,7 @@ export async function deleteCustomer(id: string, businessId: string) {
   if (!customer) return null;
 
   const outstanding = customer.salesInvoices.reduce(
-    (sum, inv) => sum + computeOutstandingBalance(inv),
+    (sum, inv) => sum + receivableDocumentBalance(inv).balancePence,
     0
   );
   if (outstanding > 0) {

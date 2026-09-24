@@ -96,7 +96,7 @@ export type ReadinessData = {
   openShiftTills: OpenShiftTillIdentity[];
   reorderNeededCount: number;
   overdueSupplierInvoiceCount: number;
-  expectedCashPence: number;
+  expectedCashPence: number | null;
   lastShiftClosedAt: string | null;
   lastReceiptId: string | null;
   /** Plan used only for Home presentation gates (e.g. Growth reorder link). */
@@ -173,8 +173,18 @@ export async function getReadiness(): Promise<ReadinessData> {
           select: {
             id: true,
             openedAt: true,
-            expectedCashPence: true,
-            till: { select: { name: true, store: { select: { name: true } } } },
+            tillId: true,
+            till: { select: { storeId: true, name: true, store: { select: { businessId: true, name: true } } } },
+            cashDrawerEntries: {
+              select: {
+                entryType: true,
+                amountPence: true,
+                businessId: true,
+                storeId: true,
+                tillId: true,
+                shiftId: true,
+              },
+            },
             _count: {
               select: {
                 salesInvoices: {
@@ -300,7 +310,13 @@ export async function getReadiness(): Promise<ReadinessData> {
       const openIssueCount = todayKpis ? countCommandCenterIssueFlags(todayKpis) : 0;
 
       const expectedCashPence = await resolveReadinessExpectedCashPence({
-        openShiftExpectedCashPence: openShifts.map((shift) => shift.expectedCashPence),
+        openShifts: openShifts.map((shift) => ({
+          businessId: shift.till.store.businessId,
+          storeId: shift.till.storeId,
+          tillId: shift.tillId,
+          shiftId: shift.id,
+          entries: shift.cashDrawerEntries,
+        })),
       });
 
       return {

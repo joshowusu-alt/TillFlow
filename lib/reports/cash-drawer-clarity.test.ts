@@ -93,7 +93,9 @@ describe('Cash Drawer report clarity pass', () => {
     expect(page).toContain('<th>Cash expected</th>');
     expect(page).toContain('<th>Cash counted</th>');
     expect(page).toContain('<th>Difference</th>');
-    expect(page).toContain('formatMoney(shift.expectedCashPence, business.currency)');
+    expect(page).toContain('expectedCashPenceFromEntries');
+    expect(page).toContain('formatMoney(displayedExpectedCash(shift), business.currency)');
+    expect(page).toContain('shift.expectedCashPence');
     expect(page).toContain('formatMoney(shift.actualCashPence, business.currency)');
     expect(page).toContain('formatMoney(shift.variance, business.currency)');
     expect(page).toContain('ReportTableEmptyRow colSpan={17}');

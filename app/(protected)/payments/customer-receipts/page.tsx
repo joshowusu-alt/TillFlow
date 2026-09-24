@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
 import { recordCustomerPaymentAction } from '@/app/actions/payments';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import DueDateBadge from '@/components/DueDateBadge';
 import RemainingBalance from '@/components/RemainingBalance';
 import Link from 'next/link';
@@ -177,9 +177,10 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
           transactionNumber: true,
           createdAt: true,
           dueDate: true,
+          paymentStatus: true,
           totalPence: true,
           customer: { select: { id: true, name: true, phone: true } },
-          payments: { select: { amountPence: true } }
+          payments: { select: { amountPence: true, status: true } }
         },
         orderBy: { createdAt: 'desc' }
       }),
@@ -228,7 +229,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
   const outstandingInvoices = invoices
     .map((invoice) => ({
       ...invoice,
-      outstanding: computeOutstandingBalance(invoice),
+      outstanding: receivableDocumentBalance(invoice).balancePence,
     }))
     .filter((invoice) => invoice.outstanding > 0);
 

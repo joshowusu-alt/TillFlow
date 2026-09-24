@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { productRankRevenuePence } from '@/lib/reports/product-rank';
+import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
 
 import {
   businessMovementSalesInvoiceWhere,
@@ -63,29 +63,57 @@ async function loadProductBuckets(
     periodEndExclusive,
   });
 
-  const grouped = await db.salesInvoiceLine.groupBy({
-    by: ['productId'],
-    where: { salesInvoice: where },
-    _sum: { lineSubtotalPence: true, lineDiscountPence: true, promoDiscountPence: true, qtyBase: true },
+  const invoices = await db.salesInvoice.findMany({
+    where,
+    select: {
+      paymentStatus: true,
+      discountPence: true,
+      vatPence: true,
+      totalPence: true,
+      lines: {
+        select: {
+          productId: true,
+          qtyBase: true,
+          lineSubtotalPence: true,
+          lineDiscountPence: true,
+          promoDiscountPence: true,
+          lineVatPence: true,
+          lineTotalPence: true,
+        },
+      },
+    },
   });
 
-  if (grouped.length === 0) return [];
+  const totals = new Map<string, { salesValuePence: number; qtyBase: number }>();
+  for (const invoice of invoices) {
+    const ranked = rankRecognisedProductSales(invoice);
+    if (!ranked.ok) continue;
+    const qtyByProduct = new Map<string, number>();
+    for (const line of invoice.lines) {
+      qtyByProduct.set(line.productId, (qtyByProduct.get(line.productId) ?? 0) + line.qtyBase);
+    }
+    for (const row of ranked.lines) {
+      const current = totals.get(row.productId) ?? { salesValuePence: 0, qtyBase: 0 };
+      current.salesValuePence += row.amountPence;
+      current.qtyBase += qtyByProduct.get(row.productId) ?? 0;
+      qtyByProduct.set(row.productId, 0);
+      totals.set(row.productId, current);
+    }
+  }
+
+  if (totals.size === 0) return [];
 
   const products = await db.product.findMany({
-    where: { id: { in: grouped.map((g) => g.productId) } },
+    where: { id: { in: [...totals.keys()] } },
     select: { id: true, name: true },
   });
   const nameById = new Map(products.map((p) => [p.id, p.name]));
 
-  return grouped.map((g) => ({
-    id: g.productId,
-    name: nameById.get(g.productId) ?? g.productId,
-    salesValuePence: productRankRevenuePence({
-      lineSubtotalPence: g._sum.lineSubtotalPence ?? 0,
-      lineDiscountPence: g._sum.lineDiscountPence ?? 0,
-      promoDiscountPence: g._sum.promoDiscountPence ?? 0,
-    }),
-    qtyBase: g._sum.qtyBase ?? 0,
+  return [...totals.entries()].map(([productId, bucket]) => ({
+    id: productId,
+    name: nameById.get(productId) ?? productId,
+    salesValuePence: bucket.salesValuePence,
+    qtyBase: bucket.qtyBase,
   }));
 }
 

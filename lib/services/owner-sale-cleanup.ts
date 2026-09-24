@@ -1,50 +1,41 @@
 import { prisma } from '@/lib/prisma';
+import { expectedCashPenceFromEntries } from '@/lib/reports/expected-cash';
 import { buildQtyByProductMap, fetchInventoryMap, resolveAvgCost, upsertInventoryBalance } from './shared';
 
-type CleanupShiftSnapshotInput = {
-  expectedCashPence: number;
-  cardTotalPence: number;
-  transferTotalPence: number;
-  momoTotalPence: number;
-  variance: number | null;
-  cashEntryDeltaPence: number;
-  cashEntryTypeTotals: Record<string, number>;
-};
+type DrawerTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
-function adjustShiftClosureSnapshot(
-  closureSnapshotJson: string | null,
-  input: CleanupShiftSnapshotInput
-): string | null {
-  if (!closureSnapshotJson) return closureSnapshotJson;
+async function syncOpenShiftExpectedCash(
+  tx: DrawerTx,
+  businessId: string,
+  drawerEntryIds: string[],
+  openShiftIds: string[],
+) {
+  if (drawerEntryIds.length > 0) {
+    await tx.cashDrawerEntry.deleteMany({
+      where: { id: { in: drawerEntryIds } },
+    });
+  }
 
-  try {
-    const parsed = JSON.parse(closureSnapshotJson) as Record<string, unknown>;
-    if (!parsed || typeof parsed !== 'object') return closureSnapshotJson;
-
-    parsed.expectedCashPence = input.expectedCashPence;
-    parsed.cardTotalPence = input.cardTotalPence;
-    parsed.transferTotalPence = input.transferTotalPence;
-    parsed.momoTotalPence = input.momoTotalPence;
-    if (input.variance !== null) parsed.variancePence = input.variance;
-
-    const existingCashEntriesByType =
-      parsed.cashEntriesByType && typeof parsed.cashEntriesByType === 'object'
-        ? (parsed.cashEntriesByType as Record<string, number>)
-        : {};
-
-    for (const [entryType, amount] of Object.entries(input.cashEntryTypeTotals)) {
-      existingCashEntriesByType[entryType] = (existingCashEntriesByType[entryType] ?? 0) - amount;
-    }
-
-    parsed.cashEntriesByType = existingCashEntriesByType;
-
-    if (typeof parsed.cashEntriesTotalPence === 'number') {
-      parsed.cashEntriesTotalPence = parsed.cashEntriesTotalPence - input.cashEntryDeltaPence;
-    }
-
-    return JSON.stringify(parsed);
-  } catch {
-    return closureSnapshotJson;
+  for (const shiftId of openShiftIds) {
+    const remaining = await tx.cashDrawerEntry.findMany({
+      where: { shiftId },
+      select: {
+        entryType: true,
+        amountPence: true,
+        businessId: true,
+        storeId: true,
+        tillId: true,
+        shiftId: true,
+      },
+    });
+    const canonicalExpectedCashPence = expectedCashPenceFromEntries(remaining, {
+      businessId,
+      shiftId,
+    });
+    await tx.shift.update({
+      where: { id: shiftId },
+      data: { expectedCashPence: canonicalExpectedCashPence },
+    });
   }
 }
 
@@ -78,13 +69,6 @@ export async function cleanupOwnerVoidedSale(input: {
 
   const qtyByProduct = buildQtyByProductMap(invoice.lines);
   const productIds = Array.from(qtyByProduct.keys());
-  const paymentTotals = invoice.payments.reduce(
-    (acc, payment) => {
-      acc[payment.method] = (acc[payment.method] ?? 0) + payment.amountPence;
-      return acc;
-    },
-    {} as Record<string, number>
-  );
 
   await prisma.$transaction(async (tx) => {
     const inventoryMap = await fetchInventoryMap(invoice.storeId, productIds, tx);
@@ -136,21 +120,13 @@ export async function cleanupOwnerVoidedSale(input: {
       },
     });
 
-    const cashDeltaByShift = new Map<string, number>();
-    const cashEntryTypesByShift = new Map<string, Record<string, number>>();
-
-    for (const entry of drawerEntries) {
-      if (!entry.shiftId) continue;
-      cashDeltaByShift.set(entry.shiftId, (cashDeltaByShift.get(entry.shiftId) ?? 0) + entry.amountPence);
-      const existing = cashEntryTypesByShift.get(entry.shiftId) ?? {};
-      existing[entry.entryType] = (existing[entry.entryType] ?? 0) + entry.amountPence;
-      cashEntryTypesByShift.set(entry.shiftId, existing);
-    }
-
     const affectedShiftIds = new Set<string>();
     if (invoice.shiftId) affectedShiftIds.add(invoice.shiftId);
-    for (const shiftId of cashDeltaByShift.keys()) affectedShiftIds.add(shiftId);
+    for (const entry of drawerEntries) {
+      if (entry.shiftId) affectedShiftIds.add(entry.shiftId);
+    }
 
+    const openShiftIds: string[] = [];
     for (const shiftId of affectedShiftIds) {
       const shift = await tx.shift.findUnique({
         where: { id: shiftId },
@@ -158,62 +134,21 @@ export async function cleanupOwnerVoidedSale(input: {
           id: true,
           status: true,
           closedAt: true,
-          expectedCashPence: true,
-          actualCashPence: true,
-          variance: true,
-          cardTotalPence: true,
-          transferTotalPence: true,
-          momoTotalPence: true,
-          closureSnapshotJson: true,
         },
       });
       if (!shift) continue;
-
-      const cashEntryDeltaPence = cashDeltaByShift.get(shiftId) ?? 0;
-      const shouldAdjustPaymentTotals = shiftId === invoice.shiftId && shift.closedAt !== null;
-      const nextExpectedCashPence = shift.expectedCashPence - cashEntryDeltaPence;
-      const nextCardTotalPence = shouldAdjustPaymentTotals
-        ? Math.max(0, shift.cardTotalPence - (paymentTotals.CARD ?? 0))
-        : shift.cardTotalPence;
-      const nextTransferTotalPence = shouldAdjustPaymentTotals
-        ? Math.max(0, shift.transferTotalPence - (paymentTotals.TRANSFER ?? 0))
-        : shift.transferTotalPence;
-      const nextMomoTotalPence = shouldAdjustPaymentTotals
-        ? Math.max(0, shift.momoTotalPence - (paymentTotals.MOBILE_MONEY ?? 0))
-        : shift.momoTotalPence;
-      const nextVariance = shift.actualCashPence === null ? shift.variance : shift.actualCashPence - nextExpectedCashPence;
-
-      const shiftUpdateData: Record<string, unknown> = {
-        expectedCashPence: nextExpectedCashPence,
-      };
-
-      if (shift.closedAt !== null) {
-        shiftUpdateData.cardTotalPence = nextCardTotalPence;
-        shiftUpdateData.transferTotalPence = nextTransferTotalPence;
-        shiftUpdateData.momoTotalPence = nextMomoTotalPence;
-        shiftUpdateData.variance = nextVariance;
-        shiftUpdateData.closureSnapshotJson = adjustShiftClosureSnapshot(shift.closureSnapshotJson, {
-          expectedCashPence: nextExpectedCashPence,
-          cardTotalPence: nextCardTotalPence,
-          transferTotalPence: nextTransferTotalPence,
-          momoTotalPence: nextMomoTotalPence,
-          variance: nextVariance,
-          cashEntryDeltaPence,
-          cashEntryTypeTotals: cashEntryTypesByShift.get(shiftId) ?? {},
-        });
+      if (shift.closedAt !== null || shift.status === 'CLOSED') {
+        throw new Error('CLOSED_SHIFT_CLEANUP_REJECTED');
       }
-
-      await tx.shift.update({
-        where: { id: shiftId },
-        data: shiftUpdateData,
-      });
+      openShiftIds.push(shift.id);
     }
 
-    if (drawerEntries.length > 0) {
-      await tx.cashDrawerEntry.deleteMany({
-        where: { id: { in: drawerEntries.map((entry) => entry.id) } },
-      });
-    }
+    await syncOpenShiftExpectedCash(
+      tx,
+      input.businessId,
+      drawerEntries.map((entry) => entry.id),
+      openShiftIds,
+    );
 
     const journalEntries = await tx.journalEntry.findMany({
       where: {

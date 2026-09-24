@@ -12,7 +12,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { createSupplierAction } from '@/app/actions/suppliers';
 import { formatMoney, formatRelativeDate, DEFAULT_PAGE_SIZE } from '@/lib/format';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import { parseTags } from '@/lib/contact-tags';
 import {
   buildSupplierListWhere,
@@ -156,7 +156,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
   // Compute derived data for each supplier
   const suppliersWithData = suppliers.map((supplier) => {
     const balance = supplier.purchaseInvoices.reduce(
-      (sum, invoice) => sum + computeOutstandingBalance(invoice),
+      (sum, invoice) => sum + payableDocumentBalance(invoice).balancePence,
       0
     );
     const lastPurchaseAt = supplier.purchaseInvoices[0]?.createdAt ?? null;

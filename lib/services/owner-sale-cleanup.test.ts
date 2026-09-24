@@ -88,30 +88,16 @@ describe('cleanupOwnerVoidedSale', () => {
     fetchInventoryMapMock.mockResolvedValue(new Map([['prod-1', { qtyOnHandBase: 10, avgCostBasePence: 900 }]]));
     upsertInventoryBalanceMock.mockResolvedValue(undefined);
     prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
-    prismaMock.cashDrawerEntry.findMany.mockResolvedValue([
-      { id: 'drawer-1', shiftId: 'shift-1', amountPence: 5004, entryType: 'CASH_SALE' },
-    ]);
+    prismaMock.cashDrawerEntry.findMany
+      .mockResolvedValueOnce([
+        { id: 'drawer-1', shiftId: 'shift-1', amountPence: 5004, entryType: 'CASH_SALE' },
+      ])
+      .mockResolvedValueOnce([]);
     prismaMock.cashDrawerEntry.deleteMany.mockResolvedValue({ count: 1 });
     prismaMock.shift.findUnique.mockResolvedValue({
       id: 'shift-1',
-      status: 'CLOSED',
-      closedAt: new Date('2026-03-17T22:00:00.000Z'),
-      expectedCashPence: 5004,
-      actualCashPence: 0,
-      variance: 5004,
-      cardTotalPence: 0,
-      transferTotalPence: 0,
-      momoTotalPence: 0,
-      closureSnapshotJson: JSON.stringify({
-        expectedCashPence: 5004,
-        countedCashPence: 0,
-        variancePence: 5004,
-        cardTotalPence: 0,
-        transferTotalPence: 0,
-        momoTotalPence: 0,
-        cashEntriesByType: { CASH_SALE: 5004 },
-        cashEntriesTotalPence: 5004,
-      }),
+      status: 'OPEN',
+      closedAt: null,
     });
     prismaMock.shift.update.mockResolvedValue({});
     prismaMock.journalEntry.findMany.mockResolvedValue([{ id: 'journal-1' }]);
@@ -161,15 +147,25 @@ describe('cleanupOwnerVoidedSale', () => {
       },
     });
 
-    expect(prismaMock.shift.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'shift-1' },
-        data: expect.objectContaining({
-          expectedCashPence: 0,
-          variance: 0,
-        }),
-      })
-    );
+    expect(prismaMock.shift.update).toHaveBeenCalledWith({
+      where: { id: 'shift-1' },
+      data: { expectedCashPence: 0 },
+    });
+  });
+
+  it('rejects cleanup of a closed shift without rewriting the snapshot', async () => {
+    prismaMock.shift.findUnique.mockResolvedValue({
+      id: 'shift-1',
+      status: 'CLOSED',
+      closedAt: new Date('2026-03-17T22:00:00.000Z'),
+    });
+
+    await expect(
+      cleanupOwnerVoidedSale({ businessId: 'biz-1', salesInvoiceId: 'inv-42' }),
+    ).rejects.toThrow('CLOSED_SHIFT_CLEANUP_REJECTED');
+    expect(prismaMock.shift.update).not.toHaveBeenCalled();
+    expect(prismaMock.cashDrawerEntry.deleteMany).not.toHaveBeenCalled();
+    expect(prismaMock.salesInvoice.update).not.toHaveBeenCalled();
   });
 
   it('rejects a sale that is already voided or returned', async () => {

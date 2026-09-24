@@ -6,7 +6,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import { DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { parseTags, serializeTags } from '@/lib/contact-tags';
 
@@ -176,6 +176,7 @@ export async function deleteSupplier(id: string, businessId: string) {
       purchaseInvoices: {
         where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
         select: {
+          paymentStatus: true,
           totalPence: true,
           payments: { select: { amountPence: true } },
         },
@@ -185,7 +186,7 @@ export async function deleteSupplier(id: string, businessId: string) {
   if (!supplier) return null;
 
   const outstanding = supplier.purchaseInvoices.reduce(
-    (sum, inv) => sum + computeOutstandingBalance(inv),
+    (sum, inv) => sum + payableDocumentBalance(inv).balancePence,
     0
   );
   if (outstanding > 0) {

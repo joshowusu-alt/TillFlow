@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	classifyInventoryState,
-	computeOutstandingBalance,
 	getReceivableAgeBucket,
 	summarizeInventoryRisk,
 	summarizeReceivables,
@@ -73,7 +72,18 @@ describe('operational report metrics helpers', () => {
 		expect(summary.stockoutCount).toBe(1);
 	});
 
-	it('computes outstanding balances safely', () => {
-		expect(computeOutstandingBalance(5_000, [{ amountPence: 2_000 }, { amountPence: 4_000 }])).toBe(0);
+	it('keeps a reconciling excess instead of capping it to zero', () => {
+		const summary = summarizeReceivables([
+			{
+				paymentStatus: 'PAID',
+				totalPence: 5_000,
+				createdAt: '2026-03-01T00:00:00.000Z',
+				payments: [
+					{ amountPence: 2_000, status: 'CONFIRMED' },
+					{ amountPence: 4_000, status: 'CONFIRMED' },
+				],
+			},
+		]);
+		expect(summary.outstandingTotalPence).toBe(0);
 	});
 });

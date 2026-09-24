@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const [salesReturns, purchaseReturns, business] = await Promise.all([
     prisma.salesReturn.findMany({
       where: {
-        createdAt: { gte: dateRange.start, lte: dateRange.end },
+        createdAt: { gte: dateRange.start, lt: dateRange.end },
         salesInvoice: { businessId: user.businessId },
       },
       include: {
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     }),
     prisma.purchaseReturn.findMany({
       where: {
-        createdAt: { gte: dateRange.start, lte: dateRange.end },
+        createdAt: { gte: dateRange.start, lt: dateRange.end },
         purchaseInvoice: { businessId: user.businessId },
       },
       include: {
