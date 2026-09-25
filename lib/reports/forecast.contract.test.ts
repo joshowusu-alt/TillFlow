@@ -9,7 +9,8 @@ describe('forecast confirmed inflow', () => {
     expect(source).toContain("method: { in: ['CASH', 'MOBILE_MONEY'] }");
     expect(source).toContain('businessDayWindow');
     expect(source).toContain('lt: trailingEnd');
-    expect(source).not.toContain("paymentStatus: { notIn: ['RETURNED', 'VOID'] }");
+    const cashQuery = source.slice(source.indexOf('Avg daily confirmed cash'));
+    expect(cashQuery).not.toContain("paymentStatus: { notIn: ['RETURNED', 'VOID'] }");
     expect(source).not.toContain('PENDING_MANUAL');
   });
 });

@@ -38,7 +38,7 @@ const prismaMock = vi.hoisted(() => {
       if (!(prop in target)) (target as Record<string, unknown>)[prop] = emptyDelegate();
       return (target as Record<string, unknown>)[prop];
     },
-  }) as typeof base & Record<string, ReturnType<typeof emptyDelegate>>;
+  }) as any;
 });
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));

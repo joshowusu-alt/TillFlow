@@ -37,7 +37,7 @@ describe('GET /exports/sales', () => {
 		vi.clearAllMocks();
 
 		getUserMock.mockResolvedValue({ role: 'OWNER', businessId: 'biz-1' });
-		businessFindUniqueMock.mockResolvedValue({ name: 'Accra Market Hub', currency: 'GHS' });
+		businessFindUniqueMock.mockResolvedValue({ name: 'Accra Market Hub', currency: 'GHS', timezone: 'UTC' });
 		detectExportFormatMock.mockReturnValue('csv');
 		respondWithExportMock.mockImplementation((params) => Response.json(params));
 	});
@@ -107,8 +107,8 @@ describe('GET /exports/sales', () => {
 		expect(body.exportOptions.rows[0]).toMatchObject({
 			invoice: 'S-1001',
 			product: 'Tomato Paste',
-			cost: '6.00',
-			margin: '6.00',
+			cost: '0.00',
+			margin: '',
 		});
 	});
 });

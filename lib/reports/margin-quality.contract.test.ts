@@ -50,9 +50,10 @@ describe('margin quality', () => {
       expect(source, file).not.toContain('lineCostPence > 0');
       expect(source, file).not.toContain('lineCostPence: { gt: 0 }');
     }
-    for (const file of ['lib/reports/weekly-digest.ts', 'lib/reports/financials.ts', 'lib/reports/today-kpis.ts', 'app/(protected)/reports/dashboard/TradingDashboardContent.tsx']) {
+    for (const file of ['lib/reports/weekly-digest.ts', 'lib/reports/financials.ts', 'lib/reports/today-kpis.ts', 'lib/reports/trading-margin.ts']) {
       expect(readFileSync(resolve(process.cwd(), file), 'utf8'), file).toContain('evaluateMarginSet');
     }
+    expect(readFileSync(resolve(process.cwd(), 'app/(protected)/reports/dashboard/TradingDashboardContent.tsx'), 'utf8')).toContain('loadTradingPeriodMargin');
     const command = readFileSync(resolve(process.cwd(), 'app/(protected)/reports/command-center/page.tsx'), 'utf8');
     expect(command).toContain("marginState === 'READY'");
   });

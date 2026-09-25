@@ -39,9 +39,12 @@ const prismaMock = vi.hoisted(() => {
       aggregate: vi.fn(async () => ({ _sum: { amountPence: 0 } })),
       findMany: vi.fn(async () => []),
     },
-    expense: { findMany: vi.fn(async () => []) },
+    expense: {
+      findMany: vi.fn(async () => []),
+      aggregate: vi.fn(async () => ({ _sum: { amountPence: 0 } })),
+    },
     expensePayment: { aggregate: vi.fn(async () => ({ _sum: { amountPence: 0 } })) },
-    riskAlert: { findMany: vi.fn(async () => []) },
+    riskAlert: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     inventoryBalance: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     mobileMoneyCollection: { count: vi.fn(async () => 0), findMany: vi.fn(async () => []) },
     shift: { findMany: vi.fn(async () => []) },
@@ -62,7 +65,7 @@ const prismaMock = vi.hoisted(() => {
       if (!(prop in target)) (target as Record<string, unknown>)[prop] = emptyDelegate();
       return (target as Record<string, unknown>)[prop];
     },
-  }) as typeof base & Record<string, ReturnType<typeof emptyDelegate>>;
+  }) as any;
 });
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));

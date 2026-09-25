@@ -189,8 +189,10 @@ describe('customer detail page', () => {
   });
 
   it('uses stable sortKey tie-breaker in statement', () => {
-    expect(src).toContain('sortKey');
-    expect(src).toContain('sortKey - b.sortKey');
+    const ledger = readFileSync(join(process.cwd(), 'lib/reports/detail-ledger.ts'), 'utf8');
+    expect(ledger).toContain('sortKey');
+    expect(ledger).toContain('sortKey - b.sortKey');
+    expect(src).toContain('buildCustomerDetailLedger');
   });
 });
 

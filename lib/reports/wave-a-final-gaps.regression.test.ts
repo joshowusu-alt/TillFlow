@@ -58,7 +58,7 @@ const prismaMock = vi.hoisted(() => {
       }),
     },
     product: { findMany: vi.fn(async () => []) },
-  };
+  } as any;
 });
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -184,10 +184,12 @@ describe('final Wave A gaps', () => {
   });
 
   it('analytics and supplier-sales payloads expose an unallocated sales difference of 500', async () => {
-    const supplierSource = readFileSync(join(process.cwd(), 'app/(protected)/reports/sales-by-supplier/page.tsx'), 'utf8');
+    const supplierSource = readFileSync(join(process.cwd(), 'lib/reports/supplier-sales.ts'), 'utf8');
+    const pageSource = readFileSync(join(process.cwd(), 'app/(protected)/reports/sales-by-supplier/page.tsx'), 'utf8');
     const exportSource = readFileSync(join(process.cwd(), 'app/(protected)/reports/sales-by-supplier/export/route.ts'), 'utf8');
-    expect(supplierSource).toContain('Unallocated sales difference');
-    expect(exportSource).toContain('Unallocated sales difference');
+    expect(supplierSource).toContain("unallocatedSalesDifferenceLabel: 'Unallocated sales difference'");
+    expect(pageSource).toContain('report.unallocatedSalesDifferenceLabel');
+    expect(exportSource).toContain('report.unallocatedSalesDifferenceLabel');
 
     const { default: AnalyticsContent } = await import('@/app/(protected)/reports/analytics/AnalyticsContent');
     const gapSale = {

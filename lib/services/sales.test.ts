@@ -1125,7 +1125,7 @@ describe('createSale — payments split & AR posting', () => {
   it('checks customer credit limit against outstanding balances after receipts', async () => {
     prismaMock.customer.findFirst.mockResolvedValue({ id: 'cust-1', creditLimitPence: 10_000 });
     prismaMock.salesInvoice.findMany.mockResolvedValue([
-      { totalPence: 9_000, payments: [{ amountPence: 7_000 }] },
+      { paymentStatus: 'PART_PAID', totalPence: 9_000, payments: [{ amountPence: 7_000, status: 'CONFIRMED' }] },
     ]);
 
     await createSale(makeBaseInput({
@@ -1139,11 +1139,12 @@ describe('createSale — payments split & AR posting', () => {
       where: {
         customerId: 'cust-1',
         businessId: BIZ_ID,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
       select: {
+        paymentStatus: true,
         totalPence: true,
-        payments: { select: { amountPence: true } },
+        payments: { select: { amountPence: true, status: true } },
       },
     });
     expect(prismaMock.salesInvoice.create).toHaveBeenCalledTimes(1);

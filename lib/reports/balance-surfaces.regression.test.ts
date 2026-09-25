@@ -24,7 +24,7 @@ const payableSurfaces = [
   'lib/services/supplier-kpis.ts',
   'lib/reports/today-kpis.ts',
   'lib/reports/owner-dashboard.ts',
-  'app/(protected)/reports/dashboard/TradingDashboardContent.tsx',
+  'lib/reports/trading-balances.ts',
 ];
 
 describe('A12 live balances use the canonical helpers', () => {

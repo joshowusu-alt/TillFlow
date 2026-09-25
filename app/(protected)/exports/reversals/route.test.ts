@@ -40,7 +40,7 @@ describe('GET /exports/reversals', () => {
 		vi.clearAllMocks();
 
 		getUserMock.mockResolvedValue({ role: 'OWNER', businessId: 'biz-1' });
-		businessFindUniqueMock.mockResolvedValue({ name: 'Accra Market Hub', currency: 'GHS' });
+		businessFindUniqueMock.mockResolvedValue({ name: 'Accra Market Hub', currency: 'GHS', timezone: 'UTC' });
 		detectExportFormatMock.mockReturnValue('csv');
 		respondWithExportMock.mockImplementation((params) => Response.json(params));
 	});

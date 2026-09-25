@@ -342,10 +342,11 @@ describe('stock alert actions', () => {
       });
       prismaMock.salesInvoice.findMany.mockResolvedValue([
         {
+          paymentStatus: 'PART_PAID',
           totalPence: 50_000,
           dueDate: new Date('2024-01-10T00:00:00.000Z'),
           createdAt: new Date('2024-01-08T00:00:00.000Z'),
-          payments: [{ amountPence: 10_000 }],
+          payments: [{ amountPence: 10_000, status: 'CONFIRMED' }],
         },
       ]);
       prismaMock.salesPayment.findFirst.mockResolvedValue({

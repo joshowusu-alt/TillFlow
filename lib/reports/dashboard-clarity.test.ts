@@ -201,7 +201,8 @@ describe('Reports dashboard clarity pass', () => {
     expect(dashboardPage).toContain('resolveReportingScope');
     // Outstanding AR/AP now use the shared document balances. The old helper ignored payment status.
     expect(dashboard).toContain('receivableDocumentBalance');
-    expect(dashboard).toContain('payableDocumentBalance');
+    expect(dashboard).toContain('loadTradingOpenDocuments');
+    expect(readSource('lib/reports/trading-balances.ts')).toContain('payableDocumentBalance');
     expect(dashboard).not.toContain('computeOutstandingBalance');
   });
 
