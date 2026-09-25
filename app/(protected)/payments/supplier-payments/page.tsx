@@ -115,7 +115,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
       ...invoice,
       outstanding: payableDocumentBalance(invoice).balancePence,
     }))
-    .filter((invoice) => invoice.outstanding > 0);
+    .filter((invoice) => invoice.outstanding !== 0);
 
   const totalOutstanding = outstandingInvoices.reduce((sum, inv) => sum + inv.outstanding, 0);
   const unpaidPurchaseCount = outstandingInvoices.length;

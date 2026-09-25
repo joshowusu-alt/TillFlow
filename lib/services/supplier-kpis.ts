@@ -97,7 +97,7 @@ export async function getSupplierListKpis(
   for (const invoice of invoices) {
     if (!invoice.supplierId) continue;
     const balance = payableDocumentBalance(invoice).balancePence;
-    if (balance <= 0) continue;
+    if (balance === 0) continue;
     outstandingBySupplier.set(
       invoice.supplierId,
       (outstandingBySupplier.get(invoice.supplierId) ?? 0) + balance,

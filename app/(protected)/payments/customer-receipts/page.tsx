@@ -231,7 +231,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
       ...invoice,
       outstanding: receivableDocumentBalance(invoice).balancePence,
     }))
-    .filter((invoice) => invoice.outstanding > 0);
+    .filter((invoice) => invoice.outstanding !== 0);
 
   const totalOutstanding = outstandingInvoices.reduce((sum, inv) => sum + inv.outstanding, 0);
   const unpaidInvoiceCount = outstandingInvoices.length;

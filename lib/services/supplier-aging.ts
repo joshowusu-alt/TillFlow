@@ -125,7 +125,7 @@ async function loadOutstandingAttributedInvoices(
   for (const inv of invoices) {
     if (!inv.supplierId || !inv.supplier) continue;
     const outstandingPence = payableDocumentBalance(inv).balancePence;
-    if (outstandingPence <= 0) continue;
+    if (outstandingPence === 0) continue;
     const paidPence = inv.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
     loaded.push({
       id: inv.id,

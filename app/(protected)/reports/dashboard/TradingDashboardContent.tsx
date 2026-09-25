@@ -7,7 +7,7 @@ import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { getIncomeStatement } from '@/lib/reports/financials';
 import { evaluateMarginSet, type MarginReturnKind } from '@/lib/reports/margin-line';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
-import { payableDocumentBalance } from '@/lib/reports/payables-balance';
+import { loadTradingOpenDocuments } from '@/lib/reports/trading-balances';
 import { classifyInventoryState, getReceivableAgeBucket } from '@/lib/reports/operational-metrics';
 import { unstable_cache } from 'next/cache';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
@@ -53,6 +53,10 @@ async function _getTradingDashboardSnapshot(
   const endExclusive = new Date(endIso);
   // Income statement helper still uses inclusive end — pass last in-range instant.
   const storeFilter = selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId };
+  const tradingBalances = await loadTradingOpenDocuments(
+    businessId,
+    selectedStoreId === 'ALL' ? undefined : selectedStoreId,
+  );
 
   const [
     salesAgg,
@@ -80,31 +84,8 @@ async function _getTradingDashboardSnapshot(
     // Money Received method totals come from getMoneyReceivedSummary (canonical
     // CONFIRMED inclusion; no parent RETURNED/VOID exclusion) — not a parallel groupBy.
     getIncomeStatement(businessId, start, endExclusive),
-    prisma.salesInvoice.findMany({
-      where: {
-        businessId,
-        ...storeFilter,
-        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-      },
-      select: {
-        id: true,
-        paymentStatus: true,
-        totalPence: true,
-        dueDate: true,
-        createdAt: true,
-        customer: { select: { id: true, name: true } },
-        payments: { select: { amountPence: true, status: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.purchaseInvoice.findMany({
-      where: {
-        businessId,
-        ...storeFilter,
-        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-      },
-      select: { paymentStatus: true, totalPence: true, payments: { select: { amountPence: true } } },
-    }),
+    Promise.resolve(tradingBalances.outstandingSales),
+    Promise.resolve(tradingBalances.outstandingPurchases),
     prisma.inventoryBalance.findMany({
       where: {
         ...(selectedStoreId === 'ALL'
@@ -439,8 +420,8 @@ export default async function TradingDashboardContent({
   void salesAgg;
 
   // AR / AP
-  const outstandingAR = outstandingSales.reduce((s, inv) => s + receivableDocumentBalance(inv).balancePence, 0);
-  const outstandingAP = outstandingPurchases.reduce((s, inv) => s + payableDocumentBalance(inv).balancePence, 0);
+  const outstandingAR = tradingBalances.outstandingARPence;
+  const outstandingAP = tradingBalances.outstandingAPPence;
 
   // Debtor ageing buckets
   const bucketKeys = ['0–30 d', '31–60 d', '61–90 d', '90+ d'] as const;
