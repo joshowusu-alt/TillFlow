@@ -59,8 +59,7 @@ export default async function AnalyticsPage({
         }
       />
       <p className="text-xs text-black/45">
-        Profit data uses stored sale-line cost where available; older lines fall back to current base
-        cost until backfilled.
+        Profit uses stored sale-line discounts and cost. Incomplete costs are shown instead of a firm gross profit.
       </p>
       <AnalyticsPeriodSelector />
       <Suspense fallback={<ReportSectionSkeleton />}>
@@ -68,6 +67,7 @@ export default async function AnalyticsPage({
           businessId={business.id}
           currency={business.currency}
           periodDays={periodDays}
+          timeZone={business.timezone}
         />
       </Suspense>
     </div>

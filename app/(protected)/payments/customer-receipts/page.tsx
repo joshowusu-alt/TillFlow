@@ -169,7 +169,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
         where: {
           businessId: business.id,
           storeId: store.id,
-          paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
           ...(customerId ? { customerId } : {}),
         },
         select: {

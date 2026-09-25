@@ -253,6 +253,9 @@ async function _getWeeklyDigestData(
     });
   }
   const topSellers = Array.from(sellerMap.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  if (unallocatedSalesDifferencePence !== 0) {
+    topSellers.push({ name: 'Unallocated sales difference', qty: 0, revenue: unallocatedSalesDifferencePence });
+  }
   const evaluatedLines = evaluateMarginLines(toMarginInvoices(marginInvoices));
   const marginByProduct = new Map<string, { name: string; revenue: number; profit: number }>();
   if (margin.state === 'READY') {

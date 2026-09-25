@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 
 /** Escape a value for CSV output. */
 function esc(v: string | number | null | undefined): string {
@@ -119,18 +120,22 @@ export async function buildVatReportCsv(businessId: string, range: DateRange): P
 // ---------------------------------------------------------------------------
 export async function buildDebtorsListingCsv(businessId: string): Promise<string> {
   const debtors = await prisma.salesInvoice.findMany({
-    where: { businessId, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
+    where: { businessId, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
     orderBy: { createdAt: 'asc' },
     select: {
       id: true, transactionNumber: true, createdAt: true, dueDate: true,
       totalPence: true, paymentStatus: true,
       customer: { select: { name: true, phone: true } },
+      payments: { select: { amountPence: true, status: true } },
     },
   });
 
   const now = new Date();
   const header = ['Invoice','Date','Due Date','Customer','Phone','Status','Amount','Days Overdue'].join(',');
-  const lines = debtors.map((d) => {
+  const open = debtors
+    .map((d) => ({ ...d, balancePence: receivableDocumentBalance({ ...d, payments: d.payments ?? [] }).balancePence }))
+    .filter((d) => d.balancePence !== 0);
+  const lines = open.map((d) => {
     const due = d.dueDate ?? d.createdAt;
     const daysOD = Math.max(0, Math.floor((now.getTime() - due.getTime()) / 86400000));
     return [
@@ -140,10 +145,12 @@ export async function buildDebtorsListingCsv(businessId: string): Promise<string
       esc(d.customer?.name ?? ''),
       esc(d.customer?.phone ?? ''),
       esc(d.paymentStatus),
-      esc(fp(d.totalPence)),
+      esc(fp(d.balancePence)),
       esc(daysOD),
     ].join(',');
   });
+  const total = open.reduce((sum, row) => sum + row.balancePence, 0);
+  lines.push(['Total','','','','','',esc(fp(total)),''].join(','));
   return [header, ...lines].join('\n');
 }
 

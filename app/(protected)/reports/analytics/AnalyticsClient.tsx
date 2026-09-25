@@ -25,7 +25,7 @@ interface AnalyticsData {
     };
 }
 
-export default function AnalyticsClient({ data }: { data: AnalyticsData }) {
+export default function AnalyticsClient({ data, kpis: _kpis }: { data: AnalyticsData; kpis?: AnalyticsData['kpis'] }) {
     const formatMoney = (pence: number) =>
         new Intl.NumberFormat('en-GB', { style: 'currency', currency: data.currency }).format(pence / 100);
 

@@ -33,7 +33,7 @@ export default async function IncomeStatementPage({
 
   const now = new Date();
   const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(searchParams, defaultStart, now);
+  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(searchParams, defaultStart, now, business.timezone);
 
   const statement = await getIncomeStatement(business.id, start, end);
   const costsIncomplete = statement.grossProfit == null || statement.netProfit == null || statement.cogs == null;

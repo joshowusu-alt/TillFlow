@@ -89,7 +89,7 @@ export default async function SalesBySupplierPage({
   }
 
   const { start, end, fromInputValue, toInputValue, periodInputValue, isCustomRange } =
-    resolveSelectableReportDateRange(searchParams, 'mtd');
+    resolveSelectableReportDateRange(searchParams, 'mtd', new Date(), business.timezone);
 
   const supplierId = searchParams?.supplierId?.trim() || undefined;
 

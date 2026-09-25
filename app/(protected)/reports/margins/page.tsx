@@ -120,7 +120,7 @@ export default async function MarginsPage({
     );
   }
 
-  const { start, end, fromInputValue, toInputValue, periodInputValue } = resolveSelectableReportDateRange(searchParams, '30d');
+  const { start, end, fromInputValue, toInputValue, periodInputValue } = resolveSelectableReportDateRange(searchParams, '30d', new Date(), business.timezone);
   const currentView = resolveMarginsView(searchParams?.view);
   const requestedPageSize = parseInt(searchParams?.pageSize ?? '20', 10) || 20;
   const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize as 10 | 20 | 50) ? requestedPageSize : 20;

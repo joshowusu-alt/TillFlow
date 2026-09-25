@@ -33,7 +33,7 @@ export default async function CashflowPage({
 
   const now = new Date();
   const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(searchParams, defaultStart, now);
+  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(searchParams, defaultStart, now, business.timezone);
 
   const cashflow = await getCashflow(business.id, start, end);
   const costsIncomplete = cashflow.netProfit == null || cashflow.netCashFromOps == null || cashflow.endingCash == null;

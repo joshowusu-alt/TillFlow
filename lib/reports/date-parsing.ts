@@ -8,6 +8,7 @@ import {
   addLocalDays,
   businessLocalDateWindow,
   localDateKey,
+  requireReportTimeZone,
   windowForLocalDates,
   type HalfOpenWindow,
 } from '@/lib/reports/reporting-clock';
@@ -98,15 +99,16 @@ export function resolveReportDateRange(
   params: { from?: string; to?: string } | undefined,
   fallbackStart: Date,
   fallbackEnd: Date,
-  timeZone: string = DEFAULT_BUSINESS_TIMEZONE,
+  timeZone?: string | null,
 ) {
+  const zone = requireReportTimeZone(timeZone);
   const fromKey = /^\d{4}-\d{2}-\d{2}$/.test(params?.from ?? '') ? params!.from! : undefined;
   const toKey = /^\d{4}-\d{2}-\d{2}$/.test(params?.to ?? '') ? params!.to! : undefined;
-  const parsed = fromKey && toKey ? businessLocalDateWindow(fromKey, toKey, timeZone) : null;
+  const parsed = fromKey && toKey ? businessLocalDateWindow(fromKey, toKey, zone) : null;
   const window = parsed ?? windowForLocalDates(
-    todayParts(fallbackStart, timeZone),
-    todayParts(fallbackEnd, timeZone),
-    timeZone,
+    todayParts(fallbackStart, zone),
+    todayParts(fallbackEnd, zone),
+    zone,
   );
   return {
     start: window.startInclusive,
@@ -119,9 +121,10 @@ export function resolveSelectableReportDateRange(
   params: { from?: string; to?: string; period?: string } | undefined,
   defaultPeriod: string,
   now = new Date(),
-  timeZone: string = DEFAULT_BUSINESS_TIMEZONE,
+  timeZone?: string | null,
 ) {
-  const preset = presetFor(params?.period ?? defaultPeriod, now, timeZone);
+  const zone = requireReportTimeZone(timeZone);
+  const preset = presetFor(params?.period ?? defaultPeriod, now, zone);
   const normalizedPeriod = (params?.period ?? '').toLowerCase();
   const submittedFrom = params?.from?.trim();
   const submittedTo = params?.to?.trim();
@@ -129,8 +132,8 @@ export function resolveSelectableReportDateRange(
     || (!normalizedPeriod && Boolean(submittedFrom || submittedTo));
   const from = hasCustomRange && submittedFrom ? submittedFrom : localDateKey(preset.from);
   const to = hasCustomRange && submittedTo ? submittedTo : localDateKey(preset.to);
-  const window = businessLocalDateWindow(from, to, timeZone)
-    ?? windowForLocalDates(preset.from, preset.to, timeZone);
+  const window = businessLocalDateWindow(from, to, zone)
+    ?? windowForLocalDates(preset.from, preset.to, zone);
 
   return {
     start: window.startInclusive,

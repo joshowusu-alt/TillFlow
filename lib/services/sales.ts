@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { UserError } from '@/lib/action-utils';
 import {
@@ -920,17 +921,18 @@ async function createSaleImpl(input: CreateSaleInput) {
             where: {
               customerId: input.customerId,
               businessId: input.businessId,
-              paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+              paymentStatus: { notIn: ['RETURNED', 'VOID'] },
             },
             select: {
+              paymentStatus: true,
               totalPence: true,
-              payments: { select: { amountPence: true } },
+              payments: { select: { amountPence: true, status: true } },
             },
           });
-          const outstanding = openInvoices.reduce((sum, invoice) => {
-            const paid = invoice.payments.reduce((paidSum, payment) => paidSum + payment.amountPence, 0);
-            return sum + Math.max(invoice.totalPence - paid, 0);
-          }, 0);
+          const outstanding = openInvoices.reduce(
+            (sum, invoice) => sum + receivableDocumentBalance(invoice).balancePence,
+            0,
+          );
           const newCreditExposure = outstanding + balanceDue;
           if (newCreditExposure > customerResult.creditLimitPence) {
             throw new UserError(

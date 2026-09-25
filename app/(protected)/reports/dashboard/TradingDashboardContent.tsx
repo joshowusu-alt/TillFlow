@@ -84,7 +84,7 @@ async function _getTradingDashboardSnapshot(
       where: {
         businessId,
         ...storeFilter,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
       select: {
         id: true,
@@ -101,7 +101,7 @@ async function _getTradingDashboardSnapshot(
       where: {
         businessId,
         ...storeFilter,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
       select: { paymentStatus: true, totalPence: true, payments: { select: { amountPence: true } } },
     }),

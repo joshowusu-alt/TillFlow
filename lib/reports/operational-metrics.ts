@@ -65,7 +65,7 @@ export function summarizeReceivables(invoices: ReceivableLike[], referenceDate =
 			totalPence: invoice.totalPence,
 			payments: invoice.payments.map((payment) => ({
 				amountPence: payment.amountPence,
-				status: payment.status ?? 'CONFIRMED',
+				status: payment.status ?? '',
 			})),
 		}).balancePence;
 		if (balancePence <= 0) continue;

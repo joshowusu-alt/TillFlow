@@ -25,7 +25,8 @@ describe('resolveReportDateRange', () => {
     const result = resolveReportDateRange(
       { from: '2026-03-01', to: '2026-03-12' },
       new Date('2026-03-01T00:00:00.000Z'),
-      new Date('2026-03-12T09:00:00.000Z')
+      new Date('2026-03-12T09:00:00.000Z'),
+      'Africa/Accra',
     );
 
     expect(result.fromInputValue).toBe('2026-03-01');
@@ -39,7 +40,8 @@ describe('resolveReportDateRange', () => {
     const result = resolveReportDateRange(
       undefined,
       new Date('2026-03-01T00:00:00.000Z'),
-      new Date('2026-03-12T09:00:00.000Z')
+      new Date('2026-03-12T09:00:00.000Z'),
+      'Africa/Accra',
     );
 
     expect(result.fromInputValue).toBe('2026-03-01');
@@ -55,6 +57,7 @@ describe('resolveSelectableReportDateRange', () => {
       { period: '30d', from: '2026-03-03', to: '2026-04-01' },
       '30d',
       now,
+      'Africa/Accra',
     );
 
     expect(result.periodInputValue).toBe('30d');
@@ -68,6 +71,7 @@ describe('resolveSelectableReportDateRange', () => {
       { period: '30d', from: '2026-02-01', to: '2026-02-28' },
       '30d',
       now,
+      'Africa/Accra',
     );
 
     expect(result.periodInputValue).toBe('30d');
@@ -81,6 +85,7 @@ describe('resolveSelectableReportDateRange', () => {
       { period: 'custom', from: '2026-02-01', to: '2026-02-28' },
       '30d',
       now,
+      'Africa/Accra',
     );
 
     expect(result.periodInputValue).toBe('custom');
@@ -97,6 +102,7 @@ describe('resolveSelectableReportDateRange', () => {
       { from: '2026-03-10', to: '2026-03-12' },
       '30d',
       now,
+      'Africa/Accra',
     );
 
     expect(result.periodInputValue).toBe('custom');

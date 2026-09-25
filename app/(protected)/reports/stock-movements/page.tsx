@@ -94,7 +94,7 @@ export default async function StockMovementsPage({
   };
 
   const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } =
-    resolveReportDateRange(params, weekAgo, today);
+    resolveReportDateRange(params, weekAgo, today, business.timezone);
   const { stores } = await getBusinessStores(business.id, params.storeId);
   const selectedStoreId = resolveStoreSelection(stores, params.storeId, 'ALL') ?? 'ALL';
 

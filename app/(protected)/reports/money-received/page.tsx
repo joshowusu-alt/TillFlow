@@ -100,18 +100,19 @@ export default async function MoneyReceivedReportPage({
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 7);
 
+  const businessTz = await prisma.business.findUnique({
+    where: { id: access.businessId },
+    select: { timezone: true },
+  });
+  const timeZone = businessTz?.timezone;
+  if (!timeZone) throw new Error('Business timezone is required for report windows');
+
   const {
     start: from,
     end: to,
     fromInputValue: fromIso,
     toInputValue: toIso,
-  } = resolveReportDateRange(searchParams, weekAgo, today);
-
-  const businessTz = await prisma.business.findUnique({
-    where: { id: access.businessId },
-    select: { timezone: true },
-  });
-  const timeZone = businessTz?.timezone ?? DEFAULT_BUSINESS_TIMEZONE;
+  } = resolveReportDateRange(searchParams, weekAgo, today, timeZone);
 
   const metricParam = (searchParams?.metric ?? 'money_received') as MoneyReceivedMetricId;
   const drillMetricId = DRILL_OPTIONS.some((o) => o.id === metricParam)

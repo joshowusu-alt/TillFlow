@@ -239,9 +239,17 @@ export function compareSalesMovement(input: {
   const branches = mergeBranchBuckets(input.currentBranches, input.comparisonBranches, 50);
   const cashiers = mergeCashierBuckets(input.currentCashiers, input.comparisonCashiers, 50);
 
+  const unallocated = [...input.currentProducts, ...input.comparisonProducts]
+    .filter((row) => row.name === 'Unallocated sales difference')
+    .reduce((sum, row) => sum + row.salesValuePence, 0);
+
   return {
     scope: input.scope,
     headline,
+    unallocatedSalesDifference: {
+      label: 'Unallocated sales difference',
+      salesValuePence: unallocated,
+    },
     productGrowers: products.growers,
     productDecliners: products.decliners,
     newProducts: products.news,

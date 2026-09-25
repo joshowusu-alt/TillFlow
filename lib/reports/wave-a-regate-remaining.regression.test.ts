@@ -98,17 +98,17 @@ describe('remaining Wave A defects', () => {
     });
     const { default: AnalyticsContent } = await import('@/app/(protected)/reports/analytics/AnalyticsContent');
     const view = await AnalyticsContent({ businessId: 'biz-1', currency: 'GHS', periodDays: 7, timeZone: 'Africa/Accra' });
-    expect(view.kpis.totalProfit).toBe(1015);
-    expect(view.kpis.marginPercent).toBeCloseTo((1015 / 1849) * 100, 5);
+    expect(view.props.kpis.totalProfit).toBe(1015);
+    expect(view.props.kpis.marginPercent).toBe(Math.round((1015 / 1849) * 100));
 
     prismaMock.salesInvoice.findMany.mockResolvedValue([{
       ...discountedSale,
       lines: [{ ...discountedSale.lines[0], lineCostPence: 0, product: { ...discountedSale.lines[0].product, defaultCostBasePence: 0 } }],
     }]);
     const incomplete = await AnalyticsContent({ businessId: 'biz-1', currency: 'GHS', periodDays: 7, timeZone: 'Africa/Accra' });
-    expect(incomplete.kpis.totalProfit).toBeNull();
-    expect(incomplete.kpis.marginPercent).toBeNull();
-    expect(incomplete.kpis.marginState).toBe('INCOMPLETE_COSTS');
+    expect(incomplete.props.kpis.totalProfit).toBeNull();
+    expect(incomplete.props.kpis.marginPercent).toBeNull();
+    expect(incomplete.props.kpis.marginState).toBe('INCOMPLETE_COSTS');
   });
 
   it('report windows require an explicit business timezone', () => {
@@ -117,9 +117,11 @@ describe('remaining Wave A defects', () => {
     expect(() => businessWeekWindow(instant)).toThrow(/timezone/i);
     expect(() => resolveReportDateRange(undefined, instant, instant)).toThrow(/timezone/i);
     const nairobi = businessDayWindow(instant, 'Africa/Nairobi');
-    expect(nairobi.startInclusive.toISOString()).toBe('2026-06-14T21:00:00.000Z');
-    expect(nairobi.endExclusive.toISOString()).toBe('2026-06-15T21:00:00.000Z');
-    expect(instant.getTime() >= nairobi.endExclusive.getTime()).toBe(true);
+    expect(nairobi.startInclusive.toISOString()).toBe('2026-06-15T21:00:00.000Z');
+    expect(nairobi.endExclusive.toISOString()).toBe('2026-06-16T21:00:00.000Z');
+    const prior = businessDayWindow(new Date(nairobi.startInclusive.getTime() - 1), 'Africa/Nairobi');
+    expect(prior.endExclusive.toISOString()).toBe('2026-06-15T21:00:00.000Z');
+    expect(instant.getTime() >= prior.endExclusive.getTime()).toBe(true);
   });
 
   it('summarizeReceivables does not treat a missing payment status as confirmed', () => {
@@ -209,6 +211,7 @@ describe('remaining Wave A defects', () => {
         aggregate: vi.fn(async () => ({ _sum: { totalPence: 500 }, _count: { id: 1 } })),
         groupBy: vi.fn(async () => []),
       },
+      salesInvoiceLine: { aggregate: vi.fn(async () => ({ _sum: { qtyBase: 0 } })) },
       product: { findMany: vi.fn(async () => [{ id: 'p1', name: 'Rice' }]) },
       store: { findMany: vi.fn(async () => []) },
       user: { findMany: vi.fn(async () => []) },

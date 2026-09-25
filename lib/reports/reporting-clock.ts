@@ -18,8 +18,14 @@ export type HalfOpenWindow = {
   endExclusive: Date;
 };
 
+export function requireReportTimeZone(timeZone?: string | null): string {
+  const trimmed = timeZone?.trim();
+  if (!trimmed) throw new Error('Business timezone is required for report windows');
+  return trimmed;
+}
+
 export function businessDayWindow(instant: Date, timeZone?: string | null): HalfOpenWindow {
-  const bounds = getBusinessDayBounds(instant, timeZone);
+  const bounds = getBusinessDayBounds(instant, requireReportTimeZone(timeZone));
   return {
     timeZone: bounds.timeZone,
     startInclusive: bounds.dayStart,
@@ -34,7 +40,7 @@ export function zonedDateTimeParts(instant: Date, timeZone?: string | null): {
   hour: number;
   weekday: number;
 } {
-  const zone = resolveBusinessTimeZone(timeZone);
+  const zone = requireReportTimeZone(timeZone);
   const formatted = new Intl.DateTimeFormat('en-US', {
     timeZone: zone,
     hour12: false,
@@ -75,7 +81,7 @@ export function windowForLocalDates(
   to: LocalDateParts,
   timeZone?: string | null,
 ): HalfOpenWindow {
-  const zone = resolveBusinessTimeZone(timeZone);
+  const zone = requireReportTimeZone(timeZone);
   const start = getBusinessCalendarDayBounds(from, zone);
   const end = getBusinessCalendarDayBounds(to, zone);
   return {
@@ -138,7 +144,7 @@ export function localDateInstant(
 }
 
 export function businessWeekWindow(now: Date, timeZone?: string | null, offsetWeeks = 0): HalfOpenWindow {
-  const zone = resolveBusinessTimeZone(timeZone);
+  const zone = requireReportTimeZone(timeZone);
   const local = getBusinessDayBounds(now, zone).localDate;
   const weekday = new Date(Date.UTC(local.year, local.month - 1, local.day)).getUTCDay();
   const mondayOffset = (weekday === 0 ? -6 : 1 - weekday) + offsetWeeks * 7;

@@ -82,18 +82,19 @@ export default async function MomoConfirmationReviewPage({
   const monthAgo = new Date(today);
   monthAgo.setDate(today.getDate() - 30);
 
+  const businessTz = await prisma.business.findUnique({
+    where: { id: access.businessId },
+    select: { timezone: true },
+  });
+  const timeZone = businessTz?.timezone;
+  if (!timeZone) throw new Error('Business timezone is required for report windows');
+
   const {
     start: from,
     end: to,
     fromInputValue: fromIso,
     toInputValue: toIso,
-  } = resolveReportDateRange(searchParams, monthAgo, today);
-
-  const businessTz = await prisma.business.findUnique({
-    where: { id: access.businessId },
-    select: { timezone: true },
-  });
-  const timeZone = businessTz?.timezone ?? DEFAULT_BUSINESS_TIMEZONE;
+  } = resolveReportDateRange(searchParams, monthAgo, today, timeZone);
 
   const statusFilter =
     searchParams?.status === 'ALL'

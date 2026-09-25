@@ -395,11 +395,11 @@ async function getOwnerDailySummaryMetrics(
       : cashVarShifts.reduce((sum, shift) => sum + (shift.variance ?? 0), 0),
     marginState: margin.state,
     overdueCustomerPence: overdueCustomers.reduce(
-      (sum, invoice) => sum + Math.max(0, receivableDocumentBalance(invoice).balancePence),
+      (sum, invoice) => sum + receivableDocumentBalance(invoice).balancePence,
       0,
     ),
     overdueSupplierPence: overdueSuppliers.reduce(
-      (sum, invoice) => sum + Math.max(0, payableDocumentBalance(invoice).balancePence),
+      (sum, invoice) => sum + payableDocumentBalance(invoice).balancePence,
       0,
     ),
     openExpectedCashPence: openShifts.length === 0

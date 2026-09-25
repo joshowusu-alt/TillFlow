@@ -38,7 +38,7 @@ export default async function ExportsPage({
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
 
-  const { start, end, fromInputValue, toInputValue, periodInputValue } = resolveSelectableReportDateRange(searchParams, '30d');
+  const { start, end, fromInputValue, toInputValue, periodInputValue } = resolveSelectableReportDateRange(searchParams, '30d', new Date(), business.timezone);
   const periodLabel = exportPeriodOptions.find((option) => option.value === periodInputValue)?.label ?? 'Last 30 days';
   const exportQuery = {
     period: periodInputValue,

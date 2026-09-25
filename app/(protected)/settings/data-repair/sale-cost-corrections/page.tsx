@@ -45,7 +45,7 @@ export default async function SaleCostCorrectionsPage({
 
   const q = searchParams?.q?.trim() ?? '';
   const status = resolveStatus(searchParams?.status);
-  const { start, end, fromInputValue, toInputValue, periodInputValue } = resolveSelectableReportDateRange(searchParams, '30d');
+  const { start, end, fromInputValue, toInputValue, periodInputValue } = resolveSelectableReportDateRange(searchParams, '30d', new Date(), business.timezone);
   const shouldLimitPreview = status === 'all';
 
   const rawLines = await prisma.salesInvoiceLine.findMany({

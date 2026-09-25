@@ -48,7 +48,7 @@ export default async function RiskMonitorPage({
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 7);
 
-  const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, weekAgo, today);
+  const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, weekAgo, today, business.timezone);
   const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
   const storeId = resolveStoreSelection(stores, searchParams?.storeId, 'ALL') ?? 'ALL';
   const status = searchParams?.status || 'OPEN';

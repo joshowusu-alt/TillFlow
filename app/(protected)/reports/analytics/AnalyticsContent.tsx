@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { businessDayWindow, zonedDateTimeParts } from '@/lib/reports/reporting-clock';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
+import { evaluateMarginSet } from '@/lib/reports/margin-line';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import AnalyticsClient from './AnalyticsClient';
 
@@ -83,8 +84,8 @@ export default async function AnalyticsContent({
         const date = new Date(today.startInclusive.getTime() - i * 24 * 60 * 60 * 1000);
         const key =
           periodDays <= 14
-            ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })
-            : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone })
+            : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone });
         dailySales.set(key, 0);
         dailyProfit.set(key, 0);
       }
@@ -93,15 +94,24 @@ export default async function AnalyticsContent({
         const date = new Date(sale.createdAt);
         const key =
           periodDays <= 14
-            ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })
-            : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone })
+            : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone });
         dailySales.set(key, (dailySales.get(key) || 0) + sale.totalPence);
-        const saleProfit = sale.lines.reduce((sum, l) => {
-          const cost =
-            l.lineCostPence > 0 ? l.lineCostPence : l.product.defaultCostBasePence * l.qtyBase;
-          return sum + l.lineSubtotalPence - cost;
-        }, 0);
-        dailyProfit.set(key, (dailyProfit.get(key) || 0) + saleProfit);
+        const saleMargin = evaluateMarginSet([{
+          paymentStatus: sale.paymentStatus,
+          discountPence: sale.discountPence,
+          lines: sale.lines.map((line) => ({
+            lineSubtotalPence: line.lineSubtotalPence,
+            lineDiscountPence: line.lineDiscountPence,
+            promoDiscountPence: line.promoDiscountPence,
+            lineCostPence: line.lineCostPence,
+            qtyBase: line.qtyBase,
+            defaultCostBasePence: line.product.defaultCostBasePence,
+          })),
+        }]);
+        if (saleMargin.grossProfitPence != null) {
+          dailyProfit.set(key, (dailyProfit.get(key) || 0) + saleMargin.grossProfitPence);
+        }
       });
 
       // Calculate hourly heatmap data
@@ -109,10 +119,10 @@ export default async function AnalyticsContent({
       const hourDaySales = new Map<string, number>();
 
       recentSales.forEach((sale) => {
-        const date = new Date(sale.createdAt);
-        const day = dayNames[date.getDay()];
+        const parts = zonedDateTimeParts(new Date(sale.createdAt), timeZone);
+        const day = dayNames[parts.weekday];
         const dayForDisplay = day === 'Sun' ? 'Sun' : day;
-        const hour = date.getHours();
+        const hour = parts.hour;
         const key = `${dayForDisplay}-${hour}`;
         hourDaySales.set(key, (hourDaySales.get(key) || 0) + 1);
       });
@@ -165,10 +175,7 @@ export default async function AnalyticsContent({
           const rankedAmount = amountByProduct.get(line.productId) ?? 0;
           existing.revenue += rankedAmount;
           amountByProduct.set(line.productId, 0);
-          existing.cost +=
-            line.lineCostPence > 0
-              ? line.lineCostPence
-              : line.product.defaultCostBasePence * line.qtyBase;
+          existing.cost += line.lineCostPence;
           productStats.set(line.productId, existing);
         });
       });
@@ -223,17 +230,20 @@ export default async function AnalyticsContent({
 
       // Calculate KPIs — GP derived from sale lines (same source as product table)
       const totalSales = recentSales.reduce((sum, s) => sum + s.totalPence, 0);
-      const totalProfit = recentSales.reduce((sum, sale) => {
-        return (
-          sum +
-          sale.lines.reduce((lineSum, l) => {
-            const cost =
-              l.lineCostPence > 0 ? l.lineCostPence : l.product.defaultCostBasePence * l.qtyBase;
-            return lineSum + l.lineSubtotalPence - cost;
-          }, 0)
-        );
-      }, 0);
-      const marginPercent = totalSales > 0 ? (totalProfit / totalSales) * 100 : 0;
+      const periodMargin = evaluateMarginSet(recentSales.map((sale) => ({
+        paymentStatus: sale.paymentStatus,
+        discountPence: sale.discountPence,
+        lines: sale.lines.map((line) => ({
+          lineSubtotalPence: line.lineSubtotalPence,
+          lineDiscountPence: line.lineDiscountPence,
+          promoDiscountPence: line.promoDiscountPence,
+          lineCostPence: line.lineCostPence,
+          qtyBase: line.qtyBase,
+          defaultCostBasePence: line.product.defaultCostBasePence,
+        })),
+      })));
+      const totalProfit = periodMargin.grossProfitPence;
+      const marginPercent = periodMargin.state === 'READY' ? periodMargin.grossProfitPercent : null;
       const previousTotalSales = previousSales.reduce((sum, s) => sum + s.totalPence, 0);
       const growthPercent =
         previousTotalSales > 0
@@ -265,6 +275,7 @@ export default async function AnalyticsContent({
           totalSales,
           totalProfit,
           marginPercent,
+          marginState: periodMargin.state,
           totalTransactions: recentSales.length,
           avgTransaction: recentSales.length > 0 ? totalSales / recentSales.length : 0,
           growthPercent,
@@ -282,5 +293,5 @@ export default async function AnalyticsContent({
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
   );
 
-  return <AnalyticsClient data={analyticsData} />;
+  return <AnalyticsClient data={analyticsData} kpis={analyticsData.kpis} />;
 }
