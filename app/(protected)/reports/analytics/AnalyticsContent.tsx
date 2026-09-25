@@ -10,19 +10,25 @@ type AnalyticsContentProps = {
   currency: string;
   periodDays: number;
   timeZone?: string | null;
+  now?: Date;
+  periodStart?: Date;
+  periodEndExclusive?: Date;
 };
 
-export default async function AnalyticsContent({
+export async function loadAnalyticsReport({
   businessId,
   currency,
   periodDays,
   timeZone,
+  now = new Date(),
+  periodStart,
+  periodEndExclusive,
 }: AnalyticsContentProps) {
-  const now = new Date();
-  const today = businessDayWindow(now, timeZone);
-  const periodAgo = new Date(today.startInclusive.getTime() - periodDays * 86_400_000);
+  const reportTimeZone = timeZone ?? undefined;
+  const today = businessDayWindow(now, reportTimeZone);
+  const periodAgo = periodStart ?? new Date(today.startInclusive.getTime() - periodDays * 86_400_000);
   const previousPeriodAgo = new Date(periodAgo.getTime() - periodDays * 86_400_000);
-  const endExclusive = new Date(now.getTime() + 1);
+  const endExclusive = periodEndExclusive ?? new Date(now.getTime() + 1);
 
   const analyticsData = await measureServerOperation(
     'report.analytics.snapshot',
@@ -84,8 +90,8 @@ export default async function AnalyticsContent({
         const date = new Date(today.startInclusive.getTime() - i * 24 * 60 * 60 * 1000);
         const key =
           periodDays <= 14
-            ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone })
-            : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone });
+            ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: reportTimeZone })
+            : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: reportTimeZone });
         dailySales.set(key, 0);
         dailyProfit.set(key, 0);
       }
@@ -94,8 +100,8 @@ export default async function AnalyticsContent({
         const date = new Date(sale.createdAt);
         const key =
           periodDays <= 14
-            ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone })
-            : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone });
+            ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: reportTimeZone })
+            : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: reportTimeZone });
         dailySales.set(key, (dailySales.get(key) || 0) + sale.totalPence);
         const saleMargin = evaluateMarginSet([{
           paymentStatus: sale.paymentStatus,
@@ -119,7 +125,7 @@ export default async function AnalyticsContent({
       const hourDaySales = new Map<string, number>();
 
       recentSales.forEach((sale) => {
-        const parts = zonedDateTimeParts(new Date(sale.createdAt), timeZone);
+        const parts = zonedDateTimeParts(new Date(sale.createdAt), reportTimeZone);
         const day = dayNames[parts.weekday];
         const dayForDisplay = day === 'Sun' ? 'Sun' : day;
         const hour = parts.hour;
@@ -141,7 +147,7 @@ export default async function AnalyticsContent({
       const hourTotals = new Map<number, number>();
 
       recentSales.forEach((sale) => {
-        const hour = zonedDateTimeParts(new Date(sale.createdAt), timeZone).hour;
+        const hour = zonedDateTimeParts(new Date(sale.createdAt), reportTimeZone).hour;
         hourTotals.set(hour, (hourTotals.get(hour) || 0) + sale.totalPence);
       });
 
@@ -294,5 +300,10 @@ export default async function AnalyticsContent({
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
   );
 
+  return analyticsData;
+}
+
+export default async function AnalyticsContent(props: AnalyticsContentProps) {
+  const analyticsData = await loadAnalyticsReport(props);
   return <AnalyticsClient data={analyticsData} kpis={analyticsData.kpis} />;
 }

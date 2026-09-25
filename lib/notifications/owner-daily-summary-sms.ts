@@ -27,7 +27,7 @@ type OwnerSummaryBusiness = {
   whatsappBranchScope: string | null;
 };
 
-type OwnerDailySummaryMetrics = {
+export type OwnerDailySummaryMetrics = {
   dateLabel: string;
   scopeLabel: string;
   totalSalesPence: number;
@@ -206,7 +206,7 @@ async function resolveSummaryStore(
   });
 }
 
-async function getOwnerDailySummaryMetrics(
+export async function getOwnerDailySummaryMetrics(
   db: PrismaTx,
   business: OwnerSummaryBusiness,
   now: Date,

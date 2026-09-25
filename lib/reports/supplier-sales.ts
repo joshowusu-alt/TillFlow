@@ -35,6 +35,8 @@ export type SupplierSalesReport = {
   topSupplierName: string | null;
   rows: SupplierSalesRow[];
   unallocatedSalesDifferencePence: number;
+  unallocatedSalesDifferenceLabel: 'Unallocated sales difference';
+  recognisedSalesPence: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -218,11 +220,23 @@ export async function getSupplierSalesReport(
     .sort((a, b) => b.totalRevenuePence - a.totalRevenuePence);
 
   const totalRevenuePence = rows.reduce((s, r) => s + r.totalRevenuePence, 0);
+  const recognisedSalesPence = salesInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
   const totalQtyBase = rows.reduce((s, r) => s + r.totalQtyBase, 0);
   const suppliersWithSalesCount = rows.filter((r) => r.totalRevenuePence > 0).length;
   const topSupplierName = rows.find((r) => r.totalRevenuePence > 0)?.supplierName ?? null;
 
-  return { start, end, totalRevenuePence, totalQtyBase, suppliersWithSalesCount, topSupplierName, rows, unallocatedSalesDifferencePence };
+  return {
+    start,
+    end,
+    totalRevenuePence,
+    totalQtyBase,
+    suppliersWithSalesCount,
+    topSupplierName,
+    rows,
+    unallocatedSalesDifferencePence,
+    unallocatedSalesDifferenceLabel: 'Unallocated sales difference',
+    recognisedSalesPence,
+  };
 }
 
 // ---------------------------------------------------------------------------

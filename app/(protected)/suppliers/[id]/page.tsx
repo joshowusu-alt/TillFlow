@@ -10,6 +10,7 @@ import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { formatMoney, formatDateTime, formatDate, formatRelativeDate } from '@/lib/format';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
+import { summarizeOpenPayables } from '@/lib/reports/surface-balances';
 import { parseTags } from '@/lib/contact-tags';
 import { updateSupplierAction } from '@/app/actions/suppliers';
 import DueDateBadge from '@/components/DueDateBadge';
@@ -143,7 +144,7 @@ export default async function SupplierDetailPage({
   });
 
   const activeInvoices = invoices.filter((invoice) => !invoice.isClosed);
-  const outstanding = activeInvoices.reduce((sum, invoice) => sum + invoice.balance, 0);
+  const outstanding = summarizeOpenPayables(supplier.purchaseInvoices).outstandingPence;
   const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
   const totalPaid = activeInvoices.reduce((sum, invoice) => sum + invoice.effectivePaid, 0);
   const activePurchaseInvoiceCount = activeInvoices.filter((invoice) => invoice.balance > 0).length;

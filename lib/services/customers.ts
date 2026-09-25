@@ -147,8 +147,9 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
         })
       : Promise.resolve([] as Array<{
           customerId: string | null;
+          paymentStatus: string;
           totalPence: number;
-          payments: { amountPence: number }[];
+          payments: { amountPence: number; status: string }[];
         }>),
     customerIds.length
       ? prisma.salesInvoice.groupBy({

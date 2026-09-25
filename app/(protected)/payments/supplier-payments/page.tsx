@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
+import { summarizeOpenPayables } from '@/lib/reports/surface-balances';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import DueDateBadge from '@/components/DueDateBadge';
 import RemainingBalance from '@/components/RemainingBalance';
@@ -117,7 +118,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
     }))
     .filter((invoice) => invoice.outstanding !== 0);
 
-  const totalOutstanding = outstandingInvoices.reduce((sum, inv) => sum + inv.outstanding, 0);
+  const totalOutstanding = summarizeOpenPayables(invoices).outstandingPence;
   const unpaidPurchaseCount = outstandingInvoices.length;
 
   // Last payment for the supplier summary header

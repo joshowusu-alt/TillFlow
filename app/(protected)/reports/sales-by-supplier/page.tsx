@@ -368,7 +368,7 @@ export default async function SalesBySupplierPage({
             <tbody>
               {report.unallocatedSalesDifferencePence !== 0 ? (
                 <tr className="rounded-xl bg-white">
-                  <td className="px-3 py-3 text-sm font-semibold">Unallocated sales difference</td>
+                  <td className="px-3 py-3 text-sm font-semibold">{report.unallocatedSalesDifferenceLabel}</td>
                   <td className="hidden sm:table-cell px-3 py-3 text-sm text-black/60">—</td>
                   <td className="px-3 py-3 text-sm font-semibold tabular-nums">
                     {formatMoney(report.unallocatedSalesDifferencePence, business.currency)}

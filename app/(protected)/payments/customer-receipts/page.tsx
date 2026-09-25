@@ -7,6 +7,7 @@ import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
 import { recordCustomerPaymentAction } from '@/app/actions/payments';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
+import { summarizeOpenReceivables } from '@/lib/reports/surface-balances';
 import DueDateBadge from '@/components/DueDateBadge';
 import RemainingBalance from '@/components/RemainingBalance';
 import Link from 'next/link';
@@ -233,7 +234,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
     }))
     .filter((invoice) => invoice.outstanding !== 0);
 
-  const totalOutstanding = outstandingInvoices.reduce((sum, inv) => sum + inv.outstanding, 0);
+  const totalOutstanding = summarizeOpenReceivables(invoices).outstandingPence;
   const unpaidInvoiceCount = outstandingInvoices.length;
 
   const renderPaymentForm = (invoiceId: string) => (

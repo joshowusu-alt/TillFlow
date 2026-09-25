@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
+import { summarizeOpenPayables } from '@/lib/reports/surface-balances';
 import { localDateInstant } from '@/lib/reports/reporting-clock';
 
 const csvEscape = (value: string | number | null | undefined) => {
@@ -66,7 +67,7 @@ export async function GET(
   const activeInvoices = invoices.filter((invoice) => !invoice.isClosed);
   const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
   const totalPaid = activeInvoices.reduce((sum, invoice) => sum + invoice.paid, 0);
-  const outstanding = activeInvoices.reduce((sum, invoice) => sum + invoice.balance, 0);
+  const outstanding = summarizeOpenPayables(supplier.purchaseInvoices).outstandingPence;
 
   const rows: string[] = [];
   rows.push(`Supplier,${csvEscape(supplier.name)}`);

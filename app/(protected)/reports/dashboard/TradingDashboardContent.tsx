@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { getIncomeStatement } from '@/lib/reports/financials';
-import { evaluateMarginSet, type MarginReturnKind } from '@/lib/reports/margin-line';
+import { loadTradingPeriodMargin } from '@/lib/reports/trading-margin';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { loadTradingOpenDocuments } from '@/lib/reports/trading-balances';
 import { classifyInventoryState, getReceivableAgeBucket } from '@/lib/reports/operational-metrics';
@@ -294,6 +294,10 @@ export default async function TradingDashboardContent({
   };
 
   const storeFilter = selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId };
+  const tradingBalances = await loadTradingOpenDocuments(
+    businessId,
+    selectedStoreId === 'ALL' ? undefined : selectedStoreId,
+  );
 
   const [
     snapshot,
@@ -363,47 +367,12 @@ export default async function TradingDashboardContent({
 
   // Summarise sales — shared sales-revenue contract (matches Home)
   const totalSales = salesRevenue.salesRevenuePence;
-  const marginInvoices = await prisma.salesInvoice.findMany({
-    where: {
-      businessId,
-      ...storeFilter,
-      createdAt: { gte: scope.startInclusive, lt: scope.endExclusive },
-    },
-    select: {
-      paymentStatus: true,
-      discountPence: true,
-      salesReturn: { select: { type: true } },
-      lines: {
-        select: {
-          lineSubtotalPence: true,
-          lineDiscountPence: true,
-          promoDiscountPence: true,
-          lineCostPence: true,
-          qtyBase: true,
-          product: { select: { defaultCostBasePence: true } },
-        },
-      },
-    },
+  const tradingMargin = await loadTradingPeriodMargin({
+    businessId,
+    startInclusive: scope.startInclusive,
+    endExclusive: scope.endExclusive,
+    storeId: selectedStoreId === 'ALL' ? undefined : selectedStoreId,
   });
-  const tradingMargin = evaluateMarginSet(marginInvoices.map((invoice) => {
-    let returnKind: MarginReturnKind = 'NONE';
-    if (invoice.salesReturn?.type === 'VOID' && invoice.paymentStatus === 'VOID') returnKind = 'FULL_VOID';
-    else if (invoice.salesReturn?.type === 'RETURN' && invoice.paymentStatus === 'RETURNED') returnKind = 'FULL_RETURN';
-    else if (invoice.salesReturn) returnKind = 'BACKUP_OR_REPLAY';
-    return {
-      paymentStatus: invoice.paymentStatus,
-      discountPence: invoice.discountPence,
-      returnKind,
-      lines: invoice.lines.map((line) => ({
-        lineSubtotalPence: line.lineSubtotalPence,
-        lineDiscountPence: line.lineDiscountPence,
-        promoDiscountPence: line.promoDiscountPence,
-        lineCostPence: line.lineCostPence,
-        qtyBase: line.qtyBase,
-        defaultCostBasePence: line.product.defaultCostBasePence,
-      })),
-    };
-  }));
   const totalGrossMargin = tradingMargin.grossProfitPence;
   const gpPercent = tradingMargin.grossProfitPercent;
   const marginReady = tradingMargin.state === 'READY' && totalGrossMargin != null && gpPercent != null;

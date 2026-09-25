@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime, formatDate, formatRelativeDate } from '@/lib/format';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
+import { summarizeOpenReceivables } from '@/lib/reports/surface-balances';
 import { buildCustomerDetailLedger } from '@/lib/reports/detail-ledger';
 import { parseTags } from '@/lib/contact-tags';
 import Link from 'next/link';
@@ -191,7 +192,7 @@ export default async function CustomerDetailPage({
   });
 
   const activeInvoices = invoices.filter((invoice) => !invoice.isClosed);
-  const outstanding = activeInvoices.reduce((sum, invoice) => sum + invoice.balance, 0);
+  const outstanding = summarizeOpenReceivables(customer.salesInvoices).outstandingPence;
   const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
   const totalPaid = activeInvoices.reduce((sum, invoice) => sum + invoice.effectivePaid, 0);
   const activeInvoiceCount = activeInvoices.filter((invoice) => invoice.balance > 0).length;
