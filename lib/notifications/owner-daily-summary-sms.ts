@@ -254,13 +254,17 @@ async function getOwnerDailySummaryMetrics(
         },
         select: { method: true, amountPence: true },
       }),
-      db.salesInvoice.aggregate({
+      db.salesInvoice.findMany({
         where: {
           businessId: business.id,
           ...storeFilter,
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
-        _sum: { totalPence: true },
+        select: {
+          paymentStatus: true,
+          totalPence: true,
+          payments: { select: { amountPence: true, status: true } },
+        },
       }),
       db.inventoryBalance.count({
         where: {
@@ -386,7 +390,10 @@ async function getOwnerDailySummaryMetrics(
     momoPence: paymentSplit.MOBILE_MONEY ?? 0,
     cardPence: paymentSplit.CARD ?? 0,
     transferPence: paymentSplit.TRANSFER ?? 0,
-    outstandingArPence: outstandingAr._sum.totalPence ?? 0,
+    outstandingArPence: outstandingAr.reduce(
+      (sum, invoice) => sum + receivableDocumentBalance(invoice).balancePence,
+      0,
+    ),
     lowStockCount,
     voidCount,
     returnCount,

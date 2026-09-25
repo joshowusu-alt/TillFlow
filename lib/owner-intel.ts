@@ -12,7 +12,6 @@ import { computeBusinessAlerts } from './reports/alerts';
 import { getCashflowForecast } from './reports/forecast';
 import { getMarginAnalysisSnapshot } from './reports/margin-analysis';
 import { prisma } from './prisma';
-import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
 import { businessDayWindow } from '@/lib/reports/reporting-clock';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
@@ -170,11 +169,11 @@ export async function getOwnerBrief(
   storeId?: string
 ): Promise<OwnerBrief> {
   const business = await prisma.business.findUnique({ where: { id: businessId }, select: { timezone: true } });
-  const todayWindow = businessDayWindow(new Date(), business?.timezone || DEFAULT_BUSINESS_TIMEZONE);
+  const todayWindow = businessDayWindow(new Date(), business?.timezone);
   const marginWindowEnd = todayWindow.endExclusive;
   const marginWindowStart = businessDayWindow(
     new Date(todayWindow.startInclusive.getTime() - 13 * 86_400_000),
-    DEFAULT_BUSINESS_TIMEZONE,
+    business?.timezone,
   ).startInclusive;
 
   const [kpis, forecast, arAp, marginSnapshot] = await Promise.all([

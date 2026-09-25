@@ -8,10 +8,13 @@ export async function GET(request: Request) {
   const { user, response } = await requireExportUser(request);
   if (!user) return response as NextResponse;
 
-  const dateRange = resolveExportDateRange(request);
+  const business = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { name: true, currency: true, timezone: true },
+  });
+  const dateRange = resolveExportDateRange(request, '30d', business?.timezone);
 
-  const [rawLines, business] = await Promise.all([
-    prisma.purchaseInvoiceLine.findMany({
+  const rawLines = await prisma.purchaseInvoiceLine.findMany({
       where: {
         purchaseInvoice: {
           businessId: user.businessId,
@@ -31,12 +34,7 @@ export async function GET(request: Request) {
         unit: true,
       },
       orderBy: { purchaseInvoice: { createdAt: 'desc' } },
-    }),
-    prisma.business.findUnique({
-      where: { id: user.businessId },
-      select: { name: true, currency: true },
-    }),
-  ]);
+  });
 
   const lines = rawLines.filter((line) => !line.purchaseInvoice.purchaseReturn);
 

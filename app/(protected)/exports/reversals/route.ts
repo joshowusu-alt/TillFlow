@@ -7,7 +7,11 @@ export async function GET(request: Request) {
   const { user, response } = await requireExportUser(request);
   if (!user) return response as NextResponse;
 
-  const dateRange = resolveExportDateRange(request);
+  const exportBusiness = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { timezone: true },
+  });
+  const dateRange = resolveExportDateRange(request, '30d', exportBusiness?.timezone);
 
   const [salesReturns, purchaseReturns, business] = await Promise.all([
     prisma.salesReturn.findMany({

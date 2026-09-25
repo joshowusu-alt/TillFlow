@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { formatMoney } from '@/lib/format';
 import { audit } from '@/lib/audit';
 import { buildWhatsAppDeepLink, resolveWhatsAppProvider, sendWhatsAppMessage } from '@/lib/notifications/providers';
@@ -193,13 +194,17 @@ async function _buildEodSummaryPayload(
         },
         select: { method: true, amountPence: true }
       }),
-      prisma.salesInvoice.aggregate({
+      prisma.salesInvoice.findMany({
         where: {
           businessId,
           ...(scopedStore ? { storeId: scopedStore.id } : {}),
-          paymentStatus: { in: ['UNPAID', 'PART_PAID'] }
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] }
         },
-        _sum: { totalPence: true }
+        select: {
+          paymentStatus: true,
+          totalPence: true,
+          payments: { select: { amountPence: true, status: true } },
+        },
       }),
       prisma.inventoryBalance.count({
         where: {
@@ -240,7 +245,10 @@ async function _buildEodSummaryPayload(
     acc[payment.method] = (acc[payment.method] ?? 0) + payment.amountPence;
     return acc;
   }, {} as Record<string, number>);
-  const arTotal = outstandingAr._sum.totalPence ?? 0;
+  const arTotal = outstandingAr.reduce(
+    (sum, invoice) => sum + receivableDocumentBalance(invoice).balancePence,
+    0,
+  );
   const cashVariance = cashVarShifts.reduce((sum, shift) => sum + Math.abs(shift.variance ?? 0), 0);
   const gpPct = totalSales > 0 ? Math.round((totalGrossProfit / totalSales) * 100) : 0;
   const dateLabel = formatBusinessDateLabel(now, effectiveTimeZone);

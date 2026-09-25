@@ -9,7 +9,7 @@ import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
-import { displayDocumentNumber, remainingBalancePence } from '@/lib/reliability/walkthrough-contracts';
+import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 import ExpensePaymentForm from './ExpensePaymentForm';
 
 type OpenTillOption = { tillId: string; tillName: string; shiftId: string };
@@ -38,7 +38,7 @@ export default async function ExpensePaymentsPage({
   // offered, the tills offered, and the focused expense must all belong to `store`.
   const [unpaidExpenses, openShifts, focusedExpense] = await Promise.all([
     prisma.expense.findMany({
-      where: { businessId: business.id, storeId: store.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
+      where: { businessId: business.id, storeId: store.id },
       select: {
         id: true,
         storeId: true,
@@ -68,12 +68,16 @@ export default async function ExpensePaymentsPage({
   ]);
 
   // The focused expense is listed first so it is the row the owner sees on arrival.
+  const openExpenses = unpaidExpenses.filter((expense) => {
+    const paid = expense.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+    return expense.amountPence - paid !== 0;
+  });
   const expenses = focusedExpense
     ? [
-        ...unpaidExpenses.filter((expense) => expense.id === focusedExpense.id),
-        ...unpaidExpenses.filter((expense) => expense.id !== focusedExpense.id),
+        ...openExpenses.filter((expense) => expense.id === focusedExpense.id),
+        ...openExpenses.filter((expense) => expense.id !== focusedExpense.id),
       ]
-    : unpaidExpenses;
+    : openExpenses;
   const focusedLabel = focusedExpense
     ? displayDocumentNumber('expense', focusedExpense.transactionNumber, focusedExpense.id)
     : null;
@@ -82,7 +86,7 @@ export default async function ExpensePaymentsPage({
       ? stores.find((item) => item.id === focusedExpense.storeId)?.name ?? 'another branch'
       : null;
   const focusedIsSettled =
-    Boolean(focusedExpense) && !focusedOtherStore && !unpaidExpenses.some((expense) => expense.id === focusedExpense?.id);
+    Boolean(focusedExpense) && !focusedOtherStore && !openExpenses.some((expense) => expense.id === focusedExpense?.id);
 
   const openTills: OpenTillOption[] = openShifts.map((shift) => ({
     tillId: shift.tillId,
@@ -141,7 +145,7 @@ export default async function ExpensePaymentsPage({
                 <tbody>
                   {expenses.map((expense) => {
                     const paid = expense.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-                    const outstanding = remainingBalancePence(expense.amountPence, paid);
+                    const outstanding = expense.amountPence - paid;
                     return (
                       <tr
                         key={expense.id}
@@ -196,7 +200,7 @@ export default async function ExpensePaymentsPage({
             <div className="space-y-3">
               {expenses.map((expense) => {
                 const paid = expense.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-                const outstanding = remainingBalancePence(expense.amountPence, paid);
+                const outstanding = expense.amountPence - paid;
                 const statusLabel =
                   expense.paymentStatus === 'PART_PAID'
                     ? 'Part paid'

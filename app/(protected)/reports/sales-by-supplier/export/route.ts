@@ -67,6 +67,17 @@ export async function GET(request: Request) {
     }
   }
 
+  if (report.unallocatedSalesDifferencePence !== 0) {
+    rows.push([
+      'Unallocated sales difference',
+      '',
+      '',
+      '',
+      formatMoney(report.unallocatedSalesDifferencePence, currency),
+      '',
+    ]);
+  }
+
   // Totals row
   rows.push([]);
   rows.push([

@@ -1,16 +1,20 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { csvEscape, formatPence, requireExportUser, resolveExportDateRange } from '../_shared';
+import { evaluateMarginLines } from '@/lib/reports/margin-line';
 import { detectExportFormat, respondWithExport } from '@/lib/exports/branded-export';
 
 export async function GET(request: Request) {
   const { user, response } = await requireExportUser(request);
   if (!user) return response as NextResponse;
 
-  const dateRange = resolveExportDateRange(request);
+  const business = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { name: true, currency: true, timezone: true },
+  });
+  const dateRange = resolveExportDateRange(request, '30d', business?.timezone);
 
-  const [rawLines, business] = await Promise.all([
-    prisma.salesInvoiceLine.findMany({
+  const rawLines = await prisma.salesInvoiceLine.findMany({
       where: {
         salesInvoice: {
           businessId: user.businessId,
@@ -26,12 +30,7 @@ export async function GET(request: Request) {
         unit: true,
       },
       orderBy: { salesInvoice: { createdAt: 'desc' } },
-    }),
-    prisma.business.findUnique({
-      where: { id: user.businessId },
-      select: { name: true, currency: true },
-    }),
-  ]);
+  });
 
   const lines = rawLines.filter((line) => !line.salesInvoice.salesReturn);
 
@@ -53,11 +52,37 @@ export async function GET(request: Request) {
     { header: 'Margin', key: 'margin', width: 12 },
   ];
 
-  const rows = lines.map((line) => {
-    const lineCostPence = line.lineCostPence > 0
-      ? line.lineCostPence
-      : line.product.defaultCostBasePence * line.qtyBase;
+  const groups = new Map<string, typeof lines>();
+  for (const line of lines) {
+    const group = groups.get(line.salesInvoice.id) ?? [];
+    group.push(line);
+    groups.set(line.salesInvoice.id, group);
+  }
+  const marginByLine = new Map<typeof lines[number], string>();
+  for (const group of groups.values()) {
+    const invoice = group[0].salesInvoice;
+    const evaluated = evaluateMarginLines([{
+      paymentStatus: invoice.paymentStatus,
+      discountPence: invoice.discountPence ?? 0,
+      lines: group.map((line) => ({
+        lineSubtotalPence: line.lineSubtotalPence,
+        lineDiscountPence: line.lineDiscountPence,
+        promoDiscountPence: line.promoDiscountPence,
+        lineCostPence: line.lineCostPence,
+        qtyBase: line.qtyBase,
+        defaultCostBasePence: line.product.defaultCostBasePence,
+      })),
+    }]);
+    group.forEach((line, index) => {
+      const result = evaluated.lines[index];
+      marginByLine.set(
+        line,
+        result?.ready && result.profitPence != null ? formatPence(result.profitPence) : '',
+      );
+    });
+  }
 
+  const rows = lines.map((line) => {
     return {
       invoice: line.salesInvoice.transactionNumber ?? line.salesInvoice.id.slice(0, 8),
       date: line.salesInvoice.createdAt.toISOString().slice(0, 10),
@@ -72,8 +97,8 @@ export async function GET(request: Request) {
       subtotal: formatPence(line.lineSubtotalPence),
       vat: formatPence(line.lineVatPence),
       total: formatPence(line.lineTotalPence),
-      cost: formatPence(lineCostPence),
-      margin: formatPence(line.lineSubtotalPence - lineCostPence),
+      cost: formatPence(line.lineCostPence),
+      margin: marginByLine.get(line) ?? '',
     };
   });
 

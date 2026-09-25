@@ -15,7 +15,11 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const view = searchParams.get('view') ?? 'all';
   const format = detectExportFormat(request);
-  const dateRange = resolveExportDateRange(request);
+  const exportBusiness = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { timezone: true },
+  });
+  const dateRange = resolveExportDateRange(request, '30d', exportBusiness?.timezone);
 
   const [snapshot, business] = await Promise.all([
     getMarginAnalysisSnapshot({ businessId: user.businessId, start: dateRange.start, end: dateRange.end }),

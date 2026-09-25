@@ -14,7 +14,11 @@ export async function GET(request: Request) {
   if (!user) return response as NextResponse;
 
   const { searchParams } = new URL(request.url);
-  const dateRange = resolveExportDateRange(request, '30d');
+  const exportBusiness = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { timezone: true },
+  });
+  const dateRange = resolveExportDateRange(request, '30d', exportBusiness?.timezone);
   const storeIdParam = searchParams.get('storeId') ?? 'ALL';
   const requestedBusinessId = searchParams.get('businessId');
   const statusParam = searchParams.get('status');

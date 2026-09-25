@@ -18,6 +18,8 @@ export type ForecastDay = {
 
 export type ForecastResult = {
   startingCashPence: number;
+  arInputPence: number;
+  apInputPence: number;
   days: ForecastDay[];
   summary: {
     daysUntilNegative: number | null;
@@ -90,8 +92,13 @@ export function projectCashflow(inputs: ForecastInputs): ForecastResult {
     }
   }
 
+  const arInputPence = [...inputs.arByDay.values()].reduce((sum, value) => sum + value, 0);
+  const apInputPence = [...inputs.apByDay.values()].reduce((sum, value) => sum + value, 0);
+
   return {
     startingCashPence: inputs.startingCashPence,
+    arInputPence,
+    apInputPence,
     days,
     summary: {
       daysUntilNegative,
@@ -145,7 +152,7 @@ async function _getCashflowForecast(
   const arByDay = new Map<string, number>();
   for (const inv of unpaidSales) {
     const remaining = receivableDocumentBalance(inv).balancePence;
-    if (remaining <= 0) continue;
+    if (remaining === 0) continue;
 
     let expectedDate: Date;
     if (inv.dueDate) {
@@ -189,7 +196,7 @@ async function _getCashflowForecast(
   const apByDay = new Map<string, number>();
   for (const inv of unpaidPurchases) {
     const remaining = payableDocumentBalance(inv).balancePence;
-    if (remaining <= 0) continue;
+    if (remaining === 0) continue;
 
     const dueDate = inv.dueDate ? new Date(inv.dueDate) : new Date(inv.createdAt);
     if (!inv.dueDate) dueDate.setDate(dueDate.getDate() + 14); // default 14 days for AP
@@ -202,7 +209,7 @@ async function _getCashflowForecast(
   const unpaidExpenses = await prisma.expense.findMany({
     where: {
       businessId,
-      paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      paymentStatus: { notIn: ['VOID'] },
     },
     select: {
       amountPence: true,
@@ -214,8 +221,8 @@ async function _getCashflowForecast(
 
   for (const exp of unpaidExpenses) {
     const paid = exp.payments.reduce((s, p) => s + p.amountPence, 0);
-    const remaining = Math.max(exp.amountPence - paid, 0);
-    if (remaining <= 0) continue;
+    const remaining = exp.amountPence - paid;
+    if (remaining === 0) continue;
 
     const dueDate = exp.dueDate ? new Date(exp.dueDate) : new Date(exp.createdAt);
     if (!exp.dueDate) dueDate.setDate(dueDate.getDate() + 7);

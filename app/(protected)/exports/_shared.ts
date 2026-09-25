@@ -21,7 +21,11 @@ export async function requireExportUser(request: Request) {
   return { user, response: null };
 }
 
-export function resolveExportDateRange(request: Request, defaultPeriod = '30d') {
+export function resolveExportDateRange(
+  request: Request,
+  defaultPeriod = '30d',
+  timeZone?: string | null,
+) {
   const { searchParams } = new URL(request.url);
 
   return resolveSelectableReportDateRange(
@@ -31,5 +35,7 @@ export function resolveExportDateRange(request: Request, defaultPeriod = '30d') 
       to: searchParams.get('to') ?? undefined,
     },
     defaultPeriod,
+    new Date(),
+    timeZone,
   );
 }

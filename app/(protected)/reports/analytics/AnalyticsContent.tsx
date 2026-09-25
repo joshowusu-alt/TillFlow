@@ -281,6 +281,7 @@ export default async function AnalyticsContent({
           growthPercent,
           previousPeriodSales: previousTotalSales,
           topSellingProduct: topProduct,
+          unallocatedSalesDifferencePence,
           peakHour,
         },
       };
