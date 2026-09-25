@@ -38,7 +38,6 @@
   "exclude": [
     "node_modules",
     "scripts",
-    "tishgroup-control",
-    "tmp"
+    "tishgroup-control"
   ]
 }

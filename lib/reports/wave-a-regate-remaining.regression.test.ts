@@ -113,8 +113,8 @@ describe('remaining Wave A defects', () => {
 
   it('report windows require an explicit business timezone', () => {
     const instant = new Date('2026-06-15T21:30:00.000Z');
-    expect(() => businessDayWindow(instant)).toThrow(/timezone/i);
-    expect(() => businessWeekWindow(instant)).toThrow(/timezone/i);
+    expect(() => businessDayWindow(instant, undefined as unknown as string)).toThrow(/timezone/i);
+    expect(() => businessWeekWindow(instant, undefined as unknown as string)).toThrow(/timezone/i);
     expect(() => resolveReportDateRange(undefined, instant, instant)).toThrow(/timezone/i);
     const nairobi = businessDayWindow(instant, 'Africa/Nairobi');
     expect(nairobi.startInclusive.toISOString()).toBe('2026-06-15T21:00:00.000Z');
@@ -201,7 +201,7 @@ describe('remaining Wave A defects', () => {
       return [zeroBase];
     });
     prismaMock.salesInvoice.aggregate.mockResolvedValue({ _sum: { totalPence: 500 }, _count: { id: 1 } });
-    const digest = await getWeeklyDigestData('biz-1', new Date('2026-03-09T00:00:00.000Z'), new Date('2026-03-16T00:00:00.000Z'));
+    const digest = await getWeeklyDigestData('biz-1', new Date('2026-03-09T00:00:00.000Z'), new Date('2026-03-16T00:00:00.000Z'), 'Africa/Accra');
     expect(digest.unallocatedSalesDifferencePence).toBe(500);
     expect(digest.topSellers.some((row) => row.name === 'Unallocated sales difference')).toBe(true);
 

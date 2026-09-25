@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const wStart = week.startInclusive;
   const wEnd = new Date(week.endExclusive.getTime() - 1);
 
-  const data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive);
+  const data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, business.timezone);
   const currency = business.currency;
   const moneyOrIncomplete = (pence: number | null) => (
     pence == null ? 'Costs incomplete' : formatMoney(pence, currency)

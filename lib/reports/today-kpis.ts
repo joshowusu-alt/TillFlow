@@ -18,8 +18,7 @@ import {
   requireMoneyReceivedMethodRows,
   resolveMoneyReceivedScope,
 } from '@/lib/reports/money-received';
-import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
-import { businessDayWindow } from '@/lib/reports/reporting-clock';
+import { businessDayWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { evaluateMarginSet, resolveAuthoritativeLineCost, type MarginInvoiceInput } from '@/lib/reports/margin-line';
 export type TodayKPIs = {
   totalSalesPence: number;
@@ -452,7 +451,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     where: { id: businessId },
     select: { timezone: true },
   });
-  const timeZone = business?.timezone || DEFAULT_BUSINESS_TIMEZONE;
+  const timeZone = requireReportTimeZone(business?.timezone);
   if (isSqliteRuntime()) {
     return getTodayKPIsSqlite(businessId, storeId, now, timeZone);
   }

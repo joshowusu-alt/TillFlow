@@ -12,7 +12,7 @@ import { computeBusinessAlerts } from './reports/alerts';
 import { getCashflowForecast } from './reports/forecast';
 import { getMarginAnalysisSnapshot } from './reports/margin-analysis';
 import { prisma } from './prisma';
-import { businessDayWindow } from '@/lib/reports/reporting-clock';
+import { businessDayWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
@@ -120,11 +120,14 @@ export function rankPriorityActions(
 
 async function getArApDue7Days(
   businessId: string,
-  storeId?: string
+  storeId: string | undefined,
+  timeZone: string,
 ): Promise<{ arPence: number; apPence: number }> {
-  const now = new Date();
-  const sevenDays = new Date(now);
-  sevenDays.setDate(sevenDays.getDate() + 7);
+  const today = businessDayWindow(new Date(), timeZone);
+  const sevenDays = businessDayWindow(
+    new Date(today.startInclusive.getTime() + 7 * 86_400_000),
+    timeZone,
+  ).endExclusive;
 
   const storeFilter = storeId ? { storeId } : {};
 
@@ -169,17 +172,18 @@ export async function getOwnerBrief(
   storeId?: string
 ): Promise<OwnerBrief> {
   const business = await prisma.business.findUnique({ where: { id: businessId }, select: { timezone: true } });
-  const todayWindow = businessDayWindow(new Date(), business?.timezone);
+  const timeZone = requireReportTimeZone(business?.timezone);
+  const todayWindow = businessDayWindow(new Date(), timeZone);
   const marginWindowEnd = todayWindow.endExclusive;
   const marginWindowStart = businessDayWindow(
     new Date(todayWindow.startInclusive.getTime() - 13 * 86_400_000),
-    business?.timezone,
+    timeZone,
   ).startInclusive;
 
   const [kpis, forecast, arAp, marginSnapshot] = await Promise.all([
     getTodayKPIs(businessId, storeId),
     getCashflowForecast(businessId, 14),
-    getArApDue7Days(businessId, storeId),
+    getArApDue7Days(businessId, storeId, timeZone),
     getMarginAnalysisSnapshot({ businessId, storeId, start: marginWindowStart, end: marginWindowEnd }),
   ]);
 

@@ -21,19 +21,19 @@ function read(path: string) {
 
 describe('A7 reporting clock requires the tenant timezone', () => {
   it('businessDayWindow without a timezone throws', () => {
-    expect(() => businessDayWindow(NAIROBI_MONTH_BOUNDARY)).toThrow(/Business timezone is required/);
+    expect(() => businessDayWindow(NAIROBI_MONTH_BOUNDARY, undefined as unknown as string)).toThrow(/Business timezone is required/);
   });
 
   it('businessWeekWindow without a timezone throws', () => {
-    expect(() => businessWeekWindow(NAIROBI_MONTH_BOUNDARY)).toThrow(/Business timezone is required/);
+    expect(() => businessWeekWindow(NAIROBI_MONTH_BOUNDARY, undefined as unknown as string)).toThrow(/Business timezone is required/);
   });
 
   it('businessMonthWindow without a timezone throws instead of falling back to Accra', () => {
-    expect(() => businessMonthWindow(NAIROBI_MONTH_BOUNDARY)).toThrow(/Business timezone is required/);
+    expect(() => businessMonthWindow(NAIROBI_MONTH_BOUNDARY, undefined as unknown as string)).toThrow(/Business timezone is required/);
   });
 
   it('localDateInstant without a timezone throws instead of accepting an Accra default', () => {
-    expect(() => localDateInstant('2026-07-01', 'start')).toThrow(/Business timezone is required/);
+    expect(() => localDateInstant('2026-07-01', 'start', undefined as unknown as string)).toThrow(/Business timezone is required/);
     expect(() => localDateInstant('2026-07-01', 'endExclusive', '   ')).toThrow(/Business timezone is required/);
   });
 
@@ -83,5 +83,16 @@ describe('A7 report callers do not replace a missing timezone with Africa/Accra'
     expect(page).toContain('business.timezone');
     expect(page).toContain('getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, business.timezone)');
     expect(route).toContain('getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, business.timezone)');
+  });
+
+  it('statement from/to filters keep both gte and lt', () => {
+    for (const path of [
+      'app/(protected)/customers/[id]/statement/route.ts',
+      'app/(protected)/suppliers/[id]/statement/route.ts',
+    ]) {
+      const source = read(path);
+      expect(source, path).toContain('gte: start');
+      expect(source, path).toContain('lt: endExclusive');
+    }
   });
 });

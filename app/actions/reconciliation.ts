@@ -12,7 +12,7 @@ import { revalidatePath } from 'next/cache';
 import { formString, formPence, formOptionalString } from '@/lib/form-helpers';
 import type { ActionResult } from '@/lib/action-utils';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
-import { localDateInstant } from '@/lib/reports/reporting-clock';
+import { localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,8 +54,9 @@ export async function getReconciliationSummary(params: {
       where: { id: businessId },
       select: { timezone: true },
     });
-    const start = localDateInstant(formatBusinessLocalDateKey(from, business?.timezone), 'start', business?.timezone) ?? from;
-    const endExclusive = localDateInstant(formatBusinessLocalDateKey(to, business?.timezone), 'endExclusive', business?.timezone) ?? to;
+    const zone = requireReportTimeZone(business?.timezone);
+    const start = localDateInstant(formatBusinessLocalDateKey(from, zone), 'start', zone) ?? from;
+    const endExclusive = localDateInstant(formatBusinessLocalDateKey(to, zone), 'endExclusive', zone) ?? to;
 
     // Get all stores for this business if no specific store
     const stores = storeId
@@ -161,8 +162,9 @@ export async function reconcilePaymentAction(formData: FormData): Promise<void> 
       where: { id: businessId },
       select: { timezone: true },
     });
-    const date = localDateInstant(dateStr, 'start', business?.timezone) ?? new Date(dateStr);
-    const dayEndExclusive = localDateInstant(dateStr, 'endExclusive', business?.timezone) ?? date;
+    const zone = requireReportTimeZone(business?.timezone);
+    const date = localDateInstant(dateStr, 'start', zone) ?? new Date(dateStr);
+    const dayEndExclusive = localDateInstant(dateStr, 'endExclusive', zone) ?? date;
 
     // Calculate system total for that date/method/store
     const payments = await prisma.salesPayment.findMany({
@@ -236,9 +238,10 @@ export async function getPaymentTransactions(params: {
       where: { id: businessId },
       select: { timezone: true },
     });
-    const dayKey = formatBusinessLocalDateKey(date, business?.timezone);
-    const dayStart = localDateInstant(dayKey, 'start', business?.timezone) ?? date;
-    const dayEndExclusive = localDateInstant(dayKey, 'endExclusive', business?.timezone) ?? date;
+    const zone = requireReportTimeZone(business?.timezone);
+    const dayKey = formatBusinessLocalDateKey(date, zone);
+    const dayStart = localDateInstant(dayKey, 'start', zone) ?? date;
+    const dayEndExclusive = localDateInstant(dayKey, 'endExclusive', zone) ?? date;
 
     const storeFilter = storeId
       ? { storeId }

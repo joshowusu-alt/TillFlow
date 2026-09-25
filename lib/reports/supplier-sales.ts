@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
-import { businessMonthWindow } from '@/lib/reports/reporting-clock';
+import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 // ---------------------------------------------------------------------------
 // Output types
@@ -261,7 +261,7 @@ export async function getTopLinkedSupplierForMonth(
     where: { id: businessId },
     select: { timezone: true },
   });
-  const month = businessMonthWindow(new Date(), business?.timezone);
+  const month = businessMonthWindow(new Date(), requireReportTimeZone(business?.timezone));
   const start = month.startInclusive;
   const endExclusive = month.endExclusive;
 

@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { businessDayWindow, zonedDateTimeParts } from '@/lib/reports/reporting-clock';
+import { businessDayWindow, requireReportTimeZone, zonedDateTimeParts } from '@/lib/reports/reporting-clock';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
 import { evaluateMarginSet } from '@/lib/reports/margin-line';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
@@ -24,7 +24,7 @@ export async function loadAnalyticsReport({
   periodStart,
   periodEndExclusive,
 }: AnalyticsContentProps) {
-  const reportTimeZone = timeZone ?? undefined;
+  const reportTimeZone = requireReportTimeZone(timeZone);
   const today = businessDayWindow(now, reportTimeZone);
   const periodAgo = periodStart ?? new Date(today.startInclusive.getTime() - periodDays * 86_400_000);
   const previousPeriodAgo = new Date(periodAgo.getTime() - periodDays * 86_400_000);

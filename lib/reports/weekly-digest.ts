@@ -5,7 +5,7 @@ import {
   requireMoneyReceivedMethodRows,
   resolveMoneyReceivedScope,
 } from '@/lib/reports/money-received';
-import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
+import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { evaluateMarginLines, evaluateMarginSet, type MarginInvoiceInput, type MarginReturnKind } from '@/lib/reports/margin-line';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
 
@@ -82,8 +82,10 @@ function toMarginInvoices(invoices: DigestInvoice[]): MarginInvoiceInput[] {
 async function _getWeeklyDigestData(
   businessId: string,
   weekStartIso: string,
-  weekEndIso: string
+  weekEndIso: string,
+  timeZone: string,
 ): Promise<WeeklyDigestData> {
+  const digestTimeZone = requireReportTimeZone(timeZone);
   const weekStart = new Date(weekStartIso);
   const weekEnd = new Date(weekEndIso);
   const prevStart = new Date(weekStart.getTime() - 7 * 86_400_000);
@@ -121,7 +123,7 @@ async function _getWeeklyDigestData(
       resolveMoneyReceivedScope({
         businessId,
         currency: 'GHS',
-        timeZone: DEFAULT_BUSINESS_TIMEZONE,
+        timeZone: digestTimeZone,
         periodStart: weekStart,
         periodEndInclusive: weekEnd,
         absoluteBounds: true,
@@ -337,7 +339,13 @@ const cachedWeeklyDigest = unstable_cache(
 export function getWeeklyDigestData(
   businessId: string,
   weekStart: Date,
-  weekEnd: Date
+  weekEnd: Date,
+  timeZone: string,
 ): Promise<WeeklyDigestData> {
-  return cachedWeeklyDigest(businessId, weekStart.toISOString(), weekEnd.toISOString());
+  return cachedWeeklyDigest(
+    businessId,
+    weekStart.toISOString(),
+    weekEnd.toISOString(),
+    requireReportTimeZone(timeZone),
+  );
 }

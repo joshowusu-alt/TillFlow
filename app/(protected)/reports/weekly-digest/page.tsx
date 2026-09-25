@@ -43,7 +43,7 @@ export default async function WeeklyDigestPage({
   const wEnd = new Date(week.endExclusive.getTime() - 1);
 
   const currency = business.currency;
-  const data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive);
+  const data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, business.timezone);
   const dateLabel = `${wStart.toDateString()} – ${wEnd.toDateString()}`;
 
   const salesChange = pctChange(data.totalSalesPence, data.prevTotalSalesPence);

@@ -9,7 +9,7 @@ import {
 } from '@/lib/exports/csv-writers';
 import { prisma } from '@/lib/prisma';
 import { strToU8, zipSync } from 'fflate';
-import { businessDayWindow, localDateInstant } from '@/lib/reports/reporting-clock';
+import { businessDayWindow, localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     where: { id: user.businessId },
     select: { timezone: true, currency: true },
   });
-  const zone = businessClock?.timezone;
+  const zone = requireReportTimeZone(businessClock?.timezone);
   const today = businessDayWindow(new Date(), zone);
   const from = localDateInstant(fromStr, 'start', zone)
     ?? new Date(today.startInclusive.getTime() - 30 * 86_400_000);

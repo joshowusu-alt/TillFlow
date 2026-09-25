@@ -2,8 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 import { unstable_cache } from 'next/cache';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
-import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
-import { businessDayWindow } from '@/lib/reports/reporting-clock';
+import { businessDayWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
@@ -247,7 +246,7 @@ async function _getCashflowForecast(
   const avgDailyExpenses = Math.round(totalExpenses30d / 30);
 
   // 5. Avg daily confirmed cash and MoMo (trailing 14 business days)
-  const forecastTimeZone = business.timezone || DEFAULT_BUSINESS_TIMEZONE;
+  const forecastTimeZone = requireReportTimeZone(business.timezone);
   const trailingEnd = businessDayWindow(now, forecastTimeZone).endExclusive;
   const trailingStart = businessDayWindow(
     new Date(trailingEnd.getTime() - 14 * 86_400_000),

@@ -12,8 +12,7 @@ import {
 	ensureSqliteReportDateColumnsNormalized,
 	isSqliteRuntime,
 } from './sqlite-report-date-normalization';
-import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
-import { businessDayWindow } from '@/lib/reports/reporting-clock';
+import { businessDayWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { evaluateMarginSet, resolveAuthoritativeLineCost } from '@/lib/reports/margin-line';
 import { unstable_cache } from 'next/cache';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
@@ -110,16 +109,16 @@ export type OwnerDashboardSnapshot = {
 	moneyPulseSeries: Array<{ date: string; projectedBalancePence: number }>;
 };
 
-function startOfDay(date = new Date(), timeZone = DEFAULT_BUSINESS_TIMEZONE) {
+function startOfDay(date: Date, timeZone: string) {
 	return businessDayWindow(date, timeZone).startInclusive;
 }
 
-function endOfDay(date = new Date(), timeZone = DEFAULT_BUSINESS_TIMEZONE) {
+function endOfDay(date: Date, timeZone: string) {
 	return businessDayWindow(date, timeZone).endExclusive;
 }
 
-function daysFromToday(date: Date) {
-	return Math.floor((startOfDay(date).getTime() - startOfDay().getTime()) / 86_400_000);
+function daysFromToday(date: Date, timeZone: string) {
+	return Math.floor((startOfDay(date, timeZone).getTime() - startOfDay(new Date(), timeZone).getTime()) / 86_400_000);
 }
 
 function describeChange(current: number, previous: number): DashboardTrend {
@@ -186,12 +185,12 @@ async function _getOwnerDashboardSnapshot(
 	}
 
 	const clock = await prisma.business.findUnique({ where: { id: businessId }, select: { timezone: true } });
-	const timeZone = clock?.timezone || DEFAULT_BUSINESS_TIMEZONE;
+	const timeZone = requireReportTimeZone(clock?.timezone);
 	const todayStart = startOfDay(new Date(), timeZone);
 	const todayEnd = endOfDay(new Date(), timeZone);
 	const yesterdayStart = startOfDay(new Date(todayStart.getTime() - 86_400_000), timeZone);
 	const yesterdayEnd = endOfDay(new Date(todayStart.getTime() - 86_400_000), timeZone);
-	const sevenDaysOut = endOfDay(new Date(todayStart.getTime() + 7 * 86_400_000));
+	const sevenDaysOut = endOfDay(new Date(todayStart.getTime() + 7 * 86_400_000), timeZone);
 	const thirtyDaysAgo = new Date(todayStart.getTime() - 30 * 86_400_000);
 
 	const storeFilter = storeId ? { storeId } : {};
@@ -499,7 +498,7 @@ async function _getOwnerDashboardSnapshot(
 		.map((invoice) => ({
 			...invoice,
 			balancePence: payableDocumentBalance(invoice).balancePence,
-			dueInDays: invoice.dueDate ? daysFromToday(invoice.dueDate) : null,
+			dueInDays: invoice.dueDate ? daysFromToday(invoice.dueDate, timeZone) : null,
 		}))
 		.filter((invoice) => invoice.balancePence > 0);
 

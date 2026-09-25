@@ -8,7 +8,6 @@ import {
   getBusinessCalendarDayBounds,
   getBusinessDayBounds,
   parseBusinessLocalDateKey,
-  resolveBusinessTimeZone,
   type LocalDateParts,
 } from '@/lib/notifications/utils';
 
@@ -21,10 +20,15 @@ export type HalfOpenWindow = {
 export function requireReportTimeZone(timeZone?: string | null): string {
   const trimmed = timeZone?.trim();
   if (!trimmed) throw new Error('Business timezone is required for report windows');
+  try {
+    new Intl.DateTimeFormat('en-GB', { timeZone: trimmed }).format(new Date());
+  } catch {
+    throw new Error('Business timezone is required for report windows');
+  }
   return trimmed;
 }
 
-export function businessDayWindow(instant: Date, timeZone?: string | null): HalfOpenWindow {
+export function businessDayWindow(instant: Date, timeZone: string): HalfOpenWindow {
   const bounds = getBusinessDayBounds(instant, requireReportTimeZone(timeZone));
   return {
     timeZone: bounds.timeZone,
@@ -115,8 +119,8 @@ export function addLocalDays(parts: LocalDateParts, days: number): LocalDatePart
 
 /** Monday-start business week. End is the next Monday, exclusive. */
 /** Calendar month containing `instant`. End is the next local month at 00:00, exclusive. */
-export function businessMonthWindow(instant: Date, timeZone?: string | null): HalfOpenWindow {
-  const zone = resolveBusinessTimeZone(timeZone);
+export function businessMonthWindow(instant: Date, timeZone: string): HalfOpenWindow {
+  const zone = requireReportTimeZone(timeZone);
   const local = getBusinessDayBounds(instant, zone).localDate;
   const start = { year: local.year, month: local.month, day: 1 };
   const nextMonth = local.month === 12
@@ -135,15 +139,16 @@ export function businessMonthWindow(instant: Date, timeZone?: string | null): Ha
 export function localDateInstant(
   key: string | null | undefined,
   edge: 'start' | 'endExclusive',
-  timeZone?: string | null,
+  timeZone: string,
 ): Date | undefined {
+  const zone = requireReportTimeZone(timeZone);
   const parts = parseBusinessLocalDateKey(key);
   if (!parts) return undefined;
-  const bounds = getBusinessCalendarDayBounds(parts, timeZone);
+  const bounds = getBusinessCalendarDayBounds(parts, zone);
   return edge === 'start' ? bounds.dayStart : bounds.dayEndExclusive;
 }
 
-export function businessWeekWindow(now: Date, timeZone?: string | null, offsetWeeks = 0): HalfOpenWindow {
+export function businessWeekWindow(now: Date, timeZone: string, offsetWeeks = 0): HalfOpenWindow {
   const zone = requireReportTimeZone(timeZone);
   const local = getBusinessDayBounds(now, zone).localDate;
   const weekday = new Date(Date.UTC(local.year, local.month - 1, local.day)).getUTCDay();

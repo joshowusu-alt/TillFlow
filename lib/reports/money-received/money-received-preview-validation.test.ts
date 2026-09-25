@@ -117,6 +117,7 @@ describe('Step 5B preview-equivalent — economic validation', () => {
     const a1 = await computeMoneyReceivedBundleFromDb(db, {
       businessId: dataset.bizA,
       currency: 'GHS',
+      timeZone: 'Africa/Accra',
       periodStart: new Date('2026-01-01T00:00:00.000Z'),
       periodEndInclusive: new Date('2026-02-01T00:00:00.000Z'),
       branchIds: [dataset.branchA1],
@@ -125,6 +126,7 @@ describe('Step 5B preview-equivalent — economic validation', () => {
     const a2 = await computeMoneyReceivedBundleFromDb(db, {
       businessId: dataset.bizA,
       currency: 'GHS',
+      timeZone: 'Africa/Accra',
       periodStart: new Date('2026-01-01T00:00:00.000Z'),
       periodEndInclusive: new Date('2026-02-01T00:00:00.000Z'),
       branchIds: [dataset.branchA2],
@@ -133,6 +135,7 @@ describe('Step 5B preview-equivalent — economic validation', () => {
     const b = await computeMoneyReceivedBundleFromDb(db, {
       businessId: dataset.bizB,
       currency: 'GHS',
+      timeZone: 'Africa/Accra',
       periodStart: new Date('2026-01-01T00:00:00.000Z'),
       periodEndInclusive: new Date('2026-02-01T00:00:00.000Z'),
       branchIds: null,
@@ -147,6 +150,7 @@ describe('Step 5B preview-equivalent — economic validation', () => {
     const empty = await computeMoneyReceivedBundleFromDb(db, {
       businessId: dataset.bizA,
       currency: 'GHS',
+      timeZone: 'Africa/Accra',
       periodStart: new Date('2025-06-01T00:00:00.000Z'),
       periodEndInclusive: new Date('2025-07-01T00:00:00.000Z'),
       branchIds: [dataset.branchA1],
@@ -195,6 +199,7 @@ describe('Step 5B preview-equivalent — drill-down, export, reconciliation', ()
       const bundle = await computeMoneyReceivedBundleFromDb(db, {
         businessId: dataset.bizA,
         currency: 'GHS',
+        timeZone: 'Africa/Accra',
         periodStart: new Date('2026-03-01T00:00:00.000Z'),
         periodEndInclusive: new Date('2026-04-01T00:00:00.000Z'),
         branchIds: [dataset.branchA1],
@@ -246,6 +251,7 @@ describe('Step 5B preview-equivalent — drill-down, export, reconciliation', ()
     const bundle = await computeMoneyReceivedBundleFromDb(db, {
       businessId: dataset.bizA,
       currency: 'GHS',
+      timeZone: 'Africa/Accra',
       periodStart: new Date('2026-03-01T00:00:00.000Z'),
       periodEndInclusive: new Date('2026-04-01T00:00:00.000Z'),
       branchIds: [dataset.branchA1],
@@ -271,6 +277,7 @@ describe('Step 5B preview-equivalent — drill-down, export, reconciliation', ()
     const feb = await computeMoneyReceivedBundleFromDb(db, {
       businessId: dataset.bizA,
       currency: 'GHS',
+      timeZone: 'Africa/Accra',
       periodStart: new Date('2026-02-01T00:00:00.000Z'),
       periodEndInclusive: new Date('2026-03-01T00:00:00.000Z'),
       branchIds: [dataset.branchA1],
@@ -358,6 +365,7 @@ describe('Step 5B preview-equivalent — query-shape and consumer parity', () =>
     await computeMoneyReceivedBundleFromDb(db, {
       businessId: dataset.bizA,
       currency: 'GHS',
+      timeZone: 'Africa/Accra',
       periodStart: new Date('2026-01-01T00:00:00.000Z'),
       periodEndInclusive: new Date('2026-02-01T00:00:00.000Z'),
       branchIds: [dataset.branchA1],

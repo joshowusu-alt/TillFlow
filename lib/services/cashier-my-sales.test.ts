@@ -27,6 +27,7 @@ describe('cashier My Sales access', () => {
       cashierUserId: 'cashier-1',
       from: '2026-07-01',
       to: '2026-07-03',
+      timeZone: 'Africa/Accra',
     });
 
     expect(where.businessId).toBe('biz-1');

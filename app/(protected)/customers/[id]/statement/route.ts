@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { summarizeOpenReceivables } from '@/lib/reports/surface-balances';
-import { localDateInstant } from '@/lib/reports/reporting-clock';
+import { localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 const csvEscape = (value: string | number | null | undefined) => {
   if (value === null || value === undefined) return '';
@@ -32,8 +32,9 @@ export async function GET(
     where: { id: user.businessId },
     select: { timezone: true },
   });
-  const start = localDateInstant(from, 'start', business?.timezone);
-  const endExclusive = localDateInstant(to, 'endExclusive', business?.timezone);
+  const zone = requireReportTimeZone(business?.timezone);
+  const start = localDateInstant(from, 'start', zone);
+  const endExclusive = localDateInstant(to, 'endExclusive', zone);
 
   const customer = await prisma.customer.findFirst({
     where: { id: params.id, businessId: user.businessId },

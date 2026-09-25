@@ -1,4 +1,4 @@
-import { localDateInstant } from '@/lib/reports/reporting-clock';
+import { localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 export const CASHIER_MY_SALES_ROUTE = '/my-sales';
 
@@ -19,8 +19,9 @@ export function buildCashierMySalesWhere({
   timeZone,
 }: Pick<CashierMySalesFilters, 'businessId' | 'cashierUserId' | 'from' | 'to'> & { timeZone?: string | null }) {
   const dateFilter: { gte?: Date; lt?: Date } = {};
-  const start = localDateInstant(from, 'start', timeZone);
-  const endExclusive = localDateInstant(to, 'endExclusive', timeZone);
+  const zone = requireReportTimeZone(timeZone);
+  const start = localDateInstant(from, 'start', zone);
+  const endExclusive = localDateInstant(to, 'endExclusive', zone);
   if (start) dateFilter.gte = start;
   if (endExclusive) dateFilter.lt = endExclusive;
 
