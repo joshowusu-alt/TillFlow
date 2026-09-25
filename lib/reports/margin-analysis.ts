@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { resolveAuthoritativeLineCost } from '@/lib/reports/margin-line';
+import { lineNetBeforeTaxPence, resolveAuthoritativeLineCost } from '@/lib/reports/margin-line';
 
 type MarginAnalysisLine = {
 	productId: string;
@@ -43,6 +43,9 @@ export type MarginAnalysisSnapshot = {
 	belowTargetMarginCount: number;
 	healthyCount: number;
 	businessDefaultThresholdBps: number;
+	state: 'READY' | 'INCOMPLETE_COSTS';
+	grossProfitPence: number | null;
+	incompleteProductCount: number;
 };
 
 export type MarginCostCheck = {
@@ -84,6 +87,7 @@ export function summarizeMarginAnalysis(
 			effectiveThresholdBps: number;
 			thresholdSource: 'business-default' | 'product-override';
 			lastSoldAt: Date;
+			incomplete?: boolean;
 		}
 	>();
 
@@ -98,8 +102,8 @@ export function summarizeMarginAnalysis(
 			qtyBase: line.qtyBase,
 			defaultCostBasePence: line.product.defaultCostBasePence,
 		});
-		if (!resolvedCost.authoritative) continue;
-		const lineCost = resolvedCost.costPence;
+		const lineCost = resolvedCost.authoritative ? resolvedCost.costPence : 0;
+		const incomplete = !resolvedCost.authoritative;
 
 		const existing = productStats.get(line.productId) ?? {
 			productId: line.productId,
@@ -113,8 +117,13 @@ export function summarizeMarginAnalysis(
 		};
 
 		existing.qtySold += line.qtyBase;
-		existing.revenuePence += line.lineSubtotalPence;
+		existing.revenuePence += lineNetBeforeTaxPence({
+			lineSubtotalPence: line.lineSubtotalPence,
+			lineDiscountPence: line.lineDiscountPence ?? 0,
+			promoDiscountPence: line.promoDiscountPence ?? 0,
+		});
 		existing.costPence += lineCost;
+		if (incomplete) existing.incomplete = true;
 		if (line.createdAt > existing.lastSoldAt) {
 			existing.lastSoldAt = line.createdAt;
 		}
@@ -154,6 +163,10 @@ export function summarizeMarginAnalysis(
 	const belowCostCount = rows.filter((row) => row.belowCost).length;
 	const belowTargetMarginCount = rows.filter((row) => row.belowTargetMargin).length;
 
+	const incompleteProductCount = Array.from(productStats.values()).filter((row) => row.incomplete).length;
+	const grossProfitPence = incompleteProductCount > 0
+		? null
+		: rows.reduce((sum, row) => sum + row.profitPence, 0);
 	return {
 		rows,
 		totalProducts: rows.length,
@@ -161,6 +174,9 @@ export function summarizeMarginAnalysis(
 		belowTargetMarginCount,
 		healthyCount: rows.filter((row) => !row.belowTargetMargin && !row.belowCost).length,
 		businessDefaultThresholdBps,
+		state: incompleteProductCount > 0 ? 'INCOMPLETE_COSTS' : 'READY',
+		grossProfitPence,
+		incompleteProductCount,
 	};
 }
 
@@ -188,9 +204,14 @@ export async function getMarginAnalysisSnapshot({
 				productId: true,
 				qtyBase: true,
 				lineSubtotalPence: true,
+				lineDiscountPence: true,
+				promoDiscountPence: true,
 				lineCostPence: true,
 				salesInvoice: {
 					select: {
+						id: true,
+						discountPence: true,
+						paymentStatus: true,
 						createdAt: true,
 						salesReturn: { select: { id: true } },
 					},
@@ -213,6 +234,8 @@ export async function getMarginAnalysisSnapshot({
 			productId: line.productId,
 			qtyBase: line.qtyBase,
 			lineSubtotalPence: line.lineSubtotalPence,
+			lineDiscountPence: line.lineDiscountPence,
+			promoDiscountPence: line.promoDiscountPence,
 			lineCostPence: line.lineCostPence,
 			createdAt: line.salesInvoice.createdAt,
 			product: line.product,

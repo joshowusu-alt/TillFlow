@@ -107,7 +107,7 @@ async function loadOutstandingAttributedInvoices(
     where: {
       businessId,
       supplierId: { not: null },
-      paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      paymentStatus: { notIn: ['RETURNED', 'VOID'] },
     },
     select: {
       id: true,

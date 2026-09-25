@@ -23,6 +23,7 @@ export type WeeklyDigestData = {
   paymentSplit: Record<string, number>;
   totalReceiptsPence: number;
   topSellers: { name: string; qty: number; revenue: number }[];
+  unallocatedSalesDifferencePence: number;
   topMargin: { name: string; revenue: number; marginPct: number }[];
   cashierPerf: { name: string; sales: number; tx: number; discounts: number }[];
   riskCashiers: { name: string; voids: number; discounts: number; cashVar: number }[];
@@ -223,6 +224,7 @@ async function _getWeeklyDigestData(
   const totalReceiptsPence = Object.values(paymentSplit).reduce((sum, amount) => sum + amount, 0);
 
   const sellerMap = new Map<string, { name: string; qty: number; revenue: number }>();
+  let unallocatedSalesDifferencePence = 0;
   for (const invoice of marginInvoices) {
     const ranked = rankRecognisedProductSales({
       paymentStatus: invoice.paymentStatus,
@@ -238,7 +240,10 @@ async function _getWeeklyDigestData(
         lineTotalPence: line.lineTotalPence,
       })),
     });
-    if (!ranked.ok) continue;
+    if (!ranked.ok) {
+      unallocatedSalesDifferencePence += ranked.differencePence;
+      continue;
+    }
     ranked.lines.forEach((rankedLine, index) => {
       const source = invoice.lines[index];
       const entry = sellerMap.get(rankedLine.productId) ?? { name: source?.product.name ?? rankedLine.productId, qty: 0, revenue: 0 };
@@ -310,6 +315,7 @@ async function _getWeeklyDigestData(
     paymentSplit,
     totalReceiptsPence,
     topSellers,
+    unallocatedSalesDifferencePence,
     topMargin,
     cashierPerf: Array.from(cashierPerfMap.values()).sort((a, b) => b.sales - a.sales).slice(0, 5),
     riskCashiers: Array.from(cashierRiskMap.values()).filter((c) => c.voids + c.discounts + c.cashVar > 0),

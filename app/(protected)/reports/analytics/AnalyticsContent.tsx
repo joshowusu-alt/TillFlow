@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { businessDayWindow } from '@/lib/reports/reporting-clock';
+import { businessDayWindow, zonedDateTimeParts } from '@/lib/reports/reporting-clock';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import AnalyticsClient from './AnalyticsClient';
@@ -131,7 +131,7 @@ export default async function AnalyticsContent({
       const hourTotals = new Map<number, number>();
 
       recentSales.forEach((sale) => {
-        const hour = new Date(sale.createdAt).getHours();
+        const hour = zonedDateTimeParts(new Date(sale.createdAt), timeZone).hour;
         hourTotals.set(hour, (hourTotals.get(hour) || 0) + sale.totalPence);
       });
 
@@ -144,10 +144,14 @@ export default async function AnalyticsContent({
 
       // Calculate product performance
       const productStats = new Map<string, { name: string; revenue: number; cost: number }>();
+      let unallocatedSalesDifferencePence = 0;
 
       recentSales.forEach((sale) => {
         const ranked = rankRecognisedProductSales(sale);
-        if (!ranked.ok) return;
+        if (!ranked.ok) {
+          unallocatedSalesDifferencePence += ranked.differencePence;
+          return;
+        }
         const amountByProduct = new Map<string, number>();
         for (const row of ranked.lines) {
           amountByProduct.set(row.productId, (amountByProduct.get(row.productId) ?? 0) + row.amountPence);
@@ -178,6 +182,14 @@ export default async function AnalyticsContent({
         }))
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 10);
+      if (unallocatedSalesDifferencePence !== 0) {
+        productData.push({
+          name: 'Unallocated sales difference',
+          revenue: unallocatedSalesDifferencePence,
+          profit: 0,
+          margin: 0,
+        });
+      }
 
       // Category breakdown
       const categoryStats = new Map<string, number>();

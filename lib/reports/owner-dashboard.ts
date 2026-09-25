@@ -14,7 +14,7 @@ import {
 } from './sqlite-report-date-normalization';
 import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
 import { businessDayWindow } from '@/lib/reports/reporting-clock';
-import { resolveAuthoritativeLineCost } from '@/lib/reports/margin-line';
+import { evaluateMarginSet, resolveAuthoritativeLineCost } from '@/lib/reports/margin-line';
 import { unstable_cache } from 'next/cache';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
@@ -110,12 +110,12 @@ export type OwnerDashboardSnapshot = {
 	moneyPulseSeries: Array<{ date: string; projectedBalancePence: number }>;
 };
 
-function startOfDay(date = new Date()) {
-	return businessDayWindow(date, DEFAULT_BUSINESS_TIMEZONE).startInclusive;
+function startOfDay(date = new Date(), timeZone = DEFAULT_BUSINESS_TIMEZONE) {
+	return businessDayWindow(date, timeZone).startInclusive;
 }
 
-function endOfDay(date = new Date()) {
-	return businessDayWindow(date, DEFAULT_BUSINESS_TIMEZONE).endExclusive;
+function endOfDay(date = new Date(), timeZone = DEFAULT_BUSINESS_TIMEZONE) {
+	return businessDayWindow(date, timeZone).endExclusive;
 }
 
 function daysFromToday(date: Date) {
@@ -185,10 +185,12 @@ async function _getOwnerDashboardSnapshot(
 		});
 	}
 
-	const todayStart = startOfDay();
-	const todayEnd = endOfDay();
-	const yesterdayStart = startOfDay(new Date(todayStart.getTime() - 86_400_000));
-	const yesterdayEnd = endOfDay(new Date(todayStart.getTime() - 86_400_000));
+	const clock = await prisma.business.findUnique({ where: { id: businessId }, select: { timezone: true } });
+	const timeZone = clock?.timezone || DEFAULT_BUSINESS_TIMEZONE;
+	const todayStart = startOfDay(new Date(), timeZone);
+	const todayEnd = endOfDay(new Date(), timeZone);
+	const yesterdayStart = startOfDay(new Date(todayStart.getTime() - 86_400_000), timeZone);
+	const yesterdayEnd = endOfDay(new Date(todayStart.getTime() - 86_400_000), timeZone);
 	const sevenDaysOut = endOfDay(new Date(todayStart.getTime() + 7 * 86_400_000));
 	const thirtyDaysAgo = new Date(todayStart.getTime() - 30 * 86_400_000);
 
@@ -225,11 +227,14 @@ async function _getOwnerDashboardSnapshot(
 				},
 			},
 			select: {
+				salesInvoiceId: true,
 				lineSubtotalPence: true,
+				lineDiscountPence: true,
+				promoDiscountPence: true,
 				lineCostPence: true,
 				qtyBase: true,
 				product: { select: { defaultCostBasePence: true } },
-				...(sqliteRuntime ? { salesInvoice: { select: { createdAt: true, paymentStatus: true } } } : {}),
+				salesInvoice: { select: { createdAt: true, paymentStatus: true, discountPence: true } },
 			},
 		}),
 		sqliteRuntime
@@ -282,7 +287,7 @@ async function _getOwnerDashboardSnapshot(
 			where: {
 				businessId,
 				...storeFilter,
-				paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+				paymentStatus: { notIn: ['RETURNED', 'VOID'] },
 				dueDate: { lt: todayEnd },
 			},
 			select: {
@@ -301,7 +306,7 @@ async function _getOwnerDashboardSnapshot(
 			where: {
 				businessId,
 				...storeFilter,
-				paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+				paymentStatus: { notIn: ['RETURNED', 'VOID'] },
 				dueDate: { lt: sevenDaysOut },
 			},
 			select: {
@@ -541,32 +546,43 @@ async function _getOwnerDashboardSnapshot(
 	const criticalCount = inventorySummary.criticalCount;
 
 	// Yesterday's GP from sale lines — same source as today's KPIs
-	const yesterdayGrossProfit = (yesterdayLinesForGP as Array<{
+	const yesterdayLines = (yesterdayLinesForGP as Array<{
+		salesInvoiceId?: string;
 		lineSubtotalPence: number;
+		lineDiscountPence?: number;
+		promoDiscountPence?: number;
 		lineCostPence: number;
 		qtyBase: number;
 		product: { defaultCostBasePence: number };
-		salesInvoice?: { createdAt: Date; paymentStatus: string };
-	}>).reduce((sum, line) => {
-		// SQLite path may include lines outside yesterday range; filter if needed
-		if (sqliteRuntime && line.salesInvoice) {
-			if (!(line.salesInvoice.createdAt >= yesterdayStart && line.salesInvoice.createdAt < yesterdayEnd)) return sum;
-			if (['RETURNED', 'VOID'].includes(line.salesInvoice.paymentStatus)) return sum;
-		}
-		const resolvedCost = resolveAuthoritativeLineCost({
+		salesInvoice?: { createdAt: Date; paymentStatus: string; discountPence?: number };
+	}>).filter((line) => {
+		if (!sqliteRuntime || !line.salesInvoice) return true;
+		if (!(line.salesInvoice.createdAt >= yesterdayStart && line.salesInvoice.createdAt < yesterdayEnd)) return false;
+		return !['RETURNED', 'VOID'].includes(line.salesInvoice.paymentStatus);
+	});
+	const yesterdayGrouped = new Map<string, { paymentStatus: string; discountPence: number; lines: Array<{ lineSubtotalPence: number; lineDiscountPence: number; promoDiscountPence: number; lineCostPence: number; qtyBase: number; defaultCostBasePence: number }> }>();
+	yesterdayLines.forEach((line, index) => {
+		const key = line.salesInvoiceId ?? `line-${index}`;
+		const invoice = yesterdayGrouped.get(key) ?? {
+			paymentStatus: line.salesInvoice?.paymentStatus ?? 'PAID',
+			discountPence: line.salesInvoice?.discountPence ?? 0,
+			lines: [],
+		};
+		invoice.lines.push({
 			lineSubtotalPence: line.lineSubtotalPence,
-			lineDiscountPence: 0,
-			promoDiscountPence: 0,
+			lineDiscountPence: line.lineDiscountPence ?? 0,
+			promoDiscountPence: line.promoDiscountPence ?? 0,
 			lineCostPence: line.lineCostPence,
 			qtyBase: line.qtyBase,
 			defaultCostBasePence: line.product.defaultCostBasePence,
 		});
-		if (!resolvedCost.authoritative) return sum;
-		return sum + line.lineSubtotalPence - resolvedCost.costPence;
-	}, 0);
+		yesterdayGrouped.set(key, invoice);
+	});
+	const yesterdayMargin = evaluateMarginSet([...yesterdayGrouped.values()]);
+	const yesterdayGrossProfit = yesterdayMargin.grossProfitPence;
 
 	const salesTrend = describeChange(kpis.totalSalesPence, normalizedYesterdaySales._sum.totalPence ?? 0);
-	const grossProfitTrend = kpis.grossMarginPence == null
+	const grossProfitTrend = kpis.grossMarginPence == null || yesterdayGrossProfit == null
 		? { label: 'Costs incomplete', direction: 'flat' as const, tone: 'neutral' as const }
 		: describeChange(kpis.grossMarginPence, yesterdayGrossProfit);
 	const transactionTrend = describeChange(kpis.txCount, normalizedYesterdaySales._count.id);

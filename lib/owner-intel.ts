@@ -14,6 +14,8 @@ import { getMarginAnalysisSnapshot } from './reports/margin-analysis';
 import { prisma } from './prisma';
 import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
 import { businessDayWindow } from '@/lib/reports/reporting-clock';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
 // ─── Priority Action ─────────────────────────────────────────────────────────
 
@@ -132,37 +134,30 @@ async function getArApDue7Days(
       where: {
         businessId,
         ...storeFilter,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         OR: [
           { dueDate: { lte: sevenDays } },
           { dueDate: null, createdAt: { lte: sevenDays } },
         ],
       },
-      select: { totalPence: true, payments: { select: { amountPence: true } } },
+      select: { paymentStatus: true, totalPence: true, payments: { select: { amountPence: true, status: true } } },
     }),
     prisma.purchaseInvoice.findMany({
       where: {
         businessId,
         ...storeFilter,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         OR: [
           { dueDate: { lte: sevenDays } },
           { dueDate: null, createdAt: { lte: sevenDays } },
         ],
       },
-      select: { totalPence: true, payments: { select: { amountPence: true } } },
+      select: { paymentStatus: true, totalPence: true, payments: { select: { amountPence: true } } },
     }),
   ]);
 
-  const arPence = arRows.reduce((sum, r) => {
-    const paid = r.payments.reduce((s, p) => s + p.amountPence, 0);
-    return sum + Math.max(0, r.totalPence - paid);
-  }, 0);
-
-  const apPence = apRows.reduce((sum, r) => {
-    const paid = r.payments.reduce((s, p) => s + p.amountPence, 0);
-    return sum + Math.max(0, r.totalPence - paid);
-  }, 0);
+  const arPence = arRows.reduce((sum, invoice) => sum + receivableDocumentBalance(invoice).balancePence, 0);
+  const apPence = apRows.reduce((sum, invoice) => sum + payableDocumentBalance(invoice).balancePence, 0);
 
   return { arPence, apPence };
 }
@@ -174,7 +169,8 @@ export async function getOwnerBrief(
   currency: string,
   storeId?: string
 ): Promise<OwnerBrief> {
-  const todayWindow = businessDayWindow(new Date(), DEFAULT_BUSINESS_TIMEZONE);
+  const business = await prisma.business.findUnique({ where: { id: businessId }, select: { timezone: true } });
+  const todayWindow = businessDayWindow(new Date(), business?.timezone || DEFAULT_BUSINESS_TIMEZONE);
   const marginWindowEnd = todayWindow.endExclusive;
   const marginWindowStart = businessDayWindow(
     new Date(todayWindow.startInclusive.getTime() - 13 * 86_400_000),

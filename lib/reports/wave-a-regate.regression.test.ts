@@ -88,6 +88,7 @@ import { getSupplierSalesReport } from '@/lib/reports/supplier-sales';
 import { getCashflowForecast } from '@/lib/reports/forecast';
 import { enqueueOwnerDailySummarySms } from '@/lib/notifications/owner-daily-summary-sms';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
+import { buildCustomerDetailLedger } from '@/lib/reports/detail-ledger';
 
 const NOW = new Date('2026-03-15T12:00:00.000Z');
 const SALE_AT = new Date('2026-03-15T10:00:00.000Z');
@@ -365,17 +366,7 @@ describe('Wave A re-gate fixtures', () => {
   });
 
   it('D15 customer detail ledger matches the canonical headline and does not settle a shortfall', async () => {
-    const specifier = ['@/lib/reports/', 'detail-ledger'].join('');
-    const ledger = await import(specifier) as {
-      buildCustomerDetailLedger: (invoices: Array<{
-        id: string;
-        createdAt: Date;
-        paymentStatus: string;
-        totalPence: number;
-        payments: Array<{ id: string; amountPence: number; status?: string; receivedAt: Date; method: string; reference: string | null }>;
-      }>) => Array<{ description: string; balancePence: number }>;
-    };
-    const rows = ledger.buildCustomerDetailLedger([{
+    const rows = buildCustomerDetailLedger([{
       id: 'inv-1',
       createdAt: SALE_AT,
       paymentStatus: 'PAID',

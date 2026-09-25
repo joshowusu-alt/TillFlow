@@ -85,9 +85,13 @@ async function loadProductBuckets(
   });
 
   const totals = new Map<string, { salesValuePence: number; qtyBase: number }>();
+  let unallocatedSalesDifferencePence = 0;
   for (const invoice of invoices) {
     const ranked = rankRecognisedProductSales(invoice);
-    if (!ranked.ok) continue;
+    if (!ranked.ok) {
+      unallocatedSalesDifferencePence += ranked.differencePence;
+      continue;
+    }
     const qtyByProduct = new Map<string, number>();
     for (const line of invoice.lines) {
       qtyByProduct.set(line.productId, (qtyByProduct.get(line.productId) ?? 0) + line.qtyBase);
@@ -101,7 +105,7 @@ async function loadProductBuckets(
     }
   }
 
-  if (totals.size === 0) return [];
+  if (totals.size === 0 && unallocatedSalesDifferencePence === 0) return [];
 
   const products = await db.product.findMany({
     where: { id: { in: [...totals.keys()] } },
@@ -109,12 +113,21 @@ async function loadProductBuckets(
   });
   const nameById = new Map(products.map((p) => [p.id, p.name]));
 
-  return [...totals.entries()].map(([productId, bucket]) => ({
+  const rows = [...totals.entries()].map(([productId, bucket]) => ({
     id: productId,
     name: nameById.get(productId) ?? productId,
     salesValuePence: bucket.salesValuePence,
     qtyBase: bucket.qtyBase,
   }));
+  if (unallocatedSalesDifferencePence !== 0) {
+    rows.push({
+      id: 'unallocated-sales-difference',
+      name: 'Unallocated sales difference',
+      salesValuePence: unallocatedSalesDifferencePence,
+      qtyBase: 0,
+    });
+  }
+  return rows;
 }
 
 async function loadBranchBuckets(

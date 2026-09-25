@@ -2,6 +2,7 @@ import PageHeader from '@/components/PageHeader';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import ReturnFormClient from './ReturnFormClient';
 
 export default async function SalesReturnPage({ params, searchParams }: { params: { id: string }; searchParams?: { error?: string } }) {
@@ -21,8 +22,9 @@ export default async function SalesReturnPage({ params, searchParams }: { params
     select: {
       id: true,
       createdAt: true,
+      paymentStatus: true,
       totalPence: true,
-      payments: { select: { amountPence: true } },
+      payments: { select: { amountPence: true, status: true } },
       customer: { select: { name: true } },
       salesReturn: { select: { id: true } }
     }
@@ -48,8 +50,9 @@ export default async function SalesReturnPage({ params, searchParams }: { params
     );
   }
 
-  const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-  const balance = Math.max(invoice.totalPence - paid, 0);
+  const document = receivableDocumentBalance(invoice);
+  const paid = document.paidPence;
+  const balance = document.balancePence;
   const isVoid = paid === 0;
   const errorMessage = searchParams?.error ? decodeURIComponent(searchParams.error) : null;
 

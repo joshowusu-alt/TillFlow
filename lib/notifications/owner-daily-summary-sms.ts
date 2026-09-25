@@ -258,7 +258,7 @@ async function getOwnerDailySummaryMetrics(
         where: {
           businessId: business.id,
           ...storeFilter,
-          paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
         _sum: { totalPence: true },
       }),
@@ -379,7 +379,7 @@ async function getOwnerDailySummaryMetrics(
   return {
     dateLabel: formatBusinessDateLabel(now, timeZone),
     scopeLabel,
-    totalSalesPence: margin.recognisedSalesPence,
+    totalSalesPence: salesInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0),
     grossProfitPence: margin.grossProfitPence,
     transactionCount: salesInvoices.length,
     cashPence: paymentSplit.CASH ?? 0,

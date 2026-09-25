@@ -76,7 +76,7 @@ export async function getSupplierListKpis(
     where: {
       businessId,
       supplierId: { not: null },
-      paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       supplier: {
         businessId,
         ...(search ? supplierNameContains(search) : {}),

@@ -136,12 +136,13 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
       ? prisma.salesInvoice.findMany({
           where: {
             customerId: { in: customerIds },
-            paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+            paymentStatus: { notIn: ['RETURNED', 'VOID'] },
           },
           select: {
             customerId: true,
+            paymentStatus: true,
             totalPence: true,
-            payments: { select: { amountPence: true } },
+            payments: { select: { amountPence: true, status: true } },
           },
         })
       : Promise.resolve([] as Array<{
@@ -241,10 +242,9 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
   const balanceMap = new Map<string, number>();
   for (const inv of arInvoices) {
     if (!inv.customerId) continue;
-    const paid = inv.payments.reduce((s, p) => s + p.amountPence, 0);
     balanceMap.set(
       inv.customerId,
-      (balanceMap.get(inv.customerId) ?? 0) + Math.max(inv.totalPence - paid, 0),
+      (balanceMap.get(inv.customerId) ?? 0) + receivableDocumentBalance(inv).balancePence,
     );
   }
 
@@ -317,15 +317,21 @@ export async function getCustomer(
     include: {
       salesInvoices: {
         where: {
-          ...(opts.from ? { createdAt: { gte: opts.from } } : {}),
-          ...(opts.endExclusive ? { createdAt: { lt: opts.endExclusive } } : {}),
+          ...((opts.from || opts.endExclusive)
+            ? {
+                createdAt: {
+                  ...(opts.from ? { gte: opts.from } : {}),
+                  ...(opts.endExclusive ? { lt: opts.endExclusive } : {}),
+                },
+              }
+            : {}),
         },
         select: {
           id: true,
           createdAt: true,
           paymentStatus: true,
           totalPence: true,
-          payments: { select: { amountPence: true } },
+          payments: { select: { amountPence: true, status: true } },
         },
         orderBy: { createdAt: 'desc' },
         take: 200,

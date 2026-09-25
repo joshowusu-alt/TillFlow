@@ -4,6 +4,8 @@ import { unstable_cache } from 'next/cache';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
 import { businessDayWindow } from '@/lib/reports/reporting-clock';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
 export type ForecastDay = {
   date: string;
@@ -120,7 +122,7 @@ async function _getCashflowForecast(
 
   const business = await prisma.business.findUniqueOrThrow({
     where: { id: businessId },
-    select: { openingCapitalPence: true },
+    select: { openingCapitalPence: true, timezone: true },
   });
   const startingCash = cashBalance + (business.openingCapitalPence ?? 0);
 
@@ -128,21 +130,21 @@ async function _getCashflowForecast(
   const unpaidSales = await prisma.salesInvoice.findMany({
     where: {
       businessId,
-      paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      paymentStatus: { notIn: ['RETURNED', 'VOID'] },
     },
     select: {
+      paymentStatus: true,
       totalPence: true,
       dueDate: true,
       createdAt: true,
-      payments: { select: { amountPence: true } },
+      payments: { select: { amountPence: true, status: true } },
       customer: { select: { paymentTermsDays: true } },
     },
   });
 
   const arByDay = new Map<string, number>();
   for (const inv of unpaidSales) {
-    const paid = inv.payments.reduce((s, p) => s + p.amountPence, 0);
-    const remaining = Math.max(inv.totalPence - paid, 0);
+    const remaining = receivableDocumentBalance(inv).balancePence;
     if (remaining <= 0) continue;
 
     let expectedDate: Date;
@@ -173,9 +175,10 @@ async function _getCashflowForecast(
   const unpaidPurchases = await prisma.purchaseInvoice.findMany({
     where: {
       businessId,
-      paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      paymentStatus: { notIn: ['RETURNED', 'VOID'] },
     },
     select: {
+      paymentStatus: true,
       totalPence: true,
       dueDate: true,
       createdAt: true,
@@ -185,8 +188,7 @@ async function _getCashflowForecast(
 
   const apByDay = new Map<string, number>();
   for (const inv of unpaidPurchases) {
-    const paid = inv.payments.reduce((s, p) => s + p.amountPence, 0);
-    const remaining = Math.max(inv.totalPence - paid, 0);
+    const remaining = payableDocumentBalance(inv).balancePence;
     if (remaining <= 0) continue;
 
     const dueDate = inv.dueDate ? new Date(inv.dueDate) : new Date(inv.createdAt);
@@ -238,10 +240,11 @@ async function _getCashflowForecast(
   const avgDailyExpenses = Math.round(totalExpenses30d / 30);
 
   // 5. Avg daily confirmed cash and MoMo (trailing 14 business days)
-  const trailingEnd = businessDayWindow(now, DEFAULT_BUSINESS_TIMEZONE).endExclusive;
+  const forecastTimeZone = business.timezone || DEFAULT_BUSINESS_TIMEZONE;
+  const trailingEnd = businessDayWindow(now, forecastTimeZone).endExclusive;
   const trailingStart = businessDayWindow(
     new Date(trailingEnd.getTime() - 14 * 86_400_000),
-    DEFAULT_BUSINESS_TIMEZONE,
+    forecastTimeZone,
   ).startInclusive;
   const recentCashPayments = await prisma.salesPayment.findMany({
     where: {

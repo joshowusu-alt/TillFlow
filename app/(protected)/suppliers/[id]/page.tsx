@@ -82,8 +82,9 @@ export default async function SupplierDetailPage({
       include: {
         purchaseInvoices: {
           where: {
-            ...(start ? { createdAt: { gte: start } } : {}),
-            ...(endExclusive ? { createdAt: { lt: endExclusive } } : {})
+            ...((start || endExclusive)
+              ? { createdAt: { ...(start ? { gte: start } : {}), ...(endExclusive ? { lt: endExclusive } : {}) } }
+              : {})
           },
           select: {
             id: true,
@@ -166,18 +167,6 @@ export default async function SupplierDetailPage({
 
   const ledgerRows = invoices
     .flatMap((invoice) => {
-      const settlementAdjustment = !invoice.isClosed && invoice.paymentStatus === 'PAID' && invoice.paid < invoice.totalPence
-        ? [{
-            key: `${invoice.id}-status-settled`,
-            date: invoice.createdAt,
-            sortKey: invoice.createdAt.getTime() + 0.5,
-            type: 'adjustment' as const,
-            description: 'Balance settled',
-            debitPence: 0,
-            creditPence: invoice.totalPence - invoice.paid,
-          }]
-        : [];
-
       return [{
         key: `${invoice.id}-invoice`,
         date: invoice.createdAt,
@@ -196,7 +185,6 @@ export default async function SupplierDetailPage({
         debitPence: 0,
         creditPence: payment.amountPence,
       })),
-      ...settlementAdjustment,
       ];
     })
     .sort((a, b) => a.sortKey - b.sortKey)
@@ -211,7 +199,7 @@ export default async function SupplierDetailPage({
     }>>((rows, row) => {
       const previousBalance = rows.at(-1)?.balancePence ?? 0;
       const { sortKey: _sortKey, ...rest } = row;
-      rows.push({ ...rest, balancePence: Math.max(previousBalance + row.debitPence - row.creditPence, 0) });
+      rows.push({ ...rest, balancePence: previousBalance + row.debitPence - row.creditPence });
       return rows;
     }, []);
 

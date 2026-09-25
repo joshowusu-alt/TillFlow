@@ -39,8 +39,9 @@ export async function GET(
     include: {
       salesInvoices: {
         where: {
-          ...(start ? { createdAt: { gte: start } } : {}),
-          ...(endExclusive ? { createdAt: { lt: endExclusive } } : {})
+          ...((start || endExclusive)
+            ? { createdAt: { ...(start ? { gte: start } : {}), ...(endExclusive ? { lt: endExclusive } : {}) } }
+            : {})
         },
         include: { payments: true },
         orderBy: { createdAt: 'asc' }

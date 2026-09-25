@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime, formatDate, formatRelativeDate } from '@/lib/format';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
+import { buildCustomerDetailLedger } from '@/lib/reports/detail-ledger';
 import { parseTags } from '@/lib/contact-tags';
 import Link from 'next/link';
 import { updateCustomerAction } from '@/app/actions/customers';
@@ -86,8 +87,9 @@ export default async function CustomerDetailPage({
     include: {
       salesInvoices: {
         where: {
-          ...(start ? { createdAt: { gte: start } } : {}),
-          ...(endExclusive ? { createdAt: { lt: endExclusive } } : {})
+          ...((start || endExclusive)
+            ? { createdAt: { ...(start ? { gte: start } : {}), ...(endExclusive ? { lt: endExclusive } : {}) } }
+            : {})
         },
         select: {
           id: true,
@@ -134,8 +136,9 @@ export default async function CustomerDetailPage({
         where: {
           customerId: { in: linkedStorefrontCustomers.map((s) => s.id) },
           status: { notIn: ['CANCELLED', 'PAYMENT_FAILED'] },
-          ...(start ? { createdAt: { gte: start } } : {}),
-          ...(endExclusive ? { createdAt: { lt: endExclusive } } : {}),
+          ...((start || endExclusive)
+            ? { createdAt: { ...(start ? { gte: start } : {}), ...(endExclusive ? { lt: endExclusive } : {}) } }
+            : {}),
         },
         select: {
           id: true,
@@ -212,56 +215,7 @@ export default async function CustomerDetailPage({
     : creditLimit > 0 && outstanding > creditLimit ? 'over-limit'
     : 'balance-due';
 
-  const ledgerRows = invoices
-    .flatMap((invoice) => {
-      const settlementAdjustment = !invoice.isClosed && invoice.paymentStatus === 'PAID' && invoice.paid < invoice.totalPence
-        ? [{
-            key: `${invoice.id}-status-settled`,
-            date: invoice.createdAt,
-            sortKey: invoice.createdAt.getTime() + 0.5,
-            type: 'adjustment' as const,
-            description: 'Balance settled',
-            debitPence: 0,
-            creditPence: invoice.totalPence - invoice.paid,
-          }]
-        : [];
-
-      return [{
-        key: `${invoice.id}-invoice`,
-        date: invoice.createdAt,
-        sortKey: invoice.createdAt.getTime(),
-        type: 'invoice' as const,
-        description: 'Invoice',
-        debitPence: invoice.isClosed ? 0 : invoice.totalPence,
-        creditPence: 0,
-      },
-      ...invoice.payments.map((payment) => ({
-        key: payment.id,
-        date: payment.receivedAt,
-        sortKey: payment.receivedAt.getTime() + 0.1,
-        type: 'payment' as const,
-        description: `Payment${payment.reference ? ` - ${payment.reference}` : ''} (${PAYMENT_LABEL[payment.method] ?? payment.method})`,
-        debitPence: 0,
-        creditPence: payment.amountPence,
-      })),
-      ...settlementAdjustment,
-      ];
-    })
-    .sort((a, b) => a.sortKey - b.sortKey)
-    .reduce<Array<{
-      key: string;
-      date: Date;
-      type: 'invoice' | 'payment' | 'adjustment';
-      description: string;
-      debitPence: number;
-      creditPence: number;
-      balancePence: number;
-    }>>((rows, row) => {
-      const previousBalance = rows.at(-1)?.balancePence ?? 0;
-      const { sortKey: _sortKey, ...rest } = row;
-      rows.push({ ...rest, balancePence: Math.max(previousBalance + row.debitPence - row.creditPence, 0) });
-      return rows;
-    }, []);
+  const ledgerRows = buildCustomerDetailLedger(invoices);
 
   return (
     <div className="space-y-6">
@@ -516,7 +470,7 @@ export default async function CustomerDetailPage({
             ) : (
               <div className="mt-4 space-y-3">
                 {invoices.map((invoice) => {
-                  const paidAmount = Math.max(invoice.totalPence - invoice.balance, 0);
+                  const paidAmount = invoice.paid;
                   const isOverdue =
                     invoice.balance > 0 &&
                     invoice.dueDate != null &&

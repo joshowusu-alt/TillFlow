@@ -203,4 +203,3 @@ export function sum(lines: { debitPence: number; creditPence: number }[]) {
     { debit: 0, credit: 0 }
   );
 }
-

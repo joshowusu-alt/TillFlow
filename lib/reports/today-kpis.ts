@@ -226,8 +226,8 @@ async function getLiquidAssetsPence(businessId: string, asOf: Date, storeId?: st
   return operationalLiquidPence;
 }
 
-async function getTodayKPIsSqlite(businessId: string, storeId: string | undefined, now: Date): Promise<TodayKPIs> {
-  const todayWindow = businessDayWindow(now, DEFAULT_BUSINESS_TIMEZONE);
+async function getTodayKPIsSqlite(businessId: string, storeId: string | undefined, now: Date, timeZone: string): Promise<TodayKPIs> {
+  const todayWindow = businessDayWindow(now, timeZone);
   const todayStart = todayWindow.startInclusive;
   const todayEnd = todayWindow.endExclusive;
 
@@ -258,7 +258,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       resolveMoneyReceivedScope({
         businessId,
         currency: 'GHS',
-        timeZone: DEFAULT_BUSINESS_TIMEZONE,
+        timeZone,
         periodStart: todayStart,
         periodEndInclusive: todayEnd,
         branchIds: storeId ? [storeId] : null,
@@ -315,11 +315,14 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
         },
       },
       select: {
+        salesInvoiceId: true,
         lineSubtotalPence: true,
+        lineDiscountPence: true,
+        promoDiscountPence: true,
         lineCostPence: true,
         qtyBase: true,
         product: { select: { id: true, defaultCostBasePence: true } },
-        salesInvoice: { select: { createdAt: true, paymentStatus: true } },
+        salesInvoice: { select: { createdAt: true, paymentStatus: true, discountPence: true } },
       },
     }),
     getLiquidAssetsPence(businessId, todayEnd, storeId),
@@ -384,8 +387,8 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     existing.revenue += line.lineSubtotalPence;
     const resolvedCost = resolveAuthoritativeLineCost({
       lineSubtotalPence: line.lineSubtotalPence,
-      lineDiscountPence: 0,
-      promoDiscountPence: 0,
+      lineDiscountPence: line.lineDiscountPence ?? 0,
+      promoDiscountPence: line.promoDiscountPence ?? 0,
       lineCostPence: line.lineCostPence,
       qtyBase: line.qtyBase,
       defaultCostBasePence: line.product.defaultCostBasePence,
@@ -445,11 +448,16 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   }
 
   const now = new Date();
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { timezone: true },
+  });
+  const timeZone = business?.timezone || DEFAULT_BUSINESS_TIMEZONE;
   if (isSqliteRuntime()) {
-    return getTodayKPIsSqlite(businessId, storeId, now);
+    return getTodayKPIsSqlite(businessId, storeId, now, timeZone);
   }
 
-  const todayWindow = businessDayWindow(now, DEFAULT_BUSINESS_TIMEZONE);
+  const todayWindow = businessDayWindow(now, timeZone);
   const todayStart = todayWindow.startInclusive;
   const todayEnd = todayWindow.endExclusive;
 
@@ -495,7 +503,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       resolveMoneyReceivedScope({
         businessId,
         currency: 'GHS',
-        timeZone: DEFAULT_BUSINESS_TIMEZONE,
+        timeZone,
         periodStart: todayStart,
         periodEndInclusive: todayEnd,
         branchIds: storeId ? [storeId] : null,
@@ -588,6 +596,8 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       },
       select: {
         lineSubtotalPence: true,
+        lineDiscountPence: true,
+        promoDiscountPence: true,
         lineCostPence: true,
         qtyBase: true,
         product: { select: { id: true, defaultCostBasePence: true } },
@@ -605,10 +615,14 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
         },
       },
       select: {
+        salesInvoiceId: true,
         lineSubtotalPence: true,
+        lineDiscountPence: true,
+        promoDiscountPence: true,
         lineCostPence: true,
         qtyBase: true,
         product: { select: { defaultCostBasePence: true } },
+        salesInvoice: { select: { paymentStatus: true, discountPence: true } },
       },
     }),
     getLiquidAssetsPence(businessId, todayEnd, storeId),
@@ -658,8 +672,8 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     existing.revenue += line.lineSubtotalPence;
     const resolvedCost = resolveAuthoritativeLineCost({
       lineSubtotalPence: line.lineSubtotalPence,
-      lineDiscountPence: 0,
-      promoDiscountPence: 0,
+      lineDiscountPence: line.lineDiscountPence ?? 0,
+      promoDiscountPence: line.promoDiscountPence ?? 0,
       lineCostPence: line.lineCostPence,
       qtyBase: line.qtyBase,
       defaultCostBasePence: line.product.defaultCostBasePence,

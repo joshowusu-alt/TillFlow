@@ -6,6 +6,7 @@ import { requireUser } from '@/lib/auth';
 import { audit, type AuditAction } from '@/lib/audit';
 import { err, ok, safeAction, type ActionResult } from '@/lib/action-utils';
 import { prisma } from '@/lib/prisma';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { sendWhatsAppMessage } from '@/lib/notifications/providers';
 import { normalizeWhatsappPhone, resolveBusinessTimeZone } from '@/lib/notifications/utils';
 import { buildLowStockAlertTemplate } from '@/lib/notifications/templates/low-stock';
@@ -402,21 +403,22 @@ export async function sendDebtorReminderAction(
       where: {
         businessId: user.businessId,
         customerId: customer.id,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
       select: {
+        paymentStatus: true,
         totalPence: true,
         dueDate: true,
         createdAt: true,
-        payments: { select: { amountPence: true } },
+        payments: { select: { amountPence: true, status: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
 
-    const outstandingBalancePence = invoices.reduce((sum, invoice) => {
-      const paid = invoice.payments.reduce((paymentSum, payment) => paymentSum + payment.amountPence, 0);
-      return sum + Math.max(invoice.totalPence - paid, 0);
-    }, 0);
+    const outstandingBalancePence = invoices.reduce(
+      (sum, invoice) => sum + receivableDocumentBalance(invoice).balancePence,
+      0,
+    );
 
     const oldestOutstandingDate = invoices[0]?.dueDate ?? invoices[0]?.createdAt ?? new Date();
     const agingDays = Math.max(

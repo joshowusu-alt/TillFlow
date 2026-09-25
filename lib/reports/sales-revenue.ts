@@ -13,6 +13,7 @@
  * therefore do not inflate revenue.
  */
 import { prisma } from '@/lib/prisma';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import {
   REPORTING_EXCLUDED_SALE_STATUSES,
   reportingTimestampFilter,
@@ -48,14 +49,12 @@ export async function getSalesRevenueSummary(scope: ReportingScope): Promise<Sal
     prisma.salesInvoice.findMany({
       where: {
         ...where,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
       select: {
+        paymentStatus: true,
         totalPence: true,
-        payments: {
-          where: { status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] } },
-          select: { amountPence: true },
-        },
+        payments: { select: { amountPence: true, status: true } },
       },
       take: 5000,
     }),
@@ -63,8 +62,7 @@ export async function getSalesRevenueSummary(scope: ReportingScope): Promise<Sal
 
   let creditSalesOutstandingPence = 0;
   for (const invoice of creditRows) {
-    const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-    creditSalesOutstandingPence += Math.max(invoice.totalPence - paid, 0);
+    creditSalesOutstandingPence += receivableDocumentBalance(invoice).balancePence;
   }
 
   return {

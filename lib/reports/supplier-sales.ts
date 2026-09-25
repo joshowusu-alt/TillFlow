@@ -34,6 +34,7 @@ export type SupplierSalesReport = {
   suppliersWithSalesCount: number;
   topSupplierName: string | null;
   rows: SupplierSalesRow[];
+  unallocatedSalesDifferencePence: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -132,6 +133,7 @@ export async function getSupplierSalesReport(
   };
 
   const supplierAcc = new Map<string, SupplierAcc>();
+  let unallocatedSalesDifferencePence = 0;
 
   // Initialise every supplier that has linked products (including zero-sales ones)
   for (const [sid, name] of supplierNames) {
@@ -160,7 +162,10 @@ export async function getSupplierSalesReport(
         lineTotalPence: line.lineTotalPence,
       })),
     });
-    if (!ranked.ok) continue;
+    if (!ranked.ok) {
+      unallocatedSalesDifferencePence += ranked.differencePence;
+      continue;
+    }
     ranked.lines.forEach((rankedLine, index) => {
       const line = invoice.lines[index];
       const product = productMap.get(line.productId);
@@ -217,7 +222,7 @@ export async function getSupplierSalesReport(
   const suppliersWithSalesCount = rows.filter((r) => r.totalRevenuePence > 0).length;
   const topSupplierName = rows.find((r) => r.totalRevenuePence > 0)?.supplierName ?? null;
 
-  return { start, end, totalRevenuePence, totalQtyBase, suppliersWithSalesCount, topSupplierName, rows };
+  return { start, end, totalRevenuePence, totalQtyBase, suppliersWithSalesCount, topSupplierName, rows, unallocatedSalesDifferencePence };
 }
 
 // ---------------------------------------------------------------------------

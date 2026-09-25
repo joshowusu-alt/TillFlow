@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { createPurchaseReturnAction } from '@/app/actions/returns';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
 export default async function PurchaseReturnPage({ params }: { params: { id: string } }) {
   const { business, store: operationalStore } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
@@ -37,8 +38,9 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
     );
   }
 
-  const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-  const balance = Math.max(invoice.totalPence - paid, 0);
+  const purchaseDocument = payableDocumentBalance(invoice);
+  const paid = purchaseDocument.paidPence;
+  const balance = purchaseDocument.balancePence;
   const isVoid = paid === 0;
   const openShifts = await prisma.shift.findMany({
     where: {

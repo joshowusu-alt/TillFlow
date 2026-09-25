@@ -27,6 +27,37 @@ export function businessDayWindow(instant: Date, timeZone?: string | null): Half
   };
 }
 
+export function zonedDateTimeParts(instant: Date, timeZone?: string | null): {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  weekday: number;
+} {
+  const zone = resolveBusinessTimeZone(timeZone);
+  const formatted = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    hour12: false,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    weekday: 'short',
+  }).formatToParts(instant);
+  const part = (type: string) => formatted.find((item) => item.type === type)?.value ?? '0';
+  const hourRaw = part('hour');
+  const weekdayName = part('weekday');
+  const weekdayIndex = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(weekdayName.slice(0, 3));
+  return {
+    year: Number(part('year')),
+    month: Number(part('month')),
+    day: Number(part('day')),
+    hour: hourRaw === '24' ? 0 : Number(hourRaw),
+    weekday: weekdayIndex < 0 ? 0 : weekdayIndex,
+  };
+}
+
 export function businessLocalDateWindow(
   fromKey: string,
   toKey: string,
