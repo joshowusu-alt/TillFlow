@@ -60,7 +60,7 @@ export function resolveMoneyReceivedScope(
 
 /** Classify an instant into the business-local calendar day start (UTC instant). */
 export function businessLocalDayStart(instant: Date, timeZone?: string | null): Date {
-  return getBusinessDayBounds(instant, timeZone).dayStart;
+  return getBusinessDayBounds(instant, requireReportTimeZone(timeZone)).dayStart;
 }
 
 export function scopesEqualForReconcile(

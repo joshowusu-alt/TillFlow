@@ -11,10 +11,8 @@ import { expectedCashPenceFromEntries } from '@/lib/reports/expected-cash';
 import { resolveReadinessExpectedCashPence } from '@/lib/reports/home-expected-cash';
 import { measureHomePerf } from '@/lib/performance/home-perf-instrumentation';
 import { assertHomeLoaderAllowed } from '@/lib/owner-home/force-fail';
-import {
-  getBusinessDayBounds,
-  resolveBusinessTimeZone,
-} from '@/lib/notifications/utils';
+import { getBusinessDayBounds } from '@/lib/notifications/utils';
+import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import {
   resolveReportingScope,
   tradingReportHref,
@@ -43,7 +41,7 @@ async function loadBusinessTimeZone(businessId: string): Promise<string> {
     where: { id: businessId },
     select: { timezone: true },
   });
-  return resolveBusinessTimeZone(business?.timezone);
+  return requireReportTimeZone(business?.timezone);
 }
 
 export async function getHomePerformanceSummary(

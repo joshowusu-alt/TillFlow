@@ -3,9 +3,9 @@ import {
   getBusinessCalendarDayBounds,
   getBusinessDayBounds,
   parseBusinessLocalDateKey,
-  resolveBusinessTimeZone,
   type LocalDateParts,
 } from '@/lib/notifications/utils';
+import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 import type { BusinessMovementPeriodPair } from './types';
 
@@ -74,7 +74,7 @@ export function resolveLastFullCalendarMonthPair(input: {
   timeZone?: string | null;
   asOf?: Date;
 }): BusinessMovementPeriodPair {
-  const timeZone = resolveBusinessTimeZone(input.timeZone);
+  const timeZone = requireReportTimeZone(input.timeZone);
   const asOf = input.asOf ?? new Date();
   const todayLocal = getBusinessDayBounds(asOf, timeZone).localDate;
   const thisMonthStart = { year: todayLocal.year, month: todayLocal.month, day: 1 };
@@ -112,7 +112,7 @@ export function resolveEqualLengthPeriodPair(input: {
   currentFromKey: string;
   currentToKey: string;
 }): BusinessMovementPeriodPair {
-  const timeZone = resolveBusinessTimeZone(input.timeZone);
+  const timeZone = requireReportTimeZone(input.timeZone);
   const from = parseBusinessLocalDateKey(input.currentFromKey);
   const to = parseBusinessLocalDateKey(input.currentToKey);
   if (!from || !to) {
@@ -145,9 +145,9 @@ export function resolveEqualLengthPeriodPair(input: {
 
 /** Debug/helper: business-local parts for an instant. */
 export function businessLocalParts(instant: Date, timeZone?: string | null): LocalDateParts {
-  return getBusinessDayBounds(instant, timeZone).localDate;
+  return getBusinessDayBounds(instant, requireReportTimeZone(timeZone)).localDate;
 }
 
 export function formatPeriodChromeKey(instant: Date, timeZone?: string | null): string {
-  return formatBusinessLocalDateKey(instant, timeZone);
+  return formatBusinessLocalDateKey(instant, requireReportTimeZone(timeZone));
 }
