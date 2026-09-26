@@ -83,7 +83,7 @@ describe('A7 remaining tenant windows', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(BOUNDARY);
     vi.clearAllMocks();
-    prismaMock.$executeRawUnsafe = vi.fn(async () => 0);
+    (prismaMock as unknown as { $executeRawUnsafe: ReturnType<typeof vi.fn> }).$executeRawUnsafe = vi.fn(async () => 0);
     prismaMock.business.findUnique.mockResolvedValue({ timezone: NAIROBI, openingCapitalPence: 0 });
     prismaMock.business.findUniqueOrThrow.mockResolvedValue({ timezone: NAIROBI, openingCapitalPence: 0 });
     prismaMock.journalLine.findMany.mockResolvedValue([]);
