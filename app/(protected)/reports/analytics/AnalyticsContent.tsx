@@ -1,5 +1,12 @@
 import { prisma } from '@/lib/prisma';
-import { businessDayWindow, requireReportTimeZone, zonedDateTimeParts } from '@/lib/reports/reporting-clock';
+import {
+  addLocalDays,
+  businessDayWindow,
+  defaultTenantLocalRange,
+  requireReportTimeZone,
+  windowForLocalDates,
+  zonedDateTimeParts,
+} from '@/lib/reports/reporting-clock';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
 import { evaluateMarginSet } from '@/lib/reports/margin-line';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
@@ -26,9 +33,17 @@ export async function loadAnalyticsReport({
 }: AnalyticsContentProps) {
   const reportTimeZone = requireReportTimeZone(timeZone);
   const today = businessDayWindow(now, reportTimeZone);
-  const periodAgo = periodStart ?? new Date(today.startInclusive.getTime() - periodDays * 86_400_000);
-  const previousPeriodAgo = new Date(periodAgo.getTime() - periodDays * 86_400_000);
-  const endExclusive = periodEndExclusive ?? today.endExclusive;
+  const currentPeriod = periodStart
+    ? { startInclusive: periodStart, endExclusive: periodEndExclusive ?? today.endExclusive }
+    : defaultTenantLocalRange(now, reportTimeZone, periodDays);
+  const periodAgo = currentPeriod.startInclusive;
+  const endExclusive = periodEndExclusive ?? currentPeriod.endExclusive;
+  const startParts = zonedDateTimeParts(periodAgo, reportTimeZone);
+  const previousPeriodAgo = windowForLocalDates(
+    addLocalDays(startParts, -periodDays),
+    addLocalDays(startParts, -1),
+    reportTimeZone,
+  ).startInclusive;
 
   const analyticsData = await measureServerOperation(
     'report.analytics.snapshot',

@@ -155,7 +155,7 @@ function summariseKpiPayables(invoices: Array<{
 
 async function getOperationalLiquidAssetsEstimatePence(
   businessId: string,
-  asOf: Date,
+  asOfExclusive: Date,
   storeId?: string
 ) {
   const storeFilter = storeId ? { storeId } : {};
@@ -179,10 +179,10 @@ async function getOperationalLiquidAssetsEstimatePence(
       select: { amountPence: true },
     }),
     // Canonical CONFIRMED receipts through asOf — no parent RETURNED/VOID exclusion.
-    aggregateConfirmedReceiptsThroughAsOf(prisma, { businessId, asOf, storeId }),
+    aggregateConfirmedReceiptsThroughAsOf(prisma, { businessId, asOf: asOfExclusive, storeId }),
     prisma.purchasePayment.aggregate({
       where: {
-        paidAt: { lte: asOf },
+        paidAt: { lt: asOfExclusive },
         purchaseInvoice: { businessId, ...storeFilter },
       },
       _sum: { amountPence: true },
@@ -191,7 +191,7 @@ async function getOperationalLiquidAssetsEstimatePence(
       where: {
         businessId,
         ...storeFilter,
-        paidAt: { lte: asOf },
+        paidAt: { lt: asOfExclusive },
       },
       _sum: { amountPence: true },
     }),
@@ -213,13 +213,13 @@ async function getOperationalLiquidAssetsEstimatePence(
   );
 }
 
-async function getLiquidAssetsPence(businessId: string, asOf: Date, storeId?: string) {
+async function getLiquidAssetsPence(businessId: string, asOfExclusive: Date, storeId?: string) {
   const [accountingLiquidPence, operationalLiquidPence] = await Promise.all([
     Promise.all([
-      getAccountBalance(businessId, ACCOUNT_CODES.cash, asOf),
-      getAccountBalance(businessId, ACCOUNT_CODES.bank, asOf),
+      getAccountBalance(businessId, ACCOUNT_CODES.cash, asOfExclusive),
+      getAccountBalance(businessId, ACCOUNT_CODES.bank, asOfExclusive),
     ]).then(([cash, bank]) => cash + bank),
-    getOperationalLiquidAssetsEstimatePence(businessId, asOf, storeId),
+    getOperationalLiquidAssetsEstimatePence(businessId, asOfExclusive, storeId),
   ]);
 
   // Prefer the formal accounting balance when it exists. If a business has

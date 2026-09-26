@@ -270,7 +270,14 @@ export function getBalanceSheet(businessId: string, asOf: Date) {
   );
 }
 
-export async function getAccountBalance(businessId: string, code: string, asOf: Date) {
+/**
+ * Point-in-time account balance at an EXCLUSIVE boundary instant: the sum of all
+ * journals stamped strictly before `asOfExclusive`. Callers pass the reporting
+ * clock's `startInclusive` for a beginning balance and `endExclusive` for an ending
+ * balance, so `balance(end) - balance(start)` covers exactly [start, end). This
+ * matches `_getBalanceSheet`, which already filters `entryDate: { lt: asOf }`.
+ */
+export async function getAccountBalance(businessId: string, code: string, asOfExclusive: Date) {
   const account = await prisma.account.findFirst({
     where: { businessId, code },
     select: { id: true, type: true },
@@ -280,7 +287,7 @@ export async function getAccountBalance(businessId: string, code: string, asOf: 
   const agg = await prisma.journalLine.aggregate({
     where: {
       accountId: account.id,
-      journalEntry: { entryDate: { lte: asOf } },
+      journalEntry: { entryDate: { lt: asOfExclusive } },
     },
     _sum: { debitPence: true, creditPence: true },
   });
