@@ -392,7 +392,11 @@ function HealthOverviewCard({ score, grade, topDrivers, href }: { score: number;
 }
 
 function MetricCard({ card, currency }: { card: BusinessHealthCard; currency: string }) {
-  const value = card.kind === 'money' ? formatMoney(card.value, currency) : card.value.toLocaleString('en-GB');
+  const value = card.value == null
+    ? 'Costs incomplete'
+    : card.kind === 'money'
+      ? formatMoney(card.value, currency)
+      : card.value.toLocaleString('en-GB');
   const toneClass = card.tone === 'danger'
     ? 'border-red-100 bg-gradient-to-br from-red-50 via-white to-red-50/70'
     : card.tone === 'warning'

@@ -22,8 +22,8 @@ describe('P2 purchase-detail mobile presentation', () => {
 
   it('preserves role gate and outstanding/total meanings from server values', () => {
     expect(src).toContain("requireBusinessAndOptionalStore(['MANAGER', 'OWNER'])");
-    expect(src).toContain('invoice.payments.reduce');
-    expect(src).toContain('invoice.totalPence - totalPaid');
+    expect(src).toContain('payableDocumentBalance');
+    expect(src).toContain('purchaseDocument.paidPence');
     expect(src).toContain('formatMoney(invoice.totalPence');
     expect(src).toContain('RemainingBalance');
     expect(src).toContain('paidPence={totalPaid}');

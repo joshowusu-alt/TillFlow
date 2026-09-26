@@ -5,10 +5,12 @@ import { getAccountBalance } from './financials';
 import {
   ensureSqliteReportDateColumnsNormalized,
   isDateOnOrAfter,
-  isDateWithinRange,
   isSqliteRuntime,
 } from './sqlite-report-date-normalization';
-import { summarizeInventoryRisk, summarizeReceivables } from './operational-metrics';
+import { getReceivableAgeBucket, summarizeInventoryRisk } from './operational-metrics';
+import { expectedCashPenceFromEntries } from '@/lib/reports/expected-cash';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import {
   aggregateConfirmedReceiptsThroughAsOf,
@@ -16,11 +18,21 @@ import {
   requireMoneyReceivedMethodRows,
   resolveMoneyReceivedScope,
 } from '@/lib/reports/money-received';
-import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
+import {
+  addLocalDays,
+  businessDayWindow,
+  localDateInstant,
+  localDateKey,
+  requireReportTimeZone,
+  zonedDateTimeParts,
+} from '@/lib/reports/reporting-clock';
+import { evaluateMarginSet, resolveAuthoritativeLineCost, type MarginInvoiceInput } from '@/lib/reports/margin-line';
 export type TodayKPIs = {
   totalSalesPence: number;
-  grossMarginPence: number;
-  gpPercent: number;
+  grossMarginPence: number | null;
+  gpPercent: number | null;
+  marginState: 'READY' | 'INCOMPLETE_COSTS';
+  incompleteLineCount: number;
   txCount: number;
   outstandingARPence: number;
   outstandingAPPence: number;
@@ -33,6 +45,7 @@ export type TodayKPIs = {
   paymentSplit: Record<string, number>;
   avgDailyExpensesPence: number;
   cashOnHandEstimatePence: number; // cash + bank/MoMo/card/transfer, with payment-ledger fallback
+  openExpectedCashPence: number | null;
   todayReceiptsPence: number;
   negativeMarginProductCount: number;
   momoPendingCount: number;
@@ -43,9 +56,106 @@ export type TodayKPIs = {
   discountOverrideCount: number;
 };
 
+async function openExpectedCashFromEntries(businessId: string, storeId?: string): Promise<number | null> {
+  const shifts = await prisma.shift.findMany({
+    where: {
+      status: 'OPEN',
+      closedAt: null,
+      till: { store: { businessId, ...(storeId ? { id: storeId } : {}) } },
+    },
+    select: {
+      id: true,
+      tillId: true,
+      till: { select: { storeId: true, store: { select: { businessId: true } } } },
+      cashDrawerEntries: {
+        select: {
+          entryType: true,
+          amountPence: true,
+          businessId: true,
+          storeId: true,
+          tillId: true,
+          shiftId: true,
+        },
+      },
+    },
+  });
+  if (shifts.length === 0) return null;
+  return shifts.reduce(
+    (sum, shift) =>
+      sum +
+      expectedCashPenceFromEntries(shift.cashDrawerEntries, {
+        businessId: shift.till.store.businessId,
+        storeId: shift.till.storeId,
+        tillId: shift.tillId,
+        shiftId: shift.id,
+      }),
+    0,
+  );
+}
+
+function marginFromSaleLines(lines: Array<{
+  lineSubtotalPence: number;
+  lineDiscountPence?: number;
+  promoDiscountPence?: number;
+  lineCostPence: number;
+  qtyBase: number;
+  product: { defaultCostBasePence: number };
+  salesInvoiceId?: string;
+  salesInvoice?: { paymentStatus: string; discountPence?: number } | null;
+}>): ReturnType<typeof evaluateMarginSet> {
+  const grouped = new Map<string, MarginInvoiceInput>();
+  lines.forEach((line, index) => {
+    const key = line.salesInvoiceId ?? `line-${index}`;
+    const invoice = grouped.get(key) ?? {
+      paymentStatus: line.salesInvoice?.paymentStatus ?? 'PAID',
+      discountPence: line.salesInvoice?.discountPence ?? 0,
+      lines: [],
+    };
+    invoice.lines.push({
+      lineSubtotalPence: line.lineSubtotalPence,
+      lineDiscountPence: line.lineDiscountPence ?? 0,
+      promoDiscountPence: line.promoDiscountPence ?? 0,
+      lineCostPence: line.lineCostPence,
+      qtyBase: line.qtyBase,
+      defaultCostBasePence: line.product.defaultCostBasePence,
+    });
+    grouped.set(key, invoice);
+  });
+  return evaluateMarginSet([...grouped.values()]);
+}
+
+function summariseKpiReceivables(invoices: Array<{
+  paymentStatus: string;
+  totalPence: number;
+  dueDate: Date | null;
+  createdAt: Date;
+  payments: Array<{ amountPence: number; status: string }>;
+}>, now: Date) {
+  let outstandingTotalPence = 0;
+  let over60Pence = 0;
+  let over90Pence = 0;
+  for (const invoice of invoices) {
+    const balancePence = receivableDocumentBalance(invoice).balancePence;
+    outstandingTotalPence += balancePence;
+    if (balancePence <= 0) continue;
+    const bucket = getReceivableAgeBucket(invoice.dueDate, invoice.createdAt, now);
+    if (bucket === '61–90 d' || bucket === '90+ d') over60Pence += balancePence;
+    if (bucket === '90+ d') over90Pence += balancePence;
+  }
+  return { outstandingTotalPence, over60Pence, over90Pence };
+}
+
+function summariseKpiPayables(invoices: Array<{
+  paymentStatus: string;
+  totalPence: number;
+  payments: Array<{ amountPence: number }>;
+}>) {
+  return invoices.reduce((sum, invoice) => sum + payableDocumentBalance(invoice).balancePence, 0);
+}
+
 async function getOperationalLiquidAssetsEstimatePence(
   businessId: string,
-  asOf: Date,
+  asOfExclusive: Date,
   storeId?: string
 ) {
   const storeFilter = storeId ? { storeId } : {};
@@ -68,11 +178,11 @@ async function getOperationalLiquidAssetsEstimatePence(
       },
       select: { amountPence: true },
     }),
-    // Canonical CONFIRMED receipts through asOf — no parent RETURNED/VOID exclusion.
-    aggregateConfirmedReceiptsThroughAsOf(prisma, { businessId, asOf, storeId }),
+    // Canonical CONFIRMED receipts strictly before endExclusive — no parent RETURNED/VOID exclusion.
+    aggregateConfirmedReceiptsThroughAsOf(prisma, { businessId, endExclusive: asOfExclusive, storeId }),
     prisma.purchasePayment.aggregate({
       where: {
-        paidAt: { lte: asOf },
+        paidAt: { lt: asOfExclusive },
         purchaseInvoice: { businessId, ...storeFilter },
       },
       _sum: { amountPence: true },
@@ -81,7 +191,7 @@ async function getOperationalLiquidAssetsEstimatePence(
       where: {
         businessId,
         ...storeFilter,
-        paidAt: { lte: asOf },
+        paidAt: { lt: asOfExclusive },
       },
       _sum: { amountPence: true },
     }),
@@ -103,13 +213,13 @@ async function getOperationalLiquidAssetsEstimatePence(
   );
 }
 
-async function getLiquidAssetsPence(businessId: string, asOf: Date, storeId?: string) {
+async function getLiquidAssetsPence(businessId: string, asOfExclusive: Date, storeId?: string) {
   const [accountingLiquidPence, operationalLiquidPence] = await Promise.all([
     Promise.all([
-      getAccountBalance(businessId, ACCOUNT_CODES.cash, asOf),
-      getAccountBalance(businessId, ACCOUNT_CODES.bank, asOf),
+      getAccountBalance(businessId, ACCOUNT_CODES.cash, asOfExclusive),
+      getAccountBalance(businessId, ACCOUNT_CODES.bank, asOfExclusive),
     ]).then(([cash, bank]) => cash + bank),
-    getOperationalLiquidAssetsEstimatePence(businessId, asOf, storeId),
+    getOperationalLiquidAssetsEstimatePence(businessId, asOfExclusive, storeId),
   ]);
 
   // Prefer the formal accounting balance when it exists. If a business has
@@ -122,29 +232,28 @@ async function getLiquidAssetsPence(businessId: string, asOf: Date, storeId?: st
   return operationalLiquidPence;
 }
 
-async function getTodayKPIsSqlite(businessId: string, storeId: string | undefined, now: Date): Promise<TodayKPIs> {
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(now);
-  todayEnd.setHours(23, 59, 59, 999);
+function lookbackStart(now: Date, timeZone: string, daysBack: number): Date {
+  const key = localDateKey(addLocalDays(zonedDateTimeParts(now, timeZone), -daysBack));
+  return localDateInstant(key, 'start', timeZone) ?? now;
+}
 
-  const sevenDaysAgo = new Date(now);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const thirtyDaysAgo = new Date(now);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyFiveDaysAgo = new Date(now);
-  thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35);
-  const fourteenDaysAgo = new Date(now.getTime() - 14 * 86_400_000);
+async function getTodayKPIsSqlite(businessId: string, storeId: string | undefined, now: Date, timeZone: string): Promise<TodayKPIs> {
+  const todayWindow = businessDayWindow(now, timeZone);
+  const todayStart = todayWindow.startInclusive;
+  const todayEnd = todayWindow.endExclusive;
+
+  const sevenDaysAgo = lookbackStart(now, timeZone, 7);
+  const thirtyDaysAgo = lookbackStart(now, timeZone, 30);
+  const thirtyFiveDaysAgo = lookbackStart(now, timeZone, 35);
+  const fourteenDaysAgo = lookbackStart(now, timeZone, 14);
   // Recency floor for KPI monitoring queries. Invoices older than 90 days that
   // are still unpaid are not filtered out from authoritative balances (customers
   // page / supplier ledger) — only from the today-KPI dashboard cards.
-  const ninetyDaysAgo = new Date(now.getTime() - 90 * 86_400_000);
-
   const storeFilter = storeId ? { storeId } : {};
 
   const [salesRows, paymentRows, openSalesInvoices, outstandingPurchases, alertRows, balances, paidExpenses, momoPending, cashVarShifts, salesLines14d, cashOnHandEstimatePence] = await Promise.all([
     prisma.salesInvoice.findMany({
-      where: { businessId, ...storeFilter, createdAt: { gte: sevenDaysAgo } },
+      where: { businessId, ...storeFilter, createdAt: { gte: sevenDaysAgo, lt: todayEnd } },
       select: {
         totalPence: true,
         createdAt: true,
@@ -157,28 +266,29 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       resolveMoneyReceivedScope({
         businessId,
         currency: 'GHS',
-        timeZone: DEFAULT_BUSINESS_TIMEZONE,
+        timeZone,
         periodStart: todayStart,
-        periodEndInclusive: new Date(todayEnd.getTime() + 1),
+        periodEndInclusive: todayEnd,
         branchIds: storeId ? [storeId] : null,
         absoluteBounds: true,
       }),
     ),
     prisma.salesInvoice.findMany({
-      where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] }, createdAt: { gte: ninetyDaysAgo } },
+      where: { businessId, ...storeFilter, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
       select: {
+        paymentStatus: true,
         totalPence: true,
         dueDate: true,
         createdAt: true,
-        payments: { select: { amountPence: true } },
+        payments: { select: { amountPence: true, status: true } },
       },
     }),
     prisma.purchaseInvoice.findMany({
-      where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] }, createdAt: { gte: ninetyDaysAgo } },
-      select: { totalPence: true, payments: { select: { amountPence: true } } },
+      where: { businessId, ...storeFilter, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
+      select: { paymentStatus: true, totalPence: true, payments: { select: { amountPence: true } } },
     }),
     prisma.riskAlert.findMany({
-      where: { businessId, severity: 'HIGH', status: 'OPEN', occurredAt: { gte: sevenDaysAgo } },
+      where: { businessId, severity: 'HIGH', status: 'OPEN', occurredAt: { gte: sevenDaysAgo, lt: todayEnd } },
       select: { occurredAt: true },
     }),
     prisma.inventoryBalance.findMany({
@@ -189,7 +299,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       },
     }),
     prisma.expense.findMany({
-      where: { businessId, paymentStatus: 'PAID', createdAt: { gte: thirtyFiveDaysAgo } },
+      where: { businessId, paymentStatus: 'PAID', createdAt: { gte: thirtyFiveDaysAgo, lt: todayEnd } },
       select: { amountPence: true, createdAt: true },
     }),
     prisma.mobileMoneyCollection.count({
@@ -199,7 +309,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       where: {
         till: { store: { businessId, ...(storeId ? { id: storeId } : {}) } },
         variance: { not: null },
-        closedAt: { gte: sevenDaysAgo },
+        closedAt: { gte: sevenDaysAgo, lt: todayEnd },
       },
       select: { variance: true, closedAt: true },
       take: 200,
@@ -208,39 +318,38 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       where: {
         salesInvoice: {
           businessId, ...(storeId ? { storeId } : {}),
-          createdAt: { gte: fourteenDaysAgo },
+          createdAt: { gte: fourteenDaysAgo, lt: todayEnd },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
       },
       select: {
+        salesInvoiceId: true,
         lineSubtotalPence: true,
+        lineDiscountPence: true,
+        promoDiscountPence: true,
         lineCostPence: true,
         qtyBase: true,
         product: { select: { id: true, defaultCostBasePence: true } },
-        salesInvoice: { select: { createdAt: true, paymentStatus: true } },
+        salesInvoice: { select: { createdAt: true, paymentStatus: true, discountPence: true } },
       },
     }),
     getLiquidAssetsPence(businessId, todayEnd, storeId),
   ]);
 
   const validTodaySales = salesRows.filter((row) =>
-    isDateWithinRange(row.createdAt, todayStart, todayEnd) && !['RETURNED', 'VOID'].includes(row.paymentStatus)
+    row.createdAt >= todayStart && row.createdAt < todayEnd && !['RETURNED', 'VOID'].includes(row.paymentStatus)
   );
 
   const totalSalesPence = validTodaySales.reduce((sum, row) => sum + row.totalPence, 0);
 
   // GP from sale lines — same source as margins/analytics
   const todaySaleLines = salesLines14d.filter((line) =>
-    isDateWithinRange(line.salesInvoice.createdAt, todayStart, todayEnd) &&
+    line.salesInvoice.createdAt >= todayStart && line.salesInvoice.createdAt < todayEnd &&
     !['RETURNED', 'VOID'].includes(line.salesInvoice.paymentStatus)
   );
-  const grossMarginPence = todaySaleLines.reduce((sum, line) => {
-    const cost = line.lineCostPence > 0
-      ? line.lineCostPence
-      : (line.product.defaultCostBasePence * line.qtyBase);
-    return sum + line.lineSubtotalPence - cost;
-  }, 0);
-  const gpPercent = totalSalesPence > 0 ? Math.round((grossMarginPence / totalSalesPence) * 100) : 0;
+  const todayMargin = marginFromSaleLines(todaySaleLines);
+  const grossMarginPence = todayMargin.grossProfitPence;
+  const gpPercent = todayMargin.grossProfitPercent;
 
   const paymentSplit: Record<string, number> = {};
   for (const row of requireMoneyReceivedMethodRows(paymentRows)) {
@@ -248,12 +357,9 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
   }
   const todayReceiptsPence = Object.values(paymentSplit).reduce((sum, amount) => sum + amount, 0);
 
-  const receivables = summarizeReceivables(openSalesInvoices, now);
+  const receivables = summariseKpiReceivables(openSalesInvoices, now);
 
-  const outstandingAPPence = outstandingPurchases.reduce((sum, inv) => {
-    const paid = inv.payments.reduce((t, p) => t + p.amountPence, 0);
-    return sum + Math.max(inv.totalPence - paid, 0);
-  }, 0);
+  const outstandingAPPence = summariseKpiPayables(outstandingPurchases);
 
   const activeBalances = balances.filter((b) => b.product.active);
   const inventorySummary = summarizeInventoryRisk(
@@ -287,9 +393,15 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     const key = line.product.id;
     const existing = productMargins.get(key) ?? { revenue: 0, cost: 0 };
     existing.revenue += line.lineSubtotalPence;
-    existing.cost += line.lineCostPence > 0
-      ? line.lineCostPence
-      : (line.product.defaultCostBasePence * line.qtyBase);
+    const resolvedCost = resolveAuthoritativeLineCost({
+      lineSubtotalPence: line.lineSubtotalPence,
+      lineDiscountPence: line.lineDiscountPence ?? 0,
+      promoDiscountPence: line.promoDiscountPence ?? 0,
+      lineCostPence: line.lineCostPence,
+      qtyBase: line.qtyBase,
+      defaultCostBasePence: line.product.defaultCostBasePence,
+    });
+    existing.cost += resolvedCost.authoritative ? resolvedCost.costPence : 0;
     productMargins.set(key, existing);
   }
 
@@ -301,6 +413,8 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     totalSalesPence,
     grossMarginPence,
     gpPercent,
+    marginState: todayMargin.state,
+    incompleteLineCount: todayMargin.incompleteLineCount,
     txCount: validTodaySales.length,
     outstandingARPence: receivables.outstandingTotalPence,
     outstandingAPPence,
@@ -313,6 +427,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     paymentSplit,
     avgDailyExpensesPence,
     cashOnHandEstimatePence: Math.max(0, cashOnHandEstimatePence),
+    openExpectedCashPence: await openExpectedCashFromEntries(businessId, storeId),
     todayReceiptsPence,
     negativeMarginProductCount,
     momoPendingCount: momoPending,
@@ -341,24 +456,24 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   }
 
   const now = new Date();
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { timezone: true },
+  });
+  const timeZone = requireReportTimeZone(business?.timezone);
   if (isSqliteRuntime()) {
-    return getTodayKPIsSqlite(businessId, storeId, now);
+    return getTodayKPIsSqlite(businessId, storeId, now, timeZone);
   }
 
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(now);
-  todayEnd.setHours(23, 59, 59, 999);
+  const todayWindow = businessDayWindow(now, timeZone);
+  const todayStart = todayWindow.startInclusive;
+  const todayEnd = todayWindow.endExclusive;
 
-  const sevenDaysAgo = new Date(now);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const thirtyDaysAgo = new Date(now);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyFiveDaysAgo = new Date(now);
-  thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35);
+  const sevenDaysAgo = lookbackStart(now, timeZone, 7);
+  const thirtyDaysAgo = lookbackStart(now, timeZone, 30);
+  const thirtyFiveDaysAgo = lookbackStart(now, timeZone, 35);
+  const fourteenDaysAgo = lookbackStart(now, timeZone, 14);
   // Recency floor for KPI monitoring queries only.
-  const ninetyDaysAgo = new Date(now.getTime() - 90 * 86_400_000);
-
   const storeFilter = storeId ? { storeId } : {};
 
   const [
@@ -382,7 +497,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     prisma.salesInvoice.aggregate({
       where: {
         businessId, ...storeFilter,
-        createdAt: { gte: todayStart, lte: todayEnd },
+        createdAt: { gte: todayStart, lt: todayEnd },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
       _sum: { totalPence: true },
@@ -394,30 +509,30 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       resolveMoneyReceivedScope({
         businessId,
         currency: 'GHS',
-        timeZone: DEFAULT_BUSINESS_TIMEZONE,
+        timeZone,
         periodStart: todayStart,
-        periodEndInclusive: new Date(todayEnd.getTime() + 1),
+        periodEndInclusive: todayEnd,
         branchIds: storeId ? [storeId] : null,
         absoluteBounds: true,
       }),
     ),
     prisma.salesInvoice.findMany({
-      where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] }, createdAt: { gte: ninetyDaysAgo } },
+      where: { businessId, ...storeFilter, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
       select: {
+        paymentStatus: true,
         totalPence: true,
         dueDate: true,
         createdAt: true,
-        payments: { select: { amountPence: true } },
+        payments: { select: { amountPence: true, status: true } },
       },
     }),
     // Outstanding AP — aggregate at DB level
     prisma.purchaseInvoice.findMany({
       where: {
         businessId, ...storeFilter,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-        createdAt: { gte: ninetyDaysAgo },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
-      select: { totalPence: true, payments: { select: { amountPence: true } } },
+      select: { paymentStatus: true, totalPence: true, payments: { select: { amountPence: true } } },
     }),
     // Open HIGH risk alerts
     prisma.riskAlert.count({
@@ -425,7 +540,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
         businessId,
         severity: 'HIGH',
         status: 'OPEN',
-        occurredAt: { gte: sevenDaysAgo },
+        occurredAt: { gte: sevenDaysAgo, lt: todayEnd },
       },
     }),
     // Inventory balances
@@ -440,12 +555,12 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     }),
     // 30-day expenses — aggregate at DB level
     prisma.expense.aggregate({
-      where: { businessId, createdAt: { gte: thirtyDaysAgo }, paymentStatus: 'PAID' },
+      where: { businessId, createdAt: { gte: thirtyDaysAgo, lt: todayEnd }, paymentStatus: 'PAID' },
       _sum: { amountPence: true },
     }),
     // This week expenses — aggregate at DB level
     prisma.expense.aggregate({
-      where: { businessId, createdAt: { gte: sevenDaysAgo }, paymentStatus: 'PAID' },
+      where: { businessId, createdAt: { gte: sevenDaysAgo, lt: todayEnd }, paymentStatus: 'PAID' },
       _sum: { amountPence: true },
     }),
     // 4-week expenses (35 days ago → 7 days ago = 28 days = 4 weeks) — aggregate at DB level
@@ -461,7 +576,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     prisma.shift.findMany({
       where: {
         till: { store: { businessId, ...(storeId ? { id: storeId } : {}) } },
-        closedAt: { gte: sevenDaysAgo },
+        closedAt: { gte: sevenDaysAgo, lt: todayEnd },
         variance: { not: null },
       },
       select: { variance: true },
@@ -471,7 +586,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     prisma.salesInvoice.count({
       where: {
         businessId,
-        createdAt: { gte: sevenDaysAgo },
+        createdAt: { gte: sevenDaysAgo, lt: todayEnd },
         discountOverrideReason: { not: null },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
@@ -481,12 +596,14 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       where: {
         salesInvoice: {
           businessId,
-          createdAt: { gte: new Date(now.getTime() - 14 * 86_400_000) },
+          createdAt: { gte: fourteenDaysAgo, lt: todayEnd },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
       },
       select: {
         lineSubtotalPence: true,
+        lineDiscountPence: true,
+        promoDiscountPence: true,
         lineCostPence: true,
         qtyBase: true,
         product: { select: { id: true, defaultCostBasePence: true } },
@@ -499,15 +616,19 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
         salesInvoice: {
           businessId,
           ...(storeId ? { storeId } : {}),
-          createdAt: { gte: todayStart, lte: todayEnd },
+          createdAt: { gte: todayStart, lt: todayEnd },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
       },
       select: {
+        salesInvoiceId: true,
         lineSubtotalPence: true,
+        lineDiscountPence: true,
+        promoDiscountPence: true,
         lineCostPence: true,
         qtyBase: true,
         product: { select: { defaultCostBasePence: true } },
+        salesInvoice: { select: { paymentStatus: true, discountPence: true } },
       },
     }),
     getLiquidAssetsPence(businessId, todayEnd, storeId),
@@ -517,13 +638,9 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   const totalSalesPence = salesAgg._sum.totalPence ?? 0;
 
   // GP from sale lines — same source as margins/analytics
-  const grossMarginPence = todayLinesForGP.reduce((sum, line) => {
-    const cost = line.lineCostPence > 0
-      ? line.lineCostPence
-      : (line.product.defaultCostBasePence * line.qtyBase);
-    return sum + line.lineSubtotalPence - cost;
-  }, 0);
-  const gpPercent = totalSalesPence > 0 ? Math.round((grossMarginPence / totalSalesPence) * 100) : 0;
+  const todayMargin = marginFromSaleLines(todayLinesForGP);
+  const grossMarginPence = todayMargin.grossProfitPence;
+  const gpPercent = todayMargin.grossProfitPercent;
 
   // Payment split — canonical Money Received aggregation
   const paymentSplit: Record<string, number> = {};
@@ -533,13 +650,9 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   const todayReceiptsPence = Object.values(paymentSplit).reduce((sum, amount) => sum + amount, 0);
 
   // AR — computed from open invoice balances so ageing buckets align with dashboard logic
-  const receivables = summarizeReceivables(openSalesInvoices, now);
+  const receivables = summariseKpiReceivables(openSalesInvoices, now);
 
-  // AP
-  const outstandingAPPence = outstandingPurchases.reduce((s, inv) => {
-    const paid = inv.payments.reduce((t, p) => t + p.amountPence, 0);
-    return s + Math.max(inv.totalPence - paid, 0);
-  }, 0);
+  const outstandingAPPence = summariseKpiPayables(outstandingPurchases);
 
   // Inventory
   const activeBalances = balances.filter((b) => b.product.active);
@@ -563,9 +676,15 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     const key = line.product.id;
     const existing = productMargins.get(key) ?? { revenue: 0, cost: 0 };
     existing.revenue += line.lineSubtotalPence;
-    existing.cost += line.lineCostPence > 0
-      ? line.lineCostPence
-      : (line.product.defaultCostBasePence * line.qtyBase);
+    const resolvedCost = resolveAuthoritativeLineCost({
+      lineSubtotalPence: line.lineSubtotalPence,
+      lineDiscountPence: line.lineDiscountPence ?? 0,
+      promoDiscountPence: line.promoDiscountPence ?? 0,
+      lineCostPence: line.lineCostPence,
+      qtyBase: line.qtyBase,
+      defaultCostBasePence: line.product.defaultCostBasePence,
+    });
+    existing.cost += resolvedCost.authoritative ? resolvedCost.costPence : 0;
     productMargins.set(key, existing);
   }
   // Count products where selling price < cost (simplified)
@@ -583,6 +702,8 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     totalSalesPence,
     grossMarginPence,
     gpPercent,
+    marginState: todayMargin.state,
+    incompleteLineCount: todayMargin.incompleteLineCount,
     txCount: salesAgg._count.id,
     outstandingARPence: receivables.outstandingTotalPence,
     outstandingAPPence,
@@ -595,6 +716,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     paymentSplit,
     avgDailyExpensesPence,
     cashOnHandEstimatePence: Math.max(0, cashOnHandEstimatePence),
+    openExpectedCashPence: await openExpectedCashFromEntries(businessId, storeId),
     todayReceiptsPence,
     negativeMarginProductCount,
     momoPendingCount: momoPending,

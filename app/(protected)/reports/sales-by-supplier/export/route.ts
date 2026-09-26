@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   };
   const supplierId = searchParams.get('supplierId') ?? undefined;
 
-  const { start, end, fromInputValue, toInputValue } = resolveSelectableReportDateRange(params, 'mtd');
+  const { start, end, fromInputValue, toInputValue } = resolveSelectableReportDateRange(params, 'mtd', new Date(), business.timezone);
   const report = await getSupplierSalesReport(business.id, { start, end, supplierId });
 
   const currency = business.currency;
@@ -65,6 +65,17 @@ export async function GET(request: Request) {
         ]);
       }
     }
+  }
+
+  if (report.unallocatedSalesDifferencePence !== 0) {
+    rows.push([
+      report.unallocatedSalesDifferenceLabel,
+      '',
+      '',
+      '',
+      formatMoney(report.unallocatedSalesDifferencePence, currency),
+      '',
+    ]);
   }
 
   // Totals row

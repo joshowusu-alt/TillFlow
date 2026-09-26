@@ -2,6 +2,16 @@ import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 import { unstable_cache } from 'next/cache';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import {
+  addLocalDays,
+  businessDayWindow,
+  localDateInstant,
+  localDateKey,
+  requireReportTimeZone,
+  zonedDateTimeParts,
+} from '@/lib/reports/reporting-clock';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
 export type ForecastDay = {
   date: string;
@@ -14,6 +24,8 @@ export type ForecastDay = {
 
 export type ForecastResult = {
   startingCashPence: number;
+  arInputPence: number;
+  apInputPence: number;
   days: ForecastDay[];
   summary: {
     daysUntilNegative: number | null;
@@ -29,10 +41,22 @@ export type ForecastInputs = {
   avgDailyExpensesPence: number;
   avgDailyCashSalesPence: number;
   days: number;
+  now: Date;
+  timeZone: string;
 };
 
-function dateKey(d: Date): string {
-  return d.toISOString().slice(0, 10);
+function tenantDateKey(instant: Date, timeZone: string): string {
+  return localDateKey(zonedDateTimeParts(instant, timeZone));
+}
+
+function tenantOffsetKey(instant: Date, timeZone: string, days: number): string {
+  return localDateKey(addLocalDays(zonedDateTimeParts(instant, timeZone), days));
+}
+
+function dueInstant(createdAt: Date, dueDate: Date | null, extraDays: number, timeZone: string): Date {
+  if (dueDate) return new Date(dueDate);
+  const key = tenantOffsetKey(createdAt, timeZone, extraDays);
+  return localDateInstant(key, 'start', timeZone) ?? createdAt;
 }
 
 export function projectCashflow(inputs: ForecastInputs): ForecastResult {
@@ -42,13 +66,11 @@ export function projectCashflow(inputs: ForecastInputs): ForecastResult {
   let runningWorst = inputs.startingCashPence;
 
   let lowestPence = inputs.startingCashPence;
-  let lowestDate = dateKey(new Date());
+  let lowestDate = tenantDateKey(inputs.now, inputs.timeZone);
   let daysUntilNegative: number | null = null;
 
   for (let i = 1; i <= inputs.days; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    const dk = dateKey(d);
+    const dk = tenantOffsetKey(inputs.now, inputs.timeZone, i);
 
     const arInflow = inputs.arByDay.get(dk) ?? 0;
     const apOutflow = inputs.apByDay.get(dk) ?? 0;
@@ -86,8 +108,13 @@ export function projectCashflow(inputs: ForecastInputs): ForecastResult {
     }
   }
 
+  const arInputPence = [...inputs.arByDay.values()].reduce((sum, value) => sum + value, 0);
+  const apInputPence = [...inputs.apByDay.values()].reduce((sum, value) => sum + value, 0);
+
   return {
     startingCashPence: inputs.startingCashPence,
+    arInputPence,
+    apInputPence,
     days,
     summary: {
       daysUntilNegative,
@@ -102,6 +129,11 @@ async function _getCashflowForecast(
   days: number
 ): Promise<ForecastResult> {
   const now = new Date();
+  const business = await prisma.business.findUniqueOrThrow({
+    where: { id: businessId },
+    select: { openingCapitalPence: true, timezone: true },
+  });
+  const forecastTimeZone = requireReportTimeZone(business.timezone);
 
   // 1. Starting cash: sum journal lines for cash account
   const cashLines = await prisma.journalLine.findMany({
@@ -116,53 +148,45 @@ async function _getCashflowForecast(
     return sum + line.creditPence - line.debitPence;
   }, 0);
 
-  const business = await prisma.business.findUniqueOrThrow({
-    where: { id: businessId },
-    select: { openingCapitalPence: true },
-  });
   const startingCash = cashBalance + (business.openingCapitalPence ?? 0);
 
   // 2. AR: unpaid sales invoices grouped by due date
   const unpaidSales = await prisma.salesInvoice.findMany({
     where: {
       businessId,
-      paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      paymentStatus: { notIn: ['RETURNED', 'VOID'] },
     },
     select: {
+      paymentStatus: true,
       totalPence: true,
       dueDate: true,
       createdAt: true,
-      payments: { select: { amountPence: true } },
+      payments: { select: { amountPence: true, status: true } },
       customer: { select: { paymentTermsDays: true } },
     },
   });
 
   const arByDay = new Map<string, number>();
   for (const inv of unpaidSales) {
-    const paid = inv.payments.reduce((s, p) => s + p.amountPence, 0);
-    const remaining = Math.max(inv.totalPence - paid, 0);
-    if (remaining <= 0) continue;
+    const remaining = receivableDocumentBalance(inv).balancePence;
+    if (remaining === 0) continue;
 
-    let expectedDate: Date;
-    if (inv.dueDate) {
-      expectedDate = new Date(inv.dueDate);
-    } else {
-      const termDays = inv.customer?.paymentTermsDays ?? 7;
-      expectedDate = new Date(inv.createdAt);
-      expectedDate.setDate(expectedDate.getDate() + termDays);
-    }
+    const expectedDate = dueInstant(
+      inv.createdAt,
+      inv.dueDate,
+      inv.customer?.paymentTermsDays ?? 7,
+      forecastTimeZone,
+    );
 
     // If already past due, assume collection spread over next 7 days
     if (expectedDate < now) {
       const dailyPortion = Math.round(remaining / 7);
       for (let i = 1; i <= 7; i++) {
-        const d = new Date(now);
-        d.setDate(d.getDate() + i);
-        const dk = dateKey(d);
+        const dk = tenantOffsetKey(now, forecastTimeZone, i);
         arByDay.set(dk, (arByDay.get(dk) ?? 0) + dailyPortion);
       }
     } else {
-      const dk = dateKey(expectedDate);
+      const dk = tenantDateKey(expectedDate, forecastTimeZone);
       arByDay.set(dk, (arByDay.get(dk) ?? 0) + remaining);
     }
   }
@@ -171,9 +195,10 @@ async function _getCashflowForecast(
   const unpaidPurchases = await prisma.purchaseInvoice.findMany({
     where: {
       businessId,
-      paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      paymentStatus: { notIn: ['RETURNED', 'VOID'] },
     },
     select: {
+      paymentStatus: true,
       totalPence: true,
       dueDate: true,
       createdAt: true,
@@ -183,14 +208,11 @@ async function _getCashflowForecast(
 
   const apByDay = new Map<string, number>();
   for (const inv of unpaidPurchases) {
-    const paid = inv.payments.reduce((s, p) => s + p.amountPence, 0);
-    const remaining = Math.max(inv.totalPence - paid, 0);
-    if (remaining <= 0) continue;
+    const remaining = payableDocumentBalance(inv).balancePence;
+    if (remaining === 0) continue;
 
-    const dueDate = inv.dueDate ? new Date(inv.dueDate) : new Date(inv.createdAt);
-    if (!inv.dueDate) dueDate.setDate(dueDate.getDate() + 14); // default 14 days for AP
-
-    const dk = dateKey(dueDate < now ? now : dueDate);
+    const dueDate = dueInstant(inv.createdAt, inv.dueDate, 14, forecastTimeZone);
+    const dk = tenantDateKey(dueDate < now ? now : dueDate, forecastTimeZone);
     apByDay.set(dk, (apByDay.get(dk) ?? 0) + remaining);
   }
 
@@ -198,7 +220,7 @@ async function _getCashflowForecast(
   const unpaidExpenses = await prisma.expense.findMany({
     where: {
       businessId,
-      paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      paymentStatus: { notIn: ['VOID'] },
     },
     select: {
       amountPence: true,
@@ -210,24 +232,26 @@ async function _getCashflowForecast(
 
   for (const exp of unpaidExpenses) {
     const paid = exp.payments.reduce((s, p) => s + p.amountPence, 0);
-    const remaining = Math.max(exp.amountPence - paid, 0);
-    if (remaining <= 0) continue;
+    const remaining = exp.amountPence - paid;
+    if (remaining === 0) continue;
 
-    const dueDate = exp.dueDate ? new Date(exp.dueDate) : new Date(exp.createdAt);
-    if (!exp.dueDate) dueDate.setDate(dueDate.getDate() + 7);
-
-    const dk = dateKey(dueDate < now ? now : dueDate);
+    const dueDate = dueInstant(exp.createdAt, exp.dueDate, 7, forecastTimeZone);
+    const dk = tenantDateKey(dueDate < now ? now : dueDate, forecastTimeZone);
     apByDay.set(dk, (apByDay.get(dk) ?? 0) + remaining);
   }
 
-  // 4. Avg daily expenses (trailing 30 days)
-  const thirtyDaysAgo = new Date(now);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  // 4. Avg daily expenses (trailing 30 tenant-local days, half-open)
+  const expenseEnd = businessDayWindow(now, forecastTimeZone).endExclusive;
+  const expenseStart = localDateInstant(
+    tenantOffsetKey(now, forecastTimeZone, -30),
+    'start',
+    forecastTimeZone,
+  ) ?? now;
 
   const recentExpenses = await prisma.expense.findMany({
     where: {
       businessId,
-      createdAt: { gte: thirtyDaysAgo },
+      createdAt: { gte: expenseStart, lt: expenseEnd },
       paymentStatus: 'PAID',
     },
     select: { amountPence: true },
@@ -235,15 +259,18 @@ async function _getCashflowForecast(
   const totalExpenses30d = recentExpenses.reduce((s, e) => s + e.amountPence, 0);
   const avgDailyExpenses = Math.round(totalExpenses30d / 30);
 
-  // 5. Avg daily cash sales (trailing 14 days, cash + mobile money only)
-  const fourteenDaysAgo = new Date(now);
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-
+  // 5. Avg daily confirmed cash and MoMo (trailing 14 business days)
+  const trailingEnd = businessDayWindow(now, forecastTimeZone).endExclusive;
+  const trailingStart = businessDayWindow(
+    new Date(trailingEnd.getTime() - 14 * 86_400_000),
+    forecastTimeZone,
+  ).startInclusive;
   const recentCashPayments = await prisma.salesPayment.findMany({
     where: {
-      receivedAt: { gte: fourteenDaysAgo },
+      receivedAt: { gte: trailingStart, lt: trailingEnd },
+      status: 'CONFIRMED',
       method: { in: ['CASH', 'MOBILE_MONEY'] },
-      salesInvoice: { businessId, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
+      salesInvoice: { businessId },
     },
     select: { amountPence: true },
   });
@@ -257,6 +284,8 @@ async function _getCashflowForecast(
     avgDailyExpensesPence: avgDailyExpenses,
     avgDailyCashSalesPence: avgDailyCashSales,
     days,
+    now,
+    timeZone: forecastTimeZone,
   });
 }
 

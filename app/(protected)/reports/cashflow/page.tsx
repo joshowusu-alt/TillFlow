@@ -11,6 +11,7 @@ import { getFeatures } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import { getCashflow } from '@/lib/reports/financials';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { businessMonthWindow } from '@/lib/reports/reporting-clock';
 
 export default async function CashflowPage({
   searchParams
@@ -32,11 +33,12 @@ export default async function CashflowPage({
   }
 
   const now = new Date();
-  const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(searchParams, defaultStart, now);
+  const month = businessMonthWindow(now, business.timezone);
+  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(searchParams, month.startInclusive, now, month.timeZone);
 
   const cashflow = await getCashflow(business.id, start, end);
-  const hasData = cashflow.beginningCash !== 0 || cashflow.netProfit !== 0 || cashflow.endingCash !== 0;
+  const costsIncomplete = cashflow.netProfit == null || cashflow.netCashFromOps == null || cashflow.endingCash == null;
+  const hasData = cashflow.beginningCash !== 0 || cashflow.netProfit !== 0 || cashflow.endingCash !== 0 || costsIncomplete;
 
   return (
     <div className="space-y-6">
@@ -66,18 +68,18 @@ export default async function CashflowPage({
         />
         <StatCard
           label="Net change in cash"
-          value={formatMoney(cashflow.netCashFromOps, business.currency)}
-          tone={cashflow.netCashFromOps >= 0 ? 'success' : 'danger'}
+          value={costsIncomplete ? 'Costs incomplete' : formatMoney(cashflow.netCashFromOps ?? 0, business.currency)}
+          tone={costsIncomplete ? 'default' : (cashflow.netCashFromOps ?? 0) >= 0 ? 'success' : 'danger'}
         />
         <StatCard
           label="Ending Cash"
-          value={formatMoney(cashflow.endingCash, business.currency)}
+          value={costsIncomplete ? 'Costs incomplete' : formatMoney(cashflow.endingCash ?? 0, business.currency)}
           tone="accent"
         />
         <StatCard
           label="Net Profit"
-          value={formatMoney(cashflow.netProfit, business.currency)}
-          tone={cashflow.netProfit >= 0 ? 'success' : 'danger'}
+          value={costsIncomplete ? 'Costs incomplete' : formatMoney(cashflow.netProfit ?? 0, business.currency)}
+          tone={costsIncomplete ? 'default' : (cashflow.netProfit ?? 0) >= 0 ? 'success' : 'danger'}
           helper="Starting point for this cashflow calculation"
         />
       </div>
@@ -114,7 +116,7 @@ export default async function CashflowPage({
           )}
           <ReportSummaryRow
             label="Net profit starting point"
-            value={formatMoney(cashflow.netProfit, business.currency)}
+            value={costsIncomplete ? 'Costs incomplete' : formatMoney(cashflow.netProfit ?? 0, business.currency)}
             divider="subtle"
           />
           <ReportSummaryRow
@@ -131,12 +133,12 @@ export default async function CashflowPage({
           />
           <ReportSummaryRow
             label="Net cash movement"
-            value={formatMoney(cashflow.netCashFromOps, business.currency)}
+            value={costsIncomplete ? 'Costs incomplete' : formatMoney(cashflow.netCashFromOps ?? 0, business.currency)}
             divider="default"
           />
           <ReportSummaryRow
             label="Ending Cash Balance"
-            value={formatMoney(cashflow.endingCash, business.currency)}
+            value={costsIncomplete ? 'Costs incomplete' : formatMoney(cashflow.endingCash ?? 0, business.currency)}
             divider="default"
             emphasis="strong"
           />

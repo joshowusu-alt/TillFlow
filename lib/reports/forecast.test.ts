@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { addLocalDays, localDateKey, zonedDateTimeParts } from './reporting-clock';
 import { projectCashflow, type ForecastInputs } from './forecast';
+
+const NOW = new Date('2026-03-15T12:00:00.000Z');
+const ZONE = 'Africa/Accra';
 
 function makeInputs(overrides: Partial<ForecastInputs> = {}): ForecastInputs {
   return {
@@ -9,14 +13,14 @@ function makeInputs(overrides: Partial<ForecastInputs> = {}): ForecastInputs {
     avgDailyExpensesPence: 10_000, // 100.00/day
     avgDailyCashSalesPence: 50_000, // 500.00/day
     days: 7,
+    now: NOW,
+    timeZone: ZONE,
     ...overrides,
   };
 }
 
 function futureDate(daysAhead: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + daysAhead);
-  return d.toISOString().slice(0, 10);
+  return localDateKey(addLocalDays(zonedDateTimeParts(NOW, ZONE), daysAhead));
 }
 
 describe('projectCashflow', () => {

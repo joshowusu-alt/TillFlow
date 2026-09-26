@@ -1,8 +1,5 @@
-import {
-  DEFAULT_BUSINESS_TIMEZONE,
-  getBusinessDayBounds,
-  resolveBusinessTimeZone,
-} from '@/lib/notifications/utils';
+import { getBusinessDayBounds } from '@/lib/notifications/utils';
+import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 import {
   MONEY_RECEIVED_DEFINITION_VERSION,
@@ -31,7 +28,7 @@ export type ResolveMoneyReceivedScopeInput = {
 export function resolveMoneyReceivedScope(
   input: ResolveMoneyReceivedScopeInput,
 ): ReportingScopeContext {
-  const timeZone = resolveBusinessTimeZone(input.timeZone ?? DEFAULT_BUSINESS_TIMEZONE);
+  const timeZone = requireReportTimeZone(input.timeZone);
   const asOf = input.asOf ?? new Date();
 
   let periodStart: Date;
@@ -63,7 +60,7 @@ export function resolveMoneyReceivedScope(
 
 /** Classify an instant into the business-local calendar day start (UTC instant). */
 export function businessLocalDayStart(instant: Date, timeZone?: string | null): Date {
-  return getBusinessDayBounds(instant, timeZone).dayStart;
+  return getBusinessDayBounds(instant, requireReportTimeZone(timeZone)).dayStart;
 }
 
 export function scopesEqualForReconcile(

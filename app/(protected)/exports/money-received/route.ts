@@ -26,7 +26,11 @@ export async function GET(request: Request) {
   if (!user) return response as NextResponse;
 
   const { searchParams } = new URL(request.url);
-  const dateRange = resolveExportDateRange(request, '7d');
+  const exportBusiness = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { timezone: true },
+  });
+  const dateRange = resolveExportDateRange(request, '7d', exportBusiness?.timezone);
   const storeIdParam = searchParams.get('storeId') ?? 'ALL';
   const requestedBusinessId = searchParams.get('businessId');
   const metricParam = (searchParams.get('metric') ?? 'money_received') as MoneyReceivedMetricId;
@@ -54,7 +58,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Business not found', completeExport: false }, { status: 404 });
   }
 
-  const periodEndExclusive = new Date(dateRange.end.getTime() + 1);
+  const periodEndExclusive = dateRange.end;
 
   const bundle = await computeMoneyReceivedBundle({
     businessId: access.businessId,

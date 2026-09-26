@@ -155,9 +155,9 @@ describe('Customer and Supplier reporting clarity', () => {
     expect(customerDetailSrc).toContain("MOBILE_MONEY: 'Mobile Money (MoMo)'");
   });
 
-  it('33. computeOutstandingBalance import remains unchanged', () => {
-    expect(customerDetailSrc).toContain("from '@/lib/accounting'");
-    expect(customerDetailSrc).toContain('computeOutstandingBalance');
+  it('33. customer detail uses the receivable document balance', () => {
+    expect(customerDetailSrc).toContain('receivableDocumentBalance');
+    expect(customerDetailSrc).not.toContain('computeOutstandingBalance');
   });
 
   // ── Supplier detail page ───────────────────────────────────────────────
@@ -198,9 +198,9 @@ describe('Customer and Supplier reporting clarity', () => {
     expect(supplierDetailSrc).toContain('Purchases increase what you owe');
   });
 
-  it('43. computeOutstandingBalance import remains unchanged', () => {
-    expect(supplierDetailSrc).toContain("from '@/lib/accounting'");
-    expect(supplierDetailSrc).toContain('computeOutstandingBalance');
+  it('43. supplier detail uses the payable document balance', () => {
+    expect(supplierDetailSrc).toContain('payableDocumentBalance');
+    expect(supplierDetailSrc).not.toContain('computeOutstandingBalance');
   });
 
   // ── Supplier aging page ────────────────────────────────────────────────

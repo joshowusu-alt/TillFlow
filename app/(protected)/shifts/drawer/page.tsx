@@ -12,18 +12,7 @@ import {
   type CashDrawerEntryType,
 } from '@/lib/services/cash-drawer';
 import { prisma } from '@/lib/prisma';
-
-function parseDate(value: string | undefined): Date | null {
-  if (!value) return null;
-  const parsed = new Date(`${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function endOfDay(value: Date): Date {
-  const end = new Date(value);
-  end.setHours(23, 59, 59, 999);
-  return end;
-}
+import { localDateInstant } from '@/lib/reports/reporting-clock';
 
 function hrefWith(params: Record<string, string | undefined>) {
   const search = new URLSearchParams();
@@ -60,8 +49,8 @@ export default async function CashDrawerDrilldownPage({
   const entryType: CashDrawerEntryType = isCashDrawerDrilldownType(requestedType)
     ? requestedType
     : 'CASH_SALE';
-  const from = parseDate(searchParams?.from);
-  const to = parseDate(searchParams?.to);
+  const from = localDateInstant(searchParams?.from, 'start', business.timezone) ?? null;
+  const endExclusive = localDateInstant(searchParams?.to, 'endExclusive', business.timezone) ?? null;
   const tillId = searchParams?.tillId || null;
   const shiftId = searchParams?.shiftId || null;
 
@@ -78,7 +67,7 @@ export default async function CashDrawerDrilldownPage({
     shiftId,
     entryType,
     from,
-    to: to ? endOfDay(to) : null,
+    endExclusive,
   });
 
   const fromValue = searchParams?.from ?? '';

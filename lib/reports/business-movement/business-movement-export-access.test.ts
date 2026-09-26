@@ -112,4 +112,26 @@ describe('GET /exports/business-movement access', () => {
     expect(body.reason).toBe('BRANCH_NOT_AUTHORISED');
     expect(body.completeExport).toBe(false);
   });
+
+  it.each([undefined, null, '', '   ', 'Mars/Olympus'] as const)(
+    'fails closed before calculation when stored timezone is %s',
+    async (timezone) => {
+      getUserMock.mockResolvedValue({ role: 'OWNER', businessId: 'biz-a' });
+      businessFindUniqueMock.mockResolvedValue({
+        id: 'biz-a',
+        currency: 'GHS',
+        timezone,
+        name: 'A',
+      });
+      let error: unknown;
+      try {
+        await GET(new Request('http://localhost/exports/business-movement?storeId=ALL'));
+      } catch (caught) {
+        error = caught;
+      }
+      expect(computeBmMock).not.toHaveBeenCalled();
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe('Business timezone is required for report windows');
+    },
+  );
 });

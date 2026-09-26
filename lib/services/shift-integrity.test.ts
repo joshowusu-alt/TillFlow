@@ -263,7 +263,8 @@ describe('shift integrity — operational POS sales', () => {
 describe('shift integrity — expected cash increment', () => {
   it('uses Prisma increment instead of a read-modify-write assignment', () => {
     const source = readFileSync(join(process.cwd(), 'lib/services/cash-drawer.ts'), 'utf8');
-    expect(source).toContain('expectedCashPence: { increment: input.amountPence }');
+    // Still a Prisma increment, not a read-modify-write. Ineligible types add 0.
+    expect(source).toContain('expectedCashPence: { increment: isExpectedCashEntryType(input.entryType) ? input.amountPence : 0 }');
     expect(source).not.toContain('data: { expectedCashPence: afterExpectedCashPence }');
   });
 });

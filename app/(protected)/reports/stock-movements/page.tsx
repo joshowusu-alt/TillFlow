@@ -8,6 +8,7 @@ import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { formatDateTime } from '@/lib/format';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';
 import { getBusinessStores, resolveStoreSelection } from '@/lib/services/stores';
 import { resolveSourceLink } from '@/lib/reliability/source-links';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
@@ -79,9 +80,8 @@ export default async function StockMovementsPage({
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
 
-  const today = new Date();
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 7);
+  const now = new Date();
+  const fallback = defaultTenantLocalRange(now, business.timezone, 7);
 
   const params = {
     from: typeof searchParams?.from === 'string' ? searchParams.from : undefined,
@@ -94,7 +94,7 @@ export default async function StockMovementsPage({
   };
 
   const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } =
-    resolveReportDateRange(params, weekAgo, today);
+    resolveReportDateRange(params, fallback.startInclusive, now, fallback.timeZone);
   const { stores } = await getBusinessStores(business.id, params.storeId);
   const selectedStoreId = resolveStoreSelection(stores, params.storeId, 'ALL') ?? 'ALL';
 
@@ -109,7 +109,7 @@ export default async function StockMovementsPage({
 
   const where = {
     storeId: storeFilter,
-    createdAt: { gte: from, lte: to },
+    createdAt: { gte: from, lt: to },
     ...(typeFilter ? { type: typeFilter } : {}),
     ...(q ? { product: { name: { contains: q, mode: 'insensitive' as const } } } : {}),
   };

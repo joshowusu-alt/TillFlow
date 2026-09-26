@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
+import { summarizeOpenPayables } from '@/lib/reports/surface-balances';
+import { localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 const csvEscape = (value: string | number | null | undefined) => {
   if (value === null || value === undefined) return '';
@@ -25,18 +28,22 @@ export async function GET(
   const url = new URL(request.url);
   const from = url.searchParams.get('from');
   const to = url.searchParams.get('to');
-  const start = from ? new Date(from) : undefined;
-  const end = to ? new Date(to) : undefined;
-  if (start) start.setHours(0, 0, 0, 0);
-  if (end) end.setHours(23, 59, 59, 999);
+  const business = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { timezone: true },
+  });
+  const zone = requireReportTimeZone(business?.timezone);
+  const start = localDateInstant(from, 'start', zone);
+  const endExclusive = localDateInstant(to, 'endExclusive', zone);
 
   const supplier = await prisma.supplier.findFirst({
     where: { id: params.id, businessId: user.businessId },
     include: {
       purchaseInvoices: {
         where: {
-          ...(start ? { createdAt: { gte: start } } : {}),
-          ...(end ? { createdAt: { lte: end } } : {})
+          ...((start || endExclusive)
+            ? { createdAt: { ...(start ? { gte: start } : {}), ...(endExclusive ? { lt: endExclusive } : {}) } }
+            : {})
         },
         include: { payments: true },
         orderBy: { createdAt: 'asc' }
@@ -49,16 +56,19 @@ export async function GET(
   }
 
   const invoices = supplier.purchaseInvoices.map((invoice) => {
-    const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+    const document = payableDocumentBalance({
+      paymentStatus: invoice.paymentStatus,
+      totalPence: invoice.totalPence,
+      payments: invoice.payments,
+    });
     const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
-    const balance = isClosed ? 0 : Math.max(invoice.totalPence - paid, 0);
-    return { ...invoice, paid, balance, isClosed };
+    return { ...invoice, paid: document.paidPence, balance: document.balancePence, excess: document.excessPence, isClosed };
   });
 
   const activeInvoices = invoices.filter((invoice) => !invoice.isClosed);
   const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
   const totalPaid = activeInvoices.reduce((sum, invoice) => sum + invoice.paid, 0);
-  const outstanding = activeInvoices.reduce((sum, invoice) => sum + invoice.balance, 0);
+  const outstanding = summarizeOpenPayables(supplier.purchaseInvoices).outstandingPence;
 
   const rows: string[] = [];
   rows.push(`Supplier,${csvEscape(supplier.name)}`);

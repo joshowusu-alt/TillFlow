@@ -6,17 +6,9 @@ import EmptyState from '@/components/EmptyState';
 import { formatMoney } from '@/lib/format';
 import { requireBusiness } from '@/lib/auth';
 import { getWeeklyDigestData } from '@/lib/reports/weekly-digest';
+import { businessWeekWindow } from '@/lib/reports/reporting-clock';
 
 export const dynamic = 'force-dynamic';
-
-function weekStart(offsetWeeks = 0) {
-  const d = new Date();
-  const day = d.getDay(); // 0=Sun
-  const diff = (day === 0 ? -6 : 1 - day) + offsetWeeks * 7;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function pctChange(current: number, previous: number): string {
   if (previous === 0) return current > 0 ? '+100%' : '—';
@@ -46,17 +38,19 @@ export default async function WeeklyDigestPage({
   }
 
   const weekOffset = Number(searchParams?.week ?? -1);
-  const wStart = weekStart(weekOffset);
-  const wEnd = new Date(wStart);
-  wEnd.setDate(wEnd.getDate() + 6);
-  wEnd.setHours(23, 59, 59, 999);
+  const week = businessWeekWindow(new Date(), business.timezone, weekOffset);
+  const wStart = week.startInclusive;
+  const wEnd = new Date(week.endExclusive.getTime() - 1);
 
   const currency = business.currency;
-  const data = await getWeeklyDigestData(business.id, wStart, wEnd);
+  const data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, business.timezone);
   const dateLabel = `${wStart.toDateString()} – ${wEnd.toDateString()}`;
 
   const salesChange = pctChange(data.totalSalesPence, data.prevTotalSalesPence);
-  const gpChange = pctChange(data.grossProfitPence, data.prevGrossProfitPence);
+  const marginReady = data.marginState === 'READY' && data.grossProfitPence != null && data.gpPercent != null;
+  const gpChange = marginReady && data.prevGrossProfitPence != null
+    ? pctChange(data.grossProfitPence ?? 0, data.prevGrossProfitPence)
+    : '—';
   const txChange = pctChange(data.txCount, data.prevTxCount);
 
   return (
@@ -99,10 +93,10 @@ export default async function WeeklyDigestPage({
             helper={`${salesChange} vs prev week`}
           />
           <StatCard
-            label={`Gross Profit (${data.gpPercent}%)`}
-            value={formatMoney(data.grossProfitPence, currency)}
-            tone={data.gpPercent >= 20 ? 'success' : data.gpPercent >= 0 ? 'warn' : 'danger'}
-            helper="Profit before expenses."
+            label={marginReady ? `Gross Profit (${data.gpPercent}%)` : 'Gross Profit'}
+            value={marginReady ? formatMoney(data.grossProfitPence ?? 0, currency) : 'Costs incomplete'}
+            tone={marginReady ? (data.gpPercent! >= 20 ? 'success' : data.gpPercent! >= 0 ? 'warn' : 'danger') : 'warn'}
+            helper={marginReady ? 'Profit before expenses.' : `${data.incompleteLineCount} lines without authoritative cost.`}
           />
           <StatCard label="Transactions" value={String(data.txCount)} helper={`${txChange} vs prev week`} />
           <StatCard
@@ -113,7 +107,7 @@ export default async function WeeklyDigestPage({
       </div>
 
       {/* Data-quality warning for extremely negative GP */}
-      {data.gpPercent < -50 && data.totalSalesPence > 0 && (
+      {marginReady && data.gpPercent != null && data.gpPercent < -50 && data.totalSalesPence > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <p className="font-semibold">⚠ Gross margin looks unusual ({data.gpPercent}%)</p>
           <p className="mt-0.5 text-amber-700">
@@ -136,7 +130,7 @@ export default async function WeeklyDigestPage({
           </div>
           <div className="flex justify-between rounded-lg bg-gray-50 px-3 py-2">
             <span className="text-muted">Gross Profit</span>
-            <span className={`font-semibold ${data.grossProfitPence >= data.prevGrossProfitPence ? 'text-success' : 'text-rose'}`}>
+            <span className={`font-semibold ${marginReady && data.prevGrossProfitPence != null && (data.grossProfitPence ?? 0) >= data.prevGrossProfitPence ? 'text-success' : 'text-rose'}`}>
               {gpChange}
             </span>
           </div>
@@ -205,7 +199,9 @@ export default async function WeeklyDigestPage({
 
         <div className="card p-4 sm:p-6">
           <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Highest estimated margin items</h2>
-          {data.topMargin.length === 0 ? (
+          {data.marginState !== 'READY' ? (
+            <EmptyState icon="chart" title="Costs incomplete" subtitle="Gross profit is hidden until every included line has an authoritative cost." />
+          ) : data.topMargin.length === 0 ? (
             <EmptyState icon="chart" title="No margin data" subtitle="Record sales with cost prices to see margins." />
           ) : (
             <div className="space-y-2 text-sm">

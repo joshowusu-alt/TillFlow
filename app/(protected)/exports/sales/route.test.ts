@@ -37,7 +37,7 @@ describe('GET /exports/sales', () => {
 		vi.clearAllMocks();
 
 		getUserMock.mockResolvedValue({ role: 'OWNER', businessId: 'biz-1' });
-		businessFindUniqueMock.mockResolvedValue({ name: 'Accra Market Hub', currency: 'GHS' });
+		businessFindUniqueMock.mockResolvedValue({ name: 'Accra Market Hub', currency: 'GHS', timezone: 'UTC' });
 		detectExportFormatMock.mockReturnValue('csv');
 		respondWithExportMock.mockImplementation((params) => Response.json(params));
 	});
@@ -90,15 +90,13 @@ describe('GET /exports/sales', () => {
 
 		const response = await GET(new Request('https://example.com/exports/sales?period=custom&from=2026-04-01&to=2026-04-03'));
 		const body = await response.json();
-		const expectedStart = new Date('2026-04-01');
-		expectedStart.setHours(0, 0, 0, 0);
-		const expectedEnd = new Date('2026-04-03');
-		expectedEnd.setHours(23, 59, 59, 999);
+		const expectedStart = new Date('2026-04-01T00:00:00.000Z');
+		const expectedEnd = new Date('2026-04-04T00:00:00.000Z');
 
 		const query = salesInvoiceLineFindManyMock.mock.calls[0][0];
 		expect(query.where.salesInvoice.businessId).toBe('biz-1');
 		expect(query.where.salesInvoice.createdAt.gte.toISOString()).toBe(expectedStart.toISOString());
-		expect(query.where.salesInvoice.createdAt.lte.toISOString()).toBe(expectedEnd.toISOString());
+		expect(query.where.salesInvoice.createdAt.lt.toISOString()).toBe(expectedEnd.toISOString());
 		expect(query.where.salesInvoice.paymentStatus).toEqual({ notIn: ['RETURNED', 'VOID'] });
 
 		expect(body.exportOptions.dateRange).toEqual({
@@ -109,8 +107,8 @@ describe('GET /exports/sales', () => {
 		expect(body.exportOptions.rows[0]).toMatchObject({
 			invoice: 'S-1001',
 			product: 'Tomato Paste',
-			cost: '6.00',
-			margin: '6.00',
+			cost: '0.00',
+			margin: '',
 		});
 	});
 });

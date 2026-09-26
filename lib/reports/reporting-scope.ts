@@ -14,9 +14,9 @@ import {
   getBusinessCalendarDayBounds,
   getBusinessDayBounds,
   parseBusinessLocalDateKey,
-  resolveBusinessTimeZone,
   type LocalDateParts,
 } from '@/lib/notifications/utils';
+import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 export const REPORTING_EXCLUDED_SALE_STATUSES = ['RETURNED', 'VOID'] as const;
 
@@ -146,7 +146,7 @@ export function resolveReportingScope(input: {
   allowedStoreIds: string[];
   now?: Date;
 }): ReportingScope {
-  const timeZone = resolveBusinessTimeZone(input.timeZone);
+  const timeZone = requireReportTimeZone(input.timeZone);
   const now = input.now ?? new Date();
   const todayBounds = getBusinessDayBounds(now, timeZone);
   const todayLocal = todayBounds.localDate;

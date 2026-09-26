@@ -29,6 +29,12 @@ const { prismaMock } = vi.hoisted(() => ({
     shift: {
       findMany: vi.fn(),
     },
+    purchaseInvoice: {
+      findMany: vi.fn(),
+    },
+    expensePayment: {
+      aggregate: vi.fn(),
+    },
   },
 }));
 
@@ -47,6 +53,8 @@ describe('enqueueOwnerDailySummarySms', () => {
     prismaMock.salesInvoice.count.mockResolvedValue(0);
     prismaMock.salesReturn.count.mockResolvedValue(0);
     prismaMock.shift.findMany.mockResolvedValue([]);
+    prismaMock.purchaseInvoice.findMany.mockResolvedValue([]);
+    prismaMock.expensePayment.aggregate.mockResolvedValue({ _sum: { amountPence: 0 } });
     prismaMock.messageOutbox.findUnique.mockResolvedValue(null);
     prismaMock.messageOutbox.create.mockResolvedValue({ id: 'outbox-1' });
   });

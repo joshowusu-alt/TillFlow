@@ -7,11 +7,14 @@ import TagChips from '@/components/TagChips';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime, formatDate, formatRelativeDate } from '@/lib/format';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
+import { summarizeOpenReceivables } from '@/lib/reports/surface-balances';
+import { buildCustomerDetailLedger } from '@/lib/reports/detail-ledger';
 import { parseTags } from '@/lib/contact-tags';
 import Link from 'next/link';
 import { updateCustomerAction } from '@/app/actions/customers';
 import { getFeatures } from '@/lib/features';
+import { localDateInstant } from '@/lib/reports/reporting-clock';
 import type { ReactNode } from 'react';
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -77,16 +80,17 @@ export default async function CustomerDetailPage({
   const storefrontSlug = ((business as any).storefrontSlug as string | null) ?? null;
   const loyaltyEnabled = features.loyaltyPoints && (business as any).loyaltyEnabled;
 
-  const start = searchParams?.from ? new Date(searchParams.from) : undefined;
-  const end = searchParams?.to ? new Date(searchParams.to) : undefined;
+  const start = localDateInstant(searchParams?.from, 'start', business.timezone);
+  const endExclusive = localDateInstant(searchParams?.to, 'endExclusive', business.timezone);
 
   const customer = await prisma.customer.findFirst({
     where: { id: params.id, businessId: business.id },
     include: {
       salesInvoices: {
         where: {
-          ...(start ? { createdAt: { gte: start } } : {}),
-          ...(end ? { createdAt: { lte: end } } : {})
+          ...((start || endExclusive)
+            ? { createdAt: { ...(start ? { gte: start } : {}), ...(endExclusive ? { lt: endExclusive } : {}) } }
+            : {})
         },
         select: {
           id: true,
@@ -95,7 +99,7 @@ export default async function CustomerDetailPage({
           paymentStatus: true,
           totalPence: true,
           payments: {
-            select: { id: true, amountPence: true, receivedAt: true, method: true, reference: true },
+            select: { id: true, amountPence: true, status: true, receivedAt: true, method: true, reference: true },
             orderBy: { receivedAt: 'asc' }
           }
         },
@@ -133,8 +137,9 @@ export default async function CustomerDetailPage({
         where: {
           customerId: { in: linkedStorefrontCustomers.map((s) => s.id) },
           status: { notIn: ['CANCELLED', 'PAYMENT_FAILED'] },
-          ...(start ? { createdAt: { gte: start } } : {}),
-          ...(end ? { createdAt: { lte: end } } : {}),
+          ...((start || endExclusive)
+            ? { createdAt: { ...(start ? { gte: start } : {}), ...(endExclusive ? { lt: endExclusive } : {}) } }
+            : {}),
         },
         select: {
           id: true,
@@ -178,15 +183,16 @@ export default async function CustomerDetailPage({
     .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
 
   const invoices = customer.salesInvoices.map((invoice) => {
-    const balance = computeOutstandingBalance(invoice);
+    const document = receivableDocumentBalance(invoice);
     const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
-    const paid = invoice.payments.reduce((sum, p) => sum + p.amountPence, 0);
-    const effectivePaid = !isClosed && invoice.paymentStatus === 'PAID' ? invoice.totalPence : paid;
+    const paid = document.paidPence;
+    const effectivePaid = document.paidPence;
+    const balance = document.balancePence;
     return { ...invoice, paid, effectivePaid, balance, isClosed };
   });
 
   const activeInvoices = invoices.filter((invoice) => !invoice.isClosed);
-  const outstanding = activeInvoices.reduce((sum, invoice) => sum + invoice.balance, 0);
+  const outstanding = summarizeOpenReceivables(customer.salesInvoices).outstandingPence;
   const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
   const totalPaid = activeInvoices.reduce((sum, invoice) => sum + invoice.effectivePaid, 0);
   const activeInvoiceCount = activeInvoices.filter((invoice) => invoice.balance > 0).length;
@@ -210,56 +216,7 @@ export default async function CustomerDetailPage({
     : creditLimit > 0 && outstanding > creditLimit ? 'over-limit'
     : 'balance-due';
 
-  const ledgerRows = invoices
-    .flatMap((invoice) => {
-      const settlementAdjustment = !invoice.isClosed && invoice.paymentStatus === 'PAID' && invoice.paid < invoice.totalPence
-        ? [{
-            key: `${invoice.id}-status-settled`,
-            date: invoice.createdAt,
-            sortKey: invoice.createdAt.getTime() + 0.5,
-            type: 'adjustment' as const,
-            description: 'Balance settled',
-            debitPence: 0,
-            creditPence: invoice.totalPence - invoice.paid,
-          }]
-        : [];
-
-      return [{
-        key: `${invoice.id}-invoice`,
-        date: invoice.createdAt,
-        sortKey: invoice.createdAt.getTime(),
-        type: 'invoice' as const,
-        description: 'Invoice',
-        debitPence: invoice.isClosed ? 0 : invoice.totalPence,
-        creditPence: 0,
-      },
-      ...invoice.payments.map((payment) => ({
-        key: payment.id,
-        date: payment.receivedAt,
-        sortKey: payment.receivedAt.getTime() + 0.1,
-        type: 'payment' as const,
-        description: `Payment${payment.reference ? ` - ${payment.reference}` : ''} (${PAYMENT_LABEL[payment.method] ?? payment.method})`,
-        debitPence: 0,
-        creditPence: payment.amountPence,
-      })),
-      ...settlementAdjustment,
-      ];
-    })
-    .sort((a, b) => a.sortKey - b.sortKey)
-    .reduce<Array<{
-      key: string;
-      date: Date;
-      type: 'invoice' | 'payment' | 'adjustment';
-      description: string;
-      debitPence: number;
-      creditPence: number;
-      balancePence: number;
-    }>>((rows, row) => {
-      const previousBalance = rows.at(-1)?.balancePence ?? 0;
-      const { sortKey: _sortKey, ...rest } = row;
-      rows.push({ ...rest, balancePence: Math.max(previousBalance + row.debitPence - row.creditPence, 0) });
-      return rows;
-    }, []);
+  const ledgerRows = buildCustomerDetailLedger(invoices);
 
   return (
     <div className="space-y-6">
@@ -425,11 +382,11 @@ export default async function CustomerDetailPage({
         <form className="mt-4 grid gap-4 md:grid-cols-4">
           <div>
             <label className="label">From</label>
-            <input className="input" name="from" type="date" defaultValue={start?.toISOString().slice(0, 10)} />
+            <input className="input" name="from" type="date" defaultValue={searchParams?.from ?? ''} />
           </div>
           <div>
             <label className="label">To</label>
-            <input className="input" name="to" type="date" defaultValue={end?.toISOString().slice(0, 10)} />
+            <input className="input" name="to" type="date" defaultValue={searchParams?.to ?? ''} />
           </div>
           <div className="flex items-end">
             <button className="btn-primary w-full">Filter</button>
@@ -437,8 +394,8 @@ export default async function CustomerDetailPage({
           <div className="flex items-end">
             <DownloadLink
               className="btn-ghost w-full text-xs"
-              href={`/customers/${customer.id}/statement?from=${start?.toISOString().slice(0, 10) ?? ''}&to=${
-                end?.toISOString().slice(0, 10) ?? ''
+              href={`/customers/${customer.id}/statement?from=${searchParams?.from ?? ''}&to=${
+                searchParams?.to ?? ''
               }`}
               fallbackFilename={`customer-statement-${customer.id.slice(0, 8)}.csv`}
             >
@@ -514,7 +471,7 @@ export default async function CustomerDetailPage({
             ) : (
               <div className="mt-4 space-y-3">
                 {invoices.map((invoice) => {
-                  const paidAmount = Math.max(invoice.totalPence - invoice.balance, 0);
+                  const paidAmount = invoice.paid;
                   const isOverdue =
                     invoice.balance > 0 &&
                     invoice.dueDate != null &&

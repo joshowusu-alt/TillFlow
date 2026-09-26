@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	classifyInventoryState,
-	computeOutstandingBalance,
 	getReceivableAgeBucket,
 	summarizeInventoryRisk,
 	summarizeReceivables,
@@ -30,13 +29,15 @@ describe('operational report metrics helpers', () => {
 					totalPence: 10_000,
 					dueDate: '2026-02-15T00:00:00.000Z',
 					createdAt: '2026-02-10T00:00:00.000Z',
-					payments: [{ amountPence: 2_500 }],
+					paymentStatus: 'PART_PAID',
+					payments: [{ amountPence: 2_500, status: 'CONFIRMED' }],
 				},
 				{
 					totalPence: 20_000,
 					dueDate: '2025-12-01T00:00:00.000Z',
 					createdAt: '2025-11-25T00:00:00.000Z',
-					payments: [{ amountPence: 5_000 }],
+					paymentStatus: 'PART_PAID',
+					payments: [{ amountPence: 5_000, status: 'CONFIRMED' }],
 				},
 			],
 			new Date('2026-03-12T12:00:00.000Z')
@@ -73,7 +74,18 @@ describe('operational report metrics helpers', () => {
 		expect(summary.stockoutCount).toBe(1);
 	});
 
-	it('computes outstanding balances safely', () => {
-		expect(computeOutstandingBalance(5_000, [{ amountPence: 2_000 }, { amountPence: 4_000 }])).toBe(0);
+	it('keeps a reconciling excess instead of capping it to zero', () => {
+		const summary = summarizeReceivables([
+			{
+				paymentStatus: 'PAID',
+				totalPence: 5_000,
+				createdAt: '2026-03-01T00:00:00.000Z',
+				payments: [
+					{ amountPence: 2_000, status: 'CONFIRMED' },
+					{ amountPence: 4_000, status: 'CONFIRMED' },
+				],
+			},
+		]);
+		expect(summary.outstandingTotalPence).toBe(0);
 	});
 });

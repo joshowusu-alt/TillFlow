@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,18 +28,19 @@ export async function GET(
   const arInvoices = await prisma.salesInvoice.findMany({
     where: {
       customerId: customer.id,
-      paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      paymentStatus: { notIn: ['RETURNED', 'VOID'] },
     },
     select: {
+      paymentStatus: true,
       totalPence: true,
-      payments: { select: { amountPence: true } },
+      payments: { select: { amountPence: true, status: true } },
     },
   });
 
-  const outstandingBalancePence = arInvoices.reduce((sum, inv) => {
-    const paid = inv.payments.reduce((s, p) => s + p.amountPence, 0);
-    return sum + Math.max(inv.totalPence - paid, 0);
-  }, 0);
+  const outstandingBalancePence = arInvoices.reduce(
+    (sum, inv) => sum + receivableDocumentBalance(inv).balancePence,
+    0,
+  );
 
   return NextResponse.json({
     customerId: customer.id,

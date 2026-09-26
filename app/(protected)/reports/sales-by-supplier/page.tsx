@@ -89,7 +89,7 @@ export default async function SalesBySupplierPage({
   }
 
   const { start, end, fromInputValue, toInputValue, periodInputValue, isCustomRange } =
-    resolveSelectableReportDateRange(searchParams, 'mtd');
+    resolveSelectableReportDateRange(searchParams, 'mtd', new Date(), business.timezone);
 
   const supplierId = searchParams?.supplierId?.trim() || undefined;
 
@@ -366,6 +366,19 @@ export default async function SalesBySupplierPage({
               </tr>
             </thead>
             <tbody>
+              {report.unallocatedSalesDifferencePence !== 0 ? (
+                <tr className="rounded-xl bg-white">
+                  <td className="px-3 py-3 text-sm font-semibold">{report.unallocatedSalesDifferenceLabel}</td>
+                  <td className="hidden sm:table-cell px-3 py-3 text-sm text-black/60">—</td>
+                  <td className="px-3 py-3 text-sm font-semibold tabular-nums">
+                    {formatMoney(report.unallocatedSalesDifferencePence, business.currency)}
+                  </td>
+                  <td className="hidden lg:table-cell px-3 py-3 text-sm">—</td>
+                  <td className="hidden lg:table-cell px-3 py-3 text-sm">—</td>
+                  <td className="hidden xl:table-cell px-3 py-3 text-sm">—</td>
+                  <td className="px-3 py-3 text-sm" />
+                </tr>
+              ) : null}
               {report.rows.length > 0 ? (
                 report.rows.map((row) => (
                   <tr key={row.supplierId} className="rounded-xl bg-white">

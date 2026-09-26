@@ -109,6 +109,10 @@ export type BusinessMovementInsight = {
 export type SalesComparisonResult = {
   scope: BusinessMovementScope;
   headline: SalesHeadlineMovement;
+  unallocatedSalesDifference: {
+    label: 'Unallocated sales difference';
+    salesValuePence: number;
+  };
   productGrowers: ProductMovementRow[];
   productDecliners: ProductMovementRow[];
   newProducts: ProductMovementRow[];

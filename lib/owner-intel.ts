@@ -12,6 +12,9 @@ import { computeBusinessAlerts } from './reports/alerts';
 import { getCashflowForecast } from './reports/forecast';
 import { getMarginAnalysisSnapshot } from './reports/margin-analysis';
 import { prisma } from './prisma';
+import { businessDayWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
 // ─── Priority Action ─────────────────────────────────────────────────────────
 
@@ -117,11 +120,14 @@ export function rankPriorityActions(
 
 async function getArApDue7Days(
   businessId: string,
-  storeId?: string
+  storeId: string | undefined,
+  timeZone: string,
 ): Promise<{ arPence: number; apPence: number }> {
-  const now = new Date();
-  const sevenDays = new Date(now);
-  sevenDays.setDate(sevenDays.getDate() + 7);
+  const today = businessDayWindow(new Date(), timeZone);
+  const sevenDays = businessDayWindow(
+    new Date(today.startInclusive.getTime() + 7 * 86_400_000),
+    timeZone,
+  ).endExclusive;
 
   const storeFilter = storeId ? { storeId } : {};
 
@@ -130,37 +136,30 @@ async function getArApDue7Days(
       where: {
         businessId,
         ...storeFilter,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         OR: [
           { dueDate: { lte: sevenDays } },
           { dueDate: null, createdAt: { lte: sevenDays } },
         ],
       },
-      select: { totalPence: true, payments: { select: { amountPence: true } } },
+      select: { paymentStatus: true, totalPence: true, payments: { select: { amountPence: true, status: true } } },
     }),
     prisma.purchaseInvoice.findMany({
       where: {
         businessId,
         ...storeFilter,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         OR: [
           { dueDate: { lte: sevenDays } },
           { dueDate: null, createdAt: { lte: sevenDays } },
         ],
       },
-      select: { totalPence: true, payments: { select: { amountPence: true } } },
+      select: { paymentStatus: true, totalPence: true, payments: { select: { amountPence: true } } },
     }),
   ]);
 
-  const arPence = arRows.reduce((sum, r) => {
-    const paid = r.payments.reduce((s, p) => s + p.amountPence, 0);
-    return sum + Math.max(0, r.totalPence - paid);
-  }, 0);
-
-  const apPence = apRows.reduce((sum, r) => {
-    const paid = r.payments.reduce((s, p) => s + p.amountPence, 0);
-    return sum + Math.max(0, r.totalPence - paid);
-  }, 0);
+  const arPence = arRows.reduce((sum, invoice) => sum + receivableDocumentBalance(invoice).balancePence, 0);
+  const apPence = apRows.reduce((sum, invoice) => sum + payableDocumentBalance(invoice).balancePence, 0);
 
   return { arPence, apPence };
 }
@@ -172,16 +171,19 @@ export async function getOwnerBrief(
   currency: string,
   storeId?: string
 ): Promise<OwnerBrief> {
-  const marginWindowEnd = new Date();
-  marginWindowEnd.setHours(23, 59, 59, 999);
-  const marginWindowStart = new Date(marginWindowEnd);
-  marginWindowStart.setDate(marginWindowStart.getDate() - 13);
-  marginWindowStart.setHours(0, 0, 0, 0);
+  const business = await prisma.business.findUnique({ where: { id: businessId }, select: { timezone: true } });
+  const timeZone = requireReportTimeZone(business?.timezone);
+  const todayWindow = businessDayWindow(new Date(), timeZone);
+  const marginWindowEnd = todayWindow.endExclusive;
+  const marginWindowStart = businessDayWindow(
+    new Date(todayWindow.startInclusive.getTime() - 13 * 86_400_000),
+    timeZone,
+  ).startInclusive;
 
   const [kpis, forecast, arAp, marginSnapshot] = await Promise.all([
     getTodayKPIs(businessId, storeId),
     getCashflowForecast(businessId, 14),
-    getArApDue7Days(businessId, storeId),
+    getArApDue7Days(businessId, storeId, timeZone),
     getMarginAnalysisSnapshot({ businessId, storeId, start: marginWindowStart, end: marginWindowEnd }),
   ]);
 

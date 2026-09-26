@@ -83,25 +83,24 @@ describe('Phase A: performance quick-wins safety', () => {
 
   // ── 3. Recency floors in today-kpis.ts ──────────────────────────────────────
 
-  it('13. today-kpis SQLite path defines ninetyDaysAgo', () => {
-    expect(todayKpisSrc).toContain('ninetyDaysAgo');
+  it('13. today-kpis does not drop receivables or payables older than 90 days', () => {
+    // The old ninetyDaysAgo floor hid open invoices from Today KPIs. A5 removes it.
+    expect(todayKpisSrc).not.toContain('ninetyDaysAgo');
   });
 
-  it('14. today-kpis SQLite openSalesInvoices query has ninetyDaysAgo floor', () => {
-    // The SQLite UNPAID salesInvoice query must include the 90-day floor
-    // Both the SQLite and Postgres paths use the same pattern.
-    const matches = todayKpisSrc.match(/UNPAID.*?PART_PAID.*?ninetyDaysAgo|ninetyDaysAgo.*?UNPAID/gs);
-    expect(todayKpisSrc.match(/ninetyDaysAgo/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+  it('14. today-kpis open sales invoices are not limited by a createdAt floor', () => {
+    expect(todayKpisSrc).not.toMatch(/UNPAID[\s\S]{0,180}ninetyDaysAgo/);
+    expect(todayKpisSrc).toContain('receivableDocumentBalance');
   });
 
-  it('15. today-kpis has ninetyDaysAgo applied to openSalesInvoices (UNPAID filter)', () => {
-    // Check both SQLite and Postgres paths have the recency floor on UNPAID invoices
-    expect(todayKpisSrc).toContain("paymentStatus: { in: ['UNPAID', 'PART_PAID'] }, createdAt: { gte: ninetyDaysAgo }");
+  it('15. today-kpis keeps PART_PAID and UNPAID sales open without a 90-day createdAt bound', () => {
+    expect(todayKpisSrc).not.toContain("createdAt: { gte: ninetyDaysAgo }");
+    expect(todayKpisSrc).toContain("paymentStatus: { notIn: ['RETURNED', 'VOID'] }");
   });
 
-  it('16. today-kpis has ninetyDaysAgo applied to outstandingPurchases', () => {
-    // purchaseInvoice UNPAID query also has the floor
-    expect(todayKpisSrc).toContain("paymentStatus: { in: ['UNPAID', 'PART_PAID'] }, createdAt: { gte: ninetyDaysAgo }");
+  it('16. today-kpis outstanding purchases are not limited by a 90-day createdAt bound', () => {
+    expect(todayKpisSrc).not.toContain('ninetyDaysAgo');
+    expect(todayKpisSrc).toContain('payableDocumentBalance');
   });
 
   // ── 4. Recency floors in owner-dashboard.ts ──────────────────────────────────

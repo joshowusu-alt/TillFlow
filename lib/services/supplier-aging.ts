@@ -7,7 +7,7 @@
  *
  * Excluded from results:
  *  - Invoices whose outstanding balance is 0 (PAID, RETURNED, VOID,
- *    or part-paid to zero) — computeOutstandingBalance returns 0 for these.
+ *    or part-paid to zero) — payableDocumentBalance returns 0 for these.
  *  - Invoices where supplierId is null (orphaned purchase data without a
  *    linked supplier record) — these cannot be attributed to any row.
  *
@@ -15,7 +15,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import {
   type AgingBucket,
   AGING_BUCKETS,
@@ -107,7 +107,7 @@ async function loadOutstandingAttributedInvoices(
     where: {
       businessId,
       supplierId: { not: null },
-      paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      paymentStatus: { notIn: ['RETURNED', 'VOID'] },
     },
     select: {
       id: true,
@@ -124,8 +124,8 @@ async function loadOutstandingAttributedInvoices(
   const loaded: LoadedInvoice[] = [];
   for (const inv of invoices) {
     if (!inv.supplierId || !inv.supplier) continue;
-    const outstandingPence = computeOutstandingBalance(inv);
-    if (outstandingPence <= 0) continue;
+    const outstandingPence = payableDocumentBalance(inv).balancePence;
+    if (outstandingPence === 0) continue;
     const paidPence = inv.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
     loaded.push({
       id: inv.id,

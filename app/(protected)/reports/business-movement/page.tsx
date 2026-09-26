@@ -8,7 +8,7 @@ import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/Repor
 import { formatMoney } from '@/lib/format';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
+import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { getBusinessStores } from '@/lib/services/stores';
 import { resolveMoneyReceivedAccess } from '@/lib/reports/money-received';
 import {
@@ -155,7 +155,7 @@ export default async function BusinessMovementReportPage({
     where: { id: access.businessId },
     select: { timezone: true },
   });
-  const timeZone = businessTz?.timezone ?? DEFAULT_BUSINESS_TIMEZONE;
+  const timeZone = requireReportTimeZone(businessTz?.timezone);
 
   const periodInput = resolveBusinessMovementPeriodInput({
     preset: searchParams?.preset,

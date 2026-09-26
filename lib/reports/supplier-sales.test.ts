@@ -28,7 +28,8 @@ describe('getSupplierSalesReport — service layer', () => {
     expect(src).toContain("notIn: ['RETURNED', 'VOID']");
   });
 
-  it('aggregates lineTotalPence as revenue', () => {
+  it('ranks recognised sales that reconcile to the invoice total', () => {
+    expect(src).toContain('rankRecognisedProductSales');
     expect(src).toContain('lineTotalPence');
     expect(src).toContain('revenuePence');
   });
@@ -368,8 +369,11 @@ describe('getTopLinkedSupplierForMonth — service helper', () => {
     expect(src).toContain('export type TopLinkedSupplierResult');
   });
 
-  it('uses current month date range: first day of month as start', () => {
-    expect(src).toContain('now.getFullYear(), now.getMonth(), 1');
+  it('uses the business-local calendar month with an exclusive end', () => {
+    expect(src).toContain('businessMonthWindow');
+    expect(src).toContain('lt: endExclusive');
+    expect(src).not.toContain('now.getFullYear(), now.getMonth(), 1');
+    expect(src).not.toContain('23, 59, 59, 999');
   });
 
   it('filters out RETURNED and VOID invoices (same as full report)', () => {
@@ -384,8 +388,10 @@ describe('getTopLinkedSupplierForMonth — service helper', () => {
     expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('aggregates qtyBase and lineTotalPence at supplier level', () => {
-    expect(src).toContain('acc.revenuePence += line.lineTotalPence');
+  it('aggregates qtyBase and the shared product-rank revenue at supplier level', () => {
+    // Replaces line.lineTotalPence so this helper cannot drift from sales_activity.
+    expect(src).toContain('rankRecognisedProductSales');
+    expect(src).toContain('acc.revenuePence += rankedAmount');
     expect(src).toContain('acc.qtyBase += line.qtyBase');
   });
 

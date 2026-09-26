@@ -3,7 +3,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
 export function normalizeSupplierName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -53,7 +53,7 @@ export async function findProbableDuplicateSuppliers(
     const key = normalizeSupplierName(supplier.name);
     if (!key) continue;
     const outstandingPence = supplier.purchaseInvoices.reduce(
-      (sum, invoice) => sum + computeOutstandingBalance(invoice),
+      (sum, invoice) => sum + payableDocumentBalance(invoice).balancePence,
       0,
     );
     const member: DuplicateSupplierMember = {

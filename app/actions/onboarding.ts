@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { writeHomeLoadingKindCookie } from '@/lib/owner-home/home-loading-kind';
 import { getTodayKPIs } from '@/lib/reports/today-kpis';
+import { businessDayWindow } from '@/lib/reports/reporting-clock';
 import { DEMO_SKUS } from '@/lib/demo-data-constants';
 import {
   loadActivationSnapshot,
@@ -96,7 +97,7 @@ export type ReadinessData = {
   openShiftTills: OpenShiftTillIdentity[];
   reorderNeededCount: number;
   overdueSupplierInvoiceCount: number;
-  expectedCashPence: number;
+  expectedCashPence: number | null;
   lastShiftClosedAt: string | null;
   lastReceiptId: string | null;
   /** Plan used only for Home presentation gates (e.g. Growth reorder link). */
@@ -129,11 +130,10 @@ export async function getReadiness(): Promise<ReadinessData> {
     'page.onboarding.get-readiness',
     async () => {
       const now = new Date();
-      const todayStart = new Date(now);
-      todayStart.setHours(0, 0, 0, 0);
-      const yesterdayStart = new Date(todayStart);
-      yesterdayStart.setDate(yesterdayStart.getDate() - 1);
-      const yesterdayEnd = new Date(todayStart.getTime() - 1);
+      const todayWindow = businessDayWindow(now, business.timezone);
+      const yesterdayWindow = businessDayWindow(new Date(todayWindow.startInclusive.getTime() - 1), business.timezone);
+      const yesterdayStart = yesterdayWindow.startInclusive;
+      const yesterdayEndExclusive = yesterdayWindow.endExclusive;
 
       const helpHref = getSetupHelpHref();
 
@@ -157,7 +157,7 @@ export async function getReadiness(): Promise<ReadinessData> {
         prisma.salesInvoice.aggregate({
           where: {
             businessId: business.id,
-            createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
+            createdAt: { gte: yesterdayStart, lt: yesterdayEndExclusive },
             paymentStatus: { notIn: ['RETURNED', 'VOID'] },
             OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
           },
@@ -173,8 +173,18 @@ export async function getReadiness(): Promise<ReadinessData> {
           select: {
             id: true,
             openedAt: true,
-            expectedCashPence: true,
-            till: { select: { name: true, store: { select: { name: true } } } },
+            tillId: true,
+            till: { select: { storeId: true, name: true, store: { select: { businessId: true, name: true } } } },
+            cashDrawerEntries: {
+              select: {
+                entryType: true,
+                amountPence: true,
+                businessId: true,
+                storeId: true,
+                tillId: true,
+                shiftId: true,
+              },
+            },
             _count: {
               select: {
                 salesInvoices: {
@@ -191,7 +201,7 @@ export async function getReadiness(): Promise<ReadinessData> {
           where: {
             businessId: business.id,
             paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-            dueDate: { lt: todayStart },
+            dueDate: { lt: todayWindow.startInclusive },
           },
         }),
         prisma.shift.findFirst({
@@ -300,7 +310,13 @@ export async function getReadiness(): Promise<ReadinessData> {
       const openIssueCount = todayKpis ? countCommandCenterIssueFlags(todayKpis) : 0;
 
       const expectedCashPence = await resolveReadinessExpectedCashPence({
-        openShiftExpectedCashPence: openShifts.map((shift) => shift.expectedCashPence),
+        openShifts: openShifts.map((shift) => ({
+          businessId: shift.till.store.businessId,
+          storeId: shift.till.storeId,
+          tillId: shift.tillId,
+          shiftId: shift.id,
+          entries: shift.cashDrawerEntries,
+        })),
       });
 
       return {

@@ -1,5 +1,4 @@
 import { formatMoney } from '@/lib/format';
-import { remainingBalancePence } from '@/lib/reliability/walkthrough-contracts';
 
 type RemainingBalanceProps = {
   amountPence: number;
@@ -14,7 +13,7 @@ export default function RemainingBalance({
   currency,
   className = '',
 }: RemainingBalanceProps) {
-  const remaining = remainingBalancePence(amountPence, paidPence);
+  const remaining = amountPence - paidPence;
   return (
     <dl className={`grid grid-cols-3 gap-2 text-sm ${className}`}>
       <div>

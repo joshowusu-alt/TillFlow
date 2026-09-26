@@ -3,6 +3,7 @@ import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { getIncomeStatement, getBalanceSheet, getCashflow } from '@/lib/reports/financials';
 import { formatMoney } from '@/lib/format';
+import { businessMonthWindow, localDateInstant } from '@/lib/reports/reporting-clock';
 
 export async function GET(request: Request) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -20,13 +21,15 @@ export async function GET(request: Request) {
   }
 
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const from = url.searchParams.get('from') ? new Date(url.searchParams.get('from')!) : monthStart;
-  const to = url.searchParams.get('to') ? new Date(url.searchParams.get('to')!) : now;
-  to.setHours(23, 59, 59, 999);
+  const month = businessMonthWindow(now, business.timezone);
+  const from = localDateInstant(url.searchParams.get('from'), 'start', business.timezone) ?? month.startInclusive;
+  const to = localDateInstant(url.searchParams.get('to'), 'endExclusive', business.timezone) ?? month.endExclusive;
 
   let rows: string[][] = [];
   let filename = '';
+  const moneyOrIncomplete = (pence: number | null) => (
+    pence == null ? 'Costs incomplete' : formatMoney(pence, currency)
+  );
 
   if (type === 'income-statement') {
     const data = await getIncomeStatement(business.id, from, to);
@@ -37,11 +40,11 @@ export async function GET(request: Request) {
       [],
       ['Line Item', 'Amount'],
       ['Revenue', formatMoney(data.revenue, currency)],
-      ['Cost of Goods Sold', formatMoney(data.cogs, currency)],
-      ['Gross Profit', formatMoney(data.grossProfit, currency)],
+      ['Cost of Goods Sold', moneyOrIncomplete(data.cogs)],
+      ['Gross Profit', moneyOrIncomplete(data.grossProfit)],
       ['Other Operating Income', formatMoney(data.otherOperatingIncome, currency)],
       ['Operating Expenses', formatMoney(data.otherExpenses, currency)],
-      ['Net Profit', formatMoney(data.netProfit, currency)],
+      ['Net Profit', moneyOrIncomplete(data.netProfit)],
     ];
   } else if (type === 'balance-sheet') {
     const data = await getBalanceSheet(business.id, to);
@@ -70,14 +73,14 @@ export async function GET(request: Request) {
       ['Currency', currency],
       [],
       ['Line Item', 'Amount'],
-      ['Net Profit', formatMoney(data.netProfit, currency)],
+      ['Net Profit', moneyOrIncomplete(data.netProfit)],
       ['AR Change', formatMoney(data.arChange, currency)],
       ['AP Change', formatMoney(data.apChange, currency)],
       ['Inventory Change', formatMoney(data.invChange, currency)],
-      ['Net Cash from Operations', formatMoney(data.netCashFromOps, currency)],
+      ['Net Cash from Operations', moneyOrIncomplete(data.netCashFromOps)],
       [],
       ['Beginning Cash', formatMoney(data.beginningCash, currency)],
-      ['Ending Cash', formatMoney(data.endingCash, currency)],
+      ['Ending Cash', moneyOrIncomplete(data.endingCash)],
     ];
   } else {
     return NextResponse.json({ error: 'Unknown report type' }, { status: 400 });

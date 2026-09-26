@@ -11,6 +11,7 @@ import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { getFeatures } from '@/lib/features';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';
 import { getBusinessStores, resolveStoreSelection } from '@/lib/services/stores';
 
 function severityClass(severity: string) {
@@ -44,18 +45,17 @@ export default async function RiskMonitorPage({
       />
     );
   }
-  const today = new Date();
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 7);
+  const now = new Date();
+  const fallback = defaultTenantLocalRange(now, business.timezone, 7);
 
-  const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, weekAgo, today);
+  const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, fallback.startInclusive, now, fallback.timeZone);
   const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
   const storeId = resolveStoreSelection(stores, searchParams?.storeId, 'ALL') ?? 'ALL';
   const status = searchParams?.status || 'OPEN';
 
   const alertWhere: any = {
     businessId: business.id,
-    occurredAt: { gte: from, lte: to },
+    occurredAt: { gte: from, lt: to },
   };
   if (storeId !== 'ALL') {
     alertWhere.storeId = storeId;
@@ -77,7 +77,7 @@ export default async function RiskMonitorPage({
     prisma.salesInvoice.findMany({
       where: {
         businessId: business.id,
-        createdAt: { gte: from, lte: to },
+        createdAt: { gte: from, lt: to },
         ...(storeId !== 'ALL' ? { storeId } : {}),
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         OR: [

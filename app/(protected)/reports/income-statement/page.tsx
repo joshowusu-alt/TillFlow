@@ -11,6 +11,7 @@ import { getFeatures } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import { getIncomeStatement } from '@/lib/reports/financials';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { businessMonthWindow } from '@/lib/reports/reporting-clock';
 
 export default async function IncomeStatementPage({
   searchParams
@@ -32,12 +33,13 @@ export default async function IncomeStatementPage({
   }
 
   const now = new Date();
-  const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(searchParams, defaultStart, now);
+  const month = businessMonthWindow(now, business.timezone);
+  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(searchParams, month.startInclusive, now, month.timeZone);
 
   const statement = await getIncomeStatement(business.id, start, end);
-  const gpPct = statement.revenue > 0 ? Math.round((statement.grossProfit / statement.revenue) * 100) : 0;
-  const npPct = statement.revenue > 0 ? Math.round((statement.netProfit / statement.revenue) * 100) : 0;
+  const costsIncomplete = statement.grossProfit == null || statement.netProfit == null || statement.cogs == null;
+  const gpPct = !costsIncomplete && statement.revenue > 0 ? Math.round((statement.grossProfit! / statement.revenue) * 100) : 0;
+  const npPct = !costsIncomplete && statement.revenue > 0 ? Math.round((statement.netProfit! / statement.revenue) * 100) : 0;
   const hasData =
     statement.revenue !== 0 ||
     statement.cogs !== 0 ||
@@ -72,17 +74,18 @@ export default async function IncomeStatementPage({
         />
         <StatCard
           label="Cost of products sold"
-          value={formatMoney(statement.cogs, business.currency)}
+          value={costsIncomplete ? 'Costs incomplete' : formatMoney(statement.cogs ?? 0, business.currency)}
         />
         <StatCard
-          label={`Gross Profit (${gpPct}%)`}
-          value={formatMoney(statement.grossProfit, business.currency)}
-          tone={gpPct >= 20 ? 'success' : gpPct >= 0 ? 'warn' : 'danger'}
+          label={costsIncomplete ? 'Gross Profit' : `Gross Profit (${gpPct}%)`}
+          value={costsIncomplete ? 'Costs incomplete' : formatMoney(statement.grossProfit ?? 0, business.currency)}
+          tone={costsIncomplete ? 'warn' : gpPct >= 20 ? 'success' : gpPct >= 0 ? 'warn' : 'danger'}
+          helper={costsIncomplete ? `${statement.incompleteLineCount} line${statement.incompleteLineCount === 1 ? '' : 's'} without authoritative cost` : undefined}
         />
         <StatCard
-          label={`Net Profit (${npPct}%)`}
-          value={formatMoney(statement.netProfit, business.currency)}
-          tone={npPct >= 10 ? 'success' : npPct >= 0 ? 'warn' : 'danger'}
+          label={costsIncomplete ? 'Net Profit' : `Net Profit (${npPct}%)`}
+          value={costsIncomplete ? 'Costs incomplete' : formatMoney(statement.netProfit ?? 0, business.currency)}
+          tone={costsIncomplete ? 'warn' : npPct >= 10 ? 'success' : npPct >= 0 ? 'warn' : 'danger'}
         />
       </div>
 
@@ -119,11 +122,11 @@ export default async function IncomeStatementPage({
           />
           <ReportSummaryRow
             label="Cost of products sold"
-            value={formatMoney(statement.cogs, business.currency)}
+            value={costsIncomplete ? 'Costs incomplete' : formatMoney(statement.cogs ?? 0, business.currency)}
           />
           <ReportSummaryRow
             label="Gross Profit"
-            value={formatMoney(statement.grossProfit, business.currency)}
+            value={costsIncomplete ? 'Costs incomplete' : formatMoney(statement.grossProfit ?? 0, business.currency)}
             divider="default"
             emphasis="strong"
           />
@@ -145,7 +148,7 @@ export default async function IncomeStatementPage({
           )}
           <ReportSummaryRow
             label="Net Profit"
-            value={<span className={statement.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}>{formatMoney(statement.netProfit, business.currency)}</span>}
+            value={costsIncomplete ? 'Costs incomplete' : <span className={(statement.netProfit ?? 0) >= 0 ? 'text-emerald-700' : 'text-rose-600'}>{formatMoney(statement.netProfit ?? 0, business.currency)}</span>}
             divider="default"
             emphasis="strong"
           />

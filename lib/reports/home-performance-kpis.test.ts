@@ -56,8 +56,20 @@ describe('getHomePerformanceSummary parity with Home KPI fields', () => {
 
     vi.mocked(prisma.shift.findMany).mockResolvedValueOnce([
       {
-        expectedCashPence: 8_919_00,
-        till: { name: 'Till B1', store: { name: 'Walkthrough Store B' } },
+        id: 'shift-1',
+        tillId: 'till-1',
+        expectedCashPence: 1,
+        till: { storeId: 'store-1', name: 'Till B1', store: { name: 'Walkthrough Store B' } },
+        cashDrawerEntries: [
+          {
+            entryType: 'OPEN_FLOAT',
+            amountPence: 8_919_00,
+            businessId: 'biz-1',
+            storeId: 'store-1',
+            tillId: 'till-1',
+            shiftId: 'shift-1',
+          },
+        ],
       },
     ] as never);
     vi.mocked(prisma.product.count).mockResolvedValueOnce(1250);

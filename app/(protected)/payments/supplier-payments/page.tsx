@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
+import { summarizeOpenPayables } from '@/lib/reports/surface-balances';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import DueDateBadge from '@/components/DueDateBadge';
 import RemainingBalance from '@/components/RemainingBalance';
@@ -45,7 +46,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
         where: {
           businessId: business.id,
           storeId: store.id,
-          paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
           ...(supplierId ? { supplierId } : {}),
         },
         select: {
@@ -53,6 +54,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
           transactionNumber: true,
           createdAt: true,
           dueDate: true,
+          paymentStatus: true,
           totalPence: true,
           supplier: { select: { id: true, name: true } },
           payments: { select: { amountPence: true, paidAt: true, method: true } }
@@ -112,11 +114,11 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
   const outstandingInvoices = invoices
     .map((invoice) => ({
       ...invoice,
-      outstanding: computeOutstandingBalance(invoice),
+      outstanding: payableDocumentBalance(invoice).balancePence,
     }))
-    .filter((invoice) => invoice.outstanding > 0);
+    .filter((invoice) => invoice.outstanding !== 0);
 
-  const totalOutstanding = outstandingInvoices.reduce((sum, inv) => sum + inv.outstanding, 0);
+  const totalOutstanding = summarizeOpenPayables(invoices).outstandingPence;
   const unpaidPurchaseCount = outstandingInvoices.length;
 
   // Last payment for the supplier summary header

@@ -7,6 +7,7 @@ import {
   resolveBusinessMovementPeriodInput,
 } from '@/lib/reports/business-movement';
 import { resolveMoneyReceivedAccess } from '@/lib/reports/money-received';
+import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { prisma } from '@/lib/prisma';
 import { getBusinessStores } from '@/lib/services/stores';
 
@@ -45,10 +46,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Business not found', completeExport: false }, { status: 404 });
   }
 
+  const timeZone = requireReportTimeZone(business.timezone);
+
   const result = await computeBusinessMovementWithMoneyFromDb(prisma, {
     businessId: access.businessId,
     currency: business.currency,
-    timeZone: business.timezone,
+    timeZone,
     branchIds: access.branchIds,
     period: periodInput,
   });

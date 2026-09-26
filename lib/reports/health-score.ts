@@ -1,6 +1,6 @@
 export type HealthScoreInputs = {
   totalSalesPence: number;
-  grossMarginPence: number;
+  grossMarginPence: number | null;
   targetGpPercent: number; // default 20
   cashOnHandPence: number;
   dailyOperatingExpensesPence: number;
@@ -43,22 +43,31 @@ export function calculateHealthScore(inputs: HealthScoreInputs): HealthScoreResu
   const dimensions: HealthDimension[] = [];
   const actions: HealthAction[] = [];
 
-  // 1. Margin Health: GP% vs target
-  const gpPercent = inputs.totalSalesPence > 0
-    ? (inputs.grossMarginPence / inputs.totalSalesPence) * 100
-    : inputs.totalSalesPence === 0 ? inputs.targetGpPercent : 0; // No sales = neutral
+  // 1. Margin Health: GP% vs target. A missing figure is not scored as zero profit.
+  if (inputs.grossMarginPence == null) {
+    dimensions.push({
+      name: 'Margin Health',
+      score: Math.round(MAX_PER_DIM / 2),
+      max: MAX_PER_DIM,
+      detail: 'Costs incomplete. Gross profit is not scored.',
+    });
+  } else {
+    const gpPercent = inputs.totalSalesPence > 0
+      ? (inputs.grossMarginPence / inputs.totalSalesPence) * 100
+      : inputs.totalSalesPence === 0 ? inputs.targetGpPercent : 0;
 
-  const marginScore = linearScore(gpPercent, 0, inputs.targetGpPercent, MAX_PER_DIM);
-  dimensions.push({
-    name: 'Margin Health',
-    score: marginScore,
-    max: MAX_PER_DIM,
-    detail: inputs.totalSalesPence > 0
-      ? `Gross margin ${gpPercent.toFixed(1)}% vs ${inputs.targetGpPercent}% target`
-      : 'No sales data yet',
-  });
-  if (marginScore < 14) {
-    actions.push({ label: 'Review profit margins', href: '/reports/margins' });
+    const marginScore = linearScore(gpPercent, 0, inputs.targetGpPercent, MAX_PER_DIM);
+    dimensions.push({
+      name: 'Margin Health',
+      score: marginScore,
+      max: MAX_PER_DIM,
+      detail: inputs.totalSalesPence > 0
+        ? `Gross margin ${gpPercent.toFixed(1)}% vs ${inputs.targetGpPercent}% target`
+        : 'No sales data yet',
+    });
+    if (marginScore < 14) {
+      actions.push({ label: 'Review profit margins', href: '/reports/margins' });
+    }
   }
 
   // 2. Cash Position: days of operating expenses covered

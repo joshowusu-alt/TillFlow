@@ -9,6 +9,7 @@ import {
 } from '@/lib/exports/csv-writers';
 import { prisma } from '@/lib/prisma';
 import { strToU8, zipSync } from 'fflate';
+import { businessDayWindow, localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,18 +23,19 @@ export async function GET(request: NextRequest) {
   const fromStr = sp.get('from');
   const toStr = sp.get('to');
 
-  const from = fromStr ? new Date(fromStr) : new Date(Date.now() - 30 * 86400000);
-  const to = toStr ? new Date(toStr) : new Date();
-  // Clamp 'to' to end of day
-  to.setHours(23, 59, 59, 999);
+  const businessClock = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { timezone: true, currency: true },
+  });
+  const zone = requireReportTimeZone(businessClock?.timezone);
+  const today = businessDayWindow(new Date(), zone);
+  const from = localDateInstant(fromStr, 'start', zone)
+    ?? new Date(today.startInclusive.getTime() - 30 * 86_400_000);
+  const to = localDateInstant(toStr, 'endExclusive', zone) ?? today.endExclusive;
   const range = { from, to };
 
   const businessId = user.businessId;
-  const business = await prisma.business.findUnique({
-    where: { id: businessId },
-    select: { currency: true },
-  });
-  const currency = business?.currency ?? 'GHS';
+  const currency = businessClock?.currency ?? 'GHS';
 
   const withCurrency = (csv: string) => `Currency,${currency}\n${csv}`;
 

@@ -14,8 +14,8 @@ interface AnalyticsData {
     comparison: { labels: string[]; current: number[]; previous: number[] };
     kpis: {
         totalSales: number;
-        totalProfit: number;
-        marginPercent: number;
+        totalProfit: number | null;
+        marginPercent: number | null;
         totalTransactions: number;
         avgTransaction: number;
         growthPercent: number;
@@ -25,7 +25,7 @@ interface AnalyticsData {
     };
 }
 
-export default function AnalyticsClient({ data }: { data: AnalyticsData }) {
+export default function AnalyticsClient({ data, kpis: _kpis }: { data: AnalyticsData; kpis?: AnalyticsData['kpis'] }) {
     const formatMoney = (pence: number) =>
         new Intl.NumberFormat('en-GB', { style: 'currency', currency: data.currency }).format(pence / 100);
 
@@ -47,14 +47,14 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData }) {
                 </div>
                 <div className="card p-3 sm:p-4">
                     <div className="text-[10px] sm:text-xs text-black/50">Gross Profit</div>
-                    <div className={`mt-1 text-base sm:text-xl font-bold truncate ${data.kpis.totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {formatMoney(data.kpis.totalProfit)}
+                    <div className={`mt-1 text-base sm:text-xl font-bold truncate ${data.kpis.totalProfit == null ? 'text-amber-700' : data.kpis.totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {data.kpis.totalProfit == null ? 'Costs incomplete' : formatMoney(data.kpis.totalProfit)}
                     </div>
                 </div>
                 <div className="card p-3 sm:p-4">
                     <div className="text-[10px] sm:text-xs text-black/50">Margin</div>
-                    <div className={`mt-1 text-base sm:text-xl font-bold ${data.kpis.marginPercent >= 20 ? 'text-emerald-600' : data.kpis.marginPercent >= 10 ? 'text-amber-600' : 'text-rose-600'}`}>
-                        {data.kpis.marginPercent.toFixed(1)}%
+                    <div className={`mt-1 text-base sm:text-xl font-bold ${data.kpis.marginPercent == null ? 'text-amber-700' : data.kpis.marginPercent >= 20 ? 'text-emerald-600' : data.kpis.marginPercent >= 10 ? 'text-amber-600' : 'text-rose-600'}`}>
+                        {data.kpis.marginPercent == null ? 'Costs incomplete' : `${data.kpis.marginPercent.toFixed(1)}%`}
                     </div>
                 </div>
                 <div className="card p-3 sm:p-4">

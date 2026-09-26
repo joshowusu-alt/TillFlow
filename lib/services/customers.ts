@@ -6,7 +6,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { normalizeGhanaPhone } from '@/lib/storefront-phone';
 import { parseTags, serializeTags } from '@/lib/contact-tags';
@@ -136,18 +136,20 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
       ? prisma.salesInvoice.findMany({
           where: {
             customerId: { in: customerIds },
-            paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+            paymentStatus: { notIn: ['RETURNED', 'VOID'] },
           },
           select: {
             customerId: true,
+            paymentStatus: true,
             totalPence: true,
-            payments: { select: { amountPence: true } },
+            payments: { select: { amountPence: true, status: true } },
           },
         })
       : Promise.resolve([] as Array<{
           customerId: string | null;
+          paymentStatus: string;
           totalPence: number;
-          payments: { amountPence: number }[];
+          payments: { amountPence: number; status: string }[];
         }>),
     customerIds.length
       ? prisma.salesInvoice.groupBy({
@@ -241,10 +243,9 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
   const balanceMap = new Map<string, number>();
   for (const inv of arInvoices) {
     if (!inv.customerId) continue;
-    const paid = inv.payments.reduce((s, p) => s + p.amountPence, 0);
     balanceMap.set(
       inv.customerId,
-      (balanceMap.get(inv.customerId) ?? 0) + Math.max(inv.totalPence - paid, 0),
+      (balanceMap.get(inv.customerId) ?? 0) + receivableDocumentBalance(inv).balancePence,
     );
   }
 
@@ -310,22 +311,28 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
 export async function getCustomer(
   id: string,
   businessId: string,
-  opts: { from?: Date; to?: Date } = {}
+  opts: { from?: Date; endExclusive?: Date } = {}
 ) {
   return prisma.customer.findFirst({
     where: { id, businessId },
     include: {
       salesInvoices: {
         where: {
-          ...(opts.from ? { createdAt: { gte: opts.from } } : {}),
-          ...(opts.to ? { createdAt: { lte: opts.to } } : {}),
+          ...((opts.from || opts.endExclusive)
+            ? {
+                createdAt: {
+                  ...(opts.from ? { gte: opts.from } : {}),
+                  ...(opts.endExclusive ? { lt: opts.endExclusive } : {}),
+                },
+              }
+            : {}),
         },
         select: {
           id: true,
           createdAt: true,
           paymentStatus: true,
           totalPence: true,
-          payments: { select: { amountPence: true } },
+          payments: { select: { amountPence: true, status: true } },
         },
         orderBy: { createdAt: 'desc' },
         take: 200,
@@ -495,8 +502,9 @@ export async function deleteCustomer(id: string, businessId: string) {
       salesInvoices: {
         where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
         select: {
+          paymentStatus: true,
           totalPence: true,
-          payments: { select: { amountPence: true } },
+          payments: { select: { amountPence: true, status: true } },
         },
       },
     },
@@ -504,7 +512,7 @@ export async function deleteCustomer(id: string, businessId: string) {
   if (!customer) return null;
 
   const outstanding = customer.salesInvoices.reduce(
-    (sum, inv) => sum + computeOutstandingBalance(inv),
+    (sum, inv) => sum + receivableDocumentBalance(inv).balancePence,
     0
   );
   if (outstanding > 0) {

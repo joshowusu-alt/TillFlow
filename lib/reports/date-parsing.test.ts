@@ -25,20 +25,23 @@ describe('resolveReportDateRange', () => {
     const result = resolveReportDateRange(
       { from: '2026-03-01', to: '2026-03-12' },
       new Date('2026-03-01T00:00:00.000Z'),
-      new Date('2026-03-12T09:00:00.000Z')
+      new Date('2026-03-12T09:00:00.000Z'),
+      'Africa/Accra',
     );
 
     expect(result.fromInputValue).toBe('2026-03-01');
     expect(result.toInputValue).toBe('2026-03-12');
-    expect(result.end.getUTCHours()).toBe(23);
-    expect(result.end.getUTCMinutes()).toBe(59);
+    // Half-open business-local end replaces the old inclusive 23:59:59.999 instant.
+    expect(result.start.toISOString()).toBe('2026-03-01T00:00:00.000Z');
+    expect(result.end.toISOString()).toBe('2026-03-13T00:00:00.000Z');
   });
 
   it('falls back when params are missing', () => {
     const result = resolveReportDateRange(
       undefined,
       new Date('2026-03-01T00:00:00.000Z'),
-      new Date('2026-03-12T09:00:00.000Z')
+      new Date('2026-03-12T09:00:00.000Z'),
+      'Africa/Accra',
     );
 
     expect(result.fromInputValue).toBe('2026-03-01');
@@ -54,6 +57,7 @@ describe('resolveSelectableReportDateRange', () => {
       { period: '30d', from: '2026-03-03', to: '2026-04-01' },
       '30d',
       now,
+      'Africa/Accra',
     );
 
     expect(result.periodInputValue).toBe('30d');
@@ -67,6 +71,7 @@ describe('resolveSelectableReportDateRange', () => {
       { period: '30d', from: '2026-02-01', to: '2026-02-28' },
       '30d',
       now,
+      'Africa/Accra',
     );
 
     expect(result.periodInputValue).toBe('30d');
@@ -80,6 +85,7 @@ describe('resolveSelectableReportDateRange', () => {
       { period: 'custom', from: '2026-02-01', to: '2026-02-28' },
       '30d',
       now,
+      'Africa/Accra',
     );
 
     expect(result.periodInputValue).toBe('custom');
@@ -87,7 +93,8 @@ describe('resolveSelectableReportDateRange', () => {
     expect(result.fromInputValue).toBe('2026-02-01');
     expect(result.toInputValue).toBe('2026-02-28');
     expect(result.start.toISOString()).toBe('2026-02-01T00:00:00.000Z');
-    expect(result.end.toISOString()).toBe('2026-02-28T23:59:59.999Z');
+    // Exclusive end is the next business-local midnight, not 23:59:59.999.
+    expect(result.end.toISOString()).toBe('2026-03-01T00:00:00.000Z');
   });
 
   it('treats date-only links without a quick period as a custom range', () => {
@@ -95,6 +102,7 @@ describe('resolveSelectableReportDateRange', () => {
       { from: '2026-03-10', to: '2026-03-12' },
       '30d',
       now,
+      'Africa/Accra',
     );
 
     expect(result.periodInputValue).toBe('custom');

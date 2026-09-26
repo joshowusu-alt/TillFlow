@@ -74,6 +74,8 @@ describe('Sales by Linked Supplier trust clarity pass', () => {
     expect(service).toContain('export async function getSupplierSalesReport');
     expect(service).toContain('preferredSupplierId: { not: null }');
     expect(service).toContain("notIn: ['RETURNED', 'VOID']");
+    // Product rank moved off lineTotalPence onto the shared sales_activity net.
+    expect(service).toContain('rankRecognisedProductSales');
     expect(service).toContain('lineTotalPence');
     expect(service).toContain('b.totalRevenuePence - a.totalRevenuePence');
     expect(exportRoute).toContain('preferred supplier setting');

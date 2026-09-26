@@ -11,6 +11,7 @@ const { prismaMock } = vi.hoisted(() => ({
     journalLine: { groupBy: vi.fn() },
     account: { findMany: vi.fn() },
     salesInvoiceLine: { findMany: vi.fn() },
+    salesInvoice: { findMany: vi.fn() },
     openingBalance: { findMany: vi.fn() },
     store: { findMany: vi.fn() },
     inventoryBalance: { findMany: vi.fn() },
@@ -48,6 +49,7 @@ describe('getBalanceSheet asOf filtering', () => {
     });
     prismaMock.account.findMany.mockResolvedValue(defaultAccounts);
     prismaMock.salesInvoiceLine.findMany.mockResolvedValue([]);
+    prismaMock.salesInvoice.findMany.mockResolvedValue([]);
     prismaMock.openingBalance.findMany.mockResolvedValue([]);
     prismaMock.store.findMany.mockResolvedValue([]);
     prismaMock.inventoryBalance.findMany.mockResolvedValue([]);
@@ -93,7 +95,7 @@ describe('getBalanceSheet asOf filtering', () => {
         where: {
           journalEntry: {
             businessId: bizId,
-            entryDate: { lte: asOf },
+            entryDate: { lt: asOf },
           },
         },
       })
@@ -125,8 +127,22 @@ describe('getBalanceSheet asOf filtering', () => {
       { accountId: 'acc-cogs', _sum: { debitPence: 60000, creditPence: 0 } },
     ]);
     // Sale lines drive revenue/COGS for NP calculation
-    prismaMock.salesInvoiceLine.findMany.mockResolvedValue([
-      { lineSubtotalPence: 100000, lineCostPence: 60000, qtyBase: 1, product: { defaultCostBasePence: 60000 } },
+    prismaMock.salesInvoice.findMany.mockResolvedValue([
+      {
+        paymentStatus: 'PAID',
+        discountPence: 0,
+        salesReturn: null,
+        lines: [
+          {
+            lineSubtotalPence: 100000,
+            lineDiscountPence: 0,
+            promoDiscountPence: 0,
+            lineCostPence: 60000,
+            qtyBase: 1,
+            product: { defaultCostBasePence: 60000 },
+          },
+        ],
+      },
     ]);
 
     const sheet = await getBalanceSheet(bizId, new Date('2024-12-31'));

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { defaultTenantLocalRange, halfOpenTimestampFilter } from '@/lib/reports/reporting-clock';
 export const dynamic = 'force-dynamic';
 
 const WINDOW_DAYS = 30;
@@ -10,11 +11,10 @@ export default async function AnalyticsSettingsPage() {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
-  const since = new Date();
-  since.setDate(since.getDate() - WINDOW_DAYS);
+  const range = defaultTenantLocalRange(new Date(), business.timezone, WINDOW_DAYS);
 
   const events = await prisma.storefrontEvent.findMany({
-    where: { businessId: business.id, timestamp: { gte: since } },
+    where: { businessId: business.id, timestamp: halfOpenTimestampFilter(range) },
     select: { eventType: true, productId: true },
   });
 

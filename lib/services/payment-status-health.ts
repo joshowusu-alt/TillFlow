@@ -46,7 +46,7 @@ function toIssue(kind: InvoiceKind, invoice: InvoiceStatusRow): PaymentStatusIss
     expectedStatus,
     totalPence: invoice.totalPence,
     paidPence,
-    outstandingPence: Math.max(invoice.totalPence - paidPence, 0),
+    outstandingPence: invoice.totalPence - paidPence,
     repairable,
   };
 }

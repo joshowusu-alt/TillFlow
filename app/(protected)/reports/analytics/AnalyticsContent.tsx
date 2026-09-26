@@ -1,4 +1,14 @@
 import { prisma } from '@/lib/prisma';
+import {
+  addLocalDays,
+  businessDayWindow,
+  defaultTenantLocalRange,
+  requireReportTimeZone,
+  windowForLocalDates,
+  zonedDateTimeParts,
+} from '@/lib/reports/reporting-clock';
+import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
+import { evaluateMarginSet } from '@/lib/reports/margin-line';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import AnalyticsClient from './AnalyticsClient';
 
@@ -6,17 +16,34 @@ type AnalyticsContentProps = {
   businessId: string;
   currency: string;
   periodDays: number;
+  timeZone?: string | null;
+  now?: Date;
+  periodStart?: Date;
+  periodEndExclusive?: Date;
 };
 
-export default async function AnalyticsContent({
+export async function loadAnalyticsReport({
   businessId,
   currency,
   periodDays,
+  timeZone,
+  now = new Date(),
+  periodStart,
+  periodEndExclusive,
 }: AnalyticsContentProps) {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const periodAgo = new Date(today.getTime() - periodDays * 24 * 60 * 60 * 1000);
-  const previousPeriodAgo = new Date(periodAgo.getTime() - periodDays * 24 * 60 * 60 * 1000);
+  const reportTimeZone = requireReportTimeZone(timeZone);
+  const today = businessDayWindow(now, reportTimeZone);
+  const currentPeriod = periodStart
+    ? { startInclusive: periodStart, endExclusive: periodEndExclusive ?? today.endExclusive }
+    : defaultTenantLocalRange(now, reportTimeZone, periodDays);
+  const periodAgo = currentPeriod.startInclusive;
+  const endExclusive = periodEndExclusive ?? currentPeriod.endExclusive;
+  const startParts = zonedDateTimeParts(periodAgo, reportTimeZone);
+  const previousPeriodAgo = windowForLocalDates(
+    addLocalDays(startParts, -periodDays),
+    addLocalDays(startParts, -1),
+    reportTimeZone,
+  ).startInclusive;
 
   const analyticsData = await measureServerOperation(
     'report.analytics.snapshot',
@@ -26,17 +53,24 @@ export default async function AnalyticsContent({
         prisma.salesInvoice.findMany({
           where: {
             businessId,
-            createdAt: { gte: periodAgo, lte: now },
+            createdAt: { gte: periodAgo, lt: endExclusive },
             paymentStatus: { notIn: ['RETURNED', 'VOID'] },
           },
           select: {
             createdAt: true,
+            paymentStatus: true,
+            discountPence: true,
+            vatPence: true,
             totalPence: true,
             lines: {
               select: {
                 productId: true,
                 qtyBase: true,
                 lineSubtotalPence: true,
+                lineDiscountPence: true,
+                promoDiscountPence: true,
+                lineVatPence: true,
+                lineTotalPence: true,
                 lineCostPence: true,
                 product: {
                   select: {
@@ -68,11 +102,11 @@ export default async function AnalyticsContent({
       // Limit chart labels based on period
       const maxLabels = periodDays <= 14 ? periodDays : Math.min(periodDays, 30);
       for (let i = maxLabels - 1; i >= 0; i--) {
-        const date = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
+        const date = new Date(today.startInclusive.getTime() - i * 24 * 60 * 60 * 1000);
         const key =
           periodDays <= 14
-            ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })
-            : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: reportTimeZone })
+            : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: reportTimeZone });
         dailySales.set(key, 0);
         dailyProfit.set(key, 0);
       }
@@ -81,15 +115,24 @@ export default async function AnalyticsContent({
         const date = new Date(sale.createdAt);
         const key =
           periodDays <= 14
-            ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })
-            : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: reportTimeZone })
+            : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: reportTimeZone });
         dailySales.set(key, (dailySales.get(key) || 0) + sale.totalPence);
-        const saleProfit = sale.lines.reduce((sum, l) => {
-          const cost =
-            l.lineCostPence > 0 ? l.lineCostPence : l.product.defaultCostBasePence * l.qtyBase;
-          return sum + l.lineSubtotalPence - cost;
-        }, 0);
-        dailyProfit.set(key, (dailyProfit.get(key) || 0) + saleProfit);
+        const saleMargin = evaluateMarginSet([{
+          paymentStatus: sale.paymentStatus,
+          discountPence: sale.discountPence,
+          lines: sale.lines.map((line) => ({
+            lineSubtotalPence: line.lineSubtotalPence,
+            lineDiscountPence: line.lineDiscountPence,
+            promoDiscountPence: line.promoDiscountPence,
+            lineCostPence: line.lineCostPence,
+            qtyBase: line.qtyBase,
+            defaultCostBasePence: line.product.defaultCostBasePence,
+          })),
+        }]);
+        if (saleMargin.grossProfitPence != null) {
+          dailyProfit.set(key, (dailyProfit.get(key) || 0) + saleMargin.grossProfitPence);
+        }
       });
 
       // Calculate hourly heatmap data
@@ -97,10 +140,10 @@ export default async function AnalyticsContent({
       const hourDaySales = new Map<string, number>();
 
       recentSales.forEach((sale) => {
-        const date = new Date(sale.createdAt);
-        const day = dayNames[date.getDay()];
+        const parts = zonedDateTimeParts(new Date(sale.createdAt), reportTimeZone);
+        const day = dayNames[parts.weekday];
         const dayForDisplay = day === 'Sun' ? 'Sun' : day;
-        const hour = date.getHours();
+        const hour = parts.hour;
         const key = `${dayForDisplay}-${hour}`;
         hourDaySales.set(key, (hourDaySales.get(key) || 0) + 1);
       });
@@ -119,7 +162,7 @@ export default async function AnalyticsContent({
       const hourTotals = new Map<number, number>();
 
       recentSales.forEach((sale) => {
-        const hour = new Date(sale.createdAt).getHours();
+        const hour = zonedDateTimeParts(new Date(sale.createdAt), reportTimeZone).hour;
         hourTotals.set(hour, (hourTotals.get(hour) || 0) + sale.totalPence);
       });
 
@@ -132,19 +175,28 @@ export default async function AnalyticsContent({
 
       // Calculate product performance
       const productStats = new Map<string, { name: string; revenue: number; cost: number }>();
+      let unallocatedSalesDifferencePence = 0;
 
       recentSales.forEach((sale) => {
+        const ranked = rankRecognisedProductSales(sale);
+        if (!ranked.ok) {
+          unallocatedSalesDifferencePence += ranked.differencePence;
+          return;
+        }
+        const amountByProduct = new Map<string, number>();
+        for (const row of ranked.lines) {
+          amountByProduct.set(row.productId, (amountByProduct.get(row.productId) ?? 0) + row.amountPence);
+        }
         sale.lines.forEach((line) => {
           const existing = productStats.get(line.productId) || {
             name: line.product.name,
             revenue: 0,
             cost: 0,
           };
-          existing.revenue += line.lineSubtotalPence;
-          existing.cost +=
-            line.lineCostPence > 0
-              ? line.lineCostPence
-              : line.product.defaultCostBasePence * line.qtyBase;
+          const rankedAmount = amountByProduct.get(line.productId) ?? 0;
+          existing.revenue += rankedAmount;
+          amountByProduct.set(line.productId, 0);
+          existing.cost += line.lineCostPence;
           productStats.set(line.productId, existing);
         });
       });
@@ -158,6 +210,14 @@ export default async function AnalyticsContent({
         }))
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 10);
+      if (unallocatedSalesDifferencePence !== 0) {
+        productData.push({
+          name: 'Unallocated sales difference',
+          revenue: unallocatedSalesDifferencePence,
+          profit: 0,
+          margin: 0,
+        });
+      }
 
       // Category breakdown
       const categoryStats = new Map<string, number>();
@@ -191,17 +251,20 @@ export default async function AnalyticsContent({
 
       // Calculate KPIs — GP derived from sale lines (same source as product table)
       const totalSales = recentSales.reduce((sum, s) => sum + s.totalPence, 0);
-      const totalProfit = recentSales.reduce((sum, sale) => {
-        return (
-          sum +
-          sale.lines.reduce((lineSum, l) => {
-            const cost =
-              l.lineCostPence > 0 ? l.lineCostPence : l.product.defaultCostBasePence * l.qtyBase;
-            return lineSum + l.lineSubtotalPence - cost;
-          }, 0)
-        );
-      }, 0);
-      const marginPercent = totalSales > 0 ? (totalProfit / totalSales) * 100 : 0;
+      const periodMargin = evaluateMarginSet(recentSales.map((sale) => ({
+        paymentStatus: sale.paymentStatus,
+        discountPence: sale.discountPence,
+        lines: sale.lines.map((line) => ({
+          lineSubtotalPence: line.lineSubtotalPence,
+          lineDiscountPence: line.lineDiscountPence,
+          promoDiscountPence: line.promoDiscountPence,
+          lineCostPence: line.lineCostPence,
+          qtyBase: line.qtyBase,
+          defaultCostBasePence: line.product.defaultCostBasePence,
+        })),
+      })));
+      const totalProfit = periodMargin.grossProfitPence;
+      const marginPercent = periodMargin.state === 'READY' ? periodMargin.grossProfitPercent : null;
       const previousTotalSales = previousSales.reduce((sum, s) => sum + s.totalPence, 0);
       const growthPercent =
         previousTotalSales > 0
@@ -233,11 +296,13 @@ export default async function AnalyticsContent({
           totalSales,
           totalProfit,
           marginPercent,
+          marginState: periodMargin.state,
           totalTransactions: recentSales.length,
           avgTransaction: recentSales.length > 0 ? totalSales / recentSales.length : 0,
           growthPercent,
           previousPeriodSales: previousTotalSales,
           topSellingProduct: topProduct,
+          unallocatedSalesDifferencePence,
           peakHour,
         },
       };
@@ -250,5 +315,10 @@ export default async function AnalyticsContent({
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
   );
 
-  return <AnalyticsClient data={analyticsData} />;
+  return analyticsData;
+}
+
+export default async function AnalyticsContent(props: AnalyticsContentProps) {
+  const analyticsData = await loadAnalyticsReport(props);
+  return <AnalyticsClient data={analyticsData} kpis={analyticsData.kpis} />;
 }

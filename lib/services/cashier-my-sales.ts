@@ -1,3 +1,5 @@
+import { localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting-clock';
+
 export const CASHIER_MY_SALES_ROUTE = '/my-sales';
 
 export type CashierMySalesFilters = {
@@ -14,18 +16,14 @@ export function buildCashierMySalesWhere({
   cashierUserId,
   from,
   to,
-}: Pick<CashierMySalesFilters, 'businessId' | 'cashierUserId' | 'from' | 'to'>) {
-  const dateFilter: { gte?: Date; lte?: Date } = {};
-
-  if (from) {
-    const start = new Date(from);
-    if (!Number.isNaN(start.getTime())) dateFilter.gte = start;
-  }
-
-  if (to) {
-    const end = new Date(`${to}T23:59:59.999`);
-    if (!Number.isNaN(end.getTime())) dateFilter.lte = end;
-  }
+  timeZone,
+}: Pick<CashierMySalesFilters, 'businessId' | 'cashierUserId' | 'from' | 'to'> & { timeZone?: string | null }) {
+  const dateFilter: { gte?: Date; lt?: Date } = {};
+  const zone = requireReportTimeZone(timeZone);
+  const start = localDateInstant(from, 'start', zone);
+  const endExclusive = localDateInstant(to, 'endExclusive', zone);
+  if (start) dateFilter.gte = start;
+  if (endExclusive) dateFilter.lt = endExclusive;
 
   return {
     businessId,

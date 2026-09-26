@@ -2,19 +2,23 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { csvEscape, formatPence, requireExportUser, resolveExportDateRange } from '../_shared';
 import { detectExportFormat, respondWithExport } from '@/lib/exports/branded-export';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
 export async function GET(request: Request) {
   const { user, response } = await requireExportUser(request);
   if (!user) return response as NextResponse;
 
-  const dateRange = resolveExportDateRange(request);
+  const business = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { name: true, currency: true, timezone: true },
+  });
+  const dateRange = resolveExportDateRange(request, '30d', business?.timezone);
 
-  const [rawLines, business] = await Promise.all([
-    prisma.purchaseInvoiceLine.findMany({
+  const rawLines = await prisma.purchaseInvoiceLine.findMany({
       where: {
         purchaseInvoice: {
           businessId: user.businessId,
-          createdAt: { gte: dateRange.start, lte: dateRange.end },
+          createdAt: { gte: dateRange.start, lt: dateRange.end },
         },
       },
       include: {
@@ -30,12 +34,7 @@ export async function GET(request: Request) {
         unit: true,
       },
       orderBy: { purchaseInvoice: { createdAt: 'desc' } },
-    }),
-    prisma.business.findUnique({
-      where: { id: user.businessId },
-      select: { name: true, currency: true },
-    }),
-  ]);
+  });
 
   const lines = rawLines.filter((line) => !line.purchaseInvoice.purchaseReturn);
 
@@ -58,8 +57,9 @@ export async function GET(request: Request) {
   ];
 
   const rows = lines.map((line) => {
-    const paid = line.purchaseInvoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-    const balance = Math.max(line.purchaseInvoice.totalPence - paid, 0);
+    const purchaseDocument = payableDocumentBalance(line.purchaseInvoice);
+    const paid = purchaseDocument.paidPence;
+    const balance = purchaseDocument.balancePence;
 
     return {
       invoice: line.purchaseInvoice.id.slice(0, 8),

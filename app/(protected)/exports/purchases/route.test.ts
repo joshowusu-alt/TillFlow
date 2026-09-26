@@ -37,7 +37,7 @@ describe('GET /exports/purchases', () => {
 		vi.clearAllMocks();
 
 		getUserMock.mockResolvedValue({ role: 'MANAGER', businessId: 'biz-1' });
-		businessFindUniqueMock.mockResolvedValue({ name: 'Accra Market Hub', currency: 'GHS' });
+		businessFindUniqueMock.mockResolvedValue({ name: 'Accra Market Hub', currency: 'GHS', timezone: 'UTC' });
 		detectExportFormatMock.mockReturnValue('csv');
 		respondWithExportMock.mockImplementation((params) => Response.json(params));
 	});
@@ -86,15 +86,13 @@ describe('GET /exports/purchases', () => {
 
 		const response = await GET(new Request('https://example.com/exports/purchases?period=custom&from=2026-04-01&to=2026-04-06'));
 		const body = await response.json();
-		const expectedStart = new Date('2026-04-01');
-		expectedStart.setHours(0, 0, 0, 0);
-		const expectedEnd = new Date('2026-04-06');
-		expectedEnd.setHours(23, 59, 59, 999);
+		const expectedStart = new Date('2026-04-01T00:00:00.000Z');
+		const expectedEnd = new Date('2026-04-07T00:00:00.000Z');
 
 		const query = purchaseInvoiceLineFindManyMock.mock.calls[0][0];
 		expect(query.where.purchaseInvoice.businessId).toBe('biz-1');
 		expect(query.where.purchaseInvoice.createdAt.gte.toISOString()).toBe(expectedStart.toISOString());
-		expect(query.where.purchaseInvoice.createdAt.lte.toISOString()).toBe(expectedEnd.toISOString());
+		expect(query.where.purchaseInvoice.createdAt.lt.toISOString()).toBe(expectedEnd.toISOString());
 
 		expect(body.exportOptions.reportTitle).toBe('Purchases Report — Product Detail');
 		expect(body.exportOptions.rows).toHaveLength(1);

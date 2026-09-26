@@ -8,8 +8,8 @@ import Pagination from '@/components/Pagination';
 import { formatMoney } from '@/lib/format';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';
 import { getBusinessStores } from '@/lib/services/stores';
 import { resolveMoneyReceivedAccess } from '@/lib/reports/money-received';
 import {
@@ -78,22 +78,20 @@ export default async function MomoConfirmationReviewPage({
     );
   }
 
-  const today = new Date();
-  const monthAgo = new Date(today);
-  monthAgo.setDate(today.getDate() - 30);
+  const businessTz = await prisma.business.findUnique({
+    where: { id: access.businessId },
+    select: { timezone: true },
+  });
+  const now = new Date();
+  const fallback = defaultTenantLocalRange(now, businessTz?.timezone, 30);
+  const timeZone = fallback.timeZone;
 
   const {
     start: from,
     end: to,
     fromInputValue: fromIso,
     toInputValue: toIso,
-  } = resolveReportDateRange(searchParams, monthAgo, today);
-
-  const businessTz = await prisma.business.findUnique({
-    where: { id: access.businessId },
-    select: { timezone: true },
-  });
-  const timeZone = businessTz?.timezone ?? DEFAULT_BUSINESS_TIMEZONE;
+  } = resolveReportDateRange(searchParams, fallback.startInclusive, now, timeZone);
 
   const statusFilter =
     searchParams?.status === 'ALL'
@@ -110,7 +108,7 @@ export default async function MomoConfirmationReviewPage({
 
   const pageSize = Math.min(100, Math.max(1, parseInt(searchParams?.pageSize ?? '25', 10) || 25));
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
-  const periodEndExclusive = new Date(to.getTime() + 1);
+  const periodEndExclusive = to;
 
   const filters = {
     businessId: access.businessId,

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computeOutstandingBalance, CHART_OF_ACCOUNTS } from './accounting';
+import { CHART_OF_ACCOUNTS } from './accounting';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 
 const { isPostgresRuntimeEnvMock } = vi.hoisted(() => ({
   isPostgresRuntimeEnvMock: vi.fn(() => false),
@@ -12,30 +13,36 @@ vi.mock('@/lib/database-runtime', async () => {
   return {
     ...actual,
     isPostgresRuntimeEnv: isPostgresRuntimeEnvMock,
+    // The suite may point DATABASE_URL at disposable Postgres. This case still
+    // has to prove the sequential fallback when the runtime detector says no.
+    isPostgresDatabaseUrl: () => false,
   };
 });
 
 // Import after mock so ensureChartOfAccounts sees the stubbed runtime detector.
 const { ensureChartOfAccounts } = await import('./accounting');
 
-describe('computeOutstandingBalance', () => {
-  it('treats paid invoices as closed even when legacy payment rows are missing', () => {
+describe('receivable document balance', () => {
+  it('keeps a paid-status shortfall visible when confirmed payments are missing', () => {
     expect(
-      computeOutstandingBalance({
+      receivableDocumentBalance({
         totalPence: 7_480_00,
         paymentStatus: 'PAID',
         payments: [],
-      }),
-    ).toBe(0);
+      }).balancePence,
+    ).toBe(7_480_00);
   });
 
-  it('subtracts recorded payments for unpaid and part-paid invoices', () => {
+  it('subtracts confirmed payments for unpaid and part-paid invoices', () => {
     expect(
-      computeOutstandingBalance({
+      receivableDocumentBalance({
         totalPence: 10_000,
         paymentStatus: 'PART_PAID',
-        payments: [{ amountPence: 2_500 }, { amountPence: 3_000 }],
-      }),
+        payments: [
+          { amountPence: 2_500, status: 'CONFIRMED' },
+          { amountPence: 3_000, status: 'CONFIRMED' },
+        ],
+      }).balancePence,
     ).toBe(4_500);
   });
 });

@@ -7,7 +7,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
 export type SupplierKpiFilter = {
   search?: string;
@@ -76,7 +76,7 @@ export async function getSupplierListKpis(
     where: {
       businessId,
       supplierId: { not: null },
-      paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       supplier: {
         businessId,
         ...(search ? supplierNameContains(search) : {}),
@@ -96,8 +96,8 @@ export async function getSupplierListKpis(
   const outstandingBySupplier = new Map<string, number>();
   for (const invoice of invoices) {
     if (!invoice.supplierId) continue;
-    const balance = computeOutstandingBalance(invoice);
-    if (balance <= 0) continue;
+    const balance = payableDocumentBalance(invoice).balancePence;
+    if (balance === 0) continue;
     outstandingBySupplier.set(
       invoice.supplierId,
       (outstandingBySupplier.get(invoice.supplierId) ?? 0) + balance,

@@ -11,13 +11,8 @@ import {
   reconcilePendingMomoCollectionsAction,
   reinitiateMomoCollectionAction,
 } from '@/app/actions/mobile-money';
-
-function parseDate(value: string | undefined, fallback: Date) {
-  if (!value) return fallback;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return fallback;
-  return parsed;
-}
+import { getBusinessDayBounds } from '@/lib/notifications/utils';
+import { addLocalDays, localDateInstant, localDateKey } from '@/lib/reports/reporting-clock';
 
 export default async function MomoReconciliationPage({
   searchParams,
@@ -25,12 +20,11 @@ export default async function MomoReconciliationPage({
   searchParams?: { error?: string; from?: string; to?: string; storeId?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  const today = new Date();
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 7);
-  const from = parseDate(searchParams?.from, weekAgo);
-  const to = parseDate(searchParams?.to, today);
-  to.setHours(23, 59, 59, 999);
+  const todayParts = getBusinessDayBounds(new Date(), business.timezone).localDate;
+  const fromKey = searchParams?.from ?? localDateKey(addLocalDays(todayParts, -7));
+  const toKey = searchParams?.to ?? localDateKey(todayParts);
+  const from = localDateInstant(fromKey, 'start', business.timezone) ?? getBusinessDayBounds(new Date(), business.timezone).dayStart;
+  const endExclusive = localDateInstant(toKey, 'endExclusive', business.timezone) ?? getBusinessDayBounds(new Date(), business.timezone).dayEndExclusive;
 
   const stores = await prisma.store.findMany({
     where: { businessId: business.id },
@@ -46,7 +40,7 @@ export default async function MomoReconciliationPage({
     where: {
       businessId: business.id,
       ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
-      initiatedAt: { gte: from, lte: to },
+      initiatedAt: { gte: from, lt: endExclusive },
     },
     orderBy: { initiatedAt: 'desc' },
     take: 100,
@@ -98,11 +92,11 @@ export default async function MomoReconciliationPage({
         </div>
         <div>
           <label className="label">From</label>
-          <input className="input" type="date" name="from" defaultValue={from.toISOString().slice(0, 10)} />
+          <input className="input" type="date" name="from" defaultValue={fromKey} />
         </div>
         <div>
           <label className="label">To</label>
-          <input className="input" type="date" name="to" defaultValue={to.toISOString().slice(0, 10)} />
+          <input className="input" type="date" name="to" defaultValue={toKey} />
         </div>
         <div className="flex items-end">
           <button className="btn-secondary w-full" type="submit">

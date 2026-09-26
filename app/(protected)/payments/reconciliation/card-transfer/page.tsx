@@ -14,13 +14,8 @@ import {
   TransactionDrillDown,
 } from './ReconciliationClient';
 import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
-
-function parseDate(value: string | undefined, fallback: Date) {
-  if (!value) return fallback;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return fallback;
-  return parsed;
-}
+import { getBusinessDayBounds } from '@/lib/notifications/utils';
+import { addLocalDays, localDateInstant, localDateKey } from '@/lib/reports/reporting-clock';
 
 export default async function CardTransferReconciliationPage({
   searchParams,
@@ -34,13 +29,11 @@ export default async function CardTransferReconciliationPage({
   };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  const today = new Date();
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 7);
-  const from = parseDate(searchParams?.from, weekAgo);
-  const to = parseDate(searchParams?.to, today);
-  const toEnd = new Date(to);
-  toEnd.setHours(23, 59, 59, 999);
+  const todayParts = getBusinessDayBounds(new Date(), business.timezone).localDate;
+  const fromKey = searchParams?.from ?? localDateKey(addLocalDays(todayParts, -7));
+  const toKey = searchParams?.to ?? localDateKey(todayParts);
+  const from = localDateInstant(fromKey, 'start', business.timezone) ?? getBusinessDayBounds(new Date(), business.timezone).dayStart;
+  const endExclusive = localDateInstant(toKey, 'endExclusive', business.timezone) ?? getBusinessDayBounds(new Date(), business.timezone).dayEndExclusive;
 
   const stores = await prisma.store.findMany({
     where: { businessId: business.id },
@@ -56,7 +49,7 @@ export default async function CardTransferReconciliationPage({
   // Fetch reconciliation summary
   const summaryResult = await getReconciliationSummary({
     from,
-    to: toEnd,
+    to: endExclusive,
     storeId: selectedStoreId,
   });
   const rows = summaryResult.success ? summaryResult.data : [];
@@ -117,7 +110,7 @@ export default async function CardTransferReconciliationPage({
             className="input"
             type="date"
             name="from"
-            defaultValue={from.toISOString().slice(0, 10)}
+            defaultValue={fromKey}
           />
         </div>
         <div>
@@ -126,7 +119,7 @@ export default async function CardTransferReconciliationPage({
             className="input"
             type="date"
             name="to"
-            defaultValue={to.toISOString().slice(0, 10)}
+            defaultValue={toKey}
           />
         </div>
         <div className="flex items-end">
@@ -248,7 +241,7 @@ export default async function CardTransferReconciliationPage({
                       <td className="px-3 py-3 text-sm">
                         <Link
                           className="text-emerald-700 hover:underline"
-                          href={`/payments/reconciliation/card-transfer?from=${searchParams?.from ?? from.toISOString().slice(0, 10)}&to=${searchParams?.to ?? to.toISOString().slice(0, 10)}&storeId=${displayStoreId}&detail=${detailKey}`}
+                          href={`/payments/reconciliation/card-transfer?from=${fromKey}&to=${toKey}&storeId=${displayStoreId}&detail=${detailKey}`}
                         >
                           {row.date}
                         </Link>
@@ -328,7 +321,7 @@ export default async function CardTransferReconciliationPage({
                         ? 'text-accent'
                         : 'text-rose';
                 const detailKey = `${row.date}|${row.method}`;
-                const detailHref = `/payments/reconciliation/card-transfer?from=${searchParams?.from ?? from.toISOString().slice(0, 10)}&to=${searchParams?.to ?? to.toISOString().slice(0, 10)}&storeId=${displayStoreId}&detail=${detailKey}`;
+                const detailHref = `/payments/reconciliation/card-transfer?from=${fromKey}&to=${toKey}&storeId=${displayStoreId}&detail=${detailKey}`;
 
                 return (
                   <DataCard key={detailKey}>
@@ -400,7 +393,7 @@ export default async function CardTransferReconciliationPage({
             </h3>
             <Link
               className="btn-ghost text-xs"
-              href={`/payments/reconciliation/card-transfer?from=${searchParams?.from ?? from.toISOString().slice(0, 10)}&to=${searchParams?.to ?? to.toISOString().slice(0, 10)}&storeId=${displayStoreId}`}
+              href={`/payments/reconciliation/card-transfer?from=${fromKey}&to=${toKey}&storeId=${displayStoreId}`}
             >
               Close
             </Link>

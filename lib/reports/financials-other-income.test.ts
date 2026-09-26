@@ -10,6 +10,7 @@ const { prismaMock } = vi.hoisted(() => ({
     journalLine: { groupBy: vi.fn() },
     account: { findMany: vi.fn() },
     salesInvoiceLine: { findMany: vi.fn() },
+    salesInvoice: { findMany: vi.fn() },
     openingBalance: { findMany: vi.fn() },
     store: { findMany: vi.fn() },
     inventoryBalance: { findMany: vi.fn() },
@@ -64,12 +65,19 @@ describe('other operating income (4100) reporting', () => {
   });
 
   it('includes 4100 below gross profit and in net profit without inflating sales revenue', async () => {
-    prismaMock.salesInvoiceLine.findMany.mockResolvedValue([
+    prismaMock.salesInvoice.findMany.mockResolvedValue([
       {
-        lineSubtotalPence: 10000,
-        lineCostPence: 4000,
-        qtyBase: 1,
-        product: { defaultCostBasePence: 4000 },
+        paymentStatus: 'PAID',
+        discountPence: 0,
+        salesReturn: null,
+        lines: [{
+          lineSubtotalPence: 10000,
+          lineDiscountPence: 0,
+          promoDiscountPence: 0,
+          lineCostPence: 4000,
+          qtyBase: 1,
+          product: { defaultCostBasePence: 4000 },
+        }],
       },
     ]);
     prismaMock.journalLine.groupBy.mockResolvedValue([
@@ -91,7 +99,7 @@ describe('other operating income (4100) reporting', () => {
   });
 
   it('keeps balance sheet balanced and retains inventory gain via adjusted NP', async () => {
-    prismaMock.salesInvoiceLine.findMany.mockResolvedValue([]);
+    prismaMock.salesInvoice.findMany.mockResolvedValue([]);
     prismaMock.journalLine.groupBy.mockResolvedValue([
       { accountId: 'acc-inv', _sum: { debitPence: 500, creditPence: 0 } },
       { accountId: 'acc-gain', _sum: { debitPence: 0, creditPence: 500 } },

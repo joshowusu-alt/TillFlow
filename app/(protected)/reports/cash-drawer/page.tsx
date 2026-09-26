@@ -9,7 +9,9 @@ import NotesCell from './NotesCell';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { expectedCashPenceFromEntries } from '@/lib/reports/expected-cash';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';
 import { getBusinessStores } from '@/lib/services/stores';
 import {
   isReportingScopeStoreError,
@@ -49,11 +51,10 @@ export default async function CashDrawerReportPage({
   searchParams?: { from?: string; to?: string; storeId?: string; page?: string; pageSize?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  const today = new Date();
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 7);
+  const now = new Date();
+  const fallback = defaultTenantLocalRange(now, business.timezone, 7);
 
-  const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, weekAgo, today);
+  const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, fallback.startInclusive, now, fallback.timeZone);
   const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
   let selectedStoreId: string;
   try {
@@ -76,7 +77,7 @@ export default async function CashDrawerReportPage({
         ...(selectedStoreId === 'ALL' ? {} : { id: selectedStoreId }),
       },
     },
-    openedAt: { gte: from, lte: to },
+    openedAt: { gte: from, lt: to },
   };
 
   const totalRows = await measureServerOperation(
@@ -112,16 +113,25 @@ export default async function CashDrawerReportPage({
         varianceReasonCode: true,
         varianceReason: true,
         notes: true,
-        till: {
-          select: {
-            name: true,
-            store: { select: { name: true } },
-          },
-        },
         user: { select: { name: true } },
         closeManagerApprovedBy: { select: { name: true } },
+        tillId: true,
+        till: {
+          select: {
+            storeId: true,
+            name: true,
+            store: { select: { businessId: true, name: true } },
+          },
+        },
         cashDrawerEntries: {
-          select: { entryType: true, amountPence: true },
+          select: {
+            entryType: true,
+            amountPence: true,
+            businessId: true,
+            storeId: true,
+            tillId: true,
+            shiftId: true,
+          },
         },
       },
     }),
@@ -135,6 +145,16 @@ export default async function CashDrawerReportPage({
     },
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
   );
+
+  const displayedExpectedCash = (shift: (typeof shifts)[number]) =>
+    shift.status === 'OPEN' && shift.closedAt === null
+      ? expectedCashPenceFromEntries(shift.cashDrawerEntries, {
+          businessId: shift.till.store.businessId,
+          storeId: shift.till.storeId,
+          tillId: shift.tillId,
+          shiftId: shift.id,
+        })
+      : shift.expectedCashPence;
 
   const closedShifts = shifts.filter((s) => s.status === 'CLOSED');
   const openShiftCount = shifts.filter((s) => s.status === 'OPEN').length;
@@ -371,7 +391,7 @@ export default async function CashDrawerReportPage({
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <DataCardField
                     label="Cash expected"
-                    value={formatMoney(shift.expectedCashPence, business.currency)}
+                    value={formatMoney(displayedExpectedCash(shift), business.currency)}
                     valueClassName="text-sm font-semibold tabular-nums"
                   />
                   <DataCardField
@@ -461,7 +481,7 @@ export default async function CashDrawerReportPage({
                   <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_REFUND ?? 0, business.currency)}</td>
                   <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_ADJUSTMENT ?? 0, business.currency)}</td>
                   <td className="px-3 py-3 text-sm font-semibold">
-                    {formatMoney(shift.expectedCashPence, business.currency)}
+                    {formatMoney(displayedExpectedCash(shift), business.currency)}
                   </td>
                   <td className="px-3 py-3 text-sm font-semibold">
                     {shift.status === 'OPEN' ? (

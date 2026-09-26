@@ -7,6 +7,7 @@ import { detectCashVarianceRisk } from '@/lib/services/risk-monitor';
 import { audit } from '@/lib/audit';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import { isSqliteDatabaseUrl } from '@/lib/database-runtime';
+import { expectedCashPenceFromEntries } from '@/lib/reports/expected-cash';
 
 export const TILL_ALREADY_OPEN_MSG =
   'A shift is already open for this till. Close or hand over that shift before opening another.';
@@ -326,7 +327,22 @@ async function performShiftCloseImpl(
         else if (payment.method === 'MOBILE_MONEY') lockedMomoTotal += payment.amountPence;
       }
     }
-    const lockedExpectedCash = lockedShift.expectedCashPence;
+    const lockedExpectedCash = expectedCashPenceFromEntries(
+      lockedShift.cashDrawerEntries.map((entry) => ({
+        entryType: entry.entryType,
+        amountPence: entry.amountPence,
+        businessId,
+        storeId: lockedShift.till.storeId,
+        tillId: lockedShift.tillId,
+        shiftId: lockedShift.id,
+      })),
+      {
+        businessId,
+        storeId: lockedShift.till.storeId,
+        tillId: lockedShift.tillId,
+        shiftId: lockedShift.id,
+      },
+    );
     // Expected cash is the drawer running balance (float + cash sales + receipts
     // + additions − supplier/expense/refunds/removals), not invoice CASH re-sum.
     const lockedVariance = actualCash - lockedExpectedCash;

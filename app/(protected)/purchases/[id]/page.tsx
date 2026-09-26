@@ -13,6 +13,7 @@ import PurchaseDraftClearer from '@/components/purchases/PurchaseDraftClearer';
 import RemainingBalance from '@/components/RemainingBalance';
 import SupplierPaymentForm from '@/components/SupplierPaymentForm';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
 export default async function PurchaseInvoicePage({
   params,
@@ -79,8 +80,9 @@ export default async function PurchaseInvoicePage({
     shiftId: shift.id,
   }));
 
-  const totalPaid = invoice.payments.reduce((s, p) => s + p.amountPence, 0);
-  const outstanding = Math.max(invoice.totalPence - totalPaid, 0);
+  const purchaseDocument = payableDocumentBalance(invoice);
+  const totalPaid = purchaseDocument.paidPence;
+  const outstanding = purchaseDocument.balancePence;
   const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
   const now = new Date();
   const today = now.toISOString().slice(0, 10);

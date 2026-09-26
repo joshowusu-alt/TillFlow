@@ -138,7 +138,10 @@ describe('shift close cash snapshot', () => {
       openedAt: new Date('2026-09-17T08:00:00.000Z'),
       till: { id: 'till-1', storeId: 'store-1', name: 'Till 1' },
       salesInvoices: [],
-      cashDrawerEntries: [{ id: 'cde-1', entryType: 'OPEN_FLOAT', amountPence: 20000, createdAt: new Date() }],
+      cashDrawerEntries: [
+        { id: 'cde-1', entryType: 'OPEN_FLOAT', amountPence: 20000, createdAt: new Date() },
+        { id: 'cde-2', entryType: 'CASH_SALE', amountPence: 5000, createdAt: new Date() },
+      ],
     };
 
     (prisma as any).shift = {

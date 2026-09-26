@@ -5,7 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { getIncomeStatement } from '@/lib/reports/financials';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { loadTradingPeriodMargin } from '@/lib/reports/trading-margin';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
+import { loadTradingOpenDocuments } from '@/lib/reports/trading-balances';
 import { classifyInventoryState, getReceivableAgeBucket } from '@/lib/reports/operational-metrics';
 import { unstable_cache } from 'next/cache';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
@@ -50,8 +52,11 @@ async function _getTradingDashboardSnapshot(
   const start = new Date(startIso);
   const endExclusive = new Date(endIso);
   // Income statement helper still uses inclusive end — pass last in-range instant.
-  const endInclusiveForJournals = new Date(endExclusive.getTime() - 1);
   const storeFilter = selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId };
+  const tradingBalances = await loadTradingOpenDocuments(
+    businessId,
+    selectedStoreId === 'ALL' ? undefined : selectedStoreId,
+  );
 
   const [
     salesAgg,
@@ -78,31 +83,9 @@ async function _getTradingDashboardSnapshot(
     }),
     // Money Received method totals come from getMoneyReceivedSummary (canonical
     // CONFIRMED inclusion; no parent RETURNED/VOID exclusion) — not a parallel groupBy.
-    getIncomeStatement(businessId, start, endInclusiveForJournals),
-    prisma.salesInvoice.findMany({
-      where: {
-        businessId,
-        ...storeFilter,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-      },
-      select: {
-        id: true,
-        totalPence: true,
-        dueDate: true,
-        createdAt: true,
-        customer: { select: { id: true, name: true } },
-        payments: { select: { amountPence: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.purchaseInvoice.findMany({
-      where: {
-        businessId,
-        ...storeFilter,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-      },
-      select: { totalPence: true, payments: { select: { amountPence: true } } },
-    }),
+    getIncomeStatement(businessId, start, endExclusive),
+    Promise.resolve(tradingBalances.outstandingSales),
+    Promise.resolve(tradingBalances.outstandingPurchases),
     prisma.inventoryBalance.findMany({
       where: {
         ...(selectedStoreId === 'ALL'
@@ -207,7 +190,6 @@ async function _getTradingDashboardSnapshot(
           createdAt: { gte: start, lt: endExclusive },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
-        lineCostPence: { gt: 0 },
       },
       _sum: {
         lineSubtotalPence: true,
@@ -312,6 +294,10 @@ export default async function TradingDashboardContent({
   };
 
   const storeFilter = selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId };
+  const tradingBalances = await loadTradingOpenDocuments(
+    businessId,
+    selectedStoreId === 'ALL' ? undefined : selectedStoreId,
+  );
 
   const [
     snapshot,
@@ -381,19 +367,21 @@ export default async function TradingDashboardContent({
 
   // Summarise sales — shared sales-revenue contract (matches Home)
   const totalSales = salesRevenue.salesRevenuePence;
-  // GP from sale lines — consistent with margins/analytics/KPIs
-  const costedGrossMargin =
-    (costedMarginAgg._sum.lineSubtotalPence ?? 0) - (costedMarginAgg._sum.lineCostPence ?? 0);
-  const uncostedGrossMargin = uncostedMarginGroups.reduce((sum, group) => {
-    const revenue = group._sum.lineSubtotalPence ?? 0;
-    const qtyBase = group._sum.qtyBase ?? 0;
-    const defaultCostBasePence = uncostedProductCostMap.get(group.productId) ?? 0;
-    return sum + revenue - (defaultCostBasePence * qtyBase);
-  }, 0);
-  const totalGrossMargin = costedGrossMargin + uncostedGrossMargin;
-  const gpPercent = totalSales > 0 ? Math.round((totalGrossMargin / totalSales) * 100) : 0;
-  // Expenses and NP still from journals (accounting source of truth for expense tracking)
-  const npPercent = totalSales > 0 ? Math.round(((totalGrossMargin - income.otherExpenses) / totalSales) * 100) : 0;
+  const tradingMargin = await loadTradingPeriodMargin({
+    businessId,
+    startInclusive: scope.startInclusive,
+    endExclusive: scope.endExclusive,
+    storeId: selectedStoreId === 'ALL' ? undefined : selectedStoreId,
+  });
+  const totalGrossMargin = tradingMargin.grossProfitPence;
+  const gpPercent = tradingMargin.grossProfitPercent;
+  const marginReady = tradingMargin.state === 'READY' && totalGrossMargin != null && gpPercent != null;
+  const npPercent = marginReady && totalSales > 0
+    ? Math.round(((totalGrossMargin - income.otherExpenses) / totalSales) * 100)
+    : 0;
+  void costedMarginAgg;
+  void uncostedMarginGroups;
+  void uncostedProductCostMap;
 
   // Money received — payment records (authoritative for method totals)
   const paymentSplit = moneyReceived.byMethod;
@@ -401,16 +389,19 @@ export default async function TradingDashboardContent({
   void salesAgg;
 
   // AR / AP
-  const outstandingAR = outstandingSales.reduce((s, inv) => s + computeOutstandingBalance(inv), 0);
-  const outstandingAP = outstandingPurchases.reduce((s, inv) => s + computeOutstandingBalance(inv), 0);
+  const outstandingAR = tradingBalances.outstandingARPence;
+  const outstandingAP = tradingBalances.outstandingAPPence;
 
   // Debtor ageing buckets
   const bucketKeys = ['0–30 d', '31–60 d', '61–90 d', '90+ d'] as const;
   const ageingBuckets: Record<string, number> = Object.fromEntries(bucketKeys.map((k) => [k, 0]));
   const debtorMap = new Map<string, { name: string; balance: number }>();
   for (const inv of outstandingSales) {
-    const paid = inv.payments.reduce((t, p) => t + p.amountPence, 0);
-    const balance = Math.max(inv.totalPence - paid, 0);
+    const balance = receivableDocumentBalance({
+      paymentStatus: inv.paymentStatus,
+      totalPence: inv.totalPence,
+      payments: inv.payments,
+    }).balancePence;
     if (balance <= 0) continue;
     const bucket = getReceivableAgeBucket(inv.dueDate, inv.createdAt);
     ageingBuckets[bucket] += balance;
@@ -549,16 +540,16 @@ export default async function TradingDashboardContent({
           helper="Recognised sales for this period (not money received)."
         />
         <StatCard
-          label={`Gross Profit (${gpPercent}%)`}
-          value={formatMoney(totalGrossMargin, currency)}
-          tone={gpPercent >= 20 ? 'success' : gpPercent >= 0 ? 'warn' : 'danger'}
-          helper="Profit before expenses."
+          label={marginReady ? `Gross Profit (${gpPercent}%)` : 'Gross Profit'}
+          value={marginReady ? formatMoney(totalGrossMargin, currency) : 'Costs incomplete'}
+          tone={marginReady ? (gpPercent >= 20 ? 'success' : gpPercent >= 0 ? 'warn' : 'danger') : 'warn'}
+          helper={marginReady ? 'Profit before expenses.' : `${tradingMargin.incompleteLineCount} lines without authoritative cost. Sales above are still recognised.`}
         />
         <StatCard label="Expenses" value={formatMoney(income.otherExpenses, currency)} helper={scopeHelper} />
         <StatCard
-          label={`Net Profit (${npPercent}%)`}
-          value={formatMoney(totalGrossMargin - income.otherExpenses, currency)}
-          tone={npPercent >= 10 ? 'success' : npPercent >= 0 ? 'warn' : 'danger'}
+          label={marginReady ? `Net Profit (${npPercent}%)` : 'Net Profit'}
+          value={marginReady ? formatMoney(totalGrossMargin - income.otherExpenses, currency) : 'Costs incomplete'}
+          tone={marginReady ? (npPercent >= 10 ? 'success' : npPercent >= 0 ? 'warn' : 'danger') : 'warn'}
           helper="Profit after expenses."
         />
         <StatCard
@@ -584,7 +575,7 @@ export default async function TradingDashboardContent({
       </div>
 
       {/* Data-quality warning: extremely negative GP almost always means wrong cost prices */}
-      {gpPercent < -50 && totalSales > 0 && (
+      {marginReady && gpPercent < -50 && totalSales > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <p className="font-semibold">⚠ Gross margin looks unusual ({gpPercent}%)</p>
           <p className="mt-0.5 text-amber-700">

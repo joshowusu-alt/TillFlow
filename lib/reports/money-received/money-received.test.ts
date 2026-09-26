@@ -385,6 +385,7 @@ describe('Database pagination query shape', () => {
     const bundle = await computeMoneyReceivedBundleFromDb(db, {
       businessId: 'biz-1',
       currency: 'GHS',
+      timeZone: 'Africa/Accra',
       periodStart: new Date('2026-01-01T00:00:00.000Z'),
       periodEndInclusive: new Date('2026-02-01T00:00:00.000Z'),
       absoluteBounds: true,
@@ -484,6 +485,7 @@ describe('Database pagination query shape', () => {
     const bundle = await computeMoneyReceivedBundleFromDb(db, {
       businessId: 'biz-1',
       currency: 'GHS',
+      timeZone: 'Africa/Accra',
       periodStart: new Date('2026-01-01T00:00:00.000Z'),
       periodEndInclusive: new Date('2026-02-01T00:00:00.000Z'),
       absoluteBounds: true,

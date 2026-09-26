@@ -9,13 +9,15 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { formatMoney, formatDateTime, formatDate, formatRelativeDate } from '@/lib/format';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
+import { summarizeOpenPayables } from '@/lib/reports/surface-balances';
 import { parseTags } from '@/lib/contact-tags';
 import { updateSupplierAction } from '@/app/actions/suppliers';
 import DueDateBadge from '@/components/DueDateBadge';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import RemainingBalance from '@/components/RemainingBalance';
 import { getSupplierSalesReport } from '@/lib/reports/supplier-sales';
+import { businessMonthWindow, localDateInstant } from '@/lib/reports/reporting-clock';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -68,13 +70,12 @@ export default async function SupplierDetailPage({
     (business as any).storeMode as any,
   );
 
-  const start = searchParams?.from ? new Date(searchParams.from) : undefined;
-  const end = searchParams?.to ? new Date(searchParams.to) : undefined;
+  const start = localDateInstant(searchParams?.from, 'start', business.timezone);
+  const endExclusive = localDateInstant(searchParams?.to, 'endExclusive', business.timezone);
 
-  const now = new Date();
-  const mtdStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const mtdEnd = new Date(now);
-  mtdEnd.setHours(23, 59, 59, 999);
+  const month = businessMonthWindow(new Date(), business.timezone);
+  const mtdStart = month.startInclusive;
+  const mtdEndExclusive = month.endExclusive;
 
   const [supplier, linkedProducts, supplierSales] = await Promise.all([
     prisma.supplier.findFirst({
@@ -82,8 +83,9 @@ export default async function SupplierDetailPage({
       include: {
         purchaseInvoices: {
           where: {
-            ...(start ? { createdAt: { gte: start } } : {}),
-            ...(end ? { createdAt: { lte: end } } : {})
+            ...((start || endExclusive)
+              ? { createdAt: { ...(start ? { gte: start } : {}), ...(endExclusive ? { lt: endExclusive } : {}) } }
+              : {})
           },
           select: {
             id: true,
@@ -121,7 +123,7 @@ export default async function SupplierDetailPage({
       take: 50,
     }),
     features.advancedReports
-      ? getSupplierSalesReport(business.id, { start: mtdStart, end: mtdEnd, supplierId: params.id })
+      ? getSupplierSalesReport(business.id, { start: mtdStart, end: mtdEndExclusive, supplierId: params.id })
       : Promise.resolve(null),
   ]);
 
@@ -133,15 +135,16 @@ export default async function SupplierDetailPage({
   const supplierNotes = ((supplier as any).notes as string | null) ?? '';
 
   const invoices = supplier.purchaseInvoices.map((invoice) => {
-    const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+    const document = payableDocumentBalance(invoice);
+    const paid = document.paidPence;
     const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
-    const effectivePaid = !isClosed && invoice.paymentStatus === 'PAID' ? invoice.totalPence : paid;
-    const balance = computeOutstandingBalance(invoice);
+    const effectivePaid = document.paidPence;
+    const balance = document.balancePence;
     return { ...invoice, paid, effectivePaid, balance, isClosed };
   });
 
   const activeInvoices = invoices.filter((invoice) => !invoice.isClosed);
-  const outstanding = activeInvoices.reduce((sum, invoice) => sum + invoice.balance, 0);
+  const outstanding = summarizeOpenPayables(supplier.purchaseInvoices).outstandingPence;
   const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
   const totalPaid = activeInvoices.reduce((sum, invoice) => sum + invoice.effectivePaid, 0);
   const activePurchaseInvoiceCount = activeInvoices.filter((invoice) => invoice.balance > 0).length;
@@ -165,18 +168,6 @@ export default async function SupplierDetailPage({
 
   const ledgerRows = invoices
     .flatMap((invoice) => {
-      const settlementAdjustment = !invoice.isClosed && invoice.paymentStatus === 'PAID' && invoice.paid < invoice.totalPence
-        ? [{
-            key: `${invoice.id}-status-settled`,
-            date: invoice.createdAt,
-            sortKey: invoice.createdAt.getTime() + 0.5,
-            type: 'adjustment' as const,
-            description: 'Balance settled',
-            debitPence: 0,
-            creditPence: invoice.totalPence - invoice.paid,
-          }]
-        : [];
-
       return [{
         key: `${invoice.id}-invoice`,
         date: invoice.createdAt,
@@ -195,7 +186,6 @@ export default async function SupplierDetailPage({
         debitPence: 0,
         creditPence: payment.amountPence,
       })),
-      ...settlementAdjustment,
       ];
     })
     .sort((a, b) => a.sortKey - b.sortKey)
@@ -210,7 +200,7 @@ export default async function SupplierDetailPage({
     }>>((rows, row) => {
       const previousBalance = rows.at(-1)?.balancePence ?? 0;
       const { sortKey: _sortKey, ...rest } = row;
-      rows.push({ ...rest, balancePence: Math.max(previousBalance + row.debitPence - row.creditPence, 0) });
+      rows.push({ ...rest, balancePence: previousBalance + row.debitPence - row.creditPence });
       return rows;
     }, []);
 
@@ -379,11 +369,11 @@ export default async function SupplierDetailPage({
         <form className="mt-4 grid gap-4 md:grid-cols-4">
           <div>
             <label className="label">From</label>
-            <input className="input" name="from" type="date" defaultValue={start?.toISOString().slice(0, 10)} />
+            <input className="input" name="from" type="date" defaultValue={searchParams?.from ?? ''} />
           </div>
           <div>
             <label className="label">To</label>
-            <input className="input" name="to" type="date" defaultValue={end?.toISOString().slice(0, 10)} />
+            <input className="input" name="to" type="date" defaultValue={searchParams?.to ?? ''} />
           </div>
           <div className="flex items-end">
             <button className="btn-primary w-full">Filter</button>
@@ -391,8 +381,8 @@ export default async function SupplierDetailPage({
           <div className="flex items-end">
             <DownloadLink
               className="btn-ghost w-full text-xs"
-              href={`/suppliers/${supplier.id}/statement?from=${start?.toISOString().slice(0, 10) ?? ''}&to=${
-                end?.toISOString().slice(0, 10) ?? ''
+              href={`/suppliers/${supplier.id}/statement?from=${searchParams?.from ?? ''}&to=${
+                searchParams?.to ?? ''
               }`}
               fallbackFilename={`supplier-statement-${supplier.id.slice(0, 8)}.csv`}
             >
