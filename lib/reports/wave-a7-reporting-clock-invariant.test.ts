@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolveExportDateRange } from '@/app/(protected)/exports/_shared';
 import {
@@ -25,6 +25,14 @@ import {
   type HalfOpenWindow,
 } from '@/lib/reports/reporting-clock';
 import { resolveReportingScope } from '@/lib/reports/reporting-scope';
+import {
+  appRouteScanReport,
+  appRoutesMissingTenantZone,
+  isAppRouteLabel,
+  normaliseScanLabel,
+  routeLoadsTenantZone,
+  scanLabel,
+} from '@/lib/test/reporting-clock-invariant-rules';
 
 /**
  * 2026-06-30T22:00:00.000Z is 30 Jun 22:00 in Accra and 1 Jul 01:00 in Nairobi.
@@ -336,7 +344,7 @@ describe('report and export sources keep tenant windows explicit', () => {
     const unexplained: string[] = [];
     for (const file of productionSources()) {
       const source = readFileSync(file, 'utf8');
-      const label = relative(process.cwd(), file);
+      const label = scanLabel(process.cwd(), file);
       source.split(/\r?\n/).forEach((line, index) => {
         for (const pattern of patterns) {
           if (!pattern.re.test(line)) continue;
@@ -352,7 +360,7 @@ describe('report and export sources keep tenant windows explicit', () => {
     const escaped: string[] = [];
     for (const file of productionSources()) {
       const source = readFileSync(file, 'utf8');
-      const label = relative(process.cwd(), file);
+      const label = scanLabel(process.cwd(), file);
       if (/setHours\s*\(\s*24\b/.test(source) || /getTime\(\)\s*\+\s*1(?!\d)/.test(source)) {
         escaped.push(label);
       }
@@ -361,17 +369,188 @@ describe('report and export sources keep tenant windows explicit', () => {
   });
 
   it('report routes that build a tenant window load Business.timezone', () => {
-    const constructors = /resolveReportDateRange\(|resolveExportDateRange\(|businessDayWindow\(|businessWeekWindow\(|businessMonthWindow\(|localDateInstant\(|defaultTenantLocalRange\(/;
-    const missing: string[] = [];
-    for (const file of productionSources()) {
-      const label = relative(process.cwd(), file);
-      if (!label.startsWith('app/')) continue;
-      const source = readFileSync(file, 'utf8');
-      if (!constructors.test(source)) continue;
-      const loadsZone = /business\.timezone|requireReportTimeZone\(|timeZone/.test(source);
-      if (!loadsZone) missing.push(label);
-    }
+    const missing = appRoutesMissingTenantZone(productionSources(), process.cwd(), (f) => readFileSync(f, 'utf8'));
     expect(missing).toEqual([]);
+  });
+});
+
+const FLAGGED_EXPORT_ROUTES = [
+  'app/(protected)/exports/margins/route.ts',
+  'app/(protected)/exports/momo-confirmation/route.ts',
+  'app/(protected)/exports/purchases/route.ts',
+  'app/(protected)/exports/reversals/route.ts',
+  'app/(protected)/exports/sales/route.ts',
+];
+
+function toWindowsLabel(label: string): string {
+  return label.replace(/\//g, '\\');
+}
+
+function exportRouteFixture(zoneArgument: string, prelude = ''): string {
+  return [
+    "import { resolveExportDateRange } from '@/app/(protected)/exports/_shared';",
+    'export async function GET(request: Request) {',
+    '  const business = await prisma.business.findUnique({ where: { id }, select: { timezone: true } });',
+    '  const exportBusiness = business;',
+    prelude,
+    `  const dateRange = resolveExportDateRange(request, '30d', ${zoneArgument});`,
+    '  return Response.json(dateRange);',
+    '}',
+    '',
+  ].join('\n');
+}
+
+describe('reporting-clock invariant scans identically on Windows and POSIX', () => {
+  const windowsMargins = 'app\\(protected)\\exports\\margins\\route.ts';
+  const posixMargins = 'app/(protected)/exports/margins/route.ts';
+
+  it('normalises Windows and POSIX scan labels to the same app-route label', () => {
+    const problems: string[] = [];
+    const normalisedWindows = normaliseScanLabel(windowsMargins);
+    if (normalisedWindows !== posixMargins) {
+      problems.push(`normaliseScanLabel(windows) -> ${JSON.stringify(normalisedWindows)}`);
+    }
+    const normalisedPosix = normaliseScanLabel(posixMargins);
+    if (normalisedPosix !== posixMargins) {
+      problems.push(`normaliseScanLabel(posix) -> ${JSON.stringify(normalisedPosix)}`);
+    }
+    if (!isAppRouteLabel(posixMargins)) problems.push('isAppRouteLabel rejects the POSIX label');
+    if (!isAppRouteLabel(windowsMargins)) problems.push('isAppRouteLabel rejects the Windows label');
+
+    const realLabel = scanLabel(process.cwd(), resolve(process.cwd(), posixMargins));
+    if (realLabel.includes('\\')) problems.push(`scanLabel contains a backslash: ${JSON.stringify(realLabel)}`);
+    if (!realLabel.startsWith('app/')) problems.push(`scanLabel does not start with app/: ${JSON.stringify(realLabel)}`);
+    expect(problems).toEqual([]);
+  });
+
+  it('examines the same set of app routes whichever separator the platform produces', () => {
+    const posixLabels = productionSources()
+      .map((file) => scanLabel(process.cwd(), file))
+      .map(normaliseScanLabel)
+      .map((label) => label.replace(/\\/g, '/'))
+      .filter((label) => label.startsWith('app/'));
+    expect(posixLabels.length).toBeGreaterThan(0);
+
+    const scannedFromPosix = new Set(
+      posixLabels.map(normaliseScanLabel).filter(isAppRouteLabel),
+    );
+    const scannedFromWindows = new Set(
+      posixLabels.map(toWindowsLabel).map(normaliseScanLabel).filter(isAppRouteLabel),
+    );
+
+    const problems: string[] = [];
+    for (const label of scannedFromPosix) {
+      if (!scannedFromWindows.has(label)) problems.push(`only scanned on POSIX: ${label}`);
+    }
+    for (const label of scannedFromWindows) {
+      if (!scannedFromPosix.has(label)) problems.push(`only scanned on Windows: ${label}`);
+    }
+    for (const label of [...FLAGGED_EXPORT_ROUTES, 'app/(protected)/exports/eod-csv/route.ts']) {
+      if (!scannedFromPosix.has(label)) problems.push(`missing from POSIX scan: ${label}`);
+      if (!scannedFromWindows.has(label)) problems.push(`missing from Windows scan: ${label}`);
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it('accepts routes that pass a stored tenant timezone to a window constructor', () => {
+    const rejected: string[] = [];
+    for (const route of FLAGGED_EXPORT_ROUTES) {
+      const source = readFileSync(resolve(process.cwd(), route), 'utf8');
+      if (!routeLoadsTenantZone(source)) rejected.push(`on-disk ${route}`);
+    }
+
+    const fixtures: Array<{ name: string; source: string }> = [
+      { name: 'business.timezone', source: exportRouteFixture('business.timezone') },
+      { name: 'business?.timezone', source: exportRouteFixture('business?.timezone') },
+      { name: 'exportBusiness.timezone', source: exportRouteFixture('exportBusiness.timezone') },
+      { name: 'exportBusiness?.timezone', source: exportRouteFixture('exportBusiness?.timezone') },
+      {
+        name: 'requireReportTimeZone(business?.timezone)',
+        source: exportRouteFixture('requireReportTimeZone(business?.timezone)'),
+      },
+      {
+        name: 'const timeZone = requireReportTimeZone(...)',
+        source: exportRouteFixture('timeZone', '  const timeZone = requireReportTimeZone(business?.timezone);'),
+      },
+      {
+        name: 'fallback = defaultTenantLocalRange(...); fallback.timeZone',
+        source: [
+          "import { resolveReportDateRange } from '@/lib/reports/date-parsing';",
+          "import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';",
+          'export async function GET(request: Request) {',
+          '  const now = new Date();',
+          '  const business = await prisma.business.findUnique({ where: { id }, select: { timezone: true } });',
+          '  const fallback = defaultTenantLocalRange(now, business?.timezone, 7);',
+          '  const range = resolveReportDateRange(searchParams, fallback.startInclusive, now, fallback.timeZone);',
+          '  return Response.json(range);',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ];
+    for (const fixture of fixtures) {
+      if (!routeLoadsTenantZone(fixture.source)) rejected.push(`fixture ${fixture.name}`);
+    }
+    expect(rejected).toEqual([]);
+  });
+
+  it('rejects routes whose only timezone mention is a comment or a hard-coded literal', () => {
+    const fixtures: Array<{ name: string; source: string }> = [
+      {
+        name: 'comment mentions Business.timezone but constructor has no zone argument',
+        source: [
+          "import { resolveExportDateRange } from '@/app/(protected)/exports/_shared';",
+          'export async function GET(request: Request) {',
+          '  // timezone is stored on Business but never loaded here',
+          "  const dateRange = resolveExportDateRange(request, '30d');",
+          '  return Response.json(dateRange);',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      {
+        name: 'hard-coded timeZone literal passed to the constructor',
+        source: [
+          "import { resolveExportDateRange } from '@/app/(protected)/exports/_shared';",
+          'export async function GET(request: Request) {',
+          "  const timeZone = 'Africa/Accra';",
+          "  const dateRange = resolveExportDateRange(request, '30d', timeZone);",
+          '  return Response.json(dateRange);',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      {
+        name: 'timeZone appears only in a comment and constructor has no zone argument',
+        source: [
+          "import { resolveExportDateRange } from '@/app/(protected)/exports/_shared';",
+          'export async function GET(request: Request) {',
+          '  // TODO: thread the tenant timeZone through once the schema exposes it',
+          "  const dateRange = resolveExportDateRange(request, '30d');",
+          '  return Response.json(dateRange);',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ];
+    const wronglyAccepted: string[] = [];
+    for (const fixture of fixtures) {
+      if (routeLoadsTenantZone(fixture.source)) wronglyAccepted.push(fixture.name);
+    }
+    expect(wronglyAccepted).toEqual([]);
+  });
+
+  it('actually examines the constructor-bearing app routes on this platform', () => {
+    const report = appRouteScanReport(productionSources(), process.cwd(), (f) => readFileSync(f, 'utf8'));
+    const examined = new Set(report.examined.map(normaliseScanLabel));
+    const problems: string[] = [];
+    if (examined.size < 6) {
+      problems.push(`examined only ${examined.size} app route(s): ${JSON.stringify([...examined])}`);
+    }
+    for (const route of FLAGGED_EXPORT_ROUTES) {
+      if (!examined.has(route)) problems.push(`not examined: ${route}`);
+    }
+    expect(problems).toEqual([]);
   });
 });
 
@@ -455,7 +634,7 @@ describe('lib/reports does not import the notification timezone fallback', () =>
     expect(files.length).toBeGreaterThan(10);
     for (const file of files) {
       const source = readFileSync(file, 'utf8');
-      const label = relative(process.cwd(), file);
+      const label = scanLabel(process.cwd(), file);
       expect(source, label).not.toMatch(importPattern);
       expect(source, label).not.toMatch(callPattern);
     }
