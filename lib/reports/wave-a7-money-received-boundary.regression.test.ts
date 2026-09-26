@@ -198,9 +198,8 @@ describe('A7 aggregateConfirmedReceiptsThroughAsOf — exclusive endExclusive', 
     const endExclusive = new Date(NAIROBI_TODAY_END);
     const result = await aggregateConfirmedReceiptsThroughAsOf(prismaMock as never, {
       businessId: BIZ,
-      asOf: endExclusive,
       endExclusive,
-    } as { businessId: string; asOf: Date; endExclusive?: Date });
+    });
 
     expect(iso(businessDayWindow(KPI_NOW, NAIROBI).endExclusive)).toBe(NAIROBI_TODAY_END);
     // 100 immediately before; 200 at the boundary and 400 after belong to the next local day.
@@ -211,9 +210,8 @@ describe('A7 aggregateConfirmedReceiptsThroughAsOf — exclusive endExclusive', 
     const endExclusive = new Date(NAIROBI_TODAY_END);
     await aggregateConfirmedReceiptsThroughAsOf(prismaMock as never, {
       businessId: BIZ,
-      asOf: endExclusive,
       endExclusive,
-    } as { businessId: string; asOf: Date; endExclusive?: Date });
+    });
 
     const filters = throughAsOfWheres();
     expect(filters.length).toBeGreaterThan(0);
@@ -239,9 +237,8 @@ describe('A7 aggregateConfirmedReceiptsThroughAsOf — exclusive endExclusive', 
 
     const result = await aggregateConfirmedReceiptsThroughAsOf(prismaMock as never, {
       businessId: BIZ,
-      asOf: new Date(NAIROBI_TODAY_END),
       endExclusive: new Date(NAIROBI_TODAY_END),
-    } as { businessId: string; asOf: Date; endExclusive?: Date });
+    });
 
     expect(result.amountPence).toBe(100);
     const where = throughAsOfWheres()[0];

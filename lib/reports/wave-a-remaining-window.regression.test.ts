@@ -16,7 +16,6 @@ import {
  */
 export const JUSTIFIED_LTE_EXCLUSIONS: Array<{ file: string; reason: string }> = [
   { file: 'lib/reports/forecast.ts', reason: 'entryDate lte now is cash on hand as of now' },
-  { file: 'lib/reports/money-received/query.ts', reason: 'receivedAt lte asOf is confirmed receipts through an instant' },
   { file: 'lib/owner-intel.ts', reason: 'dueDate lte sevenDays is an as-of attention cutoff, not a report period' },
   { file: 'lib/notifications/owner-daily-summary-sms.ts', reason: 'qtyOnHandBase lte 0 is not a date window' },
   { file: 'lib/reports/incomplete-stock.ts', reason: 'lineCostPence lte 0 is not a date window' },

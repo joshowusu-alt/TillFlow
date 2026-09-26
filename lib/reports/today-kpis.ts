@@ -178,8 +178,8 @@ async function getOperationalLiquidAssetsEstimatePence(
       },
       select: { amountPence: true },
     }),
-    // Canonical CONFIRMED receipts through asOf — no parent RETURNED/VOID exclusion.
-    aggregateConfirmedReceiptsThroughAsOf(prisma, { businessId, asOf: asOfExclusive, storeId }),
+    // Canonical CONFIRMED receipts strictly before endExclusive — no parent RETURNED/VOID exclusion.
+    aggregateConfirmedReceiptsThroughAsOf(prisma, { businessId, endExclusive: asOfExclusive, storeId }),
     prisma.purchasePayment.aggregate({
       where: {
         paidAt: { lt: asOfExclusive },

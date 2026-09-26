@@ -272,18 +272,22 @@ export async function aggregateMetricPence(
 }
 
 /**
- * Confirmed receipts through asOf (inclusive) — shared inclusion rules for liquid-asset
- * consumers that need receipt history, not a period money_received window.
+ * CONFIRMED receipts strictly before `endExclusive` — shared inclusion rules for
+ * liquid-asset consumers that need receipt history, not a period money_received
+ * window. `endExclusive` is the reporting-clock exclusive bound (callers pass
+ * `businessDayWindow(...).endExclusive`). A receipt stamped exactly at that
+ * instant belongs to the next local day and must not be included. Parent
+ * SalesInvoice RETURNED/VOID does not exclude a confirmed receipt.
  */
 export async function aggregateConfirmedReceiptsThroughAsOf(
   db: Db,
-  args: { businessId: string; asOf: Date; storeId?: string },
+  args: { businessId: string; endExclusive: Date; storeId?: string },
 ): Promise<{ amountPence: number; queryFailed?: boolean; queryError?: string }> {
   try {
     const agg = await db.salesPayment.aggregate({
       where: {
         status: CONFIRMED_PAYMENT_STATUS,
-        receivedAt: { lte: args.asOf },
+        receivedAt: { lt: args.endExclusive },
         salesInvoice: {
           businessId: args.businessId,
           ...(args.storeId ? { storeId: args.storeId } : {}),
