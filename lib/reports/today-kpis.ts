@@ -18,7 +18,14 @@ import {
   requireMoneyReceivedMethodRows,
   resolveMoneyReceivedScope,
 } from '@/lib/reports/money-received';
-import { businessDayWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
+import {
+  addLocalDays,
+  businessDayWindow,
+  localDateInstant,
+  localDateKey,
+  requireReportTimeZone,
+  zonedDateTimeParts,
+} from '@/lib/reports/reporting-clock';
 import { evaluateMarginSet, resolveAuthoritativeLineCost, type MarginInvoiceInput } from '@/lib/reports/margin-line';
 export type TodayKPIs = {
   totalSalesPence: number;
@@ -225,18 +232,20 @@ async function getLiquidAssetsPence(businessId: string, asOf: Date, storeId?: st
   return operationalLiquidPence;
 }
 
+function lookbackStart(now: Date, timeZone: string, daysBack: number): Date {
+  const key = localDateKey(addLocalDays(zonedDateTimeParts(now, timeZone), -daysBack));
+  return localDateInstant(key, 'start', timeZone) ?? now;
+}
+
 async function getTodayKPIsSqlite(businessId: string, storeId: string | undefined, now: Date, timeZone: string): Promise<TodayKPIs> {
   const todayWindow = businessDayWindow(now, timeZone);
   const todayStart = todayWindow.startInclusive;
   const todayEnd = todayWindow.endExclusive;
 
-  const sevenDaysAgo = new Date(now);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const thirtyDaysAgo = new Date(now);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyFiveDaysAgo = new Date(now);
-  thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35);
-  const fourteenDaysAgo = new Date(now.getTime() - 14 * 86_400_000);
+  const sevenDaysAgo = lookbackStart(now, timeZone, 7);
+  const thirtyDaysAgo = lookbackStart(now, timeZone, 30);
+  const thirtyFiveDaysAgo = lookbackStart(now, timeZone, 35);
+  const fourteenDaysAgo = lookbackStart(now, timeZone, 14);
   // Recency floor for KPI monitoring queries. Invoices older than 90 days that
   // are still unpaid are not filtered out from authoritative balances (customers
   // page / supplier ledger) — only from the today-KPI dashboard cards.
@@ -244,7 +253,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
 
   const [salesRows, paymentRows, openSalesInvoices, outstandingPurchases, alertRows, balances, paidExpenses, momoPending, cashVarShifts, salesLines14d, cashOnHandEstimatePence] = await Promise.all([
     prisma.salesInvoice.findMany({
-      where: { businessId, ...storeFilter, createdAt: { gte: sevenDaysAgo } },
+      where: { businessId, ...storeFilter, createdAt: { gte: sevenDaysAgo, lt: todayEnd } },
       select: {
         totalPence: true,
         createdAt: true,
@@ -279,7 +288,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       select: { paymentStatus: true, totalPence: true, payments: { select: { amountPence: true } } },
     }),
     prisma.riskAlert.findMany({
-      where: { businessId, severity: 'HIGH', status: 'OPEN', occurredAt: { gte: sevenDaysAgo } },
+      where: { businessId, severity: 'HIGH', status: 'OPEN', occurredAt: { gte: sevenDaysAgo, lt: todayEnd } },
       select: { occurredAt: true },
     }),
     prisma.inventoryBalance.findMany({
@@ -290,7 +299,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       },
     }),
     prisma.expense.findMany({
-      where: { businessId, paymentStatus: 'PAID', createdAt: { gte: thirtyFiveDaysAgo } },
+      where: { businessId, paymentStatus: 'PAID', createdAt: { gte: thirtyFiveDaysAgo, lt: todayEnd } },
       select: { amountPence: true, createdAt: true },
     }),
     prisma.mobileMoneyCollection.count({
@@ -300,7 +309,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       where: {
         till: { store: { businessId, ...(storeId ? { id: storeId } : {}) } },
         variance: { not: null },
-        closedAt: { gte: sevenDaysAgo },
+        closedAt: { gte: sevenDaysAgo, lt: todayEnd },
       },
       select: { variance: true, closedAt: true },
       take: 200,
@@ -309,7 +318,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       where: {
         salesInvoice: {
           businessId, ...(storeId ? { storeId } : {}),
-          createdAt: { gte: fourteenDaysAgo },
+          createdAt: { gte: fourteenDaysAgo, lt: todayEnd },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
       },
@@ -460,12 +469,10 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   const todayStart = todayWindow.startInclusive;
   const todayEnd = todayWindow.endExclusive;
 
-  const sevenDaysAgo = new Date(now);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const thirtyDaysAgo = new Date(now);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyFiveDaysAgo = new Date(now);
-  thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35);
+  const sevenDaysAgo = lookbackStart(now, timeZone, 7);
+  const thirtyDaysAgo = lookbackStart(now, timeZone, 30);
+  const thirtyFiveDaysAgo = lookbackStart(now, timeZone, 35);
+  const fourteenDaysAgo = lookbackStart(now, timeZone, 14);
   // Recency floor for KPI monitoring queries only.
   const storeFilter = storeId ? { storeId } : {};
 
@@ -533,7 +540,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
         businessId,
         severity: 'HIGH',
         status: 'OPEN',
-        occurredAt: { gte: sevenDaysAgo },
+        occurredAt: { gte: sevenDaysAgo, lt: todayEnd },
       },
     }),
     // Inventory balances
@@ -548,12 +555,12 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     }),
     // 30-day expenses — aggregate at DB level
     prisma.expense.aggregate({
-      where: { businessId, createdAt: { gte: thirtyDaysAgo }, paymentStatus: 'PAID' },
+      where: { businessId, createdAt: { gte: thirtyDaysAgo, lt: todayEnd }, paymentStatus: 'PAID' },
       _sum: { amountPence: true },
     }),
     // This week expenses — aggregate at DB level
     prisma.expense.aggregate({
-      where: { businessId, createdAt: { gte: sevenDaysAgo }, paymentStatus: 'PAID' },
+      where: { businessId, createdAt: { gte: sevenDaysAgo, lt: todayEnd }, paymentStatus: 'PAID' },
       _sum: { amountPence: true },
     }),
     // 4-week expenses (35 days ago → 7 days ago = 28 days = 4 weeks) — aggregate at DB level
@@ -569,7 +576,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     prisma.shift.findMany({
       where: {
         till: { store: { businessId, ...(storeId ? { id: storeId } : {}) } },
-        closedAt: { gte: sevenDaysAgo },
+        closedAt: { gte: sevenDaysAgo, lt: todayEnd },
         variance: { not: null },
       },
       select: { variance: true },
@@ -579,7 +586,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     prisma.salesInvoice.count({
       where: {
         businessId,
-        createdAt: { gte: sevenDaysAgo },
+        createdAt: { gte: sevenDaysAgo, lt: todayEnd },
         discountOverrideReason: { not: null },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
@@ -589,7 +596,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       where: {
         salesInvoice: {
           businessId,
-          createdAt: { gte: new Date(now.getTime() - 14 * 86_400_000) },
+          createdAt: { gte: fourteenDaysAgo, lt: todayEnd },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
       },

@@ -54,6 +54,18 @@ vi.mock('@/lib/reports/money-received', () => ({
   resolveMoneyReceivedScope: (scope: unknown) => scope,
 }));
 
+const kpiRuntime = vi.hoisted(() => ({ sqlite: true }));
+
+vi.mock('@/lib/reports/sqlite-report-date-normalization', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/reports/sqlite-report-date-normalization')>(
+    '@/lib/reports/sqlite-report-date-normalization',
+  );
+  return {
+    ...actual,
+    isSqliteRuntime: () => kpiRuntime.sqlite,
+  };
+});
+
 import { getOwnerHomeAttentionData } from '@/lib/owner-home/attention';
 import { getCashflowForecast } from '@/lib/reports/forecast';
 import { getTodayKPIs } from '@/lib/reports/today-kpis';
@@ -81,6 +93,7 @@ describe('A7 remaining tenant windows', () => {
     prismaMock.expense.findMany.mockResolvedValue([]);
     prismaMock.salesPayment.findMany.mockResolvedValue([]);
     prismaMock.shift.findMany.mockResolvedValue([]);
+    kpiRuntime.sqlite = true;
   });
 
   it('treats a Nairobi supplier due before local midnight as overdue', async () => {
@@ -162,14 +175,8 @@ describe('A7 remaining tenant windows', () => {
   });
 
   it('uses Nairobi half-open lookbacks on the SQLite Today KPI path', async () => {
-    const previous = process.env.DATABASE_URL;
-    process.env.DATABASE_URL = 'file:./ci-unit.db';
-    process.env.POSTGRES_PRISMA_URL = 'file:./ci-unit.db';
-    try {
-      await getTodayKPIs('biz-1');
-    } finally {
-      process.env.DATABASE_URL = previous;
-    }
+    kpiRuntime.sqlite = true;
+    await getTodayKPIs('biz-1');
 
     const sales = whereOf(prismaMock.salesInvoice.findMany)?.createdAt as { gte?: Date; lt?: Date };
     const alerts = whereOf(prismaMock.riskAlert.findMany)?.occurredAt as { gte?: Date; lt?: Date };
@@ -188,18 +195,8 @@ describe('A7 remaining tenant windows', () => {
   });
 
   it('uses the same Nairobi lookbacks on the PostgreSQL Today KPI path', async () => {
-    const previous = {
-      DATABASE_URL: process.env.DATABASE_URL,
-      POSTGRES_PRISMA_URL: process.env.POSTGRES_PRISMA_URL,
-    };
-    process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:54329/tillflow_ci?schema=public';
-    process.env.POSTGRES_PRISMA_URL = process.env.DATABASE_URL;
-    try {
-      await getTodayKPIs('biz-1');
-    } finally {
-      process.env.DATABASE_URL = previous.DATABASE_URL;
-      process.env.POSTGRES_PRISMA_URL = previous.POSTGRES_PRISMA_URL;
-    }
+    kpiRuntime.sqlite = false;
+    await getTodayKPIs('biz-1');
 
     const expenseCalls = prismaMock.expense.aggregate.mock.calls.map((call) => (
       (call[0] as { where?: { createdAt?: { gte?: Date; lt?: Date } } }).where?.createdAt

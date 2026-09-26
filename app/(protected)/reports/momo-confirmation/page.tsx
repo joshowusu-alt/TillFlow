@@ -110,7 +110,7 @@ export default async function MomoConfirmationReviewPage({
 
   const pageSize = Math.min(100, Math.max(1, parseInt(searchParams?.pageSize ?? '25', 10) || 25));
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
-  const periodEndExclusive = new Date(to.getTime() + 1);
+  const periodEndExclusive = to;
 
   const filters = {
     businessId: access.businessId,

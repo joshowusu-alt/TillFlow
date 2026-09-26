@@ -47,7 +47,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Business not found', completeExport: false }, { status: 404 });
   }
 
-  const periodEndExclusive = new Date(dateRange.end.getTime() + 1);
+  const periodEndExclusive = dateRange.end;
   const filters = {
     businessId: access.businessId,
     branchIds: access.branchIds,

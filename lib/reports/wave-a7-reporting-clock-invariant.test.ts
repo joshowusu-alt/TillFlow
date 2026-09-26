@@ -255,6 +255,95 @@ describe('report time constructors require an explicit tenant timezone', () => {
   });
 });
 
+const REPORT_SOURCE_ROOTS = [
+  'lib/reports',
+  'lib/owner-home',
+  'app/(protected)/reports',
+  'app/(protected)/exports',
+  'app/api/reports',
+  'app/api/exports',
+];
+
+function productionSources(): string[] {
+  return REPORT_SOURCE_ROOTS.flatMap((root) => {
+    const full = resolve(process.cwd(), root);
+    try {
+      statSync(full);
+    } catch {
+      return [];
+    }
+    return productionReportSources(full);
+  });
+}
+
+function lineReason(line: string, source: string): string | null {
+  if (/(weekAgo|monthAgo)\.setDate\(/.test(line) && source.includes('resolveReportDateRange(')) {
+    return 'fallback instant reinterpreted by resolveReportDateRange';
+  }
+  if (/toISOString\(\)\.slice\(\s*0\s*,\s*10\s*\)/.test(line)) {
+    const display = /filename|fallbackFilename|dateSlug|Content-Disposition|^\s*(date|reversalDate|originalDate|lastSold)\s*:/.test(line.trim())
+      || /filename=/.test(line)
+      || /const (date|label) = /.test(line.trim());
+    if (display && !/\b(gte|lt|lte)\s*:/.test(line) && !/setHours\s*\(/.test(line)) {
+      return 'display or filename text, not a query boundary';
+    }
+  }
+  return null;
+}
+
+describe('report and export sources keep tenant windows explicit', () => {
+  const patterns = [
+    { name: 'setHours', re: /setHours\s*\(/ },
+    { name: 'setDate', re: /setDate\s*\(/ },
+    { name: 'utcDayKey', re: /toISOString\(\)\.slice\(\s*0\s*,\s*10\s*\)/ },
+    { name: 'exclusiveEndPlusOne', re: /getTime\(\)\s*\+\s*1(?!\d)/ },
+    { name: 'notificationFallback', re: /\bresolveBusinessTimeZone\s*\(/ },
+    { name: 'exclusiveEndLte', re: /\blte\s*:\s*(to|end|endExclusive|dateRange\.end|periodEnd(?:Exclusive)?)\b/ },
+  ];
+
+  it('flags server-local window construction unless a focused exception proves it is not a boundary', () => {
+    const unexplained: string[] = [];
+    for (const file of productionSources()) {
+      const source = readFileSync(file, 'utf8');
+      const label = relative(process.cwd(), file);
+      source.split(/\r?\n/).forEach((line, index) => {
+        for (const pattern of patterns) {
+          if (!pattern.re.test(line)) continue;
+          const reason = lineReason(line, source);
+          if (!reason) unexplained.push(`${label}:${index + 1} ${pattern.name} ${line.trim()}`);
+        }
+      });
+    }
+    expect(unexplained).toEqual([]);
+  });
+
+  it('does not allow setHours(24) or a one-millisecond exclusive-end bump', () => {
+    const escaped: string[] = [];
+    for (const file of productionSources()) {
+      const source = readFileSync(file, 'utf8');
+      const label = relative(process.cwd(), file);
+      if (/setHours\s*\(\s*24\b/.test(source) || /getTime\(\)\s*\+\s*1(?!\d)/.test(source)) {
+        escaped.push(label);
+      }
+    }
+    expect(escaped).toEqual([]);
+  });
+
+  it('report routes that build a tenant window load Business.timezone', () => {
+    const constructors = /resolveReportDateRange\(|resolveExportDateRange\(|businessDayWindow\(|businessWeekWindow\(|businessMonthWindow\(|localDateInstant\(/;
+    const missing: string[] = [];
+    for (const file of productionSources()) {
+      const label = relative(process.cwd(), file);
+      if (!label.startsWith('app/')) continue;
+      const source = readFileSync(file, 'utf8');
+      if (!constructors.test(source)) continue;
+      const loadsZone = /business\.timezone|requireReportTimeZone\(|timeZone/.test(source);
+      if (!loadsZone) missing.push(label);
+    }
+    expect(missing).toEqual([]);
+  });
+});
+
 describe('lib/reports does not import the notification timezone fallback', () => {
   it('production report sources do not import or call resolveBusinessTimeZone', () => {
     const importPattern = /import\s*\{[^}]*\bresolveBusinessTimeZone\b[^}]*\}\s*from\s*['"]@\/lib\/notifications\/utils['"]/;

@@ -120,7 +120,7 @@ export default async function MoneyReceivedReportPage({
 
   const pageSize = Math.min(100, Math.max(1, parseInt(searchParams?.pageSize ?? '25', 10) || 25));
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
-  const periodEndExclusive = new Date(to.getTime() + 1);
+  const periodEndExclusive = to;
 
   const bundle = await computeMoneyReceivedBundle({
     businessId: access.businessId,

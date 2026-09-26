@@ -1,19 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { csvEscape, formatPence, requireExportUser } from '../_shared';
+import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { detectExportFormat, fmtDateTime, respondWithExport } from '@/lib/exports/branded-export';
 import {
   CASH_DRAWER_BREAKDOWN_ORDER,
   CASH_DRAWER_ENTRY_LABELS,
   summarizeCashDrawerEntries,
 } from '@/lib/services/cash-drawer';
-
-function parseDate(value: string | null, fallback: Date) {
-  if (!value) return fallback;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return fallback;
-  return parsed;
-}
 
 export async function GET(request: Request) {
   const { user, response } = await requireExportUser(request);
@@ -23,15 +17,25 @@ export async function GET(request: Request) {
   const today = new Date();
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 7);
-
-  const from = parseDate(url.searchParams.get('from'), weekAgo);
-  const to = parseDate(url.searchParams.get('to'), today);
-  const endExclusive = new Date(to);
-  endExclusive.setHours(24, 0, 0, 0);
   const storeId = url.searchParams.get('storeId') || 'ALL';
 
-  const [shifts, business] = await Promise.all([
-    prisma.shift.findMany({
+  const business = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { name: true, currency: true, timezone: true },
+  });
+  const range = resolveReportDateRange(
+    {
+      from: url.searchParams.get('from') ?? undefined,
+      to: url.searchParams.get('to') ?? undefined,
+    },
+    weekAgo,
+    today,
+    business?.timezone,
+  );
+  const from = range.start;
+  const endExclusive = range.end;
+
+  const shifts = await prisma.shift.findMany({
       where: {
         till: {
           store: {
@@ -58,12 +62,7 @@ export async function GET(request: Request) {
         closeManagerApprovedBy: { select: { name: true } },
         cashDrawerEntries: { select: { entryType: true, amountPence: true } },
       },
-    }),
-    prisma.business.findUnique({
-      where: { id: user.businessId },
-      select: { name: true, currency: true },
-    }),
-  ]);
+  });
 
   const movementColumns = CASH_DRAWER_BREAKDOWN_ORDER.map((type) => ({
     header: CASH_DRAWER_ENTRY_LABELS[type],
@@ -122,7 +121,7 @@ export async function GET(request: Request) {
     exportOptions: {
       businessName: business?.name ?? 'Business',
       reportTitle: 'Cash Drawer Summary',
-      dateRange: { from, to },
+      dateRange: { from, to: new Date(endExclusive.getTime() - 1) },
       currency: business?.currency ?? 'GHS',
       columns,
       rows,

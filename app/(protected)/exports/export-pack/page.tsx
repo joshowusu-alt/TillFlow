@@ -2,16 +2,16 @@ import PageHeader from '@/components/PageHeader';
 import DownloadFormButton from '@/components/DownloadFormButton';
 import DownloadLink from '@/components/DownloadLink';
 import { requireBusiness } from '@/lib/auth';
+import { addLocalDays, localDateKey, requireReportTimeZone, zonedDateTimeParts } from '@/lib/reports/reporting-clock';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ExportPackPage() {
-  await requireBusiness(['MANAGER', 'OWNER']);
-
-  const today = new Date();
-  const thirtyDaysAgo = new Date(today.getTime() - 30 * 86400000);
-  const defaultFrom = thirtyDaysAgo.toISOString().slice(0, 10);
-  const defaultTo = today.toISOString().slice(0, 10);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const timeZone = requireReportTimeZone(business.timezone);
+  const today = zonedDateTimeParts(new Date(), timeZone);
+  const defaultFrom = localDateKey(addLocalDays(today, -30));
+  const defaultTo = localDateKey(today);
 
   return (
     <div className="space-y-6">

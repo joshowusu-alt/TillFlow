@@ -28,7 +28,7 @@ export async function loadAnalyticsReport({
   const today = businessDayWindow(now, reportTimeZone);
   const periodAgo = periodStart ?? new Date(today.startInclusive.getTime() - periodDays * 86_400_000);
   const previousPeriodAgo = new Date(periodAgo.getTime() - periodDays * 86_400_000);
-  const endExclusive = periodEndExclusive ?? new Date(now.getTime() + 1);
+  const endExclusive = periodEndExclusive ?? today.endExclusive;
 
   const analyticsData = await measureServerOperation(
     'report.analytics.snapshot',

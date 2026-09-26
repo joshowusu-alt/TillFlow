@@ -2,14 +2,8 @@ import { NextResponse } from 'next/server';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import { csvEscape, formatPence, requireExportUser } from '../_shared';
+import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { detectExportFormat, respondWithExport, type ExportOptions } from '@/lib/exports/branded-export';
-
-function parseDate(value: string | null, fallback: Date) {
-  if (!value) return fallback;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return fallback;
-  return parsed;
-}
 
 export async function GET(request: Request) {
   const { user, response } = await requireExportUser(request);
@@ -19,13 +13,24 @@ export async function GET(request: Request) {
   const today = new Date();
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 7);
-
-  const from = parseDate(url.searchParams.get('from'), weekAgo);
-  const to = parseDate(url.searchParams.get('to'), today);
-  const endExclusive = new Date(to);
-  endExclusive.setHours(24, 0, 0, 0);
   const storeId = url.searchParams.get('storeId') || 'ALL';
   const status = url.searchParams.get('status') || 'OPEN';
+
+  const business = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { name: true, currency: true, timezone: true, plan: true, mode: true, storeMode: true },
+  });
+  const range = resolveReportDateRange(
+    {
+      from: url.searchParams.get('from') ?? undefined,
+      to: url.searchParams.get('to') ?? undefined,
+    },
+    weekAgo,
+    today,
+    business?.timezone,
+  );
+  const from = range.start;
+  const endExclusive = range.end;
 
   const where: any = {
     businessId: user.businessId,
@@ -38,7 +43,7 @@ export async function GET(request: Request) {
     where.status = status;
   }
 
-  const [alerts, discountedSales, business] = await Promise.all([
+  const [alerts, discountedSales] = await Promise.all([
     prisma.riskAlert.findMany({
       where,
       include: {
@@ -50,7 +55,7 @@ export async function GET(request: Request) {
     prisma.salesInvoice.findMany({
       where: {
         businessId: user.businessId,
-        createdAt: { gte: from, lt: to },
+        createdAt: { gte: from, lt: endExclusive },
         ...(storeId !== 'ALL' ? { storeId } : {}),
         OR: [
           { discountPence: { gt: 0 } },
@@ -62,10 +67,6 @@ export async function GET(request: Request) {
         discountPence: true,
         discountApprovedByUserId: true,
       },
-    }),
-    prisma.business.findUnique({
-      where: { id: user.businessId },
-      select: { name: true, currency: true, plan: true, mode: true, storeMode: true },
     }),
   ]);
 
@@ -119,7 +120,7 @@ export async function GET(request: Request) {
   const csvLines: string[] = [];
   csvLines.push('Section,Metric,Value');
   csvLines.push(['Summary', 'From', csvEscape(from.toISOString())].join(','));
-  csvLines.push(['Summary', 'To', csvEscape(to.toISOString())].join(','));
+  csvLines.push(['Summary', 'To', csvEscape(new Date(endExclusive.getTime() - 1).toISOString())].join(','));
   csvLines.push(['Summary', 'Store Filter', csvEscape(storeId)].join(','));
   csvLines.push(['Summary', 'Status Filter', csvEscape(status)].join(','));
   csvLines.push(['Summary', 'Alerts Count', csvEscape(alerts.length)].join(','));
@@ -195,7 +196,7 @@ export async function GET(request: Request) {
     exportOptions: {
       businessName: business?.name ?? 'Business',
       reportTitle,
-      dateRange: { from, to },
+      dateRange: { from, to: new Date(endExclusive.getTime() - 1) },
       currency: business?.currency ?? 'GHS',
       columns,
       rows: alertRows,

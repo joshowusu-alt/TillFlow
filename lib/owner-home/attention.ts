@@ -4,6 +4,7 @@
  * issue flags via shared countCommandCenterIssueFlags (same eligibility as CC page).
  */
 import { prisma } from '@/lib/prisma';
+import { businessDayWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { getTodayKPIs } from '@/lib/reports/today-kpis';
 import { countCommandCenterIssueFlags } from '@/lib/reports/home-issue-count';
 import { measureHomePerf } from '@/lib/performance/home-perf-instrumentation';
@@ -29,9 +30,12 @@ export async function getOwnerHomeAttentionData(
 ): Promise<OwnerHomeAttentionData> {
   return measureHomePerf('home.attention', async () => {
     assertHomeLoaderAllowed('attention');
-    const now = new Date();
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { timezone: true },
+    });
+    const timeZone = requireReportTimeZone(business?.timezone);
+    const todayStart = businessDayWindow(new Date(), timeZone).startInclusive;
 
     const [openShifts, overdueSupplierInvoiceCount, todayKpis] = await Promise.all([
       prisma.shift.findMany({
