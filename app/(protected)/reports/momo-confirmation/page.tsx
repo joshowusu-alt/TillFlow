@@ -9,6 +9,7 @@ import { formatMoney } from '@/lib/format';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';
 import { getBusinessStores } from '@/lib/services/stores';
 import { resolveMoneyReceivedAccess } from '@/lib/reports/money-received';
 import {
@@ -77,23 +78,20 @@ export default async function MomoConfirmationReviewPage({
     );
   }
 
-  const today = new Date();
-  const monthAgo = new Date(today);
-  monthAgo.setDate(today.getDate() - 30);
-
   const businessTz = await prisma.business.findUnique({
     where: { id: access.businessId },
     select: { timezone: true },
   });
-  const timeZone = businessTz?.timezone;
-  if (!timeZone) throw new Error('Business timezone is required for report windows');
+  const now = new Date();
+  const fallback = defaultTenantLocalRange(now, businessTz?.timezone, 30);
+  const timeZone = fallback.timeZone;
 
   const {
     start: from,
     end: to,
     fromInputValue: fromIso,
     toInputValue: toIso,
-  } = resolveReportDateRange(searchParams, monthAgo, today, timeZone);
+  } = resolveReportDateRange(searchParams, fallback.startInclusive, now, timeZone);
 
   const statusFilter =
     searchParams?.status === 'ALL'

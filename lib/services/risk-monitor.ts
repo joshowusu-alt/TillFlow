@@ -1,4 +1,13 @@
 import { prisma } from '@/lib/prisma';
+import { defaultTenantLocalRange, halfOpenTimestampFilter } from '@/lib/reports/reporting-clock';
+
+async function recentTenantWindow(businessId: string, inclusiveLocalDays: number) {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { timezone: true },
+  });
+  return defaultTenantLocalRange(new Date(), business?.timezone, inclusiveLocalDays);
+}
 
 type RiskSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
 
@@ -35,15 +44,14 @@ export async function detectVoidFrequencyRisk(input: {
   threshold?: number;
 }) {
   const threshold = input.threshold ?? 3;
-  const since = new Date();
-  since.setDate(since.getDate() - 7);
+  const window = await recentTenantWindow(input.businessId, 7);
 
   const count = await prisma.salesReturn.count({
     where: {
       type: 'VOID',
       storeId: input.storeId,
       userId: input.cashierUserId,
-      createdAt: { gte: since },
+      createdAt: halfOpenTimestampFilter(window),
       salesInvoice: { businessId: input.businessId },
     },
   });
@@ -153,15 +161,14 @@ export async function detectCashVarianceRisk(input: {
   thresholdPence: number;
 }) {
   const absVariance = Math.abs(input.variancePence);
-  const since = new Date();
-  since.setDate(since.getDate() - 14);
+  const window = await recentTenantWindow(input.businessId, 14);
 
   const recentVariances = await prisma.shift.count({
     where: {
       id: { not: input.shiftId },
       userId: input.cashierUserId,
       till: { storeId: input.storeId },
-      closedAt: { gte: since },
+      closedAt: halfOpenTimestampFilter(window),
       variance: { not: 0 },
     },
   });

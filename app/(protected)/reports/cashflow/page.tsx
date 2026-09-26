@@ -11,6 +11,7 @@ import { getFeatures } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import { getCashflow } from '@/lib/reports/financials';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { businessMonthWindow } from '@/lib/reports/reporting-clock';
 
 export default async function CashflowPage({
   searchParams
@@ -32,8 +33,8 @@ export default async function CashflowPage({
   }
 
   const now = new Date();
-  const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(searchParams, defaultStart, now, business.timezone);
+  const month = businessMonthWindow(now, business.timezone);
+  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(searchParams, month.startInclusive, now, month.timeZone);
 
   const cashflow = await getCashflow(business.id, start, end);
   const costsIncomplete = cashflow.netProfit == null || cashflow.netCashFromOps == null || cashflow.endingCash == null;

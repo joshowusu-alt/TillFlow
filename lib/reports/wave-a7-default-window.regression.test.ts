@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resolveExportDateRange } from '@/app/(protected)/exports/_shared';
 import {
   addLocalDays,
   localDateKey,
@@ -276,6 +277,24 @@ describe('A7 default report ranges follow the tenant calendar', () => {
         }
       }
       expect(mismatches, `${zone} ${instant}`).toEqual([]);
+
+      const moneyExport = resolveExportDateRange(new Request('http://localhost/exports/money-received'), '7d', zone);
+      const momoExport = resolveExportDateRange(new Request('http://localhost/exports/momo-confirmation'), '30d', zone);
+      const moneyScreen = windows.find(([site]) => site === 'money-received')?.[1];
+      const momoScreen = windows.find(([site]) => site === 'momo')?.[1];
+      const cashScreen = windows.find(([site]) => site === 'cash-drawer')?.[1];
+      const cashCsv = windows.find(([site]) => site === 'eod-csv')?.[1];
+      const riskScreen = windows.find(([site]) => site === 'risk-screen')?.[1];
+      const riskExport = windows.find(([site]) => site === 'risk-export')?.[1];
+      const riskVoids = windows.find(([site]) => site === 'risk-voids')?.[1];
+      expect(moneyScreen).toEqual({ gte: moneyExport.start.toISOString(), lt: moneyExport.end.toISOString() });
+      expect(momoScreen).toEqual({ gte: momoExport.start.toISOString(), lt: momoExport.end.toISOString() });
+      expect(cashScreen).toEqual(cashCsv);
+      expect(riskScreen).toEqual(riskExport);
+      expect(riskVoids).toEqual(riskScreen);
+      expect(coveredLocalDays({ gte: week.gte, lt: week.lt }, zone)).toBe(7);
+      expect(coveredLocalDays({ gte: month.gte, lt: month.lt }, zone)).toBe(30);
+      expect(coveredLocalDays({ gte: fortnight.gte, lt: fortnight.lt }, zone)).toBe(14);
     },
   );
 

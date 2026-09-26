@@ -11,12 +11,15 @@ import {
 import { resolveReportDateRange, resolveSelectableReportDateRange } from '@/lib/reports/date-parsing';
 import { businessLocalDayStart, resolveMoneyReceivedScope } from '@/lib/reports/money-received/scope-clock';
 import {
+  addLocalDays,
   businessDayWindow,
   businessLocalDateWindow,
   businessMonthWindow,
   businessWeekWindow,
+  defaultTenantLocalRange,
   instantInHalfOpenWindow,
   localDateInstant,
+  localDateKey,
   windowForLocalDates,
   zonedDateTimeParts,
   type HalfOpenWindow,
@@ -74,6 +77,7 @@ describe('report time constructors require an explicit tenant timezone', () => {
     { name: 'zonedDateTimeParts', call: (timeZone) => zonedDateTimeParts(BOUNDARY, timeZone) },
     { name: 'businessLocalDateWindow', call: (timeZone) => businessLocalDateWindow('2026-07-01', '2026-07-01', timeZone) },
     { name: 'windowForLocalDates', call: (timeZone) => windowForLocalDates(JULY_FIRST, JULY_FIRST, timeZone) },
+    { name: 'defaultTenantLocalRange', call: (timeZone) => defaultTenantLocalRange(BOUNDARY, timeZone, 7) },
     {
       name: 'resolveReportDateRange',
       call: (timeZone) => resolveReportDateRange(
@@ -260,12 +264,30 @@ const REPORT_SOURCE_ROOTS = [
   'lib/owner-home',
   'app/(protected)/reports',
   'app/(protected)/exports',
+  'app/(protected)/settings/analytics',
   'app/api/reports',
   'app/api/exports',
 ];
 
+const REPORT_SOURCE_FILES = [
+  'lib/services/risk-monitor.ts',
+];
+
+const DEFAULT_WINDOW_CALL_SITES = [
+  'app/(protected)/reports/cash-drawer/page.tsx',
+  'app/(protected)/reports/risk-monitor/page.tsx',
+  'app/(protected)/reports/stock-movements/page.tsx',
+  'app/(protected)/reports/money-received/page.tsx',
+  'app/(protected)/reports/momo-confirmation/page.tsx',
+  'app/(protected)/exports/eod-csv/route.ts',
+  'app/(protected)/exports/eod-pdf/route.ts',
+  'app/(protected)/exports/risk-summary/route.ts',
+  'app/(protected)/settings/analytics/page.tsx',
+  'lib/services/risk-monitor.ts',
+];
+
 function productionSources(): string[] {
-  return REPORT_SOURCE_ROOTS.flatMap((root) => {
+  const fromDirs = REPORT_SOURCE_ROOTS.flatMap((root) => {
     const full = resolve(process.cwd(), root);
     try {
       statSync(full);
@@ -274,12 +296,19 @@ function productionSources(): string[] {
     }
     return productionReportSources(full);
   });
+  const files = REPORT_SOURCE_FILES.flatMap((file) => {
+    const full = resolve(process.cwd(), file);
+    try {
+      statSync(full);
+    } catch {
+      return [];
+    }
+    return [full];
+  });
+  return [...fromDirs, ...files];
 }
 
-function lineReason(line: string, source: string): string | null {
-  if (/(weekAgo|monthAgo)\.setDate\(/.test(line) && source.includes('resolveReportDateRange(')) {
-    return 'fallback instant reinterpreted by resolveReportDateRange';
-  }
+function lineReason(line: string): string | null {
   if (/toISOString\(\)\.slice\(\s*0\s*,\s*10\s*\)/.test(line)) {
     const display = /filename|fallbackFilename|dateSlug|Content-Disposition|^\s*(date|reversalDate|originalDate|lastSold)\s*:/.test(line.trim())
       || /filename=/.test(line)
@@ -294,7 +323,9 @@ function lineReason(line: string, source: string): string | null {
 describe('report and export sources keep tenant windows explicit', () => {
   const patterns = [
     { name: 'setHours', re: /setHours\s*\(/ },
+    { name: 'serverLocalMidnight', re: /setHours\s*\(\s*0(?:\s*,\s*0){1,3}/ },
     { name: 'setDate', re: /setDate\s*\(/ },
+    { name: 'serverLocalMonth', re: /new Date\(\s*\w+\.getFullYear\(\)\s*,\s*\w+\.getMonth\(\)/ },
     { name: 'utcDayKey', re: /toISOString\(\)\.slice\(\s*0\s*,\s*10\s*\)/ },
     { name: 'exclusiveEndPlusOne', re: /getTime\(\)\s*\+\s*1(?!\d)/ },
     { name: 'notificationFallback', re: /\bresolveBusinessTimeZone\s*\(/ },
@@ -309,7 +340,7 @@ describe('report and export sources keep tenant windows explicit', () => {
       source.split(/\r?\n/).forEach((line, index) => {
         for (const pattern of patterns) {
           if (!pattern.re.test(line)) continue;
-          const reason = lineReason(line, source);
+          const reason = lineReason(line);
           if (!reason) unexplained.push(`${label}:${index + 1} ${pattern.name} ${line.trim()}`);
         }
       });
@@ -330,7 +361,7 @@ describe('report and export sources keep tenant windows explicit', () => {
   });
 
   it('report routes that build a tenant window load Business.timezone', () => {
-    const constructors = /resolveReportDateRange\(|resolveExportDateRange\(|businessDayWindow\(|businessWeekWindow\(|businessMonthWindow\(|localDateInstant\(/;
+    const constructors = /resolveReportDateRange\(|resolveExportDateRange\(|businessDayWindow\(|businessWeekWindow\(|businessMonthWindow\(|localDateInstant\(|defaultTenantLocalRange\(/;
     const missing: string[] = [];
     for (const file of productionSources()) {
       const label = relative(process.cwd(), file);
@@ -341,6 +372,78 @@ describe('report and export sources keep tenant windows explicit', () => {
       if (!loadsZone) missing.push(label);
     }
     expect(missing).toEqual([]);
+  });
+});
+
+describe('default tenant ranges ignore the server timezone', () => {
+  const instants = [
+    '2026-03-10T20:30:00.000Z',
+    '2026-03-10T23:30:00.000Z',
+    '2026-03-01T02:00:00.000Z',
+    '2026-01-01T03:00:00.000Z',
+  ];
+
+  function coveredDays(window: HalfOpenWindow) {
+    const start = zonedDateTimeParts(window.startInclusive, window.timeZone);
+    const last = zonedDateTimeParts(new Date(window.endExclusive.getTime() - 1), window.timeZone);
+    let count = 0;
+    let cursor = start;
+    while (localDateKey(cursor) <= localDateKey(last)) {
+      count += 1;
+      cursor = addLocalDays(cursor, 1);
+      if (count > 400) break;
+    }
+    return count;
+  }
+
+  it.each(instants.flatMap((instant) => [ACCRA, NAIROBI].map((zone) => [instant, zone] as const)))(
+    'keeps %s %s defaults identical to the tenant calendar around the New York spring-forward',
+    (instant, zone) => {
+      const now = new Date(instant);
+      for (const days of [7, 14, 30]) {
+        const range = defaultTenantLocalRange(now, zone, days);
+        const today = zonedDateTimeParts(now, zone);
+        const start = addLocalDays(today, -(days - 1));
+        const canonical = windowForLocalDates(start, today, zone);
+        const next = windowForLocalDates(addLocalDays(today, 1), addLocalDays(today, 1), zone);
+        expect(range.startInclusive.toISOString()).toBe(canonical.startInclusive.toISOString());
+        expect(range.endExclusive.toISOString()).toBe(canonical.endExclusive.toISOString());
+        expect(range.endExclusive.toISOString()).toBe(next.startInclusive.toISOString());
+        expect(instantInHalfOpenWindow(range.startInclusive, range)).toBe(true);
+        expect(instantInHalfOpenWindow(range.endExclusive, range)).toBe(false);
+        expect(coveredDays(range)).toBe(days);
+      }
+    },
+  );
+
+  it('uses the canonical helper at every former setDate fallback', () => {
+    for (const file of DEFAULT_WINDOW_CALL_SITES) {
+      const source = readFileSync(resolve(process.cwd(), file), 'utf8');
+      expect(source, file).toContain('defaultTenantLocalRange');
+      expect(source, file).not.toContain('setDate(');
+      expect(source, file).not.toContain('setHours(');
+    }
+  });
+
+  it('builds cashflow and income-statement defaults from the tenant month', () => {
+    for (const file of [
+      'app/(protected)/reports/cashflow/page.tsx',
+      'app/(protected)/reports/income-statement/page.tsx',
+    ]) {
+      const source = readFileSync(resolve(process.cwd(), file), 'utf8');
+      expect(source, file).toContain('businessMonthWindow');
+      expect(source, file).not.toContain('getFullYear()');
+      expect(source, file).not.toContain('getMonth()');
+    }
+    const instant = new Date('2026-03-01T02:00:00.000Z');
+    for (const zone of [ACCRA, NAIROBI]) {
+      const month = businessMonthWindow(instant, zone);
+      const range = resolveReportDateRange(undefined, month.startInclusive, instant, month.timeZone);
+      const today = zonedDateTimeParts(instant, zone);
+      const canonical = windowForLocalDates({ year: today.year, month: today.month, day: 1 }, today, zone);
+      expect(range.start.toISOString()).toBe(canonical.startInclusive.toISOString());
+      expect(range.end.toISOString()).toBe(canonical.endExclusive.toISOString());
+    }
   });
 });
 

@@ -3,6 +3,7 @@ import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import { csvEscape, formatPence, requireExportUser } from '../_shared';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';
 import { detectExportFormat, respondWithExport, type ExportOptions } from '@/lib/exports/branded-export';
 
 export async function GET(request: Request) {
@@ -10,9 +11,6 @@ export async function GET(request: Request) {
   if (!user) return response as NextResponse;
 
   const url = new URL(request.url);
-  const today = new Date();
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 7);
   const storeId = url.searchParams.get('storeId') || 'ALL';
   const status = url.searchParams.get('status') || 'OPEN';
 
@@ -20,14 +18,16 @@ export async function GET(request: Request) {
     where: { id: user.businessId },
     select: { name: true, currency: true, timezone: true, plan: true, mode: true, storeMode: true },
   });
+  const now = new Date();
+  const fallback = defaultTenantLocalRange(now, business?.timezone, 7);
   const range = resolveReportDateRange(
     {
       from: url.searchParams.get('from') ?? undefined,
       to: url.searchParams.get('to') ?? undefined,
     },
-    weekAgo,
-    today,
-    business?.timezone,
+    fallback.startInclusive,
+    now,
+    fallback.timeZone,
   );
   const from = range.start;
   const endExclusive = range.end;

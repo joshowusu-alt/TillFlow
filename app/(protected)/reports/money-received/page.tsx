@@ -10,6 +10,7 @@ import { formatMoney } from '@/lib/format';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';
 import { getBusinessStores } from '@/lib/services/stores';
 import {
   classifyMoneyReceivedRowKind,
@@ -95,23 +96,20 @@ export default async function MoneyReceivedReportPage({
     );
   }
 
-  const today = new Date();
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 7);
-
   const businessTz = await prisma.business.findUnique({
     where: { id: access.businessId },
     select: { timezone: true },
   });
-  const timeZone = businessTz?.timezone;
-  if (!timeZone) throw new Error('Business timezone is required for report windows');
+  const now = new Date();
+  const fallback = defaultTenantLocalRange(now, businessTz?.timezone, 7);
+  const timeZone = fallback.timeZone;
 
   const {
     start: from,
     end: to,
     fromInputValue: fromIso,
     toInputValue: toIso,
-  } = resolveReportDateRange(searchParams, weekAgo, today, timeZone);
+  } = resolveReportDateRange(searchParams, fallback.startInclusive, now, timeZone);
 
   const metricParam = (searchParams?.metric ?? 'money_received') as MoneyReceivedMetricId;
   const drillMetricId = DRILL_OPTIONS.some((o) => o.id === metricParam)

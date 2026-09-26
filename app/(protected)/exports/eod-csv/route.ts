@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { csvEscape, formatPence, requireExportUser } from '../_shared';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';
 import { detectExportFormat, fmtDateTime, respondWithExport } from '@/lib/exports/branded-export';
 import {
   CASH_DRAWER_BREAKDOWN_ORDER,
@@ -14,23 +15,22 @@ export async function GET(request: Request) {
   if (!user) return response as NextResponse;
 
   const url = new URL(request.url);
-  const today = new Date();
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 7);
   const storeId = url.searchParams.get('storeId') || 'ALL';
 
   const business = await prisma.business.findUnique({
     where: { id: user.businessId },
     select: { name: true, currency: true, timezone: true },
   });
+  const now = new Date();
+  const fallback = defaultTenantLocalRange(now, business?.timezone, 7);
   const range = resolveReportDateRange(
     {
       from: url.searchParams.get('from') ?? undefined,
       to: url.searchParams.get('to') ?? undefined,
     },
-    weekAgo,
-    today,
-    business?.timezone,
+    fallback.startInclusive,
+    now,
+    fallback.timeZone,
   );
   const from = range.start;
   const endExclusive = range.end;

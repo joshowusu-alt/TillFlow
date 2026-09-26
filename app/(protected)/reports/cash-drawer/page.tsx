@@ -11,6 +11,7 @@ import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { expectedCashPenceFromEntries } from '@/lib/reports/expected-cash';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';
 import { getBusinessStores } from '@/lib/services/stores';
 import {
   isReportingScopeStoreError,
@@ -50,11 +51,10 @@ export default async function CashDrawerReportPage({
   searchParams?: { from?: string; to?: string; storeId?: string; page?: string; pageSize?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  const today = new Date();
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 7);
+  const now = new Date();
+  const fallback = defaultTenantLocalRange(now, business.timezone, 7);
 
-  const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, weekAgo, today, business.timezone);
+  const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, fallback.startInclusive, now, fallback.timeZone);
   const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
   let selectedStoreId: string;
   try {

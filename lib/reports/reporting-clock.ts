@@ -95,6 +95,32 @@ export function windowForLocalDates(
   };
 }
 
+/**
+ * Default tenant-local report window ending on the local calendar day of `now`.
+ *
+ * `inclusiveLocalDays` is the number of local dates covered, including today.
+ * Seven is today and the six preceding dates — the same span as the `7d` preset.
+ * A server-local calendar subtraction of seven days would cover eight dates instead.
+ * Thirty and fourteen follow the same rule.
+ *
+ * The window is half-open: `startInclusive <= t < endExclusive`.
+ * `endExclusive` is the next local midnight after today.
+ * Only `now` and the validated Business.timezone affect the result.
+ */
+export function defaultTenantLocalRange(
+  now: Date,
+  timeZone: string | null | undefined,
+  inclusiveLocalDays: number,
+): HalfOpenWindow {
+  if (!Number.isInteger(inclusiveLocalDays) || inclusiveLocalDays < 1) {
+    throw new Error('Default report window requires at least one local day');
+  }
+  const zone = requireReportTimeZone(timeZone);
+  const today = zonedDateTimeParts(now, zone);
+  const start = addLocalDays(today, -(inclusiveLocalDays - 1));
+  return windowForLocalDates(start, today, zone);
+}
+
 export function instantInHalfOpenWindow(instant: Date, window: HalfOpenWindow): boolean {
   const time = instant.getTime();
   return time >= window.startInclusive.getTime() && time < window.endExclusive.getTime();
