@@ -147,7 +147,7 @@ function coveredLocalDays(bounds: Bounds, timeZone: string) {
   const start = zonedDateTimeParts(new Date(bounds.gte!), timeZone);
   const last = zonedDateTimeParts(new Date(new Date(bounds.lt!).getTime() - 1), timeZone);
   let count = 0;
-  let cursor = start;
+  let cursor: { year: number; month: number; day: number } = start;
   while (localDateKey(cursor) <= localDateKey(last)) {
     count += 1;
     cursor = addLocalDays(cursor, 1);
