@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
-import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
+import { ReportingScopeStoreError, requireAuthorisedStoreIds } from '@/lib/reports/reporting-scope';
 
 // ---------------------------------------------------------------------------
 // Output types
@@ -256,20 +256,20 @@ export type TopLinkedSupplierResult = {
 };
 
 /**
- * Returns only the top-revenue linked supplier for the current calendar month.
- * Two-query approach — avoids building full per-product breakdowns.
+ * Returns the top-revenue linked supplier inside the authorised half-open window.
+ * The caller supplies that window. This function does not recompute a calendar month.
  */
 export async function getTopLinkedSupplierForMonth(
   businessId: string,
-  storeIds?: readonly string[],
+  storeIds: readonly string[],
+  bounds: { startInclusive: Date; endExclusive: Date },
 ): Promise<TopLinkedSupplierResult | null> {
-  const business = await prisma.business.findUnique({
-    where: { id: businessId },
-    select: { timezone: true },
-  });
-  const month = businessMonthWindow(new Date(), requireReportTimeZone(business?.timezone));
-  const start = month.startInclusive;
-  const endExclusive = month.endExclusive;
+  const authorisedStores = requireAuthorisedStoreIds(storeIds);
+  if (!(bounds.startInclusive < bounds.endExclusive)) {
+    throw new ReportingScopeStoreError('Authorised reporting window is required');
+  }
+  const start = bounds.startInclusive;
+  const endExclusive = bounds.endExclusive;
 
   // Step 1: Products that have a preferred supplier
   const linkedProducts = await prisma.product.findMany({
@@ -289,9 +289,7 @@ export async function getTopLinkedSupplierForMonth(
       productId: { in: linkedProducts.map((p) => p.id) },
       salesInvoice: {
         businessId,
-        ...(storeIds && storeIds.length > 0
-          ? { storeId: storeIds.length === 1 ? storeIds[0] : { in: [...storeIds] } }
-          : {}),
+        storeId: authorisedStores.length === 1 ? authorisedStores[0] : { in: authorisedStores },
         createdAt: { gte: start, lt: endExclusive },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },

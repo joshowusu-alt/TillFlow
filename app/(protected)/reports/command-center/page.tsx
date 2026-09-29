@@ -2,12 +2,15 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
 import { openLiveReport } from '@/lib/entitlements/live-report';
-import { getTodayKPIs } from '@/lib/reports/today-kpis';
+import { getCommandCenterKpis } from '@/lib/reports/today-kpis';
+import { commandCenterRequestedRange } from '@/lib/entitlements/range';
 import { getFeatures } from '@/lib/features';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { formatMoney } from '@/lib/format';
 import RefreshIndicator from '@/components/RefreshIndicator';
 import { getTopLinkedSupplierForMonth } from '@/lib/reports/supplier-sales';
+import { businessMonthWindow, localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting-clock';
+import { isReportingScopeStoreError } from '@/lib/reports/reporting-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,9 +51,13 @@ export default async function CommandCenterPage({
   const opened = await openLiveReport({
     surfaceId: 'command_center',
     search: searchParams,
-    range: ({ timezone, now }) => {
+    range: ({ timezone, now, canonicalPlan }) => {
       const today = formatBusinessLocalDateKey(now, timezone);
-      return { fromLocalDate: today, toLocalDate: today, preset: 'CUSTOM' };
+      return commandCenterRequestedRange({
+        plan: canonicalPlan,
+        todayLocal: today,
+        includeSupplierMonth: canonicalPlan === 'GROWTH' || canonicalPlan === 'PRO',
+      });
     },
   });
   if (!opened.ok) return opened.denial;
@@ -60,13 +67,43 @@ export default async function CommandCenterPage({
   const features = getFeatures(business.canonicalPlan, business.storeMode as 'SINGLE_STORE' | 'MULTI_STORE' | null, {
     onlineStorefront: business.addonOnlineStorefront,
   });
-  const kpiStoreId = branch.selected === 'ALL' ? undefined : branch.selected;
+  const applied = opened.decision.appliedRange;
+  const timeZone = requireReportTimeZone(business.timezone);
+  const startInclusive = applied ? localDateInstant(applied.fromLocalDate, 'start', timeZone) : null;
+  const endExclusive = applied ? localDateInstant(applied.toLocalDate, 'endExclusive', timeZone) : null;
+  if (!applied || !startInclusive || !endExclusive || branch.storeIds.length === 0) notFound();
 
   const now = new Date();
-  const [kpis, topSupplier] = await Promise.all([
-    getTodayKPIs(business.id, kpiStoreId).catch(() => null),
-    features.advancedReports ? getTopLinkedSupplierForMonth(business.id, branch.storeIds).catch(() => null) : Promise.resolve(null),
-  ]);
+  const month = businessMonthWindow(now, timeZone);
+  const supplierStart = month.startInclusive > startInclusive ? month.startInclusive : startInclusive;
+  const supplierEnd = month.endExclusive < endExclusive ? month.endExclusive : endExclusive;
+  let kpis: Awaited<ReturnType<typeof getCommandCenterKpis>> | null = null;
+  let topSupplier: Awaited<ReturnType<typeof getTopLinkedSupplierForMonth>> = null;
+  try {
+    const loaded = await Promise.all([
+      getCommandCenterKpis(business.id, {
+        storeIds: branch.storeIds,
+        startInclusive,
+        endExclusive,
+        now,
+      }).catch((error) => {
+        if (isReportingScopeStoreError(error)) throw error;
+        return null;
+      }),
+      features.advancedReports ? getTopLinkedSupplierForMonth(business.id, branch.storeIds, {
+        startInclusive: supplierStart,
+        endExclusive: supplierEnd,
+      }).catch((error) => {
+        if (isReportingScopeStoreError(error)) throw error;
+        return null;
+      }) : Promise.resolve(null),
+    ]);
+    kpis = loaded[0];
+    topSupplier = loaded[1];
+  } catch (error) {
+    if (isReportingScopeStoreError(error)) notFound();
+    throw error;
+  }
 
   const currency = business.currency;
 

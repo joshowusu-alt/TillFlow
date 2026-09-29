@@ -201,7 +201,7 @@ describe('remaining Wave A defects', () => {
       return [zeroBase];
     });
     prismaMock.salesInvoice.aggregate.mockResolvedValue({ _sum: { totalPence: 500 }, _count: { id: 1 } });
-    const digest = await getWeeklyDigestData('biz-1', new Date('2026-03-09T00:00:00.000Z'), new Date('2026-03-16T00:00:00.000Z'), 'Africa/Accra');
+    const digest = await getWeeklyDigestData('biz-1', new Date('2026-03-09T00:00:00.000Z'), new Date('2026-03-16T00:00:00.000Z'), 'Africa/Accra', ['store-authorised']);
     expect(digest.unallocatedSalesDifferencePence).toBe(500);
     expect(digest.topSellers.some((row) => row.name === 'Unallocated sales difference')).toBe(true);
 

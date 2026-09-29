@@ -5,9 +5,19 @@ import { getWeeklyDigestData } from '@/lib/reports/weekly-digest';
 import { formatMoney } from '@/lib/format';
 import { businessWeekWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
+import { isReportingScopeStoreError } from '@/lib/reports/reporting-scope';
+
+function duplicateStoreResponse(surfaceId: string) {
+  return NextResponse.json(
+    { ok: false, reason: 'SCOPE_STORE_INVALID', surfaceId },
+    { status: 403, headers: { 'Cache-Control': 'no-store' } },
+  );
+}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const distinctStores = new Set(url.searchParams.getAll('storeId').map((value) => value.trim()).filter(Boolean));
+  if (distinctStores.size > 1) return duplicateStoreResponse('export_weekly_digest');
   const search = Object.fromEntries(url.searchParams.entries());
   const guarded = await guardLiveReport({
     surfaceId: 'export_weekly_digest',
@@ -32,6 +42,12 @@ export async function GET(request: Request) {
     );
   }
   const { business } = guarded;
+  if (guarded.branch.storeIds.length === 0) {
+    return NextResponse.json(
+      { ok: false, reason: 'SCOPE_STORE_INVALID', surfaceId: 'export_weekly_digest' },
+      { status: 403, headers: guarded.headers },
+    );
+  }
 
   const weekOffset = Number(search.week ?? -1);
   const timeZone = requireReportTimeZone(business.timezone);
@@ -40,13 +56,24 @@ export async function GET(request: Request) {
   const wStart = week.startInclusive;
   const wEnd = new Date(week.endExclusive.getTime() - 1);
 
-  const data = await getWeeklyDigestData(
-    business.id,
-    week.startInclusive,
-    week.endExclusive,
-    timeZone,
-    storeIds,
-  );
+  let data: Awaited<ReturnType<typeof getWeeklyDigestData>>;
+  try {
+    data = await getWeeklyDigestData(
+      business.id,
+      week.startInclusive,
+      week.endExclusive,
+      timeZone,
+      storeIds,
+    );
+  } catch (error) {
+    if (isReportingScopeStoreError(error)) {
+      return NextResponse.json(
+        { ok: false, reason: 'SCOPE_STORE_INVALID', surfaceId: 'export_weekly_digest' },
+        { status: 403, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+    throw error;
+  }
   const currency = business.currency;
   const moneyOrIncomplete = (pence: number | null) => (
     pence == null ? 'Costs incomplete' : formatMoney(pence, currency)
@@ -97,6 +124,7 @@ export async function GET(request: Request) {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="weekly-digest-${wStart.toISOString().slice(0, 10)}.csv"`,
+      'Cache-Control': 'no-store',
     },
   });
 }

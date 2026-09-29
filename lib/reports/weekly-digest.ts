@@ -6,6 +6,7 @@ import {
   resolveMoneyReceivedScope,
 } from '@/lib/reports/money-received';
 import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
+import { requireAuthorisedStoreIds } from '@/lib/reports/reporting-scope';
 import { evaluateMarginLines, evaluateMarginSet, type MarginInvoiceInput, type MarginReturnKind } from '@/lib/reports/margin-line';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
 
@@ -54,11 +55,9 @@ type DigestInvoice = {
   lines: DigestLine[];
 };
 
-/** Empty key keeps the historical business-wide read used by Wave A formula fixtures. Live reports pass store ids. */
-function digestStorePredicate(storeKey: string): { storeId?: string | { in: string[] } } {
-  const ids = storeKey.split(',').map((id) => id.trim()).filter(Boolean);
-  if (ids.length === 0) return {};
-  if (ids.length === 1) return { storeId: ids[0] };
+function digestStorePredicate(storeKey: string): { storeId: string | { in: string[] } } {
+  const ids = requireAuthorisedStoreIds(storeKey.split(','));
+  if (ids.length === 1) return { storeId: ids[0]! };
   return { storeId: { in: ids } };
 }
 
@@ -97,12 +96,13 @@ async function _getWeeklyDigestData(
   weekStartIso: string,
   weekEndIso: string,
   timeZone: string,
-  storeKey = '',
+  storeKey: string,
 ): Promise<WeeklyDigestData> {
+  const authorisedStores = requireAuthorisedStoreIds(storeKey.split(','));
   const digestTimeZone = requireReportTimeZone(timeZone);
-  const storeInvoice = digestStorePredicate(storeKey);
-  const storeRelation = digestStoreRelation(storeKey);
-  const branchIds = storeKey.split(',').map((id) => id.trim()).filter(Boolean);
+  const storeInvoice = digestStorePredicate(authorisedStores.join(','));
+  const storeRelation = digestStoreRelation(authorisedStores.join(','));
+  const branchIds = authorisedStores;
   const weekStart = new Date(weekStartIso);
   const weekEnd = new Date(weekEndIso);
   const prevStart = new Date(weekStart.getTime() - 7 * 86_400_000);
@@ -360,9 +360,14 @@ export function getWeeklyDigestData(
   weekStart: Date,
   weekEnd: Date,
   timeZone: string,
-  storeIds?: readonly string[],
+  storeIds: readonly string[],
 ): Promise<WeeklyDigestData> {
-  const storeKey = storeIds && storeIds.length > 0 ? [...storeIds].sort().join(',') : '';
+  let storeKey: string;
+  try {
+    storeKey = requireAuthorisedStoreIds(storeIds).slice().sort().join(',');
+  } catch (error) {
+    return Promise.reject(error);
+  }
   return cachedWeeklyDigest(
     businessId,
     weekStart.toISOString(),

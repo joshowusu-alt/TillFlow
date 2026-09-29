@@ -281,8 +281,11 @@ export async function aggregateMetricPence(
  */
 export async function aggregateConfirmedReceiptsThroughAsOf(
   db: Db,
-  args: { businessId: string; endExclusive: Date; storeId?: string },
+  args: { businessId: string; endExclusive: Date; storeId?: string; storeIds?: readonly string[] },
 ): Promise<{ amountPence: number; queryFailed?: boolean; queryError?: string }> {
+  const storePredicate = args.storeIds && args.storeIds.length > 0
+    ? { storeId: args.storeIds.length === 1 ? args.storeIds[0] : { in: [...args.storeIds] } }
+    : (args.storeId ? { storeId: args.storeId } : {});
   try {
     const agg = await db.salesPayment.aggregate({
       where: {
@@ -290,7 +293,7 @@ export async function aggregateConfirmedReceiptsThroughAsOf(
         receivedAt: { lt: args.endExclusive },
         salesInvoice: {
           businessId: args.businessId,
-          ...(args.storeId ? { storeId: args.storeId } : {}),
+          ...storePredicate,
         },
       },
       _sum: { amountPence: true },

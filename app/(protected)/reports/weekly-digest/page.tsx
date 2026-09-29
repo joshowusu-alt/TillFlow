@@ -9,6 +9,7 @@ import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
 import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { getWeeklyDigestData } from '@/lib/reports/weekly-digest';
+import { isReportingScopeStoreError } from '@/lib/reports/reporting-scope';
 import { businessWeekWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 export const dynamic = 'force-dynamic';
@@ -57,7 +58,14 @@ export default async function WeeklyDigestPage({
 
   const currency = business.currency;
   const storeIds = opened.branch.storeIds;
-  const data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, timeZone, storeIds);
+  if (storeIds.length === 0) notFound();
+  let data: Awaited<ReturnType<typeof getWeeklyDigestData>>;
+  try {
+    data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, timeZone, storeIds);
+  } catch (error) {
+    if (isReportingScopeStoreError(error)) notFound();
+    throw error;
+  }
   const dateLabel = `${wStart.toDateString()} – ${wEnd.toDateString()}`;
 
   const salesChange = pctChange(data.totalSalesPence, data.prevTotalSalesPence);

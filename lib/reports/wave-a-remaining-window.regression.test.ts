@@ -131,7 +131,8 @@ describe('A7 remaining reporting windows are half-open', () => {
       expect(source, file).not.toMatch(SERVER_LOCAL_MONTH);
     }
     const supplierSales = readFileSync(path.join(process.cwd(), 'lib/reports/supplier-sales.ts'), 'utf8');
-    expect(supplierSales).toContain('businessMonthWindow');
+    expect(supplierSales).toContain('bounds.endExclusive');
+    expect(supplierSales).not.toContain('businessMonthWindow');
     expect(supplierSales).toMatch(/createdAt:\s*\{[^}]*lt:\s*endExclusive/);
   });
 });

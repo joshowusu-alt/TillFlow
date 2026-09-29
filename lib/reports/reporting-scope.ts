@@ -65,6 +65,26 @@ export function isReportingScopeStoreError(error: unknown): error is ReportingSc
 }
 
 /**
+ * Store-dimensional reads require the authorised store list.
+ * An omitted or empty list must throw before any query. It must not mean every store.
+ */
+export function requireAuthorisedStoreIds(storeIds: readonly string[] | null | undefined): string[] {
+  if (!storeIds || storeIds.length === 0) {
+    throw new ReportingScopeStoreError('Authorised store scope is required');
+  }
+  const ids: string[] = [];
+  for (const storeId of storeIds) {
+    const trimmed = typeof storeId === 'string' ? storeId.trim() : '';
+    if (!trimmed || ids.includes(trimmed)) continue;
+    ids.push(trimmed);
+  }
+  if (ids.length === 0) {
+    throw new ReportingScopeStoreError('Authorised store scope is required');
+  }
+  return ids;
+}
+
+/**
  * Resolve an authorised store scope.
  *
  * - Omitted storeId → ALL (established default)

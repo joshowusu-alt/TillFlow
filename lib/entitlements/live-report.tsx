@@ -98,7 +98,12 @@ function paramPresent(search: ReportSearch, key: string): boolean {
 
 export function requestedStoreId(search: ReportSearch): string | undefined {
   if (!paramPresent(search, 'storeId')) return undefined;
-  const value = firstParam(search?.storeId);
+  const raw = search?.storeId;
+  if (Array.isArray(raw)) {
+    const distinct = new Set(raw.map((value) => value.trim()).filter(Boolean));
+    if (distinct.size > 1) return '';
+  }
+  const value = firstParam(raw);
   return value ?? '';
 }
 

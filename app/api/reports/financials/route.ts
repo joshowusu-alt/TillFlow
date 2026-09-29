@@ -8,6 +8,13 @@ import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const distinctStores = new Set(url.searchParams.getAll('storeId').map((value) => value.trim()).filter(Boolean));
+  if (distinctStores.size > 1) {
+    return NextResponse.json(
+      { ok: false, reason: 'SCOPE_STORE_INVALID', surfaceId: 'export_financials' },
+      { status: 403, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
   const search = Object.fromEntries(url.searchParams.entries());
   const guarded = await guardLiveReport({
     surfaceId: 'export_financials',
@@ -103,7 +110,7 @@ export async function GET(request: Request) {
       ['Ending Cash', moneyOrIncomplete(data.endingCash)],
     ];
   } else {
-    return NextResponse.json({ error: 'Unknown report type' }, { status: 400 });
+    return NextResponse.json({ error: 'Unknown report type' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
   }
 
   const csv = rows.map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n');
@@ -112,6 +119,7 @@ export async function GET(request: Request) {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="${filename}"`,
+      'Cache-Control': 'no-store',
     },
   });
 }

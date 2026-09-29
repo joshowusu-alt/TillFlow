@@ -26,8 +26,8 @@ describe('Mobile dashboard sales consistency', () => {
     expect(onboarding).toContain('todayRevenuePence: todayKpis?.totalSalesPence ?? 0');
     expect(onboarding).toContain('todayTransactionCount: todayKpis?.txCount ?? 0');
 
-    expect(commandCenter).toContain("import { getTodayKPIs } from '@/lib/reports/today-kpis'");
-    expect(commandCenter).toContain('getTodayKPIs(business.id, kpiStoreId)');
+    expect(commandCenter).toContain("import { getCommandCenterKpis } from '@/lib/reports/today-kpis'");
+    expect(commandCenter).toContain('getCommandCenterKpis(business.id,');
     expect(commandCenter).toContain('kpis.totalSalesPence');
     expect(commandCenter).toContain('kpis.txCount');
     expect(commandCenter).toContain('kpis.todayReceiptsPence');

@@ -33,6 +33,7 @@ vi.mock('@/lib/reports/money-received', async () => {
   };
 });
 
+import { ReportingScopeStoreError } from '@/lib/reports/reporting-scope';
 import { getWeeklyDigestData } from '@/lib/reports/weekly-digest';
 
 const weekStart = new Date('2026-09-21T00:00:00.000Z');
@@ -59,6 +60,24 @@ describe('weekly digest store dimension', () => {
       expect(where.storeId).not.toBe('store-b');
       expect(where.businessId).not.toBe('biz-b');
     }
+  });
+
+  it('fails closed before Prisma when the authorised store list is omitted', async () => {
+    await expect(
+      getWeeklyDigestData('biz-a', weekStart, weekEnd, 'Africa/Accra', undefined as unknown as readonly string[]),
+    ).rejects.toBeInstanceOf(ReportingScopeStoreError);
+    expect(aggregate).not.toHaveBeenCalled();
+    expect(findMany).not.toHaveBeenCalled();
+    expect(count).not.toHaveBeenCalled();
+  });
+
+  it('fails closed before Prisma when the authorised store list is empty', async () => {
+    await expect(
+      getWeeklyDigestData('biz-a', weekStart, weekEnd, 'Africa/Accra', []),
+    ).rejects.toBeInstanceOf(ReportingScopeStoreError);
+    expect(aggregate).not.toHaveBeenCalled();
+    expect(findMany).not.toHaveBeenCalled();
+    expect(count).not.toHaveBeenCalled();
   });
 
   it('uses every authorised branch when Pro consolidates and no other branch', async () => {
