@@ -110,7 +110,8 @@ describe('P2 mobile navigation parity', () => {
     expect(getCashierMenu(cashierContext).map((item) => item.href)).not.toContain('/reports/stock-movements');
 
     const stockPage = read('app/(protected)/reports/stock-movements/page.tsx');
-    expect(stockPage).toContain("requireBusiness(['MANAGER', 'OWNER'])");
+    expect(stockPage).toContain("surfaceId: 'stock_movements'");
+    expect(stockPage).toContain('openLiveReport');
   });
 
   it('keeps Supplier Ageing discoverable for Owner and Manager (P1 regression)', () => {

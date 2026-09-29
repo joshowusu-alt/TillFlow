@@ -1,10 +1,16 @@
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { requireBusiness } from '@/lib/auth';
-import { getTodayKPIs } from '@/lib/reports/today-kpis';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
+import { getCommandCenterKpis } from '@/lib/reports/today-kpis';
+import { commandCenterRequestedRange } from '@/lib/entitlements/range';
 import { getFeatures } from '@/lib/features';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { formatMoney } from '@/lib/format';
 import RefreshIndicator from '@/components/RefreshIndicator';
 import { getTopLinkedSupplierForMonth } from '@/lib/reports/supplier-sales';
+import { businessMonthWindow, localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting-clock';
+import { isReportingScopeStoreError } from '@/lib/reports/reporting-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,18 +43,67 @@ interface DeeperLink {
 
 /* ─── Page ───────────────────────────────────────────────────────────── */
 
-export default async function CommandCenterPage() {
-  const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
-  const features = getFeatures(
-    (business as any).plan ?? (business.mode as any),
-    (business as any).storeMode as any,
-  );
+export default async function CommandCenterPage({
+  searchParams,
+}: {
+  searchParams?: { storeId?: string; businessId?: string };
+}) {
+  const opened = await openLiveReport({
+    surfaceId: 'command_center',
+    search: searchParams,
+    range: ({ timezone, now, canonicalPlan }) => {
+      const today = formatBusinessLocalDateKey(now, timezone);
+      return commandCenterRequestedRange({
+        plan: canonicalPlan,
+        todayLocal: today,
+        includeSupplierMonth: canonicalPlan === 'GROWTH' || canonicalPlan === 'PRO',
+      });
+    },
+  });
+  if (!opened.ok) return opened.denial;
+  const { business, user } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
+  const branch = opened.branch;
+  const features = getFeatures(business.canonicalPlan, business.storeMode as 'SINGLE_STORE' | 'MULTI_STORE' | null, {
+    onlineStorefront: business.addonOnlineStorefront,
+  });
+  const applied = opened.decision.appliedRange;
+  const timeZone = requireReportTimeZone(business.timezone);
+  const startInclusive = applied ? localDateInstant(applied.fromLocalDate, 'start', timeZone) : null;
+  const endExclusive = applied ? localDateInstant(applied.toLocalDate, 'endExclusive', timeZone) : null;
+  if (!applied || !startInclusive || !endExclusive || branch.storeIds.length === 0) notFound();
 
   const now = new Date();
-  const [kpis, topSupplier] = await Promise.all([
-    getTodayKPIs(business.id).catch(() => null),
-    features.advancedReports ? getTopLinkedSupplierForMonth(business.id).catch(() => null) : Promise.resolve(null),
-  ]);
+  const month = businessMonthWindow(now, timeZone);
+  const supplierStart = month.startInclusive > startInclusive ? month.startInclusive : startInclusive;
+  const supplierEnd = month.endExclusive < endExclusive ? month.endExclusive : endExclusive;
+  let kpis: Awaited<ReturnType<typeof getCommandCenterKpis>> | null = null;
+  let topSupplier: Awaited<ReturnType<typeof getTopLinkedSupplierForMonth>> = null;
+  try {
+    const loaded = await Promise.all([
+      getCommandCenterKpis(business.id, {
+        storeIds: branch.storeIds,
+        startInclusive,
+        endExclusive,
+        now,
+      }).catch((error) => {
+        if (isReportingScopeStoreError(error)) throw error;
+        return null;
+      }),
+      features.advancedReports ? getTopLinkedSupplierForMonth(business.id, branch.storeIds, {
+        startInclusive: supplierStart,
+        endExclusive: supplierEnd,
+      }).catch((error) => {
+        if (isReportingScopeStoreError(error)) throw error;
+        return null;
+      }) : Promise.resolve(null),
+    ]);
+    kpis = loaded[0];
+    topSupplier = loaded[1];
+  } catch (error) {
+    if (isReportingScopeStoreError(error)) notFound();
+    throw error;
+  }
 
   const currency = business.currency;
 
@@ -236,6 +291,7 @@ export default async function CommandCenterPage() {
 
   return (
     <div className="space-y-6 pb-4">
+      {opened.readOnly ? <ReportReadOnlyBanner /> : null}
       {/* ── Header ─────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -246,7 +302,7 @@ export default async function CommandCenterPage() {
             Operations Today
           </h1>
           <p className="mt-1 text-sm text-muted">
-            {business.name} · {user.role === 'OWNER' ? 'Owner view' : 'Manager view'} · All branches
+            {business.name} · {user.role === 'OWNER' ? 'Owner view' : 'Manager view'} · {branch.selected === 'ALL' ? 'Consolidated — all branches' : (branch.choices.find((store) => store.id === branch.selected)?.name ?? 'Selected branch')}
           </p>
         </div>
         <RefreshIndicator fetchedAt={fetchedAt} autoRefreshMs={60_000} />

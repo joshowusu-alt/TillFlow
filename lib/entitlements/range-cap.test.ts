@@ -141,6 +141,66 @@ describe('analytical range caps', () => {
     });
     expect(accra).toMatchObject({ ok: false, reason: 'RANGE_EXCEEDS_PLAN', clampHref: '?from=2026-01-03' });
   });
+
+  it('uses the tenant date across the America/New_York spring-forward, not the UTC date', () => {
+    const now = new Date('2026-03-08T04:30:00.000Z');
+    const tenant = decideSurfaceAccess({
+      surfaceId: 'stock_movements',
+      action: 'VIEW',
+      actor: { kind: 'USER', userId: 'user-1', businessId: 'biz-1', role: 'OWNER', active: true },
+      business: {
+        id: 'biz-1',
+        plan: 'STARTER',
+        mode: null,
+        storeMode: 'SINGLE_STORE',
+        addonOnlineStorefront: false,
+        isDemo: false,
+        billing: 'PAID_ACTIVE',
+      },
+      scope: { ownedStoreIds: ['store-1'], operationalStoreId: 'store-1' },
+      range: { fromLocalDate: '2026-02-06', toLocalDate: '2026-03-07', preset: 'CUSTOM' },
+      now,
+      timezone: 'America/New_York',
+    });
+    expect(tenant.ok).toBe(true);
+
+    const asUtc = decideSurfaceAccess({
+      surfaceId: 'stock_movements',
+      action: 'VIEW',
+      actor: { kind: 'USER', userId: 'user-1', businessId: 'biz-1', role: 'OWNER', active: true },
+      business: {
+        id: 'biz-1',
+        plan: 'STARTER',
+        mode: null,
+        storeMode: 'SINGLE_STORE',
+        addonOnlineStorefront: false,
+        isDemo: false,
+        billing: 'PAID_ACTIVE',
+      },
+      scope: { ownedStoreIds: ['store-1'], operationalStoreId: 'store-1' },
+      range: { fromLocalDate: '2026-02-06', toLocalDate: '2026-03-08', preset: 'CUSTOM' },
+      now,
+      timezone: 'UTC',
+    });
+    expect(asUtc).toMatchObject({ ok: false, reason: 'RANGE_EXCEEDS_PLAN' });
+  });
+
+  it('denies the day before the year-end Starter window and allows the earliest date', () => {
+    const earliest = earliestPermittedLocalDate('STARTER', '2026-01-01');
+    expect(earliest).toBe('2025-12-03');
+    const allowed = decideRange('2026-01-01', {
+      fromLocalDate: '2025-12-03',
+      toLocalDate: '2026-01-01',
+      preset: 'CUSTOM',
+    });
+    expect(allowed.ok).toBe(true);
+    const denied = decideRange('2026-01-01', {
+      fromLocalDate: '2025-12-02',
+      toLocalDate: '2026-01-01',
+      preset: 'CUSTOM',
+    });
+    expect(denied).toMatchObject({ ok: false, reason: 'RANGE_EXCEEDS_PLAN', clampHref: '?from=2025-12-03' });
+  });
 });
 
 function readRangeSource() {

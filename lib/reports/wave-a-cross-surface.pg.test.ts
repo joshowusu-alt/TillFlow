@@ -225,10 +225,10 @@ describePg('Wave A cross-surface reconciliation (Postgres)', () => {
     expect(incompleteMargin.grossProfitPence).toBeNull();
 
     const { getWeeklyDigestData } = await import('@/lib/reports/weekly-digest');
-    const readyDigest = await getWeeklyDigestData(businessId, todayStart, todayEnd, 'Africa/Nairobi');
+    const readyDigest = await getWeeklyDigestData(businessId, todayStart, todayEnd, 'Africa/Nairobi', [storeId]);
     expect(readyDigest.marginState).toBe('READY');
     expect(readyDigest.grossProfitPence).toBe(1015);
-    const oldDigest = await getWeeklyDigestData(businessId, oldStart, oldEnd, 'Africa/Nairobi');
+    const oldDigest = await getWeeklyDigestData(businessId, oldStart, oldEnd, 'Africa/Nairobi', [storeId]);
     expect(oldDigest.marginState).toBe('INCOMPLETE_COSTS');
     expect(oldDigest.grossProfitPence).toBeNull();
     expect(oldDigest.unallocatedSalesDifferencePence).toBe(500);
@@ -308,7 +308,7 @@ describePg('Wave A cross-surface reconciliation (Postgres)', () => {
     const { getWeeklyDigestData } = await import('@/lib/reports/weekly-digest');
     const incompleteIncome = await getIncomeStatement(businessId, oldDay.startInclusive, oldDay.endExclusive);
     const incompleteMargin = await getMarginAnalysisSnapshot({ businessId, start: oldDay.startInclusive, end: oldDay.endExclusive });
-    const incompleteDigest = await getWeeklyDigestData(businessId, oldDay.startInclusive, oldDay.endExclusive, 'Africa/Nairobi');
+    const incompleteDigest = await getWeeklyDigestData(businessId, oldDay.startInclusive, oldDay.endExclusive, 'Africa/Nairobi', [storeId]);
     expect(incompleteIncome.grossProfit).toBeNull();
     expect(incompleteMargin.grossProfitPence).toBeNull();
     expect(incompleteDigest.grossProfitPence).toBeNull();

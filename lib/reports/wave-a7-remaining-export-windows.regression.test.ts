@@ -44,6 +44,7 @@ vi.mock('@/lib/prisma', () => ({
     shift: { findMany: shiftFindManyMock, count: shiftCountMock },
     riskAlert: { findMany: riskAlertFindManyMock },
     salesInvoice: { findMany: salesInvoiceFindManyMock },
+    store: { findMany: async () => [{ id: 'store-1', name: 'Main' }] },
   },
 }));
 
@@ -83,14 +84,23 @@ function business(timezone: string | null) {
     timezone,
     plan: 'GROWTH',
     mode: 'GROWTH',
-    storeMode: 'SINGLE',
+    storeMode: 'SINGLE_STORE',
+    subscriptionStatus: 'PAID_ACTIVE',
+    firstPaymentConfirmedAt: new Date('2026-01-01T00:00:00.000Z'),
   };
 }
 
 describe('A7 cash drawer and risk windows follow the stored timezone', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getUserMock.mockResolvedValue({ role: 'OWNER', businessId: 'biz-1' });
+    getUserMock.mockResolvedValue({
+      id: 'user-1',
+      name: 'Owner',
+      email: 'owner@example.com',
+      role: 'OWNER',
+      active: true,
+      businessId: 'biz-1',
+    });
     requireBusinessMock.mockResolvedValue({
       user: { role: 'OWNER', businessId: 'biz-1' },
       business: business(NAIROBI),

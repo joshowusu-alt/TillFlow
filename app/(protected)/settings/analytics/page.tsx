@@ -1,15 +1,32 @@
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
-import { requireBusiness } from '@/lib/auth';
+import { ReportScopeLabel } from '@/components/reports/ReportSurfaceDenial';
+import { addCalendarDays } from '@/lib/entitlements/range';
+import { openLiveReport } from '@/lib/entitlements/live-report';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { prisma } from '@/lib/prisma';
 import { defaultTenantLocalRange, halfOpenTimestampFilter } from '@/lib/reports/reporting-clock';
 export const dynamic = 'force-dynamic';
 
 const WINDOW_DAYS = 30;
 
-export default async function AnalyticsSettingsPage() {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  if (!business) return <div className="card p-6">Seed data missing.</div>;
+export default async function AnalyticsSettingsPage({
+  searchParams,
+}: {
+  searchParams?: { storeId?: string; businessId?: string };
+}) {
+  const opened = await openLiveReport({
+    surfaceId: 'storefront_analytics',
+    search: searchParams,
+    range: ({ timezone, now }) => {
+      const today = formatBusinessLocalDateKey(now, timezone);
+      return { fromLocalDate: addCalendarDays(today, -29), toLocalDate: today, preset: 'CUSTOM' };
+    },
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  if (opened.branch.kind !== 'label') notFound();
 
   const range = defaultTenantLocalRange(new Date(), business.timezone, WINDOW_DAYS);
 
@@ -47,6 +64,7 @@ export default async function AnalyticsSettingsPage() {
 
   return (
     <div className="space-y-6">
+      <ReportScopeLabel label={opened.branch.label} />
       <PageHeader
         title="Store Analytics"
         subtitle={`Online storefront activity in the last ${WINDOW_DAYS} days.`}

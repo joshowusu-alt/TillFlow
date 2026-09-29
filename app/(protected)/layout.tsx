@@ -15,6 +15,7 @@ import LaunchSessionCompletion from '@/components/LaunchSessionCompletion';
 import StaleOperationalStoreGuard from '@/components/StaleOperationalStoreGuard';
 import MoneyOperationKeySync from '@/components/MoneyOperationKeySync';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { REPORT_PAGE_SURFACES, visibleReportHrefs } from '@/lib/entitlements/live-report';
 
 function formatDateLabel(value: Date | string | null | undefined) {
   if (!value) return null;
@@ -24,15 +25,27 @@ function formatDateLabel(value: Date | string | null | undefined) {
 
 const RESTRICTED_BILLING_STATES = new Set(['TRIAL_RESTRICTED', 'PAYMENT_RESTRICTED', 'CANCELLED', 'READ_ONLY']);
 
-function isAllowedWhenBillingRestricted(pathname: string) {
+function isBillingAccountPath(pathname: string) {
   if (!pathname || pathname === '/') return true;
   return (
     pathname.startsWith('/settings/billing') ||
     pathname.startsWith('/account') ||
     pathname.startsWith('/settings/organization') ||
-    pathname.startsWith('/getting-started') ||
-    pathname.startsWith('/reports/dashboard')
+    pathname.startsWith('/getting-started')
   );
+}
+
+function isReportViewPath(pathname: string) {
+  if (pathname.includes('/export')) return false;
+  return Object.keys(REPORT_PAGE_SURFACES).some(
+    (href) => pathname === href || pathname.startsWith(`${href}/`),
+  );
+}
+
+function isAllowedWhenBillingRestricted(pathname: string, billingAccessState: string) {
+  if (isBillingAccountPath(pathname)) return true;
+  if (billingAccessState === 'CANCELLED') return false;
+  return isReportViewPath(pathname);
 }
 
 function RestrictedAccessScreen({
@@ -127,7 +140,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const shouldRestrictPage =
     RESTRICTED_BILLING_STATES.has(billingAccessState) &&
     !billingInternalQaAccess &&
-    !isAllowedWhenBillingRestricted(pathname);
+    !isAllowedWhenBillingRestricted(pathname, billingAccessState);
 
   return (
     <div className="min-h-screen w-full max-w-full">
@@ -161,6 +174,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         }}
         momoEnabled={!!business.momoEnabled}
         addonOnlineStorefront={Boolean((business as any).addonOnlineStorefront)}
+        allowedReportHrefs={[...(await visibleReportHrefs())]}
       />
 
       {needsOnboarding && !pathname.includes('/onboarding') && (

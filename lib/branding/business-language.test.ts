@@ -29,8 +29,9 @@ describe('Owner-facing business language', () => {
   });
 
   it('uses business setup wording on owner report empty states', () => {
-    expect(weeklyDigest).toContain('Complete your business setup');
-    expect(reorderSuggestions).toContain('Complete your business setup');
+    expect(weeklyDigest).toContain("surfaceId: 'weekly_digest'");
+    expect(weeklyDigest).not.toContain('your shop setup');
+    expect(reorderSuggestions).toContain("surfaceId: 'reorder_suggestions'");
     expect(weeklyDigest).not.toContain('your shop setup');
     expect(reorderSuggestions).not.toContain('your shop setup');
   });

@@ -1,23 +1,79 @@
 import { NextResponse } from 'next/server';
-import { requireBusiness } from '@/lib/auth';
+import { guardLiveReport } from '@/lib/entitlements/live-report';
+import { addCalendarDays } from '@/lib/entitlements/range';
 import { getWeeklyDigestData } from '@/lib/reports/weekly-digest';
 import { formatMoney } from '@/lib/format';
-import { businessWeekWindow } from '@/lib/reports/reporting-clock';
+import { businessWeekWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
+import { isReportingScopeStoreError } from '@/lib/reports/reporting-scope';
+
+function duplicateStoreResponse(surfaceId: string) {
+  return NextResponse.json(
+    { ok: false, reason: 'SCOPE_STORE_INVALID', surfaceId },
+    { status: 403, headers: { 'Cache-Control': 'no-store' } },
+  );
+}
 
 export async function GET(request: Request) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  if (!business) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const url = new URL(request.url);
+  const distinctStores = new Set(url.searchParams.getAll('storeId').map((value) => value.trim()).filter(Boolean));
+  if (distinctStores.size > 1) return duplicateStoreResponse('export_weekly_digest');
+  const search = Object.fromEntries(url.searchParams.entries());
+  const guarded = await guardLiveReport({
+    surfaceId: 'export_weekly_digest',
+    action: 'EXPORT',
+    search,
+    range: ({ timezone, now }) => {
+      const timeZone = requireReportTimeZone(timezone);
+      const weekOffset = Number(search.week ?? -1);
+      const week = businessWeekWindow(now, timeZone, Number.isFinite(weekOffset) ? weekOffset : -1);
+      const start = formatBusinessLocalDateKey(week.startInclusive, timeZone);
+      const end = formatBusinessLocalDateKey(new Date(week.endExclusive.getTime() - 1), timeZone);
+      return { fromLocalDate: start, toLocalDate: end || addCalendarDays(start, 6), preset: 'CUSTOM' };
+    },
+  });
+  if (!guarded.ok) {
+    return NextResponse.json(guarded.body, { status: guarded.status, headers: guarded.headers });
+  }
+  if (guarded.branch.kind !== 'stores') {
+    return NextResponse.json(
+      { ok: false, reason: 'SCOPE_STORE_INVALID', surfaceId: 'export_weekly_digest' },
+      { status: 403, headers: guarded.headers },
+    );
+  }
+  const { business } = guarded;
+  if (guarded.branch.storeIds.length === 0) {
+    return NextResponse.json(
+      { ok: false, reason: 'SCOPE_STORE_INVALID', surfaceId: 'export_weekly_digest' },
+      { status: 403, headers: guarded.headers },
+    );
   }
 
-  const url = new URL(request.url);
-  const weekOffset = Number(url.searchParams.get('week') ?? -1);
-
-  const week = businessWeekWindow(new Date(), business.timezone, weekOffset);
+  const weekOffset = Number(search.week ?? -1);
+  const timeZone = requireReportTimeZone(business.timezone);
+  const storeIds = guarded.branch.storeIds;
+  const week = businessWeekWindow(new Date(), timeZone, Number.isFinite(weekOffset) ? weekOffset : -1);
   const wStart = week.startInclusive;
   const wEnd = new Date(week.endExclusive.getTime() - 1);
 
-  const data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, business.timezone);
+  let data: Awaited<ReturnType<typeof getWeeklyDigestData>>;
+  try {
+    data = await getWeeklyDigestData(
+      business.id,
+      week.startInclusive,
+      week.endExclusive,
+      timeZone,
+      storeIds,
+    );
+  } catch (error) {
+    if (isReportingScopeStoreError(error)) {
+      return NextResponse.json(
+        { ok: false, reason: 'SCOPE_STORE_INVALID', surfaceId: 'export_weekly_digest' },
+        { status: 403, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+    throw error;
+  }
   const currency = business.currency;
   const moneyOrIncomplete = (pence: number | null) => (
     pence == null ? 'Costs incomplete' : formatMoney(pence, currency)
@@ -68,6 +124,7 @@ export async function GET(request: Request) {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="weekly-digest-${wStart.toISOString().slice(0, 10)}.csv"`,
+      'Cache-Control': 'no-store',
     },
   });
 }

@@ -1,5 +1,7 @@
+import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import Badge from '@/components/Badge';
@@ -36,21 +38,13 @@ export default async function ReorderSuggestionsPage({
 }: {
   searchParams: QueryParams;
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  if (!business) {
-    return <EmptyState icon="box" title="Business setup incomplete" subtitle="Complete your business setup to see reorder suggestions." cta={{ label: 'Complete Setup', href: '/onboarding' }} />;
-  }
-  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
-  if (!features.advancedReports) {
-    return (
-      <AdvancedModeNotice
-        title="Reorder Suggestions is available on Growth and Pro"
-        description="Velocity-based reorder planning and supplier grouping are unlocked on businesses provisioned for Growth or Pro."
-        featureName="Reorder Suggestions"
-        minimumPlan="GROWTH"
-      />
-    );
-  }
+  const opened = await openLiveReport({
+    surfaceId: 'reorder_suggestions',
+    search: searchParams,
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
 
   const lookbackDays = Math.min(Math.max(parseInt(searchParams.days ?? '14', 10) || 14, 7), 90);
   const leadDays = Math.min(Math.max(parseInt(searchParams.lead ?? '7', 10) || 7, 1), 30);
@@ -75,7 +69,8 @@ export default async function ReorderSuggestionsPage({
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'report' },
   );
 
-  const selectedStoreId = resolveSoleOrSelectedStoreId(stores, searchParams.storeId);
+  const selectedStoreId = opened.branch.selected;
+  const storeFilter = selectedStoreId === 'ALL' ? { in: opened.branch.storeIds } : selectedStoreId;
   if (!selectedStoreId) {
     return (
       <div className="space-y-6">
@@ -141,7 +136,7 @@ export default async function ReorderSuggestionsPage({
             }
           },
           inventoryBalances: {
-            where: { storeId: selectedStoreId },
+            where: { storeId: storeFilter },
             select: { qtyOnHandBase: true }
           }
         }
@@ -150,7 +145,7 @@ export default async function ReorderSuggestionsPage({
         where: {
           salesInvoice: {
             businessId: business.id,
-            storeId: selectedStoreId,
+            storeId: storeFilter,
             createdAt: { gte: since },
             paymentStatus: { notIn: ['RETURNED', 'VOID'] }
           }
@@ -160,7 +155,7 @@ export default async function ReorderSuggestionsPage({
       prisma.reorderAction.findMany({
         where: {
           businessId: business.id,
-          storeId: selectedStoreId,
+          storeId: storeFilter,
           status: 'ORDERED',
         },
         select: { productId: true, qtyBase: true, orderedAt: true },

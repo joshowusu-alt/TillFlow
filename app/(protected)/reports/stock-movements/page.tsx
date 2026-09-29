@@ -1,10 +1,14 @@
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import StatCard from '@/components/StatCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { addCalendarDays } from '@/lib/entitlements/range';
+import { openLiveReport } from '@/lib/entitlements/live-report';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { prisma } from '@/lib/prisma';
 import { formatDateTime } from '@/lib/format';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
@@ -78,7 +82,20 @@ export default async function StockMovementsPage({
 }: {
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const opened = await openLiveReport({
+    surfaceId: 'stock_movements',
+    search: searchParams,
+    range: ({ timezone, now }) => {
+      const from = typeof searchParams?.from === 'string' ? searchParams.from : '';
+      const to = typeof searchParams?.to === 'string' ? searchParams.to : '';
+      if (from || to) return { fromLocalDate: from, toLocalDate: to, preset: 'CUSTOM' };
+      const today = formatBusinessLocalDateKey(now, timezone);
+      return { fromLocalDate: addCalendarDays(today, -6), toLocalDate: today, preset: 'CUSTOM' };
+    },
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
 
   const now = new Date();
   const fallback = defaultTenantLocalRange(now, business.timezone, 7);
@@ -96,7 +113,7 @@ export default async function StockMovementsPage({
   const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } =
     resolveReportDateRange(params, fallback.startInclusive, now, fallback.timeZone);
   const { stores } = await getBusinessStores(business.id, params.storeId);
-  const selectedStoreId = resolveStoreSelection(stores, params.storeId, 'ALL') ?? 'ALL';
+  const selectedStoreId = opened.branch.selected;
 
   const page = Math.max(1, parseInt(params.page ?? '1', 10) || 1);
   const requestedPageSize = parseInt(params.pageSize ?? '20', 10) || 20;
@@ -104,7 +121,7 @@ export default async function StockMovementsPage({
   const typeFilter = params.type && MOVEMENT_TYPES.includes(params.type) ? params.type : undefined;
   const q = params.q?.trim() ?? '';
 
-  const storeIds = stores.map((s) => s.id);
+  const storeIds = opened.branch.storeIds;
   const storeFilter = selectedStoreId === 'ALL' ? { in: storeIds } : selectedStoreId;
 
   const where = {
@@ -192,7 +209,7 @@ export default async function StockMovementsPage({
             <div>
               <label className="label">Report branch filter</label>
               <select className="input" name="storeId" defaultValue={selectedStoreId}>
-                <option value="ALL">All branches</option>
+                {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
                 {stores.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}

@@ -6,6 +6,7 @@ import {
   resolveMoneyReceivedScope,
 } from '@/lib/reports/money-received';
 import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
+import { requireAuthorisedStoreIds } from '@/lib/reports/reporting-scope';
 import { evaluateMarginLines, evaluateMarginSet, type MarginInvoiceInput, type MarginReturnKind } from '@/lib/reports/margin-line';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
 
@@ -54,6 +55,17 @@ type DigestInvoice = {
   lines: DigestLine[];
 };
 
+function digestStorePredicate(storeKey: string): { storeId: string | { in: string[] } } {
+  const ids = requireAuthorisedStoreIds(storeKey.split(','));
+  if (ids.length === 1) return { storeId: ids[0]! };
+  return { storeId: { in: ids } };
+}
+
+function digestStoreRelation(storeKey: string): { id?: string | { in: string[] } } {
+  const predicate = digestStorePredicate(storeKey);
+  return predicate.storeId ? { id: predicate.storeId } : {};
+}
+
 function digestReturnKind(invoice: DigestInvoice): MarginReturnKind {
   if (!invoice.salesReturn) return 'NONE';
   if (invoice.salesReturn.type === 'VOID' && invoice.paymentStatus === 'VOID') return 'FULL_VOID';
@@ -84,8 +96,13 @@ async function _getWeeklyDigestData(
   weekStartIso: string,
   weekEndIso: string,
   timeZone: string,
+  storeKey: string,
 ): Promise<WeeklyDigestData> {
+  const authorisedStores = requireAuthorisedStoreIds(storeKey.split(','));
   const digestTimeZone = requireReportTimeZone(timeZone);
+  const storeInvoice = digestStorePredicate(authorisedStores.join(','));
+  const storeRelation = digestStoreRelation(authorisedStores.join(','));
+  const branchIds = authorisedStores;
   const weekStart = new Date(weekStartIso);
   const weekEnd = new Date(weekEndIso);
   const prevStart = new Date(weekStart.getTime() - 7 * 86_400_000);
@@ -107,13 +124,13 @@ async function _getWeeklyDigestData(
   ] = await Promise.all([
     // This week sales — aggregate at DB level
     prisma.salesInvoice.aggregate({
-      where: { businessId, createdAt: { gte: weekStart, lt: weekEnd }, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
+      where: { businessId, ...storeInvoice, createdAt: { gte: weekStart, lt: weekEnd }, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
       _sum: { totalPence: true },
       _count: { id: true },
     }),
     // Previous week sales — aggregate at DB level
     prisma.salesInvoice.aggregate({
-      where: { businessId, createdAt: { gte: prevStart, lt: prevEnd }, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
+      where: { businessId, ...storeInvoice, createdAt: { gte: prevStart, lt: prevEnd }, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
       _sum: { totalPence: true },
       _count: { id: true },
     }),
@@ -127,21 +144,23 @@ async function _getWeeklyDigestData(
         periodStart: weekStart,
         periodEndInclusive: weekEnd,
         absoluteBounds: true,
+        branchIds: branchIds.length > 0 ? branchIds : null,
       }),
     ),
     prisma.salesInvoice.count({
-      where: { businessId, createdAt: { gte: weekStart, lt: weekEnd }, paymentStatus: 'VOID' },
+      where: { businessId, ...storeInvoice, createdAt: { gte: weekStart, lt: weekEnd }, paymentStatus: 'VOID' },
     }),
     prisma.salesReturn.count({
-      where: { store: { businessId }, createdAt: { gte: weekStart, lt: weekEnd }, type: 'RETURN' },
+      where: { ...storeInvoice, store: { businessId, ...storeRelation }, createdAt: { gte: weekStart, lt: weekEnd }, type: 'RETURN' },
     }),
     prisma.riskAlert.findMany({
-      where: { businessId, occurredAt: { gte: weekStart, lt: weekEnd } },
+      where: { businessId, ...storeInvoice, occurredAt: { gte: weekStart, lt: weekEnd } },
       select: { alertType: true, severity: true, cashierUser: { select: { name: true } } },
     }),
     prisma.salesInvoice.count({
       where: {
         businessId,
+        ...storeInvoice,
         createdAt: { gte: weekStart, lt: weekEnd },
         discountOverrideReason: { not: null },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
@@ -149,14 +168,14 @@ async function _getWeeklyDigestData(
     }),
     prisma.shift.findMany({
       where: {
-        till: { store: { businessId } },
+        till: { store: { businessId, ...storeRelation } },
         closedAt: { gte: weekStart, lt: weekEnd },
         variance: { not: null },
       },
       select: { variance: true, user: { select: { id: true, name: true } } },
     }),
     prisma.salesInvoice.findMany({
-      where: { businessId, createdAt: { gte: weekStart, lt: weekEnd } },
+      where: { businessId, ...storeInvoice, createdAt: { gte: weekStart, lt: weekEnd } },
       select: {
         paymentStatus: true,
         discountPence: true,
@@ -179,7 +198,7 @@ async function _getWeeklyDigestData(
       },
     }),
     prisma.salesInvoice.findMany({
-      where: { businessId, createdAt: { gte: prevStart, lt: prevEnd } },
+      where: { businessId, ...storeInvoice, createdAt: { gte: prevStart, lt: prevEnd } },
       select: {
         paymentStatus: true,
         discountPence: true,
@@ -202,10 +221,10 @@ async function _getWeeklyDigestData(
       },
     }),
     prisma.stockAdjustment.count({
-      where: { store: { businessId }, createdAt: { gte: weekStart, lt: weekEnd } },
+      where: { ...storeInvoice, store: { businessId, ...storeRelation }, createdAt: { gte: weekStart, lt: weekEnd } },
     }),
     prisma.salesInvoice.findMany({
-      where: { businessId, createdAt: { gte: weekStart, lt: weekEnd }, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
+      where: { businessId, ...storeInvoice, createdAt: { gte: weekStart, lt: weekEnd }, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
       select: { totalPence: true, discountOverrideReason: true, cashierUser: { select: { id: true, name: true } } },
     }),
   ]);
@@ -341,11 +360,19 @@ export function getWeeklyDigestData(
   weekStart: Date,
   weekEnd: Date,
   timeZone: string,
+  storeIds: readonly string[],
 ): Promise<WeeklyDigestData> {
+  let storeKey: string;
+  try {
+    storeKey = requireAuthorisedStoreIds(storeIds).slice().sort().join(',');
+  } catch (error) {
+    return Promise.reject(error);
+  }
   return cachedWeeklyDigest(
     businessId,
     weekStart.toISOString(),
     weekEnd.toISOString(),
     requireReportTimeZone(timeZone),
+    storeKey,
   );
 }

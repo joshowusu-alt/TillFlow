@@ -68,9 +68,17 @@ export type MarginCostCheck = {
 type MarginAnalysisQueryOptions = {
 	businessId: string;
 	storeId?: string;
+	storeIds?: readonly string[];
 	start: Date;
 	end: Date;
 };
+
+function marginStoreFilter(storeId?: string, storeIds?: readonly string[]) {
+	if (storeIds && storeIds.length > 0) {
+		return { storeId: storeIds.length === 1 ? storeIds[0] : { in: [...storeIds] } };
+	}
+	return storeId ? { storeId } : {};
+}
 
 export function summarizeMarginAnalysis(
 	lines: MarginAnalysisLine[],
@@ -183,9 +191,11 @@ export function summarizeMarginAnalysis(
 export async function getMarginAnalysisSnapshot({
 	businessId,
 	storeId,
+	storeIds,
 	start,
 	end,
 }: MarginAnalysisQueryOptions): Promise<MarginAnalysisSnapshot> {
+	const invoiceStore = marginStoreFilter(storeId, storeIds);
 	const [business, rawLines] = await Promise.all([
 		prisma.business.findUnique({
 			where: { id: businessId },
@@ -195,7 +205,7 @@ export async function getMarginAnalysisSnapshot({
 			where: {
 				salesInvoice: {
 					businessId,
-					...(storeId ? { storeId } : {}),
+					...invoiceStore,
 					createdAt: { gte: start, lt: end },
 					paymentStatus: { notIn: ['RETURNED', 'VOID'] },
 				},
@@ -242,14 +252,15 @@ export async function getMarginAnalysisSnapshot({
 		}));
 
 	const snapshot = summarizeMarginAnalysis(lines, business?.minimumMarginThresholdBps ?? 1500);
-	return enrichMarginRowsWithCostChecks(snapshot, { businessId, storeId });
+	return enrichMarginRowsWithCostChecks(snapshot, { businessId, storeId, storeIds });
 }
 
 async function enrichMarginRowsWithCostChecks(
 	snapshot: MarginAnalysisSnapshot,
-	{ businessId, storeId }: Pick<MarginAnalysisQueryOptions, 'businessId' | 'storeId'>,
+	{ businessId, storeId, storeIds }: Pick<MarginAnalysisQueryOptions, 'businessId' | 'storeId' | 'storeIds'>,
 ): Promise<MarginAnalysisSnapshot> {
 	if (snapshot.rows.length === 0) return snapshot;
+	const invoiceStore = marginStoreFilter(storeId, storeIds);
 
 	const productIds = snapshot.rows.map((row) => row.productId);
 	const [products, purchaseLines] = await Promise.all([
@@ -268,7 +279,7 @@ async function enrichMarginRowsWithCostChecks(
 					orderBy: [{ isBaseUnit: 'desc' }, { conversionToBase: 'asc' }],
 				},
 				inventoryBalances: {
-					where: storeId ? { storeId } : undefined,
+					where: invoiceStore.storeId ? { storeId: invoiceStore.storeId } : undefined,
 					select: { avgCostBasePence: true, qtyOnHandBase: true },
 				},
 			},
@@ -278,7 +289,7 @@ async function enrichMarginRowsWithCostChecks(
 				productId: { in: productIds },
 				purchaseInvoice: {
 					businessId,
-					...(storeId ? { storeId } : {}),
+					...invoiceStore,
 				},
 			},
 			select: {

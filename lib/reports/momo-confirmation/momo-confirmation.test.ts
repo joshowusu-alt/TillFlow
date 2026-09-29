@@ -212,7 +212,7 @@ describe('MoMo confirmation review — surface wiring', () => {
     const nav = readFileSync(join(root, 'lib/navigation-config.ts'), 'utf8');
 
     expect(page).toContain('MoMo Confirmation Review');
-    expect(page).toContain('requireBusiness([\'MANAGER\', \'OWNER\'])');
+    expect(page).toContain("surfaceId: 'momo_confirmation'");
     expect(page).toContain('MomoConfirmDrawer');
     expect(page).not.toContain('Mark verified');
     expect(page).not.toContain('Approve');

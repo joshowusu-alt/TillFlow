@@ -1,7 +1,9 @@
+import { notFound } from 'next/navigation';
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
-import { requireBusiness } from '@/lib/auth';
+import { ReportScopeLabel } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { getFeatures } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
@@ -12,23 +14,15 @@ export const dynamic = 'force-dynamic';
 export default async function CashflowForecastPage({
   searchParams,
 }: {
-  searchParams?: { days?: string; scenario?: string };
+  searchParams?: { days?: string; scenario?: string; storeId?: string; businessId?: string };
 }) {
-  const { business } = await requireBusiness(['OWNER']);
-  if (!business) {
-    return <EmptyState icon="chart" title="Business not found" cta={{ label: 'Go to Settings', href: '/settings' }} />;
-  }
-  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
-  if (!features.cashflowForecast) {
-    return (
-      <AdvancedModeNotice
-        title="Cashflow Forecast is available on Pro"
-        description="Forward-looking cash pressure forecasting is unlocked on businesses provisioned for Pro."
-        featureName="Cashflow Forecast"
-        minimumPlan="PRO"
-      />
-    );
-  }
+  const opened = await openLiveReport({
+    surfaceId: 'cashflow_forecast',
+    search: searchParams,
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  if (opened.branch.kind !== 'label') notFound();
 
   const daysParam = parseInt(searchParams?.days ?? '14', 10);
   const days = ([7, 14, 30] as const).includes(daysParam as any) ? (daysParam as 7 | 14 | 30) : 14;
@@ -59,6 +53,7 @@ export default async function CashflowForecastPage({
 
   return (
     <div className="space-y-6">
+      <ReportScopeLabel label={opened.branch.label} />
       <PageHeader
         title="Cashflow Forecast"
         subtitle={`${days}-day projection based on money owed to you, money you owe, and daily sales.`}

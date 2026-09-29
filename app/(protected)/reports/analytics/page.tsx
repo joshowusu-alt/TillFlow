@@ -1,5 +1,9 @@
+import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { addCalendarDays } from '@/lib/entitlements/range';
+import { openLiveReport } from '@/lib/entitlements/live-report';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import PageHeader from '@/components/PageHeader';
 import PlanFeatureBadge from '@/components/PlanFeatureBadge';
 import RefreshIndicator from '@/components/RefreshIndicator';
@@ -24,26 +28,18 @@ export default async function AnalyticsPage({
 }: {
   searchParams?: { period?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  if (!business) {
-    return <div className="card p-6">Business not found.</div>;
-  }
-  const features = getFeatures(
-    (business as any).plan ?? (business.mode as any),
-    (business as any).storeMode as any,
-  );
-  if (!features.advancedReports) {
-    return (
-      <AdvancedModeNotice
-        title="Analytics is available on Growth and Pro"
-        description="Trend analysis and deeper trading analytics are unlocked on businesses provisioned for Growth or Pro."
-        featureName="Analytics"
-        minimumPlan="GROWTH"
-      />
-    );
-  }
-
   const periodDays = resolvePeriodDays(searchParams?.period);
+  const opened = await openLiveReport({
+    surfaceId: 'sales_analytics',
+    search: searchParams,
+    range: ({ timezone, now }) => {
+      const today = formatBusinessLocalDateKey(now, timezone);
+      return { fromLocalDate: addCalendarDays(today, -(periodDays - 1)), toLocalDate: today, preset: 'CUSTOM' };
+    },
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -68,6 +64,7 @@ export default async function AnalyticsPage({
           currency={business.currency}
           periodDays={periodDays}
           timeZone={business.timezone}
+          storeIds={opened.branch.storeIds}
         />
       </Suspense>
     </div>

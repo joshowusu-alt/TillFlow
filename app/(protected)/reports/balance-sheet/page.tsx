@@ -2,14 +2,13 @@ import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner, ReportScopeLabel } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatMoney } from '@/lib/format';
 import { getBalanceSheet } from '@/lib/reports/financials';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
-import { businessDayWindow, localDateInstant } from '@/lib/reports/reporting-clock';
-import AdvancedModeNotice from '@/components/AdvancedModeNotice';
+import { businessDayWindow, localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import PlanFeatureBadge from '@/components/PlanFeatureBadge';
-import { getFeatures } from '@/lib/features';
 import BalanceSheetDatePicker from './BalanceSheetDatePicker';
 
 function accountLineHelper(name: string): string | null {
@@ -23,26 +22,25 @@ function accountLineHelper(name: string): string | null {
 export default async function BalanceSheetPage({
   searchParams
 }: {
-  searchParams?: { asOf?: string };
+  searchParams?: { asOf?: string; storeId?: string; businessId?: string };
 }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
-  if (!business) return <div className="card p-6">Seed data missing.</div>;
-  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
-  if (!features.financialReports) {
-    return (
-      <AdvancedModeNotice
-        title="Balance Sheet is available on Growth and Pro"
-        description="Financial statements are unlocked on businesses provisioned for Growth or Pro."
-        featureName="Balance Sheet"
-        minimumPlan="GROWTH"
-      />
-    );
-  }
+  const opened = await openLiveReport({
+    surfaceId: 'balance_sheet',
+    search: searchParams,
+    range: ({ timezone, now }) => {
+      const asOf = searchParams?.asOf?.trim() || formatBusinessLocalDateKey(now, timezone);
+      return { fromLocalDate: asOf, toLocalDate: asOf, preset: 'CUSTOM' };
+    },
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
 
-  const asOfKey = searchParams?.asOf
-    ?? formatBusinessLocalDateKey(new Date(), business.timezone);
-  const asOf = localDateInstant(asOfKey, 'endExclusive', business.timezone)
-    ?? businessDayWindow(new Date(), business.timezone).endExclusive;
+  const timeZone = requireReportTimeZone(business.timezone);
+  const asOfKey = opened.decision.appliedRange?.toLocalDate
+    ?? searchParams?.asOf
+    ?? formatBusinessLocalDateKey(new Date(), timeZone);
+  const asOf = localDateInstant(asOfKey, 'endExclusive', timeZone)
+    ?? businessDayWindow(new Date(), timeZone).endExclusive;
   const sheet = await getBalanceSheet(business.id, asOf);
   // Check if any individual account line has activity, not just the net total.
   // (Buying inventory with cash nets totalAssets to 0, but data still exists.)
@@ -62,6 +60,8 @@ export default async function BalanceSheetPage({
 
   return (
     <div className="space-y-6">
+      {opened.readOnly ? <ReportReadOnlyBanner /> : null}
+      {opened.branch.kind === 'label' ? <ReportScopeLabel label={opened.branch.label} /> : null}
       <PageHeader
         title="Balance Sheet"
         subtitle="Assets, liabilities, and equity."

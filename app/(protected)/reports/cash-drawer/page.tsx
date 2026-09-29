@@ -7,7 +7,8 @@ import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
 import NotesCell from './NotesCell';
 import { formatDateTime, formatMoney } from '@/lib/format';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import { prisma } from '@/lib/prisma';
 import { expectedCashPenceFromEntries } from '@/lib/reports/expected-cash';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
@@ -50,22 +51,19 @@ export default async function CashDrawerReportPage({
 }: {
   searchParams?: { from?: string; to?: string; storeId?: string; page?: string; pageSize?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const opened = await openLiveReport({
+    surfaceId: 'cash_drawer_report',
+    search: searchParams,
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
   const now = new Date();
   const fallback = defaultTenantLocalRange(now, business.timezone, 7);
 
   const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, fallback.startInclusive, now, fallback.timeZone);
   const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
-  let selectedStoreId: string;
-  try {
-    selectedStoreId = resolveAuthorisedStoreId({
-      storeId: searchParams?.storeId,
-      allowedStoreIds: stores.map((store) => store.id),
-    });
-  } catch (error) {
-    if (isReportingScopeStoreError(error)) notFound();
-    throw error;
-  }
+  const selectedStoreId = opened.branch.selected;
   const requestedPageSize = parseInt(searchParams?.pageSize ?? '20', 10) || 20;
   const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize as 10 | 20 | 50) ? requestedPageSize : 20;
   const requestedPage = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
@@ -190,7 +188,7 @@ export default async function CashDrawerReportPage({
           Trading Report → Money received
         </a>
         {' '}or the{' '}
-        <a href="/reports/receipts?period=today&storeId=ALL" className="font-semibold underline underline-offset-2">
+        <a href="/reports/receipts?period=today" className="font-semibold underline underline-offset-2">
           Money received
         </a>{' '}
         payment list. Cash Drawer follows shift open times and till activity, so figures may differ
@@ -223,7 +221,7 @@ export default async function CashDrawerReportPage({
         <div>
           <label className="label">Report branch filter</label>
           <select className="input" name="storeId" defaultValue={selectedStoreId}>
-            <option value="ALL">All branches</option>
+            {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
             {stores.map((store) => (
               <option key={store.id} value={store.id}>
                 {store.name}

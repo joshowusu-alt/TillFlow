@@ -27,6 +27,23 @@ import {
   zonedDateTimeParts,
 } from '@/lib/reports/reporting-clock';
 import { evaluateMarginSet, resolveAuthoritativeLineCost, type MarginInvoiceInput } from '@/lib/reports/margin-line';
+import { ReportingScopeStoreError, requireAuthorisedStoreIds } from '@/lib/reports/reporting-scope';
+
+export type CommandCenterKpiScope = {
+  storeIds: readonly string[];
+  startInclusive: Date;
+  endExclusive: Date;
+  now?: Date;
+};
+
+function storeIdentity(storeIds: readonly string[]): string | { in: string[] } {
+  if (storeIds.length === 1) return storeIds[0]!;
+  return { in: [...storeIds] };
+}
+
+function storeClause(storeIds: readonly string[]): { storeId: string | { in: string[] } } {
+  return { storeId: storeIdentity(storeIds) };
+}
 export type TodayKPIs = {
   totalSalesPence: number;
   grossMarginPence: number | null;
@@ -56,12 +73,19 @@ export type TodayKPIs = {
   discountOverrideCount: number;
 };
 
-async function openExpectedCashFromEntries(businessId: string, storeId?: string): Promise<number | null> {
+async function openExpectedCashFromEntries(
+  businessId: string,
+  storeId?: string,
+  authorisedStoreIds?: readonly string[],
+): Promise<number | null> {
+  const storeIdentity = authorisedStoreIds
+    ? (authorisedStoreIds.length === 1 ? { id: authorisedStoreIds[0]! } : { id: { in: [...authorisedStoreIds] } })
+    : (storeId ? { id: storeId } : {});
   const shifts = await prisma.shift.findMany({
     where: {
       status: 'OPEN',
       closedAt: null,
-      till: { store: { businessId, ...(storeId ? { id: storeId } : {}) } },
+      till: { store: { businessId, ...storeIdentity } },
     },
     select: {
       id: true,
@@ -156,9 +180,10 @@ function summariseKpiPayables(invoices: Array<{
 async function getOperationalLiquidAssetsEstimatePence(
   businessId: string,
   asOfExclusive: Date,
-  storeId?: string
+  storeId?: string,
+  authorisedStoreIds?: readonly string[],
 ) {
-  const storeFilter = storeId ? { storeId } : {};
+  const storeFilter = authorisedStoreIds ? storeClause(authorisedStoreIds) : (storeId ? { storeId } : {});
 
   const [
     business,
@@ -179,7 +204,12 @@ async function getOperationalLiquidAssetsEstimatePence(
       select: { amountPence: true },
     }),
     // Canonical CONFIRMED receipts strictly before endExclusive — no parent RETURNED/VOID exclusion.
-    aggregateConfirmedReceiptsThroughAsOf(prisma, { businessId, endExclusive: asOfExclusive, storeId }),
+    aggregateConfirmedReceiptsThroughAsOf(prisma, {
+      businessId,
+      endExclusive: asOfExclusive,
+      storeId: authorisedStoreIds ? undefined : storeId,
+      storeIds: authorisedStoreIds ?? undefined,
+    }),
     prisma.purchasePayment.aggregate({
       where: {
         paidAt: { lt: asOfExclusive },
@@ -237,19 +267,35 @@ function lookbackStart(now: Date, timeZone: string, daysBack: number): Date {
   return localDateInstant(key, 'start', timeZone) ?? now;
 }
 
-async function getTodayKPIsSqlite(businessId: string, storeId: string | undefined, now: Date, timeZone: string): Promise<TodayKPIs> {
+async function getTodayKPIsSqlite(
+  businessId: string,
+  storeId: string | undefined,
+  now: Date,
+  timeZone: string,
+  scope?: CommandCenterKpiScope,
+): Promise<TodayKPIs> {
   const todayWindow = businessDayWindow(now, timeZone);
   const todayStart = todayWindow.startInclusive;
-  const todayEnd = todayWindow.endExclusive;
+  const todayEnd = scope?.endExclusive ?? todayWindow.endExclusive;
+  const authorisedStores = scope ? requireAuthorisedStoreIds(scope.storeIds) : null;
+  const earliest = scope?.startInclusive;
 
-  const sevenDaysAgo = lookbackStart(now, timeZone, 7);
-  const thirtyDaysAgo = lookbackStart(now, timeZone, 30);
-  const thirtyFiveDaysAgo = lookbackStart(now, timeZone, 35);
-  const fourteenDaysAgo = lookbackStart(now, timeZone, 14);
+  const sevenDaysAgoNatural = lookbackStart(now, timeZone, 7);
+  const thirtyDaysAgoNatural = lookbackStart(now, timeZone, 30);
+  const thirtyFiveDaysAgoNatural = lookbackStart(now, timeZone, 35);
+  const fourteenDaysAgoNatural = lookbackStart(now, timeZone, 14);
+  const sevenDaysAgo = earliest && sevenDaysAgoNatural < earliest ? earliest : sevenDaysAgoNatural;
+  const fourteenDaysAgo = earliest && fourteenDaysAgoNatural < earliest ? earliest : fourteenDaysAgoNatural;
+  const includeThirty = !earliest || thirtyDaysAgoNatural >= earliest;
+  const includeFourWeek = !earliest || thirtyFiveDaysAgoNatural >= earliest;
+  const thirtyDaysAgo = includeThirty ? thirtyDaysAgoNatural : earliest!;
+  const thirtyFiveDaysAgo = includeFourWeek ? thirtyFiveDaysAgoNatural : earliest!;
+  const expenseReadStart = includeFourWeek ? thirtyFiveDaysAgoNatural : (includeThirty ? thirtyDaysAgoNatural : sevenDaysAgo);
   // Recency floor for KPI monitoring queries. Invoices older than 90 days that
   // are still unpaid are not filtered out from authoritative balances (customers
   // page / supplier ledger) — only from the today-KPI dashboard cards.
-  const storeFilter = storeId ? { storeId } : {};
+  const storeFilter = authorisedStores ? storeClause(authorisedStores) : (storeId ? { storeId } : {});
+  const enforced = authorisedStores ? storeFilter : {};
 
   const [salesRows, paymentRows, openSalesInvoices, outstandingPurchases, alertRows, balances, paidExpenses, momoPending, cashVarShifts, salesLines14d, cashOnHandEstimatePence] = await Promise.all([
     prisma.salesInvoice.findMany({
@@ -269,7 +315,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
         timeZone,
         periodStart: todayStart,
         periodEndInclusive: todayEnd,
-        branchIds: storeId ? [storeId] : null,
+        branchIds: authorisedStores ?? (storeId ? [storeId] : null),
         absoluteBounds: true,
       }),
     ),
@@ -288,26 +334,33 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       select: { paymentStatus: true, totalPence: true, payments: { select: { amountPence: true } } },
     }),
     prisma.riskAlert.findMany({
-      where: { businessId, severity: 'HIGH', status: 'OPEN', occurredAt: { gte: sevenDaysAgo, lt: todayEnd } },
+      where: { businessId, ...enforced, severity: 'HIGH', status: 'OPEN', occurredAt: { gte: sevenDaysAgo, lt: todayEnd } },
       select: { occurredAt: true },
     }),
     prisma.inventoryBalance.findMany({
-      where: storeId ? { storeId } : { store: { businessId } },
+      where: authorisedStores ? storeFilter : (storeId ? { storeId } : { store: { businessId } }),
       select: {
         qtyOnHandBase: true,
         product: { select: { reorderPointBase: true, active: true } },
       },
     }),
     prisma.expense.findMany({
-      where: { businessId, paymentStatus: 'PAID', createdAt: { gte: thirtyFiveDaysAgo, lt: todayEnd } },
+      where: { businessId, ...enforced, paymentStatus: 'PAID', createdAt: { gte: expenseReadStart, lt: todayEnd } },
       select: { amountPence: true, createdAt: true },
     }),
     prisma.mobileMoneyCollection.count({
-      where: { businessId, status: 'PENDING' },
+      where: { businessId, ...enforced, status: 'PENDING' },
     }),
     prisma.shift.findMany({
       where: {
-        till: { store: { businessId, ...(storeId ? { id: storeId } : {}) } },
+        till: {
+          store: {
+            businessId,
+            ...(authorisedStores
+              ? { id: storeIdentity(authorisedStores) }
+              : (storeId ? { id: storeId } : {})),
+          },
+        },
         variance: { not: null },
         closedAt: { gte: sevenDaysAgo, lt: todayEnd },
       },
@@ -317,7 +370,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     prisma.salesInvoiceLine.findMany({
       where: {
         salesInvoice: {
-          businessId, ...(storeId ? { storeId } : {}),
+          businessId, ...storeFilter,
           createdAt: { gte: fourteenDaysAgo, lt: todayEnd },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
@@ -333,7 +386,9 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
         salesInvoice: { select: { createdAt: true, paymentStatus: true, discountPence: true } },
       },
     }),
-    getLiquidAssetsPence(businessId, todayEnd, storeId),
+    authorisedStores
+      ? getOperationalLiquidAssetsEstimatePence(businessId, todayEnd, undefined, authorisedStores)
+      : getLiquidAssetsPence(businessId, todayEnd, storeId),
   ]);
 
   const validTodaySales = salesRows.filter((row) =>
@@ -369,16 +424,20 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     }))
   );
 
-  const totalExpenses30d = paidExpenses
-    .filter((expense) => isDateOnOrAfter(expense.createdAt, thirtyDaysAgo))
-    .reduce((sum, expense) => sum + expense.amountPence, 0);
+  const totalExpenses30d = includeThirty
+    ? paidExpenses
+      .filter((expense) => isDateOnOrAfter(expense.createdAt, thirtyDaysAgo))
+      .reduce((sum, expense) => sum + expense.amountPence, 0)
+    : 0;
   const avgDailyExpensesPence = Math.round(totalExpenses30d / 30);
   const thisWeekExpensesPence = paidExpenses
     .filter((expense) => isDateOnOrAfter(expense.createdAt, sevenDaysAgo))
     .reduce((sum, expense) => sum + expense.amountPence, 0);
-  const fourWeekTotal = paidExpenses
-    .filter((expense) => isDateOnOrAfter(expense.createdAt, thirtyFiveDaysAgo) && !isDateOnOrAfter(expense.createdAt, sevenDaysAgo))
-    .reduce((sum, expense) => sum + expense.amountPence, 0);
+  const fourWeekTotal = includeFourWeek
+    ? paidExpenses
+      .filter((expense) => isDateOnOrAfter(expense.createdAt, thirtyFiveDaysAgo) && !isDateOnOrAfter(expense.createdAt, sevenDaysAgo))
+      .reduce((sum, expense) => sum + expense.amountPence, 0)
+    : 0;
   const fourWeekAvgExpensesPence = Math.round(fourWeekTotal / 4);
 
   const cashVarianceTotalPence = cashVarShifts
@@ -426,8 +485,8 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     productsAboveReorderPoint: inventorySummary.productsAboveReorderPoint,
     paymentSplit,
     avgDailyExpensesPence,
-    cashOnHandEstimatePence: Math.max(0, cashOnHandEstimatePence),
-    openExpectedCashPence: await openExpectedCashFromEntries(businessId, storeId),
+    cashOnHandEstimatePence: Math.max(0, cashOnHandEstimatePence ?? 0),
+    openExpectedCashPence: await openExpectedCashFromEntries(businessId, storeId, authorisedStores ?? undefined),
     todayReceiptsPence,
     negativeMarginProductCount,
     momoPendingCount: momoPending,
@@ -444,7 +503,16 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
   };
 }
 
-async function _getTodayKPIs(businessId: string, storeId?: string): Promise<TodayKPIs> {
+async function _getTodayKPIs(
+  businessId: string,
+  storeId?: string,
+  scope?: CommandCenterKpiScope,
+): Promise<TodayKPIs> {
+  const authorisedStores = scope ? requireAuthorisedStoreIds(scope.storeIds) : null;
+  if (scope && !(scope.startInclusive < scope.endExclusive)) {
+    throw new ReportingScopeStoreError('Authorised reporting window is required');
+  }
+
   try {
     await ensureSqliteReportDateColumnsNormalized();
   } catch (error) {
@@ -455,26 +523,34 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     });
   }
 
-  const now = new Date();
+  const now = scope?.now ?? new Date();
   const business = await prisma.business.findUnique({
     where: { id: businessId },
     select: { timezone: true },
   });
   const timeZone = requireReportTimeZone(business?.timezone);
   if (isSqliteRuntime()) {
-    return getTodayKPIsSqlite(businessId, storeId, now, timeZone);
+    return getTodayKPIsSqlite(businessId, storeId, now, timeZone, scope);
   }
 
   const todayWindow = businessDayWindow(now, timeZone);
-  const todayStart = todayWindow.startInclusive;
-  const todayEnd = todayWindow.endExclusive;
+  const earliest = scope?.startInclusive;
+  const todayStart = earliest && todayWindow.startInclusive < earliest ? earliest : todayWindow.startInclusive;
+  const todayEnd = scope?.endExclusive && scope.endExclusive < todayWindow.endExclusive
+    ? scope.endExclusive
+    : todayWindow.endExclusive;
 
-  const sevenDaysAgo = lookbackStart(now, timeZone, 7);
-  const thirtyDaysAgo = lookbackStart(now, timeZone, 30);
-  const thirtyFiveDaysAgo = lookbackStart(now, timeZone, 35);
-  const fourteenDaysAgo = lookbackStart(now, timeZone, 14);
+  const sevenDaysAgoNatural = lookbackStart(now, timeZone, 7);
+  const thirtyDaysAgoNatural = lookbackStart(now, timeZone, 30);
+  const thirtyFiveDaysAgoNatural = lookbackStart(now, timeZone, 35);
+  const fourteenDaysAgoNatural = lookbackStart(now, timeZone, 14);
+  const sevenDaysAgo = earliest && sevenDaysAgoNatural < earliest ? earliest : sevenDaysAgoNatural;
+  const fourteenDaysAgo = earliest && fourteenDaysAgoNatural < earliest ? earliest : fourteenDaysAgoNatural;
+  const includeThirty = !earliest || thirtyDaysAgoNatural >= earliest;
+  const includeFourWeek = !earliest || thirtyFiveDaysAgoNatural >= earliest;
   // Recency floor for KPI monitoring queries only.
-  const storeFilter = storeId ? { storeId } : {};
+  const storeFilter = authorisedStores ? storeClause(authorisedStores) : (storeId ? { storeId } : {});
+  const enforced = authorisedStores ? storeFilter : {};
 
   const [
     salesAgg,
@@ -512,7 +588,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
         timeZone,
         periodStart: todayStart,
         periodEndInclusive: todayEnd,
-        branchIds: storeId ? [storeId] : null,
+        branchIds: authorisedStores ?? (storeId ? [storeId] : null),
         absoluteBounds: true,
       }),
     ),
@@ -538,6 +614,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     prisma.riskAlert.count({
       where: {
         businessId,
+        ...enforced,
         severity: 'HIGH',
         status: 'OPEN',
         occurredAt: { gte: sevenDaysAgo, lt: todayEnd },
@@ -545,37 +622,48 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     }),
     // Inventory balances
     prisma.inventoryBalance.findMany({
-      where: storeId
-        ? { storeId }
-        : { store: { businessId } },
+      where: authorisedStores
+        ? storeFilter
+        : (storeId ? { storeId } : { store: { businessId } }),
       select: {
         qtyOnHandBase: true,
         product: { select: { reorderPointBase: true, active: true } },
       },
     }),
-    // 30-day expenses — aggregate at DB level
-    prisma.expense.aggregate({
-      where: { businessId, createdAt: { gte: thirtyDaysAgo, lt: todayEnd }, paymentStatus: 'PAID' },
-      _sum: { amountPence: true },
-    }),
+    // 30-day expenses — skipped when that start is outside the authorised envelope
+    includeThirty
+      ? prisma.expense.aggregate({
+        where: { businessId, ...enforced, createdAt: { gte: thirtyDaysAgoNatural, lt: todayEnd }, paymentStatus: 'PAID' },
+        _sum: { amountPence: true },
+      })
+      : Promise.resolve({ _sum: { amountPence: null as number | null } }),
     // This week expenses — aggregate at DB level
     prisma.expense.aggregate({
-      where: { businessId, createdAt: { gte: sevenDaysAgo, lt: todayEnd }, paymentStatus: 'PAID' },
+      where: { businessId, ...enforced, createdAt: { gte: sevenDaysAgo, lt: todayEnd }, paymentStatus: 'PAID' },
       _sum: { amountPence: true },
     }),
-    // 4-week expenses (35 days ago → 7 days ago = 28 days = 4 weeks) — aggregate at DB level
-    prisma.expense.aggregate({
-      where: { businessId, createdAt: { gte: thirtyFiveDaysAgo, lt: sevenDaysAgo }, paymentStatus: 'PAID' },
-      _sum: { amountPence: true },
-    }),
+    // 4-week expenses are a 35-date read. Command Center does not issue them unless the authorised envelope covers that start.
+    includeFourWeek
+      ? prisma.expense.aggregate({
+        where: { businessId, ...enforced, createdAt: { gte: thirtyFiveDaysAgoNatural, lt: sevenDaysAgoNatural }, paymentStatus: 'PAID' },
+        _sum: { amountPence: true },
+      })
+      : Promise.resolve({ _sum: { amountPence: null as number | null } }),
     // MoMo pending
     prisma.mobileMoneyCollection.count({
-      where: { businessId, status: 'PENDING' },
+      where: { businessId, ...enforced, status: 'PENDING' },
     }),
     // Cash variances last 7 days
     prisma.shift.findMany({
       where: {
-        till: { store: { businessId, ...(storeId ? { id: storeId } : {}) } },
+        till: {
+          store: {
+            businessId,
+            ...(authorisedStores
+              ? { id: storeIdentity(authorisedStores) }
+              : (storeId ? { id: storeId } : {})),
+          },
+        },
         closedAt: { gte: sevenDaysAgo, lt: todayEnd },
         variance: { not: null },
       },
@@ -586,6 +674,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     prisma.salesInvoice.count({
       where: {
         businessId,
+        ...enforced,
         createdAt: { gte: sevenDaysAgo, lt: todayEnd },
         discountOverrideReason: { not: null },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
@@ -596,6 +685,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       where: {
         salesInvoice: {
           businessId,
+          ...enforced,
           createdAt: { gte: fourteenDaysAgo, lt: todayEnd },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
@@ -615,7 +705,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       where: {
         salesInvoice: {
           businessId,
-          ...(storeId ? { storeId } : {}),
+          ...storeFilter,
           createdAt: { gte: todayStart, lt: todayEnd },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
@@ -631,7 +721,9 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
         salesInvoice: { select: { paymentStatus: true, discountPence: true } },
       },
     }),
-    getLiquidAssetsPence(businessId, todayEnd, storeId),
+    authorisedStores
+      ? getOperationalLiquidAssetsEstimatePence(businessId, todayEnd, undefined, authorisedStores)
+      : getLiquidAssetsPence(businessId, todayEnd, storeId),
   ]);
 
   // Sales KPIs — already aggregated by the DB
@@ -715,8 +807,8 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     productsAboveReorderPoint: inventorySummary.productsAboveReorderPoint,
     paymentSplit,
     avgDailyExpensesPence,
-    cashOnHandEstimatePence: Math.max(0, cashOnHandEstimatePence),
-    openExpectedCashPence: await openExpectedCashFromEntries(businessId, storeId),
+    cashOnHandEstimatePence: Math.max(0, cashOnHandEstimatePence ?? 0),
+    openExpectedCashPence: await openExpectedCashFromEntries(businessId, storeId, authorisedStores ?? undefined),
     todayReceiptsPence,
     negativeMarginProductCount,
     momoPendingCount: momoPending,
@@ -737,6 +829,19 @@ const cachedTodayKPIs = unstable_cache(
   // (cron jobs, webhooks) that don't know to bust the tag.
   { revalidate: 30, tags: ['reports'] }
 );
+
+/** Command Center only. Requires the authorised store list and half-open window before any query. */
+export function getCommandCenterKpis(businessId: string, scope: CommandCenterKpiScope): Promise<TodayKPIs> {
+  try {
+    requireAuthorisedStoreIds(scope.storeIds);
+    if (!(scope.startInclusive < scope.endExclusive)) {
+      throw new ReportingScopeStoreError('Authorised reporting window is required');
+    }
+  } catch (error) {
+    return Promise.reject(error);
+  }
+  return _getTodayKPIs(businessId, undefined, scope);
+}
 
 export function getTodayKPIs(businessId: string, storeId?: string): Promise<TodayKPIs> {
   return measureServerOperation(

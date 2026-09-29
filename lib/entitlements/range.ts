@@ -70,6 +70,30 @@ export function earliestPermittedLocalDate(plan: BusinessPlan, todayLocal: strin
   return addCalendarDays(todayLocal, -29);
 }
 
+/**
+ * The date range Command Center asks the entitlement decision to authorise.
+ *
+ * Displayed trend reads are the 14-local-date negative-margin window and,
+ * on Growth and Pro, the tenant calendar month for the linked-supplier card.
+ * The 35-local-date expense comparison cannot fit inside Starter's 30-date
+ * horizon, and it is not a Command Center metric, so it is not requested.
+ * A plan cap never lets this request start before the earliest lawful date.
+ */
+export function commandCenterRequestedRange(input: {
+  plan: BusinessPlan;
+  todayLocal: string;
+  includeSupplierMonth: boolean;
+}): { fromLocalDate: string; toLocalDate: string; preset: 'CUSTOM' } {
+  let fromLocalDate = addCalendarDays(input.todayLocal, -14);
+  if (input.includeSupplierMonth) {
+    const monthStart = firstOfMonth(input.todayLocal);
+    if (monthStart < fromLocalDate) fromLocalDate = monthStart;
+  }
+  const earliest = earliestPermittedLocalDate(input.plan, input.todayLocal);
+  if (earliest && fromLocalDate < earliest) fromLocalDate = earliest;
+  return { fromLocalDate, toLocalDate: input.todayLocal, preset: 'CUSTOM' };
+}
+
 export function clampHrefFor(earliestLocalDate: string): string {
   return `?from=${earliestLocalDate}`;
 }

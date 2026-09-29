@@ -1,6 +1,10 @@
+import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import Link from 'next/link';
-import { requireBusiness } from '@/lib/auth';
+import { ReportScopeLabel } from '@/components/reports/ReportSurfaceDenial';
+import { addCalendarDays } from '@/lib/entitlements/range';
+import { openLiveReport } from '@/lib/entitlements/live-report';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import StorefrontUpgradeNotice from '@/components/StorefrontUpgradeNotice';
@@ -45,18 +49,22 @@ function FunnelBar({ label, count, max }: { label: string; count: number; max: n
   );
 }
 
-export default async function StorefrontAnalyticsPage() {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  const addonOnlineStorefront = (business as any).addonOnlineStorefront ?? false;
-  const features = getFeatures(
-    (business as any).plan ?? (business.mode as any),
-    (business as any).storeMode as any,
-    { onlineStorefront: addonOnlineStorefront },
-  );
-
-  if (!features.onlineStorefront) {
-    return <StorefrontUpgradeNotice plan={features.plan} featureName="Storefront analytics" />;
-  }
+export default async function StorefrontAnalyticsPage({
+  searchParams,
+}: {
+  searchParams?: { storeId?: string; businessId?: string };
+}) {
+  const opened = await openLiveReport({
+    surfaceId: 'storefront_analytics',
+    search: searchParams,
+    range: ({ timezone, now }) => {
+      const today = formatBusinessLocalDateKey(now, timezone);
+      return { fromLocalDate: addCalendarDays(today, -59), toLocalDate: today, preset: 'CUSTOM' };
+    },
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  if (opened.branch.kind !== 'label') notFound();
 
   const now = Date.now();
   const since30 = new Date(now - 30 * 24 * 60 * 60 * 1000);
@@ -147,6 +155,7 @@ export default async function StorefrontAnalyticsPage() {
 
   return (
     <div className="space-y-6">
+      <ReportScopeLabel label={opened.branch.label} />
       <div className="flex items-center justify-between gap-4">
         <PageHeader title="Storefront analytics" subtitle="Last 30 days" />
         <Link

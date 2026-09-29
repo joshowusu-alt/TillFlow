@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
@@ -7,7 +8,8 @@ import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import { getFeatures } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import { resolveSelectableReportDateRange } from '@/lib/reports/date-parsing';
@@ -106,26 +108,37 @@ export default async function MarginsPage({
 }: {
   searchParams?: { period?: string; from?: string; to?: string; view?: string; page?: string; pageSize?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const opened = await openLiveReport({
+    surfaceId: 'profit_margins',
+    search: searchParams,
+    range: ({ timezone, now }) => {
+      const resolved = resolveSelectableReportDateRange(searchParams, '30d', now, timezone);
+      return { fromLocalDate: resolved.fromInputValue, toLocalDate: resolved.toInputValue, preset: 'CUSTOM' };
+    },
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
   if (!business) return <div className="card p-6">Business not found.</div>;
-  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
-  if (!features.advancedReports) {
-    return (
-      <AdvancedModeNotice
-        title="Profit Margins is available on Growth and Pro"
-        description="Margin analysis, below-cost checks, and target tracking are unlocked on businesses provisioned for Growth or Pro."
-        featureName="Profit Margins"
-        minimumPlan="GROWTH"
-      />
-    );
-  }
 
-  const { start, end, fromInputValue, toInputValue, periodInputValue } = resolveSelectableReportDateRange(searchParams, '30d', new Date(), business.timezone);
+  const { start, end, fromInputValue, toInputValue, periodInputValue } = resolveSelectableReportDateRange(
+    opened.decision.appliedRange
+      ? { from: opened.decision.appliedRange.fromLocalDate, to: opened.decision.appliedRange.toLocalDate }
+      : searchParams,
+    '30d',
+    new Date(),
+    business.timezone,
+  );
   const currentView = resolveMarginsView(searchParams?.view);
   const requestedPageSize = parseInt(searchParams?.pageSize ?? '20', 10) || 20;
   const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize as 10 | 20 | 50) ? requestedPageSize : 20;
   const requestedPage = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
-  const snapshot = await getMarginAnalysisSnapshot({ businessId: business.id, start, end });
+  const snapshot = await getMarginAnalysisSnapshot({
+    businessId: business.id,
+    start,
+    end,
+    storeIds: opened.branch.storeIds,
+  });
   const products = snapshot.rows;
 
   const totalRevenue = products.reduce((sum, row) => sum + row.revenuePence, 0);

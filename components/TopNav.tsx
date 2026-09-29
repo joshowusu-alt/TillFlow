@@ -24,6 +24,15 @@ import { SHELL_COMPACT_LANDSCAPE_MQ, SHELL_LG_PX } from '@/lib/navigation/shell-
 import { withOperationalStoreQuery } from '@/lib/reliability/operational-store';
 import OperationalStoreSwitcher, { type OperationalStoreOption } from './OperationalStoreSwitcher';
 
+function isReportNavHref(href: string) {
+  return (
+    href.startsWith('/reports') ||
+    href === '/payments/supplier-aging' ||
+    href === '/settings/analytics' ||
+    href === '/settings/online-store/analytics'
+  );
+}
+
 export type TopNavUser = {
   name: string;
   role: 'CASHIER' | 'MANAGER' | 'OWNER';
@@ -42,6 +51,7 @@ export default function TopNav({
   addonOnlineStorefront = false,
   todaySales,
   onlineOrdersCount = 0,
+  allowedReportHrefs,
 }: {
   user: TopNavUser;
   plan?: BusinessPlan;
@@ -55,7 +65,12 @@ export default function TopNav({
   addonOnlineStorefront?: boolean;
   todaySales?: { totalPence: number; txCount: number; currency: string };
   onlineOrdersCount?: number;
+  allowedReportHrefs?: string[];
 }){
+  const allowedReports = useMemo(
+    () => (allowedReportHrefs ? new Set(allowedReportHrefs) : null),
+    [allowedReportHrefs],
+  );
   const canSwitchStore = (user.role === 'OWNER' || user.role === 'MANAGER') && stores.length > 1;
   const operationalHref = (href: string) => withOperationalStoreQuery(href, storeId);
   const pathname = usePathname() ?? '';
@@ -113,7 +128,8 @@ export default function TopNav({
     const itemIsVisible = (item: (typeof NAV_GROUPS)[number]['items'][number]) =>
       item.roles.includes(user.role) &&
       (features.multiStore || item.href !== '/transfers') &&
-      (momoEnabled !== false || item.href !== '/payments/reconciliation');
+      (momoEnabled !== false || item.href !== '/payments/reconciliation') &&
+      (!allowedReports || !isReportNavHref(item.href) || allowedReports.has(item.href));
 
     return NAV_GROUPS
       .map((group) => {
@@ -124,7 +140,7 @@ export default function TopNav({
         return { ...group, items, sections };
       })
       .filter((group) => group.items.length > 0);
-  }, [user.role, features.multiStore, momoEnabled]);
+  }, [user.role, features.multiStore, momoEnabled, allowedReports]);
 
   const showMobileSalesPulse = Boolean(liveTodaySales) && !pathname.startsWith('/onboarding');
   const mobileSales = showMobileSalesPulse ? liveTodaySales : undefined;
@@ -378,9 +394,10 @@ export default function TopNav({
 
               const renderNavItem = (item: (typeof sections)[number]['items'][number]) => {
                 const active = pathname === item.href || (item.href !== '/reports' && pathname.startsWith(item.href + '/'));
-                const requiredFeature = featureGatedLinks.get(item.href);
+                const reportAllowed = allowedReports?.has(item.href) === true;
+                const requiredFeature = reportAllowed ? undefined : featureGatedLinks.get(item.href);
                 const featureLocked = requiredFeature ? !features[requiredFeature] : false;
-                const minimumPlan = planGatedLinks.get(item.href);
+                const minimumPlan = reportAllowed ? undefined : planGatedLinks.get(item.href);
                 const planLocked = !requiredFeature && minimumPlan ? !hasPlanAccess(features.plan, minimumPlan) : false;
                 const lockLabel =
                   featureLocked && requiredFeature

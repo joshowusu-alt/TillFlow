@@ -82,8 +82,8 @@ describe('sales-by-supplier page', () => {
   });
 
   it('gates on advancedReports feature', () => {
-    expect(src).toContain('advancedReports');
-    expect(src).toContain('AdvancedModeNotice');
+    expect(src).toContain("surfaceId: 'sales_by_supplier'");
+    expect(src).toContain('openLiveReport');
   });
 
   it('shows summary cards: total revenue, units sold, suppliers with sales, top supplier', () => {
@@ -369,8 +369,9 @@ describe('getTopLinkedSupplierForMonth — service helper', () => {
     expect(src).toContain('export type TopLinkedSupplierResult');
   });
 
-  it('uses the business-local calendar month with an exclusive end', () => {
-    expect(src).toContain('businessMonthWindow');
+  it('uses the authorised half-open window and does not recompute a calendar month', () => {
+    expect(src).toContain('bounds.endExclusive');
+    expect(src).not.toContain('businessMonthWindow');
     expect(src).toContain('lt: endExclusive');
     expect(src).not.toContain('now.getFullYear(), now.getMonth(), 1');
     expect(src).not.toContain('23, 59, 59, 999');
@@ -438,7 +439,7 @@ describe('command-center — Top Supplier This Month card', () => {
 
   it('fetches top supplier in parallel with KPIs', () => {
     expect(src).toContain('Promise.all');
-    expect(src).toContain('getTopLinkedSupplierForMonth(business.id)');
+    expect(src).toContain('getTopLinkedSupplierForMonth(business.id, branch.storeIds,');
   });
 
   it('gates the card on advancedReports (Starter users do not see it)', () => {
@@ -478,7 +479,8 @@ describe('command-center — Top Supplier This Month card', () => {
   });
 
   it('wraps top supplier fetch in catch to prevent dashboard crash', () => {
-    expect(src).toContain('getTopLinkedSupplierForMonth(business.id).catch(() => null)');
+    expect(src).toContain('getTopLinkedSupplierForMonth(business.id, branch.storeIds,');
+    expect(src).toContain('.catch((error) => {');
   });
 
   it('skips supplier query for Starter (only queries when advancedReports is true)', () => {

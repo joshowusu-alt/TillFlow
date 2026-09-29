@@ -178,11 +178,11 @@ describe('Financial Reports clarity', () => {
   // Safety: plan gates unchanged
 
   it('36. Plan gates remain unchanged in all pages', () => {
-    expect(cashflowSrc).toContain('features.financialReports');
-    expect(incomeSrc).toContain('features.financialReports');
-    expect(balanceSrc).toContain('features.financialReports');
-    expect(marginsSrc).toContain('features.advancedReports');
-    expect(forecastSrc).toContain('features.cashflowForecast');
+    expect(cashflowSrc).toContain("surfaceId: 'cash_flow_statement'");
+    expect(incomeSrc).toContain("surfaceId: 'income_statement'");
+    expect(balanceSrc).toContain("surfaceId: 'balance_sheet'");
+    expect(marginsSrc).toContain("surfaceId: 'profit_margins'");
+    expect(forecastSrc).toContain("surfaceId: 'cashflow_forecast'");
   });
 
   // Safety: service import paths unchanged

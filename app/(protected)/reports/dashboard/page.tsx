@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import RefreshIndicator from '@/components/RefreshIndicator';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportSectionSkeleton from '@/components/reports/ReportSectionSkeleton';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import { recordOwnerDashboardView, recordOwnerReportView } from '@/app/actions/activation';
 import { getBusinessStores } from '@/lib/services/stores';
 import {
@@ -20,7 +21,13 @@ export default async function DashboardPage({
 }: {
   searchParams?: { from?: string; to?: string; storeId?: string; period?: string };
 }) {
-  const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
+  const opened = await openLiveReport({
+    surfaceId: 'trading_report',
+    search: searchParams,
+  });
+  if (!opened.ok) return opened.denial;
+  const { business, user } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
   if (user.role === 'OWNER') {
     await Promise.all([recordOwnerDashboardView(), recordOwnerReportView()]);
   }
@@ -45,7 +52,7 @@ export default async function DashboardPage({
         period: searchParams?.period,
         from: searchParams?.from,
         to: searchParams?.to,
-        storeId: searchParams?.storeId,
+        storeId: opened.branch.selected,
       },
       defaultPeriod: '7d',
       allowedStoreIds: stores.map((store) => store.id),
@@ -66,6 +73,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-4 sm:space-y-5">
+      {opened.readOnly ? <ReportReadOnlyBanner /> : null}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">Trading Report</p>
@@ -131,12 +139,12 @@ export default async function DashboardPage({
               <label className="label">To</label>
               <input className="input" type="date" name="to" defaultValue={scope.toInputValue} />
             </div>
-            {stores.length > 1 ? (
+            {opened.branch.choices.length > 1 || opened.branch.offerAll ? (
               <div>
                 <label className="label">Report branch filter</label>
                 <select className="input" name="storeId" defaultValue={selectedStoreId}>
-                  <option value="ALL">All branches</option>
-                  {stores.map((store) => (
+                  {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
+                  {opened.branch.choices.map((store) => (
                     <option key={store.id} value={store.id}>
                       {store.name}
                     </option>

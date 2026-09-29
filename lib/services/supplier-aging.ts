@@ -102,10 +102,14 @@ function zeroBuckets(): Record<AgingBucket, number> {
 async function loadOutstandingAttributedInvoices(
   businessId: string,
   asOf: Date,
+  storeIds?: readonly string[],
 ): Promise<LoadedInvoice[]> {
   const invoices = await prisma.purchaseInvoice.findMany({
     where: {
       businessId,
+      ...(storeIds && storeIds.length > 0
+        ? { storeId: storeIds.length === 1 ? storeIds[0] : { in: [...storeIds] } }
+        : {}),
       supplierId: { not: null },
       paymentStatus: { notIn: ['RETURNED', 'VOID'] },
     },
@@ -146,8 +150,9 @@ export async function getSupplierAgingInvoices(
   businessId: string,
   asOf: Date,
   bucket?: AgingBucket,
+  storeIds?: readonly string[],
 ): Promise<SupplierAgingInvoice[]> {
-  const invoices = await loadOutstandingAttributedInvoices(businessId, asOf);
+  const invoices = await loadOutstandingAttributedInvoices(businessId, asOf, storeIds);
   const filtered = bucket ? invoices.filter((invoice) => invoice.bucket === bucket) : invoices;
   return filtered
     .map((invoice) => ({
@@ -172,8 +177,9 @@ export async function getSupplierAgingInvoices(
 export async function getSupplierAgingReport(
   businessId: string,
   asOf: Date,
+  storeIds?: readonly string[],
 ): Promise<SupplierAgingReport> {
-  const invoices = await loadOutstandingAttributedInvoices(businessId, asOf);
+  const invoices = await loadOutstandingAttributedInvoices(businessId, asOf, storeIds);
 
   const supplierMap = new Map<string, SupplierAgingRow>();
 

@@ -221,7 +221,7 @@ describe('Business Movement 6F — surface wiring', () => {
     const hub = readFileSync(join(root, 'app/(protected)/reports/page.tsx'), 'utf8');
 
     expect(page).toContain('title="Business Movement"');
-    expect(page).toContain("requireBusiness(['MANAGER', 'OWNER'])");
+    expect(page).toContain("surfaceId: 'business_movement'");
     expect(page).toContain('Product movers');
     expect(exportRoute).toContain('COMPLETE_STREAM');
     expect(exportRoute).toContain('requireExportUser');

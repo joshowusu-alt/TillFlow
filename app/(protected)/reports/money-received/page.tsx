@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation';
 import DownloadLink from '@/components/DownloadLink';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
@@ -7,7 +8,8 @@ import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
 import Pagination from '@/components/Pagination';
 import { formatMoney } from '@/lib/format';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import { prisma } from '@/lib/prisma';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';
@@ -57,7 +59,13 @@ export default async function MoneyReceivedReportPage({
     pageSize?: string;
   };
 }) {
-  const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
+  const opened = await openLiveReport({
+    surfaceId: 'money_received',
+    search: searchParams,
+  });
+  if (!opened.ok) return opened.denial;
+  const { business, user } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
   if (!business) {
     return (
       <div className="card p-6">
@@ -75,7 +83,7 @@ export default async function MoneyReceivedReportPage({
   const access = resolveMoneyReceivedAccess({
     actor: { role: user.role, businessId: user.businessId },
     requestedBusinessId: searchParams?.businessId,
-    requestedStoreId: searchParams?.storeId,
+    requestedStoreId: opened.branch.selected,
     authorisedStoreIds: stores.map((s) => s.id),
   });
   if (!access.ok) {
@@ -150,6 +158,7 @@ export default async function MoneyReceivedReportPage({
 
   return (
     <div className="space-y-6">
+      {opened.readOnly ? <ReportReadOnlyBanner /> : null}
       <PageHeader
         title="Money Received"
         subtitle="Confirmed customer money by the time it was received — separate from sales totals and from refunds."
@@ -220,8 +229,8 @@ export default async function MoneyReceivedReportPage({
             Report branch filter
           </label>
           <select id="storeId" className="input" name="storeId" defaultValue={selectedStoreId}>
-            <option value="ALL">All branches</option>
-            {stores.map((store) => (
+            {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
+            {opened.branch.choices.map((store) => (
               <option key={store.id} value={store.id}>
                 {store.name}
               </option>

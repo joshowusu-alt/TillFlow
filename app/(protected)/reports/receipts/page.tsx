@@ -4,7 +4,8 @@ import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { getBusinessStores } from '@/lib/services/stores';
 import {
@@ -39,7 +40,13 @@ export default async function MoneyReceivedReceiptsPage({
     pageSize?: string;
   };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const opened = await openLiveReport({
+    surfaceId: 'receipt_transactions',
+    search: searchParams,
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
   if (!business) {
     return <div className="card p-6">Setup Required</div>;
   }
@@ -55,7 +62,7 @@ export default async function MoneyReceivedReceiptsPage({
         period: searchParams?.period,
         from: searchParams?.from,
         to: searchParams?.to,
-        storeId: searchParams?.storeId,
+        storeId: opened.branch.selected,
       },
       defaultPeriod: 'today',
       allowedStoreIds: stores.map((store) => store.id),
@@ -153,7 +160,7 @@ export default async function MoneyReceivedReceiptsPage({
           <div>
             <label className="label">Report branch filter</label>
             <select className="input" name="storeId" defaultValue={scope.storeId}>
-              <option value="ALL">All branches</option>
+              {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
               {stores.map((store) => (
                 <option key={store.id} value={store.id}>
                   {store.name}
