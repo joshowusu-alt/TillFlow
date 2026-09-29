@@ -5,36 +5,42 @@ import EmptyState from '@/components/EmptyState';
 import ReportActionGroup from '@/components/reports/ReportActionGroup';
 import DateRangeFilterCard from '@/components/reports/DateRangeFilterCard';
 import ReportSummaryCard, { ReportSummaryRow } from '@/components/reports/ReportSummaryCard';
-import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { requireBusiness } from '@/lib/auth';
-import { getFeatures } from '@/lib/features';
+import { ReportReadOnlyBanner, ReportScopeLabel } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { formatMoney } from '@/lib/format';
 import { getIncomeStatement } from '@/lib/reports/financials';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
-import { businessMonthWindow } from '@/lib/reports/reporting-clock';
+import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 export default async function IncomeStatementPage({
   searchParams
 }: {
   searchParams?: { from?: string; to?: string };
 }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
-  if (!business) return <div className="card p-6">Seed data missing.</div>;
-  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
-  if (!features.financialReports) {
-    return (
-      <AdvancedModeNotice
-        title="Income Statement is available on Growth and Pro"
-        description="Financial statements are unlocked on businesses provisioned for Growth or Pro."
-        featureName="Income Statement"
-        minimumPlan="GROWTH"
-      />
-    );
-  }
+  const opened = await openLiveReport({
+    surfaceId: 'income_statement',
+    search: searchParams,
+    range: ({ timezone, now }) => {
+      if (searchParams?.from && searchParams?.to) {
+        return { fromLocalDate: searchParams.from, toLocalDate: searchParams.to, preset: 'CUSTOM' };
+      }
+      const today = formatBusinessLocalDateKey(now, timezone);
+      return { fromLocalDate: `${today.slice(0, 7)}-01`, toLocalDate: today, preset: 'MONTH_TO_DATE' };
+    },
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
 
   const now = new Date();
-  const month = businessMonthWindow(now, business.timezone);
-  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(searchParams, month.startInclusive, now, month.timeZone);
+  const month = businessMonthWindow(now, requireReportTimeZone(business.timezone));
+  const applied = opened.decision.appliedRange;
+  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(
+    applied ? { from: applied.fromLocalDate, to: applied.toLocalDate } : searchParams,
+    month.startInclusive,
+    now,
+    month.timeZone,
+  );
 
   const statement = await getIncomeStatement(business.id, start, end);
   const costsIncomplete = statement.grossProfit == null || statement.netProfit == null || statement.cogs == null;
@@ -48,6 +54,9 @@ export default async function IncomeStatementPage({
 
   return (
     <div className="space-y-6">
+      {opened.readOnly ? <ReportReadOnlyBanner /> : null}
+      {opened.branch.kind === 'label' ? <ReportScopeLabel label={opened.branch.label} /> : null}
+      {applied?.label === 'Last 30 days' ? <ReportScopeLabel label="Last 30 days" /> : null}
       <PageHeader
         title="Income Statement"
         subtitle="Sales, product costs, expenses, and profit for the selected period."

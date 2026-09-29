@@ -1,12 +1,15 @@
+import { notFound } from 'next/navigation';
 import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
 import StatCard from '@/components/StatCard';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
 import { formatMoney } from '@/lib/format';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { getWeeklyDigestData } from '@/lib/reports/weekly-digest';
-import { businessWeekWindow } from '@/lib/reports/reporting-clock';
+import { businessWeekWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,22 +31,33 @@ export default async function WeeklyDigestPage({
 }: {
   searchParams?: { week?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  if (!business) {
-    return (
-      <div className="card p-6">
-        <EmptyState icon="chart" title="Setup required" subtitle="Complete your business setup to unlock weekly reports." cta={{ label: 'Complete Setup', href: '/onboarding' }} />
-      </div>
-    );
-  }
+  const opened = await openLiveReport({
+    surfaceId: 'weekly_digest',
+    search: searchParams,
+    range: ({ timezone, now }) => {
+      const timeZone = requireReportTimeZone(timezone);
+      const weekOffset = Number(searchParams?.week ?? -1);
+      const week = businessWeekWindow(now, timeZone, Number.isFinite(weekOffset) ? weekOffset : -1);
+      return {
+        fromLocalDate: formatBusinessLocalDateKey(week.startInclusive, timeZone),
+        toLocalDate: formatBusinessLocalDateKey(new Date(week.endExclusive.getTime() - 1), timeZone),
+        preset: 'CUSTOM',
+      };
+    },
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
 
   const weekOffset = Number(searchParams?.week ?? -1);
-  const week = businessWeekWindow(new Date(), business.timezone, weekOffset);
+  const timeZone = requireReportTimeZone(business.timezone);
+  const week = businessWeekWindow(new Date(), timeZone, weekOffset);
   const wStart = week.startInclusive;
   const wEnd = new Date(week.endExclusive.getTime() - 1);
 
   const currency = business.currency;
-  const data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, business.timezone);
+  const storeIds = opened.branch.storeIds;
+  const data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, timeZone, storeIds);
   const dateLabel = `${wStart.toDateString()} – ${wEnd.toDateString()}`;
 
   const salesChange = pctChange(data.totalSalesPence, data.prevTotalSalesPence);
@@ -55,6 +69,7 @@ export default async function WeeklyDigestPage({
 
   return (
     <div className="space-y-6">
+      {opened.readOnly ? <ReportReadOnlyBanner /> : null}
       <PageHeader
         title="Weekly Digest"
         subtitle={dateLabel}
@@ -78,7 +93,11 @@ export default async function WeeklyDigestPage({
 
       {/* Scope and trust note */}
       <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-900">
-        <p>This digest covers Monday to Sunday for the whole business. Generated from recorded sales, receipts, returns, voids, stock adjustments, and shift activity.</p>
+        <p>
+          This digest covers Monday to Sunday for{' '}
+          {opened.branch.selected === 'ALL' ? 'all branches' : 'the selected branch'}.
+          Generated from recorded sales, receipts, returns, voids, stock adjustments, and shift activity.
+        </p>
         <p className="mt-1">Receipts may include payments for older customer credit. <a href="/reports/dashboard" className="font-medium underline-offset-2 hover:underline">Use the Trading Report</a> for date and branch filtering.</p>
       </div>
 

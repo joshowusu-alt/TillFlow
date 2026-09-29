@@ -63,8 +63,10 @@ describe('Weekly Digest clarity', () => {
     expect(src).toContain('Monday to Sunday');
   });
 
-  it('trust copy says digest covers the whole business', () => {
-    expect(src).toContain('whole business');
+  it('trust copy says digest covers the selected branch or all branches', () => {
+    expect(src).toContain('the selected branch');
+    expect(src).toContain('all branches');
+    expect(src).not.toContain('whole business');
   });
 
   it('trust copy explains receipts may include older customer credit payments', () => {

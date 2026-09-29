@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import DownloadLink from '@/components/DownloadLink';
 import PageHeader from '@/components/PageHeader';
@@ -6,7 +7,8 @@ import EmptyState from '@/components/EmptyState';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import Pagination from '@/components/Pagination';
 import { formatMoney } from '@/lib/format';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import { prisma } from '@/lib/prisma';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';
@@ -39,7 +41,13 @@ export default async function MomoConfirmationReviewPage({
     pageSize?: string;
   };
 }) {
-  const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
+  const opened = await openLiveReport({
+    surfaceId: 'momo_confirmation',
+    search: searchParams,
+  });
+  if (!opened.ok) return opened.denial;
+  const { business, user } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
   if (!business) {
     return (
       <div className="card p-6">
@@ -57,7 +65,7 @@ export default async function MomoConfirmationReviewPage({
   const access = resolveMoneyReceivedAccess({
     actor: { role: user.role, businessId: user.businessId },
     requestedBusinessId: searchParams?.businessId,
-    requestedStoreId: searchParams?.storeId,
+    requestedStoreId: opened.branch.selected,
     authorisedStoreIds: stores.map((s) => s.id),
   });
   if (!access.ok) {
@@ -193,7 +201,7 @@ export default async function MomoConfirmationReviewPage({
             Branch
           </label>
           <select id="storeId" className="input" name="storeId" defaultValue={selectedStoreId}>
-            <option value="ALL">All branches</option>
+            {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
             {stores.map((store) => (
               <option key={store.id} value={store.id}>
                 {store.name}

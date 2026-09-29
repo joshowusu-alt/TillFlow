@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import DownloadLink from '@/components/DownloadLink';
 import PageHeader from '@/components/PageHeader';
@@ -6,7 +7,10 @@ import EmptyState from '@/components/EmptyState';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
 import { formatMoney } from '@/lib/format';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { addCalendarDays } from '@/lib/entitlements/range';
+import { openLiveReport } from '@/lib/entitlements/live-report';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { prisma } from '@/lib/prisma';
 import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { getBusinessStores } from '@/lib/services/stores';
@@ -26,6 +30,8 @@ import {
   ownerProductMovers,
   OWNER_STOCK_DATA_NOTE,
   resolveBusinessMovementPeriodInput,
+  resolveEqualLengthPeriodPair,
+  resolveLastFullCalendarMonthPair,
   singleBranchNote,
   singleCashierNote,
   type ChangePair,
@@ -112,7 +118,33 @@ export default async function BusinessMovementReportPage({
     businessId?: string;
   };
 }) {
-  const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
+  const opened = await openLiveReport({
+    surfaceId: 'business_movement',
+    search: searchParams,
+    range: ({ timezone, now, canonicalPlan }) => {
+      const custom =
+        searchParams?.preset === 'equal_length_custom' &&
+        Boolean(searchParams.currentFrom) &&
+        Boolean(searchParams.currentTo);
+      if (canonicalPlan === 'STARTER' && !custom && !searchParams?.preset) {
+        const today = formatBusinessLocalDateKey(now, timezone);
+        return { fromLocalDate: addCalendarDays(today, -29), toLocalDate: today, preset: 'CUSTOM' };
+      }
+      if (custom && searchParams?.currentFrom && searchParams.currentTo) {
+        const pair = resolveEqualLengthPeriodPair({
+          timeZone: timezone,
+          currentFromKey: searchParams.currentFrom,
+          currentToKey: searchParams.currentTo,
+        });
+        return { fromLocalDate: pair.comparisonFromKey, toLocalDate: pair.currentToKey, preset: 'CUSTOM' };
+      }
+      const pair = resolveLastFullCalendarMonthPair({ timeZone: timezone, asOf: now });
+      return { fromLocalDate: pair.comparisonFromKey, toLocalDate: pair.currentToKey, preset: 'CUSTOM' };
+    },
+  });
+  if (!opened.ok) return opened.denial;
+  const { business, user } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
   if (!business) {
     return (
       <div className="card p-6">
@@ -130,7 +162,7 @@ export default async function BusinessMovementReportPage({
   const access = resolveMoneyReceivedAccess({
     actor: { role: user.role, businessId: user.businessId },
     requestedBusinessId: searchParams?.businessId,
-    requestedStoreId: searchParams?.storeId,
+    requestedStoreId: opened.branch.selected,
     authorisedStoreIds: stores.map((s) => s.id),
   });
   if (!access.ok) {
@@ -157,11 +189,21 @@ export default async function BusinessMovementReportPage({
   });
   const timeZone = requireReportTimeZone(businessTz?.timezone);
 
-  const periodInput = resolveBusinessMovementPeriodInput({
-    preset: searchParams?.preset,
-    currentFrom: searchParams?.currentFrom,
-    currentTo: searchParams?.currentTo,
-  });
+  const starterDefault =
+    business.canonicalPlan === 'STARTER' &&
+    searchParams?.preset !== 'equal_length_custom' &&
+    !searchParams?.preset;
+  const periodInput = starterDefault
+    ? {
+        preset: 'equal_length_custom' as const,
+        currentFromKey: addCalendarDays(formatBusinessLocalDateKey(new Date(), timeZone), -14),
+        currentToKey: formatBusinessLocalDateKey(new Date(), timeZone),
+      }
+    : resolveBusinessMovementPeriodInput({
+        preset: searchParams?.preset,
+        currentFrom: searchParams?.currentFrom,
+        currentTo: searchParams?.currentTo,
+      });
   const selectedPreset =
     periodInput.preset === 'equal_length_custom'
       ? 'equal_length_custom'
@@ -179,7 +221,7 @@ export default async function BusinessMovementReportPage({
     businessId: access.businessId,
     currency: business.currency,
     timeZone,
-    branchIds: access.branchIds,
+    branchIds: opened.branch.storeIds,
     period: periodInput,
   });
   const summary = buildOwnerInsightSummary(result);
@@ -311,8 +353,8 @@ export default async function BusinessMovementReportPage({
         <label className="text-sm">
           <span className="mb-1 block text-slate-600">Report branch filter</span>
           <select className="input w-full" name="storeId" defaultValue={selectedStoreId}>
-            <option value="ALL">All branches</option>
-            {stores.map((store) => (
+            {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
+            {opened.branch.choices.map((store) => (
               <option key={store.id} value={store.id}>
                 {store.name}
               </option>

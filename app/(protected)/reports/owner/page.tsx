@@ -1,5 +1,7 @@
+import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { requireBusiness } from '@/lib/auth';
+import { ReportScopeLabel } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import ReportSectionSkeleton from '@/components/reports/ReportSectionSkeleton';
 import { getFeatures } from '@/lib/features';
@@ -8,28 +10,20 @@ import OwnerDashboardBody from './OwnerDashboardBody';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OwnerIntelligencePage() {
-  const { business, user } = await requireBusiness(['OWNER']);
-  const features = getFeatures(
-    (business as any).plan ?? (business.mode as any),
-    (business as any).storeMode as any,
-  );
-  if (!features.ownerIntelligence) {
-    return (
-      <AdvancedModeNotice
-        title="Owner Dashboard is available on Pro"
-        description="Executive oversight, leakage watch, and cross-business control views are unlocked on businesses provisioned for Pro."
-        featureName="Owner Dashboard"
-        minimumPlan="PRO"
-      />
-    );
-  }
-
-  const { stores } = await getBusinessStores(business.id);
-  const scopeLabel =
-    stores.length <= 1
-      ? `Branch: ${stores[0]?.name ?? 'Main branch'}`
-      : `Scope: All ${stores.length} branches`;
+export default async function OwnerIntelligencePage({
+  searchParams,
+}: {
+  searchParams?: { storeId?: string; businessId?: string };
+}) {
+  const opened = await openLiveReport({
+    surfaceId: 'owner_brief',
+    search: searchParams,
+  });
+  if (!opened.ok) return opened.denial;
+  const { business, user } = opened;
+  if (opened.branch.kind !== 'label') notFound();
+  const features = getFeatures(business.canonicalPlan, business.storeMode as 'SINGLE_STORE' | 'MULTI_STORE' | null);
+  const scopeLabel = opened.branch.label;
 
   return (
     <div className="space-y-5 pb-2 sm:space-y-6">

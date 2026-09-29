@@ -27,7 +27,7 @@ describe('Mobile dashboard sales consistency', () => {
     expect(onboarding).toContain('todayTransactionCount: todayKpis?.txCount ?? 0');
 
     expect(commandCenter).toContain("import { getTodayKPIs } from '@/lib/reports/today-kpis'");
-    expect(commandCenter).toContain('getTodayKPIs(business.id)');
+    expect(commandCenter).toContain('getTodayKPIs(business.id, kpiStoreId)');
     expect(commandCenter).toContain('kpis.totalSalesPence');
     expect(commandCenter).toContain('kpis.txCount');
     expect(commandCenter).toContain('kpis.todayReceiptsPence');
@@ -39,7 +39,7 @@ describe('Mobile dashboard sales consistency', () => {
     const mobileMenu = read('components/NavMobileMenu.tsx');
     const readiness = read('components/ReadinessJourney.tsx');
 
-    expect(commandCenter).toContain('All branches');
+    expect(commandCenter).toContain('Consolidated — all branches');
     expect(commandCenter).not.toContain("store?.name ?? 'Main branch'");
     expect(topNav).toContain('mobileReportingScopeLabel');
     expect(topNav).toContain('mobileScopeLabel');

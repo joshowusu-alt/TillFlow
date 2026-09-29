@@ -153,21 +153,62 @@ describe('surface catalogue contract', () => {
     }
   });
 
-  it('is not imported by live routes, and core files do not import the SMS provider', () => {
+  it('is imported only by Stage 2 report consumers, and core files do not import the SMS provider', () => {
     const roots = ['app', 'components', 'hooks', 'lib'].map((dir) => path.join(process.cwd(), dir));
     const files: string[] = [];
     for (const root of roots) walk(root, files);
+    const allowed = new Set([
+      'app/(protected)/layout.tsx',
+      'app/(protected)/payments/supplier-aging/page.tsx',
+      'app/(protected)/reports/analytics/page.tsx',
+      'app/(protected)/reports/audit-log/page.tsx',
+      'app/(protected)/reports/balance-sheet/page.tsx',
+      'app/(protected)/reports/business-movement/page.tsx',
+      'app/(protected)/reports/cash-drawer/page.tsx',
+      'app/(protected)/reports/cashflow/page.tsx',
+      'app/(protected)/reports/cashflow-forecast/page.tsx',
+      'app/(protected)/reports/command-center/page.tsx',
+      'app/(protected)/reports/dashboard/page.tsx',
+      'app/(protected)/reports/exports/page.tsx',
+      'app/(protected)/reports/income-statement/page.tsx',
+      'app/(protected)/reports/margins/page.tsx',
+      'app/(protected)/reports/momo-confirmation/page.tsx',
+      'app/(protected)/reports/money-received/page.tsx',
+      'app/(protected)/reports/owner/page.tsx',
+      'app/(protected)/reports/page.tsx',
+      'app/(protected)/reports/receipts/page.tsx',
+      'app/(protected)/reports/reorder-suggestions/page.tsx',
+      'app/(protected)/reports/risk-monitor/page.tsx',
+      'app/(protected)/reports/sales/page.tsx',
+      'app/(protected)/reports/sales-by-supplier/page.tsx',
+      'app/(protected)/reports/stock-movements/page.tsx',
+      'app/(protected)/reports/weekly-digest/page.tsx',
+      'app/(protected)/reports/layout.tsx',
+      'app/(protected)/settings/analytics/page.tsx',
+      'app/(protected)/settings/online-store/analytics/page.tsx',
+      'app/api/reports/financials/route.ts',
+      'app/api/reports/weekly-digest/route.ts',
+      'components/TopNav.tsx',
+      'components/reports/ReportSurfaceDenial.tsx',
+    ]);
     const callers = files.filter((file) => {
       const normalised = file.replace(/\\/g, '/');
       if (normalised.includes('/lib/entitlements/')) return false;
       const source = readFileSync(file, 'utf8');
       return source.includes('lib/entitlements') || source.includes('decideSurfaceAccess') || source.includes('decideBusinessCapability');
     });
-    expect(callers).toEqual([]);
+    const unexpected = callers
+      .map((file) => file.replace(/\\/g, '/').split('/lib/entitlements/')[0])
+      .map((file) => {
+        const marker = file.includes('/app/') ? file.slice(file.indexOf('app/')) : file.includes('/components/') ? file.slice(file.indexOf('components/')) : file;
+        return marker;
+      })
+      .filter((file) => !allowed.has(file));
+    expect(unexpected).toEqual([]);
 
     const entitlementFiles = files.filter((file) => {
       const normalised = file.replace(/\\/g, '/');
-      return normalised.includes('/lib/entitlements/') && !normalised.endsWith('.test.ts');
+      return normalised.includes('/lib/entitlements/') && !normalised.endsWith('.test.ts') && !normalised.endsWith('live-report.tsx');
     });
     expect(entitlementFiles.length).toBeGreaterThan(0);
     for (const file of entitlementFiles) {
@@ -176,6 +217,8 @@ describe('surface catalogue contract', () => {
       expect(source, file).not.toMatch(/from ['"]@prisma\/client['"]/);
       expect(source, file).not.toMatch(/from ['"]@\/lib\/prisma['"]/);
     }
+    const adapter = readFileSync(path.join(process.cwd(), 'lib/entitlements/live-report.tsx'), 'utf8');
+    expect(adapter).not.toMatch(/from ['"][^'"]*storefront-sms/);
   });
 });
 

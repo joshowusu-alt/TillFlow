@@ -1,7 +1,7 @@
 import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
-import { requireBusiness } from '@/lib/auth';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import { getFeatures } from '@/lib/features';
 import { resolveSelectableReportDateRange } from '@/lib/reports/date-parsing';
 
@@ -35,8 +35,10 @@ export default async function ExportsPage({
 }: {
   searchParams?: { period?: string; from?: string; to?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  const opened = await openLiveReport({ surfaceId: 'exports_hub', search: searchParams });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  const features = getFeatures(business.canonicalPlan, business.storeMode as 'SINGLE_STORE' | 'MULTI_STORE' | null);
 
   const { start, end, fromInputValue, toInputValue, periodInputValue } = resolveSelectableReportDateRange(searchParams, '30d', new Date(), business.timezone);
   const periodLabel = exportPeriodOptions.find((option) => option.value === periodInputValue)?.label ?? 'Last 30 days';

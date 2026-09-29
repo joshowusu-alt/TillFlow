@@ -80,9 +80,12 @@ describe('A7 report callers do not replace a missing timezone with Africa/Accra'
     const route = read('app/api/reports/weekly-digest/route.ts');
     expect(digest).not.toContain('DEFAULT_BUSINESS_TIMEZONE');
     expect(digest).toContain('requireReportTimeZone');
-    expect(page).toContain('business.timezone');
-    expect(page).toContain('getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, business.timezone)');
-    expect(route).toContain('getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, business.timezone)');
+    expect(page).toContain('requireReportTimeZone(business.timezone)');
+    expect(page).toContain('getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, timeZone, storeIds)');
+    expect(route).toContain('requireReportTimeZone(business.timezone)');
+    expect(route).toContain('getWeeklyDigestData(');
+    expect(page).not.toContain('Africa/Accra');
+    expect(route).not.toContain('Africa/Accra');
   });
 
   it('statement from/to filters keep both gte and lt', () => {

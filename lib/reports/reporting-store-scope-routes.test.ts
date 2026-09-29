@@ -16,29 +16,29 @@ describe('reporting store-scope fail-closed routes', () => {
   it('Trading Report resolves raw searchParams.storeId and notFounds on store errors', () => {
     const page = read('app/(protected)/reports/dashboard/page.tsx');
     expect(page).toContain('resolveReportingScope(');
-    expect(page).toContain('storeId: searchParams?.storeId');
+    expect(page).toContain('storeId: opened.branch.selected');
     expect(page).not.toContain('rawStoreId ?? searchParams?.storeId ?? \'ALL\'');
     expect(page).toContain('isReportingScopeStoreError');
     expect(page).toContain('notFound()');
-    expect(page).toContain("requireBusiness(['MANAGER', 'OWNER'])");
+    expect(page).toContain('openLiveReport');
   });
 
   it('Money received list uses the same fail-closed scope as summaries', () => {
     const page = read('app/(protected)/reports/receipts/page.tsx');
     expect(page).toContain('resolveReportingScope(');
     expect(page).toContain('listMoneyReceivedPayments');
-    expect(page).toContain('storeId: searchParams?.storeId');
+    expect(page).toContain('storeId: opened.branch.selected');
     expect(page).not.toContain('rawStoreId ?? searchParams?.storeId ?? \'ALL\'');
     expect(page).toContain('isReportingScopeStoreError');
     expect(page).toContain('notFound()');
-    expect(page).toContain("requireBusiness(['MANAGER', 'OWNER'])");
+    expect(page).toContain('openLiveReport');
     expect(page).toContain('Math.min(50');
   });
 
   it('Cash Drawer uses resolveAuthorisedStoreId fail-closed (not ALL fallback)', () => {
     const page = read('app/(protected)/reports/cash-drawer/page.tsx');
-    expect(page).toContain('resolveAuthorisedStoreId');
-    expect(page).toContain('isReportingScopeStoreError');
+    expect(page).toContain("surfaceId: 'cash_drawer_report'");
+    expect(page).toContain('opened.branch.selected');
     expect(page).toContain('notFound()');
     expect(page).not.toContain("resolveStoreSelection(stores, searchParams?.storeId, 'ALL')");
   });

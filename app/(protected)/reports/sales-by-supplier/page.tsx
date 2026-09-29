@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
@@ -6,7 +7,8 @@ import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import { getFeatures } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import { resolveSelectableReportDateRange } from '@/lib/reports/date-parsing';
@@ -67,35 +69,35 @@ function ReportSetupEmptyState({
 export default async function SalesBySupplierPage({
   searchParams,
 }: {
-  searchParams?: { period?: string; from?: string; to?: string; supplierId?: string };
+  searchParams?: { period?: string; from?: string; to?: string; supplierId?: string; storeId?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  if (!business) return <div className="card p-6">Business not found.</div>;
-
-  const features = getFeatures(
-    (business as any).plan ?? (business.mode as any),
-    (business as any).storeMode as any,
-  );
-
-  if (!features.advancedReports) {
-    return (
-      <AdvancedModeNotice
-        title="Sales by Linked Supplier is available on Growth and Pro"
-        description="Supplier-linked product sales reporting is unlocked on businesses provisioned for Growth or Pro."
-        featureName="Sales by Linked Supplier"
-        minimumPlan="GROWTH"
-      />
-    );
-  }
+  const opened = await openLiveReport({
+    surfaceId: 'sales_by_supplier',
+    search: searchParams,
+    range: ({ timezone, now }) => {
+      const resolved = resolveSelectableReportDateRange(searchParams, 'mtd', now, timezone);
+      return { fromLocalDate: resolved.fromInputValue, toLocalDate: resolved.toInputValue, preset: 'CUSTOM' };
+    },
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
 
   const { start, end, fromInputValue, toInputValue, periodInputValue, isCustomRange } =
-    resolveSelectableReportDateRange(searchParams, 'mtd', new Date(), business.timezone);
+    resolveSelectableReportDateRange(
+      opened.decision.appliedRange
+        ? { from: opened.decision.appliedRange.fromLocalDate, to: opened.decision.appliedRange.toLocalDate }
+        : searchParams,
+      'mtd',
+      new Date(),
+      business.timezone,
+    );
 
   const supplierId = searchParams?.supplierId?.trim() || undefined;
 
   // When drilling into a supplier, also fetch its name for the header
   const [report, drilledSupplier] = await Promise.all([
-    getSupplierSalesReport(business.id, { start, end, supplierId }),
+    getSupplierSalesReport(business.id, { start, end, supplierId, storeIds: opened.branch.storeIds }),
     supplierId
       ? prisma.supplier.findFirst({
           where: { id: supplierId, businessId: business.id },

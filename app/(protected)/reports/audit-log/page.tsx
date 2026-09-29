@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import type { AuditAction } from '@/lib/audit';
@@ -72,18 +72,12 @@ export default async function AuditLogPage({
 }: {
   searchParams: { action?: string; user?: string; page?: string; pageSize?: string };
 }) {
-  const { user, business } = await requireBusiness(['OWNER']);
-  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
-  if (!features.auditLog) {
-    return (
-      <AdvancedModeNotice
-        title="Audit Log is available on Pro"
-        description="Deep audit history and operator traceability are unlocked on businesses provisioned for Pro."
-        featureName="Audit Log"
-        minimumPlan="PRO"
-      />
-    );
-  }
+  const opened = await openLiveReport({
+    surfaceId: 'audit_log',
+    search: searchParams,
+  });
+  if (!opened.ok) return opened.denial;
+  const { user, business } = opened;
 
   const requestedPageSize = parseInt(searchParams.pageSize || '20', 10) || 20;
   const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize as 10 | 20 | 50) ? requestedPageSize : 20;

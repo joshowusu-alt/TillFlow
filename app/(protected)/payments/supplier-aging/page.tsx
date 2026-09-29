@@ -1,5 +1,7 @@
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner, ReportScopeLabel } from '@/components/reports/ReportSurfaceDenial';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatMoney, formatDate } from '@/lib/format';
 import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
@@ -63,8 +65,14 @@ export default async function SupplierAgingPage({
 }: {
   searchParams?: { asOf?: string; bucket?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  if (!business) return <div className="card p-6">Seed data missing.</div>;
+  const opened = await openLiveReport({
+    surfaceId: 'supplier_ageing',
+    search: searchParams,
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
+  const storeIds = opened.branch.storeIds;
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const rawAsOf = searchParams?.asOf;
@@ -74,7 +82,7 @@ export default async function SupplierAgingPage({
 
   const report = await measureServerOperation(
     'page.supplier-aging.load',
-    () => getSupplierAgingReport(business.id, asOf),
+    () => getSupplierAgingReport(business.id, asOf, storeIds),
     {
       businessId: business.id,
       route: '/payments/supplier-aging',
@@ -83,7 +91,7 @@ export default async function SupplierAgingPage({
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
   );
   const bucketInvoices = selectedBucket
-    ? await getSupplierAgingInvoices(business.id, asOf, selectedBucket)
+    ? await getSupplierAgingInvoices(business.id, asOf, selectedBucket, storeIds)
     : [];
   const currency = business.currency;
   const exportHref = selectedBucket

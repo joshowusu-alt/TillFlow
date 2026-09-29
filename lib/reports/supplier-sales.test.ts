@@ -82,8 +82,8 @@ describe('sales-by-supplier page', () => {
   });
 
   it('gates on advancedReports feature', () => {
-    expect(src).toContain('advancedReports');
-    expect(src).toContain('AdvancedModeNotice');
+    expect(src).toContain("surfaceId: 'sales_by_supplier'");
+    expect(src).toContain('openLiveReport');
   });
 
   it('shows summary cards: total revenue, units sold, suppliers with sales, top supplier', () => {
@@ -438,7 +438,7 @@ describe('command-center — Top Supplier This Month card', () => {
 
   it('fetches top supplier in parallel with KPIs', () => {
     expect(src).toContain('Promise.all');
-    expect(src).toContain('getTopLinkedSupplierForMonth(business.id)');
+    expect(src).toContain('getTopLinkedSupplierForMonth(business.id, branch.storeIds)');
   });
 
   it('gates the card on advancedReports (Starter users do not see it)', () => {
@@ -478,7 +478,7 @@ describe('command-center — Top Supplier This Month card', () => {
   });
 
   it('wraps top supplier fetch in catch to prevent dashboard crash', () => {
-    expect(src).toContain('getTopLinkedSupplierForMonth(business.id).catch(() => null)');
+    expect(src).toContain('getTopLinkedSupplierForMonth(business.id, branch.storeIds).catch(() => null)');
   });
 
   it('skips supplier query for Starter (only queries when advancedReports is true)', () => {

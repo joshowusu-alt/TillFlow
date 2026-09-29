@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
-import { requireBusiness } from '@/lib/auth';
+import { openLiveReport, visibleReportHrefs } from '@/lib/entitlements/live-report';
 import { getFeatures, hasPlanAccess, type BusinessPlan } from '@/lib/features';
 import type { AppRole } from '@/lib/navigation-config';
 
@@ -426,9 +426,12 @@ function ReportCardLink({
 }
 
 export default async function ReportsIndexPage() {
-  const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
-  const features = getFeatures((business as any).plan ?? (business as any).mode, (business as any).storeMode);
+  const opened = await openLiveReport({ surfaceId: 'reports_hub' });
+  if (!opened.ok) return opened.denial;
+  const { business, user } = opened;
+  const features = getFeatures(business.canonicalPlan, business.storeMode as 'SINGLE_STORE' | 'MULTI_STORE' | null);
   const userRole = user.role as AppRole;
+  const allowed = await visibleReportHrefs();
 
   return (
     <div className="space-y-5">
@@ -467,7 +470,7 @@ export default async function ReportsIndexPage() {
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {startHereCards.map((report) => (
+          {startHereCards.filter((report) => allowed.has(report.href)).map((report) => (
             <ReportCardLink key={report.href} report={report} currentPlan={features.plan} featured />
           ))}
         </div>
@@ -475,7 +478,9 @@ export default async function ReportsIndexPage() {
 
       <div className="space-y-4">
         {reportGroups.map((group) => {
-          const visibleReports = group.reports.filter((report) => reportVisibleForRole(report, userRole));
+          const visibleReports = group.reports.filter(
+            (report) => reportVisibleForRole(report, userRole) && allowed.has(report.href),
+          );
           if (visibleReports.length === 0) return null;
 
           return (

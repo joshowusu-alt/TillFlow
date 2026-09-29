@@ -72,6 +72,7 @@ vi.mock('@/lib/prisma', () => ({
     storefrontEvent: { findMany: storefrontEventFindManyMock },
     product: { findMany: vi.fn(async () => []) },
     salesReturn: { count: salesReturnCountMock },
+    store: { findMany: vi.fn(async () => [{ id: 'store-1', name: 'Main' }]) },
   },
 }));
 
@@ -126,7 +127,10 @@ function business(timezone: string | null) {
     timezone,
     plan: 'GROWTH',
     mode: 'GROWTH',
-    storeMode: 'SINGLE',
+    storeMode: 'SINGLE_STORE',
+    subscriptionStatus: 'PAID_ACTIVE',
+    firstPaymentConfirmedAt: new Date('2026-01-01T00:00:00.000Z'),
+    addonOnlineStorefront: true,
   };
 }
 
@@ -187,7 +191,14 @@ describe('A7 default report ranges follow the tenant calendar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers({ toFake: ['Date'] });
-    getUserMock.mockResolvedValue({ role: 'OWNER', businessId: 'biz-1' });
+    getUserMock.mockResolvedValue({
+      id: 'user-1',
+      name: 'Owner',
+      email: 'owner@example.com',
+      role: 'OWNER',
+      active: true,
+      businessId: 'biz-1',
+    });
     useZone(NAIROBI);
     getBusinessStoresMock.mockResolvedValue({
       stores: [{ id: 'store-1', name: 'Main' }],
@@ -252,7 +263,7 @@ describe('A7 default report ranges follow the tenant calendar', () => {
         lt: listMomoConfirmationPaymentsMock.mock.calls.at(-1)?.[1]?.periodEndExclusive?.toISOString() ?? null,
       }, month]);
 
-      await AnalyticsSettingsPage();
+      await AnalyticsSettingsPage({});
       windows.push(['analytics', stamp(storefrontEventFindManyMock.mock.calls.at(-1)?.[0]?.where?.timestamp), month]);
 
       await detectVoidFrequencyRisk({ businessId: 'biz-1', storeId: 'store-1', cashierUserId: 'user-1' });
@@ -321,7 +332,7 @@ describe('A7 default report ranges follow the tenant calendar', () => {
     useZone(timezone);
     await expect(CashDrawerReportPage({})).rejects.toThrow(REQUIRED);
     await expect(getEodCsv(new Request('http://localhost/exports/eod-csv'))).rejects.toThrow(REQUIRED);
-    await expect(AnalyticsSettingsPage()).rejects.toThrow(REQUIRED);
+    await expect(AnalyticsSettingsPage({})).rejects.toThrow(REQUIRED);
     await expect(detectVoidFrequencyRisk({
       businessId: 'biz-1', storeId: 'store-1', cashierUserId: 'user-1',
     })).rejects.toThrow(REQUIRED);

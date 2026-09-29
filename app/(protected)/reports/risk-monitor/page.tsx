@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation';
 import DownloadLink from '@/components/DownloadLink';
 import PageHeader from '@/components/PageHeader';
 import PlanFeatureBadge from '@/components/PlanFeatureBadge';
@@ -6,7 +7,10 @@ import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
+import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import { addCalendarDays } from '@/lib/entitlements/range';
+import { openLiveReport } from '@/lib/entitlements/live-report';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { getFeatures } from '@/lib/features';
 import { formatDateTime, formatMoney } from '@/lib/format';
@@ -33,33 +37,39 @@ export default async function RiskMonitorPage({
 }: {
   searchParams?: { from?: string; to?: string; storeId?: string; status?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
-  if (!features.riskMonitor) {
-    return (
-      <AdvancedModeNotice
-        title="Risk Monitor is available on Growth and Pro"
-        description="Control alerts, override patterns, and anti-fraud monitoring are unlocked on businesses provisioned for Growth or Pro."
-        featureName="Risk Monitor"
-        minimumPlan="GROWTH"
-      />
-    );
-  }
+  const opened = await openLiveReport({
+    surfaceId: 'risk_monitor',
+    search: searchParams,
+    range: ({ timezone, now }) => {
+      if (searchParams?.from || searchParams?.to) {
+        return { fromLocalDate: searchParams.from ?? '', toLocalDate: searchParams.to ?? '', preset: 'CUSTOM' };
+      }
+      const today = formatBusinessLocalDateKey(now, timezone);
+      return { fromLocalDate: addCalendarDays(today, -6), toLocalDate: today, preset: 'CUSTOM' };
+    },
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  if (opened.branch.kind !== 'stores') notFound();
+  const features = getFeatures(business.canonicalPlan, business.storeMode as 'SINGLE_STORE' | 'MULTI_STORE' | null);
   const now = new Date();
   const fallback = defaultTenantLocalRange(now, business.timezone, 7);
-
-  const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, fallback.startInclusive, now, fallback.timeZone);
-  const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
-  const storeId = resolveStoreSelection(stores, searchParams?.storeId, 'ALL') ?? 'ALL';
+  const applied = opened.decision.appliedRange;
+  const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(
+    applied ? { from: applied.fromLocalDate, to: applied.toLocalDate } : searchParams,
+    fallback.startInclusive,
+    now,
+    fallback.timeZone,
+  );
+  const { stores } = await getBusinessStores(business.id, opened.branch.selected);
+  const storeId = opened.branch.selected;
   const status = searchParams?.status || 'OPEN';
 
   const alertWhere: any = {
     businessId: business.id,
     occurredAt: { gte: from, lt: to },
   };
-  if (storeId !== 'ALL') {
-    alertWhere.storeId = storeId;
-  }
+  alertWhere.storeId = storeId === 'ALL' ? { in: opened.branch.storeIds } : storeId;
   if (status !== 'ALL') {
     alertWhere.status = status;
   }
@@ -78,7 +88,7 @@ export default async function RiskMonitorPage({
       where: {
         businessId: business.id,
         createdAt: { gte: from, lt: to },
-        ...(storeId !== 'ALL' ? { storeId } : {}),
+        ...(storeId !== 'ALL' ? { storeId } : { storeId: { in: opened.branch.storeIds } }),
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         OR: [
           { discountPence: { gt: 0 } },
@@ -182,7 +192,7 @@ export default async function RiskMonitorPage({
         <div>
           <label className="label">Report branch filter</label>
           <select className="input" name="storeId" defaultValue={storeId}>
-            <option value="ALL">All branches</option>
+            {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
             {stores.map((store) => (
               <option key={store.id} value={store.id}>
                 {store.name}

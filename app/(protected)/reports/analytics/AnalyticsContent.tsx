@@ -17,6 +17,7 @@ type AnalyticsContentProps = {
   currency: string;
   periodDays: number;
   timeZone?: string | null;
+  storeIds?: readonly string[];
   now?: Date;
   periodStart?: Date;
   periodEndExclusive?: Date;
@@ -27,6 +28,7 @@ export async function loadAnalyticsReport({
   currency,
   periodDays,
   timeZone,
+  storeIds,
   now = new Date(),
   periodStart,
   periodEndExclusive,
@@ -53,6 +55,9 @@ export async function loadAnalyticsReport({
         prisma.salesInvoice.findMany({
           where: {
             businessId,
+            ...(storeIds && storeIds.length > 0
+              ? { storeId: storeIds.length === 1 ? storeIds[0] : { in: [...storeIds] } }
+              : {}),
             createdAt: { gte: periodAgo, lt: endExclusive },
             paymentStatus: { notIn: ['RETURNED', 'VOID'] },
           },
@@ -87,6 +92,9 @@ export async function loadAnalyticsReport({
         prisma.salesInvoice.findMany({
           where: {
             businessId,
+            ...(storeIds && storeIds.length > 0
+              ? { storeId: storeIds.length === 1 ? storeIds[0] : { in: [...storeIds] } }
+              : {}),
             createdAt: { gte: previousPeriodAgo, lt: periodAgo },
             paymentStatus: { notIn: ['RETURNED', 'VOID'] },
           },

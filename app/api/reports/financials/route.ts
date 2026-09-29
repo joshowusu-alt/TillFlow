@@ -1,29 +1,49 @@
 import { NextResponse } from 'next/server';
-import { requireBusiness } from '@/lib/auth';
-import { getFeatures } from '@/lib/features';
+import { guardLiveReport } from '@/lib/entitlements/live-report';
 import { getIncomeStatement, getBalanceSheet, getCashflow } from '@/lib/reports/financials';
 import { formatMoney } from '@/lib/format';
-import { businessMonthWindow, localDateInstant } from '@/lib/reports/reporting-clock';
+import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
+import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 
 export async function GET(request: Request) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  if (!business) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   const url = new URL(request.url);
-  const type = url.searchParams.get('type') ?? 'income-statement';
-  const currency = business.currency;
-  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
-
-  if ((type === 'income-statement' || type === 'balance-sheet' || type === 'cashflow') && !features.financialReports) {
-    return NextResponse.json({ error: 'Growth plan required' }, { status: 403 });
+  const search = Object.fromEntries(url.searchParams.entries());
+  const guarded = await guardLiveReport({
+    surfaceId: 'export_financials',
+    action: 'EXPORT',
+    search,
+    range: ({ timezone, now }) => {
+      if (search.from || search.to) {
+        return { fromLocalDate: search.from ?? '', toLocalDate: search.to ?? '', preset: 'CUSTOM' };
+      }
+      const today = formatBusinessLocalDateKey(now, timezone);
+      return { fromLocalDate: `${today.slice(0, 8)}01`, toLocalDate: today, preset: 'MONTH_TO_DATE' };
+    },
+  });
+  if (!guarded.ok) {
+    return NextResponse.json(guarded.body, { status: guarded.status, headers: guarded.headers });
   }
+  if (guarded.branch.kind !== 'label') {
+    return NextResponse.json(
+      { ok: false, reason: 'SCOPE_STORE_INVALID', surfaceId: 'export_financials' },
+      { status: 403, headers: guarded.headers },
+    );
+  }
+  const { business } = guarded;
+
+  const type = search.type ?? 'income-statement';
+  const currency = business.currency;
 
   const now = new Date();
-  const month = businessMonthWindow(now, business.timezone);
-  const from = localDateInstant(url.searchParams.get('from'), 'start', business.timezone) ?? month.startInclusive;
-  const to = localDateInstant(url.searchParams.get('to'), 'endExclusive', business.timezone) ?? month.endExclusive;
+  const month = businessMonthWindow(now, requireReportTimeZone(business.timezone));
+  const applied = guarded.decision.appliedRange;
+  const { start: from, end: to } = resolveReportDateRange(
+    applied ? { from: applied.fromLocalDate, to: applied.toLocalDate } : { from: search.from, to: search.to },
+    month.startInclusive,
+    now,
+    month.timeZone,
+  );
 
   let rows: string[][] = [];
   let filename = '';

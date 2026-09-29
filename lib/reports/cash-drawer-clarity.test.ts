@@ -15,7 +15,8 @@ describe('Cash Drawer report clarity pass', () => {
     expect(page).toContain('MoMo, card, and bank transfer receipts are electronic payments');
     expect(page).toContain('href="/reports/dashboard#money-received"');
     expect(page).toContain('Trading Report → Money received');
-    expect(page).toContain('href="/reports/receipts?period=today&storeId=ALL"');
+    expect(page).toContain('href="/reports/receipts?period=today"');
+    expect(page).not.toContain('storeId=ALL');
   });
 
   it('uses owner-friendly stat labels, helpers, and Difference wording', () => {

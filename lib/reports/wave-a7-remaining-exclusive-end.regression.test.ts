@@ -39,7 +39,10 @@ vi.mock('@/lib/auth', () => ({
 }));
 
 vi.mock('@/lib/prisma', () => ({
-  prisma: { business: { findUnique: businessFindUniqueMock } },
+  prisma: {
+    business: { findUnique: businessFindUniqueMock },
+    store: { findMany: async () => [{ id: 'store-1', name: 'Main' }] },
+  },
 }));
 
 vi.mock('@/lib/services/stores', async () => {
@@ -94,14 +97,29 @@ describe('A7 Money Received and MoMo keep the exclusive end unchanged', () => {
       user: { role: 'OWNER', businessId: 'biz-1' },
       business: { id: 'biz-1', name: 'Nairobi Market', currency: 'GHS', timezone: NAIROBI },
     });
-    getUserMock.mockResolvedValue({ role: 'OWNER', businessId: 'biz-1' });
+    getUserMock.mockResolvedValue({
+      id: 'user-1',
+      name: 'Owner',
+      email: 'owner@example.com',
+      role: 'OWNER',
+      active: true,
+      businessId: 'biz-1',
+    });
     businessFindUniqueMock.mockResolvedValue({
       id: 'biz-1',
       name: 'Nairobi Market',
       currency: 'GHS',
       timezone: NAIROBI,
+      plan: 'GROWTH',
+      mode: 'GROWTH',
+      storeMode: 'SINGLE_STORE',
+      subscriptionStatus: 'PAID_ACTIVE',
+      firstPaymentConfirmedAt: new Date('2026-01-01T00:00:00.000Z'),
     });
-    getBusinessStoresMock.mockResolvedValue({ stores: [], selectedStoreId: null });
+    getBusinessStoresMock.mockResolvedValue({
+      stores: [{ id: 'store-1', name: 'Main' }],
+      selectedStoreId: 'store-1',
+    });
     computeMoneyReceivedBundleMock.mockImplementation(async (input: { periodStart: Date; periodEndInclusive: Date; timeZone?: string | null }) => bundleFrom(input));
     drillDownForMetricMock.mockResolvedValue({
       page: { rows: [], totalCount: 0, page: 1, pageSize: 25, totalPages: 1, queryFailed: false },

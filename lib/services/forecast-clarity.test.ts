@@ -145,7 +145,8 @@ describe('Cashflow Forecast actionability and clarity', () => {
   });
 
   it('28. features.cashflowForecast plan gate remains unchanged', () => {
-    expect(pageSrc).toContain('features.cashflowForecast');
+    expect(pageSrc).toContain("surfaceId: 'cashflow_forecast'");
+    expect(pageSrc).toContain('openLiveReport');
   });
 
   it('29. Badge dead import has been removed', () => {

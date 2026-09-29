@@ -49,9 +49,13 @@ export async function getSupplierSalesReport(
     start: Date;
     end: Date;
     supplierId?: string;
+    storeIds?: readonly string[];
   },
 ): Promise<SupplierSalesReport> {
-  const { start, end, supplierId } = opts;
+  const { start, end, supplierId, storeIds } = opts;
+  const invoiceStore = storeIds && storeIds.length > 0
+    ? { storeId: storeIds.length === 1 ? storeIds[0] : { in: [...storeIds] } }
+    : {};
 
   // Step 1: All products with a preferred supplier for this business.
   // Using Product.preferredSupplierId index for fast lookup.
@@ -89,6 +93,7 @@ export async function getSupplierSalesReport(
       ? await prisma.salesInvoice.findMany({
           where: {
             businessId,
+            ...invoiceStore,
             createdAt: { gte: start, lt: end },
             paymentStatus: { notIn: ['RETURNED', 'VOID'] },
             lines: { some: { productId: { in: linkedProducts.map((p) => p.id) } } },
@@ -256,6 +261,7 @@ export type TopLinkedSupplierResult = {
  */
 export async function getTopLinkedSupplierForMonth(
   businessId: string,
+  storeIds?: readonly string[],
 ): Promise<TopLinkedSupplierResult | null> {
   const business = await prisma.business.findUnique({
     where: { id: businessId },
@@ -283,6 +289,9 @@ export async function getTopLinkedSupplierForMonth(
       productId: { in: linkedProducts.map((p) => p.id) },
       salesInvoice: {
         businessId,
+        ...(storeIds && storeIds.length > 0
+          ? { storeId: storeIds.length === 1 ? storeIds[0] : { in: [...storeIds] } }
+          : {}),
         createdAt: { gte: start, lt: endExclusive },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
