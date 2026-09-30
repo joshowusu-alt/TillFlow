@@ -17,20 +17,18 @@ const envKeys = ['VERCEL_ENV', 'NODE_ENV', 'ALLOW_REPORTS_BLUEPRINT'] as const;
 const snapshot: Record<string, string | undefined> = {};
 
 afterEach(() => {
-  for (const key of envKeys) {
-    const value = snapshot[key];
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
+  for (const key of envKeys) writeEnv(key, snapshot[key]);
 });
+
+function writeEnv(key: (typeof envKeys)[number], value: string | undefined) {
+  const env = process.env as Record<string, string | undefined>;
+  if (value === undefined) delete env[key];
+  else env[key] = value;
+}
 
 function setEnv(values: Partial<Record<(typeof envKeys)[number], string | undefined>>) {
   for (const key of envKeys) snapshot[key] = process.env[key];
-  for (const key of envKeys) {
-    const value = values[key];
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
+  for (const key of envKeys) writeEnv(key, values[key]);
 }
 
 describe('reports redesign blueprint gate', () => {

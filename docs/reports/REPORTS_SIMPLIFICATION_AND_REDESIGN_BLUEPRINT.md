@@ -1,6 +1,6 @@
 # TillFlow Reports Simplification and Redesign Blueprint
 
-Design and product definition only. No live report formula, entitlement, schema, export, SMS or customer behaviour was changed on Production.
+Design and product definition only. Owner rulings below are final. This blueprint is ready for visual approval. It is not approval to implement the production redesign.
 
 ## 1. Baseline and worktree identity
 
@@ -73,9 +73,9 @@ Branch: one store, or all stores on Pro. Range-capped. Mobile: a two-column post
 
 **Income statement** `/reports/income-statement`. Growth+. Whole business, label required. Revenue from recognised sale lines net of tax. Cost is withheld when costs are incomplete. Expenses from journals. This is a real statement. The read-only banner is duplicated.
 
-**Balance sheet** `/reports/balance-sheet`. Growth+. Whole business, as-at date. A gap between sale-line profit and journal profit is pushed into inventory so the sheet balances (`lib/reports/financials.ts`). When costs are incomplete that plug is skipped and the sheet can silently fail to balance. The page does not say this. Keep the destination. Do not present it as branch-aware, and do not hide the limitation in a later build.
+**Balance sheet** `/reports/balance-sheet`. Growth+. Whole business, as-at date. A gap between sale-line profit and journal profit is pushed into inventory so the sheet balances (`lib/reports/financials.ts`). When costs are incomplete that plug is skipped and the sheet can silently fail to balance. That is not a customer-facing statement. Hide it from Statements until an independent correction proves `Assets = Liabilities + Equity` with no unexplained plug. Keep the route, and show withheld wording with no figures and no plug amount.
 
-**Cash flow** `/reports/cashflow`. Hub says Cashflow, nav says Cash Flow. Indirect operating cash. Beginning cash is account 1000 plus legacy capital. Bank and MoMo balances are not in that beginning figure. “Net change in cash” is operating cash. Ending cash will not match the balance sheet’s cash plus bank. Rename in the interface to Cash flow statement and correct the labels in a query stage.
+**Cash flow** `/reports/cashflow`. Hub says Cashflow, nav says Cash Flow. Indirect operating cash. Beginning cash is account 1000 plus legacy capital. Bank and MoMo balances are not in that beginning figure. “Net change in cash” is operating cash. Ending cash will not match cash plus bank. The redesigned Statements list does not promote it as reliable until a later stage corrects those labels and that formula. The route stays. Until then it states those limits and does not present a full change in the business’s cash.
 
 **Cash drawer** `/reports/cash-drawer`. The right question: expected, counted, difference. Default seven days, filtered by when the shift opened. Headlines are the current page. Invalid legacy closes are omitted from the totals. Keep the page. Do not put its current headline on Today until a period total exists.
 
@@ -89,7 +89,7 @@ Branch: one store, or all stores on Pro. Range-capped. Mobile: a two-column post
 
 **Supplier payments** `/payments/supplier-payments`. A write workflow. Remove it from the reports catalogue. Leave the payments route.
 
-**Storefront analytics.** Two pages share one entitlement. `/settings/analytics` counts uppercase event names that are stored in lowercase, so the figures stay at zero. `/settings/online-store/analytics` uses the lowercase names and is the real page, with undefined colour classes (`border-edge`, `text-dim`) so parts of it do not render. Scope is the online shop, not a branch. Show it in Reports only when the add-on is on.
+**Storefront analytics.** Two pages share one entitlement. `/settings/analytics` counts uppercase event names that are stored in lowercase, so the figures stay at zero. It stays out of navigation. A redirect to the working page happens only after a dependency check, in its own stage. `/settings/online-store/analytics` is the only future destination. Its undefined colour classes (`border-edge`, `text-dim`) are corrected before that page is presented as part of the polished Reports experience. The row appears only while the add-on is on.
 
 **Audit log** `/reports/audit-log`. Pro, Owner. No date filter. Details can print `[object Object]`. Keep it under oversight. It is not a daily report.
 
@@ -97,7 +97,7 @@ Branch: one store, or all stores on Pro. Range-capped. Mobile: a two-column post
 
 **Owner brief** `/reports/owner`. Pro, Owner, fixed consolidated. Health score, seven cards, leakage language, a chart labelled 14-day that plots seven days, and “discount overrides used today” beside “discount overrides (7d)” for the same count. “Till variance detected yesterday” can be the latest variance in 30 days. Keep a shorter brief as the document an owner exports. Do not rebuild Today out of these cards.
 
-**Cash flow forecast** `/reports/cashflow-forecast`. Pro, Owner. Starting cash can double-count opening capital. The inflow adds a share of receivables and also an average of cash and MoMo receipts, so collections can be counted twice. The scenario control does not change the numbers. Hide it from navigation until the estimate is honest. Keep the route.
+**Cash flow forecast** `/reports/cashflow-forecast`. Pro, Owner. Starting cash can double-count opening capital. The inflow adds a share of receivables and also an average of cash and MoMo receipts, so collections can be counted twice. The scenario control does not change the numbers. Hide it from navigation. The direct route stays and says the estimate is withheld. It does not show forecast values.
 
 **Legacy** `/reports/sales`. Redirects to Trading and drops query parameters. Keep the redirect. Leave it out of navigation.
 
@@ -123,7 +123,7 @@ Branch: one store, or all stores on Pro. Range-capped. Mobile: a two-column post
 
 | Surface | Decision | Replacement | Customer benefit | Risk | Migration | Deep link | Data dependency |
 |---|---|---|---|---|---|---|---|
-| Reports hub | RENAME | Today becomes `/reports`. A short Activity list replaces the card catalogue. | The owner lands on a decision, not an index. | Bookmarks of `/reports` change meaning. | Ship Today on the route, keep a “All reports” list one tap away for one release. | Keep `/reports`. | None. |
+| Reports hub | RENAME | `/reports` is Today in the first implementation stage. Activity and More replace the card catalogue. There is no second hub. | The owner lands on a decision. | Bookmarks of `/reports` change meaning. | Ship Today on `/reports` in Stage A. | Keep `/reports` as Today. | None. |
 | Command Center | RENAME | Today. `/reports/command-center` redirects. | One name. | Saved links. | Redirect after Today shows the trustworthy figures. | Keep, then redirect. | Reuse sales and receipt queries. Do not reuse the mislabelled attention queries as-is. |
 | Trading Report | KEEP | Activity → Trading. | Period answer stays available. | Branch sales mixed with whole-business profit. | Remove the mixed net-profit card in a query stage. | Keep `/reports/dashboard`. | Existing sales summary. |
 | Money Received | KEEP | Activity → Money received. | Sales and cash-in stay distinct, which matters for MoMo. | Owners may still add them together. | Label both on Today. | Keep. | Existing confirmed-receipt query. |
@@ -131,26 +131,26 @@ Branch: one store, or all stores on Pro. Range-capped. Mobile: a two-column post
 | MoMo Reconciliation | KEEP | Stays in Money. Today links only to the network queue, with that name. | Re-check and retry remain. | All-store default on lower plans. | Later entitlement pass. Not this visual stage. | Keep `/payments/reconciliation`. | `mobileMoneyCollection`. |
 | Business Movement | MERGE | Trading comparison for the selected period against the previous period. | One comparison, labelled with both dates. | Owners who use the insight cards. | Redirect after Trading has the comparison. | Keep `/reports/business-movement` as a redirect. | Existing comparison query, after the Starter window is honest. |
 | Receipt transactions | MERGE | The line list inside Money received. | One place to see a payment. | Deep links from the drawer. | Redirect `/reports/receipts` to the filtered line list. | Keep, then redirect. | Same payment query. |
-| Weekly Digest | MERGE | Trading preset “Last week (Monday–Sunday)” plus the existing CSV. | The week stops being a second sales page. | The Monday–Sunday habit. | Name the week in the preset. Keep the CSV route. | Keep `/reports/weekly-digest` as a redirect. | Digest query becomes the preset. |
+| Weekly Digest | MERGE | Trading preset `Last week (Monday–Sunday)`. Customer action: `Download last week`. CSV route and technical filename stay. | The week stops being a second sales page. | Deep links. | Redirect `/reports/weekly-digest` only after Trading shows that week. | Keep, then redirect. | Digest query becomes the preset. |
 | Sales Analytics | MERGE | Growth Trading trends: sales by day, top products, busiest hour. | Removes a page whose bases disagree. | Loss of the heatmap. | Hide the nav item once Trading shows the three views. Retire the route only after that. | Keep until then. | Must stop using VAT-inclusive product margin and the unordered 90-day chart. |
 | Profit Margins | RENAME | Product margins. | The cost-repair action stays. | Missing costs shown as zero. | Block the precise total until costs are complete. | Keep `/reports/margins`. | Authoritative line cost. |
 | Sales by linked supplier | KEEP | Activity, Growth and Pro. | Answers a real buying question without pretending it is debt. | Incomplete supplier links. | Keep the current caveat on the page. | Keep. | Preferred supplier on the product. |
 | Reorder suggestions | RENAME | Stock to reorder. | The action list stays off Today except for the few urgent rows. | “Mark ordered” on a read-only account. | Disable the write when billing is restricted. | Keep. | On-hand and recent sales. All-branch stock sum is a query fix. |
 | Income statement | KEEP | Statements. | The accountant’s statement stays. | Duplicate read-only banner. | Presentation stage removes the second banner. | Keep. | Existing statement. |
-| Balance sheet | KEEP | Statements. | Assets and liabilities stay available. | Inventory plug and a sheet that may not balance. | Show the limitation, or withhold the sheet, when costs are incomplete. Do not invent a new inventory valuation here. | Keep. | Journals plus the plug. |
-| Cash flow statement | RENAME | Cash flow statement. | Separates it from the till and from the forecast. | Owners rely on “net change in cash”. | Relabel first. Formula alignment is a later query stage. | Keep `/reports/cashflow`. | Existing indirect statement. |
+| Balance sheet | HIDE UNTIL CORRECTED | No Statements row. Direct route says the statement is withheld and shows no figures and no plug amount. | Customers are not shown a sheet that balances by moving a gap into inventory. | Owners who use the page today. | Remove the nav item when the redesign ships. Return only after the integrity stage. | Keep `/reports/balance-sheet`. | Independent valuation. No plug. |
+| Cash flow statement | RENAME | Withheld from the reliable Statements list until labels and the formula are corrected. Route states the current limits. | Separates it from the till and from the forecast. | Owners rely on “net change in cash”. | Do not promote it in Statements before that stage. | Keep `/reports/cashflow`. | Account 1000, bank, MoMo, and operating cash must be labelled as they are calculated. |
 | Cash drawer | KEEP | Activity → Cash drawer. | “Is the till correct?” stays a destination. | Page-sized totals. | Today must not read the page total. | Keep. | A period sum of closed shifts is a new query, specified below. |
 | Risk monitor | RENAME | Control alerts. | The list remains for Growth and Pro. | Starter links that 403. | Remove those links from Starter Today. | Keep `/reports/risk-monitor`. | `riskAlert` rows. |
 | Stock movements | KEEP | Activity → Stock movements. | The ledger stays for disputes and adjustments. | It is a poor home-page card. | Leave it off Today. | Keep. | `stockMovement`. |
 | Supplier ageing | MOVE | Payments. Today links when an amount is past the due date. | Stops a second “reports” copy of a payments page. | Hub bookmarks. | Remove the hub card. | Keep `/payments/supplier-aging`. | Operational payables. As-of history is a known limitation. |
 | Customer balances | MOVE | Payments → customer receipts. | Same as suppliers. | None if the route stays. | Remove the hub card. | Keep. | Customer balances. |
 | Supplier payments | HIDE | No reports entry. | A payment form is not a report. | Owners who started from the hub. | Remove the card only. | Keep the payments route. | None. |
-| Storefront analytics (online store) | KEEP | Activity, only with the add-on. | One real storefront page. | Broken styles. | Presentation fix later. | Keep `/settings/online-store/analytics`. | Lowercase storefront events. |
-| `/settings/analytics` | RETIRE | Redirect to the online-store analytics page. | Removes a page that always shows zero. | Any bookmark. | Redirect after confirming nothing else links the zero page. | Redirect. | Event names. |
+| Storefront analytics (online store) | KEEP | Activity, only while the add-on is on. Destination `/settings/online-store/analytics`, after its style tokens render. | One real storefront page. | Broken styles if shown early. | Token fix is its own stage, before the polished row. | Keep that route. | Lowercase storefront events. |
+| `/settings/analytics` | RETIRE | Absent from navigation. Redirect only after a dependency check, in a separate stage. | Removes a page that always shows zero. | Bookmarks. | Do not promote it in the redesign. | Redirect after the check. | Event names. |
 | Audit log | KEEP | Oversight, Pro owner. | Control history stays. | Managers expect it. | Hidden for managers, not shown as a lock. | Keep. | `auditLog`. |
 | Exports hub | MOVE | Statements → Downloads, or More → Downloads on Starter. | Downloads sit with the accountant’s work. | Export URLs. | Move the link. Do not change export files in the visual stage. | Keep `/reports/exports`. | Per-export entitlement repair is a separate stage. |
 | Owner brief | KEEP | Oversight, Pro owner, always “Consolidated — all branches”. | A shareable brief remains. | It currently repeats Today. | Cut the duplicated cards down to the brief’s own narrative after Today exists. | Keep `/reports/owner`. | Existing brief query, with labels corrected. |
-| Cash flow forecast | HIDE | No nav item. Route remains. | Avoids a confident estimate that double-counts. | Owners who use it today. | Remove the nav item. Page explains it is withheld. | Keep `/reports/cashflow-forecast`. | Formula repair before it returns. |
+| Cash flow forecast | HIDE | No nav item. Direct route says the estimate is withheld and shows no forecast values, until double-counting and the scenario control are corrected. | Avoids a confident estimate that double-counts. | Owners who use it today. | Remove the nav item. Do not render the current series. | Keep `/reports/cashflow-forecast`. | Formula repair before any number returns. |
 | Legacy `/reports/sales` | HIDE | Redirect to Trading. | Old links keep working. | Dropped query string. | Preserve `storeId` and dates when redirecting, in the nav stage. | Keep. | None. |
 | Demo reports | LATER | Align the public demo after the live structure ships. | Marketing stops teaching the old catalogue. | Demo drift meanwhile. | Not in the first implementation PRs. | Keep `/demo/reports`. | Fixtures only. |
 | Saved views | LATER | Pro. A named filter set on a report the person can already open. | Repeat visits without a report builder. | Scope and plan must be rechecked on open. | New tables. Not in the visual PRs. | New routes later. | No source today. |
@@ -166,37 +166,38 @@ Nothing in this table is a recommendation to delete a working workflow only to t
 
 Three places. Today is the landing. Activity is the operating reports. More holds statements, downloads, and oversight. The plan decides which rows exist. Missing rows are absent, not locked.
 
+**Default landing.** `/reports` is Today in the first implementation stage. Activity and More are the report navigation. They are not a second card catalogue.
+
 **Desktop.** A reports sidebar:
 
 - Today
 - Activity
-  - Trading
+  - Trading, including `Last week (Monday–Sunday)` and `Download last week`
   - Money received
   - MoMo to confirm
   - Cash drawer
   - Stock movements
   - Product margins, Stock to reorder, Sales by linked supplier, Control alerts (Growth and Pro)
-  - Storefront (add-on on, and not Starter)
-- Statements (Growth and Pro): Income statement, Balance sheet, Cash flow statement
-- Downloads
-- Oversight: Owner brief and Audit log for the Pro owner only
-- Saved views (Pro owner, when that release exists)
+  - Storefront, only while the add-on is on, opening `/settings/online-store/analytics` after its styles are fixed
+- Statements (Growth and Pro): Income statement, then Downloads. Balance sheet is absent. Cash flow statement is absent until its formula and labels are corrected.
+- Oversight, Pro owner only: Owner brief, Audit log, and later saved views and scheduled packs
 
-**Mobile.** A three-item bar: Today, Activity, More. Activity is a single column of rows, not a card grid. More is the same pattern for statements, downloads, and oversight. No horizontal scrolling.
+A Pro manager sees consolidated operating reports where the catalogue already allows consolidation. Oversight rows are absent for that manager. This ruling does not add a role entitlement beyond Stage 2.
 
-**Default landing.** `/reports` is Today.
+**Mobile.** A three-item bar: Today, Activity, More. Activity is a single column of rows. More holds the income statement, downloads, and owner oversight. No horizontal scrolling.
 
 **Where things live.**
 
-- Today is the command page.
-- Detailed reports live under Activity and open as their own pages.
-- Financial statements live under More, with the whole-business label on every one.
+- Today is `/reports`.
+- Detailed reports live under Activity.
+- The income statement lives under More, labelled `Whole business — not separated by branch`.
 - Exports live under Downloads inside More.
-- Pro tools live in Oversight, plus the consolidated scope on Today and Activity.
-- Storefront analytics lives as one Activity row when the add-on is on, and still opens the online-store page.
-- Saved views and scheduled packs, when built, live under More for the Pro owner. A saved view stores report, branch scope, and date preset. A pack sends that view on a schedule. There is no custom report builder.
-- Hidden forecast: no row. The route, if opened, says the estimate is withheld.
-- Unavailable reports: no row. A direct URL uses the existing denial (plan notice, branch prompt, or billing redirect). The library does not preview them as disabled cards.
+- Pro consolidated scope lives on Today and Activity for Owner and Manager.
+- Storefront analytics is one Activity row only in the valid add-on state.
+- Saved views and scheduled packs, when built, are Pro owner oversight. A saved view stores report, branch scope, and date preset. A pack sends that view. There is no custom report builder.
+- Forecast: no row. The direct route says the estimate is withheld and shows no values.
+- Balance sheet: no row. The direct route says the statement is withheld and shows no figures.
+- `/settings/analytics` has no row.
 - Cashiers do not see the reports bar.
 
 ### Rejected alternative
@@ -210,7 +211,7 @@ A second rejected shape, the current six sections, fails the five-second test on
 ### Header
 
 - Title: **Today**.
-- Date: `Wednesday 30 September 2026 · Ghana time`, using the business timezone. Do not say “today” without the date.
+- Date: `Wednesday 30 September 2026 · Local time`. The date is the business-local calendar date from the tenant timezone. The device timezone is not used. A supporting line shows the configured zone, for example `Africa/Accra`. Reusable screens do not hard-code Ghana wording.
 - Scope chip, always visible: the branch name, or `Consolidated — all branches` on Pro. Accounting pages never use this chip.
 - `Updated 2:14 pm` with a refresh control. If the load fails, do not show a time.
 - Restricted banner: “Read-only. You can look at reports. Downloads and changes stay off until billing is sorted.”
@@ -241,31 +242,32 @@ Three. Each opens a short definition.
 
 **Cash difference today**
 
-- Definition: cash counted on tills closed today, minus cash expected, summed across those closed tills. Negative means the count was lower. Open tills are omitted because they have not been counted.
+- Definition: cash counted on tills closed today, minus cash expected, summed across those closed tills. Negative means the count was lower. Open tills are omitted because they have not been counted. The headline always shows the exact difference, including amounts under GHS 5.
 - Comparison: none.
 - Drill-down: Cash drawer filtered to shifts closed today.
 - Empty: “No till has been closed today, so there is no cash difference to show.” Do not show GHS 0.00 for that case.
 - Plans: all three.
 - Prerequisite: a period query. The current Cash Drawer page total must not be reused.
+- Attention: an attention row exists only when the absolute difference is at least GHS 5. A smaller difference stays on the headline and in Cash Drawer. The threshold may become configurable later. This blueprint adds no setting.
 
 Gross profit is not a headline. On Growth and Pro it appears below, and only when every sale line today has an authoritative cost. Otherwise one sentence: “Profit is hidden because some product costs are missing.” Starter does not get a profit headline. Starter is not blocked from sales, money received, or the till.
 
 ### Attention
 
-At most five. If the signal is absent, skip it. If none remain: “Nothing needs attention right now.” If the check failed: “Today could not be loaded.” Do not fill the gap with a green success claim.
+At most five qualifying items. Rank is fixed:
 
-Order, first match wins until five are shown:
+1. A till opened on a previous day is still open. Wording: “The Main till at Madina was opened yesterday and is still open.” Action: review the shift. All plans. Severity high.
+2. A till closed today whose absolute cash difference is at least GHS 5. Wording: “Cash counted is GHS 35.00 less than expected.” Detail names the till, branch, and close time. Action: review the shift. All plans. Severity high. A smaller difference does not take a slot.
+3. Mobile Money payments in the manual confirmation queue. Wording: “3 Mobile Money payments are waiting for you to confirm.” Detail: the amount, and “not included in money received.” Action: confirm. All plans. Severity high.
+4. Network collections still pending. Wording: “2 Mobile Money collections are still pending with the network.” Action: open MoMo reconciliation. All plans. Severity medium.
+5. Customer balances past their due date. Wording: “GHS 680.00 from customers is past the due date.” Detail: “Unpaid credit that is not yet due is left off this list.” Action: customer receipts. All plans. Severity medium. Do not use the 60-day bucket unless the due date is also past.
+6. Supplier balances past their due date. Same pattern. Action: supplier ageing. All plans. Severity medium.
+7. A product sold today for less than a recorded cost. Growth and Pro. Wording: “Gino tomato mix sold for less than its cost.” Action: Product margins. Severity medium. Starter has no row, because that destination is Growth.
+8. One urgent low-stock item. Starter action is Inventory. Growth and Pro action is Stock to reorder. Severity medium.
 
-1. A till opened on a previous day is still open. Wording: “The Main till at Madina was opened yesterday and is still open.” Action: close or review the shift. All plans.
-2. A till closed today whose counted cash differs from expected. Wording: “Cash counted is GHS 35.00 less than expected.” Detail names the till, branch, and close time. Action: review the shift. Severity high when the absolute difference is at least GHS 5, otherwise it stays off the list and remains visible on the cash headline and the drawer. All plans. The GHS 5 floor is an open decision.
-3. Mobile Money payments in the manual confirmation queue. Wording: “3 Mobile Money payments are waiting for you to confirm.” Detail: the amount, and “not included in money received.” No “before end of day.” Action: confirm. All plans. Source: the confirmation queue, not the network collection count.
-4. Network collections still pending. Separate row, only when that queue is non-empty. Wording: “2 Mobile Money collections are still pending with the network.” Action: open MoMo reconciliation. All plans.
-5. Customer balances past their due date. Wording: “GHS 680.00 from customers is past the due date.” Detail: “Unpaid credit that is not yet due is left off this list.” Action: customer receipts. All plans. Do not use the 60-day bucket unless the due date is also past.
-6. Supplier balances past their due date. Same pattern. Do not list every open purchase. All plans.
-7. A product sold today for less than a recorded cost. Growth and Pro. Wording: “Gino tomato mix sold for less than its cost.” Starter does not get a link to Product margins.
-8. A product with recent sales and on-hand quantity that will not cover the usual reorder lead time. Starter action opens Inventory for that product. Growth and Pro open Stock to reorder. If both below-cost and low stock qualify, low stock stays in the supporting list so the five slots stay with money first.
+Only the first five that qualify are shown. When two items would otherwise tie, higher severity wins, then the older unresolved item. A lower-ranked signal does not replace a higher one that failed to load. If a check fails, Today says it could not be loaded and does not say “Nothing needs attention.” If every check succeeds and none qualify: “Nothing needs attention right now.”
 
-Dismissal: none of these can be swiped away. They disappear when the underlying record changes. “Mark ordered” already lives on Stock to reorder and is the resolution for low stock. There is no new snooze table in the first release.
+Every row’s destination is one that plan can open. There is no swipe-to-dismiss in the first release. Rows disappear when the underlying record changes.
 
 Language: difference, past the due date, waiting for confirmation. Not theft, leakage, or investigate.
 
@@ -288,10 +290,10 @@ Stock adjustments are not an attention item. A count difference posted from stoc
 |---|---|---|---|
 | Navigation | Today, Activity, Downloads inside More | Adds Statements, Product margins, Stock to reorder, Sales by linked supplier, Control alerts | Adds consolidated scope, branch comparison, Owner brief, Audit log, and later saved views and packs |
 | Today | Three headlines, attention, last 7 days, payment mix, top products, low stock | Adds last 30 days and profit when costs are complete. Below-cost attention. | Same, plus all-branch scope and sales by branch |
-| Report depth | Trading, money, MoMo confirm, drawer, stock ledger, downloads | Adds margins, reorder, supplier sales, control alerts, three statements | Adds Owner brief and Audit log. Forecast stays hidden |
+| Report depth | Trading, money, MoMo confirm, drawer, stock ledger, downloads, `Download last week` | Adds margins, reorder, supplier sales, control alerts, income statement | Adds Owner brief and Audit log for the owner. Forecast and balance sheet stay hidden |
 | Dates | 30 local dates on capped analytical pages, today included | 13 calendar months on those pages | History kept. “To date” presets still end today |
-| Branch | One operational branch. Multi-store must pick one. | Same. All-branches is refused in one sentence | One branch, or explicit “Consolidated — all branches” |
-| Storefront | No row | Row only with the add-on | Included with Pro storefront |
+| Branch | One operational branch. Multi-store must pick one. | Same. All-branches is refused in one sentence | Owner and Manager: one branch, or explicit “Consolidated — all branches” on operational reports the catalogue already allows |
+| Storefront | No row | Row only while the storefront add-on is on | Row only while storefront is included. Destination is `/settings/online-store/analytics` after its styles render |
 | Exports | Existing files. Cost and margin columns stay off sales exports | Cost and margin included where the catalogue already allows | Same as Growth, plus Owner brief export |
 | Saved and scheduled | Absent | Absent | Later release. Not a builder |
 
@@ -299,14 +301,14 @@ Starter still answers: what sold, what money came in, whether a closed till matc
 
 Growth does not receive a combined multi-branch operating total.
 
-Pro consolidated views say `Consolidated — all branches`. Statements say `Whole business — not separated by branch` on every plan that can open them.
+Pro consolidated views say `Consolidated — all branches`. The income statement says `Whole business — not separated by branch`. A Pro manager may open that consolidated operating view. Audit log, Owner brief, and scheduled packs stay owner-only. Stage 2 role gates are not widened.
 
 ## 8. Roles, billing, and branch state
 
 | State | What the person sees |
 |---|---|
 | Owner | Full plan experience, including Pro oversight |
-| Manager | Same operating reports and statements as the owner on that plan. No Audit log, Owner brief, or scheduled pack. No locked copies of those pages |
+| Manager | Same operating reports and the income statement as the owner on that plan. On Pro, consolidated operational reports where the catalogue already permits consolidation. No Audit log, Owner brief, or scheduled pack |
 | Cashier | No reports navigation and no report URL. POS, My Sales, and their own drawer remain. Direct report URLs keep the current redirect to POS |
 | Active, billing open | Full view and the exports their plan allows |
 | Restricted or read-only | Every report their plan allows, with the read-only banner. Downloads, sends, and “mark ordered” are off |
@@ -314,7 +316,7 @@ Pro consolidated views say `Consolidated — all branches`. Statements say `Whol
 | One branch | Scope chip is that branch. No branch picker and no all-branch control |
 | Several branches, none selected | “Choose a branch.” Figures hidden. No silent sum |
 | Pro, one branch | Chip is the branch name |
-| Pro, all branches | Chip is `Consolidated — all branches`, and only after an explicit choice. Omitting the choice stays on the operational branch |
+| Pro, all branches | Chip is `Consolidated — all branches` for an Owner or Manager, and only after an explicit choice. Omitting the choice stays on the operational branch |
 | Growth or Starter asking for all branches | One explanation: “All branches is part of Pro.” A button returns to the selected branch. No card grid |
 | New business | Zero sales, zero receipts, no cash difference, no invented alerts |
 | Incomplete costs | Profit hidden. Below-cost attention only for lines with a recorded cost |
@@ -327,9 +329,10 @@ Upgrade copy appears on a direct URL that the plan cannot open, and in the singl
 
 | Say | Do not say | Plain definition |
 |---|---|---|
-| Today, with the date | Today, for a seven-day discount count | The business-local calendar date in the header. |
+| Local time, with the date | Ghana time, or a device clock | The business-local calendar date. Supporting detail shows the configured zone, such as `Africa/Accra`. |
 | Last 7 days | Today, or “this week” for a rolling seven days | The seven local dates ending today. |
-| Last week (Monday–Sunday) | Last 7 days, for the digest | The previous Monday through Sunday. |
+| Last week (Monday–Sunday) | Last 7 days, for that preset | The previous Monday through Sunday. |
+| Download last week | Weekly Digest, as the button name | The file for that week. The technical filename stays. |
 | Waiting for you to confirm | Before end of day | Manual MoMo payments not yet confirmed, of any age, until the queue is cleared. |
 | Pending with the network | The same sentence as manual confirmation | Collections the provider has not confirmed. |
 | Sales today | Money received, when the figure is invoices | Value of sales recorded in the period. |
@@ -353,19 +356,19 @@ Tooltips use the plain-definition column. The prototype’s “What is this?” 
 
 ## 10. Mobile mockups
 
-The review prototype renders these on a 390-point phone frame. Sample shop: Ama’s Provisions. Branches: Madina, Kaneshie, Kejetia. Products: Indomie, Peak milk, Voltic, Gino tomato mix. Currency: GHS. Date: Wednesday 30 September 2026.
+The review prototype renders these on a 390-point phone frame. Sample shop: Ama’s Provisions. Branches: Madina, Kaneshie, Kejetia. Currency: GHS. The header reads `Wednesday 30 September 2026 · Local time`, with `Africa/Accra` under it.
 
-1. Starter Today, healthy trading day.
-2. Starter Today, attention items.
+1. Starter Today, healthy day, cash difference GHS 2.00 on the headline and no attention row.
+2. Starter Today, five ranked attention items. Low stock is not one of them while higher checks qualify. A separate control says Open inventory.
 3. Three branches, no branch selected.
 4. Growth Today, with last 30 days.
-5. Pro Today, consolidated.
-6. Activity list.
+5. Pro Today, consolidated, including a Pro manager.
+6. Activity list, with `Download last week`, and storefront only when the add-on control is on.
 7. Money received detail, as cards.
 8. Restricted billing, downloads disabled.
 9. New business, zeros and no invented warnings.
 
-Also in the same frame: cashier refusal, cancelled account, all-branches refusal, loading, and load failure.
+Also in the same frame: cashier refusal, cancelled account, all-branches refusal, loading, load failure, and owner-only oversight.
 
 ## 11. Desktop mockups
 
@@ -376,8 +379,8 @@ A 1,180-point frame with the sidebar:
 3. Pro consolidated Today, with sales by branch.
 4. Activity list.
 5. Money received, with a table and date chips.
-6. Income statement, whole-business label, September figures.
-7. Saved views concept, marked as a later Pro release.
+6. Income statement, whole-business label. Balance sheet and cash-flow forecast are absent. Cash flow statement is not promoted as reliable.
+7. Saved views and owner oversight, marked as a later Pro owner release. A manager does not see that block.
 
 ## 12. Prototype
 
@@ -407,7 +410,7 @@ Preview URL is recorded with the commit once the branch deployment is Ready and 
 
 ## 14. Quality assessment
 
-Scored against the prototype and this specification after the phone frame was checked in a browser.
+Scored against the amended prototype and this specification. The phone and desktop frames were checked in a browser after the Owner rulings.
 
 | Area | Score | Why |
 |---|---|---|
@@ -416,7 +419,7 @@ Scored against the prototype and this specification after the phone frame was ch
 | Decision usefulness | 9.0 | Attention is capped, ordered, and each row has a verb. Empty days stay quiet. |
 | Information density | 9.0 | The week and the top products are present without a second grid of KPIs. |
 | Visual hierarchy | 9.1 | Amounts dominate. Attention is next. The week is below. |
-| Trustworthiness | 9.0 | Labels match the windows. Untested cash and forecast numbers are specified as prerequisites, not drawn from the broken totals. |
+| Trustworthiness | 9.0 | Labels match the windows. The cash headline is specified as its own query. Forecast values and the balance sheet stay off the page until those formulas are corrected. |
 | Plan differentiation | 9.0 | Starter is usable. Growth adds depth. Pro adds branches and oversight. Locks are not the interface. |
 | Ghanaian retail relevance | 9.2 | Cedis, MoMo, confirmation, and branch names a shop actually uses. |
 | Ease of implementation | 8.7 | Today can ship on existing sales and receipt queries. Cash difference, past-due balances, and the two MoMo queues are separate small query stages. |
@@ -429,45 +432,53 @@ Ease of implementation is the lowest score and is still above 8.5 because the ro
 
 Each stage is its own review. None of them start in this design branch.
 
-**Stage A — Presentation of Today.** Objective: land `/reports` on a Today layout that shows only sales today and money received today, with honest labels, and stops rendering the mislabelled attention rows. Routes: new Today composition, redirect plan for command center noted but the redirect can wait until Stage A is accepted. Reuse `PageHeader` patterns and the existing sales and receipt summaries. New: the three-row layout and the attention list component, fed only by signals that are already date-true. Queries: read existing today sales and today receipts. Do not add the cash headline yet. Entitlements: unchanged catalogue. Mobile: one column, branch chip, no card grid. Desktop: same hierarchy with more width. Tests: label assertions for “Last 7 days” versus today, Starter does not link to reorder or margins, failed KPI load does not say “no issues.” Preview: Starter Madina, empty day, restricted banner. Rollback: route `/reports` back to the hub component.
+**Stage A — Presentation of Today.** Objective: `/reports` becomes Today. It shows sales today, money received today, and the exact cash headline only after Stage B. It does not keep the card catalogue. Starter low-stock, when it ranks in the five, opens Inventory. Queries: existing today sales and today receipts. Entitlements unchanged. Tests: failed checks do not say “Nothing needs attention”; the header says Local time and names the tenant zone; Starter does not link to reorder or margins. Rollback: restore the hub component on `/reports`.
 
-**Stage B — Cash difference query.** Objective: sum counted minus expected for shifts closed today, all matching shifts, not one page. Affects a new read used by Today and, separately, the Cash Drawer headlines. Reuse the expected-cash helper. Entitlements: same drawer surface. Tests: two pages of shifts, invalid legacy closes, open shifts excluded, sign of the difference. Rollback: hide the cash headline.
+**Stage B — Cash difference query.** Objective: sum counted minus expected for every shift closed today. The headline shows the exact figure. An attention row appears only at an absolute GHS 5 or more. No settings screen. Tests: amounts of GHS 2 and GHS 5, two pages of shifts, open shifts excluded. Rollback: hide the cash headline.
 
-**Stage C — Attention queries.** Objective: manual MoMo queue, network queue, past-due customer balances, past-due supplier balances, below-cost today with authoritative cost, low stock with a destination the plan can open. One query per PR if they do not share a transaction. Tests per signal, including “open but not due” excluded. Rollback: omit that row.
+**Stage C — Attention queries.** Objective: the eight ranked signals, capped at five, with plan-safe destinations. Tests: a failed query does not clear the list into “Nothing needs attention”; rank 8 does not replace a failed rank 2. Rollback: omit that row.
 
-**Stage D — Navigation.** Objective: sidebar and mobile bar match section 5. Hide forecast, supplier-payments report card, and the zero storefront page’s nav entry. Add redirects for command center, receipts, weekly digest, and business movement only after the destination shows their content. Preserve deep-link query parameters on `/reports/sales`. Tests: cashier still has no reports link, manager has no audit link, Growth has no all-branches control. Rollback: restore `REPORT_NAV_SECTIONS`.
+**Stage D — Navigation.** Objective: sidebar and mobile bar match section 5. Hide forecast and balance sheet. Remove `/settings/analytics` from nav without redirecting yet. `Download last week` can appear only after Trading has the week preset; the digest redirect waits for that. Tests: cashier has no reports link; Pro manager has consolidated operating nav and no audit link. Rollback: restore `REPORT_NAV_SECTIONS`.
 
-**Stage E — Trading cleanup.** Objective: remove the branch-sales plus whole-business-profit card, add last-week and previous-period presets with printed dates, retire the analytics nav item after the three trend views exist. Query work is separate from the preset labels. Tests: Starter 30-date denial, VAT basis not used for margin. Rollback: show the old Trading cards.
+**Stage E — Trading cleanup.** Objective: add `Last week (Monday–Sunday)`, then redirect the digest. Keep the CSV route and filename. Customer label: `Download last week`. Remove the mixed net-profit card. Rollback: show the old Trading cards.
 
-**Stage F — Statement honesty.** Objective: one read-only banner, cash-flow labels, balance-sheet limitation when the plug is in use or costs are incomplete. Queries change only in this stage. Tests: incomplete costs hide profit and state why. Rollback: previous statement layout.
+**Stage F — Cash flow statement honesty.** Objective: correct labels and the formula before the statement is promoted in Statements. Until this stage, the route states its limits and is not in the reliable list. Tests: beginning cash, bank, MoMo, and operating cash are named as calculated. Rollback: keep the route withheld.
 
-**Stage G — Pro consolidated Today.** Objective: branch comparison from the same sales query grouped by store, only when scope is explicit ALL. Tests: omitted scope stays on one store, label text exact. Rollback: hide the branch list.
+**Stage F2 — Balance sheet integrity.** Objective: correct inventory valuation and the balancing logic, then review it independently. Not part of the visual redesign. The route stays withheld, with no figures and no plug amount, until all of these pass: `Assets = Liabilities + Equity`; complete costs; incomplete costs; opening balances; inventory movements; retained profit; refunds and reversals; no unexplained balancing plug. This design branch does not change the accounting code. Rollback: leave the route withheld.
 
-**Stage H — Export alignment.** Objective: the Wave B export gates, Starter cost columns, and branch on export links. Not a visual redesign. Own PR. Rollback: revert the export routes only.
+**Stage G — Pro consolidated Today.** Objective: branch comparison only when scope is explicit ALL, for Owner and Manager, on surfaces the catalogue already allows. Tests: omitted scope stays on one store; manager still cannot open Audit log. Rollback: hide the branch list.
 
-**Stage I — Forecast return.** Objective: after the double-count is removed, show it again under Oversight as an estimate, with the scenario control wired or deleted. Until then it stays hidden.
+**Stage H — Export alignment.** Objective: Wave B export gates. Own PR. The weekly file keeps its technical name.
 
-**Stage J — Saved views.** Objective: Pro owner and manager save a report plus scope plus preset they can already view. New tables. Re-check entitlements on open.
+**Stage I — Forecast return.** Objective: after double-counting is removed and the scenario control either changes the numbers or is deleted, the estimate may return under owner oversight. Until then the route shows withheld wording and no values.
 
-**Stage K — Scheduled packs.** Objective: one weekly file to the owner. Not SMS. Not Wave B-SMS.
+**Stage J — Saved views.** Objective: Pro owner saves a report plus scope plus preset they can already view. Managers are not given this. Re-check entitlements on open.
 
-**Stage L — Retire duplicate routes.** Objective: after redirects have been in production, remove dead page bodies that no longer have callers. Dependency review first.
+**Stage K — Scheduled packs.** Objective: one weekly file to the owner. Not SMS. Not a manager feature.
 
-Presentation stages are A and D. Query stages are B, C, E, F, G, I. Navigation is D. New Pro capability is G, J, K. Export work is H.
+**Stage L — Storefront route.** Objective: fix style tokens on `/settings/online-store/analytics`, then show that row only when storefront is entitled. Redirect `/settings/analytics` only after dependency checking. Separate from the Today presentation.
 
-## 16. Open decisions for the owner
+**Stage M — Retire duplicate routes.** Objective: after redirects have been in production, remove dead page bodies. Dependency review first.
 
-1. Cash-difference attention floor. The blueprint uses GHS 5 so a pesewa does not occupy an attention slot. The headline still shows the exact difference. Confirm or set another floor.
-2. Whether `/reports` itself becomes Today in Stage A, or Today lives at `/reports/today` for one release with the hub still on `/reports`.
-3. Forecast: hide from navigation in Stage D, as recommended, or leave the current page linked until Stage I.
-4. Managers on Pro may see consolidated operating Today. Audit log, Owner brief, and packs stay owner-only. Confirm.
-5. Starter low-stock action opens Inventory, because Stock to reorder is Growth. Confirm that destination.
-6. Weekly Digest CSV keeps its name after the page merges into “Last week (Monday–Sunday).” Confirm the export label.
+Presentation stages are A and D. Query stages are B, C, E, F, F2, G, I. Navigation is D. Export work is H. Storefront is L.
+
+## 16. Owner decisions
+
+These rulings replace the previous open questions.
+
+1. Cash-difference attention uses an absolute GHS 5 threshold. The exact difference always shows on the cash headline and in Cash Drawer. Amounts under GHS 5 do not take an attention slot. A later setting is allowed. None is added now.
+2. `/reports` becomes Today in the first implementation stage. The card catalogue does not remain the landing page. Activity and More are the navigation.
+3. Cash-flow forecast stays out of navigation until double-counting and the scenario control are corrected. The direct route says the estimate is withheld and shows no values.
+4. A Manager on Pro may view consolidated operational reports where the catalogue already permits consolidation. Audit log, Owner brief, scheduled packs, and owner-governance features stay Owner-only. Stage 2 role entitlements are not widened.
+5. Starter low stock opens Inventory. It does not open Stock to reorder.
+6. Weekly Digest merges into Trading preset `Last week (Monday–Sunday)`. The CSV route and technical filename stay. The customer action is `Download last week`. The digest URL redirects only after Trading contains that week.
+
+No product question in this amendment still needs an Owner ruling. Visual approval of the prototype is the remaining review. Implementation is not approved by this document.
 
 ## 17. What did not change
 
-No production report calculation, entitlement catalogue, schema, export file, SMS path, or customer navigation was edited. The design branch adds a document, a review route, a gate that 404s on Production, and a unit test for that gate. Middleware behaviour for every existing path is unchanged.
+No production report calculation, entitlement catalogue, schema, export file, SMS path, or customer navigation was edited. The design branch adds a document, a review route, a gate that 404s on Production, and a unit test for that gate. Middleware behaviour for every existing path is unchanged. This amendment does not correct the balance sheet.
 
 ## 18. Verdict
 
-`REPORTS REDESIGN BLUEPRINT COMPLETE — READY FOR OWNER REVIEW`
+`REPORTS REDESIGN BLUEPRINT AMENDED — READY FOR VISUAL OWNER APPROVAL`

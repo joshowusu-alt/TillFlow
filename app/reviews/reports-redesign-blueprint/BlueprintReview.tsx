@@ -46,15 +46,28 @@ type Attention = {
 
 function attentionItems(plan: Plan, consolidated: boolean): Attention[] {
   const branch = consolidated ? 'Kaneshie' : 'Madina';
-  const items: Attention[] = [
+  const ranked: Array<Attention & { rank: number; plans: Plan[] }> = [
     {
-      id: 'cash',
+      rank: 1,
+      plans: ['starter', 'growth', 'pro'],
+      id: 'open-shift',
       tone: 'high',
-      title: `Cash counted is ${ghs(consolidated ? 20 : 35)} less than expected`,
-      detail: `${branch} · Main till · closed today at 1:40 pm`,
+      title: `The Main till at ${branch} was opened yesterday and is still open`,
+      detail: 'It has not been counted, so it is not in the cash difference',
       action: 'Review shift',
     },
     {
+      rank: 2,
+      plans: ['starter', 'growth', 'pro'],
+      id: 'cash',
+      tone: 'high',
+      title: `Cash counted is ${ghs(consolidated ? 20 : 35)} less than expected`,
+      detail: `${branch} · Main till · closed today at 1:40 pm · at least GHS 5`,
+      action: 'Review shift',
+    },
+    {
+      rank: 3,
+      plans: ['starter', 'growth', 'pro'],
       id: 'momo',
       tone: 'high',
       title: '3 Mobile Money payments are waiting for you to confirm',
@@ -62,6 +75,17 @@ function attentionItems(plan: Plan, consolidated: boolean): Attention[] {
       action: 'Confirm',
     },
     {
+      rank: 4,
+      plans: ['starter', 'growth', 'pro'],
+      id: 'network',
+      tone: 'medium',
+      title: '2 Mobile Money collections are still pending with the network',
+      detail: 'This is the provider queue, separate from payments you confirm',
+      action: 'Review',
+    },
+    {
+      rank: 5,
+      plans: ['starter', 'growth', 'pro'],
       id: 'customers',
       tone: 'medium',
       title: `${ghs(680)} from customers is past the due date`,
@@ -69,31 +93,37 @@ function attentionItems(plan: Plan, consolidated: boolean): Attention[] {
       action: 'Review',
     },
     {
+      rank: 6,
+      plans: ['starter', 'growth', 'pro'],
       id: 'suppliers',
       tone: 'medium',
       title: `${ghs(1150)} to suppliers is past the due date`,
       detail: 'This is not every open purchase',
       action: 'Review',
     },
-  ];
-  if (plan === 'starter') {
-    items.push({
-      id: 'stock',
-      tone: 'medium',
-      title: 'Peak milk 400g may run out',
-      detail: '4 left at Madina · 11 sold in the last 7 days',
-      action: 'See stock',
-    });
-  } else {
-    items.push({
+    {
+      rank: 7,
+      plans: ['growth', 'pro'],
       id: 'cost',
       tone: 'medium',
       title: 'Gino tomato mix sold for less than its cost',
       detail: `Today · ${branch} · the cost price is recorded`,
       action: 'See product',
-    });
-  }
-  return items.slice(0, 5);
+    },
+    {
+      rank: 8,
+      plans: ['starter', 'growth', 'pro'],
+      id: 'stock',
+      tone: 'medium',
+      title: 'Peak milk 400g may run out',
+      detail: plan === 'starter' ? '4 left · opens Inventory' : '4 left · opens Stock to reorder',
+      action: plan === 'starter' ? 'Open inventory' : 'Reorder',
+    },
+  ];
+  return ranked
+    .filter((item) => item.plans.includes(plan))
+    .sort((a, b) => a.rank - b.rank || (a.tone === b.tone ? 0 : a.tone === 'high' ? -1 : 1))
+    .slice(0, 5);
 }
 
 const WEEK = [
@@ -210,8 +240,8 @@ export default function BlueprintReview() {
           <Choice current={storefront ? 'on' : 'off'} value="on" onSelect={() => setStorefront(true)}>On</Choice>
         </ControlRow>
         <p className="text-sm text-[#4B5563]">
-          Cash flow forecast is left out of the navigation until the estimate is reliable. A cashier never sees these pages.
-          {plan !== 'pro' ? ' All branches is refused below Pro, with no locked-card grid.' : ''}
+          Sample date uses Local time. The shop timezone in this fixture is Africa/Accra. Balance sheet and cash-flow forecast stay out of the navigation. A cashier never sees these pages.
+          {plan !== 'pro' ? ' All branches is refused below Pro.' : ' A Pro manager can view the consolidated operating page. Oversight stays with the owner.'}
         </p>
       </div>
 
@@ -495,8 +525,10 @@ function Header({ title, scope, onHelp, accounting }: { title: string; scope: st
     <header className="mb-4">
       <div className="flex items-start justify-between gap-3">
         <div>
+          {title === 'Today' ? <p className="text-xs font-semibold uppercase tracking-wide text-[#1E40AF]">/reports</p> : null}
           <h1 className="font-display text-[1.75rem] font-semibold leading-tight">{title}</h1>
-          <p className="mt-1 text-sm text-[#4B5563]">Wednesday 30 September 2026 · Ghana time</p>
+          <p className="mt-1 text-sm text-[#4B5563]">Wednesday 30 September 2026 · Local time</p>
+          <p className="mt-1 text-sm text-[#4B5563]">Timezone Africa/Accra</p>
         </div>
         {onHelp ? (
           <button type="button" className="min-h-11 shrink-0 rounded-xl px-3 text-sm font-semibold text-[#1E40AF]" onClick={onHelp}>
@@ -523,7 +555,7 @@ function TodayFigures(props: {
   const sales = props.consolidated ? 18430 : 4860;
   const received = props.consolidated ? 16920 : 4210;
   const attention = props.scene === 'attention';
-  const difference = attention ? (props.consolidated ? -20 : -35) : 0;
+  const difference = attention ? (props.consolidated ? -20 : -35) : -2;
   const wide = props.viewport === 'desktop';
   return (
     <div>
@@ -534,7 +566,7 @@ function TodayFigures(props: {
         <Figure
           label="Cash difference today"
           value={ghs(difference)}
-          hint={difference === 0 ? 'Closed tills match expected cash' : 'Counted minus expected · closed tills only'}
+          hint={Math.abs(difference) < 5 ? 'Exact difference. Under GHS 5, so it is not an attention item.' : 'Counted minus expected · closed tills only'}
           onHelp={() => props.onHelp('Cash difference today')}
         />
         <button type="button" className="mt-2 min-h-11 text-sm font-semibold text-[#1E40AF]" onClick={() => props.onScreen('detail')}>
@@ -564,12 +596,28 @@ function TodayFigures(props: {
             Nothing needs attention right now.
           </p>
         )}
+        {attention ? (
+          <div className="mt-2">
+            <p className="text-sm leading-6 text-[#4B5563]">
+              Five items is the limit. Lower-ranked checks stay off this list.
+              {props.plan === 'starter'
+                ? ' Peak milk is rank 8, so it is not one of these five.'
+                : ' Below-cost and low stock stay off this list while the first five qualify.'}
+            </p>
+            {props.plan === 'starter' ? (
+              <button type="button" className="mt-2 flex min-h-11 w-full items-center justify-between rounded-xl bg-white px-3 text-left text-sm">
+                <span>Peak milk 400g · 4 left · not an attention row</span>
+                <span className="font-semibold text-[#1E40AF]">Open inventory</span>
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </section>
       </div>
 
       <section className="mt-6">
         <h2 className="font-display text-lg font-semibold">Last 7 days</h2>
-        <p className="mt-1 text-sm leading-6 text-[#4B5563]">Thursday 24 September through today, Ghana time.</p>
+        <p className="mt-1 text-sm leading-6 text-[#4B5563]">Thursday 24 September through today, in the shop&apos;s local dates.</p>
         <ul className="mt-3 space-y-3 rounded-2xl bg-white p-4">
           {(props.consolidated ? WEEK.map((bar) => ({ ...bar, amount: Math.round(bar.amount * 3.6) })) : WEEK).map((bar, _index, list) => {
             const max = Math.max(...list.map((item) => item.amount));
@@ -723,7 +771,7 @@ function ActivityScreen(props: { plan: Plan; storefront: boolean; scopeText: str
     ['Stock to reorder', 'What may run out', props.plan !== 'starter'],
     ['Sales by linked supplier', 'Sales for products linked to a supplier. Not what you owe them.', props.plan !== 'starter'],
     ['Control alerts', 'Variances and discounts worth a look', props.plan !== 'starter'],
-    ['Storefront', 'Visits and orders on the online shop', props.storefront && props.plan !== 'starter'],
+    ['Storefront', 'Online shop analytics. Shown only while the add-on is on.', props.storefront && props.plan !== 'starter'],
   ] as const;
   return (
     <div data-screen="activity">
@@ -738,6 +786,10 @@ function ActivityScreen(props: { plan: Plan; storefront: boolean; scopeText: str
           </li>
         ))}
       </ul>
+      <button type="button" className="mt-4 min-h-11 rounded-xl bg-[#1E40AF] px-4 text-sm font-semibold text-white">
+        Download last week
+      </button>
+      <p className="mt-2 text-sm leading-6 text-[#4B5563]">Last week (Monday–Sunday). The file name stays the current weekly export.</p>
     </div>
   );
 }
@@ -837,7 +889,7 @@ function StatementsScreen(props: { plan: Plan; role: Role; readOnly: boolean; on
         <button type="button" disabled={props.readOnly} className={`mt-4 min-h-11 rounded-xl px-4 text-sm font-semibold ${props.readOnly ? 'bg-[#E5E7EB] text-[#4B5563]' : 'bg-[#1E40AF] text-white'}`}>
           {props.readOnly ? 'Downloads are off' : 'Download sales CSV'}
         </button>
-        <p className="mt-4 text-sm leading-6 text-[#4B5563]">Income statement, balance sheet and cash flow statement are on Growth and Pro. They cover the whole business, not one branch.</p>
+        <p className="mt-4 text-sm leading-6 text-[#4B5563]">The income statement is on Growth and Pro. It covers the whole business. The balance sheet is withheld on every plan until it can be shown to balance without an inventory plug.</p>
       </div>
     );
   }
@@ -853,17 +905,16 @@ function StatementsScreen(props: { plan: Plan; role: Role; readOnly: boolean; on
         <Row k="Profit" v={ghs(31400)} />
       </dl>
       <div className="mt-4 flex flex-wrap gap-2">
-        {['Balance sheet', 'Cash flow statement', 'Downloads'].map((label) => (
-          <span key={label} className="inline-flex min-h-11 items-center rounded-full bg-white px-3 text-sm font-semibold text-[#1E3A8A]">{label}</span>
-        ))}
+        <span className="inline-flex min-h-11 items-center rounded-full bg-white px-3 text-sm font-semibold text-[#1E3A8A]">Downloads</span>
       </div>
+      <p className="mt-4 text-sm leading-6 text-[#4B5563]">Balance sheet is not in this list. A direct address says the statement is withheld and shows no inventory figure. Cash flow statement stays out of this list until its labels match the formula. Cash-flow forecast is not here.</p>
       {props.plan === 'pro' && props.role === 'owner' ? (
         <button type="button" className="mt-4 min-h-11 text-sm font-semibold text-[#1E40AF]" onClick={() => props.onScreen('saved')}>
           Saved views and scheduled packs
         </button>
       ) : null}
       {props.plan === 'pro' && props.role === 'manager' ? (
-        <p className="mt-4 text-sm leading-6 text-[#4B5563]">Audit log and Owner brief stay with the owner. You can still open these statements.</p>
+        <p className="mt-4 text-sm leading-6 text-[#4B5563]">You can view consolidated operating reports. Audit log, Owner brief and scheduled packs stay with the owner.</p>
       ) : null}
     </div>
   );
@@ -883,7 +934,7 @@ function SavedScreen(props: { plan: Plan; role: Role }) {
     return (
       <div data-screen="saved">
         <Header title="Saved views" scope="Not on this plan" />
-        <p className="text-sm leading-6">Saved views and scheduled packs are a later Pro release for the owner. They start from reports you already use. There is no custom report builder.</p>
+        <p className="text-sm leading-6">Saved views, scheduled packs, Audit log and Owner brief stay with the Pro owner. A Pro manager can still open consolidated operating reports. There is no custom report builder.</p>
       </div>
     );
   }
@@ -891,6 +942,7 @@ function SavedScreen(props: { plan: Plan; role: Role }) {
     <div data-screen="saved">
       <p className="mb-3 rounded-xl bg-[#EFF6FF] px-3 py-3 text-sm font-medium leading-6 text-[#1E3A8A]">Concept for a later Pro release. Not in the product today.</p>
       <Header title="Saved views" scope="Consolidated — all branches" />
+      <p className="mb-3 text-sm leading-6">Oversight for the Pro owner: Owner brief and Audit log. A manager does not see this block.</p>
       <ul className="space-y-2">
         <li className="rounded-2xl bg-white px-4 py-3">
           <p className="font-semibold">Madina · money received · last 7 days</p>
@@ -898,7 +950,7 @@ function SavedScreen(props: { plan: Plan; role: Role }) {
         </li>
         <li className="rounded-2xl bg-white px-4 py-3">
           <p className="font-semibold">All branches · sales today</p>
-          <p className="mt-1 text-sm text-[#4B5563]">Scheduled Monday 7:00 am · Ghana time · one PDF</p>
+          <p className="mt-1 text-sm text-[#4B5563]">Scheduled Monday 7:00 am · Local time · one PDF</p>
         </li>
       </ul>
     </div>
@@ -917,10 +969,10 @@ function Denied({ title, body, action }: { title: string; body: string; action?:
 
 function definition(title: string) {
   if (title === 'Money received today') {
-    return 'Confirmed payments received today in Ghana time, for the branch shown. Credit sales are not included until the customer pays. Refunds are not subtracted here.';
+    return 'Confirmed payments received on the business-local date, for the branch shown. Credit sales are not included until the customer pays. Refunds are not subtracted here.';
   }
   if (title === 'Cash difference today') {
-    return 'Cash counted when a till was closed today, minus the cash the till expected. A negative figure means the count was lower. It is not an accusation. Open tills are excluded because they have not been counted.';
+    return 'Cash counted when a till was closed on the business-local date, minus the cash the till expected. The exact figure always shows here. An attention row appears only when the absolute difference is at least GHS 5. Open tills are excluded because they have not been counted.';
   }
-  return 'Sales recorded today in Ghana time, for the branch or consolidated view shown. Returned and voided sales are excluded. This is the value of sales, not the cash in the drawer.';
+  return 'Sales recorded on the business-local date, for the branch or consolidated view shown. Returned and voided sales are excluded. This is the value of sales, not the cash in the drawer. The date uses the shop timezone, shown under Local time.';
 }
