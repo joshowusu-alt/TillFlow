@@ -136,8 +136,6 @@ jobs:
     env:
       # Job-local SQLite — does not share unit/build DB files.
       DATABASE_URL: file:./ci-pos-safety.db
-      # Review-only routes (money layout) are allowed in preview/local dev, not Production.
-      VERCEL_ENV: preview
       BASE_URL: http://localhost:6200
       E2E_OWNER_EMAIL: owner@store.com
       E2E_OWNER_PASSWORD: Pass1234!
@@ -178,6 +176,9 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Start app
+        env:
+          # Review-only Reports routes (money layout) require preview/local gate under `next start`.
+          VERCEL_ENV: preview
         run: |
           set -euo pipefail
           npm run start -- -p 6200 > .ci-server.log 2>&1 &
