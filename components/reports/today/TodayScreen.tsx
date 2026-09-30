@@ -234,11 +234,11 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
           {salesKnownZero ? (
             <p className="mt-2 text-base font-semibold text-ink">No sales recorded yet today</p>
           ) : props.salesHref ? (
-            <Link href={props.salesHref} className={`mt-1 block min-w-0 ${FOCUS}`}>
+            <Link href={props.salesHref} className={`mt-1 block min-w-0 @container ${FOCUS}`}>
               <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
             </Link>
           ) : (
-            <div className="mt-1 min-w-0">
+            <div className="mt-1 min-w-0 @container">
               <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
             </div>
           )}

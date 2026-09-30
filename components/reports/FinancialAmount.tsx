@@ -33,7 +33,7 @@ export default function FinancialAmount({
     <span
       data-financial-amount={testId}
       data-testid={testId}
-      className={`@container ${VARIANT[variant]} ${className}`.trim()}
+      className={`${VARIANT[variant]} ${className}`.trim()}
     >
       {amount}
     </span>

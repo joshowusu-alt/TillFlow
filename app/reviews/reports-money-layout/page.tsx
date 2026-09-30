@@ -32,7 +32,7 @@ export default function ReportsMoneyLayoutReviewPage() {
             style={{ width: '100%' }}
           >
             <h2 className="text-sm font-semibold text-ink">{fixture.label}</h2>
-            <div className="mt-2 min-w-0" data-money-layout-target>
+            <div className="mt-2 min-w-0 @container" data-money-layout-target>
               <FinancialAmount pence={fixture.pence} currency="GHS" variant="hero" data-testid={`amount-${fixture.id}`} />
             </div>
           </section>
