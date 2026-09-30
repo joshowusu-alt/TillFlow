@@ -1,13 +1,10 @@
 import { formatMoney } from '@/lib/format';
 
-const BASE =
-  'max-w-full whitespace-nowrap tabular-nums text-ink';
-
 const VARIANT = {
-  hero: `${BASE} block w-full font-display font-semibold leading-none [font-size:clamp(1.05rem,9cqi,2rem)]`,
-  prominent: `${BASE} block w-full font-display font-semibold leading-none [font-size:clamp(0.8rem,8cqi,1.5rem)]`,
-  inline: `${BASE} inline-block font-semibold leading-none [font-size:clamp(0.8rem,6cqi,1.125rem)]`,
-  compact: `${BASE} inline-block font-semibold leading-none [font-size:clamp(0.7rem,5cqi,0.875rem)]`,
+  hero: 'financial-amount financial-amount--hero font-display',
+  prominent: 'financial-amount financial-amount--prominent font-display',
+  inline: 'financial-amount financial-amount--inline',
+  compact: 'financial-amount financial-amount--compact',
 } as const;
 
 export type FinancialAmountVariant = keyof typeof VARIANT;

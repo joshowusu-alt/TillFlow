@@ -234,11 +234,11 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
           {salesKnownZero ? (
             <p className="mt-2 text-base font-semibold text-ink">No sales recorded yet today</p>
           ) : props.salesHref ? (
-            <Link href={props.salesHref} className={`mt-1 block min-w-0 @container ${FOCUS}`}>
+            <Link href={props.salesHref} className={`mt-1 block min-w-0 financial-fit ${FOCUS}`}>
               <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
             </Link>
           ) : (
-            <div className="mt-1 min-w-0 @container">
+            <div className="mt-1 min-w-0 financial-fit">
               <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
             </div>
           )}
@@ -256,7 +256,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
                   <p className="mt-1 text-sm text-ink">No confirmed payments yet today</p>
                 ) : (
                   <>
-                    <div className="mt-1 min-w-0 @container" data-today-money>
+                    <div className="mt-1 min-w-0 financial-fit" data-today-money>
                       <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
                     </div>
                     <p className="mt-0.5 text-xs text-muted">Confirmed · not sales</p>
@@ -269,7 +269,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
                 {receiptsKnownZero ? (
                   <p className="mt-1 text-sm text-ink">No confirmed payments yet today</p>
                 ) : (
-                  <div className="mt-1 min-w-0 @container" data-today-money>
+                  <div className="mt-1 min-w-0 financial-fit" data-today-money>
                     <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
                   </div>
                 )}
@@ -281,7 +281,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
                 <p className="mt-1 text-sm text-ink">No till closed today</p>
               ) : (
                 <>
-                  <div className="mt-1 min-w-0 @container" data-today-cash>
+                  <div className="mt-1 min-w-0 financial-fit" data-today-cash>
                     <FinancialAmount pence={cashDiff} currency={currency} variant="prominent" />
                   </div>
                   <p className="mt-0.5 text-xs text-muted">{cashNeedsLook ? 'Needs a look' : 'Within GH₵5.00'}</p>
