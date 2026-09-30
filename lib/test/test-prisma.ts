@@ -76,6 +76,8 @@ export type OpenTestPrismaOptions = {
   env?: NodeJS.ProcessEnv;
   /** Injected for the guard's own regression tests; production callers never set this. */
   construct?: (url: string) => PrismaClient;
+  /** Records SQL from the guarded client. Used by disposable Postgres evidence tests. */
+  onQuery?: (event: { query: string; params: string }) => void;
   /** Skip the live round-trip (regression tests only). */
   skipLiveVerification?: boolean;
   log?: (line: string) => void;
@@ -121,7 +123,17 @@ export async function openTestPrismaClient(options: OpenTestPrismaOptions = {}):
 
   if (env === process.env) await dropAppPrismaSingleton();
 
-  const construct = options.construct ?? ((url: string) => new PrismaClient({ datasources: { db: { url } } }));
+  const construct = options.construct ?? ((url: string) => {
+    if (!options.onQuery) return new PrismaClient({ datasources: { db: { url } } });
+    const client = new PrismaClient({
+      datasources: { db: { url } },
+      log: [{ emit: 'event', level: 'query' }],
+    });
+    client.$on('query', (event) => {
+      options.onQuery?.({ query: event.query, params: event.params });
+    });
+    return client;
+  });
   const prisma = construct(prepared.url);
 
   let live = { currentDatabase: prepared.identity.database, currentSchema: prepared.identity.schema };

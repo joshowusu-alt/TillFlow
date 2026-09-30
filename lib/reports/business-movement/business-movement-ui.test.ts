@@ -218,7 +218,7 @@ describe('Business Movement 6F — surface wiring', () => {
       'utf8',
     );
     const nav = readFileSync(join(root, 'lib/navigation-config.ts'), 'utf8');
-    const hub = readFileSync(join(root, 'app/(protected)/reports/page.tsx'), 'utf8');
+    const hub = readFileSync(join(root, 'lib/reports/today/stage3a-nav.ts'), 'utf8');
 
     expect(page).toContain('title="Business Movement"');
     expect(page).toContain("surfaceId: 'business_movement'");

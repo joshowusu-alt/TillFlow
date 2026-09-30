@@ -399,6 +399,36 @@ async function enforcePageDecision(
   };
 }
 
+/**
+ * Same session and decision as `openLiveReport`, without redirecting or calling `notFound`.
+ * Today uses this so an invalid store can render a panel instead of the generic 404,
+ * and so optional destinations can be checked without replacing the page.
+ */
+export async function inspectLiveReport(input: {
+  surfaceId: SurfaceId;
+  search?: ReportSearch;
+  range?: LiveReportRange | ((ctx: LoadedReportContext) => LiveReportRange);
+  now?: Date;
+}): Promise<{
+  page: PageAccessResult;
+  business: OpenedReport['business'] | null;
+  stores: { id: string; name: string }[];
+  user: OpenedReport['user'] | null;
+}> {
+  const prepared = await prepareLiveReport({ ...input, action: 'VIEW' });
+  const page = requireSurface(prepared.accessInput);
+  if (page.outcome === 'notFound' && page.reason === 'SCOPE_STORE_INVALID' && prepared.cookieStoreId) {
+    const owned = new Set(prepared.stores.map((store) => store.id));
+    if (!owned.has(prepared.cookieStoreId)) clearOperationalStoreCookie();
+  }
+  return {
+    page,
+    business: prepared.business,
+    stores: prepared.stores,
+    user: prepared.user,
+  };
+}
+
 export async function openLiveReport(input: {
   surfaceId: SurfaceId;
   search?: ReportSearch;
