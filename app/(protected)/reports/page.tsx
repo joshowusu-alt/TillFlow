@@ -2,12 +2,13 @@ import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import TodayScreen, { scopeStoreLinks, TodayLoading, type TodayScreenProps } from '@/components/reports/today/TodayScreen';
 import { branchFromAllow, inspectLiveReport, visibleReportHrefs, type ReportSearch } from '@/lib/entitlements/live-report';
-import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import { measureServerOperation } from '@/lib/observability';
 import { prisma } from '@/lib/prisma';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
+import { agreeingReportScope, ScopeAgreementError, todayNextActions } from '@/lib/reports/today/model';
 import { loadToday, type TodaySnapshot } from '@/lib/reports/today/load';
-import { stage3aLinks, stage3aSection, withStoreScope } from '@/lib/reports/today/stage3a-nav';
+import { stage3aExplore, stage3aLinks, stage3aSection, withStoreScope } from '@/lib/reports/today/stage3a-nav';
+import { tradingReplacesSalesAnalytics } from '@/lib/reports/today/trading-parity';
 import { buildTodayWindows, shiftLocalDateKey, type TodayPlan } from '@/lib/reports/today/windows';
 import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { ReportingScopeStoreError } from '@/lib/reports/reporting-scope';
@@ -29,6 +30,8 @@ function shell(props: Omit<TodayScreenProps, 'section' | 'links'> & { section?: 
   return {
     section: props.section ?? 'today',
     links: props.links ?? [],
+    exploreLinks: props.exploreLinks ?? [],
+    nextActions: props.nextActions ?? [],
     scopeLabel: props.scopeLabel,
     dateLabel: props.dateLabel,
     zoneName: props.zoneName,
@@ -65,7 +68,7 @@ async function ReportsToday({ search }: { search?: Search }) {
   const zoneName = zoneLabel(hub.business.timezone, now);
   const base = {
     section,
-    scopeLabel: 'Branch',
+    scopeLabel: '',
     dateLabel: dateLabel(now, hub.business.timezone),
     zoneName,
     updatedLabel: timeLabel(now, hub.business.timezone),
@@ -77,6 +80,8 @@ async function ReportsToday({ search }: { search?: Search }) {
     blocked: null as TodayScreenProps['blocked'],
     failed: false,
     links: [] as TodayScreenProps['links'],
+    exploreLinks: [] as TodayScreenProps['exploreLinks'],
+    nextActions: [] as TodayScreenProps['nextActions'],
   };
 
   if (hub.page.outcome !== 'allow') {
@@ -141,11 +146,28 @@ async function ReportsToday({ search }: { search?: Search }) {
 
   const applied = data.page.decision.appliedRange;
   const storeId = branch.selected;
-  const scopeLabel = storeId === 'ALL'
-    ? CONSOLIDATED_LABEL
-    : data.stores.find((store) => store.id === storeId)?.name ?? 'Branch';
+  let agreed: { label: string; storeIds: string[] };
+  try {
+    agreed = agreeingReportScope({
+      plan,
+      selected: storeId,
+      queriedStoreIds: branch.storeIds,
+      ownedStores: data.stores,
+    });
+  } catch (error) {
+    if (error instanceof ScopeAgreementError) {
+      return <TodayScreen {...shell({ ...base, blocked: noticeCopy('SCOPE_STORE_UNSELECTED') })} />;
+    }
+    throw error;
+  }
+  const scopeLabel = agreed.label;
   const allowed = await visibleReportHrefs(now);
-  const links = scopeStoreLinks(stage3aLinks(section, allowed), storeId);
+  const momoOn = (hub.business as { momoEnabled?: boolean | null }).momoEnabled !== false;
+  const linkOptions = {
+    tradingReplacesSalesAnalytics: tradingReplacesSalesAnalytics(),
+    showNetworkQueue: momoOn && (hub.user?.role === 'OWNER' || hub.user?.role === 'MANAGER'),
+  };
+  const links = scopeStoreLinks(stage3aLinks(section, allowed, linkOptions), storeId);
   const readOnly = data.page.decision.readOnly === true || base.readOnly;
   const framed = {
     ...base,
@@ -153,6 +175,8 @@ async function ReportsToday({ search }: { search?: Search }) {
     storeId,
     readOnly,
     links,
+    exploreLinks: scopeStoreLinks(stage3aExplore(allowed, linkOptions), storeId),
+    nextActions: todayNextActions({ role: hub.user?.role ?? '', readOnly }),
     salesHref: allowed.has('/reports/dashboard')
       ? withStoreScope(`/reports/dashboard?from=${todayKey}&to=${todayKey}`, storeId)
       : null,
@@ -173,7 +197,7 @@ async function ReportsToday({ search }: { search?: Search }) {
     const snapshot = await measureServerOperation('reports.today', () => loadToday(prisma, {
       businessId: hub.business!.id,
       ownedStoreIds: data.stores.map((store) => store.id),
-      storeIds: branch.storeIds,
+      storeIds: agreed.storeIds,
       currency: framed.currency,
       timeZone,
       plan,

@@ -5,6 +5,7 @@ import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportSectionSkeleton from '@/components/reports/ReportSectionSkeleton';
 import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
 import { openLiveReport } from '@/lib/entitlements/live-report';
+import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import { recordOwnerDashboardView, recordOwnerReportView } from '@/app/actions/activation';
 import { getBusinessStores } from '@/lib/services/stores';
 import {
@@ -140,7 +141,7 @@ export default async function DashboardPage({
               <div>
                 <label className="label">Report branch filter</label>
                 <select className="input" name="storeId" defaultValue={selectedStoreId}>
-                  {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
+                  {opened.branch.offerAll ? <option value="ALL">{CONSOLIDATED_LABEL}</option> : null}
                   {opened.branch.choices.map((store) => (
                     <option key={store.id} value={store.id}>
                       {store.name}

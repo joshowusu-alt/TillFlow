@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import { notFound } from 'next/navigation';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
@@ -107,7 +108,7 @@ export default async function MoneyReceivedReceiptsPage({
           {' · '}
           <strong>{originLabel}</strong> for{' '}
           {isToday ? 'Today' : `${scope.fromInputValue} → ${scope.toInputValue}`}
-          {scope.storeId === 'ALL' ? ' · All branches' : ''}.
+          {scope.storeId === 'ALL' ? ` · ${CONSOLIDATED_LABEL}` : ''}.
           Each row is one confirmed payment line. For cash-in totals, method split, unverified
           items, and refunds, use <strong>Money Received</strong>.
         </p>
@@ -160,7 +161,7 @@ export default async function MoneyReceivedReceiptsPage({
           <div>
             <label className="label">Report branch filter</label>
             <select className="input" name="storeId" defaultValue={scope.storeId}>
-              {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
+              {opened.branch.offerAll ? <option value="ALL">{CONSOLIDATED_LABEL}</option> : null}
               {stores.map((store) => (
                 <option key={store.id} value={store.id}>
                   {store.name}

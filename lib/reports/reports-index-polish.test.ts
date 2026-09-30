@@ -32,7 +32,9 @@ describe('Reports Today shell', () => {
   });
 
   it('lists existing Activity and More destinations and withholds unfinished statements', () => {
-    expect(screen).toContain("label: mobile ? 'More' : 'More reports'");
+    expect(screen).toContain('More reports');
+    expect(screen).toContain('data-reports-nav="contextual"');
+    expect(screen).not.toContain('fixed inset-x-0');
     expect(nav).toContain("href: '/reports/business-movement'");
     expect(nav).toContain("href: '/reports/dashboard'");
     expect(nav).toContain("href: '/reports/cash-drawer'");

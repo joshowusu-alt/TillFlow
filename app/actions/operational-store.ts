@@ -9,8 +9,7 @@ import {
   ALL_BRANCHES_NOT_OPERATIONAL_MSG,
   FOREIGN_OPERATIONAL_STORE_MSG,
   OPERATIONAL_STORE_COOKIE,
-  isOperationalRoute,
-  withOperationalStoreQuery,
+  pathAfterOperationalSwitch,
 } from '@/lib/reliability/operational-store';
 import { operationalStoreCookieOptions } from '@/lib/reliability/operational-store-cookie';
 
@@ -41,10 +40,7 @@ export async function switchOperationalStoreResultAction(formData: FormData): Pr
     cookies().set(OPERATIONAL_STORE_COOKIE, store.id, operationalStoreCookieOptions());
     revalidatePath('/', 'layout');
 
-    const nextPath = isOperationalRoute(returnTo.split('?')[0] ?? '')
-      ? withOperationalStoreQuery(returnTo, store.id)
-      : returnTo.split('?')[0] || returnTo;
-    redirect(nextPath);
+    redirect(pathAfterOperationalSwitch(returnTo, store.id));
   });
 }
 

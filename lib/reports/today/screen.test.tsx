@@ -81,6 +81,7 @@ describe('Today screen', () => {
         salesTodayPence: 0,
         salesCount: 0,
         yesterdayPence: 0,
+        days: [{ key: '2026-09-30', label: 'Wed', salesPence: 0 }],
         moneyReceivedPence: 0,
         methods: [],
         cashDifferencePence: null,
@@ -89,11 +90,10 @@ describe('Today screen', () => {
         attention: [],
       }),
     });
-    expect(empty).toContain('No sales recorded yet today');
-    expect(empty).toContain('No sales yesterday.');
-    expect(empty).toContain('No confirmed payments yet today');
-    expect(empty).toContain('No till has been closed today');
-    expect(empty).toContain('Nothing needs attention right now.');
+    expect(empty).toContain('No sales have been recorded for Accra today');
+    expect(empty).toContain('data-today-state="empty"');
+    expect(empty).not.toContain('Last seven dates');
+    expect(empty).not.toContain('GH₵0.00');
 
     const restricted = html({ readOnly: true });
     expect(restricted).toContain('Read-only. You can look at reports. Downloads and changes stay off until billing is sorted.');
@@ -120,7 +120,7 @@ describe('Today screen', () => {
     const markup = html({
       section: 'activity',
       snapshot: null,
-      links: [{ href: '/reports/dashboard?storeId=store-1', label: 'Trading', purpose: 'Sales for a period you choose', group: 'Reports' }],
+      links: [{ href: '/reports/dashboard?storeId=store-1', label: 'Trading', purpose: 'Sales for a period you choose', group: 'Reports', iconKey: 'reports' }],
     });
     expect(markup).toContain('Trading');
     expect(markup).toContain('More reports');

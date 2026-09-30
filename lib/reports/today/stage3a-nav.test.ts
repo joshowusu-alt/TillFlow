@@ -9,7 +9,10 @@ describe('Stage 3A navigation', () => {
     expect(stage3aSection('more')).toBe('more');
     expect(stage3aSection('balance-sheet')).toBe('today');
     const page = readFileSync('components/reports/today/TodayScreen.tsx', 'utf8');
-    expect(page).toContain("label: mobile ? 'More' : 'More reports'");
+    expect(page).toContain('More reports');
+    expect(page).toContain('data-reports-nav="contextual"');
+    expect(page).not.toContain('fixed inset-x-0');
+    expect(page).not.toContain('--mobile-bottom-nav-height');
   });
 
   it('links only existing authorised destinations and withholds the unfinished statements', () => {

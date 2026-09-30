@@ -7,6 +7,9 @@
  *
  * Off Home, when the business-wide today-sales pulse is showing, the chip also
  * says "All branches". Otherwise it shows the user's operational store identity.
+ *
+ * Reports never uses that chip. The report page names its own scope, and a
+ * business-wide "All branches" line beside the till would contradict it.
  */
 export function mobileReportingScopeLabel(input: {
   pathname: string;
@@ -14,6 +17,9 @@ export function mobileReportingScopeLabel(input: {
   showingBusinessWideSalesPulse: boolean;
 }): string {
   const path = input.pathname || '';
+  if (path === '/reports' || path.startsWith('/reports/')) {
+    return input.storeName?.trim() || 'Branch';
+  }
   const isHome = path === '/onboarding' || path.startsWith('/onboarding/');
   if (isHome || input.showingBusinessWideSalesPulse) {
     return 'All branches';

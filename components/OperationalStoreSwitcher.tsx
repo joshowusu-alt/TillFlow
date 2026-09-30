@@ -32,11 +32,14 @@ export default function OperationalStoreSwitcher({
   selectedStoreId,
   selectedStoreName,
   canSwitch,
+  controlLabel = 'Active branch',
 }: {
   stores: OperationalStoreOption[];
   selectedStoreId?: string | null;
   selectedStoreName?: string | null;
   canSwitch: boolean;
+  /** Accessible name. On Reports this is the working till, not the report scope. */
+  controlLabel?: string;
 }) {
   const pathname = usePathname() ?? '/onboarding';
   const searchParams = useSearchParams();
@@ -152,7 +155,7 @@ export default function OperationalStoreSwitcher({
     >
       <input type="hidden" name="returnTo" value={returnTo} />
       <label className="sr-only" htmlFor="operational-store-switcher">
-        Active branch
+        {controlLabel}
       </label>
       {/*
         The visible select is controlled by the server-authoritative branch so the

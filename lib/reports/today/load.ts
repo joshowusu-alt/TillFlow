@@ -14,8 +14,8 @@
  * and any whole-business fallback.
  */
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { formatMoney } from '@/lib/format';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
+import type { TodaySnapshot } from '@/lib/reports/today/model';
 import { evaluateMarginLines } from '@/lib/reports/margin-line';
 import { aggregateMoneyReceivedByMethod, requireMoneyReceivedMethodRows } from '@/lib/reports/money-received/query';
 import { resolveMoneyReceivedScope } from '@/lib/reports/money-received/scope-clock';
@@ -26,7 +26,7 @@ import { halfOpenTimestampFilter } from '@/lib/reports/reporting-clock';
 import { REPORTING_EXCLUDED_SALE_STATUSES, ReportingScopeStoreError } from '@/lib/reports/reporting-scope';
 import { isInvalidLegacyClose } from '@/lib/reliability/invalid-preview-shift-closures';
 import { applyRefundsToMethods } from '@/lib/reports/today/money-net';
-import { creditBuckets, selectAttention, type AttentionCandidate } from '@/lib/reports/today/attention';
+import { creditBuckets, selectAttention } from '@/lib/reports/today/attention';
 import { windowInside, type TodayPlan, type TodayWindows } from '@/lib/reports/today/windows';
 
 const METHOD_LABELS: Record<string, string> = {
@@ -66,21 +66,7 @@ export type TodayLoadInput = {
   hrefForLowStock: string | null;
 };
 
-export type TodaySnapshot = {
-  readCount: number;
-  salesTodayPence: number;
-  salesCount: number;
-  yesterdayPence: number;
-  days: Array<{ key: string; label: string; salesPence: number }>;
-  moneyReceivedPence: number;
-  methods: Array<{ method: string; label: string; amountPence: number }>;
-  cashDifferencePence: number | null;
-  comparison: { last30Pence: number; previous30Pence: number } | null;
-  branches: Array<{ storeId: string; name: string; salesPence: number }> | null;
-  profit: { state: 'omitted' | 'ready' | 'incomplete'; grossProfitPence: number | null };
-  topProducts: Array<{ name: string; salesPence: number }>;
-  attention: AttentionCandidate[];
-};
+export { cashDifferenceLabel, type TodaySnapshot } from '@/lib/reports/today/model';
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -526,10 +512,3 @@ export async function loadToday(db: Db, input: TodayLoadInput): Promise<TodaySna
   }
 }
 
-export function cashDifferenceLabel(pence: number | null, currency: string): string | null {
-  if (pence == null) return null;
-  const amount = formatMoney(Math.abs(pence), currency);
-  if (pence < 0) return `−${amount}`;
-  if (pence > 0) return `+${amount}`;
-  return amount;
-}

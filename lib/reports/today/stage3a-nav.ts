@@ -1,28 +1,11 @@
+import type { NavIconKey } from '@/lib/navigation-config';
+
 /**
- * Stage 3A navigation. Today is the live page. Activity and More reports are
- * stage-safe lists of routes that already exist. They are not the later
- * Activity or More redesign. Withheld reports are never linked.
+ * Today is `/reports`. Activity and More reports are directories of routes
+ * that already have their own screens. Withheld statements are never linked.
  *
- * Today (`/reports`, or `section` omitted):
- *   Live Today for the store scope authorised by `command_center`.
- *
- * Activity (`/reports?section=activity`):
- *   Links, only when that surface's own VIEW decision allows them:
- *   Trading `/reports/dashboard`, Business movement `/reports/business-movement`,
- *   Money received `/reports/money-received`,
- *   MoMo to confirm `/reports/momo-confirmation`, Cash drawer `/reports/cash-drawer`,
- *   Stock movements `/reports/stock-movements`, Product margins `/reports/margins`,
- *   Stock to reorder `/reports/reorder-suggestions`, Sales by linked supplier
- *   `/reports/sales-by-supplier`, Control alerts `/reports/risk-monitor`,
- *   Storefront `/settings/online-store/analytics`.
- *
- * More reports (`/reports?section=more`; mobile label More):
- *   Income statement `/reports/income-statement`, Downloads `/reports/exports`,
- *   Owner brief `/reports/owner`, Audit log `/reports/audit-log`.
- *   Each link is shown only when its own VIEW decision allows it.
- *
- * Not linked from this stage: Balance Sheet, Cash-flow Statement, Cash-flow
- * Forecast, and Weekly Digest. Those direct routes stay as they are.
+ * Sales Analytics stays beside Trading until `tradingReplacesSalesAnalytics()`
+ * is true. Weekly Digest is not linked. The weekly file action is not added here.
  */
 
 export const STAGE_3A_WITHHELD_HREFS = [
@@ -34,32 +17,176 @@ export const STAGE_3A_WITHHELD_HREFS = [
 
 export type Stage3aSection = 'today' | 'activity' | 'more';
 
+export type Stage3aGroup =
+  | 'Reports'
+  | 'Queues'
+  | 'Ledgers and controls'
+  | 'Statements'
+  | 'Downloads'
+  | 'Owner tools';
+
+export type ExploreGroup = 'Understand sales' | 'Follow money' | 'Control stock' | 'Review statements';
+
 export type Stage3aLink = {
   href: string;
   label: string;
   purpose: string;
-  group: 'Reports' | 'Queues' | 'Ledgers' | 'Statements' | 'Downloads' | 'Oversight';
+  group: Stage3aGroup;
+  iconKey: NavIconKey;
+  explore?: ExploreGroup;
+};
+
+export type Stage3aLinkOptions = {
+  /** True only when Trading already covers every entitled Sales Analytics capability. */
+  tradingReplacesSalesAnalytics?: boolean;
+  /** Mobile Money network queue. Hidden when the business has not turned MoMo on. */
+  showNetworkQueue?: boolean;
 };
 
 const ACTIVITY_LINKS: Stage3aLink[] = [
-  { href: '/reports/dashboard', label: 'Trading', purpose: 'Sales for a period you choose', group: 'Reports' },
-  { href: '/reports/business-movement', label: 'Business movement', purpose: 'How stock, cash and debts moved', group: 'Reports' },
-  { href: '/reports/money-received', label: 'Money received', purpose: 'Confirmed payments, separate from sales', group: 'Reports' },
-  { href: '/settings/online-store/analytics', label: 'Storefront', purpose: 'Online shop visits and orders', group: 'Reports' },
-  { href: '/reports/momo-confirmation', label: 'MoMo to confirm', purpose: 'Payments waiting for you to confirm', group: 'Queues' },
-  { href: '/reports/cash-drawer', label: 'Cash drawer', purpose: 'Expected cash, counted cash, difference', group: 'Ledgers' },
-  { href: '/reports/stock-movements', label: 'Stock movements', purpose: 'Stock in and out', group: 'Ledgers' },
-  { href: '/reports/margins', label: 'Product margins', purpose: 'Products below your target, when cost is known', group: 'Ledgers' },
-  { href: '/reports/reorder-suggestions', label: 'Stock to reorder', purpose: 'What may run out', group: 'Ledgers' },
-  { href: '/reports/sales-by-supplier', label: 'Sales by linked supplier', purpose: 'Sales for linked products. Not what you owe.', group: 'Ledgers' },
-  { href: '/reports/risk-monitor', label: 'Control alerts', purpose: 'Variances and discounts worth a look', group: 'Ledgers' },
+  {
+    href: '/reports/dashboard',
+    label: 'Trading',
+    purpose: 'See sales, returns, profit and your best-selling products for a period you choose.',
+    group: 'Reports',
+    iconKey: 'reports',
+    explore: 'Understand sales',
+  },
+  {
+    href: '/reports/analytics',
+    label: 'Sales analytics',
+    purpose: 'Compare sales over time and see the products, categories and busy hours driving performance.',
+    group: 'Reports',
+    iconKey: 'analytics',
+    explore: 'Understand sales',
+  },
+  {
+    href: '/reports/business-movement',
+    label: 'Business movement',
+    purpose: 'See how sales, confirmed payments, refunds and product sales changed between two equal periods.',
+    group: 'Reports',
+    iconKey: 'profit',
+    explore: 'Understand sales',
+  },
+  {
+    href: '/reports/money-received',
+    label: 'Money received',
+    purpose: 'Track confirmed cash, MoMo, card and bank payments separately from sales.',
+    group: 'Reports',
+    iconKey: 'payments',
+    explore: 'Follow money',
+  },
+  {
+    href: '/settings/online-store/analytics',
+    label: 'Storefront',
+    purpose: 'See visits and orders from your online shop.',
+    group: 'Reports',
+    iconKey: 'orders',
+    explore: 'Understand sales',
+  },
+  {
+    href: '/reports/momo-confirmation',
+    label: 'MoMo to confirm',
+    purpose: 'Review Mobile Money payments waiting for confirmation before they count as money received.',
+    group: 'Queues',
+    iconKey: 'reconciliation',
+    explore: 'Follow money',
+  },
+  {
+    href: '/payments/reconciliation',
+    label: 'MoMo with the network',
+    purpose: 'Track collections still pending with the payment provider.',
+    group: 'Queues',
+    iconKey: 'reconciliation',
+    explore: 'Follow money',
+  },
+  {
+    href: '/reports/cash-drawer',
+    label: 'Cash drawer',
+    purpose: 'Compare expected cash with counted cash and investigate any difference.',
+    group: 'Ledgers and controls',
+    iconKey: 'cashDrawer',
+    explore: 'Follow money',
+  },
+  {
+    href: '/reports/stock-movements',
+    label: 'Stock movements',
+    purpose: 'Trace every stock increase and decrease to a sale, purchase, return, transfer or adjustment.',
+    group: 'Ledgers and controls',
+    iconKey: 'stockMovements',
+    explore: 'Control stock',
+  },
+  {
+    href: '/reports/margins',
+    label: 'Product margins',
+    purpose: 'Find products selling below cost or below your profit target.',
+    group: 'Ledgers and controls',
+    iconKey: 'profit',
+    explore: 'Control stock',
+  },
+  {
+    href: '/reports/reorder-suggestions',
+    label: 'Stock to reorder',
+    purpose: 'See products likely to run out and decide what to purchase next.',
+    group: 'Ledgers and controls',
+    iconKey: 'reorder',
+    explore: 'Control stock',
+  },
+  {
+    href: '/reports/sales-by-supplier',
+    label: 'Sales by linked supplier',
+    purpose: 'See sales generated by products linked to each supplier—not what you owe them.',
+    group: 'Ledgers and controls',
+    iconKey: 'supplierSales',
+    explore: 'Control stock',
+  },
+  {
+    href: '/reports/risk-monitor',
+    label: 'Control alerts',
+    purpose: 'Review unusual discounts, cash differences and other activity worth checking.',
+    group: 'Ledgers and controls',
+    iconKey: 'risk',
+    explore: 'Follow money',
+  },
 ];
 
 const MORE_LINKS: Stage3aLink[] = [
-  { href: '/reports/income-statement', label: 'Income statement', purpose: 'Sales, costs, expenses and profit for the whole business', group: 'Statements' },
-  { href: '/reports/exports', label: 'Downloads', purpose: 'CSV files for sales, purchases, stock and the till', group: 'Downloads' },
-  { href: '/reports/owner', label: 'Owner brief', purpose: 'Owner brief for the whole business', group: 'Oversight' },
-  { href: '/reports/audit-log', label: 'Audit log', purpose: 'Owner audit log', group: 'Oversight' },
+  {
+    href: '/reports/income-statement',
+    label: 'Income statement',
+    purpose: 'Sales, costs, expenses and profit for the whole business, not separated by branch.',
+    group: 'Statements',
+    iconKey: 'incomeStatement',
+    explore: 'Review statements',
+  },
+  {
+    href: '/reports/exports',
+    label: 'Downloads',
+    purpose: 'Download CSV files for sales, purchases, stock and the till.',
+    group: 'Downloads',
+    iconKey: 'exports',
+  },
+  {
+    href: '/reports/owner',
+    label: 'Owner brief',
+    purpose: 'A short owner view of how the whole business is trading.',
+    group: 'Owner tools',
+    iconKey: 'ownerBrief',
+  },
+  {
+    href: '/reports/audit-log',
+    label: 'Audit log',
+    purpose: 'See who changed important records.',
+    group: 'Owner tools',
+    iconKey: 'audit',
+  },
+];
+
+export const EXPLORE_GROUPS: ExploreGroup[] = [
+  'Understand sales',
+  'Follow money',
+  'Control stock',
+  'Review statements',
 ];
 
 export function stage3aSection(value: string | undefined): Stage3aSection {
@@ -70,17 +197,46 @@ export function stage3aSection(value: string | undefined): Stage3aSection {
 
 const WITHHELD = new Set<string>(STAGE_3A_WITHHELD_HREFS);
 
+/** These screens reject a branch id. A store query would be an invalid scope. */
+const NO_STORE_SCOPE = new Set([
+  '/reports/income-statement',
+  '/reports/exports',
+  '/reports/owner',
+  '/reports/audit-log',
+  '/settings/online-store/analytics',
+]);
+
 export function withStoreScope(href: string, storeId: string | null): string {
   if (!storeId) return href;
   const url = new URL(href, 'https://tillflow.local');
+  if (NO_STORE_SCOPE.has(url.pathname)) return `${url.pathname}${url.search}`;
   url.searchParams.set('storeId', storeId);
   return `${url.pathname}${url.search}`;
 }
 
-export function stage3aLinks(section: Stage3aSection, allowedHrefs: ReadonlySet<string>): Stage3aLink[] {
+function linkVisible(link: Stage3aLink, allowedHrefs: ReadonlySet<string>, options: Stage3aLinkOptions): boolean {
+  if (WITHHELD.has(link.href)) return false;
+  if (link.href === '/reports/analytics' && options.tradingReplacesSalesAnalytics) return false;
+  if (link.href === '/payments/reconciliation') return options.showNetworkQueue === true;
+  return allowedHrefs.has(link.href);
+}
+
+export function stage3aLinks(
+  section: Stage3aSection,
+  allowedHrefs: ReadonlySet<string>,
+  options: Stage3aLinkOptions = {},
+): Stage3aLink[] {
   if (section === 'today') return [];
   const source = section === 'activity' ? ACTIVITY_LINKS : MORE_LINKS;
-  return source.filter((link) => allowedHrefs.has(link.href) && !WITHHELD.has(link.href));
+  return source.filter((link) => linkVisible(link, allowedHrefs, options));
+}
+
+/** Compact destinations for a quiet Today. Not the full Activity or More list. */
+export function stage3aExplore(
+  allowedHrefs: ReadonlySet<string>,
+  options: Stage3aLinkOptions = {},
+): Stage3aLink[] {
+  return [...ACTIVITY_LINKS, ...MORE_LINKS].filter((link) => link.explore && linkVisible(link, allowedHrefs, options));
 }
 
 export type ReportReturnPath = {
