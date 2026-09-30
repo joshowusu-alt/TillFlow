@@ -6,8 +6,10 @@ import {
   isReportsStage3aAllowed,
   isReportsStage3aPath,
   REPORTS_MONEY_LAYOUT_REVIEW_PATH,
+  REPORTS_STAGE3A_CONTEXT_REVIEW_PATH,
   REPORTS_STAGE3A_REVIEW_PATH,
 } from '@/lib/reviews/reports-stage3a-gate';
+import { reviewAttentionSampleRows } from '@/lib/reports/today/review-samples';
 
 const mutableEnv = process.env as { VERCEL_ENV?: string; NODE_ENV?: string };
 const env = { VERCEL_ENV: process.env.VERCEL_ENV, NODE_ENV: process.env.NODE_ENV };
@@ -36,6 +38,13 @@ describe('Stage 3A review gate', () => {
     const money = middleware(new NextRequest(new URL(REPORTS_MONEY_LAYOUT_REVIEW_PATH, 'http://localhost')));
     expect(money.status).toBe(404);
     expect(isReportsStage3aPath(REPORTS_MONEY_LAYOUT_REVIEW_PATH)).toBe(true);
+    expect(isReportsStage3aPath(REPORTS_STAGE3A_CONTEXT_REVIEW_PATH)).toBe(true);
+  });
+
+  it('exposes five ranked attention rows on the review sample', () => {
+    const rows = reviewAttentionSampleRows();
+    expect(rows).toHaveLength(5);
+    expect(rows.map((row) => row.rank)).toEqual([1, 2, 3, 4, 5]);
   });
 
   it('does not query or mutate from the review surface', () => {
@@ -57,5 +66,14 @@ describe('Stage 3A review gate', () => {
     const moneyPage = readFileSync('app/reviews/reports-money-layout/page.tsx', 'utf8');
     expect(moneyPage).not.toContain('prisma');
     expect(moneyPage).toContain('FinancialAmount');
+    const contextPage = readFileSync('app/reviews/reports-stage3a-context/page.tsx', 'utf8');
+    const contextClient = readFileSync('app/reviews/reports-stage3a-context/Stage3aContextReview.tsx', 'utf8');
+    for (const source of [contextPage, contextClient]) {
+      expect(source).not.toContain('prisma');
+      expect(source).not.toContain('loadToday');
+      expect(source).not.toContain('fetch(');
+    }
+    expect(contextClient).toContain('ReportsDestinationHead');
+    expect(contextClient).toContain('Synthetic destination context');
   });
 });

@@ -1,4 +1,5 @@
 import type { TodaySnapshot } from '@/lib/reports/today/model';
+import { selectAttention } from '@/lib/reports/today/attention';
 import { stage3aExplore, stage3aLinks, type Stage3aLink, type Stage3aSection } from '@/lib/reports/today/stage3a-nav';
 import { CONSOLIDATED_LABEL } from '@/lib/reports/scope-labels';
 
@@ -8,6 +9,32 @@ export type ReviewRole = 'OWNER' | 'MANAGER';
 export type ReviewScenario = 'empty' | 'healthy' | 'attention' | 'partial' | 'missing-cost' | 'error' | 'restricted' | 'cancelled';
 
 const SAMPLE = 'Sample';
+
+/** Synthetic five-row attention for the review surface only. Uses the same ranking rules as live Today. */
+export function reviewAttentionSampleRows() {
+  return selectAttention({
+    currency: 'GHS',
+    openTills: [{ tillName: 'Main till', storeName: `${SAMPLE} Main Branch`, openedAt: new Date('2026-09-29T08:00:00Z') }],
+    closedTills: [{
+      tillName: 'Front till',
+      storeName: `${SAMPLE} Main Branch`,
+      closedAt: new Date('2026-09-30T13:40:00Z'),
+      variancePence: -500,
+    }],
+    momoManual: { count: 3, amountPence: 42000 },
+    momoNetworkCount: 2,
+    customerPastDuePence: 68000,
+    supplierPastDuePence: 115000,
+    belowCost: null,
+    lowStock: null,
+    hrefForShift: '/shifts',
+    hrefForCash: '/reports/cash-drawer',
+    hrefForMomo: '/reports/momo-confirmation',
+    hrefForNetwork: '/payments/reconciliation',
+    hrefForCustomers: '/payments/customer-receipts',
+    hrefForSuppliers: '/payments/supplier-aging',
+  });
+}
 
 function days(today: number): TodaySnapshot['days'] {
   return [
@@ -61,18 +88,8 @@ export function reviewSnapshot(scenario: ReviewScenario, plan: ReviewPlan, conso
       attention: [],
     });
   }
-  const attention = scenario === 'attention' || scenario === 'healthy'
-    ? scenario === 'attention'
-      ? [{
-        rank: 2 as const,
-        severity: 'high' as const,
-        title: `${SAMPLE}: cash counted is GH₵35.00 less than expected`,
-        detail: 'Front till · sample branch',
-        action: 'Review cash',
-        href: '/reports/cash-drawer',
-        occurredAt: '2026-09-30T18:00:00.000Z',
-      }]
-      : []
+  const attention = scenario === 'attention'
+    ? reviewAttentionSampleRows()
     : [];
   const partial = scenario === 'partial'
     ? base({

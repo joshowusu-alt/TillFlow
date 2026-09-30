@@ -191,6 +191,11 @@ jobs:
           cat .ci-server.log || true
           exit 1
 
+      - name: Reports money layout (320px and 390px)
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:6200
+        run: npx playwright test --project=reports-money-layout-chromium
+
       - name: Offline sync smoke E2E
         run: npm run test:e2e:smoke
 
