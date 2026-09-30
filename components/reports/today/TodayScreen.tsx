@@ -71,14 +71,14 @@ export default function TodayScreen(props: TodayScreenProps) {
   const section = stage3aSection(props.section);
   const title = section === 'today' ? 'Today' : section === 'activity' ? 'Activity' : 'More reports';
   return (
-    <div className="mx-auto min-w-0 max-w-6xl overflow-x-hidden px-4 py-6 sm:px-6">
+    <div className="mx-auto min-w-0 max-w-6xl overflow-x-hidden px-4 py-3 sm:px-6 sm:py-6">
       <ReportsSectionHead
         title={title}
         section={section}
         storeId={props.storeId}
         dateLabel={props.dateLabel}
         scopeLabel={props.scopeLabel}
-        updatedLabel={props.updatedLabel}
+        updatedLabel={props.failed ? '' : props.updatedLabel}
         showDate={section === 'today'}
         help={section === 'today' ? (
           <TodayHelpControl>
@@ -168,6 +168,7 @@ function QuietToday({
               <Link
                 key={action.href}
                 href={action.href}
+                data-today-primary-action={index === 0 ? 'true' : undefined}
                 className={`${index === 0 ? 'btn-primary' : 'btn-secondary'} inline-flex min-h-11 items-center justify-center ${FOCUS}`}
               >
                 {action.label}
@@ -220,12 +221,12 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
   const cashNeedsLook = cashDiff != null && Math.abs(cashDiff) >= CASH_ATTENTION_THRESHOLD_PENCE;
   return (
     <div className="mt-6 min-w-0" data-today-state={partial.length > 0 ? 'partial' : 'ready'} data-partial={partial.join(' ')}>
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-start">
-        <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-5">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(16rem,0.85fr)] lg:items-start">
+        <section data-today-sales-card className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-5">
           <div className="flex min-w-0 items-start justify-between gap-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted">Sales today</p>
             {props.salesHref ? (
-              <Link href={props.salesHref} className={`btn-secondary shrink-0 px-3 text-xs ${FOCUS}`}>
+              <Link href={props.salesHref} data-today-primary-action className={`btn-secondary shrink-0 px-3 text-xs ${FOCUS}`}>
                 Open trading
               </Link>
             ) : null}
@@ -255,7 +256,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
                   <p className="mt-1 text-sm text-ink">No confirmed payments yet today</p>
                 ) : (
                   <>
-                    <div className="mt-1 min-w-0">
+                    <div className="mt-1 min-w-0 @container" data-today-money>
                       <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
                     </div>
                     <p className="mt-0.5 text-xs text-muted">Confirmed · not sales</p>
@@ -268,7 +269,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
                 {receiptsKnownZero ? (
                   <p className="mt-1 text-sm text-ink">No confirmed payments yet today</p>
                 ) : (
-                  <div className="mt-1 min-w-0">
+                  <div className="mt-1 min-w-0 @container" data-today-money>
                     <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
                   </div>
                 )}
@@ -280,7 +281,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
                 <p className="mt-1 text-sm text-ink">No till closed today</p>
               ) : (
                 <>
-                  <div className="mt-1 min-w-0">
+                  <div className="mt-1 min-w-0 @container" data-today-cash>
                     <FinancialAmount pence={cashDiff} currency={currency} variant="prominent" />
                   </div>
                   <p className="mt-0.5 text-xs text-muted">{cashNeedsLook ? 'Needs a look' : 'Within GH₵5.00'}</p>
@@ -331,7 +332,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
 
 function Attention({ snapshot }: { snapshot: TodaySnapshot }) {
   return (
-    <section className="min-w-0 lg:mt-0" aria-labelledby="today-attention">
+    <section className="min-w-0 lg:mt-0" aria-labelledby="today-attention" data-today-attention>
       <h2 id="today-attention" className="font-display text-base font-semibold text-ink">Needs attention</h2>
       {snapshot.attention.length === 0 ? (
         <p className="mt-2 flex min-h-11 items-center gap-2 rounded-xl border border-emerald-100 bg-white px-3 text-sm text-ink shadow-card">
@@ -434,10 +435,10 @@ function Profit({
           </p>
         )
       ) : null}
-      {profit.state === 'incomplete' || profit.grossProfitPence == null ? (
-        <p className="mt-2 text-sm text-ink">Profit is hidden because some product costs are missing.</p>
-      ) : profit.state === 'ready' ? (
-        <p className="mt-2 text-sm text-ink">
+      {profit.state === 'incomplete' ? (
+        <p className="mt-2 text-sm text-ink" data-profit-state="incomplete">Profit is hidden because some product costs are missing.</p>
+      ) : profit.state === 'ready' && profit.grossProfitPence != null ? (
+        <p className="mt-2 text-sm text-ink" data-profit-state="ready">
           Estimated gross profit today <FinancialAmount pence={profit.grossProfitPence} currency={currency} variant="compact" />. Every product cost used here is recorded.
         </p>
       ) : null}

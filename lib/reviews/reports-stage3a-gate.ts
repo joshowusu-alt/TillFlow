@@ -6,11 +6,13 @@
 export const REPORTS_STAGE3A_REVIEW_PATH = '/reviews/reports-stage3a';
 export const REPORTS_MONEY_LAYOUT_REVIEW_PATH = '/reviews/reports-money-layout';
 export const REPORTS_STAGE3A_CONTEXT_REVIEW_PATH = '/reviews/reports-stage3a-context';
+export const REPORTS_TODAY_LAYOUT_REVIEW_PATH = '/reviews/reports-today-layout';
 
 export function isReportsStage3aPath(pathname: string): boolean {
   return pathname === REPORTS_STAGE3A_REVIEW_PATH
     || pathname === REPORTS_MONEY_LAYOUT_REVIEW_PATH
-    || pathname === REPORTS_STAGE3A_CONTEXT_REVIEW_PATH;
+    || pathname === REPORTS_STAGE3A_CONTEXT_REVIEW_PATH
+    || pathname === REPORTS_TODAY_LAYOUT_REVIEW_PATH;
 }
 
 export function isReportsStage3aAllowed(env: {

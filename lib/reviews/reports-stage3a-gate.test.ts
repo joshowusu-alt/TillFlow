@@ -9,7 +9,8 @@ import {
   REPORTS_STAGE3A_CONTEXT_REVIEW_PATH,
   REPORTS_STAGE3A_REVIEW_PATH,
 } from '@/lib/reviews/reports-stage3a-gate';
-import { reviewAttentionSampleRows } from '@/lib/reports/today/review-samples';
+import { reviewAttentionSampleRows, reviewLinks, reviewSnapshot } from '@/lib/reports/today/review-samples';
+import { isQuietToday } from '@/lib/reports/today/model';
 
 const mutableEnv = process.env as { VERCEL_ENV?: string; NODE_ENV?: string };
 const env = { VERCEL_ENV: process.env.VERCEL_ENV, NODE_ENV: process.env.NODE_ENV };
@@ -39,6 +40,18 @@ describe('Stage 3A review gate', () => {
     expect(money.status).toBe(404);
     expect(isReportsStage3aPath(REPORTS_MONEY_LAYOUT_REVIEW_PATH)).toBe(true);
     expect(isReportsStage3aPath(REPORTS_STAGE3A_CONTEXT_REVIEW_PATH)).toBe(true);
+  });
+
+  it('keeps empty Today next steps to four and distinct from healthy', () => {
+    const empty = reviewSnapshot('empty', 'GROWTH', false);
+    const healthy = reviewSnapshot('healthy', 'GROWTH', false);
+    expect(empty && isQuietToday(empty)).toBe(true);
+    expect(healthy && isQuietToday(healthy)).toBe(false);
+    expect(healthy?.salesTodayPence).toBeGreaterThan(0);
+    const { explore } = reviewLinks({ section: 'today', plan: 'GROWTH', role: 'OWNER', analyticsVisible: true });
+    expect(explore.length).toBeGreaterThan(0);
+    expect(explore.length).toBeLessThanOrEqual(4);
+    expect(explore.map((link) => link.href)).not.toContain('/reports/analytics');
   });
 
   it('exposes five ranked attention rows on the review sample', () => {

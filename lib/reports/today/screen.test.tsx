@@ -98,10 +98,15 @@ describe('Today screen', () => {
     const restricted = html({ readOnly: true });
     expect(restricted).toContain('Read-only. You can look at reports. Downloads and changes stay off until billing is sorted.');
 
-    const failed = html({ failed: true, snapshot: null });
+    const failed = html({ failed: true, snapshot: null, updatedLabel: '12:00' });
     expect(failed).toContain('Today could not be loaded');
     expect(failed).toContain('Retry');
     expect(failed).not.toContain('GH₵');
+    expect(failed).not.toContain('Updated');
+
+    const ready = html();
+    expect(ready).toContain('Updated');
+    expect(ready).toContain('12:00');
 
     const blocked = html({
       snapshot: null,
@@ -114,6 +119,25 @@ describe('Today screen', () => {
     });
     expect(blocked).toContain('All branches is part of Pro');
     expect(blocked).not.toContain('GH₵');
+  });
+
+  it('explains missing costs only for the incomplete profit state', () => {
+    const incomplete = html();
+    expect(incomplete).toContain('Profit is hidden because some product costs are missing.');
+    expect(incomplete).toContain('data-profit-state="incomplete"');
+
+    const ready = html({
+      snapshot: snapshot({ profit: { state: 'ready', grossProfitPence: 45000 } }),
+    });
+    expect(ready).toContain('Estimated gross profit today');
+    expect(ready).toContain('data-profit-state="ready"');
+    expect(ready).not.toContain('some product costs are missing');
+
+    const omitted = html({
+      snapshot: snapshot({ profit: { state: 'omitted', grossProfitPence: null } }),
+    });
+    expect(omitted).not.toContain('some product costs are missing');
+    expect(omitted).not.toContain('data-profit-state="incomplete"');
   });
 
   it('uses the desktop and mobile labels on the activity landing', () => {

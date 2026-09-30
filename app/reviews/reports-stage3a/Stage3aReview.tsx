@@ -64,7 +64,7 @@ export default function Stage3aReview() {
             scopeLabel={scopeLabel}
             dateLabel="Wednesday 30 September 2026 · Local time"
             zoneName="GMT"
-            updatedLabel="14:10"
+            updatedLabel={scenario === 'error' ? '' : '14:10'}
             readOnly={readOnly}
             currency="GHS"
             storeId={consolidated && plan === 'PRO' ? 'ALL' : 'sample-branch'}

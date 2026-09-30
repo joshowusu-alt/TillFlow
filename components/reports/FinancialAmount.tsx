@@ -1,13 +1,13 @@
 import { formatMoney } from '@/lib/format';
 
 const BASE =
-  'max-w-full tabular-nums text-ink [overflow-wrap:anywhere] [word-break:break-word]';
+  'max-w-full whitespace-nowrap tabular-nums text-ink';
 
 const VARIANT = {
-  hero: `${BASE} block w-full font-display font-semibold leading-tight text-[clamp(1.35rem,5vw+0.35rem,2rem)]`,
-  prominent: `${BASE} block w-full font-display text-xl font-semibold sm:text-2xl`,
-  inline: `${BASE} inline-block font-semibold text-base sm:text-lg`,
-  compact: `${BASE} inline-block text-sm font-semibold`,
+  hero: `${BASE} block w-full font-display font-semibold leading-none [font-size:clamp(1.05rem,9cqi,2rem)]`,
+  prominent: `${BASE} block w-full font-display font-semibold leading-none [font-size:clamp(0.8rem,8cqi,1.5rem)]`,
+  inline: `${BASE} inline-block font-semibold leading-none [font-size:clamp(0.8rem,6cqi,1.125rem)]`,
+  compact: `${BASE} inline-block font-semibold leading-none [font-size:clamp(0.7rem,5cqi,0.875rem)]`,
 } as const;
 
 export type FinancialAmountVariant = keyof typeof VARIANT;
@@ -33,7 +33,7 @@ export default function FinancialAmount({
     <span
       data-financial-amount={testId}
       data-testid={testId}
-      className={`${VARIANT[variant]} ${className}`.trim()}
+      className={`@container ${VARIANT[variant]} ${className}`.trim()}
     >
       {amount}
     </span>

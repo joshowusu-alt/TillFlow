@@ -1,6 +1,6 @@
 import type { TodaySnapshot } from '@/lib/reports/today/model';
 import { selectAttention } from '@/lib/reports/today/attention';
-import { stage3aExplore, stage3aLinks, type Stage3aLink, type Stage3aSection } from '@/lib/reports/today/stage3a-nav';
+import { stage3aExploreNextSteps, stage3aLinks, type Stage3aLink, type Stage3aSection } from '@/lib/reports/today/stage3a-nav';
 import { CONSOLIDATED_LABEL } from '@/lib/reports/scope-labels';
 
 /** Synthetic figures for the review surface. Not used by `/reports`. */
@@ -161,6 +161,6 @@ export function reviewLinks(input: {
   };
   return {
     links: stage3aLinks(input.section, allowed, options),
-    explore: stage3aExplore(allowed, options),
+    explore: stage3aExploreNextSteps(allowed, options),
   };
 }

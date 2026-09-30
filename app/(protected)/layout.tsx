@@ -81,23 +81,44 @@ function RestrictedAccessScreen({
 async function OwnerSetupBanner({
   businessId,
   pathname,
+  compact,
 }: {
   businessId: string;
   pathname: string;
+  compact: boolean;
 }) {
   if (pathname.includes('/onboarding')) return null;
 
   const setupBanner = await getOwnerSetupBannerState(businessId);
+  const title = setupBanner?.title ?? 'Getting ready';
+  const detail = setupBanner?.detail ?? 'Tell us about your business, add what you sell, then start selling.';
+  const cta = setupBanner?.cta ?? 'Continue setup';
+
+  if (compact) {
+    return (
+      <div className="border-b border-blue-200/70 bg-blue-50 px-3 py-1.5" data-reports-banner="setup">
+        <div className="flex items-center justify-between gap-3">
+          <p className="min-w-0 text-xs leading-5 text-accent">
+            <span className="font-semibold">{title}</span>
+            <span className="text-accent/80"> · {detail}</span>
+          </p>
+          <Link href="/onboarding" className="shrink-0 text-xs font-semibold text-accent underline underline-offset-2">
+            {cta}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="border-b border-blue-200/70 bg-gradient-to-r from-blue-50 via-white to-indigo-50/80 px-4 py-3 sm:px-6">
       <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 text-accent">
           <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent/70">
-            {setupBanner?.title ?? 'Getting ready'}
+            {title}
           </div>
           <span className="text-sm font-medium text-accent">
-            {setupBanner?.detail ?? 'Tell us about your business, add what you sell, then start selling.'}
+            {detail}
           </span>
           {setupBanner?.activationStatus ? (
             <span className="mt-0.5 block text-[11px] text-accent/70">
@@ -109,7 +130,7 @@ async function OwnerSetupBanner({
           href="/onboarding"
           className="inline-flex w-full flex-shrink-0 items-center justify-center rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-accent/90 sm:ml-4 sm:w-auto sm:text-sm"
         >
-          {setupBanner?.cta ?? 'Continue setup'} &rarr;
+          {cta} &rarr;
         </Link>
       </div>
     </div>
@@ -137,6 +158,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const billingControlMessage = String((business as any).billingControlMessage ?? 'Billing access is being evaluated.');
   const billingMerchantMessage = String((business as any).billingMerchantMessage ?? getMerchantSubscriptionMessage(business as any));
   const billingInternalQaAccess = Boolean((business as any).billingInternalQaAccess);
+  const reportsBannerCompact = isReportViewPath(pathname);
   const shouldRestrictPage =
     RESTRICTED_BILLING_STATES.has(billingAccessState) &&
     !billingInternalQaAccess &&
@@ -179,19 +201,19 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
       {needsOnboarding && !pathname.includes('/onboarding') && (
         <Suspense fallback={null}>
-          <OwnerSetupBanner businessId={business.id} pathname={pathname} />
+          <OwnerSetupBanner businessId={business.id} pathname={pathname} compact={reportsBannerCompact} />
         </Suspense>
       )}
 
       {billingPrimaryBanner && !pathname.includes('/settings/billing') && (
-        <div className={`border-b px-4 py-3 text-sm sm:px-6 ${
+        <div data-reports-banner={reportsBannerCompact ? 'trial' : undefined} className={`border-b ${reportsBannerCompact ? 'px-3 py-1.5 text-xs' : 'px-4 py-3 text-sm sm:px-6'} ${
           ['TRIAL_RESTRICTED', 'PAYMENT_RESTRICTED', 'CANCELLED', 'READ_ONLY'].includes(billingAccessState)
             ? 'border-rose-200 bg-rose-50/90 text-rose-900'
             : billingAccessState.includes('DUE_TODAY') || billingAccessState.includes('OVERDUE')
               ? 'border-amber-200 bg-amber-50/90 text-amber-900'
               : 'border-blue-200 bg-blue-50/90 text-blue-900'
         }`}>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className={reportsBannerCompact ? 'flex items-center justify-between gap-3' : 'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'}>
             <p>{billingPrimaryBanner}</p>
             <Link href={billingNextActionHref} className="font-semibold underline underline-offset-4">
               {billingNextActionLabel}
@@ -206,7 +228,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         <main
           id="main-content"
           tabIndex={-1}
-          className="app-main-shell w-full min-w-0 max-w-full px-4 pt-3 sm:px-5 sm:pt-4 lg:px-6 lg:pt-5"
+          className={`app-main-shell w-full min-w-0 max-w-full px-4 sm:px-5 lg:px-6 ${reportsBannerCompact ? 'pt-1 sm:pt-2 lg:pt-4' : 'pt-3 sm:pt-4 lg:pt-5'}`}
           data-route-shell={pathname === '/pos' || pathname.startsWith('/pos/') ? 'pos' : undefined}
         >
           {shouldRestrictPage ? (
