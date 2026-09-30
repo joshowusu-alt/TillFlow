@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { enforceCsrf } from '@/lib/middleware/csrf';
 import { isCronSecretPath, isValidCronRequest } from '@/lib/middleware/cron-gate';
 import { buildPassThroughResponse } from '@/lib/middleware/security-headers';
+import { isReportsBlueprintAllowed, isReportsBlueprintPath } from '@/lib/reviews/reports-blueprint-gate';
 
 /**
  * Exact public pathname for Preview deploy identity.
@@ -79,6 +80,20 @@ export function middleware(request: NextRequest) {
         'cache-control': 'no-store',
       },
     });
+  }
+
+  // Design prototype. Never served on Production. Not a customer route.
+  if (isReportsBlueprintPath(pathname)) {
+    if (!isReportsBlueprintAllowed()) {
+      return new NextResponse('Not Found', {
+        status: 404,
+        headers: {
+          'content-type': 'text/plain; charset=utf-8',
+          'cache-control': 'no-store',
+        },
+      });
+    }
+    return buildPassThroughResponse(request, requestId);
   }
 
   // Root route should never appear as an empty shell in the browser.
