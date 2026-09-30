@@ -64,7 +64,7 @@ export default function ReportsSectionHead({
       ) : (
         help ? <div className="mt-2">{help}</div> : null
       )}
-      <nav aria-label="Reports sections" className="mt-4" data-reports-nav="contextual">
+      <nav aria-label="Reports sections" className="mt-2 sm:mt-4" data-reports-nav="contextual">
         <ul className="flex w-fit max-w-full gap-1 rounded-xl bg-slate-100 p-1">
           {items.map((item) => {
             const current = item.id === section;

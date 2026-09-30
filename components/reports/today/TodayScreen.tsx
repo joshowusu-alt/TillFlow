@@ -153,8 +153,8 @@ function QuietToday({
   readOnly: boolean;
 }) {
   return (
-    <div className="mt-6 min-w-0 space-y-4" data-today-state="empty">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6" role="status">
+    <div className="mt-3 min-w-0 space-y-3 sm:mt-6 sm:space-y-4" data-today-state="empty">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-6" role="status">
         <h2 className="font-display text-xl font-semibold text-ink">No sales yet today</h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-ink">
           No sales have been recorded for {scopeLabel} today. Once you make a sale, Today will show sales, confirmed money received, payment methods and anything needing attention.
@@ -163,7 +163,7 @@ function QuietToday({
           Nothing is wrong. This scope simply has no sales, confirmed receipts, closed till or items needing attention yet.
         </p>
         {nextActions.length > 0 ? (
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-3 flex flex-col gap-2 sm:mt-5 sm:flex-row">
             {nextActions.map((action, index) => (
               <Link
                 key={action.href}
