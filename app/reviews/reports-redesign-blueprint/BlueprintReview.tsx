@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
+import { Logo } from '@/components/Logo';
+import NavIcon from '@/components/navigation/NavIcon';
+import type { NavIconKey } from '@/lib/navigation-config';
 
-type Width = 320 | 390 | 768 | 1180;
+type Width = 320 | 390 | 768 | 1180 | 1440;
 type Plan = 'starter' | 'growth' | 'pro';
 type Role = 'owner' | 'manager' | 'cashier';
 type Shops = 'single' | 'multi';
@@ -10,7 +13,7 @@ type Scope = 'branch' | 'all' | 'pick';
 type Scene = 'healthy' | 'attention' | 'empty' | 'restricted' | 'cancelled' | 'loading' | 'error';
 type Screen = 'today' | 'activity' | 'more' | 'money' | 'trading' | 'statement' | 'downloads' | 'oversight';
 
-const WIDTHS: Width[] = [320, 390, 768, 1180];
+const WIDTHS: Width[] = [320, 390, 768, 1180, 1440];
 const PLANS: Plan[] = ['starter', 'growth', 'pro'];
 const ROLES: Role[] = ['owner', 'manager', 'cashier'];
 const SCENES: Scene[] = ['healthy', 'attention', 'empty', 'restricted', 'cancelled', 'loading', 'error'];
@@ -177,7 +180,7 @@ export default function BlueprintReview() {
           <ControlRow label="Width">
             {WIDTHS.map((item) => (
               <Choice key={item} current={String(width)} value={String(item)} onSelect={() => setWidth(item)}>
-                {item === 768 ? 'Tablet' : item === 1180 ? 'Desktop' : `${item}`}
+                {item === 768 ? 'Tablet' : item === 1180 ? 'Laptop' : item === 1440 ? 'Large' : `${item}`}
               </Choice>
             ))}
           </ControlRow>
@@ -306,15 +309,10 @@ function CustomerApp(props: {
 }) {
   return (
     <div className={`flex min-h-[720px] flex-col ${props.desktop ? '' : 'min-h-[844px]'}`}>
-      <AppHeader plan={props.plan} role={props.role} desktop={props.desktop} />
-      <div className={props.desktop ? 'flex min-h-0 flex-1' : 'flex min-h-0 flex-1 flex-col'}>
-        {props.desktop && props.role !== 'cashier' && props.scene !== 'cancelled' ? (
-          <SideNav {...props} />
-        ) : null}
-        <main id="report-preview" className={`min-w-0 flex-1 px-3 py-3 ${props.desktop ? 'px-5 py-4' : ''}`}>
-          <ScreenBody {...props} />
-        </main>
-      </div>
+      <AppHeader plan={props.plan} role={props.role} desktop={props.desktop} consolidated={props.consolidated} scope={props.scope} />
+      <main id="report-preview" className={`min-w-0 flex-1 px-3 py-3 ${props.desktop ? 'px-6 py-4' : ''}`}>
+        <ScreenBody {...props} />
+      </main>
       {!props.desktop && props.role !== 'cashier' && props.scene !== 'cancelled' ? (
         <BottomNav screen={props.screen} onScreen={props.onScreen} />
       ) : null}
@@ -322,65 +320,45 @@ function CustomerApp(props: {
   );
 }
 
-function AppHeader({ plan, role, desktop }: { plan: Plan; role: Role; desktop: boolean }) {
+function AppHeader({ plan, role, desktop, consolidated, scope }: { plan: Plan; role: Role; desktop: boolean; consolidated: boolean; scope: Scope }) {
   const person = role === 'cashier' ? 'Cashier' : role === 'manager' ? 'Manager' : 'Owner';
+  const place = consolidated ? 'All branches' : scope === 'pick' ? 'Choose a branch' : 'Madina';
+  const globalNav = ['Home', 'Sales', 'Inventory', 'Reports', 'More'];
   return (
     <header className="border-b border-slate-200/80 bg-white">
-      <div className={`flex items-center justify-between gap-3 px-3 py-2.5 ${desktop ? 'px-4' : ''}`}>
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-sm font-bold text-white" aria-hidden="true">T</span>
-          <span className="font-display text-lg font-semibold tracking-tight text-accent">TillFlow</span>
+      <div className={`flex items-center gap-3 px-3 py-2 ${desktop ? 'px-5' : ''}`}>
+        <Logo variant="lockup" size={desktop ? 26 : 22} />
+        {desktop ? (
+          <nav aria-label="Main" className="flex min-w-0 items-center gap-0.5">
+            {globalNav.map((item) => {
+              const current = item === 'Reports';
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  aria-current={current ? 'page' : undefined}
+                  className={`${current ? 'shell-nav-trigger shell-nav-trigger-active' : 'shell-nav-trigger'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
+                >
+                  {item}
+                </button>
+              );
+            })}
+          </nav>
+        ) : null}
+        <div className="ml-auto flex min-w-0 items-center gap-2">
+          {desktop ? <span className="truncate text-xs font-semibold text-ink">Ama’s Provisions · {place}</span> : null}
+          <p className="truncate text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+            <span className="mr-1 inline-block h-2 w-2 rounded-full bg-success" aria-hidden="true" />
+            {person} · {planLabel(plan)}
+          </p>
         </div>
-        <p className="truncate text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-          <span className="mr-1 inline-block h-2 w-2 rounded-full bg-success" aria-hidden="true" />
-          {person} · {planLabel(plan)}
-        </p>
       </div>
-      <div className={`flex items-center gap-2 px-3 pb-2.5 ${desktop ? 'px-4' : ''}`}>
-        <span className="inline-flex min-h-8 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-ink">Ama’s Provisions</span>
-        <span className="inline-flex min-h-8 items-center rounded-full bg-emerald-100 px-3 text-[11px] font-semibold uppercase tracking-wide text-emerald-800">Sample</span>
-      </div>
+      {!desktop ? (
+        <div className="px-3 pb-2">
+          <span className="inline-flex min-h-8 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-ink">Ama’s Provisions</span>
+        </div>
+      ) : null}
     </header>
-  );
-}
-
-function SideNav(props: {
-  plan: Plan;
-  role: Role;
-  storefront: boolean;
-  screen: Screen;
-  onScreen: (screen: Screen) => void;
-}) {
-  const items: { id: Screen; label: string; show: boolean }[] = [
-    { id: 'today', label: 'Today', show: true },
-    { id: 'activity', label: 'Activity', show: true },
-    { id: 'statement', label: 'Income statement', show: props.plan !== 'starter' },
-    { id: 'downloads', label: 'Downloads', show: true },
-    { id: 'oversight', label: 'Oversight', show: props.plan === 'pro' && props.role === 'owner' },
-    { id: 'activity', label: 'Storefront', show: props.storefront && props.plan !== 'starter' },
-  ];
-  return (
-    <nav aria-label="Reports" className="w-56 shrink-0 border-r border-slate-200/80 bg-white px-2 py-3">
-      <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Reports</p>
-      <div className="space-y-0.5">
-        {items.filter((item) => item.show).map((item) => {
-          const active = props.screen === item.id || (item.label === 'Storefront' && props.screen === 'activity');
-          return (
-            <button
-              key={item.label}
-              type="button"
-              onClick={() => props.onScreen(item.id)}
-              className={`shell-nav-link min-h-11 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${active ? 'shell-nav-link-active' : ''}`}
-            >
-              <span className="flex items-center gap-2">
-                <Mark />
-                {item.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </nav>
   );
 }
 
@@ -402,7 +380,7 @@ function BottomNav({ screen, onScreen }: { screen: Screen; onScreen: (screen: Sc
             selected === tab.id ? 'text-accent' : 'text-slate-500'
           }`}
         >
-          <Mark />
+          <NavIcon iconKey={tab.id === 'today' ? 'reports' : tab.id === 'activity' ? 'analytics' : 'reportsHub'} className="h-5 w-5" />
           {tab.label}
         </button>
       ))}
@@ -410,12 +388,12 @@ function BottomNav({ screen, onScreen }: { screen: Screen; onScreen: (screen: Sc
   );
 }
 
-function Mark() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h10" />
-    </svg>
-  );
+const ReportHelpContext = createContext<{ help: string | null; close: () => void }>({ help: null, close: () => undefined });
+
+function reportSection(screen: Screen): Screen {
+  if (screen === 'today') return 'today';
+  if (screen === 'activity' || screen === 'money' || screen === 'trading') return 'activity';
+  return 'more';
 }
 
 function ScreenBody(props: {
@@ -463,6 +441,7 @@ function ScreenBody(props: {
   const picking = props.scope === 'pick' && props.shops === 'multi' && operational;
 
   return (
+    <ReportHelpContext.Provider value={{ help: props.help, close: () => props.onHelp(null) }}>
     <div>
       {props.scene === 'restricted' ? (
         <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium leading-5 text-amber-900">
@@ -496,8 +475,8 @@ function ScreenBody(props: {
       ) : (
         <OversightScreen {...props} />
       )}
-      {props.help ? <HelpDrawer title={props.help} onClose={() => props.onHelp(null)} /> : null}
     </div>
+    </ReportHelpContext.Provider>
   );
 }
 
@@ -507,37 +486,82 @@ function PageHead({
   updated,
   onRefresh,
   onHelp,
+  helpLabel,
   accounting,
+  desktop,
+  screen,
+  onScreen,
 }: {
   title: string;
   scope: string;
   updated: string;
   onRefresh: () => void;
   onHelp?: () => void;
+  helpLabel?: string;
   accounting?: boolean;
+  desktop?: boolean;
+  screen?: Screen;
+  onScreen?: (screen: Screen) => void;
 }) {
+  const section = screen ? reportSection(screen) : 'today';
+  const sections: { id: Screen; label: string }[] = [
+    { id: 'today', label: 'Today' },
+    { id: 'activity', label: 'Activity' },
+    { id: 'more', label: 'More' },
+  ];
   return (
     <div className="mb-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <h1 className="font-display text-2xl font-semibold leading-tight">{title}</h1>
-        <button type="button" onClick={onRefresh} className="btn-ghost min-h-11 shrink-0 px-3 text-xs">Refresh</button>
+        <div className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 shadow-sm">
+          <p className="px-1 text-xs text-slate-600">Updated {updated}</p>
+          <button type="button" onClick={onRefresh} className="btn-ghost min-h-11 px-3 text-xs">
+            Refresh
+          </button>
+        </div>
       </div>
       <p className="mt-1 text-sm leading-5 text-slate-600">
         Wednesday 30 September 2026 · <abbr title="Shop timezone Africa/Accra" className="cursor-help no-underline">Local time</abbr>
       </p>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <p className="inline-flex max-w-full items-center rounded-full bg-accentSoft px-3 py-1 text-sm font-semibold leading-5 text-blue-900">
           {accounting ? 'Whole business — not separated by branch' : scope}
         </p>
-        <p className="text-xs text-slate-600">Updated {updated}</p>
+        {onHelp ? (
+          <button type="button" onClick={onHelp} className="inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-semibold text-accent hover:bg-accentSoft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:bg-blue-100">
+            {helpLabel ?? 'How this page is calculated'}
+          </button>
+        ) : null}
       </div>
-      {onHelp ? (
-        <button type="button" onClick={onHelp} className="mt-1 min-h-11 text-sm font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-          What is this?
-        </button>
+      {desktop && onScreen ? (
+        <nav aria-label="Reports" className="mt-3 flex w-fit gap-1 rounded-xl bg-slate-100 p-1">
+          {sections.map((item) => {
+            const selected = section === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onScreen(item.id)}
+                className={`min-h-11 rounded-lg px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                  selected ? 'bg-white text-ink shadow-sm' : 'text-slate-600 hover:bg-white/70 hover:text-ink active:bg-white'
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
       ) : null}
+      <HelpSlot />
     </div>
   );
+}
+
+function HelpSlot() {
+  const { help, close } = useContext(ReportHelpContext);
+  if (!help) return null;
+  return <HelpDrawer title={help} onClose={close} />;
 }
 
 function TodayScreen(props: {
@@ -554,7 +578,7 @@ function TodayScreen(props: {
   if (props.scene === 'loading') {
     return (
       <div>
-        <PageHead title="Today" scope={props.scopeText} updated={props.updated} onRefresh={props.onRefresh} />
+        <PageHead title="Today" scope={props.scopeText} updated={props.updated} onRefresh={props.onRefresh} desktop={props.desktop} screen="today" onScreen={props.onScreen} />
         <div aria-busy="true" aria-live="polite" className="card p-4">
           <p className="text-sm font-semibold">Loading today’s figures</p>
           <div className="mt-3 h-8 w-40 rounded-lg bg-slate-200 motion-reduce:animate-none animate-pulse" />
@@ -569,7 +593,7 @@ function TodayScreen(props: {
   if (props.scene === 'error') {
     return (
       <div>
-        <PageHead title="Today" scope={props.scopeText} updated={props.updated} onRefresh={props.onRefresh} />
+        <PageHead title="Today" scope={props.scopeText} updated={props.updated} onRefresh={props.onRefresh} desktop={props.desktop} screen="today" onScreen={props.onScreen} />
         <StatusPanel
           tone="alert"
           title="Today could not be loaded"
@@ -596,34 +620,41 @@ function TodayScreen(props: {
         scope={props.scopeText}
         updated={props.updated}
         onRefresh={props.onRefresh}
-        onHelp={() => props.onHelp('Sales today')}
+        desktop={props.desktop}
+        screen="today"
+        onScreen={props.onScreen}
+        helpLabel="How Today is calculated"
+        onHelp={() => props.onHelp('How Today is calculated')}
       />
-      <section className="card p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sales today</p>
-        <p className="mt-1 font-display text-[1.85rem] font-semibold leading-none tabular-nums">{ghs(sales)}</p>
+      <div className={props.desktop ? 'grid grid-cols-[minmax(17rem,22rem)_minmax(0,1fr)] items-start gap-4' : ''}>
+      <section className="card px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sales today</p>
+          <button type="button" className="btn-secondary min-h-11 shrink-0 px-3 text-xs" onClick={() => props.onScreen('trading')}>Open trading</button>
+        </div>
+        <p className="mt-1 font-display text-[2rem] font-semibold leading-none tabular-nums">{ghs(sales)}</p>
         <p className="mt-2 text-sm text-slate-600">{props.consolidated ? '86 sales' : '42 sales'} · yesterday {ghs(props.consolidated ? 17040 : 4120)}</p>
-        <button type="button" className="mt-1 min-h-11 text-sm font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => props.onScreen('trading')}>Open trading</button>
         <div className={`mt-3 grid gap-2 border-t border-slate-100 pt-3 ${props.desktop ? 'grid-cols-2' : 'grid-cols-1'}`}>
-          <button type="button" onClick={() => props.onScreen('money')} className="rounded-xl bg-slate-50 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Money received today</span>
-            <span className="mt-1 block font-display text-xl font-semibold tabular-nums">{ghs(received)}</span>
-            <span className="mt-1 block text-xs text-slate-600">Confirmed · cash, MoMo, transfer</span>
+          <button type="button" onClick={() => props.onScreen('money')} className="rounded-xl bg-slate-50 px-3 py-2 text-left hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:bg-slate-200">
+            <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"><NavIcon iconKey="payments" className="h-3.5 w-3.5" /> Money received</span>
+            <span className="mt-1 block text-base font-semibold tabular-nums">{ghs(received)}</span>
+            <span className="mt-0.5 block text-xs text-slate-600">Confirmed</span>
           </button>
-          <button type="button" onClick={() => props.onHelp('Cash difference today')} className={`rounded-xl px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${Math.abs(difference) >= 5 ? 'bg-amber-50' : 'bg-slate-50'}`}>
-            <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Cash difference today</span>
-            <span className="mt-1 block font-display text-xl font-semibold tabular-nums">{ghs(difference)}</span>
-            <span className="mt-1 block text-xs text-slate-600">{Math.abs(difference) >= 5 ? 'Needs a look · closed tills' : 'Within GHS 5 · closed tills'}</span>
+          <button type="button" onClick={() => props.onHelp('Cash difference today')} className={`rounded-xl px-3 py-2 text-left hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:brightness-90 ${Math.abs(difference) >= 5 ? 'bg-amber-50' : 'bg-slate-50'}`}>
+            <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"><NavIcon iconKey="cashDrawer" className="h-3.5 w-3.5" /> Cash difference</span>
+            <span className="mt-1 block text-base font-semibold tabular-nums">{ghs(difference)}</span>
+            <span className="mt-0.5 block text-xs text-slate-600">{Math.abs(difference) >= 5 ? 'Needs a look' : 'Within GHS 5'}</span>
           </button>
         </div>
       </section>
 
-      <section className="mt-3" aria-label="Needs attention">
+      <section className={props.desktop ? '' : 'mt-3'} aria-label="Needs attention">
         <h2 className="font-display text-base font-semibold">Needs attention</h2>
         {attention ? (
           <ul className="mt-2 space-y-2">
             {attentionItems(props.plan, props.consolidated).map((item) => (
               <li key={item.id}>
-                <button type="button" className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-left shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                <button type="button" className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-left shadow-card hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:bg-slate-100">
                   <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase ${item.tone === 'high' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>
                     {item.tone === 'high' ? 'High' : 'Check'}
                   </span>
@@ -643,6 +674,7 @@ function TodayScreen(props: {
           </p>
         )}
       </section>
+      </div>
 
       <section className={`mt-4 ${props.desktop ? 'grid grid-cols-2 gap-3' : 'space-y-3'}`}>
         <div className="card p-3">
@@ -714,10 +746,10 @@ function TodayScreen(props: {
   );
 }
 
-function EmptyToday(props: { scopeText: string; updated: string; onRefresh: () => void }) {
+function EmptyToday(props: { scopeText: string; updated: string; onRefresh: () => void; desktop?: boolean; onScreen?: (screen: Screen) => void; onHelp: (help: string | null) => void }) {
   return (
     <div>
-      <PageHead title="Today" scope={props.scopeText} updated={props.updated} onRefresh={props.onRefresh} />
+      <PageHead title="Today" scope={props.scopeText} updated={props.updated} onRefresh={props.onRefresh} desktop={props.desktop} screen="today" onScreen={props.onScreen} helpLabel="How Today is calculated" onHelp={() => props.onHelp('How Today is calculated')} />
       <section className="card p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sales today</p>
         <p className="mt-1 font-display text-[1.85rem] font-semibold tabular-nums">{ghs(0)}</p>
@@ -743,43 +775,44 @@ function ActivityScreen(props: {
   scopeText: string;
   updated: string;
   scene: Scene;
+  desktop?: boolean;
   onScreen: (screen: Screen) => void;
   onRefresh: () => void;
 }) {
   if (props.scene === 'error') {
     return <StatusPanel tone="alert" title="Activity could not be loaded" body="The report list did not load. Try again." action="Try again" onAction={props.onRefresh} />;
   }
-  const groups: { title: string; rows: { label: string; purpose: string; screen: Screen; show: boolean }[] }[] = [
+  const groups: { title: string; rows: { label: string; purpose: string; screen: Screen; icon: NavIconKey; show: boolean }[] }[] = [
     {
       title: 'Reports',
       rows: [
-        { label: 'Trading', purpose: 'Sales for a period you choose', screen: 'trading', show: true },
-        { label: 'Money received', purpose: 'Confirmed payments, separate from sales', screen: 'money', show: true },
-        { label: 'Storefront', purpose: 'Online shop visits and orders', screen: 'activity', show: props.storefront && props.plan !== 'starter' },
+        { label: 'Trading', purpose: 'Sales for a period you choose', screen: 'trading', icon: 'reports', show: true },
+        { label: 'Money received', purpose: 'Confirmed payments, separate from sales', screen: 'money', icon: 'payments', show: true },
+        { label: 'Storefront', purpose: 'Online shop visits and orders', screen: 'activity', icon: 'analytics', show: props.storefront && props.plan !== 'starter' },
       ],
     },
     {
       title: 'Queues',
       rows: [
-        { label: 'MoMo to confirm', purpose: 'Payments waiting for you to confirm', screen: 'activity', show: true },
-        { label: 'MoMo with the network', purpose: 'Collections still pending with the provider', screen: 'activity', show: true },
+        { label: 'MoMo to confirm', purpose: 'Payments waiting for you to confirm', screen: 'activity', icon: 'reconciliation', show: true },
+        { label: 'MoMo with the network', purpose: 'Collections still pending with the provider', screen: 'activity', icon: 'shifts', show: true },
       ],
     },
     {
       title: 'Ledgers',
       rows: [
-        { label: 'Cash drawer', purpose: 'Expected cash, counted cash, difference', screen: 'activity', show: true },
-        { label: 'Stock movements', purpose: 'Stock in and out', screen: 'activity', show: true },
-        { label: 'Product margins', purpose: 'Products below your target, when cost is known', screen: 'activity', show: props.plan !== 'starter' },
-        { label: 'Stock to reorder', purpose: 'What may run out', screen: 'activity', show: props.plan !== 'starter' },
-        { label: 'Sales by linked supplier', purpose: 'Sales for linked products. Not what you owe.', screen: 'activity', show: props.plan !== 'starter' },
-        { label: 'Control alerts', purpose: 'Variances and discounts worth a look', screen: 'activity', show: props.plan !== 'starter' },
+        { label: 'Cash drawer', purpose: 'Expected cash, counted cash, difference', screen: 'activity', icon: 'cashDrawer', show: true },
+        { label: 'Stock movements', purpose: 'Stock in and out', screen: 'activity', icon: 'stockMovements', show: true },
+        { label: 'Product margins', purpose: 'Products below your target, when cost is known', screen: 'activity', icon: 'profit', show: props.plan !== 'starter' },
+        { label: 'Stock to reorder', purpose: 'What may run out', screen: 'activity', icon: 'inventory', show: props.plan !== 'starter' },
+        { label: 'Sales by linked supplier', purpose: 'Sales for linked products. Not what you owe.', screen: 'activity', icon: 'supplierSales', show: props.plan !== 'starter' },
+        { label: 'Control alerts', purpose: 'Variances and discounts worth a look', screen: 'activity', icon: 'risk', show: props.plan !== 'starter' },
       ],
     },
   ];
   return (
     <div>
-      <PageHead title="Activity" scope={props.consolidated ? 'Consolidated — all branches' : props.scopeText} updated={props.updated} onRefresh={props.onRefresh} />
+      <PageHead title="Activity" scope={props.consolidated ? 'Consolidated — all branches' : props.scopeText} updated={props.updated} onRefresh={props.onRefresh} desktop={props.desktop} screen="activity" onScreen={props.onScreen} />
       <div className="space-y-4">
         {groups.map((group) => (
           <section key={group.title}>
@@ -787,8 +820,8 @@ function ActivityScreen(props: {
             <ul className="mt-1.5 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">
               {group.rows.filter((row) => row.show).map((row) => (
                 <li key={row.label} className="border-b border-slate-100 last:border-0">
-                  <button type="button" onClick={() => props.onScreen(row.screen)} className="flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accentSoft text-accent" aria-hidden="true"><Mark /></span>
+                  <button type="button" onClick={() => props.onScreen(row.screen)} className="flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent active:bg-slate-100">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accentSoft text-accent" aria-hidden="true"><NavIcon iconKey={row.icon} className="h-4 w-4" /></span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold">{row.label}</span>
                       <span className="block text-xs leading-5 text-slate-600">{row.purpose}</span>
@@ -806,25 +839,28 @@ function ActivityScreen(props: {
           <p className="text-sm font-semibold">Last week (Monday–Sunday)</p>
           <p className="text-xs text-slate-600">21–27 September 2026</p>
         </div>
-        <button type="button" className="btn-primary min-h-11 text-xs">Download last week</button>
+        <button type="button" disabled={props.scene === 'restricted'} className={`min-h-11 text-xs disabled:cursor-not-allowed disabled:opacity-60 ${props.scene === 'restricted' ? 'btn-ghost' : 'btn-primary'}`}>
+          {props.scene === 'restricted' ? 'Downloads are off' : 'Download last week'}
+        </button>
       </div>
     </div>
   );
 }
 
-function MoreScreen(props: { plan: Plan; role: Role; onScreen: (screen: Screen) => void; updated: string; onRefresh: () => void; scopeText: string }) {
-  const rows = [
-    { label: 'Income statement', purpose: 'Sales, costs, expenses and profit for the whole business', screen: 'statement' as Screen, show: props.plan !== 'starter' },
-    { label: 'Downloads', purpose: 'CSV files for sales, purchases, stock and the till', screen: 'downloads' as Screen, show: true },
-    { label: 'Oversight', purpose: 'Owner brief, audit log and later scheduled packs', screen: 'oversight' as Screen, show: props.plan === 'pro' && props.role === 'owner' },
+function MoreScreen(props: { plan: Plan; role: Role; desktop?: boolean; onScreen: (screen: Screen) => void; updated: string; onRefresh: () => void; scopeText: string }) {
+  const rows: { label: string; purpose: string; screen: Screen; icon: NavIconKey; show: boolean }[] = [
+    { label: 'Income statement', purpose: 'Sales, costs, expenses and profit for the whole business', screen: 'statement', icon: 'incomeStatement', show: props.plan !== 'starter' },
+    { label: 'Downloads', purpose: 'CSV files for sales, purchases, stock and the till', screen: 'downloads', icon: 'exports', show: true },
+    { label: 'Oversight', purpose: 'Owner brief, audit log and later scheduled packs', screen: 'oversight', icon: 'ownerBrief', show: props.plan === 'pro' && props.role === 'owner' },
   ];
   return (
     <div>
-      <PageHead title="More" scope={props.scopeText} updated={props.updated} onRefresh={props.onRefresh} />
+      <PageHead title="More" scope={props.scopeText} updated={props.updated} onRefresh={props.onRefresh} desktop={props.desktop} screen="more" onScreen={props.onScreen} />
       <ul className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">
         {rows.filter((row) => row.show).map((row) => (
           <li key={row.label} className="border-b border-slate-100 last:border-0">
-            <button type="button" onClick={() => props.onScreen(row.screen)} className="flex min-h-14 w-full items-center gap-3 px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
+            <button type="button" onClick={() => props.onScreen(row.screen)} className="flex min-h-14 w-full items-center gap-3 px-3 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent active:bg-slate-100">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accentSoft text-accent" aria-hidden="true"><NavIcon iconKey={row.icon} className="h-4 w-4" /></span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold">{row.label}</span>
                 <span className="block text-xs text-slate-600">{row.purpose}</span>
@@ -845,6 +881,7 @@ function MoneyScreen(props: {
   desktop: boolean;
   scene: Scene;
   updated: string;
+  onScreen?: (screen: Screen) => void;
   onRefresh: () => void;
 }) {
   const readOnly = props.scene === 'restricted';
@@ -857,7 +894,7 @@ function MoneyScreen(props: {
   ];
   return (
     <div>
-      <PageHead title="Money received" scope={props.consolidated ? 'Consolidated — all branches' : props.scopeText} updated={props.updated} onRefresh={props.onRefresh} />
+      <PageHead title="Money received" scope={props.consolidated ? 'Consolidated — all branches' : props.scopeText} updated={props.updated} onRefresh={props.onRefresh} desktop={props.desktop} screen="money" onScreen={props.onScreen} />
       <p className="mb-2 text-sm text-slate-700">Confirmed customer money by the time it was received. Refunds stay separate.</p>
       <div className="flex flex-wrap gap-1.5">
         {['Today', 'Last 7 days', 'Last 30 days'].map((label, index) => (
@@ -908,21 +945,45 @@ function TradingScreen(props: {
   desktop: boolean;
   updated: string;
   onRefresh: () => void;
+  onScreen?: (screen: Screen) => void;
   plan: Plan;
 }) {
+  const [preset, setPreset] = useState('Today');
   return (
     <div>
-      <PageHead title="Trading" scope={props.consolidated ? 'Consolidated — all branches' : props.scopeText} updated={props.updated} onRefresh={props.onRefresh} />
-      <div className="flex flex-wrap gap-1.5">
-        {['Today', 'Last 7 days', 'Last 30 days', 'Last week'].map((label, index) => (
-          <span key={label} className={`inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold ${index === 0 ? 'bg-accent text-white' : 'border border-slate-200 bg-white'}`}>{label}</span>
+      <PageHead title="Trading" scope={props.consolidated ? 'Consolidated — all branches' : props.scopeText} updated={props.updated} onRefresh={props.onRefresh} desktop={props.desktop} screen="trading" onScreen={props.onScreen} />
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Trading period">
+        {['Today', 'Last 7 days', 'Last 30 days', 'Last week'].map((label) => (
+          <button
+            key={label}
+            type="button"
+            aria-pressed={preset === label}
+            onClick={() => setPreset(label)}
+            className={`inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${preset === label ? 'bg-accent text-white' : 'border border-slate-200 bg-white hover:bg-slate-50 active:bg-slate-100'}`}
+          >
+            {label}
+          </button>
         ))}
       </div>
       <div className="card mt-3 p-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sales · today</p>
-        <p className="font-display text-2xl font-semibold tabular-nums">{ghs(props.consolidated ? 18430 : 4860)}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {preset === 'Last week' ? 'Last week (Monday–Sunday)' : `Sales · ${preset.toLowerCase()}`}
+        </p>
+        {preset === 'Last week' ? (
+          <p className="mt-1 text-sm text-slate-700">21–27 September 2026. The file is Download last week.</p>
+        ) : (
+          <p className="font-display text-2xl font-semibold tabular-nums">
+            {ghs(
+              preset === 'Today'
+                ? (props.consolidated ? 18430 : 4860)
+                : preset === 'Last 7 days'
+                  ? (props.consolidated ? 71028 : 19730)
+                  : 98400,
+            )}
+          </p>
+        )}
       </div>
-      {props.desktop ? (
+      {preset !== 'Today' ? null : props.desktop ? (
         <table className="mt-3 w-full text-left text-sm">
           <thead className="text-xs uppercase tracking-wide text-slate-500">
             <tr><th className="py-2 font-medium">Product</th><th className="text-right font-medium">Qty</th><th className="text-right font-medium">Sales</th></tr>
@@ -964,6 +1025,7 @@ function StatementScreen(props: {
   onHelp: (help: string | null) => void;
   onScreen: (screen: Screen) => void;
 }) {
+  const [month, setMonth] = useState('This month');
   if (props.plan === 'starter') {
     return (
       <StatusPanel
@@ -984,7 +1046,7 @@ function StatementScreen(props: {
   if (props.scene === 'empty') {
     return (
       <div>
-        <PageHead title="Income statement" scope="" accounting updated={props.updated} onRefresh={props.onRefresh} />
+        <PageHead title="Income statement" scope="" accounting updated={props.updated} onRefresh={props.onRefresh} desktop={props.desktop} screen="statement" onScreen={props.onScreen} />
         <StatusPanel tone="neutral" title="No sales in this period" body="1 September to 30 September 2026 has no revenue, costs, or expenses to show." />
       </div>
     );
@@ -1000,12 +1062,20 @@ function StatementScreen(props: {
   ];
   return (
     <div>
-      <PageHead title="Income statement" scope="" accounting updated={props.updated} onRefresh={props.onRefresh} onHelp={() => props.onHelp('Income statement')} />
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        {['This month', 'Last month'].map((label, index) => (
-          <span key={label} className={`inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold ${index === 0 ? 'bg-accent text-white' : 'border border-slate-200 bg-white'}`}>{label}</span>
+      <PageHead title="Income statement" scope="" accounting updated={props.updated} onRefresh={props.onRefresh} desktop={props.desktop} screen="statement" onScreen={props.onScreen} helpLabel="How the income statement is calculated" onHelp={() => props.onHelp('Income statement')} />
+      <div className="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="Statement period">
+        {['This month', 'Last month'].map((label) => (
+          <button
+            key={label}
+            type="button"
+            aria-pressed={month === label}
+            onClick={() => setMonth(label)}
+            className={`inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${month === label ? 'bg-accent text-white' : 'border border-slate-200 bg-white hover:bg-slate-50 active:bg-slate-100'}`}
+          >
+            {label}
+          </button>
         ))}
-        <span className="text-xs text-slate-600">1–30 September 2026</span>
+        <span className="text-xs text-slate-600">{month === 'This month' ? '1–30 September 2026' : '1–31 August 2026'}</span>
       </div>
       {missing ? (
         <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
@@ -1017,8 +1087,8 @@ function StatementScreen(props: {
           <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-3 py-2 font-semibold">Line</th>
-              <th className="px-3 py-2 text-right font-semibold">September</th>
-              {props.desktop ? <th className="px-3 py-2 text-right font-semibold">August</th> : null}
+              <th className="px-3 py-2 text-right font-semibold">{month === 'This month' ? 'September' : 'August'}</th>
+              {props.desktop && month === 'This month' ? <th className="px-3 py-2 text-right font-semibold">August</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -1028,8 +1098,8 @@ function StatementScreen(props: {
                   {line.label}
                   {line.note ? <span className="ml-2 text-xs font-semibold text-emerald-800">{line.note}</span> : null}
                 </td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{line.amount}</td>
-                {props.desktop ? <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{line.prior}</td> : null}
+                <td className="px-3 py-2.5 text-right tabular-nums">{month === 'This month' ? line.amount : line.prior}</td>
+                {props.desktop && month === 'This month' ? <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{line.prior}</td> : null}
               </tr>
             ))}
           </tbody>
@@ -1047,17 +1117,17 @@ function StatementScreen(props: {
   );
 }
 
-function DownloadsScreen(props: { scene: Scene; plan: Plan; updated: string; onRefresh: () => void; scopeText: string }) {
+function DownloadsScreen(props: { scene: Scene; plan: Plan; desktop?: boolean; onScreen?: (screen: Screen) => void; updated: string; onRefresh: () => void; scopeText: string }) {
   const readOnly = props.scene === 'restricted';
   const files = ['Sales', 'Purchases', 'Stock', 'Till records'];
   return (
     <div>
-      <PageHead title="Downloads" scope={props.scopeText} updated={props.updated} onRefresh={props.onRefresh} />
+      <PageHead title="Downloads" scope={props.scopeText} updated={props.updated} onRefresh={props.onRefresh} desktop={props.desktop} screen="downloads" onScreen={props.onScreen} />
       <ul className="space-y-2">
         {files.map((file) => (
           <li key={file} className="card flex min-h-14 items-center justify-between gap-3 px-3">
             <span className="text-sm font-semibold">{file}</span>
-            <button type="button" disabled={readOnly} className={readOnly ? 'btn-ghost min-h-11 text-xs' : 'btn-secondary min-h-11 text-xs'}>
+            <button type="button" disabled={readOnly} className={`min-h-11 text-xs disabled:cursor-not-allowed disabled:opacity-60 ${readOnly ? 'btn-ghost' : 'btn-secondary'}`}>
               {readOnly ? 'Off' : 'CSV'}
             </button>
           </li>
@@ -1069,7 +1139,7 @@ function DownloadsScreen(props: { scene: Scene; plan: Plan; updated: string; onR
   );
 }
 
-function OversightScreen(props: { plan: Plan; role: Role; updated: string; onRefresh: () => void }) {
+function OversightScreen(props: { plan: Plan; role: Role; desktop?: boolean; onScreen?: (screen: Screen) => void; updated: string; onRefresh: () => void }) {
   if (props.plan !== 'pro' || props.role !== 'owner') {
     return (
       <StatusPanel
@@ -1081,7 +1151,7 @@ function OversightScreen(props: { plan: Plan; role: Role; updated: string; onRef
   }
   return (
     <div>
-      <PageHead title="Oversight" scope="Consolidated — all branches" updated={props.updated} onRefresh={props.onRefresh} />
+      <PageHead title="Oversight" scope="Consolidated — all branches" updated={props.updated} onRefresh={props.onRefresh} desktop={props.desktop} screen="oversight" onScreen={props.onScreen} />
       <ul className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
         {['Owner brief', 'Audit log'].map((label) => (
           <li key={label} className="flex min-h-14 items-center border-b border-slate-100 px-3 text-sm font-semibold last:border-0">{label}</li>
@@ -1151,15 +1221,24 @@ function StatusPanel({
 }
 
 function HelpDrawer({ title, onClose }: { title: string; onClose: () => void }) {
+  const today = title === 'How Today is calculated';
   const body = title === 'Cash difference today'
-    ? 'Cash counted when a till closed today, minus the cash that till expected. The exact figure always shows. An attention row appears only at GHS 5 or more.'
+    ? 'Cash counted when a till closed today, minus the cash that till expected. The exact figure always shows. An attention row appears only at GHS 5 or more. Open tills are left out because they have not been counted.'
     : title === 'Income statement'
-      ? 'Revenue is sales after discounts and before VAT. Profit stays hidden when product costs are incomplete. The comparison is the previous calendar month.'
+      ? 'Revenue is sales after discounts and before VAT. Profit stays hidden when product costs are incomplete. The comparison is the previous calendar month. The statement covers the whole business and is not split by branch.'
       : 'Sales recorded on the shop’s local date for the branch or consolidated view shown. This is the value of sales, not the cash in the drawer.';
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="help-title" className="mt-3 rounded-2xl border border-blue-100 bg-white p-4 shadow-raised">
+    <div role="region" aria-labelledby="help-title" className="mt-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-raised">
       <h2 id="help-title" className="font-display text-lg font-semibold">{title}</h2>
-      <p className="mt-2 text-sm leading-6">{body}</p>
+      {today ? (
+        <div className="mt-2 space-y-2 text-sm leading-6 text-slate-700">
+          <p>Today is Wednesday 30 September 2026, the shop’s local date in Africa/Accra. The phone or computer clock is not used.</p>
+          <p>Figures follow the branch on screen. Consolidated — all branches adds every branch. Whole business — not separated by branch is used only for statements.</p>
+          <p>Sales are recorded sales. Money received is confirmed payments and can differ from sales. Cash difference uses tills closed today. A difference under GHS 5 stays on the figure and does not take an attention place. Profit is omitted when product costs are incomplete.</p>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm leading-6">{body}</p>
+      )}
       <button type="button" className="btn-primary mt-3 min-h-11" onClick={onClose}>Close</button>
     </div>
   );

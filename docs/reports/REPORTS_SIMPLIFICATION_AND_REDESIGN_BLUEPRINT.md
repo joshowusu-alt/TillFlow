@@ -168,21 +168,29 @@ Three places. Today is the landing. Activity is the operating reports. More hold
 
 **Default landing.** `/reports` is Today in the first implementation stage. Activity and More are the report navigation. They are not a second card catalogue.
 
-**Desktop.** A reports sidebar:
+**Desktop.** TillFlow’s existing header and global top navigation stay. Reports is not a separate application and does not add a left rail. Under the report heading, a compact control offers only:
 
 - Today
 - Activity
-  - Trading, including `Last week (Monday–Sunday)` and `Download last week`
-  - Money received
-  - MoMo to confirm
-  - Cash drawer
-  - Stock movements
-  - Product margins, Stock to reorder, Sales by linked supplier, Control alerts (Growth and Pro)
-  - Storefront, only while the add-on is on, opening `/settings/online-store/analytics` after its styles are fixed
-- Statements (Growth and Pro): Income statement, then Downloads. Balance sheet is absent. Cash flow statement is absent until its formula and labels are corrected.
+- More
+
+Activity opens the operating list:
+
+- Trading, including `Last week (Monday–Sunday)` and `Download last week`
+- Money received
+- MoMo to confirm
+- Cash drawer
+- Stock movements
+- Product margins, Stock to reorder, Sales by linked supplier, Control alerts (Growth and Pro)
+- Storefront, only while the add-on is on, opening `/settings/online-store/analytics` after its styles are fixed
+
+More opens:
+
+- Income statement (Growth and Pro), labelled `Whole business — not separated by branch`
+- Downloads, as its own destination
 - Oversight, Pro owner only: Owner brief, Audit log, and later saved views and scheduled packs
 
-A Pro manager sees consolidated operating reports where the catalogue already allows consolidation. Oversight rows are absent for that manager. This ruling does not add a role entitlement beyond Stage 2.
+Balance sheet is absent. Cash flow statement is absent until its formula and labels are corrected. A Pro manager sees consolidated operating reports where the catalogue already allows consolidation. Oversight rows are absent for that manager. This ruling does not add a role entitlement beyond Stage 2.
 
 **Mobile.** A three-item bar: Today, Activity, More. Activity is a single column of rows. More holds the income statement, downloads, and owner oversight. No horizontal scrolling.
 
@@ -352,7 +360,7 @@ Upgrade copy appears on a direct URL that the plan cannot open, and in the singl
 | Custom period, with both dates | “Period” | The from and to dates printed in full. |
 | Last full month | This month vs last, when the current month is excluded | The previous calendar month against the one before it. |
 
-Tooltips use the plain-definition column. The prototype’s “What is this?” drawer is the pattern: one definition, a close control, no article.
+Tooltips use the plain-definition column. On Today the control is labelled `How Today is calculated`. It names the local date, the shop timezone, the branch or consolidated scope, and the limits on sales, money received, closed-till cash difference, and incomplete costs.
 
 ## 10. Mobile mockups
 
@@ -372,7 +380,7 @@ Also in the same frame: cashier refusal, cancelled account, all-branches refusal
 
 ## 11. Desktop mockups
 
-A 1,180-point frame with the sidebar:
+A 1,180-point laptop frame and a 1,440-point frame, using the existing TillFlow header and the compact Today / Activity / More control:
 
 1. Starter Today.
 2. Growth Today.
@@ -438,7 +446,7 @@ Each stage is its own review. None of them start in this design branch.
 
 **Stage C — Attention queries.** Objective: the eight ranked signals, capped at five, with plan-safe destinations. Tests: a failed query does not clear the list into “Nothing needs attention”; rank 8 does not replace a failed rank 2. Rollback: omit that row.
 
-**Stage D — Navigation.** Objective: sidebar and mobile bar match section 5. Hide forecast and balance sheet. Remove `/settings/analytics` from nav without redirecting yet. `Download last week` can appear only after Trading has the week preset; the digest redirect waits for that. Tests: cashier has no reports link; Pro manager has consolidated operating nav and no audit link. Rollback: restore `REPORT_NAV_SECTIONS`.
+**Stage D — Navigation.** Objective: the global header, the compact Reports control, and the mobile bar match section 5. Hide forecast and balance sheet. Remove `/settings/analytics` from nav without redirecting yet. `Download last week` can appear only after Trading has the week preset; the digest redirect waits for that. Tests: cashier has no reports link; Pro manager has consolidated operating nav and no audit link. Rollback: restore `REPORT_NAV_SECTIONS`.
 
 **Stage E — Trading cleanup.** Objective: add `Last week (Monday–Sunday)`, then redirect the digest. Keep the CSV route and filename. Customer label: `Download last week`. Remove the mixed net-profit card. Rollback: show the old Trading cards.
 
@@ -493,28 +501,30 @@ The approved structure stays. This pass replaces the sparse review styling with 
 | Statements | Stat cards exist in source | Four equal cards, not a statement | Period, export actions | Aligned statement lines and totals |
 | Empty and error | Shared empty component exists | Large blank areas | Icon-sized status, one action | Fit the status inside the page |
 
-**Reused.** Paper `#F8FAFC`, ink `#111827`, accent `#1E40AF`, accent soft, success and amber, Plus Jakarta Sans and DM Sans, `rounded-2xl`, `shadow-card`, `btn-primary`, `btn-secondary`, `btn-ghost`, `shell-nav-link`, pills, and the mobile tab pattern.
+**Reused.** Paper `#F8FAFC`, ink `#111827`, accent `#1E40AF`, accent soft, success and amber, Plus Jakarta Sans and DM Sans, `rounded-2xl`, `shadow-card`, `btn-primary`, `btn-secondary`, `btn-ghost`, the production logo lockup, the existing header, pills, and the mobile tab pattern.
 
-**New, native pieces.** A sales-led summary with two quieter figures, a five-row attention list with a written High or Check mark, a grouped Activity list, a separate Downloads destination, and an income-statement table with a prior-month column. No new brand.
+**New, native pieces.** A sales-led summary with two quieter figures, a five-row attention list with a written High or Check mark, a grouped Activity list, a separate Downloads destination inside More, and an income-statement table with a prior-month column. No new brand. Desktop does not add a reports rail.
 
 **Customer screens do not include** route names, blueprint commentary, Balance Sheet, or Cash-flow Forecast.
 
-**Scores after browser review** at 320, 390, and desktop widths.
+**Refinement after the first high-fidelity pass.** The reports rail is gone. Desktop keeps the TillFlow header and global menu, then a compact Today / Activity / More control under the heading. The placeholder T is the production logo. Refresh and the last-updated time sit in one group. Today’s explanation is labelled `How Today is calculated`.
+
+**Scores after the refinement review** at 320, 390, 1,180, and 1,440, including an axe-core WCAG 2.1 AA run on the customer frame.
 
 | Area | Score | Why |
 | --- | --- | --- |
-| Visual polish | 9.0 | Shell, cards, and type match the live app. The mark is a simple T, not the production logo file. |
-| TillFlow consistency | 9.0 | Tokens, buttons, nav links, and chips are the existing ones. |
-| Five-second clarity | 9.1 | Sales is the large figure. Scope and date sit above it. |
-| Mobile usability | 9.0 | 320px preview does not scroll sideways. Targets are at least 44px. |
-| Hierarchy | 9.1 | Sales leads. Money and cash are quieter. Totals are heavier than lines. |
+| Visual polish | 8.7 | Logo, header, and type match the live app. A quiet day still leaves open space beside the short attention line. |
+| TillFlow consistency | 9.0 | The lockup, header, tokens, and buttons are the existing ones. |
+| Five-second clarity | 9.0 | Sales is the large figure. The next action is on that card or in the attention list. |
+| Mobile usability | 9.0 | 320 and 390 do not scroll sideways. Bottom navigation is unchanged in structure. |
+| Hierarchy | 8.8 | Sales leads. Money received and cash difference are smaller. |
 | Trustworthiness | 9.0 | Exact amounts print. A failed load shows no figures. Incomplete costs hide profit. |
 | Ghanaian retail relevance | 9.0 | Cedis, MoMo, and branch names stay in the sample. |
-| Plan differentiation | 9.0 | Starter, Growth, Pro manager, and Pro owner change the nav. |
-| Accessibility | 8.7 | Focus rings, text severity, and contrast were checked in the browser. No automated audit. |
-| Implementation realism | 8.8 | Presentation can use the current shell. Queries stay in later stages. |
-| Overall | 9.0 | |
+| Plan differentiation | 9.0 | Starter, Growth, Pro manager, and Pro owner change what More contains. |
+| Accessibility | 8.8 | axe-core reported no WCAG 2.1 AA violations on the customer frames checked. Focus rings and written severity are present. Axe does not measure every touch target. |
+| Implementation realism | 8.8 | The header can reuse the current shell. Queries stay in later stages. |
+| Overall | 8.9 | Ready for owner visual approval. Not an implementation approval. |
 
 ## 18. Verdict
 
-`REPORTS HIGH-FIDELITY DESIGN COMPLETE — READY FOR VISUAL OWNER APPROVAL`
+`REPORTS FINAL VISUAL REFINEMENT COMPLETE — READY FOR OWNER APPROVAL`
