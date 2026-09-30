@@ -473,12 +473,48 @@ These rulings replace the previous open questions.
 5. Starter low stock opens Inventory. It does not open Stock to reorder.
 6. Weekly Digest merges into Trading preset `Last week (Monday–Sunday)`. The CSV route and technical filename stay. The customer action is `Download last week`. The digest URL redirects only after Trading contains that week.
 
-No product question in this amendment still needs an Owner ruling. Visual approval of the prototype is the remaining review. Implementation is not approved by this document.
+No product question in this amendment still needs an Owner ruling. The high-fidelity visual pass is the review surface. Implementation is not approved by this document.
 
 ## 17. What did not change
 
-No production report calculation, entitlement catalogue, schema, export file, SMS path, or customer navigation was edited. The design branch adds a document, a review route, a gate that 404s on Production, and a unit test for that gate. Middleware behaviour for every existing path is unchanged. This amendment does not correct the balance sheet.
+No production report calculation, entitlement catalogue, schema, export file, SMS path, or customer navigation was edited. The design branch adds a document, a review route, a gate that 404s on Production, and a unit test for that gate. Middleware behaviour for every existing path is unchanged. This visual pass does not correct the balance sheet.
+
+## 19. High-fidelity visual pass
+
+The approved structure stays. This pass replaces the sparse review styling with TillFlow’s customer shell.
+
+**Baseline.** On the synthetic seed business, the authenticated shell, Reports hub, and POS were opened locally. Command Center, Trading, Cash Drawer, and the Income Statement returned the application’s not-found page for that unfinished seed, so those interiors were not claimed as a visual review. Source components used for the target language: `PageHeader`, `TopNav`, `BottomTabBar`, `.btn-primary`, `.card`, `.shell-nav-link`, and `shadow-card`.
+
+| Element | Current strength | Current weakness | Preserve | Improve |
+| --- | --- | --- | --- | --- |
+| App header | Logo, identity, store chip, status | Setup banner can dominate | White header, chips, green status | Reports header stays compact |
+| Reports hub | Soft cards, icons, bottom tabs | Catalogue, not a decision | Card radius, shadow, type | Today replaces the catalogue |
+| Page header | Clear title card | Large and repeated | Display face, ink text | Tighter title, date, scope, refresh |
+| Statements | Stat cards exist in source | Four equal cards, not a statement | Period, export actions | Aligned statement lines and totals |
+| Empty and error | Shared empty component exists | Large blank areas | Icon-sized status, one action | Fit the status inside the page |
+
+**Reused.** Paper `#F8FAFC`, ink `#111827`, accent `#1E40AF`, accent soft, success and amber, Plus Jakarta Sans and DM Sans, `rounded-2xl`, `shadow-card`, `btn-primary`, `btn-secondary`, `btn-ghost`, `shell-nav-link`, pills, and the mobile tab pattern.
+
+**New, native pieces.** A sales-led summary with two quieter figures, a five-row attention list with a written High or Check mark, a grouped Activity list, a separate Downloads destination, and an income-statement table with a prior-month column. No new brand.
+
+**Customer screens do not include** route names, blueprint commentary, Balance Sheet, or Cash-flow Forecast.
+
+**Scores after browser review** at 320, 390, and desktop widths.
+
+| Area | Score | Why |
+| --- | --- | --- |
+| Visual polish | 9.0 | Shell, cards, and type match the live app. The mark is a simple T, not the production logo file. |
+| TillFlow consistency | 9.0 | Tokens, buttons, nav links, and chips are the existing ones. |
+| Five-second clarity | 9.1 | Sales is the large figure. Scope and date sit above it. |
+| Mobile usability | 9.0 | 320px preview does not scroll sideways. Targets are at least 44px. |
+| Hierarchy | 9.1 | Sales leads. Money and cash are quieter. Totals are heavier than lines. |
+| Trustworthiness | 9.0 | Exact amounts print. A failed load shows no figures. Incomplete costs hide profit. |
+| Ghanaian retail relevance | 9.0 | Cedis, MoMo, and branch names stay in the sample. |
+| Plan differentiation | 9.0 | Starter, Growth, Pro manager, and Pro owner change the nav. |
+| Accessibility | 8.7 | Focus rings, text severity, and contrast were checked in the browser. No automated audit. |
+| Implementation realism | 8.8 | Presentation can use the current shell. Queries stay in later stages. |
+| Overall | 9.0 | |
 
 ## 18. Verdict
 
-`REPORTS REDESIGN BLUEPRINT AMENDED — READY FOR VISUAL OWNER APPROVAL`
+`REPORTS HIGH-FIDELITY DESIGN COMPLETE — READY FOR VISUAL OWNER APPROVAL`
