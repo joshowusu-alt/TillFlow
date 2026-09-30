@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import DownloadLink from '@/components/DownloadLink';
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
+import { reportScopeLabel } from '@/lib/reports/scope-labels';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -266,11 +267,16 @@ export default async function BusinessMovementReportPage({
     throw new Error('Business Movement page refused stock-causation language');
   }
 
+  const scopeLabel = reportScopeLabel(selectedStoreId, stores);
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Business Movement"
-        subtitle="See how sales, confirmed payments, refunds and Mobile Money waiting for confirmation changed between two equal periods."
+      {opened.readOnly ? <ReportReadOnlyBanner /> : null}
+      <ReportsDestinationHead
+        pathname="/reports/business-movement"
+        title="Business movement"
+        scopeLabel={scopeLabel}
+        storeId={selectedStoreId === 'ALL' ? null : selectedStoreId}
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
@@ -296,6 +302,9 @@ export default async function BusinessMovementReportPage({
           </div>
         }
       />
+      <p className="text-sm text-muted">
+        See how sales, confirmed payments, refunds and Mobile Money waiting for confirmation changed between two equal periods.
+      </p>
 
       <section className="max-w-3xl space-y-2 text-sm leading-6 text-slate-700">
         <h2 className="text-base font-semibold text-slate-900">How to read this</h2>

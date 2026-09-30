@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs';
 import { NextRequest } from 'next/server';
 import { afterEach, describe, expect, it } from 'vitest';
 import { middleware } from '@/middleware';
-import { isReportsStage3aAllowed, REPORTS_STAGE3A_REVIEW_PATH } from '@/lib/reviews/reports-stage3a-gate';
+import {
+  isReportsStage3aAllowed,
+  isReportsStage3aPath,
+  REPORTS_MONEY_LAYOUT_REVIEW_PATH,
+  REPORTS_STAGE3A_REVIEW_PATH,
+} from '@/lib/reviews/reports-stage3a-gate';
 
 const mutableEnv = process.env as { VERCEL_ENV?: string; NODE_ENV?: string };
 const env = { VERCEL_ENV: process.env.VERCEL_ENV, NODE_ENV: process.env.NODE_ENV };
@@ -28,6 +33,9 @@ describe('Stage 3A review gate', () => {
     mutableEnv.NODE_ENV = 'production';
     const response = middleware(new NextRequest(new URL(REPORTS_STAGE3A_REVIEW_PATH, 'http://localhost')));
     expect(response.status).toBe(404);
+    const money = middleware(new NextRequest(new URL(REPORTS_MONEY_LAYOUT_REVIEW_PATH, 'http://localhost')));
+    expect(money.status).toBe(404);
+    expect(isReportsStage3aPath(REPORTS_MONEY_LAYOUT_REVIEW_PATH)).toBe(true);
   });
 
   it('does not query or mutate from the review surface', () => {
@@ -46,5 +54,8 @@ describe('Stage 3A review gate', () => {
     expect(client).toContain('Sample');
     expect(reportsPage).not.toContain('review-samples');
     expect(reportsPage).not.toContain('fixture');
+    const moneyPage = readFileSync('app/reviews/reports-money-layout/page.tsx', 'utf8');
+    expect(moneyPage).not.toContain('prisma');
+    expect(moneyPage).toContain('FinancialAmount');
   });
 });

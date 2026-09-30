@@ -90,6 +90,21 @@ describe('Stage 3A navigation correction', () => {
     expect(cashflow).not.toContain('getCashflow(');
   });
 
+  it('uses shared Reports destination context on Trading, Sales analytics and Business movement', () => {
+    for (const file of [
+      'app/(protected)/reports/dashboard/page.tsx',
+      'app/(protected)/reports/analytics/page.tsx',
+      'app/(protected)/reports/business-movement/page.tsx',
+    ]) {
+      const source = readFileSync(join(root, file), 'utf8');
+      expect(source).toContain('ReportsDestinationHead');
+      expect(source).not.toContain("href=\"/reports/command-center\"");
+    }
+    const head = readFileSync(join(root, 'components/reports/ReportsDestinationHead.tsx'), 'utf8');
+    expect(head).toContain('ReportsReturnPath');
+    expect(head).toContain('returnPathFor');
+  });
+
   it('does not link withheld reports from customer screens', () => {
     const files: string[] = [];
     walk(join(root, 'app'), files);

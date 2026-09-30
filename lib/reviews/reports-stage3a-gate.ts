@@ -4,9 +4,10 @@
  * The page uses synthetic data and is not linked from customer navigation.
  */
 export const REPORTS_STAGE3A_REVIEW_PATH = '/reviews/reports-stage3a';
+export const REPORTS_MONEY_LAYOUT_REVIEW_PATH = '/reviews/reports-money-layout';
 
 export function isReportsStage3aPath(pathname: string): boolean {
-  return pathname === REPORTS_STAGE3A_REVIEW_PATH;
+  return pathname === REPORTS_STAGE3A_REVIEW_PATH || pathname === REPORTS_MONEY_LAYOUT_REVIEW_PATH;
 }
 
 export function isReportsStage3aAllowed(env: {

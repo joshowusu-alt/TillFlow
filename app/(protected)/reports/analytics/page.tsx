@@ -4,9 +4,10 @@ import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
 import { addCalendarDays } from '@/lib/entitlements/range';
 import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import PlanFeatureBadge from '@/components/PlanFeatureBadge';
-import RefreshIndicator from '@/components/RefreshIndicator';
+import { reportScopeLabel } from '@/lib/reports/scope-labels';
+import { getBusinessStores } from '@/lib/services/stores';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import ReportSectionSkeleton from '@/components/reports/ReportSectionSkeleton';
 import { getFeatures } from '@/lib/features';
@@ -40,19 +41,18 @@ export default async function AnalyticsPage({
   if (!opened.ok) return opened.denial;
   const { business } = opened;
   if (opened.branch.kind !== 'stores') notFound();
+  const { stores } = await getBusinessStores(business.id, undefined);
+  const scopeLabel = reportScopeLabel(opened.branch.selected, stores);
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <PageHeader
-        eyebrow="Reports"
-        title="Trend Analytics"
-        subtitle="Period-over-period trends, product performance, and peak trading windows."
-        actions={
-          <>
-            <PlanFeatureBadge plan="GROWTH" />
-            <RefreshIndicator fetchedAt={new Date().toISOString()} />
-          </>
-        }
+      {opened.readOnly ? <ReportReadOnlyBanner /> : null}
+      <ReportsDestinationHead
+        pathname="/reports/analytics"
+        title="Sales analytics"
+        scopeLabel={scopeLabel}
+        storeId={opened.branch.selected === 'ALL' ? null : opened.branch.selected}
+        actions={<PlanFeatureBadge plan="GROWTH" />}
       />
       <p className="text-xs text-black/45">
         Profit uses stored sale-line discounts and cost. Incomplete costs are shown instead of a firm gross profit.

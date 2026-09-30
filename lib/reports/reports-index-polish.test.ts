@@ -16,7 +16,7 @@ describe('Reports Today shell', () => {
     expect(src).not.toContain("title: 'Daily Action'");
     expect(src).not.toContain('const startHereCards');
     expect(src).toContain('loadToday(');
-    expect(src).toContain("surfaceId: 'command_center'");
+    expect(src).toContain("surfaceId: 'reports_hub'");
   });
 
   it('keeps Reports in the header as Today, Activity and More reports', () => {
@@ -33,7 +33,8 @@ describe('Reports Today shell', () => {
 
   it('lists existing Activity and More destinations and withholds unfinished statements', () => {
     expect(screen).toContain('More reports');
-    expect(screen).toContain('data-reports-nav="contextual"');
+    const head = readFileSync(join(root, 'components/reports/ReportsSectionHead.tsx'), 'utf8');
+    expect(head).toContain('data-reports-nav="contextual"');
     expect(screen).not.toContain('fixed inset-x-0');
     expect(nav).toContain("href: '/reports/business-movement'");
     expect(nav).toContain("href: '/reports/dashboard'");

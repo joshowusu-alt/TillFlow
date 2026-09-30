@@ -1,20 +1,20 @@
 import Link from 'next/link';
 import NavIcon from '@/components/navigation/NavIcon';
-import PageHeader from '@/components/PageHeader';
+import FinancialAmount from '@/components/reports/FinancialAmount';
+import ReportsSectionHead from '@/components/reports/ReportsSectionHead';
+import TodayHelpControl from '@/components/reports/TodayHelpControl';
+import { CASH_ATTENTION_THRESHOLD_PENCE } from '@/lib/reports/today/attention';
 import { CONSOLIDATED_LABEL } from '@/lib/reports/scope-labels';
-import { formatMoney } from '@/lib/format';
 import {
-  cashDifferenceLabel,
   isQuietToday,
   todayPartialKinds,
   type TodayNextAction,
   type TodaySnapshot,
 } from '@/lib/reports/today/model';
 import {
-  EXPLORE_GROUPS,
+  activityGroupHeading,
   stage3aSection,
   withStoreScope,
-  type ExploreGroup,
   type Stage3aLink,
   type Stage3aSection,
 } from '@/lib/reports/today/stage3a-nav';
@@ -44,28 +44,48 @@ export type TodayScreenProps = {
   exploreLinks?: Stage3aLink[];
   nextActions?: TodayNextAction[];
   salesHref: string | null;
+  moneyHref?: string | null;
+  cashHref?: string | null;
   snapshot: TodaySnapshot | null;
   blocked: { title: string; body: string; href: string; action: string } | null;
   failed: boolean;
 };
 
+function TodayHelpBody({ scopeLabel, zoneName }: { scopeLabel: string; zoneName: string }) {
+  return (
+    <>
+      <p>Dates are the business local date in {zoneName}. The phone or browser clock is not used.</p>
+      <p>
+        {scopeLabel === CONSOLIDATED_LABEL
+          ? `This page is ${scopeLabel}. Every figure uses only the branches this account is allowed to see.`
+          : `This page is for ${scopeLabel}. Other branches are not included.`}
+      </p>
+      <p>Sales is the total of invoices, excluding voided and returned sales. Money received is confirmed payments, with completed refunds paid back today deducted. Pending Mobile Money is not included, and a returned sale is not deducted unless the refund was actually paid.</p>
+      <p>Cash difference is the counted difference on tills closed today. An amount below GH₵5.00 stays in that figure and is not listed as needing attention.</p>
+      <p>Estimated profit is shown only when every product cost is recorded. If a cost is missing, the profit figure is hidden.</p>
+    </>
+  );
+}
+
 export default function TodayScreen(props: TodayScreenProps) {
   const section = stage3aSection(props.section);
   const title = section === 'today' ? 'Today' : section === 'activity' ? 'Activity' : 'More reports';
-  const subtitle = section === 'today'
-    ? 'Sales, confirmed money received, and anything that needs a look.'
-    : section === 'activity'
-      ? 'Open the report that answers the question you have.'
-      : 'Statements, downloads and owner controls.';
   return (
-    <div className="mx-auto min-w-0 max-w-6xl overflow-x-hidden">
-      <PageHeader eyebrow="Reports" title={title} subtitle={subtitle} description={props.dateLabel} />
-      <ReportsNav section={section} storeId={props.storeId} />
-      {props.scopeLabel ? (
-        <p className="mt-3 inline-flex max-w-full rounded-full bg-accentSoft px-3 py-1 text-sm font-medium text-accent" data-report-scope={props.scopeLabel}>
-          <span className="truncate">{props.scopeLabel}</span>
-        </p>
-      ) : null}
+    <div className="mx-auto min-w-0 max-w-6xl overflow-x-hidden px-4 py-6 sm:px-6">
+      <ReportsSectionHead
+        title={title}
+        section={section}
+        storeId={props.storeId}
+        dateLabel={props.dateLabel}
+        scopeLabel={props.scopeLabel}
+        updatedLabel={props.updatedLabel}
+        showDate={section === 'today'}
+        help={section === 'today' ? (
+          <TodayHelpControl>
+            <TodayHelpBody scopeLabel={props.scopeLabel} zoneName={props.zoneName} />
+          </TodayHelpControl>
+        ) : undefined}
+      />
       {props.readOnly ? (
         <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="status">
           Read-only. You can look at reports. Downloads and changes stay off until billing is sorted.
@@ -81,50 +101,6 @@ export default function TodayScreen(props: TodayScreenProps) {
       ) : null}
     </div>
   );
-}
-
-function ReportsNav({ section, storeId }: { section: Stage3aSection; storeId: string | null }) {
-  const items: Array<{ id: Stage3aSection; short: string; label: string }> = [
-    { id: 'today', short: 'Today', label: 'Today' },
-    { id: 'activity', short: 'Activity', label: 'Activity' },
-    { id: 'more', short: 'More', label: 'More reports' },
-  ];
-  return (
-    <nav aria-label="Reports sections" className="mt-4" data-reports-nav="contextual">
-      <ul className="flex gap-2">
-        {items.map((item) => {
-          const current = item.id === section;
-          return (
-            <li key={item.id} className="min-w-0 flex-1 sm:flex-none">
-              <Link
-                href={sectionHref(item.id, storeId)}
-                aria-current={current ? 'page' : undefined}
-                aria-label={item.label}
-                className={`inline-flex min-h-11 w-full items-center justify-center rounded-full border px-3 text-sm font-semibold ${FOCUS} ${
-                  current ? 'border-accent bg-accent text-white' : 'border-slate-200 bg-white text-ink hover:bg-slate-50'
-                }`}
-              >
-                {item.id === 'more' ? (
-                  <>
-                    <span className="sm:hidden">More</span>
-                    <span className="hidden sm:inline">More reports</span>
-                  </>
-                ) : item.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
-  );
-}
-
-function sectionHref(section: Stage3aSection, storeId: string | null) {
-  const params = new URLSearchParams();
-  if (section !== 'today') params.set('section', section);
-  if (storeId) params.set('storeId', storeId);
-  const query = params.toString();
-  return query ? `/reports?${query}` : '/reports';
 }
 
 function TodayFailed() {
@@ -208,38 +184,23 @@ function QuietToday({
 }
 
 function ExploreReports({ links }: { links: Stage3aLink[] }) {
-  const groups = EXPLORE_GROUPS
-    .map((group) => ({ group, rows: links.filter((link) => link.explore === group) }))
-    .filter((entry) => entry.rows.length > 0);
-  if (groups.length === 0) return null;
+  if (links.length === 0) return null;
   return (
     <section id="explore-reports" aria-labelledby="explore-reports-title" className="min-w-0">
-      <h2 id="explore-reports-title" className="font-display text-lg font-semibold text-ink">Explore reports</h2>
-      <p className="mt-1 max-w-2xl text-sm text-muted">Reports this account can open from here.</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        {groups.map(({ group, rows }) => (
-          <ExploreGroupCard key={group} group={group} rows={rows} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ExploreGroupCard({ group, rows }: { group: ExploreGroup; rows: Stage3aLink[] }) {
-  return (
-    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4" aria-label={group}>
-      <h3 className="text-sm font-semibold text-ink">{group}</h3>
-      <ul className="mt-2 space-y-1">
-        {rows.map((link) => (
-          <li key={link.href}>
-            <Link href={link.href} className={`flex min-h-11 items-center justify-between gap-3 rounded-xl px-1 text-sm ${FOCUS}`}>
-              <span className="inline-flex min-w-0 items-center gap-2">
-                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accentSoft text-accent">
-                  <NavIcon iconKey={link.iconKey} />
-                </span>
-                <span className="truncate font-semibold text-ink">{link.label}</span>
+      <h2 id="explore-reports-title" className="font-display text-lg font-semibold text-ink">Next steps</h2>
+      <p className="mt-1 max-w-2xl text-sm text-muted">A few reports you can open from here.</p>
+      <ul className="mt-3 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">
+        {links.map((link) => (
+          <li key={link.href} className="border-b border-slate-100 last:border-0">
+            <Link href={link.href} className={`flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 ${FOCUS}`}>
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accentSoft text-accent">
+                <NavIcon iconKey={link.iconKey} />
               </span>
-              <span className="shrink-0 text-sm font-semibold text-accent">Open</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-ink">{link.label}</span>
+                <span className="block text-xs leading-5 text-muted">{link.purpose}</span>
+              </span>
+              <span className="shrink-0 text-slate-400" aria-hidden="true">›</span>
             </Link>
           </li>
         ))}
@@ -249,56 +210,81 @@ function ExploreGroupCard({ group, rows }: { group: ExploreGroup; rows: Stage3aL
 }
 
 function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
-  const { snapshot, currency, scopeLabel } = props;
+  const { snapshot, currency } = props;
   const partial = todayPartialKinds(snapshot);
   const salesKnownZero = snapshot.salesCount === 0 && snapshot.salesTodayPence === 0;
   const receiptsKnownZero = snapshot.moneyReceivedPence === 0 && snapshot.methods.length === 0;
   const saleWord = snapshot.salesCount === 1 ? 'sale' : 'sales';
   const showWeek = snapshot.days.some((day) => day.salesPence !== 0);
+  const cashDiff = snapshot.cashDifferencePence;
+  const cashNeedsLook = cashDiff != null && Math.abs(cashDiff) >= CASH_ATTENTION_THRESHOLD_PENCE;
   return (
     <div className="mt-6 min-w-0" data-today-state={partial.length > 0 ? 'partial' : 'ready'} data-partial={partial.join(' ')}>
-      <div className="flex min-w-0 justify-end">
-        <RefreshToday label={props.updatedLabel} />
-      </div>
-
-      <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-        <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-          <h2 className="text-sm font-semibold text-muted">Sales today</h2>
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-start">
+        <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-5">
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Sales today</p>
+            {props.salesHref ? (
+              <Link href={props.salesHref} className={`btn-secondary shrink-0 px-3 text-xs ${FOCUS}`}>
+                Open trading
+              </Link>
+            ) : null}
+          </div>
           {salesKnownZero ? (
             <p className="mt-2 text-base font-semibold text-ink">No sales recorded yet today</p>
           ) : props.salesHref ? (
-            <Link href={props.salesHref} className={`mt-2 inline-flex min-h-11 min-w-0 items-center break-words font-display text-[clamp(1.75rem,8vw,3rem)] font-semibold leading-tight text-ink ${FOCUS}`}>
-              {formatMoney(snapshot.salesTodayPence, currency)}
+            <Link href={props.salesHref} className={`mt-1 block min-w-0 ${FOCUS}`}>
+              <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
             </Link>
           ) : (
-            <p className="mt-2 inline-flex min-h-11 min-w-0 items-center break-words font-display text-[clamp(1.75rem,8vw,3rem)] font-semibold leading-tight text-ink">
-              {formatMoney(snapshot.salesTodayPence, currency)}
-            </p>
+            <div className="mt-1 min-w-0">
+              <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
+            </div>
           )}
           {salesKnownZero ? null : (
             <p className="mt-2 text-sm text-ink">{snapshot.salesCount} {saleWord}</p>
           )}
           <p className="mt-1 text-sm text-muted">
-            {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : `Yesterday ${formatMoney(snapshot.yesterdayPence, currency)}`}
+            {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" /></>}
           </p>
-          <div className="mt-5 grid min-w-0 gap-4 sm:grid-cols-2">
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-muted">Money received</h3>
-              {receiptsKnownZero ? (
-                <p className="mt-1 text-sm text-ink">No confirmed payments yet today</p>
+          <div className="mt-3 grid min-w-0 gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2">
+            {props.moneyHref ? (
+              <Link href={props.moneyHref} className={`min-w-0 rounded-xl bg-slate-50 px-3 py-2 text-left hover:bg-slate-100 ${FOCUS}`}>
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted">Money received</span>
+                {receiptsKnownZero ? (
+                  <p className="mt-1 text-sm text-ink">No confirmed payments yet today</p>
+                ) : (
+                  <>
+                    <div className="mt-1 min-w-0">
+                      <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted">Confirmed · not sales</p>
+                  </>
+                )}
+              </Link>
+            ) : (
+              <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted">Money received</span>
+                {receiptsKnownZero ? (
+                  <p className="mt-1 text-sm text-ink">No confirmed payments yet today</p>
+                ) : (
+                  <div className="mt-1 min-w-0">
+                    <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
+                  </div>
+                )}
+              </div>
+            )}
+            <div className={`min-w-0 rounded-xl px-3 py-2 ${cashNeedsLook ? 'bg-amber-50' : 'bg-slate-50'}`}>
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted">Cash difference</span>
+              {cashDiff == null ? (
+                <p className="mt-1 text-sm text-ink">No till closed today</p>
               ) : (
                 <>
-                  <p className="mt-1 break-words text-lg font-semibold text-ink">{formatMoney(snapshot.moneyReceivedPence, currency)}</p>
-                  <p className="text-sm text-muted">Confirmed payments. This is not sales.</p>
+                  <div className="mt-1 min-w-0">
+                    <FinancialAmount pence={cashDiff} currency={currency} variant="prominent" />
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted">{cashNeedsLook ? 'Needs a look' : 'Within GH₵5.00'}</p>
                 </>
-              )}
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-muted">Cash difference</h3>
-              {snapshot.cashDifferencePence == null ? (
-                <p className="mt-1 text-sm text-ink">No till has been closed today, so there is no cash difference to show.</p>
-              ) : (
-                <p className="mt-1 break-words text-lg font-semibold text-ink">{cashDifferenceLabel(snapshot.cashDifferencePence, currency)}</p>
               )}
             </div>
           </div>
@@ -315,21 +301,12 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
         )}
         <Methods snapshot={snapshot} currency={currency} />
       </div>
-      {snapshot.comparison ? (
-        snapshot.comparison.last30Pence === 0 && snapshot.comparison.previous30Pence === 0 ? (
-          <p className="mt-4 text-sm text-ink">There is no earlier 30-day period with sales to compare.</p>
-        ) : (
-          <p className="mt-4 text-sm text-ink">
-            Last 30 days {formatMoney(snapshot.comparison.last30Pence, currency)}. The 30 days before that were {formatMoney(snapshot.comparison.previous30Pence, currency)}.
-          </p>
-        )
-      ) : null}
       {snapshot.branches ? (
         <ul className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2">
           {snapshot.branches.map((branch) => (
             <li key={branch.storeId} className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
               <span className="block truncate font-semibold text-ink">{branch.name}</span>
-              <span className="break-words text-muted">{formatMoney(branch.salesPence, currency)}</span>
+              <FinancialAmount pence={branch.salesPence} currency={currency} variant="compact" className="text-muted" />
             </li>
           ))}
         </ul>
@@ -341,33 +318,39 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
             {snapshot.topProducts.map((product) => (
               <li key={product.name} className="flex min-w-0 items-baseline justify-between gap-3 text-sm">
                 <span className="min-w-0 truncate text-ink">{product.name}</span>
-                <span className="shrink-0 text-muted">{formatMoney(product.salesPence, currency)}</span>
+                <FinancialAmount pence={product.salesPence} currency={currency} variant="compact" className="shrink-0 text-muted" />
               </li>
             ))}
           </ol>
         </section>
       ) : null}
-      <Profit profit={snapshot.profit} currency={currency} />
-      <Help scopeLabel={scopeLabel} zoneName={props.zoneName} />
+      <Profit profit={snapshot.profit} currency={currency} comparison={snapshot.comparison} />
     </div>
   );
 }
 
 function Attention({ snapshot }: { snapshot: TodaySnapshot }) {
   return (
-    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-card" aria-labelledby="today-attention">
-      <h2 id="today-attention" className="font-display text-lg font-semibold text-ink">Needs attention</h2>
+    <section className="min-w-0 lg:mt-0" aria-labelledby="today-attention">
+      <h2 id="today-attention" className="font-display text-base font-semibold text-ink">Needs attention</h2>
       {snapshot.attention.length === 0 ? (
-        <p className="mt-3 text-sm text-muted">Nothing needs attention right now.</p>
+        <p className="mt-2 flex min-h-11 items-center gap-2 rounded-xl border border-emerald-100 bg-white px-3 text-sm text-ink shadow-card">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800" aria-hidden="true">OK</span>
+          Nothing needs attention right now.
+        </p>
       ) : (
-        <ul className="mt-3 space-y-3">
+        <ul className="mt-2 space-y-2">
           {snapshot.attention.map((row) => (
-            <li key={`${row.rank}-${row.title}`} className="min-w-0 border-t border-slate-100 pt-3 first:border-t-0 first:pt-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">{row.severity === 'high' ? 'High' : 'Review'}</p>
-              <p className="mt-1 text-sm font-semibold text-ink">{row.title}</p>
-              <p className="text-sm text-muted">{row.detail}</p>
-              <Link href={row.href} className={`mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-accent ${FOCUS}`}>
-                {row.action}
+            <li key={`${row.rank}-${row.title}`} className="min-w-0">
+              <Link href={row.href} className={`flex min-h-11 w-full items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-2 shadow-sm hover:bg-slate-50 ${FOCUS}`}>
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase ${row.severity === 'high' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>
+                  {row.severity === 'high' ? 'High' : 'Check'}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold leading-5 text-ink">{row.title}</span>
+                  <span className="block text-xs leading-5 text-muted">{row.detail}</span>
+                </span>
+                <span className="shrink-0 text-sm font-semibold text-accent">{row.action}</span>
               </Link>
             </li>
           ))}
@@ -387,7 +370,9 @@ function Week({ days, currency }: { days: TodaySnapshot['days']; currency: strin
           <li key={day.key} className="min-w-0 text-sm">
             <div className="flex min-w-0 items-baseline justify-between gap-3">
               <span className="shrink-0 text-muted">{day.label}</span>
-              <span className="min-w-0 break-words text-right text-ink">{formatMoney(day.salesPence, currency)}</span>
+              <span className="min-w-0 text-right">
+                <FinancialAmount pence={day.salesPence} currency={currency} variant="compact" />
+              </span>
             </div>
             <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
               <span className="block h-1.5 rounded-full bg-accent" style={{ width: `${Math.round((day.salesPence / peak) * 100)}%` }} />
@@ -414,7 +399,9 @@ function Methods({ snapshot, currency }: { snapshot: TodaySnapshot; currency: st
               <li key={row.method} className="min-w-0 text-sm">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-ink">{row.label}</span>
-                  <span className="break-words text-right text-ink">{formatMoney(row.amountPence, currency)} · {share}%</span>
+                  <span className="text-right">
+                    <FinancialAmount pence={row.amountPence} currency={currency} variant="compact" /> · {share}%
+                  </span>
                 </div>
               </li>
             );
@@ -425,39 +412,40 @@ function Methods({ snapshot, currency }: { snapshot: TodaySnapshot; currency: st
   );
 }
 
-function Profit({ profit, currency }: { profit: TodaySnapshot['profit']; currency: string }) {
-  if (profit.state === 'omitted') return null;
-  if (profit.state === 'incomplete' || profit.grossProfitPence == null) {
-    return <p className="mt-4 text-sm text-ink">Profit is hidden because some product costs are missing.</p>;
-  }
+function Profit({
+  profit,
+  currency,
+  comparison,
+}: {
+  profit: TodaySnapshot['profit'];
+  currency: string;
+  comparison: TodaySnapshot['comparison'];
+}) {
+  if (profit.state === 'omitted' && !comparison) return null;
   return (
-    <p className="mt-4 text-sm text-ink">
-      Estimated gross profit {formatMoney(profit.grossProfitPence, currency)}. Every product cost used here is recorded.
-    </p>
-  );
-}
-
-function Help({ scopeLabel, zoneName }: { scopeLabel: string; zoneName: string }) {
-  return (
-    <details className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
-      <summary className={`min-h-11 cursor-pointer text-sm font-semibold text-ink ${FOCUS}`}>How Today is calculated</summary>
-      <div className="mt-3 space-y-2 text-sm text-muted">
-        <p>Dates are the business local date in {zoneName}. The phone or browser clock is not used.</p>
-        <p>
-          {scopeLabel === CONSOLIDATED_LABEL
-            ? `This page is ${scopeLabel}. Every figure uses only the branches this account is allowed to see.`
-            : `This page is for ${scopeLabel}. Other branches are not included.`}
+    <section className="mt-4 min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+      {comparison ? (
+        comparison.last30Pence === 0 && comparison.previous30Pence === 0 ? (
+          <p className="text-sm text-ink">There is no earlier 30-day period with sales to compare.</p>
+        ) : (
+          <p className="text-sm text-ink">
+            Last 30 days <FinancialAmount pence={comparison.last30Pence} currency={currency} variant="compact" /> · previous{' '}
+            <FinancialAmount pence={comparison.previous30Pence} currency={currency} variant="compact" />
+          </p>
+        )
+      ) : null}
+      {profit.state === 'incomplete' || profit.grossProfitPence == null ? (
+        <p className="mt-2 text-sm text-ink">Profit is hidden because some product costs are missing.</p>
+      ) : profit.state === 'ready' ? (
+        <p className="mt-2 text-sm text-ink">
+          Estimated gross profit today <FinancialAmount pence={profit.grossProfitPence} currency={currency} variant="compact" />. Every product cost used here is recorded.
         </p>
-        <p>Sales is the total of invoices, excluding voided and returned sales. Money received is confirmed payments, with completed refunds paid back today deducted. Pending Mobile Money is not included, and a returned sale is not deducted unless the refund was actually paid.</p>
-        <p>Cash difference is the counted difference on tills closed today. An amount below GH₵5.00 stays in that figure and is not listed as needing attention.</p>
-        <p>Estimated profit is shown only when every product cost is recorded. If a cost is missing, the profit figure is hidden.</p>
-      </div>
-    </details>
+      ) : null}
+    </section>
   );
 }
 
 function SectionLanding({ section, links }: { section: Stage3aSection; links: Stage3aLink[] }) {
-  const title = section === 'activity' ? 'What do you want to know?' : 'Statements, downloads and owner controls';
   const groups = new Map<string, Stage3aLink[]>();
   for (const link of links) {
     const rows = groups.get(link.group) ?? [];
@@ -465,26 +453,31 @@ function SectionLanding({ section, links }: { section: Stage3aSection; links: St
     groups.set(link.group, rows);
   }
   return (
-    <div className="mt-6 min-w-0">
-      <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
+    <div className="mt-6 min-w-0 space-y-4">
       {links.length === 0 ? (
-        <p className="mt-4 text-sm text-ink" role="status">Nothing in this list is available on the current plan.</p>
+        <p className="text-sm text-ink" role="status">Nothing in this list is available on the current plan.</p>
       ) : (
         [...groups.entries()].map(([group, rows]) => (
-          <section key={group} className="mt-5" aria-labelledby={`group-${group}`}>
-            <h3 id={`group-${group}`} className="text-sm font-semibold text-ink">{group}</h3>
-            <ul className="mt-2 space-y-2">
+          <section key={group} aria-labelledby={`group-${group}`}>
+            <h2 id={`group-${group}`} className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+              {activityGroupHeading(group as Stage3aLink['group'])}
+            </h2>
+            <ul className="mt-1.5 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">
               {rows.map((link) => (
-                <li key={link.href}>
-                  <Link href={link.href} className={`flex min-h-11 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm ${FOCUS}`}>
-                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accentSoft text-accent">
+                <li key={link.href} className="border-b border-slate-100 last:border-0">
+                  <Link href={link.href} className={`flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 ${FOCUS}`}>
+                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accentSoft text-accent">
                       <NavIcon iconKey={link.iconKey} />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold text-ink">{link.label}</span>
-                      <span className="mt-0.5 block text-sm leading-5 text-muted">{link.purpose}</span>
+                      {link.useWhen ? (
+                        <span className="mt-0.5 block text-xs leading-5 text-muted">{link.useWhen}</span>
+                      ) : (
+                        <span className="mt-0.5 block text-xs leading-5 text-muted">{link.purpose}</span>
+                      )}
                     </span>
-                    <span className="shrink-0 text-sm font-semibold text-accent">Open</span>
+                    <span className="shrink-0 text-slate-400" aria-hidden="true">›</span>
                   </Link>
                 </li>
               ))}

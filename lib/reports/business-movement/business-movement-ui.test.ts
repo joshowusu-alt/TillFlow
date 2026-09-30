@@ -219,7 +219,8 @@ describe('Business Movement 6F — surface wiring', () => {
     );
     const hub = readFileSync(join(root, 'lib/reports/today/stage3a-nav.ts'), 'utf8');
 
-    expect(page).toContain('title="Business Movement"');
+    expect(page).toContain('title="Business movement"');
+    expect(page).toContain('ReportsDestinationHead');
     expect(page).toContain("surfaceId: 'business_movement'");
     expect(page).toContain('Product movers');
     expect(exportRoute).toContain('COMPLETE_STREAM');

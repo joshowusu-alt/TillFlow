@@ -31,6 +31,8 @@ export type Stage3aLink = {
   href: string;
   label: string;
   purpose: string;
+  /** Short “Use this when…” line for Activity rows. */
+  useWhen?: string;
   group: Stage3aGroup;
   iconKey: NavIconKey;
   explore?: ExploreGroup;
@@ -47,7 +49,8 @@ const ACTIVITY_LINKS: Stage3aLink[] = [
   {
     href: '/reports/dashboard',
     label: 'Trading',
-    purpose: 'See sales, returns, profit and your best-selling products for a period you choose.',
+    purpose: 'Sales, returns, receipts and profit for a trading period you choose.',
+    useWhen: 'Use this when you want to examine sales, returns, receipts and profit for a chosen trading period.',
     group: 'Reports',
     iconKey: 'reports',
     explore: 'Understand sales',
@@ -55,7 +58,8 @@ const ACTIVITY_LINKS: Stage3aLink[] = [
   {
     href: '/reports/analytics',
     label: 'Sales analytics',
-    purpose: 'Compare sales over time and see the products, categories and busy hours driving performance.',
+    purpose: 'Trends in sales, categories, products and busy trading times across longer ranges.',
+    useWhen: 'Use this when you want to understand trends, categories, products and busy trading times across longer ranges.',
     group: 'Reports',
     iconKey: 'analytics',
     explore: 'Understand sales',
@@ -63,7 +67,8 @@ const ACTIVITY_LINKS: Stage3aLink[] = [
   {
     href: '/reports/business-movement',
     label: 'Business movement',
-    purpose: 'See how sales, confirmed payments, refunds and product sales changed between two equal periods.',
+    purpose: 'How sales, confirmed payments, refunds and product sales changed between two equal periods.',
+    useWhen: 'Use this when you want to compare how selected operational measures changed between two equal periods.',
     group: 'Reports',
     iconKey: 'profit',
     explore: 'Understand sales',
@@ -237,6 +242,34 @@ export function stage3aExplore(
   options: Stage3aLinkOptions = {},
 ): Stage3aLink[] {
   return [...ACTIVITY_LINKS, ...MORE_LINKS].filter((link) => link.explore && linkVisible(link, allowedHrefs, options));
+}
+
+const EXPLORE_NEXT_ORDER = [
+  '/reports/dashboard',
+  '/reports/money-received',
+  '/reports/momo-confirmation',
+  '/reports/stock-movements',
+] as const;
+
+/** At most four next steps on quiet Today — not the full Activity catalogue. */
+export function stage3aExploreNextSteps(
+  allowedHrefs: ReadonlySet<string>,
+  options: Stage3aLinkOptions = {},
+  max = 4,
+): Stage3aLink[] {
+  const pool = stage3aExplore(allowedHrefs, options);
+  const picked: Stage3aLink[] = [];
+  for (const href of EXPLORE_NEXT_ORDER) {
+    if (picked.length >= max) break;
+    const link = pool.find((row) => row.href === href);
+    if (link) picked.push(link);
+  }
+  return picked;
+}
+
+export function activityGroupHeading(group: Stage3aGroup): string {
+  if (group === 'Ledgers and controls') return 'Ledgers';
+  return group;
 }
 
 export type ReportReturnPath = {

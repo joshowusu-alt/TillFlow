@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { agreeingReportScope, ScopeAgreementError, todayNextActions } from '@/lib/reports/today/model';
 import { loadToday, type TodaySnapshot } from '@/lib/reports/today/load';
-import { stage3aExplore, stage3aLinks, stage3aSection, withStoreScope } from '@/lib/reports/today/stage3a-nav';
+import { stage3aExploreNextSteps, stage3aLinks, stage3aSection, withStoreScope } from '@/lib/reports/today/stage3a-nav';
 import { tradingReplacesSalesAnalytics } from '@/lib/reports/today/trading-parity';
 import { buildTodayWindows, shiftLocalDateKey, type TodayPlan } from '@/lib/reports/today/windows';
 import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
@@ -31,6 +31,8 @@ function shell(props: Omit<TodayScreenProps, 'section' | 'links'> & { section?: 
     section: props.section ?? 'today',
     links: props.links ?? [],
     exploreLinks: props.exploreLinks ?? [],
+    moneyHref: props.moneyHref ?? null,
+    cashHref: props.cashHref ?? null,
     nextActions: props.nextActions ?? [],
     scopeLabel: props.scopeLabel,
     dateLabel: props.dateLabel,
@@ -175,7 +177,13 @@ async function ReportsToday({ search }: { search?: Search }) {
     storeId,
     readOnly,
     links,
-    exploreLinks: scopeStoreLinks(stage3aExplore(allowed, linkOptions), storeId),
+    exploreLinks: scopeStoreLinks(stage3aExploreNextSteps(allowed, linkOptions), storeId),
+    moneyHref: allowed.has('/reports/money-received')
+      ? withStoreScope('/reports/money-received', storeId)
+      : null,
+    cashHref: allowed.has('/reports/cash-drawer')
+      ? withStoreScope(`/reports/cash-drawer?from=${todayKey}&to=${todayKey}`, storeId)
+      : null,
     nextActions: todayNextActions({ role: hub.user?.role ?? '', readOnly }),
     salesHref: allowed.has('/reports/dashboard')
       ? withStoreScope(`/reports/dashboard?from=${todayKey}&to=${todayKey}`, storeId)

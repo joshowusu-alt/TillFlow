@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import TodayScreen from '@/components/reports/today/TodayScreen';
 import { agreeingReportScope, isQuietToday, todayNextActions, todayPartialKinds, type TodaySnapshot } from '@/lib/reports/today/model';
-import { stage3aExplore, stage3aLinks } from '@/lib/reports/today/stage3a-nav';
+import { stage3aExploreNextSteps, stage3aLinks } from '@/lib/reports/today/stage3a-nav';
 import { tradingReplacesSalesAnalytics } from '@/lib/reports/today/trading-parity';
 
 vi.mock('next/navigation', () => ({
@@ -11,9 +11,9 @@ vi.mock('next/navigation', () => ({
 }));
 
 const CUSTOMER_COPY = [
-  'See sales, returns, profit and your best-selling products for a period you choose.',
-  'Compare sales over time and see the products, categories and busy hours driving performance.',
-  'See how sales, confirmed payments, refunds and product sales changed between two equal periods.',
+  'Sales, returns, receipts and profit for a trading period you choose.',
+  'Trends in sales, categories, products and busy trading times across longer ranges.',
+  'How sales, confirmed payments, refunds and product sales changed between two equal periods.',
   'Track confirmed cash, MoMo, card and bank payments separately from sales.',
   'Review Mobile Money payments waiting for confirmation before they count as money received.',
   'Track collections still pending with the payment provider.',
@@ -63,7 +63,7 @@ function screen(snapshot: TodaySnapshot, extras: Partial<Parameters<typeof Today
       currency="GHS"
       storeId="store-1"
       links={[]}
-      exploreLinks={stage3aExplore(new Set(['/reports/dashboard', '/reports/money-received', '/reports/stock-movements']), { showNetworkQueue: false })}
+      exploreLinks={stage3aExploreNextSteps(new Set(['/reports/dashboard', '/reports/money-received', '/reports/momo-confirmation', '/reports/stock-movements']), { showNetworkQueue: false })}
       nextActions={todayNextActions({ role: 'OWNER', readOnly: false })}
       salesHref={null}
       snapshot={snapshot}
@@ -82,8 +82,9 @@ describe('Today empty and partial states', () => {
     expect(markup).toContain('Nothing is wrong');
     expect(markup).toContain('Open Sell');
     expect(markup).toContain('Add stock');
-    expect(markup).toContain('Explore reports');
-    expect(markup).toContain('Understand sales');
+    expect(markup).toContain('Next steps');
+    expect(markup).not.toContain('Understand sales');
+    expect(markup.split('Trading').length - 1).toBeLessThanOrEqual(2);
     expect(markup).not.toContain('Last seven dates');
     expect(markup).not.toContain('GH₵0.00');
     expect(markup).not.toContain('Getting ready');
@@ -122,9 +123,9 @@ describe('Today empty and partial states', () => {
     const kinds = todayPartialKinds(snapshot);
     expect(kinds).toEqual(expect.arrayContaining(['no-closed-till', 'no-payment-mix', 'no-history', 'missing-costs', 'no-attention']));
     const markup = screen(snapshot);
-    expect(markup).toContain('No till has been closed today');
-    expect(markup).toContain('no payment mix');
-    expect(markup).toContain('no-history');
+    expect(markup).toContain('No till closed today');
+    expect(markup).toContain('No confirmed payments yet today');
+    expect(markup).toContain('data-partial');
     expect(markup).toContain('Profit is hidden because some product costs are missing.');
     expect(markup).toContain('Nothing needs attention right now.');
   });
@@ -145,7 +146,7 @@ describe('Reports navigation, Activity and More', () => {
     const markup = screen(quiet());
     expect(markup).toContain('data-reports-nav="contextual"');
     expect(markup).not.toContain('fixed');
-    expect(markup).toContain('aria-label="More reports"');
+    expect(markup).toContain('aria-label="Reports sections"');
   });
 
   it('uses customer descriptions and withholds internal language', () => {
@@ -188,7 +189,9 @@ describe('Reports navigation, Activity and More', () => {
     );
     for (const phrase of FORBIDDEN) expect(markup).not.toContain(phrase);
     expect(markup).not.toContain('Download last week');
-    expect(markup).toContain('Open');
+    expect(markup).toContain('Use this when you want to examine sales, returns, receipts and profit for a chosen trading period.');
+    expect(markup).toContain('Use this when you want to understand trends, categories, products and busy trading times across longer ranges.');
+    expect(markup).toContain('Use this when you want to compare how selected operational measures changed between two equal periods.');
   });
 
   it('shows Sales Analytics for Growth until Trading covers it, and never for Starter', () => {
