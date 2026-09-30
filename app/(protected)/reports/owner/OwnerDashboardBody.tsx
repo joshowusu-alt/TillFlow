@@ -13,9 +13,7 @@ import { countOnlineOrdersNeedingAttention } from '@/lib/services/online-orders-
 
 const quickLinks = [
   { label: 'Reorder queue', href: '/reports/reorder-suggestions', desc: 'Raise purchase orders before shelves go empty' },
-  { label: 'Cashflow forecast', href: '/reports/cashflow-forecast', desc: 'See short-term cash pressure and low-balance dates' },
   { label: 'Risk monitor', href: '/reports/risk-monitor', desc: 'Follow up overrides, variances, and control alerts' },
-  { label: 'Weekly digest', href: '/reports/weekly-digest', desc: 'Review the last 7 trading days in one brief' },
 ];
 
 /* ÔöÇÔöÇÔöÇ Page ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */
@@ -52,16 +50,12 @@ export default async function OwnerDashboardBody({
 
   const firstName = (userName ?? '').trim().split(/\s+/)[0] || userEmail.split('@')[0] || 'there';
 
-  // Pick a single nudge for returning owners. Priority: critical health → many attention items → Monday digest.
-  const isMonday = new Date().getDay() === 1;
   const nudge: { label: string; href: string; tone: 'info' | 'warning' | 'critical' } | null = coldStart
     ? null
     : snapshot.brief.healthScore.grade === 'RED'
     ? { label: 'Health is critical — review priority actions', href: snapshot.brief.healthScore.scoreUrl, tone: 'critical' }
     : snapshot.attentionItems.length > 5
     ? { label: `${snapshot.attentionItems.length} items need attention today`, href: '#attention-needed-today', tone: 'warning' }
-    : isMonday
-    ? { label: 'Monday brief — your weekly digest is ready', href: '/reports/weekly-digest', tone: 'info' }
     : null;
 
   return (
@@ -251,7 +245,7 @@ export default async function OwnerDashboardBody({
 function GoDeeperFooter({ advancedReports }: { advancedReports: boolean }) {
   const links: Array<{ label: string; desc: string; href: string }> = [
     { label: 'Trading Report', desc: 'Sales, debtors, and stock pressure for any date range', href: '/reports/dashboard' },
-    { label: 'Operations Today', desc: 'Today’s pulse, attention items, and next actions', href: '/reports/command-center' },
+    { label: 'Today', desc: 'Today’s sales, money received, and what needs attention', href: '/reports' },
   ];
   if (advancedReports) {
     links.push({ label: 'Trend Analytics', desc: 'Period-over-period trends and product performance', href: '/reports/analytics' });
@@ -545,8 +539,8 @@ function MoneyPulsePanel({ snapshot, currency }: { snapshot: Awaited<ReturnType<
             <h2 className="text-base font-semibold sm:text-lg">Money Pulse</h2>
             <p className="mt-1 text-sm text-blue-100/80">Short-term visibility into cash pressure, collections, and supplier obligations.</p>
           </div>
-          <Link href="/reports/cashflow-forecast" className="inline-flex min-h-10 items-center rounded-full border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-blue-100/80 transition-colors hover:border-white/20 hover:text-white">
-            Full forecast
+          <Link href="/reports" className="inline-flex min-h-11 items-center rounded-full border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-blue-100/80 transition-colors hover:border-white/20 hover:text-white">
+            Open Today
           </Link>
         </div>
       </div>

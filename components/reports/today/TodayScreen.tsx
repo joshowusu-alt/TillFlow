@@ -313,7 +313,7 @@ function Help({ scopeLabel, zoneName }: { scopeLabel: string; zoneName: string }
       <div className="mt-3 space-y-2 text-sm text-muted">
         <p>Dates are the business local date in {zoneName}. The phone or browser clock is not used.</p>
         <p>This page is for {scopeLabel}. It does not switch to a whole-business total.</p>
-        <p>Sales is the total of invoices, excluding voided and returned sales. Money received is confirmed payments only. Pending Mobile Money is not included, and refunds are not subtracted from money received.</p>
+        <p>Sales is the total of invoices, excluding voided and returned sales. Money received is confirmed payments, with completed refunds paid back today deducted. Pending Mobile Money is not included, and a returned sale is not deducted unless the refund was actually paid.</p>
         <p>Cash difference is the counted difference on tills closed today. An amount below GH₵5.00 stays in that figure and is not listed as needing attention.</p>
         <p>Estimated profit is shown only when every product cost is recorded. If a cost is missing, the profit figure is hidden.</p>
       </div>

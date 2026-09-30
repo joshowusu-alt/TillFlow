@@ -396,7 +396,7 @@ describe('ReadinessJourney home stats', () => {
     expect(screen.getAllByText('4 areas need your attention today.')).toHaveLength(1); // Today's attention only
     expect(screen.getByText(/85 sales in this open shift/)).toBeInTheDocument();
     expect(screen.getByText(/Supplier payments due/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /4 issues in Command Center/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /4 issues in Today/i })).toBeInTheDocument();
     expect(screen.getAllByText(/Supplier payments due/)).toHaveLength(1);
     expect(screen.queryByText('Follow up before close')).not.toBeInTheDocument();
   });
@@ -506,7 +506,7 @@ describe('Improve Your Records Phase 2', () => {
     expect(
       screen.getByText('Optional improvements that make your records and reports more reliable.')
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /2 issues in Command Center/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /2 issues in Today/i })).toBeInTheDocument();
   });
 });
 
@@ -551,9 +551,9 @@ describe('Owner Home Phase 1 control centre', () => {
     expect(
       within(screen.getByRole('link', { name: /Expected Cash:/ })).getByText('Current open till')
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /5 issues in Command Center/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /5 issues in Today/i })).toHaveAttribute(
       'href',
-      '/reports/command-center'
+      '/reports'
     );
     expect(screen.getByRole('link', { name: /Supplier payments due/i })).toHaveAttribute(
       'href',
@@ -598,7 +598,7 @@ describe('Owner Home Phase 1 control centre', () => {
     });
 
     expect(screen.queryByRole('link', { name: /Reorder needed/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /1 issue in Command Center/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /1 issue in Today/i })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('1 area needs your attention today');
     expect(screen.getAllByText('1 area needs your attention today.')).toHaveLength(1);
   });

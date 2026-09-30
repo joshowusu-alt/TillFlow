@@ -374,6 +374,19 @@ export default function TopNav({
               </Link>
             ) : null}
             {visibleGroups.map((group) => {
+              if (group.id === 'reports') {
+                const reportsActive = pathname === '/reports' || pathname.startsWith('/reports/');
+                return (
+                  <Link
+                    key={group.id}
+                    href={operationalHref('/reports')}
+                    aria-current={reportsActive ? 'page' : undefined}
+                    className={reportsActive ? 'shell-nav-trigger shell-nav-trigger-active' : 'shell-nav-trigger'}
+                  >
+                    Reports
+                  </Link>
+                );
+              }
               // '/onboarding' also lives under Admin > Setup Guide for discoverability,
               // but it renders as Home once setup is complete — the dedicated Home link
               // above owns the active state for it so Admin does not also light up.

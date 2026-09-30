@@ -64,10 +64,10 @@ export function formatHeroStatusPill(input: {
   return 'No urgent issues today';
 }
 
-/** Command Center card label — uses underlying issue count, not Home action count. */
+/** Home card label for the live Today page. Uses the issue count, not the Home action count. */
 export function formatCommandCenterActionLabel(issueCount: number): string {
-  if (issueCount <= 0) return 'Open Command Center';
-  return `${issueCount} issue${issueCount === 1 ? '' : 's'} in Command Center`;
+  if (issueCount <= 0) return 'Open Today';
+  return `${issueCount} issue${issueCount === 1 ? '' : 's'} in Today`;
 }
 
 export type OpenShiftTillIdentity = {

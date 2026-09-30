@@ -87,9 +87,6 @@ export default async function DashboardPage({
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
-          <a href="/reports/weekly-digest" className="btn-secondary justify-center text-sm">
-            Weekly Digest
-          </a>
           <RefreshIndicator fetchedAt={new Date().toISOString()} autoRefreshMs={120_000} />
         </div>
       </div>

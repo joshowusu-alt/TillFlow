@@ -3,7 +3,7 @@
  *
  * | Label | Meaning | Source | Dates | Stores | Refunds / reversals | Discounts / VAT | Pending | Missing data | Who sees it |
  * | Sales today, count, yesterday, seven dates, last 30 days | Invoice totals | salesInvoice aggregate/find, paymentStatus notIn RETURNED/VOID, sum totalPence | Half-open tenant window inside the decision range | businessId + storeId in authorised ids | Excluded by the status predicate | totalPence already includes header discount and VAT | Not a payment metric | Query failure hides the page. A successful empty sum is zero | Owner and manager when command_center allows |
- * | Money received and payment mix | Confirmed receipts | aggregateMoneyReceivedByMethod + resolveMoneyReceivedScope, absoluteBounds, branchIds = authorised ids | Same today window | branchIds array, never null | Not subtracted. A confirmed receipt on a returned sale stays in this figure | Receipt amount, not the sale total | PENDING, FAILED, CANCELLED and VOID are excluded | queryFailed throws. No zero substitute | Same |
+ * | Money received and payment mix | Confirmed receipts minus completed refunds paid back in the same window | aggregateMoneyReceivedByMethod, then SalesReturn type RETURN with refundAmountPence > 0. In-store refunds use createdAt. An online refund counts only when OnlineOrder.refundStatus is REFUNDED and refundedAt is in the window. MANUAL_REFUND_NEEDED is not deducted. A negative confirmed payment is not deducted again | Same today window for receipts and refunds | branchIds and store id in authorised ids, businessId on the store | A RETURNED sale is not deducted unless a completed refund record exists. VOID refunds are zero | Receipt amount, not the sale total | PENDING, FAILED, CANCELLED and VOID receipts are excluded. Uncompleted refunds are excluded | queryFailed throws. A refund with no method throws. No zero substitute | Same |
  * | Cash difference | Signed variance of accepted closed tills | Shift CLOSED, closedAt in today, actualCashPence >= 0, variance not null | Today, by closedAt | till.storeId in authorised ids and till.store.businessId | Not a sale | Not a sale | Not a payment | No closed till → no figure, not zero. Null variance is skipped | Same. Headline links to /reports/cash-drawer |
  * | Attention rows | Ranked conditions | Open shifts, closed-till variance, PENDING_MANUAL payments, PENDING collections, receivableDocumentBalance, payableDocumentBalance, evaluateMarginLines, inventory reorder | Open tills from before today. Cash is today. Queues and balances are current | Same store predicate | Returned and void documents have a zero balance | Balance uses invoice totalPence | Pending MoMo is an attention row and is not money received | A failed check fails the page. Unknown is not turned into zero. Cash under 500 pence stays off this list | Same. Below-cost and reorder only when that destination is allowed |
  * | Estimated gross profit | Margin when every line cost is authoritative | evaluateMarginSet / evaluateMarginLines | Today | Lines on the sales predicate | Returned and void invoices are removed by the margin evaluator | Header discount is allocated by the existing half-up helper | Not a payment metric | INCOMPLETE_COSTS hides the figure. Starter does not request it | Growth and Pro |
@@ -25,6 +25,7 @@ import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { halfOpenTimestampFilter } from '@/lib/reports/reporting-clock';
 import { REPORTING_EXCLUDED_SALE_STATUSES, ReportingScopeStoreError } from '@/lib/reports/reporting-scope';
 import { isInvalidLegacyClose } from '@/lib/reliability/invalid-preview-shift-closures';
+import { applyRefundsToMethods } from '@/lib/reports/today/money-net';
 import { creditBuckets, selectAttention, type AttentionCandidate } from '@/lib/reports/today/attention';
 import { windowInside, type TodayPlan, type TodayWindows } from '@/lib/reports/today/windows';
 
@@ -144,7 +145,7 @@ export async function loadToday(db: Db, input: TodayLoadInput): Promise<TodaySna
   }
   if (input.plan === 'STARTER' && windows.comparison) throw new TodayLoadError();
 
-  let readCount = 7;
+  let readCount = 8;
   const weekWindow = {
     ...windows.today,
     startInclusive: windows.days[0]?.window.startInclusive ?? windows.today.startInclusive,
@@ -156,6 +157,49 @@ export async function loadToday(db: Db, input: TodayLoadInput): Promise<TodaySna
       select: { totalPence: true, createdAt: true, storeId: true },
     });
     const money = aggregateMoneyReceivedByMethod(db, moneyScope(input, storeIds, windows.today));
+    const refunds = db.salesReturn.findMany({
+      where: {
+        type: 'RETURN',
+        refundAmountPence: { gt: 0 },
+        store: { businessId: input.businessId, id: { in: storeIds } },
+        OR: [
+          {
+            createdAt: halfOpenTimestampFilter(windows.today),
+            OR: [
+              { salesInvoice: { onlineOrder: { is: null } } },
+              { salesInvoice: { onlineOrder: { is: { refundStatus: null } } } },
+            ],
+          },
+          {
+            salesInvoice: {
+              businessId: input.businessId,
+              storeId: { in: storeIds },
+              onlineOrder: {
+                is: {
+                  refundStatus: 'REFUNDED',
+                  refundedAt: halfOpenTimestampFilter(windows.today),
+                },
+              },
+            },
+          },
+        ],
+      },
+      select: {
+        refundAmountPence: true,
+        refundMethod: true,
+        salesInvoice: {
+          select: {
+            payments: {
+              where: {
+                status: 'CONFIRMED',
+                receivedAt: halfOpenTimestampFilter(windows.today),
+              },
+              select: { amountPence: true },
+            },
+          },
+        },
+      },
+    });
     const last30 = windows.comparison
       ? db.salesInvoice.aggregate({
         where: salesWhere(input.businessId, storeIds, windows.comparison.last30),
@@ -270,6 +314,7 @@ export async function loadToday(db: Db, input: TodayLoadInput): Promise<TodaySna
     const [
       weekRows,
       methodRows,
+      refundRows,
       last30Row,
       previous30Row,
       closedRows,
@@ -283,6 +328,7 @@ export async function loadToday(db: Db, input: TodayLoadInput): Promise<TodaySna
     ] = await Promise.all([
       weekSales,
       money,
+      refunds,
       last30,
       previous30,
       closedShifts,
@@ -295,7 +341,17 @@ export async function loadToday(db: Db, input: TodayLoadInput): Promise<TodaySna
       lowStock,
     ]);
 
-    const methods = requireMoneyReceivedMethodRows(methodRows);
+    const receiptMethods = requireMoneyReceivedMethodRows(methodRows);
+    let methods;
+    try {
+      methods = applyRefundsToMethods(receiptMethods, refundRows.map((refund) => ({
+        refundAmountPence: refund.refundAmountPence,
+        refundMethod: refund.refundMethod,
+        confirmedAmountsPence: refund.salesInvoice.payments.map((payment) => payment.amountPence),
+      })));
+    } catch {
+      throw new TodayLoadError();
+    }
     const byDay = new Map<string, { salesPence: number; count: number }>();
     const byStore = new Map<string, number>();
     for (const row of weekRows) {

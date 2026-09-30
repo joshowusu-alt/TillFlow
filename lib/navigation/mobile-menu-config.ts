@@ -153,9 +153,9 @@ export const OWNER_BROWSE_AREAS: MobileBrowseArea[] = [
     label: 'Reports',
     description: 'Review performance and make decisions.',
     items: [
-      { href: '/reports', label: 'Reports Hub', iconKey: 'reportsHub', roles: ['OWNER'] },
-      { href: '/reports/owner', label: 'Owner Brief', iconKey: 'ownerBrief', roles: ['OWNER'], minimumPlan: 'PRO' },
-      { href: '/reports/analytics', label: 'Analytics', iconKey: 'analytics', roles: ['OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports', label: 'Today', iconKey: 'reportsHub', roles: ['OWNER'] },
+      { href: '/reports?section=activity', label: 'Activity', iconKey: 'analytics', roles: ['OWNER'] },
+      { href: '/reports?section=more', label: 'More reports', iconKey: 'reports', roles: ['OWNER'] },
     ],
   },
   {
@@ -268,7 +268,9 @@ export const MANAGER_MENU_SECTIONS: MobileBrowseArea[] = [
     id: 'reports-settings',
     label: 'Reports & account',
     items: [
-      { href: '/reports', label: 'Reports Hub', iconKey: 'reportsHub', roles: ['MANAGER'] },
+      { href: '/reports', label: 'Today', iconKey: 'reportsHub', roles: ['MANAGER'] },
+      { href: '/reports?section=activity', label: 'Activity', iconKey: 'analytics', roles: ['MANAGER'] },
+      { href: '/reports?section=more', label: 'More reports', iconKey: 'reports', roles: ['MANAGER'] },
       { href: '/settings', label: 'Business settings', iconKey: 'settings', roles: ['MANAGER'] },
       { href: '/account', label: 'My Account', iconKey: 'account', roles: ['MANAGER'] },
     ],

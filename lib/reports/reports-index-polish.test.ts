@@ -19,24 +19,16 @@ describe('Reports Today shell', () => {
     expect(src).toContain("surfaceId: 'command_center'");
   });
 
-  it('keeps Reports in the existing header menu', () => {
+  it('keeps Reports in the header as Today, Activity and More reports', () => {
     const reports = NAV_GROUPS.find((group) => group.id === 'reports');
-    const main = REPORT_NAV_SECTIONS.find((section) => section.id === 'main');
-
-    expect(reports).toBeDefined();
-    expect(main?.items[0]).toEqual(expect.objectContaining({
-      href: '/reports',
-      label: 'Reports Hub',
-      roles: ['MANAGER', 'OWNER'],
-      iconKey: 'reportsHub',
-    }));
-    expect(main?.items[1]).toEqual(expect.objectContaining({ href: '/reports/command-center', label: 'Command Center' }));
-    expect(reports!.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ href: '/reports', label: 'Reports Hub' }),
-      expect.objectContaining({ href: '/reports/dashboard', label: 'Trading Report' }),
-      expect.objectContaining({ href: '/reports/weekly-digest', label: 'Weekly Digest' }),
-      expect.objectContaining({ href: '/reports/exports', label: 'Exports' }),
-    ]));
+    expect(reports?.items.map((item) => item.label)).toEqual(['Today', 'Activity', 'More reports']);
+    expect(reports?.items.map((item) => item.href)).toEqual([
+      '/reports',
+      '/reports?section=activity',
+      '/reports?section=more',
+    ]);
+    const labels = REPORT_NAV_SECTIONS.flatMap((section) => section.items.map((item) => item.label));
+    expect(labels).toEqual(['Today', 'Activity', 'More reports']);
   });
 
   it('lists existing Activity and More destinations and withholds unfinished statements', () => {

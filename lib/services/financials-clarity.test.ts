@@ -29,16 +29,17 @@ describe('Financial Reports clarity', () => {
     expect(cashflowSrc).not.toContain('"Net Cash from Ops"');
   });
 
-  it('4. Contains a plain-English cash movement subtitle', () => {
-    expect(cashflowSrc).toContain('money moved in and out of the business');
+  it('4. States the cash-flow limitation and shows no cash-change total', () => {
+    expect(cashflowSrc).toContain('not on the reliable list');
+    expect(cashflowSrc).not.toContain('getCashflow(');
   });
 
-  it('5. Contains explanation that cashflow is not the same as profit', () => {
-    expect(cashflowSrc).toContain('Cashflow is not the same as profit');
+  it('5. Does not present ending cash as a complete change', () => {
+    expect(cashflowSrc).toContain('ending cash will not match cash plus bank');
   });
 
-  it('6. Contains explanation that credit sales may affect profit before cash is collected', () => {
-    expect(cashflowSrc).toContain('Credit sales may increase profit before the cash is collected');
+  it('6. Keeps the statement off the figure grid', () => {
+    expect(cashflowSrc).toContain('No cash-change total is shown');
   });
 
   it('7. Does not contain raw "Change in Accounts Receivable" label', () => {
@@ -49,9 +50,9 @@ describe('Financial Reports clarity', () => {
     expect(cashflowSrc).not.toContain('Change in Accounts Payable');
   });
 
-  it('9. Contains friendly AR/AP row alternatives', () => {
-    expect(cashflowSrc).toContain('Customer credit not yet collected');
-    expect(cashflowSrc).toContain('Supplier bills not yet paid');
+  it('9. Does not render the old cash-flow rows', () => {
+    expect(cashflowSrc).not.toContain('Customer credit not yet collected');
+    expect(cashflowSrc).not.toContain('Supplier bills not yet paid');
   });
 
   // Income Statement page
@@ -129,26 +130,26 @@ describe('Financial Reports clarity', () => {
     expect(balanceSrc).toContain('export default async function BalanceSheetPage');
   });
 
-  it('26. Existing blue note remains present', () => {
-    expect(balanceSrc).toContain('Balance Sheet is an as-of-date financial position report');
-    expect(balanceSrc).toContain('Equity includes cumulative net profit to date');
+  it('26. Says the balance sheet is withheld', () => {
+    expect(balanceSrc).toContain('This statement is withheld');
+    expect(balanceSrc).toContain('No figures are shown');
   });
 
-  it('27. Contains "Money customers owe you" near Accounts Receivable', () => {
-    expect(balanceSrc).toContain('Money customers owe you');
+  it('27. Does not show receivable figures', () => {
+    expect(balanceSrc).not.toContain('Money customers owe you');
+    expect(balanceSrc).not.toContain('getBalanceSheet');
   });
 
-  it('28. Contains "Value of stock on hand, not cash" near Inventory', () => {
-    expect(balanceSrc).toContain('Value of stock on hand, not cash');
+  it('28. Does not show an inventory plug', () => {
+    expect(balanceSrc).not.toContain('Value of stock on hand, not cash');
   });
 
-  it('29. Contains "Money you owe suppliers" near Accounts Payable', () => {
-    expect(balanceSrc).toContain('Money you owe suppliers');
+  it('29. Does not show payable figures', () => {
+    expect(balanceSrc).not.toContain('Money you owe suppliers');
   });
 
-  it('30. BalanceSheetDatePicker import and control remain unchanged', () => {
-    expect(balanceSrc).toContain("import BalanceSheetDatePicker from './BalanceSheetDatePicker'");
-    expect(balanceSrc).toContain('<BalanceSheetDatePicker');
+  it('30. Does not render the old date picker', () => {
+    expect(balanceSrc).not.toContain('BalanceSheetDatePicker');
   });
 
   // Cashflow Forecast page
@@ -161,18 +162,17 @@ describe('Financial Reports clarity', () => {
     expect(forecastSrc).not.toContain('AR, AP');
   });
 
-  it('33. Subtitle contains plain-English alternatives', () => {
-    expect(forecastSrc).toContain('money owed to you');
-    expect(forecastSrc).toContain('money you owe');
+  it('33. Says the estimate is withheld', () => {
+    expect(forecastSrc).toContain('This estimate is withheld');
+    expect(forecastSrc).toContain('No values are shown');
   });
 
-  it('34. "How this forecast works" methodology note remains present', () => {
-    expect(forecastSrc).toContain('How this forecast works');
+  it('34. Does not explain a live forecast method', () => {
+    expect(forecastSrc).not.toContain('How this forecast works');
   });
 
-  it('35. Forecast day controls remain present', () => {
-    expect(forecastSrc).toContain('days=${d}');
-    expect(forecastSrc).toContain('[7, 14, 30]');
+  it('35. Does not render forecast day controls', () => {
+    expect(forecastSrc).not.toContain('[7, 14, 30]');
   });
 
   // Safety: plan gates unchanged
@@ -187,30 +187,30 @@ describe('Financial Reports clarity', () => {
 
   // Safety: service import paths unchanged
 
-  it('37. Service import paths remain unchanged', () => {
-    expect(cashflowSrc).toContain("from '@/lib/reports/financials'");
+  it('37. Withheld pages do not import the figure services', () => {
+    expect(cashflowSrc).not.toContain("from '@/lib/reports/financials'");
     expect(incomeSrc).toContain("from '@/lib/reports/financials'");
-    expect(balanceSrc).toContain("from '@/lib/reports/financials'");
+    expect(balanceSrc).not.toContain("from '@/lib/reports/financials'");
     expect(marginsSrc).toContain("from '@/lib/reports/margin-analysis'");
-    expect(forecastSrc).toContain("from '@/lib/reports/forecast'");
+    expect(forecastSrc).not.toContain("from '@/lib/reports/forecast'");
   });
 
   // Safety: date filters remain present
 
-  it('38. Date filter controls remain present', () => {
-    expect(cashflowSrc).toContain('DateRangeFilterCard');
+  it('38. Date filters remain on the reports that still show figures', () => {
+    expect(cashflowSrc).not.toContain('DateRangeFilterCard');
     expect(incomeSrc).toContain('DateRangeFilterCard');
-    expect(balanceSrc).toContain('BalanceSheetDatePicker');
+    expect(balanceSrc).not.toContain('BalanceSheetDatePicker');
     expect(marginsSrc).toContain("name=\"period\"");
-    expect(forecastSrc).toContain('[7, 14, 30]');
+    expect(forecastSrc).not.toContain('[7, 14, 30]');
   });
 
   // Safety: export links remain present
 
-  it('39. Export links remain present where they existed', () => {
-    expect(cashflowSrc).toContain('Export CSV');
+  it('39. Export links remain on statements that still show figures', () => {
+    expect(cashflowSrc).not.toContain('Export CSV');
     expect(incomeSrc).toContain('Export CSV');
-    expect(balanceSrc).toContain('Export CSV');
+    expect(balanceSrc).not.toContain('Export CSV');
     expect(marginsSrc).toContain('Excel');
     expect(marginsSrc).toContain('Print / PDF');
   });

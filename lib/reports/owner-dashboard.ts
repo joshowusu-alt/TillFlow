@@ -801,8 +801,8 @@ async function _getOwnerDashboardSnapshot(
 			title: 'Cash pressure in the next 14 days',
 			whyItMatters: 'Projected cash drops below zero soon, so collections or supplier timing must be managed before it turns urgent.',
 			severity: 'critical',
-			ctaLabel: 'Open cash forecast',
-			href: '/reports/cashflow-forecast',
+			ctaLabel: 'Open Today',
+			href: '/reports',
 		});
 	}
 

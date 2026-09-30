@@ -209,7 +209,7 @@ describe('MoMo confirmation review — surface wiring', () => {
       join(root, 'app/(protected)/reports/money-received/page.tsx'),
       'utf8',
     );
-    const nav = readFileSync(join(root, 'lib/navigation-config.ts'), 'utf8');
+    const nav = readFileSync(join(root, 'lib/reports/today/stage3a-nav.ts'), 'utf8');
 
     expect(page).toContain('MoMo Confirmation Review');
     expect(page).toContain("surfaceId: 'momo_confirmation'");

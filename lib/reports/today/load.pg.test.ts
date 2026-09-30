@@ -24,6 +24,8 @@ describePg('Today live scope (Postgres)', () => {
   let storeB = '';
   let otherStoreId = '';
   let lineId = '';
+  let tillAId = '';
+  let cashierId = '';
 
   beforeAll(async () => {
     ({ prisma } = await openTestPrismaClient({
@@ -52,6 +54,8 @@ describePg('Today live scope (Postgres)', () => {
       data: { businessId: otherBusinessId, email: `o-${suffix}@example.com`, name: 'Other', role: 'OWNER', passwordHash: 'x' },
     });
     const tillA = await prisma.till.create({ data: { storeId: storeA, name: `Front ${suffix}` } });
+    tillAId = tillA.id;
+    cashierId = cashier.id;
     const tillB = await prisma.till.create({ data: { storeId: storeB, name: `Tema till ${suffix}` } });
     const tillF = await prisma.till.create({ data: { storeId: otherStoreId, name: `Foreign till ${suffix}` } });
     const unit = await prisma.unit.create({ data: { name: `Each ${suffix}`, pluralName: 'Each' } });
@@ -114,7 +118,15 @@ describePg('Today live scope (Postgres)', () => {
       data: { salesInvoiceId: returned.id, method: 'CASH', amountPence: 800, receivedAt: now, status: 'CONFIRMED', receiptOrigin: 'RECEIVED_AT_SALE' },
     });
     await prisma.salesReturn.create({
-      data: { salesInvoiceId: returned.id, storeId: storeA, userId: cashier.id, type: 'FULL', refundAmountPence: 800 },
+      data: {
+        salesInvoiceId: returned.id,
+        storeId: storeA,
+        userId: cashier.id,
+        type: 'RETURN',
+        refundMethod: 'CASH',
+        refundAmountPence: 800,
+        createdAt: now,
+      },
     });
     await prisma.salesInvoice.create({
       data: {
@@ -218,6 +230,7 @@ describePg('Today live scope (Postgres)', () => {
     await runTestTeardown(prisma, [
       () => prisma.salesPayment.deleteMany({ where: { salesInvoice: { businessId: { in: [businessId, otherBusinessId] } } } }),
       () => prisma.salesReturn.deleteMany({ where: { storeId: { in: [storeA, storeB, otherStoreId] } } }),
+      () => prisma.onlineOrder.deleteMany({ where: { businessId: { in: [businessId, otherBusinessId] } } }),
       () => prisma.salesInvoiceLine.deleteMany({ where: { salesInvoice: { businessId: { in: [businessId, otherBusinessId] } } } }),
       () => prisma.salesInvoice.deleteMany({ where: { businessId: { in: [businessId, otherBusinessId] } } }),
       () => prisma.shift.deleteMany({ where: { till: { storeId: { in: [storeA, storeB, otherStoreId] } } } }),
@@ -272,7 +285,7 @@ describePg('Today live scope (Postgres)', () => {
 
     expect(snapshot.salesTodayPence).toBe(1500);
     expect(snapshot.salesCount).toBe(1);
-    expect(snapshot.moneyReceivedPence).toBe(2300);
+    expect(snapshot.moneyReceivedPence).toBe(1500);
     expect(snapshot.methods.map((row) => row.method)).toEqual(['CASH']);
     expect(snapshot.cashDifferencePence).toBe(-900);
     expect(snapshot.comparison).toBeNull();
@@ -293,6 +306,172 @@ describePg('Today live scope (Postgres)', () => {
     expect(evidence).toContain('2026-08-08');
     expect(evidence).not.toContain(otherBusinessId);
     expect(evidence).not.toContain(storeB);
+  });
+
+  it('nets only completed in-window refunds and does not query an empty store list', async () => {
+    const returnedOnly = await prisma.salesInvoice.create({
+      data: {
+        businessId,
+        storeId: storeA,
+        tillId: tillAId,
+        cashierUserId: cashierId,
+        paymentStatus: 'RETURNED',
+        subtotalPence: 300,
+        vatPence: 0,
+        totalPence: 300,
+        createdAt: now,
+        payments: {
+          create: [
+            { method: 'CASH', amountPence: 300, receivedAt: now, status: 'CONFIRMED', receiptOrigin: 'RECEIVED_AT_SALE' },
+            { method: 'CASH', amountPence: 999, receivedAt: now, status: 'FAILED', receiptOrigin: 'RECEIVED_AT_SALE' },
+            { method: 'CASH', amountPence: 888, receivedAt: now, status: 'CANCELLED', receiptOrigin: 'RECEIVED_AT_SALE' },
+            { method: 'CASH', amountPence: 777, receivedAt: now, status: 'VOID', receiptOrigin: 'RECEIVED_AT_SALE' },
+          ],
+        },
+      },
+    });
+    const pendingOnline = await prisma.salesInvoice.create({
+      data: {
+        businessId,
+        storeId: storeA,
+        tillId: tillAId,
+        cashierUserId: cashierId,
+        paymentStatus: 'RETURNED',
+        subtotalPence: 200,
+        vatPence: 0,
+        totalPence: 200,
+        createdAt: now,
+        payments: {
+          create: { method: 'MOBILE_MONEY', amountPence: 200, receivedAt: now, status: 'CONFIRMED', receiptOrigin: 'RECEIVED_AT_SALE' },
+        },
+      },
+    });
+    await prisma.salesReturn.create({
+      data: {
+        salesInvoiceId: pendingOnline.id,
+        storeId: storeA,
+        userId: cashierId,
+        type: 'RETURN',
+        refundMethod: 'MOBILE_MONEY',
+        refundAmountPence: 200,
+        createdAt: now,
+      },
+    });
+    await prisma.onlineOrder.create({
+      data: {
+        businessId,
+        storeId: storeA,
+        salesInvoiceId: pendingOnline.id,
+        publicToken: `token-${suffix}`,
+        orderNumber: `QA-${suffix}`,
+        customerName: 'QA Customer',
+        customerPhone: '0200000000',
+        subtotalPence: 200,
+        totalPence: 200,
+        refundStatus: 'MANUAL_REFUND_NEEDED',
+      },
+    });
+    const outside = await prisma.salesInvoice.create({
+      data: {
+        businessId,
+        storeId: storeA,
+        tillId: tillAId,
+        cashierUserId: cashierId,
+        paymentStatus: 'RETURNED',
+        subtotalPence: 150,
+        vatPence: 0,
+        totalPence: 150,
+        createdAt: now,
+        payments: {
+          create: { method: 'CASH', amountPence: 150, receivedAt: now, status: 'CONFIRMED', receiptOrigin: 'RECEIVED_AT_SALE' },
+        },
+      },
+    });
+    await prisma.salesReturn.create({
+      data: {
+        salesInvoiceId: outside.id,
+        storeId: storeA,
+        userId: cashierId,
+        type: 'RETURN',
+        refundMethod: 'CASH',
+        refundAmountPence: 150,
+        createdAt: new Date('2026-08-06T10:00:00.000Z'),
+      },
+    });
+    const reversed = await prisma.salesInvoice.create({
+      data: {
+        businessId,
+        storeId: storeA,
+        tillId: tillAId,
+        cashierUserId: cashierId,
+        paymentStatus: 'RETURNED',
+        subtotalPence: 400,
+        vatPence: 0,
+        totalPence: 400,
+        createdAt: now,
+        payments: {
+          create: [
+            { method: 'CASH', amountPence: 400, receivedAt: now, status: 'CONFIRMED', receiptOrigin: 'RECEIVED_AT_SALE' },
+            { method: 'CASH', amountPence: -400, receivedAt: now, status: 'CONFIRMED', receiptOrigin: 'RECEIVED_AT_SALE' },
+          ],
+        },
+      },
+    });
+    await prisma.salesReturn.create({
+      data: {
+        salesInvoiceId: reversed.id,
+        storeId: storeA,
+        userId: cashierId,
+        type: 'RETURN',
+        refundMethod: 'CASH',
+        refundAmountPence: 400,
+        createdAt: now,
+      },
+    });
+    const otherStoreRefund = await prisma.salesInvoice.create({
+      data: {
+        businessId,
+        storeId: storeB,
+        tillId: (await prisma.till.findFirstOrThrow({ where: { storeId: storeB } })).id,
+        cashierUserId: cashierId,
+        paymentStatus: 'RETURNED',
+        subtotalPence: 5000,
+        vatPence: 0,
+        totalPence: 5000,
+        createdAt: now,
+        payments: {
+          create: { method: 'CASH', amountPence: 5000, receivedAt: now, status: 'CONFIRMED', receiptOrigin: 'RECEIVED_AT_SALE' },
+        },
+      },
+    });
+    await prisma.salesReturn.create({
+      data: {
+        salesInvoiceId: otherStoreRefund.id,
+        storeId: storeB,
+        userId: cashierId,
+        type: 'RETURN',
+        refundMethod: 'CASH',
+        refundAmountPence: 5000,
+        createdAt: now,
+      },
+    });
+    await prisma.salesPayment.create({
+      data: {
+        salesInvoiceId: returnedOnly.id,
+        method: 'CASH',
+        amountPence: 12345,
+        receivedAt: new Date('2026-08-08T00:00:00.000Z'),
+        status: 'CONFIRMED',
+        receiptOrigin: 'RECEIVED_AT_SALE',
+      },
+    });
+
+    const snapshot = await loadToday(prisma, loadInput('STARTER', false));
+    expect(snapshot.moneyReceivedPence).toBe(2150);
+
+    queries.length = 0;
+    await expect(loadToday(prisma, { ...loadInput('STARTER', false), storeIds: [] })).rejects.toThrow(/store scope/i);
+    expect(queries).toHaveLength(0);
   });
 
   it('hides profit while a cost is missing and shows a below-cost row only when the cost is recorded', async () => {

@@ -94,7 +94,7 @@ export default async function WeeklyDigestPage({
             >
               Export CSV
             </DownloadLink>
-            <a href="/reports/command-center" className="btn-secondary min-w-[calc(50%-0.25rem)] flex-1 justify-center text-sm sm:min-w-0 sm:flex-none">Command Center</a>
+            <a href="/reports" className="btn-secondary min-w-[calc(50%-0.25rem)] flex-1 justify-center text-sm sm:min-w-0 sm:flex-none">Back to Today</a>
           </div>
         }
       />

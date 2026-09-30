@@ -82,3 +82,51 @@ export function stage3aLinks(section: Stage3aSection, allowedHrefs: ReadonlySet<
   const source = section === 'activity' ? ACTIVITY_LINKS : MORE_LINKS;
   return source.filter((link) => allowedHrefs.has(link.href) && !WITHHELD.has(link.href));
 }
+
+export type ReportReturnPath = {
+  href: string;
+  section: 'activity' | 'more';
+  title: string;
+  backLabel: 'Back to Activity' | 'Back to More reports';
+};
+
+const WITHHELD_TITLES: Record<(typeof STAGE_3A_WITHHELD_HREFS)[number], string> = {
+  '/reports/balance-sheet': 'Balance sheet',
+  '/reports/cashflow': 'Cash-flow statement',
+  '/reports/cashflow-forecast': 'Cash-flow forecast',
+  '/reports/weekly-digest': 'Weekly digest',
+};
+
+/** Every Activity and More destination, used to prove a return path exists. */
+export function reportReturnPaths(): ReportReturnPath[] {
+  return [...ACTIVITY_LINKS, ...MORE_LINKS].map((link) => ({
+    href: link.href,
+    section: ACTIVITY_LINKS.some((item) => item.href === link.href) ? 'activity' : 'more',
+    title: link.label,
+    backLabel: ACTIVITY_LINKS.some((item) => item.href === link.href) ? 'Back to Activity' : 'Back to More reports',
+  }));
+}
+
+export function returnPathFor(pathname: string): ReportReturnPath | { withheld: true; title: string; href: string } | null {
+  const listed = reportReturnPaths().find((path) => path.href === pathname);
+  if (listed) return listed;
+  if (pathname in WITHHELD_TITLES) {
+    const href = pathname as keyof typeof WITHHELD_TITLES;
+    return { withheld: true, title: WITHHELD_TITLES[href], href };
+  }
+  return null;
+}
+
+/**
+ * A return link may carry one owned store id. ALL, duplicates, blanks and
+ * foreign ids are dropped so the destination resolves its own scope.
+ */
+export function safeReturnStoreId(search: string, ownedStoreIds: readonly string[]): string | null {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  const values = params.getAll('storeId').map((value) => value.trim()).filter((value) => value.length > 0);
+  if (values.length !== 1) return null;
+  const id = values[0];
+  if (id === 'ALL') return null;
+  const matches = ownedStoreIds.filter((owned) => owned === id);
+  return matches.length === 1 ? id : null;
+}
