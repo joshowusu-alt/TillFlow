@@ -1,5 +1,6 @@
 'use client';
 
+import { useLayoutEffect, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { ReportsReturnPath } from '@/components/reports/ReportsContextNav';
 import { chromeStoreId, returnPathFor } from '@/lib/reports/today/stage3a-nav';
@@ -13,12 +14,26 @@ import { chromeStoreId, returnPathFor } from '@/lib/reports/today/stage3a-nav';
 export function ReportsContextNavClient({ ownedStoreIds }: { ownedStoreIds: readonly string[] }) {
   const pathname = usePathname() || '';
   const search = useSearchParams();
+  const query = search?.toString() ?? '';
+  const frame = useRef<HTMLDivElement>(null);
   const path = returnPathFor(pathname);
+  useLayoutEffect(() => {
+    const nav = frame.current?.querySelector('nav');
+    if (!nav) return;
+    const header = document.querySelector('header');
+    const limit = header?.getBoundingClientRect().bottom ?? 0;
+    const top = nav.getBoundingClientRect().top;
+    if (top < limit - 1) window.scrollBy(0, top - limit - 4);
+  }, [pathname, query]);
   if (!path) return null;
   const storeId = chromeStoreId(
     'withheld' in path ? { href: path.href, withheld: true } : { href: path.href },
-    search?.toString() ?? '',
+    query,
     ownedStoreIds,
   );
-  return <ReportsReturnPath path={path} storeId={storeId} />;
+  return (
+    <div ref={frame} style={{ overflowAnchor: 'none' }}>
+      <ReportsReturnPath path={path} storeId={storeId} />
+    </div>
+  );
 }
