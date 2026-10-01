@@ -65,7 +65,9 @@ describe('Today screen', () => {
     expect(markup).toContain('GH₵1,200.00');
     expect(markup).toContain('−GH₵4.00');
     expect(markup).toContain('More reports');
-    expect(markup).toContain('>More<');
+    expect(markup).toContain('100%');
+    expect(markup).toContain('aria-label="More reports"');
+    expect(markup).toContain('aria-hidden="true">More<');
     expect(markup).toContain('Review cash');
     expect(markup).toContain('/reports/cash-drawer?from=2026-09-30');
     expect(markup).not.toContain('<details open');
@@ -138,6 +140,40 @@ describe('Today screen', () => {
     });
     expect(omitted).not.toContain('some product costs are missing');
     expect(omitted).not.toContain('data-profit-state="incomplete"');
+  });
+
+  it('omits a payment percentage unless the share is a meaningful positive number', () => {
+    const mixed = html({
+      snapshot: snapshot({
+        methods: [
+          { method: 'CASH', label: 'Cash', amountPence: 8_000 },
+          { method: 'MOMO', label: 'MoMo', amountPence: 2_000 },
+          { method: 'CARD', label: 'Card', amountPence: 0 },
+          { method: 'BANK', label: 'Bank', amountPence: -500 },
+        ],
+      }),
+    });
+    const methods = mixed.slice(mixed.indexOf('Payment methods'));
+    expect(methods).toContain('84%');
+    expect(methods).toContain('21%');
+    expect(methods).not.toContain('· 0%');
+    expect(methods).not.toContain('NaN');
+    expect(methods).not.toContain('Infinity');
+    expect(methods).toContain('>Card</span>');
+    expect(methods).not.toContain('Card</span><span class="text-right"><span data-financial-amount="financial-amount" data-testid="financial-amount" class="financial-amount financial-amount--compact">GH₵0.00</span> ·');
+
+    const zero = html({ snapshot: snapshot({ methods: [{ method: 'CASH', label: 'Cash', amountPence: 0 }] }) });
+    expect(zero.slice(zero.indexOf('Payment methods'))).not.toContain('%');
+
+    const negative = html({
+      snapshot: snapshot({
+        methods: [
+          { method: 'CASH', label: 'Cash', amountPence: 100 },
+          { method: 'MOMO', label: 'MoMo', amountPence: -500 },
+        ],
+      }),
+    });
+    expect(negative.slice(negative.indexOf('Payment methods'))).not.toContain('%');
   });
 
   it('uses the desktop and mobile labels on the activity landing', () => {

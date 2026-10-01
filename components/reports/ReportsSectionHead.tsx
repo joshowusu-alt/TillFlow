@@ -73,13 +73,14 @@ export default function ReportsSectionHead({
                 <Link
                   href={sectionHref(item.id, storeId)}
                   aria-current={current ? 'page' : undefined}
+                  aria-label={item.id === 'more' ? 'More reports' : undefined}
                   className={`inline-flex min-h-11 items-center justify-center rounded-lg px-3 text-sm font-semibold ${FOCUS} ${
                     current ? 'bg-white text-ink shadow-sm' : 'text-muted hover:bg-white/70 hover:text-ink'
                   }`}
                 >
                   {item.id === 'more' ? (
                     <>
-                      <span className="sm:hidden">More</span>
+                      <span className="sm:hidden" aria-hidden="true">More</span>
                       <span className="hidden sm:inline">More reports</span>
                     </>
                   ) : (

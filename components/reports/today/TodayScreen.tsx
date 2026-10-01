@@ -19,6 +19,7 @@ import {
   type Stage3aSection,
 } from '@/lib/reports/today/stage3a-nav';
 import RefreshToday from '@/components/reports/today/RefreshToday';
+import { paymentMethodSharePercent } from '@/lib/reports/today/method-share';
 
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
@@ -395,13 +396,14 @@ function Methods({ snapshot, currency }: { snapshot: TodaySnapshot; currency: st
       ) : (
         <ul className="mt-3 space-y-2">
           {snapshot.methods.map((row) => {
-            const share = total > 0 ? Math.round((row.amountPence / total) * 100) : 0;
+            const share = paymentMethodSharePercent(row.amountPence, total);
             return (
               <li key={row.method} className="min-w-0 text-sm">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-ink">{row.label}</span>
                   <span className="text-right">
-                    <FinancialAmount pence={row.amountPence} currency={currency} variant="compact" /> · {share}%
+                    <FinancialAmount pence={row.amountPence} currency={currency} variant="compact" />
+                    {share == null ? null : ` · ${share}%`}
                   </span>
                 </div>
               </li>

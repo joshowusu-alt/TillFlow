@@ -1,5 +1,31 @@
 import { test, expect } from '@playwright/test';
 
+for (const width of [320, 390] as const) {
+  test(`More reports accessible name at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/reviews/reports-today-layout?fixture=medium');
+    const more = page.getByRole('link', { name: 'More reports' });
+    await expect(more).toBeVisible();
+    const accessible = await more.evaluate((element) => {
+      const node = element as HTMLElement;
+      return {
+        name: node.getAttribute('aria-label'),
+        visible: node.innerText.replace(/\s+/g, ' ').trim(),
+      };
+    });
+    expect(accessible.name).toBe('More reports');
+    expect(accessible.visible).toBe('More');
+  });
+}
+
+test('More reports is the visible desktop label', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/reviews/reports-today-layout?fixture=medium');
+  const more = page.getByRole('link', { name: 'More reports' });
+  await expect(more).toBeVisible();
+  await expect(more).toHaveText('More reports', { useInnerText: true });
+});
+
 const FIXTURES = ['zero', 'medium', 'large', 'negative-large'] as const;
 const WIDTHS = [320, 390, 1180, 1440] as const;
 
