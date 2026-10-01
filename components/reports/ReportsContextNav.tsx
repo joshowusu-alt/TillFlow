@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { ReportReturnPath } from '@/lib/reports/today/stage3a-nav';
+import { destinationOmitsStoreId, type ReportReturnPath } from '@/lib/reports/today/stage3a-nav';
 
 const FOCUS = 'rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
 
@@ -26,7 +26,8 @@ export function ReportsReturnPath({
   path: ReportReturnPath | { withheld: true; title: string };
   storeId: string | null;
 }) {
-  const todayHref = withStore('/reports', storeId);
+  const scopedStoreId = !('withheld' in path) && destinationOmitsStoreId(path.href) ? null : storeId;
+  const todayHref = withStore('/reports', scopedStoreId);
   if ('withheld' in path) {
     return (
       <nav aria-label="Reports location" className="mb-4 min-w-0">
@@ -42,7 +43,7 @@ export function ReportsReturnPath({
     );
   }
 
-  const sectionHref = withStore(`/reports?section=${path.section}`, storeId);
+  const sectionHref = withStore(`/reports?section=${path.section}`, scopedStoreId);
   const sectionLabel = path.section === 'activity' ? 'Activity' : 'More reports';
   return (
     <nav aria-label="Reports location" className="mb-4 min-w-0">

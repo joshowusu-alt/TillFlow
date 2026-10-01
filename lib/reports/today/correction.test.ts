@@ -107,8 +107,12 @@ describe('Stage 3A navigation correction', () => {
     expect(head).not.toContain('Back to Activity');
     const layout = readFileSync(join(root, 'app/(protected)/reports/layout.tsx'), 'utf8');
     const context = readFileSync(join(root, 'lib/reports/today/context-nav.tsx'), 'utf8');
+    const client = readFileSync(join(root, 'lib/reports/today/context-nav-client.tsx'), 'utf8');
     expect(layout).toContain('ReportsContextNav');
-    expect(context).toContain('<ReportsReturnPath');
+    expect(context).toContain('ReportsContextNavClient');
+    expect(context).not.toContain('x-pathname');
+    expect(client).toContain('usePathname');
+    expect(client).toContain('<ReportsReturnPath');
     const income = readFileSync(join(root, 'app/(protected)/reports/income-statement/page.tsx'), 'utf8');
     const digest = readFileSync(join(root, 'app/(protected)/reports/weekly-digest/page.tsx'), 'utf8');
     expect(income).not.toContain('Back to More reports');

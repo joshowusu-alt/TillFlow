@@ -211,6 +211,25 @@ const NO_STORE_SCOPE = new Set([
   '/settings/online-store/analytics',
 ]);
 
+/** Whole-business and other routes whose existing scope gate rejects a branch id. */
+export function destinationOmitsStoreId(href: string): boolean {
+  return NO_STORE_SCOPE.has(href);
+}
+
+/**
+ * Branch id for the shared return chrome. Whole-business destinations omit it
+ * even when the address bar still carries one. Withheld direct routes keep an
+ * owned id so Back to Today can return to the same branch.
+ */
+export function chromeStoreId(
+  path: { href: string; withheld?: true },
+  search: string,
+  ownedStoreIds: readonly string[],
+): string | null {
+  if (!path.withheld && destinationOmitsStoreId(path.href)) return null;
+  return safeReturnStoreId(search, ownedStoreIds);
+}
+
 export function withStoreScope(href: string, storeId: string | null): string {
   if (!storeId) return href;
   const url = new URL(href, 'https://tillflow.local');
