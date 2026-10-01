@@ -260,7 +260,6 @@ export default async function CommandCenterPage({
   /* ── Deeper analysis links ──────────────────────────────────────── */
   const deeperLinks: DeeperLink[] = [
     { label: 'Trading Report', desc: 'Sales, debtors, and stock pressure for any date range', href: '/reports/dashboard' },
-    { label: 'Weekly Digest', desc: 'Owner-friendly weekly sales, receipts, and control summary', href: '/reports/weekly-digest' },
   ];
 
   if (features.advancedReports) {
@@ -271,14 +270,12 @@ export default async function CommandCenterPage({
       { label: 'Reorder Queue', desc: 'Stock replenishment priorities ranked by urgency', href: '/reports/reorder-suggestions', plan: 'GROWTH' },
       { label: 'Sales by Linked Supplier', desc: 'Revenue and volume for products linked to each supplier', href: '/reports/sales-by-supplier', plan: 'GROWTH' },
       { label: 'Income Statement', desc: 'Revenue minus costs for any period', href: '/reports/income-statement', plan: 'GROWTH' },
-      { label: 'Cash Flow', desc: 'Cash movements and payment method split', href: '/reports/cashflow', plan: 'GROWTH' },
     );
   }
 
   if (features.ownerIntelligence) {
     deeperLinks.push(
       { label: 'Owner Brief', desc: 'Executive brief — health score, leakage watch, activity', href: '/reports/owner', plan: 'PRO' },
-      { label: 'Cash Flow Forecast', desc: '14-day money pulse and low-balance alerts', href: '/reports/cashflow-forecast', plan: 'PRO' },
     );
   }
 

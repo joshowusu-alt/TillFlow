@@ -85,7 +85,7 @@ export function calculateHealthScore(inputs: HealthScoreInputs): HealthScoreResu
       : 'No expense data — cash position estimated',
   });
   if (cashScore < 14) {
-    actions.push({ label: 'Review cashflow forecast', href: '/reports/cashflow-forecast' });
+    actions.push({ label: 'Open Today', href: '/reports' });
   }
 
   // 3. Receivables Quality: % of AR that is current (not 90+ days)

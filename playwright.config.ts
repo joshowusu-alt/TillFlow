@@ -210,6 +210,15 @@ export default defineConfig({
       },
     },
     {
+      name: 'reports-money-layout-chromium',
+      testMatch: /reports-(money-layout|today-layout)\.spec\.ts/,
+      retries: 0,
+      timeout: 60_000,
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+    },
+    {
       name: 'reliability-till3-accounting',
       testDir: './playwright',
       testMatch: /reliability-till3-accounting\.spec\.ts/,

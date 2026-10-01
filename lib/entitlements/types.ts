@@ -1,5 +1,6 @@
 import type { BillingAccessState } from '@/lib/subscription-lifecycle';
 import type { BusinessPlan } from '@/lib/features';
+import { CONSOLIDATED_LABEL } from '@/lib/reports/scope-labels';
 
 /**
  * Wave B-Core Stage 1 types.
@@ -236,7 +237,7 @@ export type BusinessCapabilityInput = {
 };
 
 export const WHOLE_BUSINESS_LABEL = 'Whole business — not separated by branch';
-export const CONSOLIDATED_LABEL = 'Consolidated — all branches';
+export { CONSOLIDATED_LABEL };
 export const STOREFRONT_LABEL = 'Online storefront';
 
 export type ResolvedScope =

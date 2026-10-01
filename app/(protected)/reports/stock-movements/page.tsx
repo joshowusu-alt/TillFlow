@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
@@ -209,7 +210,7 @@ export default async function StockMovementsPage({
             <div>
               <label className="label">Report branch filter</label>
               <select className="input" name="storeId" defaultValue={selectedStoreId}>
-                {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
+                {opened.branch.offerAll ? <option value="ALL">{CONSOLIDATED_LABEL}</option> : null}
                 {stores.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}

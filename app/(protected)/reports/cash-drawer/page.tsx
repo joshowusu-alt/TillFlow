@@ -1,4 +1,5 @@
 import DownloadLink from '@/components/DownloadLink';
+import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import Pagination from '@/components/Pagination';
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
@@ -221,7 +222,7 @@ export default async function CashDrawerReportPage({
         <div>
           <label className="label">Report branch filter</label>
           <select className="input" name="storeId" defaultValue={selectedStoreId}>
-            {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
+            {opened.branch.offerAll ? <option value="ALL">{CONSOLIDATED_LABEL}</option> : null}
             {stores.map((store) => (
               <option key={store.id} value={store.id}>
                 {store.name}

@@ -75,6 +75,33 @@ export function isOperationalRoute(pathname: string | null | undefined): boolean
   );
 }
 
+const REPORT_SWITCH_KEYS = ['from', 'to', 'period', 'preset', 'currentFrom', 'currentTo'] as const;
+
+/**
+ * After a branch switch, a report URL must not keep the previous store id.
+ * The visible header and the next query both use the branch just chosen.
+ * Other routes keep the previous rule: operational pages carry storeId, the rest drop the query.
+ */
+export function pathAfterOperationalSwitch(returnTo: string, storeId: string): string {
+  const [path] = returnTo.split('?');
+  const pathname = (path || '/onboarding').split('#')[0] || '/onboarding';
+  if (isOperationalRoute(pathname)) return withOperationalStoreQuery(returnTo, storeId);
+  if (pathname === '/reports' || pathname.startsWith('/reports/')) {
+    const params = new URLSearchParams(returnTo.split('?')[1] ?? '');
+    const next = new URLSearchParams();
+    const section = params.get('section');
+    if (section === 'activity' || section === 'more') next.set('section', section);
+    for (const key of REPORT_SWITCH_KEYS) {
+      const value = params.get(key);
+      if (value) next.set(key, value);
+    }
+    next.set('storeId', storeId);
+    const qs = next.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  }
+  return pathname;
+}
+
 export function withOperationalStoreQuery(path: string, storeId: string | null | undefined): string {
   if (!isOperationalRoute(path.split('?')[0] ?? '')) return path;
   const trimmed = storeId?.trim() ?? '';

@@ -176,6 +176,9 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Start app
+        env:
+          # Review-only Reports routes (money layout) require preview/local gate under `next start`.
+          VERCEL_ENV: preview
         run: |
           set -euo pipefail
           npm run start -- -p 6200 > .ci-server.log 2>&1 &
@@ -190,6 +193,11 @@ jobs:
           echo "Server failed to start"
           cat .ci-server.log || true
           exit 1
+
+      - name: Reports money layout (320px and 390px)
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:6200
+        run: npx playwright test --project=reports-money-layout-chromium
 
       - name: Offline sync smoke E2E
         run: npm run test:e2e:smoke

@@ -92,7 +92,7 @@ export function HomeAttentionUnavailable() {
       <div className="rounded-2xl border border-amber-200/80 bg-amber-50 px-3.5 py-3">
         <p className="text-sm font-semibold text-ink">We could not check today&apos;s attention items</p>
         <p className="mt-1 text-xs leading-5 text-muted">
-          Do not assume the till is clear. Use Command Center from the menu if you need to review issues.
+          Do not assume the till is clear. Open Today in Reports if you need to review issues.
         </p>
         <RetryButton />
       </div>

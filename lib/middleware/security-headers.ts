@@ -11,6 +11,7 @@ export function buildPassThroughResponse(request: NextRequest, requestId: string
   const pathname = request.nextUrl.pathname;
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-pathname', pathname);
+  requestHeaders.set('x-search', request.nextUrl.search);
   requestHeaders.set('x-request-id', requestId);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });

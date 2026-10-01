@@ -217,15 +217,14 @@ describe('Business Movement 6F — surface wiring', () => {
       join(root, 'app/(protected)/exports/business-movement/route.ts'),
       'utf8',
     );
-    const nav = readFileSync(join(root, 'lib/navigation-config.ts'), 'utf8');
-    const hub = readFileSync(join(root, 'app/(protected)/reports/page.tsx'), 'utf8');
+    const hub = readFileSync(join(root, 'lib/reports/today/stage3a-nav.ts'), 'utf8');
 
-    expect(page).toContain('title="Business Movement"');
+    expect(page).toContain('title="Business movement"');
+    expect(page).toContain('ReportsDestinationHead');
     expect(page).toContain("surfaceId: 'business_movement'");
     expect(page).toContain('Product movers');
     expect(exportRoute).toContain('COMPLETE_STREAM');
     expect(exportRoute).toContain('requireExportUser');
-    expect(nav).toContain('/reports/business-movement');
     expect(hub).toContain('/reports/business-movement');
   });
 });

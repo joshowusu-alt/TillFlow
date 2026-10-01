@@ -1,20 +1,11 @@
-import PageHeader from '@/components/PageHeader';
-import DownloadLink from '@/components/DownloadLink';
-import StatCard from '@/components/StatCard';
-import EmptyState from '@/components/EmptyState';
-import ReportActionGroup from '@/components/reports/ReportActionGroup';
-import DateRangeFilterCard from '@/components/reports/DateRangeFilterCard';
-import ReportSummaryCard, { ReportSummaryRow } from '@/components/reports/ReportSummaryCard';
+import { WithheldReportNotice } from '@/components/reports/ReportsContextNav';
 import { ReportReadOnlyBanner, ReportScopeLabel } from '@/components/reports/ReportSurfaceDenial';
 import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
-import { formatMoney } from '@/lib/format';
-import { getCashflow } from '@/lib/reports/financials';
-import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 export default async function CashflowPage({
-  searchParams
+  searchParams,
 }: {
   searchParams?: { from?: string; to?: string; storeId?: string; businessId?: string };
 }) {
@@ -30,129 +21,16 @@ export default async function CashflowPage({
     },
   });
   if (!opened.ok) return opened.denial;
-  const { business } = opened;
-
-  const now = new Date();
-  const month = businessMonthWindow(now, requireReportTimeZone(business.timezone));
-  const applied = opened.decision.appliedRange;
-  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(
-    applied ? { from: applied.fromLocalDate, to: applied.toLocalDate } : searchParams,
-    month.startInclusive,
-    now,
-    month.timeZone,
-  );
-
-  const cashflow = await getCashflow(business.id, start, end);
-  const costsIncomplete = cashflow.netProfit == null || cashflow.netCashFromOps == null || cashflow.endingCash == null;
-  const hasData = cashflow.beginningCash !== 0 || cashflow.netProfit !== 0 || cashflow.endingCash !== 0 || costsIncomplete;
+  void businessMonthWindow(new Date(), requireReportTimeZone(opened.business.timezone));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {opened.readOnly ? <ReportReadOnlyBanner /> : null}
       {opened.branch.kind === 'label' ? <ReportScopeLabel label={opened.branch.label} /> : null}
-      {applied?.label === 'Last 30 days' ? <ReportScopeLabel label="Last 30 days" /> : null}
-      <PageHeader
-        title="Cashflow"
-        subtitle="See how money moved in and out of the business during the selected period."
-        actions={
-          <ReportActionGroup>
-            <DownloadLink
-              href={`/api/reports/financials?type=cashflow&from=${fromStr}&to=${toStr}`}
-              fallbackFilename={`cashflow-${fromStr}.csv`}
-              className="btn-secondary text-sm"
-            >
-              Export CSV
-            </DownloadLink>
-            <a href="/reports/cashflow-forecast" className="btn-secondary text-sm">Cashflow Forecast</a>
-            <a href="/reports/command-center" className="btn-secondary text-sm">Command Center</a>
-          </ReportActionGroup>
-        }
+      <WithheldReportNotice
+        title="This statement is not on the reliable list"
+        body="Beginning cash is the till cash account plus legacy capital. Bank and Mobile Money balances are not in that figure. Net change in cash is operating cash, so ending cash will not match cash plus bank. This statement stays off the list until those labels and that formula are corrected. No cash-change total is shown."
       />
-
-      {/* KPI Summary */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Beginning Cash"
-          value={formatMoney(cashflow.beginningCash, business.currency)}
-        />
-        <StatCard
-          label="Net change in cash"
-          value={costsIncomplete ? 'Costs incomplete' : formatMoney(cashflow.netCashFromOps ?? 0, business.currency)}
-          tone={costsIncomplete ? 'default' : (cashflow.netCashFromOps ?? 0) >= 0 ? 'success' : 'danger'}
-        />
-        <StatCard
-          label="Ending Cash"
-          value={costsIncomplete ? 'Costs incomplete' : formatMoney(cashflow.endingCash ?? 0, business.currency)}
-          tone="accent"
-        />
-        <StatCard
-          label="Net Profit"
-          value={costsIncomplete ? 'Costs incomplete' : formatMoney(cashflow.netProfit ?? 0, business.currency)}
-          tone={costsIncomplete ? 'default' : (cashflow.netProfit ?? 0) >= 0 ? 'success' : 'danger'}
-          helper="Starting point for this cashflow calculation"
-        />
-      </div>
-
-      <DateRangeFilterCard from={fromStr} to={toStr} />
-
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        Cashflow is not the same as profit. It shows money movement. Credit sales may increase profit before the cash is collected.
-      </div>
-
-      {!hasData ? (
-        <EmptyState
-          icon="chart"
-          title="No cashflow data yet"
-          subtitle="Record transactions to see your cashflow statement."
-          cta={{ label: 'Open POS', href: '/pos' }}
-          secondaryCta={{ label: 'Run Demo Day', href: '/onboarding#demo' }}
-          hint="Demo Day generates realistic transactions to preview reports."
-        />
-      ) : (
-        <ReportSummaryCard spacingClassName="space-y-2">
-          <ReportSummaryRow
-            label="Beginning Cash Balance"
-            value={formatMoney(cashflow.beginningCash, business.currency)}
-            tone="muted"
-          />
-          {cashflow.openingCapital > 0 && (
-            <ReportSummaryRow
-              label="Includes owner&apos;s capital"
-              value={formatMoney(cashflow.openingCapital, business.currency)}
-              inset
-              tone="muted"
-            />
-          )}
-          <ReportSummaryRow
-            label="Net profit starting point"
-            value={costsIncomplete ? 'Costs incomplete' : formatMoney(cashflow.netProfit ?? 0, business.currency)}
-            divider="subtle"
-          />
-          <ReportSummaryRow
-            label="Customer credit not yet collected"
-            value={formatMoney(cashflow.arChange, business.currency)}
-          />
-          <ReportSummaryRow
-            label="Cash tied up in stock"
-            value={formatMoney(cashflow.invChange, business.currency)}
-          />
-          <ReportSummaryRow
-            label="Supplier bills not yet paid"
-            value={formatMoney(cashflow.apChange, business.currency)}
-          />
-          <ReportSummaryRow
-            label="Net cash movement"
-            value={costsIncomplete ? 'Costs incomplete' : formatMoney(cashflow.netCashFromOps ?? 0, business.currency)}
-            divider="default"
-          />
-          <ReportSummaryRow
-            label="Ending Cash Balance"
-            value={costsIncomplete ? 'Costs incomplete' : formatMoney(cashflow.endingCash ?? 0, business.currency)}
-            divider="default"
-            emphasis="strong"
-          />
-        </ReportSummaryCard>
-      )}
     </div>
   );
 }

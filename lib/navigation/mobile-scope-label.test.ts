@@ -42,6 +42,16 @@ describe('mobileReportingScopeLabel', () => {
     ).toBe('Main Branch');
   });
 
+  it('does not call a Reports page all branches when the till has a name', () => {
+    expect(
+      mobileReportingScopeLabel({
+        pathname: '/reports',
+        storeName: 'Main Branch',
+        showingBusinessWideSalesPulse: true,
+      }),
+    ).toBe('Main Branch');
+  });
+
   it('falls back to Main branch when no store name is available off Home', () => {
     expect(
       mobileReportingScopeLabel({

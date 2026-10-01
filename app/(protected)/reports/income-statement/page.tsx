@@ -69,7 +69,6 @@ export default async function IncomeStatementPage({
             >
               Export CSV
             </DownloadLink>
-            <a href="/reports/command-center" className="btn-secondary text-sm">Command Center</a>
           </ReportActionGroup>
         }
       />

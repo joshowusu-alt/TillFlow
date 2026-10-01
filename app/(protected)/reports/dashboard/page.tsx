@@ -1,10 +1,12 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import RefreshIndicator from '@/components/RefreshIndicator';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
+import { reportScopeLabel } from '@/lib/reports/scope-labels';
 import ReportSectionSkeleton from '@/components/reports/ReportSectionSkeleton';
 import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
 import { openLiveReport } from '@/lib/entitlements/live-report';
+import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import { recordOwnerDashboardView, recordOwnerReportView } from '@/app/actions/activation';
 import { getBusinessStores } from '@/lib/services/stores';
 import {
@@ -71,28 +73,20 @@ export default async function DashboardPage({
     || (searchParams?.storeId && searchParams.storeId !== 'ALL')
   );
 
+  const scopeLabel = reportScopeLabel(selectedStoreId, stores);
+
   return (
     <div className="space-y-4 sm:space-y-5">
       {opened.readOnly ? <ReportReadOnlyBanner /> : null}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">Trading Report</p>
-          <h1 className="mt-1 text-xl font-display font-bold tracking-tight text-ink sm:text-2xl">
-            {business.name}
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            {isToday
-              ? `Today (live) · ${scope.timeZone}`
-              : `${scope.fromInputValue} to ${scope.toInputValue} · ${scope.timeZone}`}
-          </p>
-        </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
-          <a href="/reports/weekly-digest" className="btn-secondary justify-center text-sm">
-            Weekly Digest
-          </a>
-          <RefreshIndicator fetchedAt={new Date().toISOString()} autoRefreshMs={120_000} />
-        </div>
-      </div>
+      <ReportsDestinationHead
+        title="Trading"
+        scopeLabel={scopeLabel}
+      />
+      <p className="text-sm text-muted">
+        {isToday
+          ? `Today (live) · ${scope.timeZone}`
+          : `${scope.fromInputValue} to ${scope.toInputValue} · ${scope.timeZone}`}
+      </p>
 
       <details className="details-mobile" open={hasNonDefaultParams || isToday}>
         <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
@@ -143,7 +137,7 @@ export default async function DashboardPage({
               <div>
                 <label className="label">Report branch filter</label>
                 <select className="input" name="storeId" defaultValue={selectedStoreId}>
-                  {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
+                  {opened.branch.offerAll ? <option value="ALL">{CONSOLIDATED_LABEL}</option> : null}
                   {opened.branch.choices.map((store) => (
                     <option key={store.id} value={store.id}>
                       {store.name}

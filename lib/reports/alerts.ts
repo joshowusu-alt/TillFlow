@@ -125,7 +125,7 @@ const rules: AlertRule[] = [
         severity: 'HIGH',
         title: 'Cash forecast goes negative within 14 days',
         explanation: `Your projected cash balance drops to ${(inputs.lowestProjectedBalancePence / 100).toFixed(2)} within the next 14 days based on current AR/AP and expenses.`,
-        cta: { label: 'Review cashflow forecast', href: '/reports/cashflow-forecast' },
+        cta: { label: 'Open Today', href: '/reports' },
       };
     },
   },

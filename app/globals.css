@@ -446,6 +446,38 @@ textarea {
   word-break: break-word;
 }
 
+.financial-fit {
+  container-type: inline-size;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.financial-amount {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: var(--color-ink, #0f172a);
+  font-size: clamp(0.58rem, 6.2cqi, 1rem);
+}
+
+.financial-amount--hero {
+  font-weight: 600;
+  font-size: clamp(0.65rem, 7.2cqi, 2rem);
+}
+
+.financial-amount--prominent {
+  font-weight: 600;
+  font-size: clamp(0.58rem, 6.4cqi, 1.5rem);
+}
+
+.financial-amount--inline,
+.financial-amount--compact {
+  display: inline-block;
+  font-weight: 600;
+}
+
 .operational-filter-row {
   display: flex;
   min-width: 0;
@@ -569,6 +601,14 @@ html:has(input:focus, textarea:focus, select:focus) .safe-floating-bottom {
   left: max(0.75rem, calc(env(safe-area-inset-left, 0px) + 0.75rem));
   right: max(0.75rem, calc(env(safe-area-inset-right, 0px) + 0.75rem));
   max-height: min(70dvh, calc(100dvh - var(--app-header-offset) - 1rem));
+}
+
+/* Reports content only. The fixed mobile tab bar is outside this scope.
+   Scroll margin lets native focus scrolling clear that bar; it does not add a bar. */
+@media (max-width: 1023px) {
+  [data-reports-focus-scope] :is(a, button, summary, input, select, textarea) {
+    scroll-margin-bottom: calc(var(--mobile-bottom-nav-height) + 1.5rem);
+  }
 }
 
 @media (min-width: 1024px) {

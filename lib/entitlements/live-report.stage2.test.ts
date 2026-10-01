@@ -174,8 +174,6 @@ describe('live report decision wiring', () => {
   it('places the live gate before each report query', () => {
     const pairs = [
       ['app/(protected)/reports/income-statement/page.tsx', 'getIncomeStatement'],
-      ['app/(protected)/reports/balance-sheet/page.tsx', 'getBalanceSheet'],
-      ['app/(protected)/reports/cashflow/page.tsx', 'getCashflow'],
       ['app/(protected)/reports/weekly-digest/page.tsx', 'getWeeklyDigestData'],
       ['app/api/reports/financials/route.ts', 'getIncomeStatement'],
       ['app/api/reports/weekly-digest/route.ts', 'getWeeklyDigestData'],
@@ -185,6 +183,15 @@ describe('live report decision wiring', () => {
       const gate = source.indexOf('openLiveReport') >= 0 ? source.indexOf('openLiveReport') : source.indexOf('guardLiveReport');
       expect(gate).toBeGreaterThanOrEqual(0);
       expect(gate).toBeLessThan(source.indexOf(query));
+    }
+    for (const [file, query] of [
+      ['app/(protected)/reports/balance-sheet/page.tsx', 'getBalanceSheet'],
+      ['app/(protected)/reports/cashflow/page.tsx', 'getCashflow'],
+      ['app/(protected)/reports/cashflow-forecast/page.tsx', 'getCashflowForecast'],
+    ] as const) {
+      const source = readFileSync(file, 'utf8');
+      expect(source).toContain('openLiveReport');
+      expect(source).not.toContain(query);
     }
   });
 });

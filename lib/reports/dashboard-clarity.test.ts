@@ -228,40 +228,22 @@ describe('Reports dashboard clarity pass', () => {
 });
 
 describe('Reports navigation clarity', () => {
-  it('groups report links into owner-friendly sections', () => {
-    expect(REPORT_NAV_SECTIONS.map((section) => section.label)).toEqual([
-      'Main',
-      'Sales & Stock',
-      'Finance',
-      'Control',
-      'Advanced',
+  it('groups report links into Today, Activity and More reports', () => {
+    expect(REPORT_NAV_SECTIONS.map((section) => section.label)).toEqual(['Reports']);
+    expect(REPORT_NAV_SECTIONS.flatMap((section) => section.items.map((item) => item.label))).toEqual([
+      'Today',
+      'Activity',
+      'More reports',
     ]);
   });
 
-  it('adds Weekly Digest and renamed report labels without changing routes', () => {
+  it('does not put withheld reports in the header menu', () => {
     const reports = NAV_GROUPS.find((group) => group.id === 'reports');
-    expect(reports).toBeDefined();
-
-    const items = reports!.items;
-    expect(items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ href: '/reports/dashboard', label: 'Trading Report' }),
-      expect.objectContaining({ href: '/reports/weekly-digest', label: 'Weekly Digest' }),
-      expect.objectContaining({ href: '/reports/sales-by-supplier', label: 'Sales by Linked Supplier' }),
-      expect.objectContaining({ href: '/reports/cashflow', label: 'Cash Flow' }),
-      expect.objectContaining({ href: '/reports/owner', label: 'Owner Brief' }),
-      expect.objectContaining({ href: '/reports/cashflow-forecast', label: 'Cash Flow Forecast' }),
-    ]));
-  });
-
-  it('preserves existing plan gates on grouped report routes', () => {
-    const reports = NAV_GROUPS.find((group) => group.id === 'reports')!;
-    const itemByHref = new Map(reports.items.map((item) => [item.href, item]));
-
-    expect(itemByHref.get('/reports/analytics')?.minimumPlan).toBe('GROWTH');
-    expect(itemByHref.get('/reports/income-statement')?.minimumPlan).toBe('GROWTH');
-    expect(itemByHref.get('/reports/owner')?.minimumPlan).toBe('PRO');
-    expect(itemByHref.get('/reports/audit-log')?.minimumPlan).toBe('PRO');
-    expect(itemByHref.get('/reports/weekly-digest')?.minimumPlan).toBeUndefined();
+    const hrefs = reports!.items.map((item) => item.href);
+    expect(hrefs).toEqual(['/reports', '/reports?section=activity', '/reports?section=more']);
+    expect(hrefs.join(' ')).not.toContain('weekly-digest');
+    expect(hrefs.join(' ')).not.toContain('balance-sheet');
+    expect(hrefs.join(' ')).not.toContain('cashflow');
   });
 
   it('does not duplicate report routes across grouped navigation sections', () => {
@@ -276,8 +258,10 @@ describe('Reports navigation clarity', () => {
 
     expect(topNav).toContain('group.sections');
     expect(mobileNav).toContain('getOwnerLauncherMenu');
-    expect(mobileConfig).toContain("label: 'Reports Hub'");
-    expect(mobileConfig).toContain("href: '/reports/analytics'");
+    expect(mobileConfig).toContain("label: 'Today'");
+    expect(mobileConfig).toContain("label: 'More reports'");
+    expect(mobileConfig).not.toContain("label: 'Reports Hub'");
+    expect(mobileConfig).not.toContain("href: '/reports/analytics'");
   });
 
   it('keeps the desktop Reports dropdown compact and scroll-safe', () => {
@@ -370,8 +354,9 @@ describe('Reports navigation clarity', () => {
       expect.objectContaining({ href: '/products/labels', label: 'Product Labels', iconKey: 'labels', description: 'Print product and shelf labels.' }),
     ]));
     expect(reports.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ href: '/reports/owner', label: 'Owner Brief', iconKey: 'ownerBrief' }),
-      expect.objectContaining({ href: '/reports/cashflow-forecast', label: 'Cash Flow Forecast', iconKey: 'forecast' }),
+      expect.objectContaining({ href: '/reports', label: 'Today', iconKey: 'reportsHub' }),
+      expect.objectContaining({ href: '/reports?section=activity', label: 'Activity', iconKey: 'analytics' }),
+      expect.objectContaining({ href: '/reports?section=more', label: 'More reports', iconKey: 'reports' }),
     ]));
     expect(reports.items.every((item) => item.description === undefined)).toBe(true);
   });
@@ -387,8 +372,11 @@ describe('Reports navigation clarity', () => {
     expect(sell.items.find((item) => item.href === '/online-orders')?.requiresFeature).toBe('onlineStorefront');
     expect(stock.items.find((item) => item.href === '/products/labels')?.minimumPlan).toBe('GROWTH');
     expect(stock.items.find((item) => item.href === '/inventory/stocktake')?.minimumPlan).toBe('GROWTH');
-    expect(reports.items.find((item) => item.href === '/reports/owner')?.minimumPlan).toBe('PRO');
-    expect(reports.items.find((item) => item.href === '/reports/audit-log')?.roles).toEqual(['OWNER']);
+    expect(reports.items.map((item) => item.href)).toEqual([
+      '/reports',
+      '/reports?section=activity',
+      '/reports?section=more',
+    ]);
     expect(mobileNav).toContain('NavIcon');
     expect(mobileNav).toContain('Browse by area');
   });

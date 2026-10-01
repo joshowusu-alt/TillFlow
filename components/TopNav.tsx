@@ -142,7 +142,8 @@ export default function TopNav({
       .filter((group) => group.items.length > 0);
   }, [user.role, features.multiStore, momoEnabled, allowedReports]);
 
-  const showMobileSalesPulse = Boolean(liveTodaySales) && !pathname.startsWith('/onboarding');
+  const onReports = pathname === '/reports' || pathname.startsWith('/reports/');
+  const showMobileSalesPulse = Boolean(liveTodaySales) && !pathname.startsWith('/onboarding') && !onReports;
   const mobileSales = showMobileSalesPulse ? liveTodaySales : undefined;
   // Home KPIs are always business-wide. Never show the operational store name
   // as if it filtered Home ("Main Branch" beside "Today · All branches").
@@ -374,6 +375,19 @@ export default function TopNav({
               </Link>
             ) : null}
             {visibleGroups.map((group) => {
+              if (group.id === 'reports') {
+                const reportsActive = pathname === '/reports' || pathname.startsWith('/reports/');
+                return (
+                  <Link
+                    key={group.id}
+                    href={operationalHref('/reports')}
+                    aria-current={reportsActive ? 'page' : undefined}
+                    className={reportsActive ? 'shell-nav-trigger shell-nav-trigger-active' : 'shell-nav-trigger'}
+                  >
+                    Reports
+                  </Link>
+                );
+              }
               // '/onboarding' also lives under Admin > Setup Guide for discoverability,
               // but it renders as Home once setup is complete — the dedicated Home link
               // above owns the active state for it so Admin does not also light up.
@@ -588,12 +602,14 @@ export default function TopNav({
                   className="!h-6 !w-6 !rounded-md"
                 />
               ) : null}
+              {onReports ? <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Till</span> : null}
               <Suspense fallback={<span className="text-xs font-semibold text-ink">{storeName || 'Select branch'}</span>}>
                 <OperationalStoreSwitcher
                   stores={stores}
                   selectedStoreId={storeId}
                   selectedStoreName={storeName}
                   canSwitch={canSwitchStore}
+                  controlLabel={onReports ? 'Working location' : undefined}
                 />
               </Suspense>
             </span>
@@ -630,15 +646,17 @@ export default function TopNav({
           }`}
         >
           <div className="flex flex-nowrap items-center gap-x-2 overflow-x-clip">
+            {onReports ? <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Till</span> : null}
             <Suspense fallback={<span className="text-xs font-semibold text-ink">{storeName || 'Select branch'}</span>}>
               <OperationalStoreSwitcher
                 stores={stores}
                 selectedStoreId={storeId}
                 selectedStoreName={storeName}
                 canSwitch={canSwitchStore}
+                controlLabel={onReports ? 'Working location' : undefined}
               />
             </Suspense>
-            {mobileScopeLabel === 'All branches' ? (
+            {!onReports && mobileScopeLabel === 'All branches' ? (
               <span className="metric-chip" title="Figures shown in this header are across all branches">
                 Today · All branches
               </span>

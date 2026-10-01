@@ -355,7 +355,7 @@ function TodaysAttentionSection({
   actionCount: number;
 }) {
   const hasItems = attentionActions.length > 0;
-  const hasCommandCenterAction = attentionActions.some((action) => action.href === '/reports/command-center');
+  const hasCommandCenterAction = attentionActions.some((action) => action.href === '/reports');
 
   return (
     <section aria-labelledby="todays-attention-heading">
@@ -378,7 +378,7 @@ function TodaysAttentionSection({
           ))}
           {!hasCommandCenterAction ? (
             <Link
-              href="/reports/command-center"
+              href="/reports"
               className="flex min-h-11 items-center justify-between rounded-xl border border-black/[0.06] bg-white px-3 py-2 text-xs font-semibold text-accent shadow-sm transition hover:bg-accentSoft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               View all tasks
@@ -530,7 +530,7 @@ function WelcomeDashboard({
     data.openIssueCount > 0 ? {
       label: formatCommandCenterActionLabel(data.openIssueCount),
       desc: 'Review operational issues',
-      href: '/reports/command-center',
+      href: '/reports',
       urgent: true,
       icon: <HomeIcon name="alert" />,
     } : null,

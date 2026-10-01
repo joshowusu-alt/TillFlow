@@ -84,56 +84,15 @@ export type SettingsTabSection = {
   items: NavigationItem[];
 };
 
+/** Customer Reports navigation. The page sub-navigation uses the same three destinations. */
 export const REPORT_NAV_SECTIONS: NavigationSection[] = [
   {
-    id: 'main',
-    label: 'Main',
+    id: 'reports',
+    label: 'Reports',
     items: [
-      { href: '/reports', label: 'Reports Hub', roles: ['MANAGER', 'OWNER'], iconKey: 'reportsHub' },
-      { href: '/reports/command-center', label: 'Command Center', roles: ['MANAGER', 'OWNER'], iconKey: 'reports' },
-      { href: '/reports/dashboard', label: 'Trading Report', roles: ['MANAGER', 'OWNER'], iconKey: 'analytics' },
-      { href: '/reports/money-received', label: 'Money Received', roles: ['MANAGER', 'OWNER'], iconKey: 'payments' },
-      { href: '/reports/momo-confirmation', label: 'MoMo Confirmation', roles: ['MANAGER', 'OWNER'], iconKey: 'payments' },
-      { href: '/reports/business-movement', label: 'Business Movement', roles: ['MANAGER', 'OWNER'], iconKey: 'analytics' },
-      { href: '/reports/receipts', label: 'Receipt transactions', roles: ['MANAGER', 'OWNER'], iconKey: 'payments' },
-      { href: '/reports/weekly-digest', label: 'Weekly Digest', roles: ['MANAGER', 'OWNER'], iconKey: 'reports' },
-    ],
-  },
-  {
-    id: 'sales-stock',
-    label: 'Sales & Stock',
-    items: [
-      { href: '/reports/analytics', label: 'Sales Analytics', roles: ['MANAGER', 'OWNER'], iconKey: 'analytics', minimumPlan: 'GROWTH' },
-      { href: '/reports/margins', label: 'Profit Margins', roles: ['MANAGER', 'OWNER'], iconKey: 'profit', minimumPlan: 'GROWTH' },
-      { href: '/reports/sales-by-supplier', label: 'Sales by Linked Supplier', roles: ['MANAGER', 'OWNER'], iconKey: 'supplierSales', minimumPlan: 'GROWTH' },
-      { href: '/reports/reorder-suggestions', label: 'Reorder Suggestions', roles: ['MANAGER', 'OWNER'], iconKey: 'reorder', minimumPlan: 'GROWTH' },
-    ],
-  },
-  {
-    id: 'finance',
-    label: 'Finance',
-    items: [
-      { href: '/reports/income-statement', label: 'Income Statement', roles: ['MANAGER', 'OWNER'], iconKey: 'incomeStatement', minimumPlan: 'GROWTH' },
-      { href: '/reports/balance-sheet', label: 'Balance Sheet', roles: ['MANAGER', 'OWNER'], iconKey: 'balanceSheet', minimumPlan: 'GROWTH' },
-      { href: '/reports/cashflow', label: 'Cash Flow', roles: ['MANAGER', 'OWNER'], iconKey: 'cashFlow', minimumPlan: 'GROWTH' },
-      { href: '/reports/cash-drawer', label: 'Cash Drawer', roles: ['MANAGER', 'OWNER'], iconKey: 'cashDrawer' },
-    ],
-  },
-  {
-    id: 'control',
-    label: 'Control',
-    items: [
-      { href: '/reports/risk-monitor', label: 'Risk Monitor', roles: ['MANAGER', 'OWNER'], iconKey: 'risk', minimumPlan: 'GROWTH' },
-      { href: '/reports/audit-log', label: 'Audit Log', roles: ['OWNER'], iconKey: 'audit', minimumPlan: 'PRO' },
-      { href: '/reports/exports', label: 'Exports', roles: ['MANAGER', 'OWNER'], iconKey: 'exports' },
-    ],
-  },
-  {
-    id: 'advanced',
-    label: 'Advanced',
-    items: [
-      { href: '/reports/owner', label: 'Owner Brief', roles: ['OWNER'], iconKey: 'ownerBrief', minimumPlan: 'PRO' },
-      { href: '/reports/cashflow-forecast', label: 'Cash Flow Forecast', roles: ['OWNER'], iconKey: 'forecast', minimumPlan: 'PRO' },
+      { href: '/reports', label: 'Today', roles: ['MANAGER', 'OWNER'], iconKey: 'reportsHub' },
+      { href: '/reports?section=activity', label: 'Activity', roles: ['MANAGER', 'OWNER'], iconKey: 'analytics' },
+      { href: '/reports?section=more', label: 'More reports', roles: ['MANAGER', 'OWNER'], iconKey: 'reports' },
     ],
   },
 ];
@@ -174,6 +133,7 @@ export const NAV_GROUPS: NavigationGroup[] = [
       { href: '/payments/supplier-aging', label: 'Supplier Aging', roles: ['MANAGER', 'OWNER'], iconKey: 'supplierAging', description: 'See overdue supplier balances.' },
       { href: '/payments/reconciliation', label: 'MoMo Reconciliation', roles: ['MANAGER', 'OWNER'], iconKey: 'reconciliation', description: 'Match mobile money collections.' },
       { href: '/payments/reconciliation/card-transfer', label: 'Card/Transfer Reconciliation', roles: ['MANAGER', 'OWNER'], iconKey: 'reconciliation', description: 'Reconcile bank and card payments.' },
+      { href: '/reports/cash-drawer', label: 'Cash drawer', roles: ['MANAGER', 'OWNER'], iconKey: 'cashDrawer', description: 'Review expected cash, counted cash, and the difference.' },
     ],
   },
   {

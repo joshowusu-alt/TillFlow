@@ -20,7 +20,7 @@ describe('home attention presentation', () => {
     };
     expect(countHomeAttentionActions(flags)).toBe(3);
     expect(formatHomeAttentionActionSummary(3)).toBe('3 areas need your attention today.');
-    expect(formatCommandCenterActionLabel(5)).toBe('5 issues in Command Center');
+    expect(formatCommandCenterActionLabel(5)).toBe('5 issues in Today');
     expect(formatHeroAttentionSubtitle({ actionCount: 3, hasRecordImprovements: true })).toBe(
       '3 areas need your attention today.'
     );
@@ -40,7 +40,7 @@ describe('home attention presentation', () => {
     expect(formatHeroStatusPill({ actionCount: 1, openShiftCount: 1, hasRecordImprovements: false })).toBe(
       'Your open shift needs closing'
     );
-    expect(formatCommandCenterActionLabel(1)).toBe('1 issue in Command Center');
+    expect(formatCommandCenterActionLabel(1)).toBe('1 issue in Today');
   });
 
   it('handles no Home actions with honest record-aware hero copy', () => {
@@ -75,7 +75,7 @@ describe('home attention presentation', () => {
     });
     expect(actionCount).toBe(1);
     expect(formatHomeAttentionActionSummary(actionCount)).toBe('1 area needs your attention today.');
-    expect(formatCommandCenterActionLabel(5)).toBe('5 issues in Command Center');
+    expect(formatCommandCenterActionLabel(5)).toBe('5 issues in Today');
   });
 
   it('"areas" wording never overstates a bundled Command Center issue count as a flat total', () => {
@@ -92,7 +92,7 @@ describe('home attention presentation', () => {
     const actionCount = countHomeAttentionActions(flags);
     expect(actionCount).toBe(1);
     expect(formatHomeAttentionActionSummary(actionCount)).toBe('1 area needs your attention today.');
-    expect(formatCommandCenterActionLabel(flags.openIssueCount)).toBe('4 issues in Command Center');
+    expect(formatCommandCenterActionLabel(flags.openIssueCount)).toBe('4 issues in Today');
   });
 
   it('formats Close Shift copy for today, previous day, zero sales, and missing open time', () => {

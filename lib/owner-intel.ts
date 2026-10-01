@@ -233,7 +233,7 @@ export async function getOwnerBrief(
       score: health.score,
       grade: health.grade,
       topDrivers: health.topDrivers,
-      scoreUrl: '/reports/command-center',
+      scoreUrl: '/reports',
     },
     priorityActions,
     moneyPulse: {

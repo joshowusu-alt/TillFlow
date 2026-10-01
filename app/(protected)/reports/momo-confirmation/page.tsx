@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import Link from 'next/link';
 import DownloadLink from '@/components/DownloadLink';
 import PageHeader from '@/components/PageHeader';
@@ -201,7 +202,7 @@ export default async function MomoConfirmationReviewPage({
             Branch
           </label>
           <select id="storeId" className="input" name="storeId" defaultValue={selectedStoreId}>
-            {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
+            {opened.branch.offerAll ? <option value="ALL">{CONSOLIDATED_LABEL}</option> : null}
             {stores.map((store) => (
               <option key={store.id} value={store.id}>
                 {store.name}

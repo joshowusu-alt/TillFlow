@@ -178,8 +178,8 @@ export default function OpeningStockClient({
           </div>
         </div>
         <div className="flex flex-col justify-center gap-3 sm:flex-row">
-          <Link href="/reports/balance-sheet" className="btn-primary">
-            View Balance Sheet →
+          <Link href="/reports" className="btn-primary">
+            Back to Reports
           </Link>
           <Link href="/onboarding" className="btn-ghost border border-black/10">
             Back to Setup

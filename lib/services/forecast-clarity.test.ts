@@ -18,84 +18,80 @@ describe('Cashflow Forecast actionability and clarity', () => {
     expect(pageSrc).not.toContain('AR, AP');
   });
 
-  it('3. Subtitle contains plain-English money owed alternatives', () => {
-    expect(pageSrc).toContain('money owed to you');
-    expect(pageSrc).toContain('money you owe');
+  it('3. Says the estimate is withheld and shows no values', () => {
+    expect(pageSrc).toContain('This estimate is withheld');
+    expect(pageSrc).toContain('No values are shown');
+    expect(pageSrc).not.toContain('getCashflowForecast');
   });
 
   // Warning banner
 
-  it('4. Warning banner contains action-focused language', () => {
-    expect(pageSrc).toContain('Cash may run short');
+  it('4. Does not show a cash-short warning', () => {
+    expect(pageSrc).not.toContain('Cash may run short');
   });
 
-  it('5. Warning banner includes "Recommended actions"', () => {
-    expect(pageSrc).toContain('Recommended actions');
+  it('5. Does not list recommended forecast actions', () => {
+    expect(pageSrc).not.toContain('Recommended actions');
   });
 
-  it('6. Warning banner tells user to chase overdue customer balances', () => {
-    expect(pageSrc).toContain('Chase overdue customer balances');
+  it('6. Does not tell the customer to chase balances from this page', () => {
+    expect(pageSrc).not.toContain('Chase overdue customer balances');
   });
 
-  it('7. Warning banner tells user to review supplier payments', () => {
-    expect(pageSrc).toContain('Review large supplier payments');
+  it('7. Does not tell the customer to review supplier payments from this page', () => {
+    expect(pageSrc).not.toContain('Review large supplier payments');
   });
 
-  it('8. Warning banner includes largest outflow check', () => {
-    expect(pageSrc).toContain('Largest expected outflow');
-    expect(pageSrc).toContain('check this is correct');
+  it('8. Does not show an outflow figure', () => {
+    expect(pageSrc).not.toContain('Largest expected outflow');
   });
 
   it('9. Warning banner does not contain "receivables"', () => {
     expect(pageSrc).not.toContain('receivables');
   });
 
-  it('10. Warning banner includes estimate/not-a-guarantee disclaimer', () => {
-    expect(pageSrc).toContain('not a guarantee');
+  it('10. Does not present a guarantee disclaimer beside live numbers', () => {
+    expect(pageSrc).not.toContain('not a guarantee');
   });
 
   // Cashflow vs profit
 
-  it('11. Page explains forecast is not the same as profit', () => {
-    expect(pageSrc).toContain('not the same as profit');
+  it('11. Does not compare a live forecast with profit', () => {
+    expect(pageSrc).not.toContain('not the same as profit');
   });
 
-  it('12. Page explains credit sales are not cash until customer pays', () => {
-    expect(pageSrc).toContain('sales on credit are not cash until the customer pays');
+  it('12. Does not explain credit sales beside forecast numbers', () => {
+    expect(pageSrc).not.toContain('sales on credit are not cash until the customer pays');
   });
 
   // Scenario helper
 
-  it('13. Scenario helper explains Expected / Best / Worst', () => {
-    expect(pageSrc).toContain('Expected uses normal assumptions');
-    expect(pageSrc).toContain('customers pay faster');
-    expect(pageSrc).toContain('slower collections');
+  it('13. Does not render scenario assumptions', () => {
+    expect(pageSrc).not.toContain('Expected uses normal assumptions');
+    expect(pageSrc).not.toContain('customers pay faster');
   });
 
   // Daily Projection table
 
-  it('14. Daily Projection has helper text about cash pressure', () => {
-    expect(pageSrc).toContain('pressure on cash');
+  it('14. Does not render a daily projection', () => {
+    expect(pageSrc).not.toContain('pressure on cash');
   });
 
-  it('15. "Inflow" column header is replaced with "Money in"', () => {
-    expect(pageSrc).toContain('>Money in<');
-    expect(pageSrc).not.toContain('>Inflow<');
+  it('15. Does not render a money-in column', () => {
+    expect(pageSrc).not.toContain('>Money in<');
   });
 
-  it('16. "Outflow" column header is replaced with "Money out"', () => {
-    expect(pageSrc).toContain('>Money out<');
-    expect(pageSrc).not.toContain('>Outflow<');
+  it('16. Does not render a money-out column', () => {
+    expect(pageSrc).not.toContain('>Money out<');
   });
 
-  it('17. "Balance (Expected)" column header is replaced with "Expected balance"', () => {
-    expect(pageSrc).toContain('>Expected balance<');
-    expect(pageSrc).not.toContain('Balance (Expected)');
+  it('17. Does not render an expected-balance column', () => {
+    expect(pageSrc).not.toContain('>Expected balance<');
   });
 
-  it('17b. "Best Case" and "Worst Case" column headers remain present', () => {
-    expect(pageSrc).toContain('>Best Case<');
-    expect(pageSrc).toContain('>Worst Case<');
+  it('17b. Does not render best and worst case columns', () => {
+    expect(pageSrc).not.toContain('>Best Case<');
+    expect(pageSrc).not.toContain('>Worst Case<');
   });
 
   // Methodology note
@@ -116,32 +112,31 @@ describe('Cashflow Forecast actionability and clarity', () => {
     expect(pageSrc).not.toContain('AP without due dates');
   });
 
-  it('22. Methodology note contains "customer balances"', () => {
-    expect(pageSrc).toContain('customer balances');
+  it('22. Does not describe customer balances as a forecast input', () => {
+    expect(pageSrc).not.toContain('customer balances');
   });
 
-  it('23. Methodology note contains supplier bills language', () => {
-    expect(pageSrc).toContain('Supplier balances');
-    expect(pageSrc).toContain('Supplier bills');
+  it('23. Does not describe supplier bills as a forecast input', () => {
+    expect(pageSrc).not.toContain('Supplier balances');
   });
 
-  it('24. Methodology note contains estimate/not-guaranteed disclaimer', () => {
-    expect(pageSrc).toContain('not a guaranteed prediction');
+  it('24. Does not attach a prediction disclaimer to live numbers', () => {
+    expect(pageSrc).not.toContain('not a guaranteed prediction');
   });
 
-  it('25. "How this forecast works" section remains present', () => {
-    expect(pageSrc).toContain('How this forecast works');
+  it('25. Does not render the forecast method note', () => {
+    expect(pageSrc).not.toContain('How this forecast works');
   });
 
   // Controls and safety
 
-  it('26. Day buttons 7, 14, 30 remain present', () => {
-    expect(pageSrc).toContain('[7, 14, 30]');
+  it('26. Day buttons are not rendered', () => {
+    expect(pageSrc).not.toContain('[7, 14, 30]');
   });
 
-  it('27. getCashflowForecast import remains unchanged', () => {
-    expect(pageSrc).toContain("from '@/lib/reports/forecast'");
-    expect(pageSrc).toContain('getCashflowForecast');
+  it('27. The page does not load forecast values', () => {
+    expect(pageSrc).not.toContain("from '@/lib/reports/forecast'");
+    expect(pageSrc).not.toContain('getCashflowForecast');
   });
 
   it('28. features.cashflowForecast plan gate remains unchanged', () => {
@@ -161,18 +156,16 @@ describe('Cashflow Forecast actionability and clarity', () => {
 
   // Local helper calculations
 
-  it('30b. largestOutflowDay local helper is present', () => {
-    expect(pageSrc).toContain('largestOutflowDay');
-    expect(pageSrc).toContain('expectedOutflowPence');
+  it('30b. No outflow helper is calculated on the page', () => {
+    expect(pageSrc).not.toContain('largestOutflowDay');
   });
 
-  it('30c. cashRecoveryDay local helper is present', () => {
-    expect(pageSrc).toContain('cashRecoveryDay');
+  it('30c. No recovery helper is calculated on the page', () => {
+    expect(pageSrc).not.toContain('cashRecoveryDay');
   });
 
-  it('30d. lowestPointDate row highlight is present', () => {
-    expect(pageSrc).toContain('isLowestDay');
-    expect(pageSrc).toContain('bg-rose-50');
+  it('30d. No lowest-day highlight is rendered', () => {
+    expect(pageSrc).not.toContain('isLowestDay');
   });
 
   // Service file integrity

@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import DownloadLink from '@/components/DownloadLink';
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
+import { reportScopeLabel } from '@/lib/reports/scope-labels';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -9,6 +10,7 @@ import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/Repor
 import { formatMoney } from '@/lib/format';
 import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
 import { addCalendarDays } from '@/lib/entitlements/range';
+import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { prisma } from '@/lib/prisma';
@@ -265,11 +267,14 @@ export default async function BusinessMovementReportPage({
     throw new Error('Business Movement page refused stock-causation language');
   }
 
+  const scopeLabel = reportScopeLabel(selectedStoreId, stores);
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Business Movement"
-        subtitle="What changed, in plain language."
+      {opened.readOnly ? <ReportReadOnlyBanner /> : null}
+      <ReportsDestinationHead
+        title="Business movement"
+        scopeLabel={scopeLabel}
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
@@ -295,6 +300,24 @@ export default async function BusinessMovementReportPage({
           </div>
         }
       />
+      <p className="text-sm text-muted">
+        See how sales, confirmed payments, refunds and Mobile Money waiting for confirmation changed between two equal periods.
+      </p>
+
+      <section className="max-w-3xl space-y-2 text-sm leading-6 text-slate-700">
+        <h2 className="text-base font-semibold text-slate-900">How to read this</h2>
+        <p>
+          This compares {chrome.currentFull} with {chrome.comparisonFull}. The totals below are what changed.
+          The notes under them say why that change showed up.
+        </p>
+        <p>
+          Sales, confirmed payments, refunds and Mobile Money waiting for confirmation are operational figures for the selected period.
+          They are not the income statement. This report does not calculate purchases, expenses, or customer and supplier balances.
+        </p>
+        <p>
+          Next, open Money received or MoMo to confirm when a payment needs a person, and use the product list to see what moved.
+        </p>
+      </section>
 
       <div>
         <p
@@ -317,7 +340,7 @@ export default async function BusinessMovementReportPage({
         <p className="mt-2 text-xs text-slate-500">
           {business.name} ·{' '}
           {selectedStoreId === 'ALL'
-            ? 'All branches'
+            ? CONSOLIDATED_LABEL
             : stores.find((s) => s.id === selectedStoreId)?.name ?? selectedStoreId}{' '}
           · {formatScopeInstant(p.currentStart, p.timeZone)} →{' '}
           {formatScopeInstant(new Date(p.currentEndExclusive.getTime() - 1), p.timeZone)}
@@ -353,7 +376,7 @@ export default async function BusinessMovementReportPage({
         <label className="text-sm">
           <span className="mb-1 block text-slate-600">Report branch filter</span>
           <select className="input w-full" name="storeId" defaultValue={selectedStoreId}>
-            {opened.branch.offerAll ? <option value="ALL">All branches</option> : null}
+            {opened.branch.offerAll ? <option value="ALL">{CONSOLIDATED_LABEL}</option> : null}
             {opened.branch.choices.map((store) => (
               <option key={store.id} value={store.id}>
                 {store.name}
