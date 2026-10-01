@@ -16,6 +16,7 @@ import StaleOperationalStoreGuard from '@/components/StaleOperationalStoreGuard'
 import MoneyOperationKeySync from '@/components/MoneyOperationKeySync';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import { REPORT_PAGE_SURFACES, visibleReportHrefs } from '@/lib/entitlements/live-report';
+import { ReportsCompactBillingBanner, ReportsCompactSetupBanner } from '@/components/reports/ReportsCompactBanners';
 
 function formatDateLabel(value: Date | string | null | undefined) {
   if (!value) return null;
@@ -95,19 +96,7 @@ async function OwnerSetupBanner({
   const cta = setupBanner?.cta ?? 'Continue setup';
 
   if (compact) {
-    return (
-      <div className="border-b border-blue-200/70 bg-blue-50 px-3 py-1.5" data-reports-banner="setup">
-        <div className="flex items-center justify-between gap-3">
-          <p className="min-w-0 text-xs leading-5 text-accent">
-            <span className="font-semibold">{title}</span>
-            <span className="text-accent/80"> · {detail}</span>
-          </p>
-          <Link href="/onboarding" className="shrink-0 text-xs font-semibold text-accent underline underline-offset-2">
-            {cta}
-          </Link>
-        </div>
-      </div>
-    );
+    return <ReportsCompactSetupBanner title={title} detail={detail} cta={cta} />;
   }
 
   return (
@@ -206,20 +195,35 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       )}
 
       {billingPrimaryBanner && !pathname.includes('/settings/billing') && (
-        <div data-reports-banner={reportsBannerCompact ? 'trial' : undefined} className={`border-b ${reportsBannerCompact ? 'px-3 py-1.5 text-xs' : 'px-4 py-3 text-sm sm:px-6'} ${
-          ['TRIAL_RESTRICTED', 'PAYMENT_RESTRICTED', 'CANCELLED', 'READ_ONLY'].includes(billingAccessState)
-            ? 'border-rose-200 bg-rose-50/90 text-rose-900'
-            : billingAccessState.includes('DUE_TODAY') || billingAccessState.includes('OVERDUE')
-              ? 'border-amber-200 bg-amber-50/90 text-amber-900'
-              : 'border-blue-200 bg-blue-50/90 text-blue-900'
-        }`}>
-          <div className={reportsBannerCompact ? 'flex items-center justify-between gap-3' : 'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'}>
-            <p>{billingPrimaryBanner}</p>
-            <Link href={billingNextActionHref} className="font-semibold underline underline-offset-4">
-              {billingNextActionLabel}
-            </Link>
+        reportsBannerCompact ? (
+          <ReportsCompactBillingBanner
+            message={billingPrimaryBanner}
+            actionLabel={billingNextActionLabel}
+            href={billingNextActionHref}
+            tone={
+              ['TRIAL_RESTRICTED', 'PAYMENT_RESTRICTED', 'CANCELLED', 'READ_ONLY'].includes(billingAccessState)
+                ? 'rose'
+                : billingAccessState.includes('DUE_TODAY') || billingAccessState.includes('OVERDUE')
+                  ? 'amber'
+                  : 'blue'
+            }
+          />
+        ) : (
+          <div className={`border-b px-4 py-3 text-sm sm:px-6 ${
+            ['TRIAL_RESTRICTED', 'PAYMENT_RESTRICTED', 'CANCELLED', 'READ_ONLY'].includes(billingAccessState)
+              ? 'border-rose-200 bg-rose-50/90 text-rose-900'
+              : billingAccessState.includes('DUE_TODAY') || billingAccessState.includes('OVERDUE')
+                ? 'border-amber-200 bg-amber-50/90 text-amber-900'
+                : 'border-blue-200 bg-blue-50/90 text-blue-900'
+          }`}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p>{billingPrimaryBanner}</p>
+              <Link href={billingNextActionHref} className="font-semibold underline underline-offset-4">
+                {billingNextActionLabel}
+              </Link>
+            </div>
           </div>
-        </div>
+        )
       )}
 
         <Suspense fallback={null}>

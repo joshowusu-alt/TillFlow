@@ -21,6 +21,7 @@ describe('Stage 3A navigation', () => {
     expect(head).toContain('data-reports-nav="contextual"');
     expect(page).not.toContain('fixed inset-x-0');
     expect(page).not.toContain('--mobile-bottom-nav-height');
+    expect(page).not.toContain('100dvh');
   });
 
   it('links only existing authorised destinations and withholds the unfinished statements', () => {

@@ -156,36 +156,27 @@ function QuietToday({
   const primaryAction = nextActions[0];
   const laterActions = nextActions.slice(1);
   return (
-    <div className="mt-1 min-w-0 sm:mt-6" data-today-state="empty">
-      <div className="max-lg:min-h-[calc(100dvh-12rem)]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-6" role="status">
-          <h2 className="font-display text-xl font-semibold text-ink">No sales yet today</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-5 text-ink sm:mt-3 sm:leading-6">
-            No sales have been recorded for {scopeLabel} today. Once you make a sale, Today will show sales, confirmed money received, payment methods and anything needing attention.
-          </p>
-          <p className="mt-1 max-w-2xl text-sm leading-5 text-muted sm:mt-2 sm:leading-6">
-            Nothing is wrong. This scope simply has no sales, confirmed receipts, closed till or items needing attention yet.
-          </p>
-          {primaryAction ? (
-            <div className="mt-3 flex flex-col gap-2 sm:mt-5 lg:flex-row">
-              <TodayActionLink action={primaryAction} primary />
-              {laterActions.map((action) => (
-                <TodayActionLink key={action.href} action={action} className="hidden lg:inline-flex" />
-              ))}
-            </div>
-          ) : readOnly ? (
-            <p className="mt-4 text-sm text-muted">Selling and stock changes stay off while the account is read-only.</p>
-          ) : null}
-        </section>
-      </div>
-      {laterActions.length > 0 ? (
-        <div className="mt-4 flex flex-col gap-2 lg:hidden">
-          {laterActions.map((action) => (
-            <TodayActionLink key={action.href} action={action} />
-          ))}
-        </div>
-      ) : null}
-      <ExploreReports links={exploreLinks} />
+    <div className="mt-3 min-w-0 sm:mt-6" data-today-state="empty">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-6" role="status">
+        <h2 className="font-display text-xl font-semibold text-ink">No sales yet today</h2>
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-ink">
+          No sales have been recorded for {scopeLabel} today. Once you make a sale, Today will show sales, confirmed money received, payment methods and anything needing attention.
+        </p>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+          Nothing is wrong. This scope simply has no sales, confirmed receipts, closed till or items needing attention yet.
+        </p>
+        {primaryAction ? (
+          <div className="mt-3 flex flex-col gap-2 sm:mt-5 lg:flex-row">
+            <TodayActionLink action={primaryAction} primary />
+            {laterActions.map((action) => (
+              <TodayActionLink key={action.href} action={action} className="hidden lg:inline-flex" />
+            ))}
+          </div>
+        ) : readOnly ? (
+          <p className="mt-4 text-sm text-muted">Selling and stock changes stay off while the account is read-only.</p>
+        ) : null}
+      </section>
+      <ExploreReports links={exploreLinks} laterActions={laterActions} />
     </div>
   );
 }
@@ -211,28 +202,39 @@ function TodayActionLink({
   );
 }
 
-function ExploreReports({ links }: { links: Stage3aLink[] }) {
-  if (links.length === 0) return null;
+function ExploreReports({ links, laterActions }: { links: Stage3aLink[]; laterActions: TodayNextAction[] }) {
+  if (links.length === 0 && laterActions.length === 0) return null;
   return (
-    <section id="explore-reports" aria-labelledby="explore-reports-title" className="mt-3 min-w-0 sm:mt-4">
-      <h2 id="explore-reports-title" className="font-display text-lg font-semibold text-ink">Next steps</h2>
-      <p className="mt-1 max-w-2xl text-sm text-muted">A few reports you can open from here.</p>
-      <ul className="mt-3 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">
-        {links.map((link) => (
-          <li key={link.href} className="border-b border-slate-100 last:border-0">
-            <Link href={link.href} data-today-action="true" className={`flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 ${FOCUS}`}>
-              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accentSoft text-accent">
-                <NavIcon iconKey={link.iconKey} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-ink">{link.label}</span>
-                <span className="block text-xs leading-5 text-muted">{link.purpose}</span>
-              </span>
-              <span className="shrink-0 text-slate-400" aria-hidden="true">›</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+    <section id="explore-reports" aria-labelledby="explore-reports-title" className="mt-4 min-w-0">
+      <h2 id="explore-reports-title" className="font-display text-lg font-semibold text-ink">Other ways to get started</h2>
+      <p className="mt-1 max-w-2xl text-sm text-muted">
+        {laterActions.length > 0 ? 'Stock changes and a few reports sit here.' : 'A few reports you can open from here.'}
+      </p>
+      {laterActions.length > 0 ? (
+        <div className="mt-3 flex flex-col gap-2 lg:hidden">
+          {laterActions.map((action) => (
+            <TodayActionLink key={action.href} action={action} />
+          ))}
+        </div>
+      ) : null}
+      {links.length > 0 ? (
+        <ul className="mt-3 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">
+          {links.map((link) => (
+            <li key={link.href} className="border-b border-slate-100 last:border-0">
+              <Link href={link.href} data-today-action="true" className={`flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 ${FOCUS}`}>
+                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accentSoft text-accent">
+                  <NavIcon iconKey={link.iconKey} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-ink">{link.label}</span>
+                  <span className="block text-xs leading-5 text-muted">{link.purpose}</span>
+                </span>
+                <span className="shrink-0 text-slate-400" aria-hidden="true">›</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </section>
   );
 }

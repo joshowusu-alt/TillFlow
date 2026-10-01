@@ -82,7 +82,8 @@ describe('Today empty and partial states', () => {
     expect(markup).toContain('Nothing is wrong');
     expect(markup).toContain('Open Sell');
     expect(markup).toContain('Add stock');
-    expect(markup).toContain('Next steps');
+    expect(markup).toContain('Other ways to get started');
+    expect(markup).not.toContain('100dvh');
     expect(markup).not.toContain('Understand sales');
     expect(markup.split('Trading').length - 1).toBeLessThanOrEqual(2);
     expect(markup).not.toContain('Last seven dates');

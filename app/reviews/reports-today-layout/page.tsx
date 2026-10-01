@@ -1,8 +1,11 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import BottomTabBar from '@/components/BottomTabBar';
+import { ReportsCompactBillingBanner, ReportsCompactSetupBanner } from '@/components/reports/ReportsCompactBanners';
 import TodayScreen from '@/components/reports/today/TodayScreen';
+import { todayNextActions, type TodaySnapshot } from '@/lib/reports/today/model';
+import { stage3aExploreNextSteps } from '@/lib/reports/today/stage3a-nav';
 import { isReportsStage3aAllowed } from '@/lib/reviews/reports-stage3a-gate';
-import type { TodaySnapshot } from '@/lib/reports/today/model';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,15 +50,84 @@ function snapshot(fixture: FixtureId): TodaySnapshot {
   };
 }
 
+const BANNERS = ['none', 'setup', 'trial', 'both'] as const;
+type BannerMode = (typeof BANNERS)[number];
+
+function quietSnapshot(): TodaySnapshot {
+  return {
+    readCount: 1,
+    salesTodayPence: 0,
+    salesCount: 0,
+    yesterdayPence: 0,
+    days: [],
+    moneyReceivedPence: 0,
+    methods: [],
+    cashDifferencePence: null,
+    comparison: null,
+    branches: null,
+    profit: { state: 'omitted', grossProfitPence: null },
+    topProducts: [],
+    attention: [],
+  };
+}
+
 export default function ReportsTodayLayoutReviewPage({
   searchParams,
 }: {
-  searchParams?: { fixture?: string };
+  searchParams?: { fixture?: string; state?: string; banner?: string };
 }) {
   if (!isReportsStage3aAllowed()) notFound();
   const fixture = (searchParams?.fixture && searchParams.fixture in FIXTURES
     ? searchParams.fixture
     : 'medium') as FixtureId;
+  if (searchParams?.state === 'empty') {
+    const banner = (BANNERS.includes(searchParams.banner as BannerMode) ? searchParams.banner : 'none') as BannerMode;
+    const exploreLinks = stage3aExploreNextSteps(new Set([
+      '/reports/dashboard',
+      '/reports/money-received',
+      '/reports/momo-confirmation',
+      '/reports/stock-movements',
+    ]));
+    return (
+      <div data-today-layout-review data-today-fixture="empty" data-banner-mode={banner}>
+        {banner === 'setup' || banner === 'both' ? (
+          <ReportsCompactSetupBanner
+            title="Getting ready"
+            detail="Tell us what kind of business you run."
+            cta="Begin setup"
+          />
+        ) : null}
+        {banner === 'trial' || banner === 'both' ? (
+          <ReportsCompactBillingBanner
+            message="Your TillFlow trial has 8 days left."
+            actionLabel="View billing"
+            href="/settings/billing"
+            tone="blue"
+          />
+        ) : null}
+        <main className="app-main-shell">
+          <TodayScreen
+            section="today"
+            scopeLabel="Sample Main Branch"
+            dateLabel="Wednesday 30 September 2026 · Local time"
+            zoneName="GMT"
+            updatedLabel=""
+            readOnly={false}
+            currency="GHS"
+            storeId="sample-branch"
+            links={[]}
+            exploreLinks={exploreLinks}
+            nextActions={todayNextActions({ role: 'OWNER', readOnly: false })}
+            salesHref="/reports/dashboard"
+            snapshot={quietSnapshot()}
+            blocked={null}
+            failed={false}
+          />
+        </main>
+        <BottomTabBar userRole="OWNER" />
+      </div>
+    );
+  }
   return (
     <div data-today-layout-review data-today-fixture={fixture}>
       <TodayScreen
