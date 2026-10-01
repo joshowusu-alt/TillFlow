@@ -48,10 +48,8 @@ export default async function AnalyticsPage({
     <div className="space-y-4 sm:space-y-5">
       {opened.readOnly ? <ReportReadOnlyBanner /> : null}
       <ReportsDestinationHead
-        pathname="/reports/analytics"
         title="Sales analytics"
         scopeLabel={scopeLabel}
-        storeId={opened.branch.selected === 'ALL' ? null : opened.branch.selected}
         actions={<PlanFeatureBadge plan="GROWTH" />}
       />
       <p className="text-xs text-black/45">

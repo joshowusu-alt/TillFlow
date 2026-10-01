@@ -15,10 +15,10 @@ export default async function ReportsLayout({ children }: { children: React.Reac
   const pathname = headers().get('x-pathname') || '';
   const todayOwnsRestrictedCopy = pathname === '/reports';
   return (
-    <>
+    <div data-reports-focus-scope className="min-w-0">
       {READ_ONLY_BILLING.has(billing) && !todayOwnsRestrictedCopy ? <ReportReadOnlyBanner /> : null}
       <ReportsContextNav businessId={business.id} />
       {children}
-    </>
+    </div>
   );
 }

@@ -273,10 +273,8 @@ export default async function BusinessMovementReportPage({
     <div className="space-y-6">
       {opened.readOnly ? <ReportReadOnlyBanner /> : null}
       <ReportsDestinationHead
-        pathname="/reports/business-movement"
         title="Business movement"
         scopeLabel={scopeLabel}
-        storeId={selectedStoreId === 'ALL' ? null : selectedStoreId}
         actions={
           <div className="flex flex-wrap gap-2">
             <Link

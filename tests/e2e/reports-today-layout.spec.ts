@@ -1,3 +1,4 @@
+import axe from 'axe-core';
 import { test, expect, type Page } from '@playwright/test';
 
 for (const width of [320, 390] as const) {
@@ -175,4 +176,165 @@ for (const width of [320, 390] as const) {
       expect(last.top).toBeGreaterThanOrEqual(0);
     });
   }
+}
+
+type FocusBox = {
+  name: string;
+  tag: string;
+  top: number;
+  bottom: number;
+  barTop: number | null;
+  inBar: boolean;
+  outline: string;
+  scrollMarginBottom: string;
+};
+
+async function focusedBox(page: Page): Promise<FocusBox | null> {
+  return page.evaluate(() => {
+    const element = document.activeElement;
+    if (!(element instanceof HTMLElement) || element === document.body) return null;
+    const rect = element.getBoundingClientRect();
+    const bar = document.querySelector('nav[aria-label="Primary mobile navigation"]');
+    const barRect = bar?.getBoundingClientRect() ?? null;
+    const style = getComputedStyle(element);
+    return {
+      name: (element.getAttribute('aria-label') || element.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 80),
+      tag: element.tagName,
+      top: rect.top,
+      bottom: rect.bottom,
+      barTop: barRect ? barRect.top : null,
+      inBar: Boolean(element.closest('nav[aria-label="Primary mobile navigation"]')),
+      outline: style.outlineStyle,
+      scrollMarginBottom: style.scrollMarginBottom,
+    };
+  });
+}
+
+async function assertCustomerFocusClearsBar(page: Page, path: string, width: number) {
+  await page.setViewportSize({ width, height: 844 });
+  await page.goto(path);
+  const seen: string[] = [];
+  for (let step = 0; step < 28; step += 1) {
+    await page.keyboard.press('Tab');
+    await page.waitForTimeout(350);
+    const box = await focusedBox(page);
+    if (!box || box.inBar) continue;
+    seen.push(box.name);
+    expect(box.barTop, box.name).not.toBeNull();
+    expect(box.bottom, `${box.name} bottom ${box.bottom} bar ${box.barTop}`).toBeLessThanOrEqual((box.barTop ?? 0) - 16);
+    expect(box.top, box.name).toBeGreaterThanOrEqual(0);
+    expect(box.outline, box.name).not.toBe('none');
+  }
+  expect(seen.length).toBeGreaterThan(0);
+  return seen;
+}
+
+const FOCUS_CASES = [
+  { state: 'attention', expectName: /cash|momo|customer|supplier/i },
+  { state: 'activity', expectName: /^Trading/ },
+  { state: 'more', expectName: /^Income statement/ },
+  { state: 'failed', expectName: /^Retry$/ },
+  { state: 'empty&banner=none', expectName: /^Open Sell$|^How Today is calculated$/ },
+  { state: 'return&destination=trading', expectName: /Back to Activity/ },
+  { state: 'return&destination=income', expectName: /Back to More reports/ },
+] as const;
+
+for (const width of [320, 390] as const) {
+  for (const focusCase of FOCUS_CASES) {
+    test(`native tab keeps ${focusCase.state} above the mobile bar at ${width}px`, async ({ page }) => {
+      const seen = await assertCustomerFocusClearsBar(
+        page,
+        `/reviews/reports-today-layout?state=${focusCase.state}`,
+        width,
+      );
+      expect(seen.some((name) => focusCase.expectName.test(name))).toBe(true);
+    });
+  }
+}
+
+test('desktop reports focus does not add mobile scroll margin or another bar', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/reviews/reports-today-layout?state=attention');
+  let box: FocusBox | null = null;
+  for (let step = 0; step < 8; step += 1) {
+    await page.keyboard.press('Tab');
+    box = await focusedBox(page);
+    if (box && !box.inBar) break;
+  }
+  expect(box).not.toBeNull();
+  expect(box?.scrollMarginBottom === '0px' || box?.scrollMarginBottom === 'auto').toBe(true);
+  const visibleFixed = await page.evaluate(() => (
+    [...document.querySelectorAll('nav.fixed')].filter((element) => getComputedStyle(element).display !== 'none').length
+  ));
+  expect(visibleFixed).toBe(0);
+});
+
+test('calculation disclosure opens and closes from the keyboard', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/reviews/reports-today-layout?state=empty&banner=none');
+  const help = page.getByRole('button', { name: 'How Today is calculated' });
+  for (let step = 0; step < 12; step += 1) {
+    if (await help.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press('Tab');
+  }
+  await expect(help).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(help).toHaveAttribute('aria-expanded', 'true');
+  await expect(help).toBeFocused();
+  await expect(page.getByText('Dates are the business local date')).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(help).toHaveAttribute('aria-expanded', 'false');
+  await expect(help).toBeFocused();
+  await page.keyboard.press(' ');
+  await expect(help).toHaveAttribute('aria-expanded', 'true');
+  await expect(help).toBeFocused();
+});
+
+test('pointer click on the calculation disclosure does not jump the page', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/reviews/reports-today-layout?state=empty&banner=none');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const before = await page.evaluate(() => window.scrollY);
+  const help = page.getByRole('button', { name: 'How Today is calculated' });
+  await help.click();
+  const after = await page.evaluate(() => window.scrollY);
+  expect(Math.abs(after - before)).toBeLessThanOrEqual(1);
+  await expect(help).toHaveAttribute('aria-expanded', 'true');
+  await help.click();
+  await expect(help).toHaveAttribute('aria-expanded', 'false');
+  await expect(help).toBeFocused();
+});
+
+test('Choose a branch focuses the visible working-location control', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/reviews/reports-today-layout?state=no-branch');
+  await expect(page.getByRole('link', { name: 'Back to Today' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Choose a branch' }).click();
+  const focused = await page.evaluate(() => {
+    const element = document.activeElement;
+    return {
+      tag: element?.tagName ?? null,
+      label: element instanceof HTMLElement ? element.getAttribute('aria-label') : null,
+    };
+  });
+  expect(focused).toEqual({ tag: 'SELECT', label: 'Working location' });
+});
+
+for (const width of [390, 1440] as const) {
+  test(`reports section contrast at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/reviews/reports-today-layout?fixture=medium');
+    const more = page.getByRole('link', { name: 'More reports' });
+    if (width < 640) await expect(more).toHaveText('More', { useInnerText: true });
+    else await expect(more).toHaveText('More reports', { useInnerText: true });
+    await expect(more).toHaveAttribute('aria-label', 'More reports');
+    await page.addScriptTag({ content: axe.source });
+    const violations = await page.evaluate(async () => {
+      const root = document.querySelector('[aria-label="Reports sections"]') ?? document.body;
+      const axeRunner = (window as unknown as { axe: { run: (node: Element, options: unknown) => Promise<{ violations: Array<{ id: string; nodes: unknown[] }> }> } }).axe;
+      const results = await axeRunner.run(root, { runOnly: { type: 'rule', values: ['color-contrast'] } });
+      return results.violations;
+    });
+    expect(violations).toEqual([]);
+  });
 }

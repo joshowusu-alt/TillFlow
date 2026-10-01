@@ -79,10 +79,8 @@ export default async function DashboardPage({
     <div className="space-y-4 sm:space-y-5">
       {opened.readOnly ? <ReportReadOnlyBanner /> : null}
       <ReportsDestinationHead
-        pathname="/reports/dashboard"
         title="Trading"
         scopeLabel={scopeLabel}
-        storeId={selectedStoreId === 'ALL' ? null : selectedStoreId}
       />
       <p className="text-sm text-muted">
         {isToday

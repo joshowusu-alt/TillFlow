@@ -18,6 +18,7 @@ import {
   type Stage3aLink,
   type Stage3aSection,
 } from '@/lib/reports/today/stage3a-nav';
+import ChooseBranchButton from '@/components/reports/today/ChooseBranchButton';
 import RefreshToday from '@/components/reports/today/RefreshToday';
 import { paymentMixPresentation } from '@/lib/reports/today/method-share';
 
@@ -48,7 +49,7 @@ export type TodayScreenProps = {
   moneyHref?: string | null;
   cashHref?: string | null;
   snapshot: TodaySnapshot | null;
-  blocked: { title: string; body: string; href: string; action: string } | null;
+  blocked: { title: string; body: string; href?: string; action?: string; focusBranch?: boolean } | null;
   failed: boolean;
 };
 
@@ -72,7 +73,7 @@ export default function TodayScreen(props: TodayScreenProps) {
   const section = stage3aSection(props.section);
   const title = section === 'today' ? 'Today' : section === 'activity' ? 'Activity' : 'More reports';
   return (
-    <div className="mx-auto min-w-0 max-w-6xl overflow-x-hidden px-4 py-3 sm:px-6 sm:py-6">
+    <div className="mx-auto min-w-0 max-w-6xl overflow-x-hidden px-4 py-3 sm:px-6 sm:py-6" data-reports-focus-scope>
       <ReportsSectionHead
         title={title}
         section={section}
@@ -121,9 +122,11 @@ function BlockedPanel({ blocked }: { blocked: NonNullable<TodayScreenProps['bloc
     <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-card" role="status">
       <h2 className="font-display text-xl font-semibold text-ink">{blocked.title}</h2>
       <p className="mt-2 max-w-xl text-sm text-muted">{blocked.body}</p>
-      <Link href={blocked.href} className={`btn-primary mt-4 inline-flex min-h-11 items-center ${FOCUS}`}>
-        {blocked.action}
-      </Link>
+      {blocked.focusBranch ? <ChooseBranchButton /> : blocked.href && blocked.action ? (
+        <Link href={blocked.href} className={`btn-primary mt-4 inline-flex min-h-11 items-center ${FOCUS}`}>
+          {blocked.action}
+        </Link>
+      ) : null}
     </div>
   );
 }

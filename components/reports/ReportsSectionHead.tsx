@@ -75,7 +75,9 @@ export default function ReportsSectionHead({
                   aria-current={current ? 'page' : undefined}
                   aria-label={item.id === 'more' ? 'More reports' : undefined}
                   className={`inline-flex min-h-11 items-center justify-center rounded-lg px-3 text-sm font-semibold ${FOCUS} ${
-                    current ? 'bg-white text-ink shadow-sm' : 'text-muted hover:bg-white/70 hover:text-ink'
+                    current
+                      ? 'bg-white text-ink shadow-sm'
+                      : 'text-ink hover:bg-white/70 active:bg-slate-200'
                   }`}
                 >
                   {item.id === 'more' ? (

@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { ReportsReturnPath } from '@/components/reports/ReportsContextNav';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import { reviewScopeLabel } from '@/lib/reports/today/review-samples';
+import { returnPathFor } from '@/lib/reports/today/stage3a-nav';
 
 const WIDTHS = {
   '320': 320,
@@ -38,6 +40,7 @@ export default function Stage3aContextReview() {
   const [destination, setDestination] = useState<Destination>('trading');
   const scopeLabel = reviewScopeLabel('GROWTH', false);
   const dest = DESTINATIONS[destination];
+  const path = returnPathFor(dest.pathname);
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -67,11 +70,10 @@ export default function Stage3aContextReview() {
           <div className="mb-3 border-b border-slate-200 pb-2 text-xs font-semibold text-slate-500">
             Sample destination · {WIDTHS[viewport]}px · {dest.title}
           </div>
+          {path ? <ReportsReturnPath path={path} storeId="sample-branch" /> : null}
           <ReportsDestinationHead
-            pathname={dest.pathname}
             title={dest.title}
             scopeLabel={scopeLabel}
-            storeId="sample-branch"
           />
           <p className="mt-4 text-sm leading-6 text-slate-600">{dest.note}</p>
         </div>

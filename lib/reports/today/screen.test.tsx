@@ -121,6 +121,18 @@ describe('Today screen', () => {
     });
     expect(blocked).toContain('All branches is part of Pro');
     expect(blocked).not.toContain('GH₵');
+
+    const unselected = html({
+      snapshot: null,
+      blocked: {
+        title: 'Choose a branch',
+        body: 'Figures stay hidden until a branch is selected. Use the Working location control at the top of the screen.',
+        focusBranch: true,
+      },
+    });
+    expect(unselected).toContain('Working location control');
+    expect(unselected).toContain('>Choose a branch<');
+    expect(unselected).not.toContain('Back to Today');
   });
 
   it('explains missing costs only for the incomplete profit state', () => {

@@ -268,9 +268,8 @@ function noticeCopy(reason: string): NonNullable<TodayScreenProps['blocked']> {
   if (reason === 'SCOPE_STORE_UNSELECTED' || reason === 'SCOPE_STORE_NOT_OPERATIONAL') {
     return {
       title: 'Choose a branch',
-      body: 'Figures stay hidden until a branch is selected.',
-      href: '/reports',
-      action: 'Back to Today',
+      body: 'Figures stay hidden until a branch is selected. Use the Working location control at the top of the screen.',
+      focusBranch: true,
     };
   }
   if (reason === 'RANGE_EXCEEDS_PLAN') {

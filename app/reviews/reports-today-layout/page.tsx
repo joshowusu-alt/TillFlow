@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import BottomTabBar from '@/components/BottomTabBar';
+import { ReportsReturnPath } from '@/components/reports/ReportsContextNav';
 import { ReportsCompactBillingBanner, ReportsCompactSetupBanner } from '@/components/reports/ReportsCompactBanners';
 import TodayScreen from '@/components/reports/today/TodayScreen';
 import { todayNextActions, type TodaySnapshot } from '@/lib/reports/today/model';
-import { stage3aExploreNextSteps } from '@/lib/reports/today/stage3a-nav';
+import { reviewAttentionSampleRows } from '@/lib/reports/today/review-samples';
+import { returnPathFor, stage3aExploreNextSteps, stage3aLinks, type Stage3aSection } from '@/lib/reports/today/stage3a-nav';
 import { isReportsStage3aAllowed } from '@/lib/reviews/reports-stage3a-gate';
 
 export const dynamic = 'force-dynamic';
@@ -71,12 +73,113 @@ function quietSnapshot(): TodaySnapshot {
   };
 }
 
+const REVIEW_HREFS = new Set([
+  '/reports/dashboard',
+  '/reports/analytics',
+  '/reports/business-movement',
+  '/reports/money-received',
+  '/settings/online-store/analytics',
+  '/reports/momo-confirmation',
+  '/payments/reconciliation',
+  '/reports/cash-drawer',
+  '/reports/stock-movements',
+  '/reports/margins',
+  '/reports/reorder-suggestions',
+  '/reports/sales-by-supplier',
+  '/reports/risk-monitor',
+  '/reports/income-statement',
+  '/reports/exports',
+  '/reports/owner',
+  '/reports/audit-log',
+]);
+
+const RETURN_DESTINATIONS = {
+  trading: '/reports/dashboard',
+  analytics: '/reports/analytics',
+  movement: '/reports/business-movement',
+  income: '/reports/income-statement',
+} as const;
+
+function ReviewShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div data-today-layout-review>
+      <main className="app-main-shell" data-reports-focus-scope>
+        {children}
+      </main>
+      <BottomTabBar userRole="OWNER" />
+    </div>
+  );
+}
+
+function reviewToday(section: Stage3aSection, extras: Partial<Parameters<typeof TodayScreen>[0]>) {
+  return (
+    <TodayScreen
+      section={section}
+      scopeLabel="Sample Main Branch"
+      dateLabel="Wednesday 30 September 2026 · Local time"
+      zoneName="GMT"
+      updatedLabel="14:10"
+      readOnly={false}
+      currency="GHS"
+      storeId="sample-branch"
+      links={stage3aLinks(section, REVIEW_HREFS, { showNetworkQueue: true })}
+      salesHref="/reports/dashboard"
+      snapshot={null}
+      blocked={null}
+      failed={false}
+      {...extras}
+    />
+  );
+}
+
 export default function ReportsTodayLayoutReviewPage({
   searchParams,
 }: {
-  searchParams?: { fixture?: string; state?: string; banner?: string };
+  searchParams?: { fixture?: string; state?: string; banner?: string; destination?: string };
 }) {
   if (!isReportsStage3aAllowed()) notFound();
+  if (searchParams?.state === 'attention') {
+    const ready = snapshot('large');
+    ready.attention = reviewAttentionSampleRows();
+    return <ReviewShell>{reviewToday('today', { snapshot: ready, moneyHref: '/reports/money-received', cashHref: '/reports/cash-drawer' })}</ReviewShell>;
+  }
+  if (searchParams?.state === 'activity' || searchParams?.state === 'more') {
+    return <ReviewShell>{reviewToday(searchParams.state, {})}</ReviewShell>;
+  }
+  if (searchParams?.state === 'failed') {
+    return <ReviewShell>{reviewToday('today', { failed: true, updatedLabel: '', snapshot: null })}</ReviewShell>;
+  }
+  if (searchParams?.state === 'no-branch') {
+    return (
+      <ReviewShell>
+        <select id="operational-store-switcher" className="hidden" aria-label="Hidden branch" defaultValue="">
+          <option value="">Select branch</option>
+        </select>
+        <select id="operational-store-switcher" aria-label="Working location" defaultValue="">
+          <option value="">Select branch</option>
+          <option value="sample-branch">Sample Main Branch</option>
+        </select>
+        {reviewToday('today', {
+          snapshot: null,
+          blocked: {
+            title: 'Choose a branch',
+            body: 'Figures stay hidden until a branch is selected. Use the Working location control at the top of the screen.',
+            focusBranch: true,
+          },
+        })}
+      </ReviewShell>
+    );
+  }
+  if (searchParams?.state === 'return') {
+    const destination = RETURN_DESTINATIONS[searchParams.destination as keyof typeof RETURN_DESTINATIONS] ?? RETURN_DESTINATIONS.trading;
+    const path = returnPathFor(destination);
+    if (!path) notFound();
+    return (
+      <ReviewShell>
+        <ReportsReturnPath path={path} storeId={destination === '/reports/income-statement' ? null : 'sample-branch'} />
+      </ReviewShell>
+    );
+  }
   const fixture = (searchParams?.fixture && searchParams.fixture in FIXTURES
     ? searchParams.fixture
     : 'medium') as FixtureId;

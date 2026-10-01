@@ -98,11 +98,23 @@ describe('Stage 3A navigation correction', () => {
     ]) {
       const source = readFileSync(join(root, file), 'utf8');
       expect(source).toContain('ReportsDestinationHead');
+      expect(source).not.toContain('ReportsReturnPath');
+      expect(source).not.toContain('Back to Activity');
       expect(source).not.toContain("href=\"/reports/command-center\"");
     }
     const head = readFileSync(join(root, 'components/reports/ReportsDestinationHead.tsx'), 'utf8');
-    expect(head).toContain('ReportsReturnPath');
-    expect(head).toContain('returnPathFor');
+    expect(head).not.toContain('ReportsReturnPath');
+    expect(head).not.toContain('Back to Activity');
+    const layout = readFileSync(join(root, 'app/(protected)/reports/layout.tsx'), 'utf8');
+    const context = readFileSync(join(root, 'lib/reports/today/context-nav.tsx'), 'utf8');
+    expect(layout).toContain('ReportsContextNav');
+    expect(context).toContain('<ReportsReturnPath');
+    const income = readFileSync(join(root, 'app/(protected)/reports/income-statement/page.tsx'), 'utf8');
+    const digest = readFileSync(join(root, 'app/(protected)/reports/weekly-digest/page.tsx'), 'utf8');
+    expect(income).not.toContain('Back to More reports');
+    expect(income).not.toContain('Reports location');
+    expect(digest).not.toContain('Back to Today');
+    expect(digest).not.toContain('Reports location');
   });
 
   it('does not link withheld reports from customer screens', () => {

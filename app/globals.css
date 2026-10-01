@@ -603,6 +603,14 @@ html:has(input:focus, textarea:focus, select:focus) .safe-floating-bottom {
   max-height: min(70dvh, calc(100dvh - var(--app-header-offset) - 1rem));
 }
 
+/* Reports content only. The fixed mobile tab bar is outside this scope.
+   Scroll margin lets native focus scrolling clear that bar; it does not add a bar. */
+@media (max-width: 1023px) {
+  [data-reports-focus-scope] :is(a, button, summary, input, select, textarea) {
+    scroll-margin-bottom: calc(var(--mobile-bottom-nav-height) + 1.5rem);
+  }
+}
+
 @media (min-width: 1024px) {
   html {
     scroll-padding-top: var(--app-header-offset-desktop);
