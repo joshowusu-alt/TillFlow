@@ -142,7 +142,7 @@ describe('Today screen', () => {
     expect(omitted).not.toContain('data-profit-state="incomplete"');
   });
 
-  it('omits a payment percentage unless the share is a meaningful positive number', () => {
+  it('omits every payment percentage when a negative method would make the shares exceed 100', () => {
     const mixed = html({
       snapshot: snapshot({
         methods: [
@@ -154,26 +154,55 @@ describe('Today screen', () => {
       }),
     });
     const methods = mixed.slice(mixed.indexOf('Payment methods'));
-    expect(methods).toContain('84%');
-    expect(methods).toContain('21%');
-    expect(methods).not.toContain('· 0%');
+    expect(methods).toContain('GH₵80.00');
+    expect(methods).toContain('−GH₵5.00');
+    expect(methods).not.toContain('%');
+    expect(methods).not.toContain('data-payment-mix-bar="visible"');
     expect(methods).not.toContain('NaN');
     expect(methods).not.toContain('Infinity');
-    expect(methods).toContain('>Card</span>');
-    expect(methods).not.toContain('Card</span><span class="text-right"><span data-financial-amount="financial-amount" data-testid="financial-amount" class="financial-amount financial-amount--compact">GH₵0.00</span> ·');
+
+    const positive = html({
+      snapshot: snapshot({
+        methods: [
+          { method: 'CASH', label: 'Cash', amountPence: 70_000 },
+          { method: 'MOMO', label: 'MoMo', amountPence: 50_000 },
+        ],
+      }),
+    });
+    const positiveMethods = positive.slice(positive.indexOf('Payment methods'));
+    expect(positiveMethods).toContain('58%');
+    expect(positiveMethods).toContain('42%');
+    expect(positiveMethods).toContain('data-payment-mix-bar="visible"');
+
+    const withZero = html({
+      snapshot: snapshot({
+        methods: [
+          { method: 'CASH', label: 'Cash', amountPence: 50 },
+          { method: 'MOMO', label: 'MoMo', amountPence: 50 },
+          { method: 'CARD', label: 'Card', amountPence: 0 },
+        ],
+      }),
+    });
+    const withZeroMethods = withZero.slice(withZero.indexOf('Payment methods'));
+    expect(withZeroMethods).toContain('data-payment-mix-bar="visible"');
+    expect(withZeroMethods).toContain('50%');
+    expect(withZeroMethods).not.toContain('· 0%');
 
     const zero = html({ snapshot: snapshot({ methods: [{ method: 'CASH', label: 'Cash', amountPence: 0 }] }) });
-    expect(zero.slice(zero.indexOf('Payment methods'))).not.toContain('%');
+    expect(zero.slice(zero.indexOf('Payment methods'))).not.toContain('data-payment-mix-bar="visible"');
 
     const negative = html({
       snapshot: snapshot({
         methods: [
-          { method: 'CASH', label: 'Cash', amountPence: 100 },
+          { method: 'CASH', label: 'Cash', amountPence: -100 },
           { method: 'MOMO', label: 'MoMo', amountPence: -500 },
         ],
       }),
     });
-    expect(negative.slice(negative.indexOf('Payment methods'))).not.toContain('%');
+    const negativeMethods = negative.slice(negative.indexOf('Payment methods'));
+    expect(negativeMethods).not.toContain('%');
+    expect(negativeMethods).not.toContain('data-payment-mix-bar="visible"');
+    expect(negativeMethods).toContain('−GH₵5.00');
   });
 
   it('uses the desktop and mobile labels on the activity landing', () => {

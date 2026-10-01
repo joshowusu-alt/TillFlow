@@ -113,7 +113,19 @@ function Field({
   return (
     <label className="block text-xs font-semibold text-slate-600" htmlFor={id}>
       {label}
-      <select id={id} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-ink" value={value} onChange={(event) => onChange(event.target.value)}>
+      <select
+        id={id}
+        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-ink"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+          event.preventDefault();
+          const index = options.indexOf(value);
+          const next = event.key === 'ArrowDown' ? Math.min(options.length - 1, index + 1) : Math.max(0, index - 1);
+          onChange(options[next]);
+        }}
+      >
         {options.map((option) => (
           <option key={option} value={option}>{option}</option>
         ))}
