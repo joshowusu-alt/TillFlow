@@ -159,14 +159,11 @@ function QuietToday({
     <div className="mt-3 min-w-0 sm:mt-6" data-today-state="empty">
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-6" role="status">
         <h2 className="font-display text-xl font-semibold text-ink">No sales yet today</h2>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-ink">
+        <p className="mt-2 max-w-2xl text-sm leading-5 text-ink sm:mt-3 sm:leading-6">
           No sales have been recorded for {scopeLabel} today. Once you make a sale, Today will show sales, confirmed money received, payment methods and anything needing attention.
         </p>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-          Nothing is wrong. This scope simply has no sales, confirmed receipts, closed till or items needing attention yet.
-        </p>
         {primaryAction ? (
-          <div className="mt-3 flex flex-col gap-2 sm:mt-5 lg:flex-row">
+          <div className="mt-2 flex flex-col gap-2 sm:mt-5 lg:flex-row">
             <TodayActionLink action={primaryAction} primary />
             {laterActions.map((action) => (
               <TodayActionLink key={action.href} action={action} className="hidden lg:inline-flex" />
@@ -175,6 +172,9 @@ function QuietToday({
         ) : readOnly ? (
           <p className="mt-4 text-sm text-muted">Selling and stock changes stay off while the account is read-only.</p>
         ) : null}
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
+          Nothing is wrong. This scope simply has no sales, confirmed receipts, closed till or items needing attention yet.
+        </p>
       </section>
       <ExploreReports links={exploreLinks} laterActions={laterActions} />
     </div>

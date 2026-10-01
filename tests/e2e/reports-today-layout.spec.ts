@@ -106,9 +106,15 @@ for (const width of [320, 390] as const) {
       const heading = page.getByRole('heading', { name: 'Other ways to get started' });
       const headingBox = await heading.boundingBox();
       const stock = await box(page, 'Add stock');
+      const note = await page.getByText('Nothing is wrong', { exact: false }).boundingBox();
+      const card = await page.locator('[data-today-state="empty"] > section[role="status"]').boundingBox();
       expect(headingBox).not.toBeNull();
-      expect(headingBox!.y - sell.bottom).toBeLessThanOrEqual(64);
-      expect(headingBox!.y - sell.bottom).toBeGreaterThanOrEqual(0);
+      expect(note).not.toBeNull();
+      expect(card).not.toBeNull();
+      expect(note!.y - sell.bottom).toBeLessThanOrEqual(64);
+      expect(note!.y - sell.bottom).toBeGreaterThanOrEqual(0);
+      expect(headingBox!.y - (card!.y + card!.height)).toBeLessThanOrEqual(64);
+      expect(headingBox!.y - (card!.y + card!.height)).toBeGreaterThanOrEqual(0);
       expect(stock.top - (headingBox!.y + headingBox!.height)).toBeLessThanOrEqual(64);
       expect(stock.width).toBeGreaterThanOrEqual(44);
       expect(stock.height).toBeGreaterThanOrEqual(44);
