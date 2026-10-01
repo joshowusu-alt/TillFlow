@@ -52,10 +52,11 @@ export function TradingWelcome() {
  */
 export function AnalyticsResult({ truncateMoney }: { truncateMoney: boolean }) {
   const revenue = money(DESTINATION_LONG_PENCE);
+  const label = truncateMoney ? 'text-[10px] text-black/50 sm:text-xs' : 'text-xs font-semibold text-slate-700';
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8" data-destination-result="analytics">
       <div className="card p-3 sm:p-4" data-primary-card="true">
-        <div className="text-[10px] sm:text-xs text-black/50">Revenue</div>
+        <div className={label}>Revenue</div>
         {truncateMoney ? (
           <div className="mt-1 text-base sm:text-xl font-bold text-emerald-600 truncate" data-analytics-amount="" data-first-figure="true">{revenue}</div>
         ) : (
@@ -65,31 +66,31 @@ export function AnalyticsResult({ truncateMoney }: { truncateMoney: boolean }) {
         )}
       </div>
       <div className="card p-3 sm:p-4">
-        <div className="text-[10px] sm:text-xs text-black/50">Gross Profit</div>
+        <div className={label}>Gross Profit</div>
         <div className="mt-1 text-base sm:text-xl font-bold truncate text-amber-700">Costs incomplete</div>
       </div>
       <div className="card p-3 sm:p-4">
-        <div className="text-[10px] sm:text-xs text-black/50">Margin</div>
+        <div className={label}>Margin</div>
         <div className="mt-1 text-base sm:text-xl font-bold text-amber-700">Costs incomplete</div>
       </div>
       <div className="card p-3 sm:p-4">
-        <div className="text-[10px] sm:text-xs text-black/50">Transactions</div>
+        <div className={label}>Transactions</div>
         <div className="mt-1 text-base sm:text-xl font-bold">4</div>
       </div>
       <div className="card p-3 sm:p-4">
-        <div className="text-[10px] sm:text-xs text-black/50">Avg Ticket</div>
+        <div className={label}>Avg Ticket</div>
         <div className="mt-1 text-base sm:text-xl font-bold truncate">—</div>
       </div>
       <div className="card p-3 sm:p-4">
-        <div className="text-[10px] sm:text-xs text-black/50">Growth</div>
+        <div className={label}>Growth</div>
         <div className="mt-1 text-base sm:text-xl font-bold">—</div>
       </div>
       <div className="card p-3 sm:p-4">
-        <div className="text-[10px] sm:text-xs text-black/50">Top Product</div>
+        <div className={label}>Top Product</div>
         <div className="mt-1 truncate font-bold text-xs sm:text-sm">Sample rice</div>
       </div>
       <div className="card p-3 sm:p-4">
-        <div className="text-[10px] sm:text-xs text-black/50">Peak Hour</div>
+        <div className={label}>Peak Hour</div>
         <div className="mt-1 text-base sm:text-xl font-bold">—</div>
       </div>
     </div>

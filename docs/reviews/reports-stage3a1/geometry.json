@@ -627,7 +627,7 @@
       "h1": [
         "Sales analytics"
       ],
-      "figureTop": 474,
+      "figureTop": 475,
       "figureText": "GH₵98,765,432.10",
       "blocks": [],
       "navTop": 560,
@@ -712,7 +712,7 @@
       "h1": [
         "Sales analytics"
       ],
-      "figureTop": 406,
+      "figureTop": 407,
       "figureText": "GH₵98,765,432.10",
       "blocks": [],
       "navTop": 764,
@@ -1024,13 +1024,7 @@
     },
     {
       "label": "destination-sales-analytics",
-      "violations": [
-        {
-          "id": "color-contrast",
-          "impact": "serious",
-          "n": 8
-        }
-      ]
+      "violations": []
     },
     {
       "label": "destination-business-movement",
@@ -1038,13 +1032,7 @@
     },
     {
       "label": "destination-analytics-1440",
-      "violations": [
-        {
-          "id": "color-contrast",
-          "impact": "serious",
-          "n": 8
-        }
-      ]
+      "violations": []
     }
   ]
 }
