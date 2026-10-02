@@ -180,6 +180,8 @@ export default async function MoneyReceivedReportPage({
           Use this report for cash-in totals. A later return or void does not erase a confirmed
           receipt already shown here. Full returns appear under Refund outflows; sale edits that
           gave money back appear as negative lines in the table below.
+          {' '}Reports Today shows net money received after completed refunds. Here, confirmed receipts
+          and refund outflows are shown separately, so the headline can differ even for the same dates.
         </p>
         <p className="mt-2 text-xs text-slate-600">
           {business.name} ·{' '}
@@ -266,7 +268,7 @@ export default async function MoneyReceivedReportPage({
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Money received"
+          label="Confirmed receipts"
           value={queryFailed || mr?.valuePence == null ? '—' : formatMoney(mr.valuePence, currency)}
           helper="Confirmed receipts in period (net of sale amends)"
         />
@@ -277,7 +279,7 @@ export default async function MoneyReceivedReportPage({
               ? '—'
               : formatMoney(refunds.valuePence, currency)
           }
-          helper="Returns/voids paid back — not subtracted from Money Received"
+          helper="Paid-back refunds shown separately; not deducted from Confirmed receipts"
         />
         <Link
           href={`/reports/momo-confirmation?from=${fromIso}&to=${toIso}&storeId=${selectedStoreId}`}

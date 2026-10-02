@@ -240,7 +240,7 @@ describe('Business Movement 6H — owner UX polish', () => {
     expect(page).toContain('data-testid="owner-summary-strip"');
     expect(page).toContain('In short');
     expect(page).toContain('What changed');
-    expect(page).toContain('Why it matters');
+    expect(page).toContain('Supporting figures');
     expect(page).toContain('What to check');
     expect(page).toContain('Review MoMo confirmations');
     expect(page).toContain('Open Money Received');

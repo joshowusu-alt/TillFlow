@@ -43,8 +43,8 @@ describe('Reports dashboard clarity pass', () => {
     const commandCenter = readSource('app/(protected)/reports/command-center/page.tsx');
 
     // Phase 2A: label updated to owner-friendly wording
-    expect(dashboard).toContain('Closed-shift cash difference');
-    expect(dashboard).toContain('Difference between expected and counted cash from closed shifts.');
+    expect(dashboard).toContain('Total cash discrepancies');
+    expect(dashboard).toContain('Shortages and overages added without cancelling each other out. Cash Drawer shows the net difference.');
     // Calculation logic unchanged
     expect(dashboard).toContain('closedAt: { gte: start, lt: endExclusive }');
     expect(dashboard).toContain('Math.abs(v.variance ?? 0)');
@@ -57,7 +57,7 @@ describe('Reports dashboard clarity pass', () => {
     const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
 
     // Phase 2A: scopeHelper text updated to be more owner-friendly
-    expect(dashboard).toContain('Expenses and net profit use the business-wide accounting records currently available.');
+    expect(dashboard).toContain('Sales and gross profit are filtered to this branch. Expenses cover the whole business.');
     expect(dashboard).toContain('helper={scopeHelper}');
   });
 

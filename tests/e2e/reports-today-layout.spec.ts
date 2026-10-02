@@ -364,3 +364,49 @@ for (const width of [390, 1440] as const) {
     expect(violations).toEqual([]);
   });
 }
+
+// Live-review regressions: use actual Analytics and Business Movement amount components.
+for (const width of [320, 390, 768, 1024, 1440] as const) {
+  for (const state of ['analytics-values', 'movement-values']) {
+    test(`${state} readable complete amounts @ ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/reviews/reports-today-layout?state=${state}`);
+      const amounts = page.locator('[data-financial-amount]');
+      await expect(amounts.first()).toBeVisible();
+      const measures = await amounts.evaluateAll(nodes => nodes.map(element => {
+        const node = element as HTMLElement;
+        const style = getComputedStyle(node);
+        return { font: parseFloat(style.fontSize), width: node.clientWidth, scroll: node.scrollWidth, whiteSpace: style.whiteSpace };
+      }));
+      for (const measure of measures) {
+        expect(measure.font).toBeGreaterThanOrEqual(16);
+        expect(measure.whiteSpace).toBe('nowrap');
+        expect(measure.scroll).toBeLessThanOrEqual(measure.width + 1);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      if (width === 320 || width === 1440) {
+        const screenshot = testInfo.outputPath('report.png');
+        await page.screenshot({ path: screenshot, fullPage: true });
+        await testInfo.attach(`${state}-${width}`, { path: screenshot, contentType: 'image/png' });
+      }
+      if (state === 'analytics-values') {
+        await page.getByText('Sales by hour and day — view figures', { exact: true }).click();
+        await expect(page.getByRole('table', { name: 'Sales by hour and day' })).toContainText('Sales count');
+        await expect(page.getByRole('table', { name: 'Sales by hour and day' })).toContainText('4');
+      }
+    });
+  }
+  test(`Trading closed filter is visible and keyboard opens @ ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/reviews/reports-today-layout?state=trading-filters');
+    const summary = page.locator('.reports-filter-disclosure > summary');
+    await expect(summary).toHaveAccessibleName('Adjust date range / branch');
+    await expect(summary).toBeVisible();
+    await expect(page.getByLabel('From', { exact: true })).toBeHidden();
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByLabel('From', { exact: true })).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(page.getByLabel('From', { exact: true })).toBeHidden();
+  });
+}

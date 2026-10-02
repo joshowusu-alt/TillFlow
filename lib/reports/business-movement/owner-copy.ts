@@ -267,15 +267,24 @@ export function rewriteOwnerPeriodCopy(text: string, labels: OwnerPeriodLabels):
     .replace(/this period/gi, `in ${labels.currentFull}`);
 }
 
+/** Translate implementation terms at the presentation boundary only. */
+function readableEvidence(text: string): string {
+  return text.replace(/\(createdAt\)/g, '(by invoice date)')
+    .replace(/\(receivedAt, CONFIRMED\)/g, '(confirmed, by receipt date)')
+    .replace(/\btx\b/g, 'sales').replace(/\bSKU\b/g, 'product')
+    .replace(/\bproductId\b/g, 'product').replace(/\bqty\b/g, 'quantity')
+    .replace(/Δ/g, 'change');
+}
+
 export function ownerInsightCopy(
   insight: RankedBusinessMovementInsight,
   labels: OwnerPeriodLabels,
 ): { fact: string; evidence: string; signal: string; recommendedCheck: string } {
   return {
-    fact: rewriteOwnerPeriodCopy(insight.fact, labels),
-    evidence: rewriteOwnerPeriodCopy(insight.evidence, labels),
-    signal: rewriteOwnerPeriodCopy(ownerWhyItMatters(insight.signal), labels),
-    recommendedCheck: rewriteOwnerPeriodCopy(insight.recommendedCheck, labels),
+    fact: readableEvidence(rewriteOwnerPeriodCopy(insight.fact, labels)),
+    evidence: readableEvidence(rewriteOwnerPeriodCopy(insight.evidence, labels)),
+    signal: readableEvidence(rewriteOwnerPeriodCopy(ownerWhyItMatters(insight.signal), labels)),
+    recommendedCheck: readableEvidence(rewriteOwnerPeriodCopy(insight.recommendedCheck, labels)),
   };
 }
 

@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { agreeingReportScope, ScopeAgreementError, todayNextActions } from '@/lib/reports/today/model';
 import { loadToday, type TodaySnapshot } from '@/lib/reports/today/load';
-import { stage3aExploreNextSteps, stage3aLinks, stage3aSection, withStoreScope } from '@/lib/reports/today/stage3a-nav';
+import { stage3aExploreNextSteps, stage3aLinks, stage3aSection, todayDetailHref, withStoreScope } from '@/lib/reports/today/stage3a-nav';
 import { tradingReplacesSalesAnalytics } from '@/lib/reports/today/trading-parity';
 import { buildTodayWindows, shiftLocalDateKey, type TodayPlan } from '@/lib/reports/today/windows';
 import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
@@ -179,14 +179,14 @@ async function ReportsToday({ search }: { search?: Search }) {
     links,
     exploreLinks: scopeStoreLinks(stage3aExploreNextSteps(allowed, linkOptions), storeId),
     moneyHref: allowed.has('/reports/money-received')
-      ? withStoreScope('/reports/money-received', storeId)
+      ? todayDetailHref('/reports/money-received', todayKey, storeId)
       : null,
     cashHref: allowed.has('/reports/cash-drawer')
-      ? withStoreScope(`/reports/cash-drawer?from=${todayKey}&to=${todayKey}`, storeId)
+      ? todayDetailHref('/reports/cash-drawer', todayKey, storeId)
       : null,
     nextActions: todayNextActions({ role: hub.user?.role ?? '', readOnly }),
     salesHref: allowed.has('/reports/dashboard')
-      ? withStoreScope(`/reports/dashboard?from=${todayKey}&to=${todayKey}`, storeId)
+      ? todayDetailHref('/reports/dashboard', todayKey, storeId)
       : null,
   };
 
@@ -215,7 +215,7 @@ async function ReportsToday({ search }: { search?: Search }) {
       storeNames: data.stores,
       hrefForShift: '/shifts',
       hrefForCash: allowed.has('/reports/cash-drawer')
-        ? withStoreScope(`/reports/cash-drawer?from=${todayKey}&to=${todayKey}`, storeId)
+        ? todayDetailHref('/reports/cash-drawer', todayKey, storeId)
         : null,
       hrefForMomo: allowed.has('/reports/momo-confirmation')
         ? withStoreScope('/reports/momo-confirmation', storeId)

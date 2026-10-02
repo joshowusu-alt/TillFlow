@@ -3,7 +3,7 @@ import Link from 'next/link';
 import DownloadLink from '@/components/DownloadLink';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import { reportScopeLabel } from '@/lib/reports/scope-labels';
-import StatCard from '@/components/StatCard';
+import ReportAmountCard from '@/components/reports/ReportAmountCard';
 import EmptyState from '@/components/EmptyState';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
@@ -82,7 +82,6 @@ function InsightCard({
         <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
           {ownerCategoryLabel(insight.category)}
         </span>
-        {confidenceHint ? <span>{confidenceHint}</span> : null}
       </div>
       <dl className="space-y-2">
         <div>
@@ -93,18 +92,17 @@ function InsightCard({
         </div>
         <div>
           <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Why it matters
-          </dt>
-          <dd className="text-slate-700">{copy.signal}</dd>
-          <dd className="mt-1 text-xs text-slate-500">{copy.evidence}</dd>
-        </div>
-        <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             What to check
           </dt>
           <dd className="text-slate-700">{copy.recommendedCheck}</dd>
         </div>
       </dl>
+      <details className="mt-2">
+        <summary className="flex min-h-11 cursor-pointer items-center text-xs font-semibold text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">Supporting figures</summary>
+        <p className="text-xs leading-5 text-slate-600">{copy.evidence}</p>
+        <p className="mt-1 text-xs leading-5 text-slate-600">{copy.signal}</p>
+        {confidenceHint ? <p className="mt-1 text-xs text-slate-600">Data confidence: {confidenceHint}</p> : null}
+      </details>
     </article>
   );
 }
@@ -317,7 +315,8 @@ export default async function BusinessMovementReportPage({
           </div>
         }
       />
-      <div data-first-metric="">
+      <details data-first-metric="">
+        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">Exact comparison dates</summary>
         <p
           className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-800"
           data-testid="comparing-line"
@@ -327,7 +326,7 @@ export default async function BusinessMovementReportPage({
         <p className="mt-1 text-xs text-slate-500" data-testid="period-audit-range">
           {chrome.currentRangeKeys} vs {chrome.comparisonRangeKeys}
         </p>
-      </div>
+      </details>
 
       <section
         className="rounded-xl border border-slate-200 bg-white px-4 py-4 text-sm text-slate-800"
@@ -384,10 +383,10 @@ export default async function BusinessMovementReportPage({
         </label>
       </ReportFilterCard>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ReportAmountCard currency={currency}
           label="Sales"
-          value={formatMoney(result.headline.salesValuePence.current, currency)}
+          pence={result.headline.salesValuePence.current}
           helper={changeHelper(result.headline.salesValuePence, currency, chrome)}
           tone={
             result.headline.salesValuePence.absoluteChange < 0
@@ -397,9 +396,9 @@ export default async function BusinessMovementReportPage({
                 : 'default'
           }
         />
-        <StatCard
+        <ReportAmountCard currency={currency}
           label="Money Received"
-          value={formatMoney(result.money.moneyReceived.current, currency)}
+          pence={result.money.moneyReceived.current}
           helper={
             queryFailed
               ? 'Money layer unavailable'
@@ -407,21 +406,21 @@ export default async function BusinessMovementReportPage({
           }
           tone="accent"
         />
-        <StatCard
+        <ReportAmountCard currency={currency}
           label="Refunds"
-          value={formatMoney(result.money.refundOutflows.current, currency)}
+          pence={result.money.refundOutflows.current}
           helper={changeHelper(result.money.refundOutflows, currency, chrome)}
           tone={result.money.refundOutflows.absoluteChange > 0 ? 'warn' : 'default'}
         />
-        <StatCard
+        <ReportAmountCard currency={currency}
           label="MoMo to confirm"
-          value={formatMoney(result.money.needsMomoConfirmation.current, currency)}
+          pence={result.money.needsMomoConfirmation.current}
           helper={changeHelper(result.money.needsMomoConfirmation, currency, chrome)}
           tone={result.money.needsMomoConfirmation.current > 0 ? 'warn' : 'default'}
         />
-        <StatCard
+        <ReportAmountCard currency={currency}
           label="Sales vs money in"
-          value={gap == null ? '—' : formatMoney(Math.abs(gap), currency)}
+          pence={gap == null ? null : Math.abs(gap)}
           helper={
             gap == null
               ? 'Unavailable'
