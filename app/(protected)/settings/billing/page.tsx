@@ -8,6 +8,7 @@ import { requireBusiness } from '@/lib/auth';
 import { getFeatures, getPlanSummary, hasPlanAccess, type BusinessPlan } from '@/lib/features';
 import { PLAN_MONTHLY_PRICES, getAnnualPlanPrice, getAnnualPlanSavings } from '@/lib/plan-pricing';
 import { getMerchantSubscriptionMessage } from '@/lib/subscription-lifecycle';
+import { parseBillingHistory } from '@/lib/internal-control-billing-notes';
 
 const PLAN_ORDER: BusinessPlan[] = ['STARTER', 'GROWTH', 'PRO'];
 
@@ -115,50 +116,6 @@ function formatBillingHistoryValue(label: string, value: string) {
     return value.replace(/^GHc\b/i, 'GH₵');
   }
   return value;
-}
-
-type BillingHistoryEntry = {
-  id: string;
-  title: string;
-  occurredAt: string | null;
-  facts: Array<{ label: string; value: string }>;
-  notes: string[];
-};
-
-function parseBillingHistory(notes: string | null | undefined): BillingHistoryEntry[] {
-  if (!notes?.trim()) return [];
-
-  return notes
-    .trim()
-    .split(/\n\s*\n/)
-    .map((chunk, index) => {
-      const lines = chunk.split('\n').map((line) => line.trim()).filter(Boolean);
-      const [header = '', ...rest] = lines;
-      const match = header.match(/^\[(.+?)\]\s+(.*)$/);
-      const facts: Array<{ label: string; value: string }> = [];
-      const freeform: string[] = [];
-
-      for (const line of rest) {
-        const separatorIndex = line.indexOf(':');
-        if (separatorIndex > 0) {
-          facts.push({
-            label: line.slice(0, separatorIndex).trim(),
-            value: line.slice(separatorIndex + 1).trim(),
-          });
-        } else {
-          freeform.push(line);
-        }
-      }
-
-      return {
-        id: `${match?.[1] ?? header}-${index}`,
-        title: match?.[2] ?? header,
-        occurredAt: match?.[1] ?? null,
-        facts,
-        notes: freeform,
-      };
-    })
-    .reverse();
 }
 
 export default async function BillingPage({

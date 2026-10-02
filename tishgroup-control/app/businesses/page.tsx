@@ -1,12 +1,11 @@
 import Link from 'next/link';
-import { bulkReviewControlBusinessesAction, updateControlSubscriptionAction } from '@/app/actions/control-businesses';
-import BillingScheduleFields from '@/components/BillingScheduleFields';
+import { bulkReviewControlBusinessesAction } from '@/app/actions/control-businesses';
 import ControlPageHeader from '@/components/control-page-header';
 import SectionHeading from '@/components/section-heading';
 import { PlanPill, StatePill } from '@/components/status-pill';
 import SlaFlags from '@/components/sla-flags';
 import BulkRosterClient from '@/components/bulk-roster-client';
-import { canManageSubscriptions, canWriteNotes, listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
+import { canWriteNotes, listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
 import { listManagedBusinessesPage } from '@/lib/control-service';
 import { formatCedi } from '@/lib/control-metrics';
 import { getSlaFlags } from '@/lib/sla';
@@ -87,9 +86,8 @@ export default async function BusinessesPage({
   const hasPreviousPage = roster.page > 1;
   const hasNextPage = roster.page < roster.totalPages;
   const clearSearchHref = buildBusinessesHref({ filter, search: '', pageSize: roster.pageSize });
-  const canEditSubscription = canManageSubscriptions(staff.role);
   const canBulkReview = canWriteNotes(staff.role);
-  const atRiskOnPage = pageBusinesses.filter((business) => ['GRACE', 'GRACE_PERIOD', 'OVERDUE', 'SUSPENDED', 'STARTER_FALLBACK', 'READ_ONLY'].includes(business.state)).length;
+  const atRiskOnPage = pageBusinesses.filter((business) => ['TRIAL_EXPIRED_GRACE', 'PAYMENT_OVERDUE_GRACE', 'TRIAL_RESTRICTED', 'PAYMENT_RESTRICTED', 'READ_ONLY'].includes(business.state)).length;
   const headerStats = [
     {
       label: 'In this view',
@@ -104,7 +102,7 @@ export default async function BusinessesPage({
     {
       label: 'At risk on page',
       value: String(atRiskOnPage),
-      hint: 'Current page items already in grace, fallback, or read-only.',
+      hint: 'Current page items already overdue, restricted, or read-only.',
     },
     {
       label: 'Page size',
@@ -143,7 +141,7 @@ export default async function BusinessesPage({
         description="Keep the roster fast, make billing edits without scroll fatigue, and keep every business tied to a clear owner, plan, and next action."
         chips={[
           { label: 'Roster control', href: '#roster-tools' },
-          ...(canEditSubscription ? [{ label: 'Quick billing setup', href: '#billing-setup', tone: 'dark' as const }] : []),
+          { label: 'Billing changes', href: '#billing-setup', tone: 'dark' as const },
           ...(canBulkReview && filter === 'unreviewed' && pageBusinesses.length > 0 ? [{ label: 'Bulk review', href: '#bulk-review' }] : []),
           { label: 'Roster', href: '#business-roster' },
         ]}
@@ -218,64 +216,13 @@ export default async function BusinessesPage({
       <section id="billing-setup" className="panel p-4 sm:p-5">
         <SectionHeading
           eyebrow="Billing setup"
-          title="Quick billing setup"
-          description="Select a business on the current page, adjust the commercial plan, and save billing dates without opening the full record."
+          title="Commercial changes"
+          description="Plan and subscription status must be bound to a specific business record."
         />
 
-        {canEditSubscription && pageBusinesses.length > 0 ? (
-          <form action={updateControlSubscriptionAction} className="mt-5 grid gap-4 sm:grid-cols-2">
-            <input type="hidden" name="returnPath" value={buildBusinessesHref({ filter, search, page: roster.page, pageSize: roster.pageSize })} />
-
-            <label className="block space-y-1 text-sm sm:col-span-2">
-              <span className="font-medium text-control-ink">Business</span>
-              <select name="businessId" defaultValue={pageBusinesses[0]?.id ?? ''} className="control-field" required>
-                {pageBusinesses.map((business) => (
-                  <option key={business.id} value={business.id}>
-                    {business.name} · {business.plan} · {business.billingCadence}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block space-y-1 text-sm">
-              <span className="font-medium text-control-ink">Sold plan</span>
-              <select name="purchasedPlan" defaultValue="STARTER" className="control-field">
-                <option value="STARTER">Starter</option>
-                <option value="GROWTH">Growth</option>
-                <option value="PRO">Pro</option>
-              </select>
-            </label>
-
-            <label className="block space-y-1 text-sm">
-              <span className="font-medium text-control-ink">Subscription status</span>
-              <select name="status" defaultValue="PAID_ACTIVE" className="control-field">
-                <option value="PAID_ACTIVE">Paid active</option>
-                <option value="TRIAL">Trial</option>
-                <option value="SUSPENDED">Suspended</option>
-                <option value="READ_ONLY">Read only</option>
-                <option value="INACTIVE">Deactivated</option>
-              </select>
-            </label>
-
-            <BillingScheduleFields />
-
-            <p className="text-sm text-black/60 sm:col-span-2">
-              Leave the first due date blank to let TG Control calculate it from the start date and whether the business is monthly or annual.
-            </p>
-
-            <button type="submit" className="inline-flex h-[42px] items-center justify-center rounded-[18px] bg-control-dark px-4 text-sm font-semibold text-white transition hover:bg-control-night sm:col-span-2 sm:w-fit">
-              Save billing setup
-            </button>
-          </form>
-        ) : !canEditSubscription ? (
-          <div className="mt-5 rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/60">
-            Your role can review the roster, but only Control admins and account managers can change billing setup from this page.
-          </div>
-        ) : (
-          <div className="mt-5 rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/60">
-            Narrow the roster with search or switch pages before saving billing setup. There are no businesses in the current view yet.
-          </div>
-        )}
+        <div className="mt-5 rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/60">
+          Commercial changes must be made on the business billing page so plan and status bind to that business.
+        </div>
       </section>
 
       <BulkRosterClient

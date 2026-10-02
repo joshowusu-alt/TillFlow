@@ -54,3 +54,6 @@ perf.db-journal
 # Local Preview probe secrets (never commit)
 tmp/*.local.env
 tmp/reporting-preview.local.env
+tmp/phase0.2-owner-identity-pack.json
+tmp/phase0*-mapping.json
+tmp/*credentials*.json

@@ -265,7 +265,7 @@ async function main() {
     ownerName: 'Owner',
     ownerEmail: 'owner@store.com',
     plan: business.plan,
-    status: business.subscriptionStatus,
+    status: 'TRIAL_ACTIVE',
     supportStatus: 'HEALTHY',
     notes: 'Seeded starter control-plane record for the local demo tenant.',
     nextDueDate: business.nextBillingDate ?? business.nextPaymentDueAt ?? null,
