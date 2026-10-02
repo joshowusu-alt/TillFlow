@@ -69,6 +69,7 @@ export default async function OwnerDashboardBody({
         nudge={nudge}
         coldStart={coldStart}
         userKey={userId}
+        pageTitle={false}
         actions={
           <>
             <PlanFeatureBadge plan="PRO" />

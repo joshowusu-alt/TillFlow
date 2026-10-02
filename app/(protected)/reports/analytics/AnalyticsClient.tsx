@@ -1,6 +1,7 @@
 'use client';
 
 import { SalesTrendChart, HourlyHeatmap, CategoryBreakdown, ProductPerformance, ComparisonChart } from '@/components/charts';
+import FinancialAmount from '@/components/reports/FinancialAmount';
 import { getCurrencySymbol } from '@/lib/format';
 
 interface AnalyticsData {
@@ -40,33 +41,41 @@ export default function AnalyticsClient({ data, kpis: _kpis }: { data: Analytics
     return (
         <div className="space-y-4 sm:space-y-6">
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8" data-analytics-kpis="">
                 <div className="card p-3 sm:p-4">
-                    <div className="text-[10px] sm:text-xs text-black/50">Revenue</div>
-                    <div className="mt-1 text-base sm:text-xl font-bold text-emerald-600 truncate">{formatMoney(data.kpis.totalSales)}</div>
-                </div>
-                <div className="card p-3 sm:p-4">
-                    <div className="text-[10px] sm:text-xs text-black/50">Gross Profit</div>
-                    <div className={`mt-1 text-base sm:text-xl font-bold truncate ${data.kpis.totalProfit == null ? 'text-amber-700' : data.kpis.totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {data.kpis.totalProfit == null ? 'Costs incomplete' : formatMoney(data.kpis.totalProfit)}
+                    <div className="text-xs font-semibold text-slate-700">Revenue</div>
+                    <div className="financial-fit mt-1 text-emerald-600" data-analytics-amount="revenue">
+                        <FinancialAmount pence={data.kpis.totalSales} currency={data.currency} variant="prominent" />
                     </div>
                 </div>
                 <div className="card p-3 sm:p-4">
-                    <div className="text-[10px] sm:text-xs text-black/50">Margin</div>
-                    <div className={`mt-1 text-base sm:text-xl font-bold ${data.kpis.marginPercent == null ? 'text-amber-700' : data.kpis.marginPercent >= 20 ? 'text-emerald-600' : data.kpis.marginPercent >= 10 ? 'text-amber-600' : 'text-rose-600'}`}>
+                    <div className="text-xs font-semibold text-slate-700">Gross Profit</div>
+                    {data.kpis.totalProfit == null ? (
+                        <p className="mt-1 break-words text-base font-bold leading-snug text-amber-700 sm:text-xl">Costs incomplete</p>
+                    ) : (
+                        <div className={`financial-fit mt-1 ${data.kpis.totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            <FinancialAmount pence={data.kpis.totalProfit} currency={data.currency} variant="prominent" />
+                        </div>
+                    )}
+                </div>
+                <div className="card p-3 sm:p-4">
+                    <div className="text-xs font-semibold text-slate-700">Margin</div>
+                    <div className={`mt-1 break-words text-base font-bold leading-snug sm:text-xl ${data.kpis.marginPercent == null ? 'text-amber-700' : data.kpis.marginPercent >= 20 ? 'text-emerald-600' : data.kpis.marginPercent >= 10 ? 'text-amber-600' : 'text-rose-600'}`}>
                         {data.kpis.marginPercent == null ? 'Costs incomplete' : `${data.kpis.marginPercent.toFixed(1)}%`}
                     </div>
                 </div>
                 <div className="card p-3 sm:p-4">
-                    <div className="text-[10px] sm:text-xs text-black/50">Transactions</div>
-                    <div className="mt-1 text-base sm:text-xl font-bold">{data.kpis.totalTransactions.toLocaleString()}</div>
+                    <div className="text-xs font-semibold text-slate-700">Transactions</div>
+                    <div className="mt-1 text-base font-bold sm:text-xl">{data.kpis.totalTransactions.toLocaleString()}</div>
                 </div>
                 <div className="card p-3 sm:p-4">
-                    <div className="text-[10px] sm:text-xs text-black/50">Avg Ticket</div>
-                    <div className="mt-1 text-base sm:text-xl font-bold truncate">{formatMoney(data.kpis.avgTransaction)}</div>
+                    <div className="text-xs font-semibold text-slate-700">Avg Ticket</div>
+                    <div className="financial-fit mt-1">
+                        <FinancialAmount pence={data.kpis.avgTransaction} currency={data.currency} variant="prominent" />
+                    </div>
                 </div>
                 <div className="card p-3 sm:p-4">
-                    <div className="text-[10px] sm:text-xs text-black/50">Growth</div>
+                    <div className="text-xs font-semibold text-slate-700">Growth</div>
                     <div className={`mt-1 text-base sm:text-xl font-bold ${data.kpis.growthPercent >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {data.kpis.growthPercent >= 0 ? '+' : ''}{data.kpis.growthPercent.toFixed(1)}%
                     </div>
@@ -76,13 +85,13 @@ export default function AnalyticsClient({ data, kpis: _kpis }: { data: Analytics
                     </div>
                 </div>
                 <div className="card p-3 sm:p-4">
-                    <div className="text-[10px] sm:text-xs text-black/50">Top Product</div>
-                    <div className="mt-1 truncate font-bold text-xs sm:text-sm" title={data.kpis.topSellingProduct}>
+                    <div className="text-xs font-semibold text-slate-700">Top Product</div>
+                    <div className="mt-1 break-words font-bold text-xs leading-snug sm:text-sm" title={data.kpis.topSellingProduct}>
                         {data.kpis.topSellingProduct || '—'}
                     </div>
                 </div>
                 <div className="card p-3 sm:p-4">
-                    <div className="text-[10px] sm:text-xs text-black/50">Peak Hour</div>
+                    <div className="text-xs font-semibold text-slate-700">Peak Hour</div>
                     <div className="mt-1 text-base sm:text-xl font-bold">{data.kpis.peakHour || '—'}</div>
                 </div>
             </div>

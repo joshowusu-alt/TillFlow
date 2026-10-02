@@ -15,8 +15,8 @@ export function ReportsCompactSetupBanner({
 }) {
   return (
     <div className="border-b border-blue-200/70 bg-blue-50 px-3" data-reports-banner="setup">
-      <div className="flex items-center justify-between gap-3">
-        <p className="min-w-0 text-xs leading-5 text-accent">
+      <div className="flex min-h-11 items-center justify-between gap-3">
+        <p className="min-w-0 truncate whitespace-nowrap text-xs leading-4 text-accent">
           <span className="font-semibold">{title}</span>
           <span className="text-accent/80"> · {detail}</span>
         </p>
@@ -46,8 +46,8 @@ export function ReportsCompactBillingBanner({
       : 'border-blue-200 bg-blue-50/90 text-blue-900';
   return (
     <div data-reports-banner="trial" className={`border-b px-3 text-xs ${toneClass}`}>
-      <div className="flex items-center justify-between gap-3">
-        <p className="min-w-0">{message}</p>
+      <div className="flex min-h-11 items-center justify-between gap-3">
+        <p className="min-w-0 truncate whitespace-nowrap">{message}</p>
         <Link href={href} className={ACTION}>
           {actionLabel}
         </Link>

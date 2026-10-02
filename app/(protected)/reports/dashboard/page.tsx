@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
+import RefreshIndicator from '@/components/RefreshIndicator';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import { reportScopeLabel } from '@/lib/reports/scope-labels';
 import ReportSectionSkeleton from '@/components/reports/ReportSectionSkeleton';
@@ -66,12 +67,6 @@ export default async function DashboardPage({
 
   const selectedStoreId = scope.storeId;
   const isToday = isReportingScopeToday(scope);
-  const hasNonDefaultParams = !!(
-    searchParams?.from
-    || searchParams?.to
-    || searchParams?.period
-    || (searchParams?.storeId && searchParams.storeId !== 'ALL')
-  );
 
   const scopeLabel = reportScopeLabel(selectedStoreId, stores);
 
@@ -81,14 +76,14 @@ export default async function DashboardPage({
       <ReportsDestinationHead
         title="Trading"
         scopeLabel={scopeLabel}
-      />
-      <p className="text-sm text-muted">
-        {isToday
+        periodLabel={isToday
           ? `Today (live) · ${scope.timeZone}`
           : `${scope.fromInputValue} to ${scope.toInputValue} · ${scope.timeZone}`}
-      </p>
+        showRefresh={false}
+        actions={<RefreshIndicator fetchedAt={new Date().toISOString()} autoRefreshMs={120_000} />}
+      />
 
-      <details className="details-mobile" open={hasNonDefaultParams || isToday}>
+      <details className="details-mobile">
         <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
           <span className="text-sm font-semibold text-ink">Adjust date range / branch</span>
           <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

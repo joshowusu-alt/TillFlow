@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import Link from 'next/link';
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import Pagination from '@/components/Pagination';
 import StatCard from '@/components/StatCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -170,9 +170,9 @@ export default async function StockMovementsPage({
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <PageHeader
+      <ReportsDestinationHead
         title="Stock Movements"
-        subtitle="Stock movement history showing how stock increased or decreased from sales, purchases, returns, adjustments, transfers, and opening stock."
+        periodLabel="Stock movement history showing how stock increased or decreased from sales, purchases, returns, adjustments, transfers, and opening stock."
       />
 
       <section className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-relaxed text-blue-900 shadow-sm">

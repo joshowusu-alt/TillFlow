@@ -1,6 +1,4 @@
-import DashboardWelcomeHeader from '@/components/DashboardWelcomeHeader';
 import StatCard from '@/components/StatCard';
-import RefreshIndicator from '@/components/RefreshIndicator';
 import { prisma } from '@/lib/prisma';
 import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
@@ -268,12 +266,8 @@ const getCachedTradingDashboardSnapshot = unstable_cache(
 
 export default async function TradingDashboardContent({
   businessId,
-  businessName,
   currency,
   timeZone,
-  userId,
-  userName,
-  userEmail,
   selectedStoreId,
   fromIso,
   toIso,
@@ -487,7 +481,6 @@ export default async function TradingDashboardContent({
   const cashDrawerHref = `/reports/cash-drawer?${cashDrawerParams.toString()}`;
   const receiptsHref = moneyReceivedHref(scope);
 
-  const firstName = (userName ?? '').trim().split(/\s+/)[0] || userEmail.split('@')[0] || 'there';
   const lastSaleChipLabel =
     lastSaleMinutesAgo === null
       ? 'No sales yet today'
@@ -505,33 +498,8 @@ export default async function TradingDashboardContent({
     : [];
 
   return (
-    <div className="space-y-4 sm:space-y-5">
-      <DashboardWelcomeHeader
-        firstName={firstName}
-        businessName={businessName}
-        caption={isToday ? 'Trading Report · today (live).' : `Trading Report · ${fromIso} to ${toIso}`}
-        pulse={headerPulse}
-        userKey={userId}
-        actions={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
-            <RefreshIndicator fetchedAt={new Date().toISOString()} autoRefreshMs={120_000} />
-          </div>
-        }
-      />
-
-      {/* Active cashier names rail — only when at least one shift is open */}
-      {isToday && activeCashierCount > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-black/5 bg-white px-3 py-2 text-xs shadow-sm">
-          <span className="text-black/50">On shift now</span>
-          <span className="font-semibold text-ink">
-            {openShifts.slice(0, 3).map((s) => s.user?.name ?? '—').join(', ')}
-            {openShifts.length > 3 ? ` +${openShifts.length - 3} more` : ''}
-          </span>
-        </div>
-      )}
-
-      {/* KPI row */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+    <div className="space-y-4 sm:space-y-5" data-first-metric="">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6" data-first-figure="">
         <StatCard
           label="Sales revenue"
           value={formatMoney(totalSales, currency)}
@@ -560,6 +528,19 @@ export default async function TradingDashboardContent({
           <StatCard label="What you owe suppliers" value={formatMoney(outstandingAP, currency)} helper="Current supplier balances. Record supplier payments when purchases are paid." />
         </a>
       </div>
+
+      {headerPulse.length > 0 ? (
+        <p className="text-sm text-muted">{headerPulse.map((chip) => chip.label).join(' · ')}</p>
+      ) : null}
+      {isToday && activeCashierCount > 0 ? (
+        <div className="flex items-center gap-2 rounded-lg border border-black/5 bg-white px-3 py-2 text-xs shadow-sm">
+          <span className="text-black/50">On shift now</span>
+          <span className="font-semibold text-ink">
+            {openShifts.slice(0, 3).map((s) => s.user?.name ?? '—').join(', ')}
+            {openShifts.length > 3 ? ` +${openShifts.length - 3} more` : ''}
+          </span>
+        </div>
+      ) : null}
 
       <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
         <p>

@@ -1,4 +1,4 @@
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import DownloadLink from '@/components/DownloadLink';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import { openLiveReport } from '@/lib/entitlements/live-report';
@@ -51,9 +51,10 @@ export default async function ExportsPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <ReportsDestinationHead
         title="Exports"
-        subtitle="Download polished retail reports in branded CSV, Excel, or print-ready PDF views."
+        periodLabel={periodLabel}
+        reading={<p>Download polished retail reports in branded CSV, Excel, or print-ready PDF views. Active window: {periodLabel} · {dateSummary}.</p>}
       />
 
       <div className="rounded-2xl border border-accent/10 bg-[linear-gradient(180deg,rgba(37,99,235,0.07),rgba(255,255,255,1))] p-5 shadow-[0_18px_40px_rgba(37,99,235,0.06)] space-y-4">

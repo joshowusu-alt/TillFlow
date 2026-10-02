@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import DownloadLink from '@/components/DownloadLink';
 import Pagination from '@/components/Pagination';
 import StatCard from '@/components/StatCard';
@@ -187,10 +187,10 @@ export default async function MarginsPage({
   const hasNonDefaultFilterParams = !!(searchParams?.from || searchParams?.to || (searchParams?.view && searchParams?.view !== 'all') || (searchParams?.period && searchParams?.period !== '30d'));
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 sm:space-y-5">
-      <PageHeader
+    <div className="space-y-4 sm:space-y-5">
+      <ReportsDestinationHead
         title="Profit Margins"
-        subtitle="Spot below-cost lines and products falling short of your target margin."
+        periodLabel="Spot below-cost lines and products falling short of your target margin."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <DownloadLink

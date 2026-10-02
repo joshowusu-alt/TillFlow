@@ -50,11 +50,12 @@ export default async function AnalyticsPage({
       <ReportsDestinationHead
         title="Sales analytics"
         scopeLabel={scopeLabel}
+        periodLabel={`${periodDays} days`}
         actions={<PlanFeatureBadge plan="GROWTH" />}
+        reading={
+          <p>Profit uses stored sale-line discounts and cost. Incomplete costs are shown instead of a firm gross profit.</p>
+        }
       />
-      <p className="text-xs text-black/45">
-        Profit uses stored sale-line discounts and cost. Incomplete costs are shown instead of a firm gross profit.
-      </p>
       <AnalyticsPeriodSelector />
       <Suspense fallback={<ReportSectionSkeleton />}>
         <AnalyticsContent

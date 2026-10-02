@@ -1,7 +1,7 @@
 import DownloadLink from '@/components/DownloadLink';
 import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import Pagination from '@/components/Pagination';
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import StatCard from '@/components/StatCard';
 import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -172,13 +172,14 @@ export default async function CashDrawerReportPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <ReportsDestinationHead
         title="Cash Drawer Report"
-        subtitle="Track cash expected and cash counted across all tills and shifts."
-        secondaryCta={{
-          label: 'Supporting cash rows',
-          href: `/shifts/drawer?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`,
-        }}
+        periodLabel="Track cash expected and cash counted across all tills and shifts."
+        actions={
+          <a href={`/shifts/drawer?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`} className="btn-secondary justify-center text-sm">
+            Supporting cash rows
+          </a>
+        }
       />
 
       <section className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-relaxed text-blue-900 shadow-sm">

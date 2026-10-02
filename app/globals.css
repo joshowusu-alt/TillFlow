@@ -607,6 +607,7 @@ html:has(input:focus, textarea:focus, select:focus) .safe-floating-bottom {
    Scroll margin lets native focus scrolling clear that bar; it does not add a bar. */
 @media (max-width: 1023px) {
   [data-reports-focus-scope] :is(a, button, summary, input, select, textarea) {
+    scroll-margin-top: 0.5rem;
     scroll-margin-bottom: calc(var(--mobile-bottom-nav-height) + 1.5rem);
   }
 }

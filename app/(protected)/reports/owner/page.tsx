@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { ReportScopeLabel } from '@/components/reports/ReportSurfaceDenial';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import { openLiveReport } from '@/lib/entitlements/live-report';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import ReportSectionSkeleton from '@/components/reports/ReportSectionSkeleton';
@@ -27,11 +27,7 @@ export default async function OwnerIntelligencePage({
 
   return (
     <div className="space-y-5 pb-2 sm:space-y-6">
-      <div className="rounded-[1.35rem] border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm sm:px-5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">Owner Brief</p>
-        <p className="mt-1 text-sm font-semibold text-ink">{business.name}</p>
-        <p className="mt-0.5 text-xs text-muted">{scopeLabel}</p>
-      </div>
+      <ReportsDestinationHead title="Owner Brief" scopeLabel={scopeLabel} periodLabel={business.name} showRefresh={false} />
 
       <Suspense fallback={<ReportSectionSkeleton />}>
         <OwnerDashboardBody

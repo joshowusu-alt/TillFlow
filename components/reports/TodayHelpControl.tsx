@@ -12,7 +12,7 @@ export default function TodayHelpControl({ children }: { children: React.ReactNo
     <div className="min-w-0">
       <button
         type="button"
-        className={`inline-flex min-h-11 items-center px-2 text-sm font-semibold text-accent hover:bg-accentSoft ${FOCUS}`}
+        className={`inline-flex min-h-8 items-center px-2 text-xs font-semibold text-accent hover:bg-accentSoft sm:min-h-11 sm:text-sm ${FOCUS}`}
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}

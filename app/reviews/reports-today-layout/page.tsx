@@ -103,6 +103,7 @@ const RETURN_DESTINATIONS = {
 function ReviewShell({ children }: { children: React.ReactNode }) {
   return (
     <div data-today-layout-review>
+      <div aria-hidden="true" className="h-[5.75rem] border-b border-slate-200 bg-white" data-header-stand-in="" />
       <main className="app-main-shell" data-reports-focus-scope>
         {children}
       </main>
@@ -226,6 +227,37 @@ export default function ReportsTodayLayoutReviewPage({
             blocked={null}
             failed={false}
           />
+        </main>
+        <BottomTabBar userRole="OWNER" />
+      </div>
+    );
+  }
+  if (searchParams?.state === 'clearance') {
+    const banner = (BANNERS.includes(searchParams.banner as BannerMode) ? searchParams.banner : 'setup') as BannerMode;
+    return (
+      <div data-today-layout-review data-banner-mode={banner}>
+        <div aria-hidden="true" className="h-[5.75rem] border-b border-slate-200 bg-white" data-header-stand-in="" />
+        {banner === 'setup' || banner === 'both' ? (
+          <ReportsCompactSetupBanner
+            title="Getting ready"
+            detail="Tell us what kind of business you run."
+            cta="Begin setup"
+          />
+        ) : null}
+        {banner === 'trial' || banner === 'both' ? (
+          <ReportsCompactBillingBanner
+            message="Your TillFlow trial has 8 days left."
+            actionLabel="View billing"
+            href="/settings/billing"
+            tone="blue"
+          />
+        ) : null}
+        <main className="app-main-shell w-full min-w-0 px-4 pt-1">
+          {reviewToday('today', {
+            snapshot: snapshot('large'),
+            moneyHref: '/reports/money-received',
+            cashHref: '/reports/cash-drawer',
+          })}
         </main>
         <BottomTabBar userRole="OWNER" />
       </div>
