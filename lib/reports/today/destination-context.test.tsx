@@ -42,7 +42,8 @@ describe('Stage 3A destination context', () => {
     expect(money).toContain('>Money received<');
     expect(money).not.toContain('Sales analytics');
     expect(count(money, 'aria-label="Reports location"')).toBe(1);
-    expect(count(money, '>Back to Activity<')).toBe(1);
+    expect(money).toContain('aria-label="Back to Activity, Reports"');
+    expect(count(money, '>Back to Activity<')).toBe(0);
     expect(money).toContain('href="/reports?section=activity&amp;storeId=store-1"');
   });
 
@@ -57,7 +58,8 @@ describe('Stage 3A destination context', () => {
     expect(count(markup, 'aria-label="Reports location"')).toBe(1);
     expect(markup).toContain('>Income statement<');
     expect(markup).toContain('>More reports<');
-    expect(count(markup, '>Back to More reports<')).toBe(1);
+    expect(markup).toContain('aria-label="Back to More reports, Reports"');
+    expect(count(markup, '>Back to More reports<')).toBe(0);
     expect(markup).toContain('href="/reports?section=more"');
     expect(markup).not.toContain('storeId=');
     expect(markup).not.toContain('Back to Activity');
@@ -77,7 +79,8 @@ describe('Stage 3A destination context', () => {
     expect(returnPathFor(path.href)).toMatchObject({ title: path.title, backLabel: path.backLabel, section: path.section });
     expect(count(markup, 'aria-label="Reports location"')).toBe(1);
     expect(count(markup, `>${path.title}<`)).toBe(1);
-    expect(count(markup, `>${path.backLabel}<`)).toBe(1);
+    expect(markup).toContain(`aria-label="${path.backLabel}, Reports"`);
+    expect(count(markup, `>${path.backLabel}<`)).toBe(0);
     expect(markup).toContain(`>${section}<`);
     expect(markup).not.toContain('Back to Today');
     if (destinationOmitsStoreId(path.href)) {

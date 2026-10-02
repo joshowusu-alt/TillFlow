@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import DownloadLink from '@/components/DownloadLink';
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import PlanFeatureBadge from '@/components/PlanFeatureBadge';
 import StatCard from '@/components/StatCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -164,9 +164,9 @@ export default async function RiskMonitorPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <ReportsDestinationHead
         title="Risk Monitor"
-        subtitle="Anti-fraud alerts and cashier trends."
+        periodLabel="Anti-fraud alerts and cashier trends."
         actions={
           <>
             <PlanFeatureBadge plan="GROWTH" />

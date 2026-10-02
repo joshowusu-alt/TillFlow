@@ -15,6 +15,8 @@ type OwnerWelcomeHeaderProps = {
   coldStart?: boolean;
   userKey: string;
   actions?: ReactNode;
+  /** Reports destination shell owns the page h1. This header then uses paragraphs. */
+  pageTitle?: boolean;
 };
 
 function greetingFor(hour: number): string {
@@ -40,7 +42,9 @@ export default function OwnerWelcomeHeader({
   coldStart,
   userKey,
   actions,
+  pageTitle = true,
 }: OwnerWelcomeHeaderProps) {
+  const Title = pageTitle ? 'h1' : 'p';
   // Render a neutral greeting on the server to avoid hydration mismatch,
   // then upgrade to time-of-day after mount.
   const [greeting, setGreeting] = useState<string>('Welcome back');
@@ -92,9 +96,9 @@ export default function OwnerWelcomeHeader({
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">
               {businessName}
             </p>
-            <h1 className="mt-1.5 text-[1.6rem] font-display font-bold leading-tight text-ink sm:text-2xl md:text-[1.85rem]">
+            <Title className="mt-1.5 text-[1.6rem] font-display font-bold leading-tight text-ink sm:text-2xl md:text-[1.85rem]">
               Welcome to TillFlow, {firstName}
-            </h1>
+            </Title>
             <p className="mt-1.5 text-sm font-medium text-slate-500">
               You&apos;re set up. Ring your first sale to start seeing real numbers in this brief — your health score, cash pulse, and stock pressure all populate from live trading.
             </p>
@@ -119,9 +123,9 @@ export default function OwnerWelcomeHeader({
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">
               {businessName}
             </p>
-            <h1 className="mt-1.5 text-[1.6rem] font-display font-bold leading-tight text-ink sm:text-2xl md:text-[1.85rem]">
+            <Title className="mt-1.5 text-[1.6rem] font-display font-bold leading-tight text-ink sm:text-2xl md:text-[1.85rem]">
               {greeting}, {firstName}
-            </h1>
+            </Title>
             <p className="mt-1.5 text-sm font-medium text-slate-500">
               Here is your operating brief — stock pressure, cash position, and control signals all in one view.
             </p>
@@ -131,9 +135,9 @@ export default function OwnerWelcomeHeader({
             <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-accent">
               <span>Welcome back, {firstName}</span>
             </div>
-            <h1 className="mt-2 text-[1.45rem] font-display font-bold leading-tight text-ink sm:text-[1.65rem] md:text-[1.75rem]">
+            <Title className="mt-2 text-[1.45rem] font-display font-bold leading-tight text-ink sm:text-[1.65rem] md:text-[1.75rem]">
               {businessName} — today&apos;s brief
-            </h1>
+            </Title>
           </>
         )}
 

@@ -6,7 +6,7 @@ import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import Pagination from '@/components/Pagination';
 import ReportActionGroup from '@/components/reports/ReportActionGroup';
 import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
@@ -74,9 +74,9 @@ export default async function ReorderSuggestionsPage({
   if (!selectedStoreId) {
     return (
       <div className="space-y-6">
-        <PageHeader
+        <ReportsDestinationHead
           title="Reorder Suggestions"
-          subtitle="Products that may need restocking based on recent sales and current stock."
+          periodLabel="Products that may need restocking based on recent sales and current stock."
         />
         <div className="card p-3.5 sm:p-4">
           <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -275,9 +275,9 @@ export default async function ReorderSuggestionsPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <ReportsDestinationHead
         title="Reorder Suggestions"
-        subtitle="Products that may need restocking based on recent sales and current stock."
+        periodLabel="Products that may need restocking based on recent sales and current stock."
         actions={
           <ReportActionGroup>
             <a

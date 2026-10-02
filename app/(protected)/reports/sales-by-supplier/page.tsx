@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import DownloadLink from '@/components/DownloadLink';
 import StatCard from '@/components/StatCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -119,21 +119,18 @@ export default async function SalesBySupplierPage({
 
   return (
     <div className="space-y-5">
-      <PageHeader
+      <ReportsDestinationHead
         title="Sales by Linked Supplier"
-        subtitle={
+        periodLabel={
           isDrillDown
             ? `Product sales under the preferred supplier link for ${drilledSupplier!.name}.`
             : 'Understand sales performance by the preferred supplier linked to each product.'
         }
-        secondaryCta={
-          isDrillDown
-            ? {
-                label: '← All suppliers',
-                href: buildHref({ period: periodInputValue, from: fromInputValue, to: toInputValue }),
-              }
-            : undefined
-        }
+        actions={isDrillDown ? (
+          <Link href={buildHref({ period: periodInputValue, from: fromInputValue, to: toInputValue })} className="btn-secondary justify-center text-sm">
+            ← All suppliers
+          </Link>
+        ) : undefined}
       />
 
       <section className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-4 text-sm leading-relaxed text-blue-900 shadow-sm">

@@ -1,4 +1,4 @@
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import DownloadLink from '@/components/DownloadLink';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
@@ -55,11 +55,11 @@ export default async function IncomeStatementPage({
   return (
     <div className="space-y-6">
       {opened.readOnly ? <ReportReadOnlyBanner /> : null}
-      {opened.branch.kind === 'label' ? <ReportScopeLabel label={opened.branch.label} /> : null}
       {applied?.label === 'Last 30 days' ? <ReportScopeLabel label="Last 30 days" /> : null}
-      <PageHeader
+      <ReportsDestinationHead
         title="Income Statement"
-        subtitle="Sales, product costs, expenses, and profit for the selected period."
+        scopeLabel={opened.branch.kind === 'label' ? opened.branch.label : undefined}
+        periodLabel={`${fromStr} to ${toStr}`}
         actions={
           <ReportActionGroup>
             <DownloadLink

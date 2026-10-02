@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import Link from 'next/link';
 import DownloadLink from '@/components/DownloadLink';
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -155,9 +155,9 @@ export default async function MomoConfirmationReviewPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <ReportsDestinationHead
         title="MoMo Confirmation Review"
-        subtitle="Mobile Money payments that still need confirmation — not included in Money Received until confirmed."
+        periodLabel="Mobile Money payments that still need confirmation — not included in Money Received until confirmed."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link

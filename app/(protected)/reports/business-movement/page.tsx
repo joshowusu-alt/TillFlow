@@ -275,6 +275,23 @@ export default async function BusinessMovementReportPage({
       <ReportsDestinationHead
         title="Business movement"
         scopeLabel={scopeLabel}
+        periodLabel={chrome.comparingLine}
+        readingTitle="How to read this"
+        reading={
+          <>
+            <p>
+              This compares {chrome.currentFull} with {chrome.comparisonFull}. The totals below are what changed.
+              The notes under them say why that change showed up.
+            </p>
+            <p>
+              Sales, confirmed payments, refunds and Mobile Money waiting for confirmation are operational figures for the selected period.
+              They are not the income statement. This report does not calculate purchases, expenses, or customer and supplier balances.
+            </p>
+            <p>
+              Next, open Money received or MoMo to confirm when a payment needs a person, and use the product list to see what moved.
+            </p>
+          </>
+        }
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
@@ -300,26 +317,7 @@ export default async function BusinessMovementReportPage({
           </div>
         }
       />
-      <p className="text-sm text-muted">
-        See how sales, confirmed payments, refunds and Mobile Money waiting for confirmation changed between two equal periods.
-      </p>
-
-      <section className="max-w-3xl space-y-2 text-sm leading-6 text-slate-700">
-        <h2 className="text-base font-semibold text-slate-900">How to read this</h2>
-        <p>
-          This compares {chrome.currentFull} with {chrome.comparisonFull}. The totals below are what changed.
-          The notes under them say why that change showed up.
-        </p>
-        <p>
-          Sales, confirmed payments, refunds and Mobile Money waiting for confirmation are operational figures for the selected period.
-          They are not the income statement. This report does not calculate purchases, expenses, or customer and supplier balances.
-        </p>
-        <p>
-          Next, open Money received or MoMo to confirm when a payment needs a person, and use the product list to see what moved.
-        </p>
-      </section>
-
-      <div>
+      <div data-first-metric="">
         <p
           className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-800"
           data-testid="comparing-line"

@@ -26,7 +26,7 @@ const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outli
 
 export function TodayLoading() {
   return (
-    <div className="mx-auto min-w-0 max-w-6xl overflow-x-hidden px-4 py-6" aria-busy="true" aria-live="polite">
+    <div className="min-w-0" aria-busy="true" aria-live="polite">
       <h1 className="font-display text-2xl font-semibold text-ink">Today</h1>
       <p className="mt-4 text-sm text-muted">Loading Today</p>
     </div>
@@ -72,8 +72,9 @@ function TodayHelpBody({ scopeLabel, zoneName }: { scopeLabel: string; zoneName:
 export default function TodayScreen(props: TodayScreenProps) {
   const section = stage3aSection(props.section);
   const title = section === 'today' ? 'Today' : section === 'activity' ? 'Activity' : 'More reports';
+  const quiet = Boolean(props.snapshot && isQuietToday(props.snapshot));
   return (
-    <div className="mx-auto min-w-0 max-w-6xl overflow-x-hidden px-4 py-3 sm:px-6 sm:py-6" data-reports-focus-scope>
+    <div className="min-w-0 overflow-x-hidden" data-reports-focus-scope>
       <ReportsSectionHead
         title={title}
         section={section}
@@ -82,7 +83,8 @@ export default function TodayScreen(props: TodayScreenProps) {
         scopeLabel={props.scopeLabel}
         updatedLabel={props.failed ? '' : props.updatedLabel}
         showDate={section === 'today'}
-        help={section === 'today' ? (
+        lead={section === 'today' ? 'Sales, confirmed money and counted cash.' : undefined}
+        help={section === 'today' && (props.failed || props.blocked || quiet) ? (
           <TodayHelpControl>
             <TodayHelpBody scopeLabel={props.scopeLabel} zoneName={props.zoneName} />
           </TodayHelpControl>
@@ -252,80 +254,86 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
   const cashDiff = snapshot.cashDifferencePence;
   const cashNeedsLook = cashDiff != null && Math.abs(cashDiff) >= CASH_ATTENTION_THRESHOLD_PENCE;
   return (
-    <div className="mt-6 min-w-0" data-today-state={partial.length > 0 ? 'partial' : 'ready'} data-partial={partial.join(' ')}>
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(16rem,0.85fr)] lg:items-start">
-        <section data-today-sales-card className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-5">
-          <div className="flex min-w-0 items-start justify-between gap-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Sales today</p>
+    <div className="mt-1 min-w-0 space-y-3" data-today-state={partial.length > 0 ? 'partial' : 'ready'} data-partial={partial.join(' ')}>
+      <div
+        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card md:grid md:grid-cols-3 md:gap-3 md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:shadow-none"
+        data-reconciliation-grid=""
+        data-primary-card="true"
+      >
+        <section className="min-w-0 px-4 pb-1 pt-1 md:rounded-2xl md:border md:border-slate-200 md:bg-white md:p-4 md:shadow-card" data-today-sales-card data-metric-block="sales">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Sales today</h2>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              {salesKnownZero ? (
+                <p className="text-base font-semibold text-ink">No sales recorded yet today</p>
+              ) : props.salesHref ? (
+                <Link href={props.salesHref} className={`block financial-fit ${FOCUS}`}>
+                  <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
+                </Link>
+              ) : (
+                <div className="financial-fit">
+                  <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
+                </div>
+              )}
+            </div>
             {props.salesHref ? (
-              <Link href={props.salesHref} data-today-primary-action className={`btn-secondary shrink-0 px-3 text-xs ${FOCUS}`}>
+              <Link href={props.salesHref} data-today-primary-action className={`btn-secondary min-h-11 shrink-0 px-3 text-xs ${FOCUS}`}>
                 Open trading
               </Link>
             ) : null}
           </div>
           {salesKnownZero ? (
-            <p className="mt-2 text-base font-semibold text-ink">No sales recorded yet today</p>
-          ) : props.salesHref ? (
-            <Link href={props.salesHref} className={`mt-1 block min-w-0 financial-fit ${FOCUS}`}>
-              <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
+            <p className="mt-1 text-sm text-muted">
+              {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" /></>}
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-ink">
+              {snapshot.salesCount} {saleWord}
+              <span className="text-muted">
+                {' · '}
+                {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" /></>}
+              </span>
+            </p>
+          )}
+        </section>
+        <section className="min-w-0 border-t border-slate-100 px-4 py-1 md:rounded-2xl md:border md:border-slate-200 md:bg-white md:p-4 md:shadow-card" data-metric-block="money">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Money received</h2>
+            {receiptsKnownZero ? null : <p className="text-xs text-muted">Confirmed · not sales</p>}
+          </div>
+          {receiptsKnownZero ? (
+            <p className="mt-1 text-sm text-ink">No confirmed payments yet today</p>
+          ) : props.moneyHref ? (
+            <Link href={props.moneyHref} className={`mt-1 block financial-fit ${FOCUS}`} data-today-money>
+              <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
             </Link>
           ) : (
-            <div className="mt-1 min-w-0 financial-fit">
-              <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
+            <div className="financial-fit mt-1" data-today-money>
+              <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
             </div>
           )}
-          {salesKnownZero ? null : (
-            <p className="mt-2 text-sm text-ink">{snapshot.salesCount} {saleWord}</p>
-          )}
-          <p className="mt-1 text-sm text-muted">
-            {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" /></>}
-          </p>
-          <div className="mt-3 grid min-w-0 gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2">
-            {props.moneyHref ? (
-              <Link href={props.moneyHref} className={`min-w-0 rounded-xl bg-slate-50 px-3 py-2 text-left hover:bg-slate-100 ${FOCUS}`}>
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted">Money received</span>
-                {receiptsKnownZero ? (
-                  <p className="mt-1 text-sm text-ink">No confirmed payments yet today</p>
-                ) : (
-                  <>
-                    <div className="mt-1 min-w-0 financial-fit" data-today-money>
-                      <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted">Confirmed · not sales</p>
-                  </>
-                )}
-              </Link>
-            ) : (
-              <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted">Money received</span>
-                {receiptsKnownZero ? (
-                  <p className="mt-1 text-sm text-ink">No confirmed payments yet today</p>
-                ) : (
-                  <div className="mt-1 min-w-0 financial-fit" data-today-money>
-                    <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
-                  </div>
-                )}
-              </div>
-            )}
-            <div className={`min-w-0 rounded-xl px-3 py-2 ${cashNeedsLook ? 'bg-amber-50' : 'bg-slate-50'}`}>
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted">Cash difference</span>
-              {cashDiff == null ? (
-                <p className="mt-1 text-sm text-ink">No till closed today</p>
-              ) : (
-                <>
-                  <div className="mt-1 min-w-0 financial-fit" data-today-cash>
-                    <FinancialAmount pence={cashDiff} currency={currency} variant="prominent" />
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted">{cashNeedsLook ? 'Needs a look' : 'Within GH₵5.00'}</p>
-                </>
-              )}
-            </div>
-          </div>
         </section>
-        <Attention snapshot={snapshot} />
+        <section data-metric-block="cash" className={`min-w-0 border-t px-4 py-1 md:rounded-2xl md:border md:p-4 md:shadow-card ${cashNeedsLook ? 'border-amber-200 bg-amber-50 md:bg-amber-50' : 'border-slate-100 md:border-slate-200 md:bg-white'}`}>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Cash difference</h2>
+            {cashDiff == null ? null : <p className="text-xs text-muted">{cashNeedsLook ? 'Needs a look' : 'Within GH₵5.00'}</p>}
+          </div>
+          {cashDiff == null ? (
+            <p className="mt-1 text-sm text-ink">No till closed today</p>
+          ) : props.cashHref ? (
+            <Link href={props.cashHref} className={`mt-1 block financial-fit ${FOCUS}`} data-today-cash>
+              <FinancialAmount pence={cashDiff} currency={currency} variant="prominent" />
+            </Link>
+          ) : (
+            <div className="financial-fit mt-1" data-today-cash>
+              <FinancialAmount pence={cashDiff} currency={currency} variant="prominent" />
+            </div>
+          )}
+        </section>
       </div>
+      <Attention snapshot={snapshot} />
 
-      <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
         {showWeek ? <Week days={snapshot.days} currency={currency} /> : (
           <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5">
             <h3 className="text-sm font-semibold text-ink">Last seven dates</h3>
@@ -344,20 +352,25 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
           ))}
         </ul>
       ) : null}
-      {snapshot.topProducts.length > 0 ? (
-        <section className="mt-4 min-w-0">
-          <h3 className="text-sm font-semibold text-ink">Top products today</h3>
-          <ol className="mt-2 space-y-2">
-            {snapshot.topProducts.map((product) => (
-              <li key={product.name} className="flex min-w-0 items-baseline justify-between gap-3 text-sm">
-                <span className="min-w-0 truncate text-ink">{product.name}</span>
-                <FinancialAmount pence={product.salesPence} currency={currency} variant="compact" className="shrink-0 text-muted" />
-              </li>
-            ))}
-          </ol>
-        </section>
-      ) : null}
-      <Profit profit={snapshot.profit} currency={currency} comparison={snapshot.comparison} />
+      <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
+        {snapshot.topProducts.length > 0 ? (
+          <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+            <h3 className="text-sm font-semibold text-ink">Top products today</h3>
+            <ol className="mt-2 space-y-2">
+              {snapshot.topProducts.map((product) => (
+                <li key={product.name} className="flex min-w-0 items-baseline justify-between gap-3 text-sm">
+                  <span className="min-w-0 break-words text-ink">{product.name}</span>
+                  <FinancialAmount pence={product.salesPence} currency={currency} variant="compact" className="shrink-0 text-muted" />
+                </li>
+              ))}
+            </ol>
+          </section>
+        ) : null}
+        <Profit profit={snapshot.profit} currency={currency} comparison={snapshot.comparison} />
+      </div>
+      <TodayHelpControl>
+        <TodayHelpBody scopeLabel={props.scopeLabel} zoneName={props.zoneName} />
+      </TodayHelpControl>
     </div>
   );
 }
@@ -504,13 +517,18 @@ function SectionLanding({ section, links }: { section: Stage3aSection; links: St
     rows.push(link);
     groups.set(link.group, rows);
   }
+  const columns = groups.size <= 1
+    ? 'max-w-2xl'
+    : groups.size === 2
+      ? 'md:grid-cols-2'
+      : 'md:grid-cols-2 xl:grid-cols-3';
   return (
-    <div className="mt-6 min-w-0 space-y-4">
+    <div className={`mt-3 grid min-w-0 grid-cols-1 gap-4 ${columns}`} data-directory-grid="" data-directory-groups={groups.size}>
       {links.length === 0 ? (
         <p className="text-sm text-ink" role="status">Nothing in this list is available on the current plan.</p>
       ) : (
         [...groups.entries()].map(([group, rows]) => (
-          <section key={group} aria-labelledby={`group-${group}`}>
+          <section key={group} aria-labelledby={`group-${group}`} className="min-w-0">
             <h2 id={`group-${group}`} className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
               {activityGroupHeading(group as Stage3aLink['group'])}
             </h2>

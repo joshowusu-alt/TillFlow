@@ -82,7 +82,12 @@ describe('Stage 3A destination chrome', () => {
       </>,
     );
     expect(count(markup, 'aria-label="Reports location"')).toBe(1);
-    expect(count(markup, `>${route.back}<`)).toBe(1);
+    if ('withheld' in (path ?? {})) {
+      expect(count(markup, `>${route.back}<`)).toBe(1);
+    } else {
+      expect(markup).toContain(`aria-label="${route.back}, Reports"`);
+      expect(markup).toContain('data-return-path=""');
+    }
     if (route.usesHead) expect(count(markup, '<h1')).toBe(1);
     if (route.storeId) expect(markup).toContain(`storeId=${route.storeId}`);
     if (route.pathname === '/reports/income-statement') expect(markup).not.toContain('storeId=');

@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { openLiveReport } from '@/lib/entitlements/live-report';
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import Pagination from '@/components/Pagination';
 import type { AuditAction } from '@/lib/audit';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
@@ -112,8 +112,8 @@ export default async function AuditLogPage({
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <PageHeader title="Audit Log" subtitle={`${total.toLocaleString()} entries`} />
+    <div className="space-y-6">
+      <ReportsDestinationHead title="Audit Log" periodLabel={`${total.toLocaleString()} entries`} />
 
       {/* Filters */}
       <form method="GET" className="card grid gap-3 p-3.5 sm:grid-cols-2 sm:p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] xl:items-end">

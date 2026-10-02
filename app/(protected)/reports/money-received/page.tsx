@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import DownloadLink from '@/components/DownloadLink';
 import Link from 'next/link';
-import PageHeader from '@/components/PageHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -160,9 +160,9 @@ export default async function MoneyReceivedReportPage({
   return (
     <div className="space-y-6">
       {opened.readOnly ? <ReportReadOnlyBanner /> : null}
-      <PageHeader
+      <ReportsDestinationHead
         title="Money Received"
-        subtitle="Confirmed customer money by the time it was received — separate from sales totals and from refunds."
+        periodLabel="Confirmed customer money by the time it was received — separate from sales totals and from refunds."
         actions={
           <DownloadLink
             href={`/exports/money-received?${exportQs.toString()}`}

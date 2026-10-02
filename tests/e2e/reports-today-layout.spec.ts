@@ -63,8 +63,14 @@ for (const width of WIDTHS) {
         expect(measure.height).toBeLessThanOrEqual(measure.lineHeight * 1.35);
         expect(measure.pageScroll).toBeLessThanOrEqual(measure.pageClient + 1);
         if (width >= 1180) {
-          const cardBox = await card.boundingBox();
-          expect(cardBox?.width ?? 0).toBeGreaterThan(480);
+          const blocks = await page.locator('[data-metric-block]').evaluateAll((nodes) => nodes.map((node) => {
+            const rect = node.getBoundingClientRect();
+            return { top: rect.top, width: rect.width };
+          }));
+          expect(blocks).toHaveLength(3);
+          expect(Math.abs(blocks[0].top - blocks[1].top)).toBeLessThan(2);
+          expect(Math.abs(blocks[1].top - blocks[2].top)).toBeLessThan(2);
+          expect(blocks[0].width).toBeGreaterThan(240);
         }
       });
     }
@@ -318,6 +324,26 @@ test('Choose a branch focuses the visible working-location control', async ({ pa
     };
   });
   expect(focused).toEqual({ tag: 'SELECT', label: 'Working location' });
+});
+
+test('setup banner leaves the three Today metrics 16px above the bar at 320x640', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/reviews/reports-today-layout?state=clearance&banner=setup');
+  const bar = await page.getByRole('navigation', { name: 'Primary mobile navigation' }).boundingBox();
+  expect(bar).not.toBeNull();
+  const metrics = await page.locator('[data-metric-block]').evaluateAll((nodes) => nodes.map((node) => {
+    const rect = node.getBoundingClientRect();
+    return { name: node.getAttribute('data-metric-block'), top: rect.top, bottom: rect.bottom };
+  }));
+  expect(metrics.map((metric) => metric.name)).toEqual(['sales', 'money', 'cash']);
+  for (const metric of metrics) {
+    expect(metric.bottom, metric.name ?? 'metric').toBeLessThanOrEqual((bar?.y ?? 0) - 16);
+  }
+  const overflow = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
 });
 
 for (const width of [390, 1440] as const) {
