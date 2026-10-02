@@ -298,8 +298,8 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
         </section>
         <section className="min-w-0 border-t border-slate-100 px-4 py-1 md:rounded-2xl md:border md:border-slate-200 md:bg-white md:p-4 md:shadow-card" data-metric-block="money">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Money received</h2>
-            {receiptsKnownZero ? null : <p className="text-xs text-muted">Confirmed · not sales</p>}
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Money received (net)</h2>
+            {receiptsKnownZero ? null : <p className="text-xs text-muted">After completed refunds</p>}
           </div>
           {receiptsKnownZero ? (
             <p className="mt-1 text-sm text-ink">No confirmed payments yet today</p>
@@ -333,7 +333,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
       </div>
       <Attention snapshot={snapshot} />
 
-      <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 items-start gap-3 md:grid-cols-2">
         {showWeek ? <Week days={snapshot.days} currency={currency} /> : (
           <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5">
             <h3 className="text-sm font-semibold text-ink">Last seven dates</h3>
@@ -488,7 +488,8 @@ function Profit({
 }) {
   if (profit.state === 'omitted' && !comparison) return null;
   return (
-    <section className="mt-4 min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+      <h3 className="mb-2 text-sm font-semibold text-ink">Sales comparison and profit</h3>
       {comparison ? (
         comparison.last30Pence === 0 && comparison.previous30Pence === 0 ? (
           <p className="text-sm text-ink">There is no earlier 30-day period with sales to compare.</p>

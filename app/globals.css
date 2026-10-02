@@ -459,17 +459,17 @@ textarea {
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   color: var(--color-ink, #0f172a);
-  font-size: clamp(0.58rem, 6.2cqi, 1rem);
+  font-size: clamp(0.875rem, 6.2cqi, 1rem);
 }
 
 .financial-amount--hero {
   font-weight: 600;
-  font-size: clamp(0.65rem, 7.2cqi, 2rem);
+  font-size: clamp(1rem, 7.2cqi, 2rem);
 }
 
 .financial-amount--prominent {
   font-weight: 600;
-  font-size: clamp(0.58rem, 6.4cqi, 1.5rem);
+  font-size: clamp(1rem, 6.4cqi, 1.5rem);
 }
 
 .financial-amount--inline,

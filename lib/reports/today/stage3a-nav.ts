@@ -68,7 +68,7 @@ const ACTIVITY_LINKS: Stage3aLink[] = [
     href: '/reports/business-movement',
     label: 'Business movement',
     purpose: 'How sales, confirmed payments, refunds and product sales changed between two equal periods.',
-    useWhen: 'Use this when you want to compare how selected operational measures changed between two equal periods.',
+    useWhen: 'Compare sales, confirmed payments, refunds and product sales with the previous month or a matching date range.',
     group: 'Reports',
     iconKey: 'profit',
     explore: 'Understand sales',
@@ -236,6 +236,14 @@ export function withStoreScope(href: string, storeId: string | null): string {
   if (NO_STORE_SCOPE.has(url.pathname)) return `${url.pathname}${url.search}`;
   url.searchParams.set('storeId', storeId);
   return `${url.pathname}${url.search}`;
+}
+
+/** Drill-downs must keep the displayed tenant-local day, not a route default. */
+export function todayDetailHref(href: string, todayKey: string, storeId: string | null): string {
+  const url = new URL(href, 'https://tillflow.local');
+  url.searchParams.set('from', todayKey);
+  url.searchParams.set('to', todayKey);
+  return withStoreScope(`${url.pathname}${url.search}`, storeId);
 }
 
 function linkVisible(link: Stage3aLink, allowedHrefs: ReadonlySet<string>, options: Stage3aLinkOptions): boolean {

@@ -1,5 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import AnalyticsClient from '@/app/(protected)/reports/analytics/AnalyticsClient';
+import ReportAmountCard from '@/components/reports/ReportAmountCard';
+import ReportFilterDisclosure from '@/components/reports/ReportFilterDisclosure';
 import BottomTabBar from '@/components/BottomTabBar';
 import { ReportsReturnPath } from '@/components/reports/ReportsContextNav';
 import { ReportsCompactBillingBanner, ReportsCompactSetupBanner } from '@/components/reports/ReportsCompactBanners';
@@ -139,6 +142,32 @@ export default function ReportsTodayLayoutReviewPage({
   searchParams?: { fixture?: string; state?: string; banner?: string; destination?: string };
 }) {
   if (!isReportsStage3aAllowed()) notFound();
+  if (searchParams?.state === 'analytics-values') {
+    return <ReviewShell><AnalyticsClient data={{
+      currency: 'GHS', periodDays: 7,
+      salesTrend: { labels: ['Mon'], values: [1_234_567_890] },
+      profitTrend: { labels: ['Mon'], values: [-1_234_567_890] },
+      hourlyData: [{ day: 'Mon', hour: 10, sales: 4 }],
+      categoryData: [{ name: 'Groceries', value: 1_234_567_890 }],
+      productData: [{ name: 'Rice', revenue: 1_234_567_890, profit: 500_000, margin: 20 }],
+      comparison: { labels: ['Mon'], current: [1_234_567_890], previous: [800_000] },
+      kpis: { totalSales: 1_234_567_890, totalProfit: -1_234_567_890, marginPercent: -100,
+        totalTransactions: 4, avgTransaction: 1_234_567_890, growthPercent: 20,
+        previousPeriodSales: 800_000, topSellingProduct: 'Rice', peakHour: '10:00' },
+    }} /></ReviewShell>;
+  }
+  if (searchParams?.state === 'movement-values') {
+    return <ReviewShell><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {[0, 150_000, 16_273_050, 1_234_567_890, -1_234_567_890].map((pence, index) =>
+        <ReportAmountCard key={index} label={`Metric ${index + 1}`} pence={pence} currency="GHS" />)}
+    </div></ReviewShell>;
+  }
+  if (searchParams?.state === 'trading-filters') {
+    return <ReviewShell><ReportFilterDisclosure><form method="GET">
+      <label htmlFor="review-from">From</label><input className="input" id="review-from" type="date" name="from" defaultValue="2026-10-02" />
+      <button className="btn-primary" type="submit">Apply filters</button>
+    </form></ReportFilterDisclosure></ReviewShell>;
+  }
   if (searchParams?.state === 'attention') {
     const ready = snapshot('large');
     ready.attention = reviewAttentionSampleRows();

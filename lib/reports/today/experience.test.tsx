@@ -192,7 +192,7 @@ describe('Reports navigation, Activity and More', () => {
     expect(markup).not.toContain('Download last week');
     expect(markup).toContain('Use this when you want to examine sales, returns, receipts and profit for a chosen trading period.');
     expect(markup).toContain('Use this when you want to understand trends, categories, products and busy trading times across longer ranges.');
-    expect(markup).toContain('Use this when you want to compare how selected operational measures changed between two equal periods.');
+    expect(markup).toContain('Compare sales, confirmed payments, refunds and product sales with the previous month or a matching date range.');
   });
 
   it('shows Sales Analytics for Growth until Trading covers it, and never for Starter', () => {

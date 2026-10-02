@@ -1,4 +1,4 @@
-import StatCard from '@/components/StatCard';
+import ReportAmountCard from '@/components/reports/ReportAmountCard';
 import { prisma } from '@/lib/prisma';
 import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
@@ -476,7 +476,7 @@ export default async function TradingDashboardContent({
   const scopeHelper =
     selectedStoreId === 'ALL'
       ? 'Figures use the selected period across all branches. Expenses and net profit use business-wide accounting records.'
-      : 'Sales are filtered to this branch. Expenses and net profit use the business-wide accounting records currently available.';
+      : 'Sales and gross profit are filtered to this branch. Expenses cover the whole business.';
   const cashDrawerParams = buildReportingScopeSearchParams(scope);
   const cashDrawerHref = `/reports/cash-drawer?${cashDrawerParams.toString()}`;
   const receiptsHref = moneyReceivedHref(scope);
@@ -499,33 +499,33 @@ export default async function TradingDashboardContent({
 
   return (
     <div className="space-y-4 sm:space-y-5" data-first-metric="">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6" data-first-figure="">
-        <StatCard
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-first-figure="">
+        <ReportAmountCard currency={currency}
           label="Sales revenue"
-          value={formatMoney(totalSales, currency)}
+          pence={totalSales}
           tone="accent"
           helper="Recognised sales for this period (not money received)."
         />
-        <StatCard
+        <ReportAmountCard currency={currency}
           label={marginReady ? `Gross Profit (${gpPercent}%)` : 'Gross Profit'}
-          value={marginReady ? formatMoney(totalGrossMargin, currency) : 'Costs incomplete'}
+          pence={marginReady ? totalGrossMargin : null} unavailableLabel="Costs incomplete"
           tone={marginReady ? (gpPercent >= 20 ? 'success' : gpPercent >= 0 ? 'warn' : 'danger') : 'warn'}
           helper={marginReady ? 'Profit before expenses.' : `${tradingMargin.incompleteLineCount} lines without authoritative cost. Sales above are still recognised.`}
         />
-        <StatCard label="Expenses" value={formatMoney(income.otherExpenses, currency)} helper={scopeHelper} />
-        <StatCard
-          label={marginReady ? `Net Profit (${npPercent}%)` : 'Net Profit'}
-          value={marginReady ? formatMoney(totalGrossMargin - income.otherExpenses, currency) : 'Costs incomplete'}
+        <ReportAmountCard currency={currency} label="Expenses" pence={income.otherExpenses} helper={scopeHelper} />
+        <ReportAmountCard currency={currency}
+          label={selectedStoreId === 'ALL' ? (marginReady ? `Net Profit (${npPercent}%)` : 'Net Profit') : 'Profit after business-wide expenses'}
+          pence={marginReady ? totalGrossMargin - income.otherExpenses : null} unavailableLabel="Costs incomplete"
           tone={marginReady ? (npPercent >= 10 ? 'success' : npPercent >= 0 ? 'warn' : 'danger') : 'warn'}
-          helper="Profit after expenses."
+          helper={selectedStoreId === 'ALL' ? 'Profit after expenses.' : 'Branch gross profit minus whole-business expenses. This is not branch net profit.'}
         />
-        <StatCard
+        <ReportAmountCard currency={currency}
           label="Credit sales (unpaid)"
-          value={formatMoney(salesRevenue.creditSalesOutstandingPence, currency)}
+          pence={salesRevenue.creditSalesOutstandingPence}
           helper="Unpaid portion of sales in this period. Not counted as money received."
         />
         <a href="/payments/supplier-payments" className="block min-w-0">
-          <StatCard label="What you owe suppliers" value={formatMoney(outstandingAP, currency)} helper="Current supplier balances. Record supplier payments when purchases are paid." />
+          <ReportAmountCard currency={currency} label="What you owe suppliers" pence={outstandingAP} helper="Current supplier balances. Record supplier payments when purchases are paid." />
         </a>
       </div>
 
@@ -689,10 +689,10 @@ export default async function TradingDashboardContent({
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="font-medium text-purple-700">
-                        Closed-shift cash difference ({todayCashVar.length} shift{todayCashVar.length !== 1 ? 's' : ''})
+                        Total cash discrepancies ({todayCashVar.length} shift{todayCashVar.length !== 1 ? 's' : ''})
                       </div>
                       <div className="mt-0.5 text-xs leading-relaxed text-purple-700/70">
-                        Difference between expected and counted cash from closed shifts.
+                        Shortages and overages added without cancelling each other out. Cash Drawer shows the net difference.
                       </div>
                     </div>
                     <span className="font-semibold text-purple-700 sm:text-right">{formatMoney(cashVarTotal, currency)}</span>
