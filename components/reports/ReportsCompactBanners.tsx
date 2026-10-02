@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 /** Compact Reports banner action. The label stays small; the box is the tap target. */
 const ACTION =
-  'inline-flex h-8 min-w-8 shrink-0 items-center justify-center px-2 text-xs font-semibold underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+  'inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center px-2 text-xs font-semibold underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 export function ReportsCompactSetupBanner({
   title,
@@ -15,7 +15,7 @@ export function ReportsCompactSetupBanner({
 }) {
   return (
     <div className="border-b border-blue-200/70 bg-blue-50 px-3" data-reports-banner="setup">
-      <div className="flex h-8 items-center justify-between gap-3">
+      <div className="flex min-h-11 items-center justify-between gap-3">
         <p className="min-w-0 truncate whitespace-nowrap text-xs leading-4 text-accent">
           <span className="font-semibold">{title}</span>
           <span className="text-accent/80"> · {detail}</span>
@@ -46,7 +46,7 @@ export function ReportsCompactBillingBanner({
       : 'border-blue-200 bg-blue-50/90 text-blue-900';
   return (
     <div data-reports-banner="trial" className={`border-b px-3 text-xs ${toneClass}`}>
-      <div className="flex h-8 items-center justify-between gap-3">
+      <div className="flex min-h-11 items-center justify-between gap-3">
         <p className="min-w-0 truncate whitespace-nowrap">{message}</p>
         <Link href={href} className={ACTION}>
           {actionLabel}
