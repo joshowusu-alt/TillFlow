@@ -262,7 +262,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
       >
         <section className="min-w-0 px-4 pb-1 pt-1 md:rounded-2xl md:border md:border-slate-200 md:bg-white md:p-4 md:shadow-card" data-today-sales-card data-metric-block="sales">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Sales today</h2>
-          <div className="mt-1 flex items-center justify-between gap-2">
+          <div className="mt-0.5 flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
               {salesKnownZero ? (
                 <p className="text-base font-semibold text-ink">No sales recorded yet today</p>
@@ -275,26 +275,26 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
                   <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
                 </div>
               )}
+              {salesKnownZero ? (
+                <p className="text-xs leading-4 text-muted">
+                  {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" /></>}
+                </p>
+              ) : (
+                <p className="text-xs leading-4 text-ink">
+                  {snapshot.salesCount} {saleWord}
+                  <span className="text-muted">
+                    {' · '}
+                    {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" /></>}
+                  </span>
+                </p>
+              )}
             </div>
             {props.salesHref ? (
-              <Link href={props.salesHref} data-today-primary-action className={`btn-secondary min-h-11 shrink-0 px-3 text-xs ${FOCUS}`}>
+              <Link href={props.salesHref} data-today-primary-action className={`btn-secondary min-h-9 shrink-0 px-3 text-xs md:min-h-11 ${FOCUS}`}>
                 Open trading
               </Link>
             ) : null}
           </div>
-          {salesKnownZero ? (
-            <p className="mt-1 text-sm text-muted">
-              {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" /></>}
-            </p>
-          ) : (
-            <p className="mt-1 text-sm text-ink">
-              {snapshot.salesCount} {saleWord}
-              <span className="text-muted">
-                {' · '}
-                {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" /></>}
-              </span>
-            </p>
-          )}
         </section>
         <section className="min-w-0 border-t border-slate-100 px-4 py-1 md:rounded-2xl md:border md:border-slate-200 md:bg-white md:p-4 md:shadow-card" data-metric-block="money">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">

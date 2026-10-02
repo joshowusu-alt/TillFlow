@@ -49,7 +49,7 @@ export default function ReportsSectionHead({
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <h1 className="min-w-0 font-display text-2xl font-semibold leading-tight text-ink">{title}</h1>
         {section === 'today' && visibleUpdated ? (
-          <div className="flex min-h-11 shrink-0 items-center">
+          <div className="flex shrink-0 items-center">
             <RefreshToday label={visibleUpdated} />
           </div>
         ) : null}
