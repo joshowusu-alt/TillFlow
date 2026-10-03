@@ -1,0 +1,1038 @@
+{
+  "rows": [
+    {
+      "shot": "320-current-today-healthy",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "320-proposed-today-healthy",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": 347,
+      "figureText": "GH₵1,500.00",
+      "blocks": [
+        {
+          "name": "sales",
+          "top": 307,
+          "bottom": 403,
+          "clearance": 157
+        },
+        {
+          "name": "money",
+          "top": 403,
+          "bottom": 450,
+          "clearance": 110
+        },
+        {
+          "name": "cash",
+          "top": 450,
+          "bottom": 497,
+          "clearance": 63
+        }
+      ],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "320-current-activity",
+      "h1": [
+        "Activity"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "320-proposed-activity",
+      "h1": [
+        "Activity"
+      ],
+      "figureTop": 242,
+      "figureText": "TradingUse this when you want to examine sales, returns, receipts and profit for a chosen trading period.›",
+      "blocks": [],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "320-current-more",
+      "h1": [
+        "More reports"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "320-proposed-more",
+      "h1": [
+        "More reports"
+      ],
+      "figureTop": 242,
+      "figureText": "Income statementSales, costs, expenses and profit for the whole business, not separated by branch.›",
+      "blocks": [],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "320-proposed-today-banner",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": 392,
+      "figureText": "GH₵1,500.00",
+      "blocks": [
+        {
+          "name": "sales",
+          "top": 352,
+          "bottom": 448,
+          "clearance": 112
+        },
+        {
+          "name": "money",
+          "top": 448,
+          "bottom": 495,
+          "clearance": 65
+        },
+        {
+          "name": "cash",
+          "top": 495,
+          "bottom": 542,
+          "clearance": 18
+        }
+      ],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "320-proposed-today-long",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": 347,
+      "figureText": "GH₵98,765,432.10",
+      "blocks": [
+        {
+          "name": "sales",
+          "top": 307,
+          "bottom": 423,
+          "clearance": 137
+        },
+        {
+          "name": "money",
+          "top": 423,
+          "bottom": 470,
+          "clearance": 90
+        },
+        {
+          "name": "cash",
+          "top": 470,
+          "bottom": 517,
+          "clearance": 43
+        }
+      ],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "390-current-today-healthy",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "390-proposed-today-healthy",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": 310,
+      "figureText": "GH₵1,500.00",
+      "blocks": [
+        {
+          "name": "sales",
+          "top": 273,
+          "bottom": 369,
+          "clearance": 395
+        },
+        {
+          "name": "money",
+          "top": 369,
+          "bottom": 421,
+          "clearance": 343
+        },
+        {
+          "name": "cash",
+          "top": 421,
+          "bottom": 473,
+          "clearance": 291
+        }
+      ],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "390-current-activity",
+      "h1": [
+        "Activity"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "390-proposed-activity",
+      "h1": [
+        "Activity"
+      ],
+      "figureTop": 242,
+      "figureText": "TradingUse this when you want to examine sales, returns, receipts and profit for a chosen trading period.›",
+      "blocks": [],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "390-current-more",
+      "h1": [
+        "More reports"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "390-proposed-more",
+      "h1": [
+        "More reports"
+      ],
+      "figureTop": 242,
+      "figureText": "Income statementSales, costs, expenses and profit for the whole business, not separated by branch.›",
+      "blocks": [],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "390-proposed-today-banner",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": 355,
+      "figureText": "GH₵1,500.00",
+      "blocks": [
+        {
+          "name": "sales",
+          "top": 318,
+          "bottom": 414,
+          "clearance": 350
+        },
+        {
+          "name": "money",
+          "top": 414,
+          "bottom": 466,
+          "clearance": 298
+        },
+        {
+          "name": "cash",
+          "top": 466,
+          "bottom": 518,
+          "clearance": 246
+        }
+      ],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "390-proposed-today-long",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": 310,
+      "figureText": "GH₵98,765,432.10",
+      "blocks": [
+        {
+          "name": "sales",
+          "top": 273,
+          "bottom": 369,
+          "clearance": 395
+        },
+        {
+          "name": "money",
+          "top": 369,
+          "bottom": 421,
+          "clearance": 343
+        },
+        {
+          "name": "cash",
+          "top": 421,
+          "bottom": 473,
+          "clearance": 291
+        }
+      ],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "768-current-today-healthy",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": 944,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "768-proposed-today-healthy",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": 313,
+      "figureText": "GH₵1,500.00",
+      "blocks": [
+        {
+          "name": "sales",
+          "top": 260,
+          "bottom": 402,
+          "clearance": 542
+        },
+        {
+          "name": "money",
+          "top": 260,
+          "bottom": 402,
+          "clearance": 542
+        },
+        {
+          "name": "cash",
+          "top": 260,
+          "bottom": 402,
+          "clearance": 542
+        }
+      ],
+      "navTop": 944,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "768-current-activity",
+      "h1": [
+        "Activity"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": 944,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "768-proposed-activity",
+      "h1": [
+        "Activity"
+      ],
+      "figureTop": 254,
+      "figureText": "TradingUse this when you want to examine sales, returns, receipts and profit for a chosen trading period.›",
+      "blocks": [],
+      "navTop": 944,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "768-current-more",
+      "h1": [
+        "More reports"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": 944,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "768-proposed-more",
+      "h1": [
+        "More reports"
+      ],
+      "figureTop": 254,
+      "figureText": "Income statementSales, costs, expenses and profit for the whole business, not separated by branch.›",
+      "blocks": [],
+      "navTop": 944,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1440-current-today-healthy",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1440-proposed-today-healthy",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": 315,
+      "figureText": "GH₵1,500.00",
+      "blocks": [
+        {
+          "name": "sales",
+          "top": 268,
+          "bottom": 390,
+          "clearance": null
+        },
+        {
+          "name": "money",
+          "top": 268,
+          "bottom": 390,
+          "clearance": null
+        },
+        {
+          "name": "cash",
+          "top": 268,
+          "bottom": 390,
+          "clearance": null
+        }
+      ],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1440-current-activity",
+      "h1": [
+        "Activity"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1440-proposed-activity",
+      "h1": [
+        "Activity"
+      ],
+      "figureTop": 262,
+      "figureText": "TradingUse this when you want to examine sales, returns, receipts and profit for a chosen trading period.›",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1440-current-more",
+      "h1": [
+        "More reports"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1440-proposed-more",
+      "h1": [
+        "More reports"
+      ],
+      "figureTop": 262,
+      "figureText": "Income statementSales, costs, expenses and profit for the whole business, not separated by branch.›",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1920-current-today-healthy",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1920-proposed-today-healthy",
+      "h1": [
+        "Today"
+      ],
+      "figureTop": 314,
+      "figureText": "GH₵1,500.00",
+      "blocks": [
+        {
+          "name": "sales",
+          "top": 268,
+          "bottom": 390,
+          "clearance": null
+        },
+        {
+          "name": "money",
+          "top": 268,
+          "bottom": 390,
+          "clearance": null
+        },
+        {
+          "name": "cash",
+          "top": 268,
+          "bottom": 390,
+          "clearance": null
+        }
+      ],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1920-current-activity",
+      "h1": [
+        "Activity"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1920-proposed-activity",
+      "h1": [
+        "Activity"
+      ],
+      "figureTop": 262,
+      "figureText": "TradingUse this when you want to examine sales, returns, receipts and profit for a chosen trading period.›",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1920-current-more",
+      "h1": [
+        "More reports"
+      ],
+      "figureTop": null,
+      "figureText": null,
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1920-proposed-more",
+      "h1": [
+        "More reports"
+      ],
+      "figureTop": 262,
+      "figureText": "Income statementSales, costs, expenses and profit for the whole business, not separated by branch.›",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "320-current-trading",
+      "h1": [
+        "Trading",
+        "Sample Main Branch"
+      ],
+      "figureTop": 1049,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "320-proposed-trading",
+      "h1": [
+        "Trading"
+      ],
+      "figureTop": 391,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "320-current-sales-analytics",
+      "h1": [
+        "Sales analytics"
+      ],
+      "figureTop": 659,
+      "figureText": "GH₵98,765,432.10",
+      "blocks": [],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": {
+        "text": "GH₵98,765,432.10",
+        "scroll": 137,
+        "client": 112,
+        "overflow": "ellipsis",
+        "truncated": true
+      }
+    },
+    {
+      "shot": "320-proposed-sales-analytics",
+      "h1": [
+        "Sales analytics"
+      ],
+      "figureTop": 475,
+      "figureText": "GH₵98,765,432.10",
+      "blocks": [],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": {
+        "text": "GH₵98,765,432.10",
+        "scroll": 112,
+        "client": 112,
+        "overflow": "clip",
+        "truncated": false
+      }
+    },
+    {
+      "shot": "320-current-business-movement",
+      "h1": [
+        "Business movement"
+      ],
+      "figureTop": 846,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "320-proposed-business-movement",
+      "h1": [
+        "Business movement"
+      ],
+      "figureTop": 427,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": 560,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "390-current-trading",
+      "h1": [
+        "Trading",
+        "Sample Main Branch"
+      ],
+      "figureTop": 1029,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "390-proposed-trading",
+      "h1": [
+        "Trading"
+      ],
+      "figureTop": 363,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "390-current-sales-analytics",
+      "h1": [
+        "Sales analytics"
+      ],
+      "figureTop": 497,
+      "figureText": "GH₵98,765,432.10",
+      "blocks": [],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": {
+        "text": "GH₵98,765,432.10",
+        "scroll": 147,
+        "client": 147,
+        "overflow": "ellipsis",
+        "truncated": false
+      }
+    },
+    {
+      "shot": "390-proposed-sales-analytics",
+      "h1": [
+        "Sales analytics"
+      ],
+      "figureTop": 407,
+      "figureText": "GH₵98,765,432.10",
+      "blocks": [],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": {
+        "text": "GH₵98,765,432.10",
+        "scroll": 147,
+        "client": 147,
+        "overflow": "clip",
+        "truncated": false
+      }
+    },
+    {
+      "shot": "390-current-business-movement",
+      "h1": [
+        "Business movement"
+      ],
+      "figureTop": 758,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "390-proposed-business-movement",
+      "h1": [
+        "Business movement"
+      ],
+      "figureTop": 407,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": 764,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "768-current-trading",
+      "h1": [
+        "Trading",
+        "Sample Main Branch"
+      ],
+      "figureTop": 859,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": 944,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "768-proposed-trading",
+      "h1": [
+        "Trading"
+      ],
+      "figureTop": 371,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": 944,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "768-current-sales-analytics",
+      "h1": [
+        "Sales analytics"
+      ],
+      "figureTop": 490,
+      "figureText": "GH₵98,765,432.10",
+      "blocks": [],
+      "navTop": 944,
+      "docOverflow": 0,
+      "analytics": {
+        "text": "GH₵98,765,432.10",
+        "scroll": 172,
+        "client": 139,
+        "overflow": "ellipsis",
+        "truncated": true
+      }
+    },
+    {
+      "shot": "768-proposed-sales-analytics",
+      "h1": [
+        "Sales analytics"
+      ],
+      "figureTop": 415,
+      "figureText": "GH₵98,765,432.10",
+      "blocks": [],
+      "navTop": 944,
+      "docOverflow": 0,
+      "analytics": {
+        "text": "GH₵98,765,432.10",
+        "scroll": 139,
+        "client": 139,
+        "overflow": "clip",
+        "truncated": false
+      }
+    },
+    {
+      "shot": "768-current-business-movement",
+      "h1": [
+        "Business movement"
+      ],
+      "figureTop": 632,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": 944,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "768-proposed-business-movement",
+      "h1": [
+        "Business movement"
+      ],
+      "figureTop": 371,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": 944,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1440-current-trading",
+      "h1": [
+        "Trading",
+        "Sample Main Branch"
+      ],
+      "figureTop": 832,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1440-proposed-trading",
+      "h1": [
+        "Trading"
+      ],
+      "figureTop": 380,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1440-current-sales-analytics",
+      "h1": [
+        "Sales analytics"
+      ],
+      "figureTop": 484,
+      "figureText": "GH₵98,765,432.10",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": {
+        "text": "GH₵98,765,432.10",
+        "scroll": 172,
+        "client": 130,
+        "overflow": "ellipsis",
+        "truncated": true
+      }
+    },
+    {
+      "shot": "1440-proposed-sales-analytics",
+      "h1": [
+        "Sales analytics"
+      ],
+      "figureTop": 423,
+      "figureText": "GH₵98,765,432.10",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": {
+        "text": "GH₵98,765,432.10",
+        "scroll": 130,
+        "client": 130,
+        "overflow": "clip",
+        "truncated": false
+      }
+    },
+    {
+      "shot": "1440-current-business-movement",
+      "h1": [
+        "Business movement"
+      ],
+      "figureTop": 607,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1440-proposed-business-movement",
+      "h1": [
+        "Business movement"
+      ],
+      "figureTop": 380,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1920-current-trading",
+      "h1": [
+        "Trading",
+        "Sample Main Branch"
+      ],
+      "figureTop": 832,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1920-proposed-trading",
+      "h1": [
+        "Trading"
+      ],
+      "figureTop": 380,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1920-current-sales-analytics",
+      "h1": [
+        "Sales analytics"
+      ],
+      "figureTop": 484,
+      "figureText": "GH₵98,765,432.10",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": {
+        "text": "GH₵98,765,432.10",
+        "scroll": 190,
+        "client": 190,
+        "overflow": "ellipsis",
+        "truncated": false
+      }
+    },
+    {
+      "shot": "1920-proposed-sales-analytics",
+      "h1": [
+        "Sales analytics"
+      ],
+      "figureTop": 423,
+      "figureText": "GH₵98,765,432.10",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": {
+        "text": "GH₵98,765,432.10",
+        "scroll": 136,
+        "client": 136,
+        "overflow": "clip",
+        "truncated": false
+      }
+    },
+    {
+      "shot": "1920-current-business-movement",
+      "h1": [
+        "Business movement"
+      ],
+      "figureTop": 607,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    },
+    {
+      "shot": "1920-proposed-business-movement",
+      "h1": [
+        "Business movement"
+      ],
+      "figureTop": 380,
+      "figureText": "GH₵1,500.00",
+      "blocks": [],
+      "navTop": null,
+      "docOverflow": 0,
+      "analytics": null
+    }
+  ],
+  "axeRows": [
+    {
+      "label": "hub-today-healthy",
+      "violations": []
+    },
+    {
+      "label": "hub-activity",
+      "violations": []
+    },
+    {
+      "label": "hub-more",
+      "violations": []
+    },
+    {
+      "label": "destination-trading",
+      "violations": []
+    },
+    {
+      "label": "destination-sales-analytics",
+      "violations": []
+    },
+    {
+      "label": "destination-business-movement",
+      "violations": []
+    },
+    {
+      "label": "destination-analytics-1440",
+      "violations": []
+    }
+  ]
+}
