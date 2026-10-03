@@ -1158,3 +1158,41 @@ main#main-content { animation: fade-in-up .25s ease-out; }
 .divide-y.overflow-y-auto::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.3);
 }
+
+/* Option 2 is confined to Reports Today; shared Home metrics are untouched. */
+.today-dashboard {
+  display: grid;
+  gap: 1rem;
+  grid-template-areas: "main" "attention" "week" "detail" "context";
+}
+.today-dashboard__side { display: contents; }
+.today-dashboard__main { grid-area: main; }
+.today-dashboard__attention { grid-area: attention; }
+.today-dashboard__week { grid-area: week; }
+.today-dashboard__detail { grid-area: detail; }
+.today-dashboard__context { grid-area: context; }
+.today-sales-hero {
+  background: linear-gradient(115deg, #142451 0%, #1846c7 70%, #1557e8 100%);
+  box-shadow: 0 6px 20px rgb(30 64 175 / 12%);
+}
+.today-sales-hero .financial-amount { color: white; }
+.today-sales-value .financial-amount--hero { font-size: clamp(1rem, var(--today-amount-size, 8.8cqi), 3.5rem); }
+.today-support-card .financial-amount--prominent { font-size: clamp(1rem, 7.2cqi, 2rem); }
+.today-week-chart { position: relative; height: 11rem; margin-inline: 0.5rem; }
+.today-week-chart__baseline { position: absolute; inset-inline: 0; border-top: 1px solid #cbd5e1; }
+.today-week-chart__columns { display: grid; position: absolute; inset: 0; gap: 0.6rem; }
+.today-week-chart__column { position: relative; min-width: 0; }
+.today-week-chart__bar { position: absolute; inset-inline: 12%; background: #1e40af; border-radius: 5px 5px 0 0; }
+.today-week-chart__bar--today { background: #0369a1; }
+.today-week-chart__label { position: absolute; top: calc(100% + 0.5rem); inset-inline: 0; text-align: center; font-size: 0.75rem; color: #475569; }
+@media (min-width: 1024px) {
+  .today-dashboard {
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    grid-template-areas: "main side" "week side" "context context";
+    gap: 1.25rem;
+    align-items: start;
+  }
+  .today-dashboard__side { display: block; grid-area: side; }
+  .today-sales-hero { padding: 1.75rem; }
+  .today-week-chart { height: 13rem; }
+}

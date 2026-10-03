@@ -62,15 +62,25 @@ for (const width of WIDTHS) {
         expect(measure.scrollWidth).toBeLessThanOrEqual(measure.clientWidth + 1);
         expect(measure.height).toBeLessThanOrEqual(measure.lineHeight * 1.35);
         expect(measure.pageScroll).toBeLessThanOrEqual(measure.pageClient + 1);
+        const metricAmounts = await page.locator('[data-metric-block] [data-financial-amount]').evaluateAll(nodes => nodes.map(node => ({
+          font: parseFloat(getComputedStyle(node).fontSize), width: node.clientWidth, scroll: node.scrollWidth,
+        })));
+        for (const amount of metricAmounts) {
+          expect(amount.font).toBeGreaterThanOrEqual(16);
+          expect(amount.scroll).toBeLessThanOrEqual(amount.width + 1);
+        }
+        await page.getByText('View daily sales figures', { exact: true }).click();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+
         if (width >= 1180) {
           const blocks = await page.locator('[data-metric-block]').evaluateAll((nodes) => nodes.map((node) => {
             const rect = node.getBoundingClientRect();
             return { top: rect.top, width: rect.width };
           }));
           expect(blocks).toHaveLength(3);
-          expect(Math.abs(blocks[0].top - blocks[1].top)).toBeLessThan(2);
+          expect(blocks[1].top).toBeGreaterThan(blocks[0].top);
           expect(Math.abs(blocks[1].top - blocks[2].top)).toBeLessThan(2);
-          expect(blocks[0].width).toBeGreaterThan(240);
+          expect(blocks[0].width).toBeGreaterThan(480);
         }
       });
     }
@@ -222,7 +232,10 @@ async function assertCustomerFocusClearsBar(page: Page, path: string, width: num
   const seen: string[] = [];
   for (let step = 0; step < 28; step += 1) {
     await page.keyboard.press('Tab');
-    await page.waitForTimeout(350);
+    await expect.poll(async () => {
+      const current = await focusedBox(page);
+      return !current || current.inBar || (current.top >= 0 && current.bottom <= (current.barTop ?? 0) - 16);
+    }, { timeout: 5000, message: 'Native focus scroll must settle above the bar' }).toBe(true);
     const box = await focusedBox(page);
     if (!box || box.inBar) continue;
     seen.push(box.name);
@@ -326,24 +339,27 @@ test('Choose a branch focuses the visible working-location control', async ({ pa
   expect(focused).toEqual({ tag: 'SELECT', label: 'Working location' });
 });
 
-test('setup banner leaves the three Today metrics 16px above the bar at 320x640', async ({ page }) => {
+test('short phone shows the sales hero and can scroll to supporting metrics', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 640 });
   await page.goto('/reviews/reports-today-layout?state=clearance&banner=setup');
+  const action = page.locator('[data-today-primary-action]');
+  await expect(action).toBeVisible();
+  await action.focus();
   const bar = await page.getByRole('navigation', { name: 'Primary mobile navigation' }).boundingBox();
-  expect(bar).not.toBeNull();
-  const metrics = await page.locator('[data-metric-block]').evaluateAll((nodes) => nodes.map((node) => {
-    const rect = node.getBoundingClientRect();
-    return { name: node.getAttribute('data-metric-block'), top: rect.top, bottom: rect.bottom };
-  }));
-  expect(metrics.map((metric) => metric.name)).toEqual(['sales', 'money', 'cash']);
-  for (const metric of metrics) {
-    expect(metric.bottom, metric.name ?? 'metric').toBeLessThanOrEqual((bar?.y ?? 0) - 16);
+  await expect.poll(async () => {
+    const actionBox = await action.boundingBox();
+    return actionBox!.y + actionBox!.height;
+  }).toBeLessThanOrEqual(bar!.y - 16);
+  for (const name of ['money', 'cash']) {
+    const metric = page.locator(`[data-metric-block="${name}"]`);
+    await metric.scrollIntoViewIfNeeded();
+    await expect(metric).toBeVisible();
+    const amount = metric.locator('[data-financial-amount]');
+    const size = await amount.evaluate(el => ({ width: el.clientWidth, scroll: el.scrollWidth, font: parseFloat(getComputedStyle(el).fontSize) }));
+    expect(size.scroll).toBeLessThanOrEqual(size.width + 1);
+    expect(size.font).toBeGreaterThanOrEqual(16);
   }
-  const overflow = await page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    clientWidth: document.documentElement.clientWidth,
-  }));
-  expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });
 
 for (const width of [390, 1440] as const) {
@@ -408,5 +424,66 @@ for (const width of [320, 390, 768, 1024, 1440] as const) {
     await expect(page.getByLabel('From', { exact: true })).toBeVisible();
     await page.keyboard.press('Enter');
     await expect(page.getByLabel('From', { exact: true })).toBeHidden();
+  });
+}
+
+for (const width of [320, 390, 768, 1024, 1440, 1920, 2560]) {
+  test(`Option 2 hierarchy, chart and financial states @ ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/reviews/reports-today-layout?fixture=medium');
+    const active = page.getByRole('link', { name: 'Today', exact: true });
+    await expect(active).toHaveAttribute('aria-current', 'page');
+    expect(await active.evaluate(el => getComputedStyle(el).color)).toBe('rgb(255, 255, 255)');
+    for (const name of ['Refresh', 'How Today is calculated']) {
+      const bounds = await page.getByRole('button', { name, exact: true }).boundingBox();
+      expect(bounds!.height).toBeGreaterThanOrEqual(44);
+    }
+    const hero = page.locator('[data-today-sales-card]');
+    expect(await hero.evaluate(el => getComputedStyle(el).backgroundImage)).toContain('linear-gradient');
+    const heroAmount = hero.locator('[data-financial-amount]').first();
+    expect(await heroAmount.evaluate(el => getComputedStyle(el).color)).toBe('rgb(255, 255, 255)');
+    await expect(page.getByText('Today so far', { exact: false }).first()).toBeVisible();
+    await expect(page.locator('[data-week-chart]')).toBeVisible();
+    await page.getByText('View daily sales figures', { exact: true }).click();
+    const table = page.getByRole('table', { name: 'Daily sales over the last seven days' });
+    await expect(table).toBeVisible();
+    await expect(table.locator('tbody tr')).toHaveCount(7);
+    await expect(table).toContainText('GH₵8,854.50');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.getByText('View daily sales figures', { exact: true }).click();
+    if (width >= 1024) {
+      const heroBox = await hero.boundingBox();
+      const attention = await page.locator('[data-today-attention]').boundingBox();
+      expect(attention!.x).toBeGreaterThan(heroBox!.x + heroBox!.width);
+      expect(Math.abs(heroBox!.y - attention!.y)).toBeLessThan(2);
+    }
+    await page.screenshot({ path: testInfo.outputPath(`today-option2-${width}.png`), fullPage: true });
+    await page.goto('/reviews/reports-today-layout?state=partial');
+    await expect(page.getByText('No confirmed payments yet today', { exact: true })).toBeVisible();
+    await expect(page.getByText('No till closed today', { exact: true })).toBeVisible();
+    await expect(page.locator('[data-profit-state="incomplete"]')).toBeVisible();
+    await expect(page.locator('[data-payment-mix-bar]')).toHaveCount(0);
+    await page.goto('/reviews/reports-today-layout?state=failed');
+    await expect(page.locator('.reports-today-surface').getByRole('alert')).toContainText('Today could not be loaded');
+    await expect(page.locator('[data-financial-amount]')).toHaveCount(0);
+    await page.goto('/reviews/reports-today-layout?state=restricted');
+    await expect(page.locator('.reports-today-surface').getByRole('status')).toContainText('Read-only');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  });
+}
+
+for (const width of [320, 390, 1440]) {
+  test(`Option 2 full content accessibility @ ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    for (const state of ['attention', 'empty', 'partial', 'failed', 'no-branch']) {
+      await page.goto(`/reviews/reports-today-layout?state=${state}`);
+      await page.addScriptTag({ content: axe.source });
+      const violations = await page.evaluate(async () => {
+        const runner = (window as unknown as { axe: { run: (node: Element, options: unknown) => Promise<{ violations: unknown[] }> } }).axe;
+        return (await runner.run(document.querySelector('.reports-today-surface')!, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } })).violations;
+      });
+      expect(violations, state).toEqual([]);
+      if (state === 'attention') await expect(page.locator('[data-today-attention] li')).toHaveCount(5);
+    }
   });
 }

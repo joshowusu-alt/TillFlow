@@ -36,6 +36,11 @@ function snapshot(overrides: Partial<TodaySnapshot> = {}): TodaySnapshot {
   };
 }
 
+function methodMarkup(markup: string) {
+  const start = markup.indexOf('Payment methods');
+  return markup.slice(start, markup.indexOf('</section>', start));
+}
+
 function html(overrides: Partial<Parameters<typeof TodayScreen>[0]> = {}) {
   return renderToStaticMarkup(
     <TodayScreen
@@ -165,7 +170,7 @@ describe('Today screen', () => {
         ],
       }),
     });
-    const methods = mixed.slice(mixed.indexOf('Payment methods'));
+    const methods = methodMarkup(mixed);
     expect(methods).toContain('GH₵80.00');
     expect(methods).toContain('−GH₵5.00');
     expect(methods).not.toContain('%');
@@ -181,7 +186,7 @@ describe('Today screen', () => {
         ],
       }),
     });
-    const positiveMethods = positive.slice(positive.indexOf('Payment methods'));
+    const positiveMethods = methodMarkup(positive);
     expect(positiveMethods).toContain('58%');
     expect(positiveMethods).toContain('42%');
     expect(positiveMethods).toContain('data-payment-mix-bar="visible"');
@@ -195,13 +200,13 @@ describe('Today screen', () => {
         ],
       }),
     });
-    const withZeroMethods = withZero.slice(withZero.indexOf('Payment methods'));
+    const withZeroMethods = methodMarkup(withZero);
     expect(withZeroMethods).toContain('data-payment-mix-bar="visible"');
     expect(withZeroMethods).toContain('50%');
     expect(withZeroMethods).not.toContain('· 0%');
 
     const zero = html({ snapshot: snapshot({ methods: [{ method: 'CASH', label: 'Cash', amountPence: 0 }] }) });
-    expect(zero.slice(zero.indexOf('Payment methods'))).not.toContain('data-payment-mix-bar="visible"');
+    expect(methodMarkup(zero)).not.toContain('data-payment-mix-bar="visible"');
 
     const negative = html({
       snapshot: snapshot({
@@ -211,7 +216,7 @@ describe('Today screen', () => {
         ],
       }),
     });
-    const negativeMethods = negative.slice(negative.indexOf('Payment methods'));
+    const negativeMethods = methodMarkup(negative);
     expect(negativeMethods).not.toContain('%');
     expect(negativeMethods).not.toContain('data-payment-mix-bar="visible"');
     expect(negativeMethods).toContain('−GH₵5.00');
@@ -227,5 +232,29 @@ describe('Today screen', () => {
     expect(markup).toContain('More reports');
     expect(markup).not.toContain('GH₵');
     expect(markup).not.toContain('/reports/balance-sheet');
+  });
+});
+
+describe('Option 2 presentation', () => {
+  it('distinguishes partial today from yesterday and exposes daily chart figures', () => {
+    const markup = html();
+    expect(markup).toContain('Today so far');
+    expect(markup).toContain('Full day');
+    expect(markup).toContain('Sales over the last seven days');
+    expect(markup).toContain('View daily sales figures');
+    expect(markup).toContain('aria-label="Daily sales over the last seven days"');
+    expect(markup.match(/How Today is calculated/g)).toHaveLength(1);
+    expect(markup).not.toContain('Sales this week');
+  });
+
+  it('keeps a negative day below zero and never creates a negative bar height', () => {
+    const markup = html({ snapshot: snapshot({ days: [
+      { key: '2026-09-29', label: 'Tue', salesPence: 10000 },
+      { key: '2026-09-30', label: 'Wed', salesPence: -5000 },
+    ] }) });
+    expect(markup).toContain('top:66.66666666666666%');
+    expect(markup).toContain('height:33.33333333333333%');
+    expect(markup).toContain('−GH₵50.00');
+    expect(markup).not.toMatch(/height:-/);
   });
 });

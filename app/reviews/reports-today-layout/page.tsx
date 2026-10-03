@@ -7,6 +7,7 @@ import BottomTabBar from '@/components/BottomTabBar';
 import { ReportsReturnPath } from '@/components/reports/ReportsContextNav';
 import { ReportsCompactBillingBanner, ReportsCompactSetupBanner } from '@/components/reports/ReportsCompactBanners';
 import TodayScreen from '@/components/reports/today/TodayScreen';
+import { ReportsCanvas } from '@/components/reports/ReportsCanvas';
 import { todayNextActions, type TodaySnapshot } from '@/lib/reports/today/model';
 import { reviewAttentionSampleRows } from '@/lib/reports/today/review-samples';
 import { returnPathFor, stage3aExploreNextSteps, stage3aLinks, type Stage3aSection } from '@/lib/reports/today/stage3a-nav';
@@ -32,17 +33,25 @@ function snapshot(fixture: FixtureId): TodaySnapshot {
   const amounts = FIXTURES[fixture];
   return {
     readCount: 1,
-    salesTodayPence: 150_000,
+    salesTodayPence: fixture === 'large' || fixture === 'negative-large' ? amounts.money : 150_000,
     salesCount: 4,
     yesterdayPence: 80_000,
-    days: [{ key: '2026-09-30', label: 'Wed', salesPence: 150_000 }],
+    days: [
+      { key: '2026-09-24', label: 'Thu', salesPence: 885_450 },
+      { key: '2026-09-25', label: 'Fri', salesPence: 852_550 },
+      { key: '2026-09-26', label: 'Sat', salesPence: 0 },
+      { key: '2026-09-27', label: 'Sun', salesPence: 666_300 },
+      { key: '2026-09-28', label: 'Mon', salesPence: 561_500 },
+      { key: '2026-09-29', label: 'Tue', salesPence: 80_000 },
+      { key: '2026-09-30', label: 'Wed', salesPence: fixture === 'large' || fixture === 'negative-large' ? amounts.money : 150_000 },
+    ],
     moneyReceivedPence: amounts.money,
     methods: [{ method: 'CASH', label: 'Cash', amountPence: amounts.money }],
     cashDifferencePence: amounts.cash,
     comparison: null,
     branches: null,
     profit: { state: 'ready', grossProfitPence: 45_000 },
-    topProducts: [],
+    topProducts: [{ name: 'Rice 5kg', salesPence: 45_000 }, { name: 'Fresh milk 1L', salesPence: 37_000 }, { name: 'Biscuits', salesPence: 25_000 }],
     attention: fixture === 'medium' ? [] : [{
       rank: 1,
       severity: 'high',
@@ -107,8 +116,8 @@ function ReviewShell({ children }: { children: React.ReactNode }) {
   return (
     <div data-today-layout-review>
       <div aria-hidden="true" className="h-[5.75rem] border-b border-slate-200 bg-white" data-header-stand-in="" />
-      <main className="app-main-shell" data-reports-focus-scope>
-        {children}
+      <main className="app-main-shell w-full min-w-0 px-4 pt-1 sm:px-5 sm:pt-2 lg:px-6 lg:pt-4" data-reports-focus-scope>
+        <ReportsCanvas>{children}</ReportsCanvas>
       </main>
       <BottomTabBar userRole="OWNER" />
     </div>
@@ -167,6 +176,15 @@ export default function ReportsTodayLayoutReviewPage({
       <label htmlFor="review-from">From</label><input className="input" id="review-from" type="date" name="from" defaultValue="2026-10-02" />
       <button className="btn-primary" type="submit">Apply filters</button>
     </form></ReportFilterDisclosure></ReviewShell>;
+  }
+  if (searchParams?.state === 'restricted') {
+    return <ReviewShell>{reviewToday('today', { snapshot: snapshot('medium'), readOnly: true })}</ReviewShell>;
+  }
+  if (searchParams?.state === 'partial') {
+    const partial = snapshot('medium');
+    partial.moneyReceivedPence = 0; partial.methods = []; partial.cashDifferencePence = null;
+    partial.profit = { state: 'incomplete', grossProfitPence: null };
+    return <ReviewShell>{reviewToday('today', { snapshot: partial })}</ReviewShell>;
   }
   if (searchParams?.state === 'attention') {
     const ready = snapshot('large');
@@ -293,7 +311,8 @@ export default function ReportsTodayLayoutReviewPage({
     );
   }
   return (
-    <div data-today-layout-review data-today-fixture={fixture}>
+    <ReviewShell>
+    <div data-today-fixture={fixture}>
       <TodayScreen
         section="today"
         scopeLabel="Sample Main Branch"
@@ -311,5 +330,6 @@ export default function ReportsTodayLayoutReviewPage({
         failed={false}
       />
     </div>
+    </ReviewShell>
   );
 }
