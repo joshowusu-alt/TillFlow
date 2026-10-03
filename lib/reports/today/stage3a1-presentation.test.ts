@@ -38,7 +38,7 @@ describe('Stage 3A.1 customer presentation', () => {
     expect(today).toContain('data-metric-block="sales"');
     expect(today).toContain('data-metric-block="money"');
     expect(today).toContain('data-metric-block="cash"');
-    expect(today).toContain('md:grid-cols-3');
+    expect(today).toContain('today-support-grid');
     expect(today).toContain('data-directory-grid');
     expect(today).toContain('xl:grid-cols-3');
   });

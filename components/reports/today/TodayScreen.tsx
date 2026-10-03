@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import type { CSSProperties } from 'react';
+import { formatMoney } from '@/lib/format';
 import NavIcon from '@/components/navigation/NavIcon';
 import FinancialAmount from '@/components/reports/FinancialAmount';
 import ReportsSectionHead from '@/components/reports/ReportsSectionHead';
@@ -21,6 +23,7 @@ import {
 import ChooseBranchButton from '@/components/reports/today/ChooseBranchButton';
 import RefreshToday from '@/components/reports/today/RefreshToday';
 import { paymentMixPresentation } from '@/lib/reports/today/method-share';
+import TodayWeekChart from '@/components/reports/today/TodayWeekChart';
 
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
@@ -29,6 +32,7 @@ export function TodayLoading() {
     <div className="min-w-0" aria-busy="true" aria-live="polite">
       <h1 className="font-display text-2xl font-semibold text-ink">Today</h1>
       <p className="mt-4 text-sm text-muted">Loading Today</p>
+      <div aria-hidden="true" className="today-sales-hero mt-4 h-52 rounded-2xl motion-safe:animate-pulse" />
     </div>
   );
 }
@@ -74,7 +78,7 @@ export default function TodayScreen(props: TodayScreenProps) {
   const title = section === 'today' ? 'Today' : section === 'activity' ? 'Activity' : 'More reports';
   const quiet = Boolean(props.snapshot && isQuietToday(props.snapshot));
   return (
-    <div className="min-w-0 overflow-x-hidden" data-reports-focus-scope>
+    <div className="reports-today-surface min-w-0 overflow-x-hidden" data-reports-focus-scope>
       <ReportsSectionHead
         title={title}
         section={section}
@@ -83,7 +87,6 @@ export default function TodayScreen(props: TodayScreenProps) {
         scopeLabel={props.scopeLabel}
         updatedLabel={props.failed ? '' : props.updatedLabel}
         showDate={section === 'today'}
-        lead={section === 'today' ? 'Sales, confirmed money and counted cash.' : undefined}
         help={section === 'today' && (props.failed || props.blocked || quiet) ? (
           <TodayHelpControl>
             <TodayHelpBody scopeLabel={props.scopeLabel} zoneName={props.zoneName} />
@@ -249,136 +252,123 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
   const partial = todayPartialKinds(snapshot);
   const salesKnownZero = snapshot.salesCount === 0 && snapshot.salesTodayPence === 0;
   const receiptsKnownZero = snapshot.moneyReceivedPence === 0 && snapshot.methods.length === 0;
+  const salesSize = { '--today-amount-size': `${Math.min(16, 160 / formatMoney(snapshot.salesTodayPence, currency).length)}cqi` } as CSSProperties;
   const saleWord = snapshot.salesCount === 1 ? 'sale' : 'sales';
-  const showWeek = snapshot.days.some((day) => day.salesPence !== 0);
   const cashDiff = snapshot.cashDifferencePence;
   const cashNeedsLook = cashDiff != null && Math.abs(cashDiff) >= CASH_ATTENTION_THRESHOLD_PENCE;
   return (
-    <div className="mt-1 min-w-0 space-y-3" data-today-state={partial.length > 0 ? 'partial' : 'ready'} data-partial={partial.join(' ')}>
-      <div
-        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card md:grid md:grid-cols-3 md:gap-3 md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:shadow-none"
-        data-reconciliation-grid=""
-        data-primary-card="true"
-      >
-        <section className="min-w-0 px-4 pb-1 pt-1 md:rounded-2xl md:border md:border-slate-200 md:bg-white md:p-4 md:shadow-card" data-today-sales-card data-metric-block="sales">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Sales today</h2>
-          <div className="mt-0.5 flex items-center justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              {salesKnownZero ? (
-                <p className="text-base font-semibold text-ink">No sales recorded yet today</p>
-              ) : props.salesHref ? (
-                <Link href={props.salesHref} className={`block financial-fit ${FOCUS}`}>
-                  <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
+    <div className="today-dashboard mt-4 min-w-0" data-today-state={partial.length > 0 ? 'partial' : 'ready'} data-partial={partial.join(' ')}>
+      <div className="today-dashboard__main min-w-0 space-y-4">
+        <div className="min-w-0 space-y-4" data-reconciliation-grid="" data-primary-card="true">
+          <section className="today-sales-hero min-w-0 rounded-2xl p-5 sm:p-6" data-today-sales-card data-metric-block="sales">
+            <h2 className="text-base font-semibold text-white">Sales today</h2>
+            {salesKnownZero ? (
+              <p className="mt-3 text-xl font-semibold text-white">No sales recorded yet today</p>
+            ) : props.salesHref ? (
+              <Link href={props.salesHref} style={salesSize} className="today-sales-value financial-fit mt-3 block rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">
+                <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
+              </Link>
+            ) : (
+              <div style={salesSize} className="today-sales-value financial-fit mt-3">
+                <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
+              </div>
+            )}
+            <p className="mt-2 text-sm text-white">{snapshot.salesCount} {saleWord} · Today so far</p>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-white/25 pt-3">
+              <p className="min-w-0 text-sm text-white">
+                {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday: <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" className="today-yesterday-amount" /> · Full day</>}
+              </p>
+              {props.salesHref ? (
+                <Link href={props.salesHref} data-today-primary-action className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-white hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+                  Open trading <span aria-hidden="true">→</span>
+                </Link>
+              ) : null}
+            </div>
+          </section>
+          <div className={`today-support-grid grid min-w-0 gap-3 sm:grid-cols-2 ${[snapshot.moneyReceivedPence, cashDiff ?? 0].some((amount) => formatMoney(amount, currency).length > 12) ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            <section className="today-support-card min-w-0 rounded-2xl border border-slate-200 bg-white p-3 sm:p-5" data-metric-block="money">
+              <h2 className="text-sm font-semibold text-ink">Money received (net)</h2>
+              {receiptsKnownZero ? (
+                <p className="mt-3 text-base font-semibold text-ink">No confirmed payments yet today</p>
+              ) : props.moneyHref ? (
+                <Link href={props.moneyHref} className={`financial-fit mt-3 block rounded-md ${FOCUS}`} data-today-money>
+                  <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
                 </Link>
               ) : (
-                <div className="financial-fit">
-                  <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
+                <div className="financial-fit mt-3" data-today-money>
+                  <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
                 </div>
               )}
-              {salesKnownZero ? (
-                <p className="text-xs leading-4 text-muted">
-                  {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" /></>}
-                </p>
+              <p className="mt-2 text-xs leading-5 text-muted">After completed refunds</p>
+            </section>
+            <section data-metric-block="cash" className={`today-support-card min-w-0 rounded-2xl border p-3 sm:p-5 ${cashNeedsLook ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'}`}>
+              <h2 className="text-sm font-semibold text-ink">Cash difference</h2>
+              {cashDiff == null ? (
+                <p className="mt-3 text-base font-semibold text-ink">No till closed today</p>
+              ) : props.cashHref ? (
+                <Link href={props.cashHref} className={`financial-fit mt-3 block rounded-md ${FOCUS}`} data-today-cash>
+                  <FinancialAmount pence={cashDiff} currency={currency} variant="prominent" />
+                </Link>
               ) : (
-                <p className="text-xs leading-4 text-ink">
-                  {snapshot.salesCount} {saleWord}
-                  <span className="text-muted">
-                    {' · '}
-                    {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" /></>}
-                  </span>
-                </p>
+                <div className="financial-fit mt-3" data-today-cash>
+                  <FinancialAmount pence={cashDiff} currency={currency} variant="prominent" />
+                </div>
               )}
-            </div>
-            {props.salesHref ? (
-              <Link href={props.salesHref} data-today-primary-action className={`btn-secondary min-h-9 shrink-0 px-3 text-xs md:min-h-11 ${FOCUS}`}>
-                Open trading
-              </Link>
-            ) : null}
+              <p className="mt-2 text-xs leading-5 text-muted">{cashDiff == null ? 'Shown after a till is closed' : cashNeedsLook ? 'Needs a look' : 'Within GH₵5.00'}</p>
+            </section>
           </div>
-        </section>
-        <section className="min-w-0 border-t border-slate-100 px-4 py-1 md:rounded-2xl md:border md:border-slate-200 md:bg-white md:p-4 md:shadow-card" data-metric-block="money">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Money received (net)</h2>
-            {receiptsKnownZero ? null : <p className="text-xs text-muted">After completed refunds</p>}
-          </div>
-          {receiptsKnownZero ? (
-            <p className="mt-1 text-sm text-ink">No confirmed payments yet today</p>
-          ) : props.moneyHref ? (
-            <Link href={props.moneyHref} className={`mt-1 block financial-fit ${FOCUS}`} data-today-money>
-              <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
-            </Link>
-          ) : (
-            <div className="financial-fit mt-1" data-today-money>
-              <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
-            </div>
-          )}
-        </section>
-        <section data-metric-block="cash" className={`min-w-0 border-t px-4 py-1 md:rounded-2xl md:border md:p-4 md:shadow-card ${cashNeedsLook ? 'border-amber-200 bg-amber-50 md:bg-amber-50' : 'border-slate-100 md:border-slate-200 md:bg-white'}`}>
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Cash difference</h2>
-            {cashDiff == null ? null : <p className="text-xs text-muted">{cashNeedsLook ? 'Needs a look' : 'Within GH₵5.00'}</p>}
-          </div>
-          {cashDiff == null ? (
-            <p className="mt-1 text-sm text-ink">No till closed today</p>
-          ) : props.cashHref ? (
-            <Link href={props.cashHref} className={`mt-1 block financial-fit ${FOCUS}`} data-today-cash>
-              <FinancialAmount pence={cashDiff} currency={currency} variant="prominent" />
-            </Link>
-          ) : (
-            <div className="financial-fit mt-1" data-today-cash>
-              <FinancialAmount pence={cashDiff} currency={currency} variant="prominent" />
-            </div>
-          )}
-        </section>
+        </div>
+        <div className="today-dashboard__help">
+          <TodayHelpControl>
+            <TodayHelpBody scopeLabel={props.scopeLabel} zoneName={props.zoneName} />
+          </TodayHelpControl>
+        </div>
       </div>
-      <Attention snapshot={snapshot} />
-
-      <div className="grid min-w-0 grid-cols-1 items-start gap-3 md:grid-cols-2">
-        {showWeek ? <Week days={snapshot.days} currency={currency} /> : (
-          <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5">
-            <h3 className="text-sm font-semibold text-ink">Last seven dates</h3>
-            <p className="mt-3 text-sm text-muted">No sales in the last seven dates.</p>
-          </section>
-        )}
-        <Methods snapshot={snapshot} currency={currency} />
+      <div className="today-dashboard__side min-w-0 lg:space-y-4">
+        <div className="today-dashboard__attention min-w-0"><Attention snapshot={snapshot} /></div>
+        <div className="today-dashboard__detail min-w-0 space-y-4">
+          <Methods snapshot={snapshot} currency={currency} />
+          {snapshot.topProducts.length > 0 ? (
+            <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+              <h3 className="font-display text-lg font-semibold text-ink">Top products today</h3>
+              <ol className="mt-3 divide-y divide-slate-100">
+                {snapshot.topProducts.map((product) => (
+                  <li key={product.name} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-3 text-sm">
+                    <span className="min-w-0 break-words text-ink">{product.name}</span>
+                    <FinancialAmount pence={product.salesPence} currency={currency} variant="compact" className="text-ink" />
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-2 text-xs leading-5 text-muted">By recorded product sales</p>
+            </section>
+          ) : null}
+        </div>
       </div>
-      {snapshot.branches ? (
-        <ul className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2">
-          {snapshot.branches.map((branch) => (
-            <li key={branch.storeId} className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
-              <span className="block truncate font-semibold text-ink">{branch.name}</span>
-              <FinancialAmount pence={branch.salesPence} currency={currency} variant="compact" className="text-muted" />
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
-        {snapshot.topProducts.length > 0 ? (
-          <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
-            <h3 className="text-sm font-semibold text-ink">Top products today</h3>
-            <ol className="mt-2 space-y-2">
-              {snapshot.topProducts.map((product) => (
-                <li key={product.name} className="flex min-w-0 items-baseline justify-between gap-3 text-sm">
-                  <span className="min-w-0 break-words text-ink">{product.name}</span>
-                  <FinancialAmount pence={product.salesPence} currency={currency} variant="compact" className="shrink-0 text-muted" />
+      <div className="today-dashboard__week min-w-0"><TodayWeekChart days={snapshot.days} currency={currency} /></div>
+      <div className="today-dashboard__context min-w-0 space-y-4">
+        <Profit profit={snapshot.profit} currency={currency} comparison={snapshot.comparison} />
+        {snapshot.branches ? (
+          <section aria-labelledby="today-branches" className="min-w-0">
+            <h3 id="today-branches" className="font-display text-lg font-semibold text-ink">Sales by branch</h3>
+            <ul className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {snapshot.branches.map((branch) => (
+                <li key={branch.storeId} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 text-sm">
+                  <span className="block break-words font-semibold text-ink">{branch.name}</span>
+                  <div className="financial-fit mt-2"><FinancialAmount pence={branch.salesPence} currency={currency} variant="prominent" /></div>
                 </li>
               ))}
-            </ol>
+            </ul>
           </section>
         ) : null}
-        <Profit profit={snapshot.profit} currency={currency} comparison={snapshot.comparison} />
       </div>
-      <TodayHelpControl>
-        <TodayHelpBody scopeLabel={props.scopeLabel} zoneName={props.zoneName} />
-      </TodayHelpControl>
     </div>
   );
 }
 
 function Attention({ snapshot }: { snapshot: TodaySnapshot }) {
   return (
-    <section className="min-w-0 lg:mt-0" aria-labelledby="today-attention" data-today-attention>
-      <h2 id="today-attention" className="font-display text-base font-semibold text-ink">Needs attention</h2>
+    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-5" aria-labelledby="today-attention" data-today-attention>
+      <h2 id="today-attention" className="font-display text-lg font-semibold text-ink">Needs attention</h2>
       {snapshot.attention.length === 0 ? (
         <p className="mt-2 flex min-h-11 items-center gap-2 rounded-xl border border-emerald-100 bg-white px-3 text-sm text-ink shadow-card">
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800" aria-hidden="true">OK</span>
@@ -396,36 +386,12 @@ function Attention({ snapshot }: { snapshot: TodaySnapshot }) {
                   <span className="block text-sm font-semibold leading-5 text-ink">{row.title}</span>
                   <span className="block text-xs leading-5 text-muted">{row.detail}</span>
                 </span>
-                <span className="shrink-0 text-sm font-semibold text-accent">{row.action}</span>
+                <span className="max-w-[5rem] shrink-0 text-sm font-semibold text-accent">{row.action}</span>
               </Link>
             </li>
           ))}
         </ul>
       )}
-    </section>
-  );
-}
-
-function Week({ days, currency }: { days: TodaySnapshot['days']; currency: string }) {
-  const peak = Math.max(1, ...days.map((day) => day.salesPence));
-  return (
-    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-      <h3 className="text-sm font-semibold text-ink">Last seven dates</h3>
-      <ul className="mt-3 space-y-3">
-        {days.map((day) => (
-          <li key={day.key} className="min-w-0 text-sm">
-            <div className="flex min-w-0 items-baseline justify-between gap-3">
-              <span className="shrink-0 text-muted">{day.label}</span>
-              <span className="min-w-0 text-right">
-                <FinancialAmount pence={day.salesPence} currency={currency} variant="compact" />
-              </span>
-            </div>
-            <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
-              <span className="block h-1.5 rounded-full bg-accent" style={{ width: `${Math.round((day.salesPence / peak) * 100)}%` }} />
-            </span>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }
@@ -437,7 +403,7 @@ function Methods({ snapshot, currency }: { snapshot: TodaySnapshot; currency: st
   const total = snapshot.methods.reduce((sum, row) => sum + row.amountPence, 0);
   return (
     <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-      <h3 className="text-sm font-semibold text-ink">Payment methods</h3>
+      <h3 className="font-display text-lg font-semibold text-ink">Payment methods</h3>
       {snapshot.methods.length === 0 ? (
         <p className="mt-3 text-sm text-muted">No confirmed payments yet today, so there is no payment mix.</p>
       ) : (
@@ -460,7 +426,7 @@ function Methods({ snapshot, currency }: { snapshot: TodaySnapshot; currency: st
               const share = mix.shares[index];
               return (
                 <li key={row.method} className="min-w-0 text-sm">
-                  <div className="flex items-baseline justify-between gap-3">
+                  <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                     <span className="text-ink">{row.label}</span>
                     <span className="text-right">
                       <FinancialAmount pence={row.amountPence} currency={currency} variant="compact" />

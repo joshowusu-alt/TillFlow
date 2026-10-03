@@ -46,8 +46,9 @@ export default function ReportsSectionHead({
   const visibleUpdated = showsLocalTime && updatedLabel ? `${updatedLabel}${localMarker}` : updatedLabel;
   return (
     <header className="min-w-0">
+      <p className="mb-1 text-xs font-semibold tracking-wide text-muted">Reports</p>
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
-        <h1 className="min-w-0 font-display text-2xl font-semibold leading-tight text-ink">{title}</h1>
+        <h1 className="min-w-0 font-display text-2xl font-semibold leading-tight sm:text-3xl text-ink">{title}</h1>
         {section === 'today' && visibleUpdated ? (
           <div className="flex shrink-0 items-center">
             <RefreshToday label={visibleUpdated} />
@@ -69,7 +70,7 @@ export default function ReportsSectionHead({
           {help}
         </div>
       ) : help ? <div className="mt-1">{help}</div> : null}
-      <nav aria-label="Reports sections" className="mt-1" data-reports-nav="contextual">
+      <nav aria-label="Reports sections" className="mt-3" data-reports-nav="contextual">
         <ul className="flex w-fit max-w-full gap-1 rounded-xl bg-slate-100 p-0.5 md:p-1">
           {items.map((item) => {
             const current = item.id === section;
@@ -80,7 +81,7 @@ export default function ReportsSectionHead({
                   aria-current={current ? 'page' : undefined}
                   aria-label={item.id === 'more' ? 'More reports' : undefined}
                   className={`inline-flex min-h-11 items-center justify-center rounded-lg px-3 text-sm font-semibold ${FOCUS} ${
-                    current ? 'bg-white text-ink shadow-sm' : 'text-ink hover:bg-white/70'
+                    current ? 'bg-accent text-white shadow-sm' : 'text-ink hover:bg-white/70'
                   }`}
                 >
                   {item.id === 'more' ? (
