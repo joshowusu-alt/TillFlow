@@ -273,10 +273,10 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
                 <FinancialAmount pence={snapshot.salesTodayPence} currency={currency} variant="hero" />
               </div>
             )}
-            <p className="mt-2 text-sm text-white">{snapshot.salesCount} {saleWord} · Today so far</p>
+            <p className="mt-2 text-sm text-white">{snapshot.salesCount} {saleWord} so far today</p>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-white/25 pt-3">
               <p className="min-w-0 text-sm text-white">
-                {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday: <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" className="today-yesterday-amount" /> · Full day</>}
+                {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday’s sales: <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" className="today-yesterday-amount" /></>}
               </p>
               {props.salesHref ? (
                 <Link href={props.salesHref} data-today-primary-action className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-white hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
@@ -289,7 +289,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
             <section className="today-support-card min-w-0 rounded-2xl border border-slate-200 bg-white p-3 sm:p-5" data-metric-block="money">
               <h2 className="text-sm font-semibold text-ink">Money received (net)</h2>
               {receiptsKnownZero ? (
-                <p className="mt-3 text-base font-semibold text-ink">No confirmed payments yet today</p>
+                <p className="mt-3 text-sm font-medium leading-5 text-ink">No confirmed payments today</p>
               ) : props.moneyHref ? (
                 <Link href={props.moneyHref} className={`financial-fit mt-3 block rounded-md ${FOCUS}`} data-today-money>
                   <FinancialAmount pence={snapshot.moneyReceivedPence} currency={currency} variant="prominent" />
@@ -304,7 +304,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
             <section data-metric-block="cash" className={`today-support-card min-w-0 rounded-2xl border p-3 sm:p-5 ${cashNeedsLook ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'}`}>
               <h2 className="text-sm font-semibold text-ink">Cash difference</h2>
               {cashDiff == null ? (
-                <p className="mt-3 text-base font-semibold text-ink">No till closed today</p>
+                <p className="mt-3 text-sm font-medium leading-5 text-ink">No till closed today</p>
               ) : props.cashHref ? (
                 <Link href={props.cashHref} className={`financial-fit mt-3 block rounded-md ${FOCUS}`} data-today-cash>
                   <FinancialAmount pence={cashDiff} currency={currency} variant="prominent" />
@@ -314,7 +314,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
                   <FinancialAmount pence={cashDiff} currency={currency} variant="prominent" />
                 </div>
               )}
-              <p className="mt-2 text-xs leading-5 text-muted">{cashDiff == null ? 'Shown after a till is closed' : cashNeedsLook ? 'Needs a look' : 'Within GH₵5.00'}</p>
+              <p className="mt-2 text-xs leading-5 text-muted">{cashDiff == null ? 'Shown after a till is closed' : cashNeedsLook ? cashDiff < 0 ? 'Counted cash is below expected' : 'Counted cash is above expected' : 'Below the GH₵5.00 attention threshold'}</p>
             </section>
           </div>
         </div>
@@ -385,6 +385,7 @@ function Attention({ snapshot }: { snapshot: TodaySnapshot }) {
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold leading-5 text-ink">{row.title}</span>
                   <span className="block text-xs leading-5 text-muted">{row.detail}</span>
+                  {row.rank === 3 || row.rank === 4 ? <span className="block text-xs leading-5 text-muted">Pending queue across dates; not limited to today.</span> : null}
                 </span>
                 <span className="max-w-[5rem] shrink-0 text-sm font-semibold text-accent">{row.action}</span>
               </Link>
@@ -488,14 +489,14 @@ function SectionLanding({ section, links }: { section: Stage3aSection; links: St
     ? 'max-w-2xl'
     : groups.size === 2
       ? 'md:grid-cols-2'
-      : 'md:grid-cols-2 xl:grid-cols-3';
+      : section === 'activity' ? 'md:grid-cols-2' : 'md:grid-cols-2 xl:grid-cols-3';
   return (
     <div className={`mt-3 grid min-w-0 grid-cols-1 gap-4 ${columns}`} data-directory-grid="" data-directory-groups={groups.size}>
       {links.length === 0 ? (
         <p className="text-sm text-ink" role="status">Nothing in this list is available on the current plan.</p>
       ) : (
         [...groups.entries()].map(([group, rows]) => (
-          <section key={group} aria-labelledby={`group-${group}`} className="min-w-0">
+          <section key={group} aria-labelledby={`group-${group}`} className={`min-w-0 ${section === 'activity' && group === 'Ledgers and controls' ? 'md:col-start-2 md:row-start-1 md:row-span-2' : ''}`}>
             <h2 id={`group-${group}`} className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
               {activityGroupHeading(group as Stage3aLink['group'])}
             </h2>

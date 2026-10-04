@@ -238,8 +238,9 @@ describe('Today screen', () => {
 describe('Option 2 presentation', () => {
   it('distinguishes partial today from yesterday and exposes daily chart figures', () => {
     const markup = html();
-    expect(markup).toContain('Today so far');
-    expect(markup).toContain('Full day');
+    expect(markup).toContain('sales so far today');
+    expect(markup).toContain('Yesterday’s sales:');
+    expect(markup).not.toContain('Full day');
     expect(markup).toContain('Sales over the last seven days');
     expect(markup).toContain('View daily sales figures');
     expect(markup).toContain('aria-label="Daily sales over the last seven days"');

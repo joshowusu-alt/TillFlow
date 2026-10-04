@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import OwnerCorrectionReview from './OwnerCorrectionReview';
 import { notFound } from 'next/navigation';
 import AnalyticsClient from '@/app/(protected)/reports/analytics/AnalyticsClient';
 import ReportAmountCard from '@/components/reports/ReportAmountCard';
@@ -151,6 +152,9 @@ export default function ReportsTodayLayoutReviewPage({
   searchParams?: { fixture?: string; state?: string; banner?: string; destination?: string };
 }) {
   if (!isReportsStage3aAllowed()) notFound();
+  if (searchParams?.state === 'owner-cash' || searchParams?.state === 'owner-movement') {
+    return <ReviewShell><OwnerCorrectionReview screen={searchParams.state === 'owner-cash' ? 'cash' : 'movement'} large={searchParams.fixture === 'large'} /></ReviewShell>;
+  }
   if (searchParams?.state === 'analytics-values') {
     return <ReviewShell><AnalyticsClient data={{
       currency: 'GHS', periodDays: 7,

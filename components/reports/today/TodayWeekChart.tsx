@@ -23,12 +23,13 @@ export default function TodayWeekChart({ days, currency }: { days: TodaySnapshot
                 <div key={day.key} className="today-week-chart__column">
                   <span className={`today-week-chart__bar ${index === days.length - 1 ? 'today-week-chart__bar--today' : ''}`}
                     style={{ top: `${day.salesPence >= 0 ? baseline - (day.salesPence / range) * 100 : baseline}%`, height: `${Math.abs(day.salesPence / range) * 100}%` }} />
-                  <span className="today-week-chart__label">{day.label}</span>
+                  <span className="today-week-chart__label">{index === days.length - 1 ? 'Today' : day.label}</span>
                 </div>
               ))}
             </div>
           </div>
-          <p className="mt-10 text-xs leading-5 text-muted">Today is still in progress. Earlier dates show full days.</p>
+          <p className="mt-10 text-xs leading-5 text-muted">Today shows sales so far. Previous days cover the full calendar day.</p>
+          {days.at(-1)?.salesPence === 0 ? <p className="mt-1 text-xs leading-5 text-muted">No sales recorded today yet.</p> : null}
           <details className="mt-2">
             <summary className="inline-flex min-h-11 cursor-pointer items-center rounded-lg px-1 text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">View daily sales figures</summary>
             <table className="mt-2 w-full text-sm" aria-label="Daily sales over the last seven days">

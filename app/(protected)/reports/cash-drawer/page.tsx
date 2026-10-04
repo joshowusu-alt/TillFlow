@@ -2,7 +2,8 @@ import DownloadLink from '@/components/DownloadLink';
 import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import Pagination from '@/components/Pagination';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
-import StatCard from '@/components/StatCard';
+import CashDrawerSummary from '@/components/reports/CashDrawerSummary';
+import { reportScopeLabel } from '@/lib/reports/scope-labels';
 import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
@@ -171,32 +172,24 @@ export default async function CashDrawerReportPage({
   }, {});
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {opened.readOnly ? <ReportReadOnlyBanner /> : null}
       <ReportsDestinationHead
-        title="Cash Drawer Report"
-        periodLabel="Track cash expected and cash counted across all tills and shifts."
+        title="Cash drawer"
+        scopeLabel={reportScopeLabel(selectedStoreId, stores)}
+        periodLabel={`${fromIso} to ${toIso} · ${fallback.timeZone} · Shifts opened in this period`}
         actions={
           <a href={`/shifts/drawer?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`} className="btn-secondary justify-center text-sm">
-            Supporting cash rows
+            Open till cash ledger
           </a>
         }
       />
 
-      <section className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-relaxed text-blue-900 shadow-sm">
-        This report covers physical cash movements only — notes and coins in the till.
-        MoMo, card, and bank transfer receipts are electronic payments and are not included here.
-        Inspect them under{' '}
-        <a href="/reports/dashboard#money-received" className="font-semibold underline underline-offset-2">
-          Trading Report → Money received
-        </a>
-        {' '}or the{' '}
-        <a href="/reports/receipts?period=today" className="font-semibold underline underline-offset-2">
-          Money received
-        </a>{' '}
-        payment list. Cash Drawer follows shift open times and till activity, so figures may differ
-        from calendar-day cash receipts.
-      </section>
-
+      <p className="text-sm leading-6 text-slate-600">Physical cash in tills. MoMo, card and bank payments are shown in Money received.</p>
+      <CashDrawerSummary expected={totalExpected} counted={totalActual} difference={totalVariance}
+        acceptedCount={acceptedClosed.length} openCount={openShiftCount} page={currentPage} currency={business.currency} />
+      <details className="rounded-xl border border-slate-200 bg-white px-3 py-1">
+        <summary className="flex min-h-11 w-fit max-w-full cursor-pointer items-center rounded-lg px-1 text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">Change dates or branch · Download</summary>
       <ReportFilterCard
         actions={
           <>
@@ -216,13 +209,13 @@ export default async function CashDrawerReportPage({
             </DownloadLink>
           </>
         }
-        columnsClassName="sm:grid-cols-5"
+        columnsClassName="md:grid-cols-2 xl:grid-cols-4"
         submitLabel="Apply"
         submitTone="secondary"
       >
         <div>
-          <label className="label">Report branch filter</label>
-          <select className="input" name="storeId" defaultValue={selectedStoreId}>
+          <label className="label" htmlFor="cash-report-branch">Branch</label>
+          <select id="cash-report-branch" className="input" name="storeId" defaultValue={selectedStoreId}>
             {opened.branch.offerAll ? <option value="ALL">{CONSOLIDATED_LABEL}</option> : null}
             {stores.map((store) => (
               <option key={store.id} value={store.id}>
@@ -232,43 +225,25 @@ export default async function CashDrawerReportPage({
           </select>
         </div>
         <div>
-          <label className="label">From</label>
-          <input className="input" type="date" name="from" defaultValue={fromIso} />
+          <label className="label" htmlFor="cash-report-from">From</label>
+          <input id="cash-report-from" className="input" type="date" name="from" defaultValue={fromIso} />
         </div>
         <div>
-          <label className="label">To</label>
-          <input className="input" type="date" name="to" defaultValue={toIso} />
+          <label className="label" htmlFor="cash-report-to">To</label>
+          <input id="cash-report-to" className="input" type="date" name="to" defaultValue={toIso} />
         </div>
       </ReportFilterCard>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard
-          label="Cash expected"
-          value={formatMoney(totalExpected, business.currency)}
-          helper="What the till should hold based on recorded activity."
-        />
-        <StatCard
-          label={openShiftCount > 0 ? 'Cash counted (closed shifts only)' : 'Cash counted'}
-          value={formatMoney(totalActual, business.currency)}
-          helper="Cash physically counted when the shift was closed."
-        />
-        <StatCard
-          label={openShiftCount > 0 ? 'Difference (closed shifts only)' : 'Difference'}
-          value={formatMoney(totalVariance, business.currency)}
-          tone={totalVariance === 0 ? 'default' : totalVariance > 0 ? 'success' : 'danger'}
-          helper="Positive = more than expected. Negative = less than expected."
-        />
-      </div>
-
-      {openShiftCount > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <strong>
-            {openShiftCount} shift{openShiftCount > 1 ? 's' : ''} still open — not counted yet.
-          </strong>{' '}
-          Cash counted and difference are from closed shifts only. Cash expected includes all shifts. Close open shifts
-          before relying on these figures.
+      </details>
+      <details className="text-sm text-ink">
+        <summary className="flex min-h-11 w-fit max-w-full cursor-pointer items-center rounded-lg px-1 font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">How to read the cash figures</summary>
+        <div className="max-w-3xl space-y-2 rounded-xl border border-slate-200 bg-white p-4 leading-6">
+          <p>This report selects shifts by when they were opened. A shift can span calendar days, so its cash activity can differ from cash receipts received within the selected dates.</p>
+          <p>The summary uses valid cash counts from closed shifts on the displayed page. Open shifts and invalid legacy cash counts are excluded from expected cash, counted cash and the difference.</p>
+          <p>The till cash ledger is a separate operational view for your working branch. It lists cash entries by entry date, so it may have a different scope from this shift report.</p>
+          <a href={`/reports/money-received?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}&storeId=${encodeURIComponent(selectedStoreId)}`} className="inline-flex min-h-11 items-center font-semibold text-accent underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">Open Money received</a>
         </div>
-      )}
+      </details>
 
       <div className="card overflow-hidden p-3.5 sm:p-4">
         <h2 className="text-base font-display font-semibold sm:text-lg">How cash moved through the drawer</h2>
