@@ -25,7 +25,7 @@ describe('Phase 2b report streaming', () => {
   it('analytics page uses Suspense and keeps shell outside heavy content', () => {
     expect(analyticsPage).toContain('Suspense');
     expect(analyticsPage).toContain('AnalyticsContent');
-    expect(analyticsPage).toContain('ReportsDestinationHead');
+    expect(analyticsPage).toContain('ReportHeader');
     expect(analyticsPage).toContain('AnalyticsPeriodSelector');
     expect(analyticsPage).not.toContain('salesInvoice.findMany');
     expect(analyticsContent).toContain('salesInvoice.findMany');

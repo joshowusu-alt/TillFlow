@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { NAV_GROUPS, REPORT_NAV_SECTIONS } from '@/lib/navigation-config';
 
 const root = process.cwd();
-const readSource = (path: string) => readFileSync(join(root, path), 'utf8');
+const readSource = (path: string) => readFileSync(join(root, path), 'utf8') + (path === 'app/(protected)/reports/dashboard/TradingDashboardContent.tsx' ? readFileSync(join(root, 'components/reports/stage3b/TradingReportView.tsx'), 'utf8') : '');
 
 describe('Reports dashboard clarity pass', () => {
   it('calculates receipt percentages from total receipts rather than invoice sales', () => {
@@ -14,7 +14,7 @@ describe('Reports dashboard clarity pass', () => {
     const weeklyService = readSource('lib/reports/weekly-digest.ts');
 
     expect(dashboard).toContain('const totalPaymentReceipts = moneyReceived.totalPence');
-    expect(dashboard).toContain('amount / totalPaymentReceipts');
+    expect(dashboard).toContain('row.pence / data.totalPaymentReceipts');
     expect(weeklyService).toContain('totalReceiptsPence');
     expect(weeklyPage).toContain('amount / data.totalReceiptsPence');
   });
@@ -58,7 +58,7 @@ describe('Reports dashboard clarity pass', () => {
 
     // Phase 2A: scopeHelper text updated to be more owner-friendly
     expect(dashboard).toContain('Sales and gross profit are filtered to this branch. Expenses cover the whole business.');
-    expect(dashboard).toContain('helper={scopeHelper}');
+    expect(dashboard).toContain('helper={data.scopeHelper}');
   });
 
   it('keeps large stat values visible instead of forcing one-line clipping', () => {
@@ -100,7 +100,7 @@ describe('Reports dashboard clarity pass', () => {
     const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const weeklyPage = readSource('app/(protected)/reports/weekly-digest/page.tsx');
 
-    expect(dashboard).toContain('Includes money');
+    expect(dashboard).toContain('Confirmed receipts in this period');
     expect(dashboard).toContain('later credit collections');
     // Phase 2B: Weekly Digest uses consistent receipts distinction copy
     expect(weeklyPage).toContain('Receipts may include payments for older customer credit.');
@@ -149,7 +149,7 @@ describe('Reports dashboard clarity pass', () => {
 
   it('period activity helper text is present', () => {
     const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
-    expect(dashboard).toContain('Returns, voids, and movement recorded during the selected period.');
+    expect(dashboard).toContain('Returns, voids and stock adjustments in this period.');
   });
 
   it('customer debt helper clarifies current-state balance', () => {
@@ -165,11 +165,11 @@ describe('Reports dashboard clarity pass', () => {
   });
 
   it('trust copy in filter info box clarifies sales and receipts distinction', () => {
-    const dashboardPage = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboardPage = readSource('app/(protected)/reports/dashboard/page.tsx') + readSource('components/reports/stage3b/TradingReportView.tsx');
     expect(dashboardPage).toContain('Sales revenue');
     expect(dashboardPage).toContain('Money received');
-    expect(dashboardPage).toContain('business timezone');
-    expect(dashboardPage).toContain('current position, not only this period');
+    expect(dashboardPage).toContain('scope.timeZone');
+    expect(dashboardPage).toContain('Current position across all periods');
   });
 
   it('date controls remain present and unchanged', () => {
@@ -212,7 +212,8 @@ describe('Reports dashboard clarity pass', () => {
     expect(dashboard).toContain('outstandingAR');
     expect(dashboard).toContain('outstandingAP');
     expect(dashboard).toContain('moneyReceived.byMethod');
-    expect(dashboard).toContain('RECEIPT_METHOD_LABELS.UNKNOWN');
+    expect(dashboard).toContain("'UNKNOWN'");
+    expect(dashboard).toContain('RECEIPT_METHOD_LABELS[key]');
     expect(dashboard).toContain('Unknown/Other');
     expect(dashboard).toContain('totalGrossMargin');
     expect(dashboard).toContain('income.otherExpenses');

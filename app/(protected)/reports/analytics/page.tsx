@@ -4,13 +4,10 @@ import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
 import { addCalendarDays } from '@/lib/entitlements/range';
 import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
-import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
-import PlanFeatureBadge from '@/components/PlanFeatureBadge';
+import ReportHeader from '@/components/reports/stage3b/ReportHeader';
 import { reportScopeLabel } from '@/lib/reports/scope-labels';
 import { getBusinessStores } from '@/lib/services/stores';
-import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import ReportSectionSkeleton from '@/components/reports/ReportSectionSkeleton';
-import { getFeatures } from '@/lib/features';
 import AnalyticsContent from './AnalyticsContent';
 import AnalyticsPeriodSelector from './AnalyticsPeriodSelector';
 
@@ -43,18 +40,15 @@ export default async function AnalyticsPage({
   if (opened.branch.kind !== 'stores') notFound();
   const { stores } = await getBusinessStores(business.id, undefined);
   const scopeLabel = reportScopeLabel(opened.branch.selected, stores);
+  const appliedRange = opened.decision.appliedRange;
 
   return (
     <div className="space-y-4 sm:space-y-5">
       {opened.readOnly ? <ReportReadOnlyBanner /> : null}
-      <ReportsDestinationHead
+      <ReportHeader
         title="Sales analytics"
         scopeLabel={scopeLabel}
-        periodLabel={`${periodDays} days`}
-        actions={<PlanFeatureBadge plan="GROWTH" />}
-        reading={
-          <p>Profit uses stored sale-line discounts and cost. Incomplete costs are shown instead of a firm gross profit.</p>
-        }
+        periodLabel={appliedRange ? `${appliedRange.fromLocalDate} to ${appliedRange.toLocalDate} · ${business.timezone}` : `${periodDays} days, including today · ${business.timezone}`}
       />
       <AnalyticsPeriodSelector />
       <Suspense fallback={<ReportSectionSkeleton />}>

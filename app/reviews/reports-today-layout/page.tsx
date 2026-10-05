@@ -1,3 +1,5 @@
+import Stage3bReview from './Stage3bReview';
+import type { Stage3bFixture } from '@/lib/reviews/reports-stage3b-fixtures';
 import type { Metadata } from 'next';
 import OwnerCorrectionReview from './OwnerCorrectionReview';
 import { notFound } from 'next/navigation';
@@ -152,6 +154,12 @@ export default function ReportsTodayLayoutReviewPage({
   searchParams?: { fixture?: string; state?: string; banner?: string; destination?: string };
 }) {
   if (!isReportsStage3aAllowed()) notFound();
+  if (['stage3b-trading', 'stage3b-analytics', 'stage3b-movement'].includes(searchParams?.state ?? '')) {
+    const screen = searchParams!.state!.slice(8) as 'trading' | 'analytics' | 'movement';
+    const fixture = (['normal', 'large', 'negative', 'empty', 'incomplete', 'failed'].includes(searchParams?.fixture ?? '') ? searchParams!.fixture : 'normal') as Stage3bFixture;
+    return <ReviewShell><Stage3bReview screen={screen} fixture={fixture} /></ReviewShell>;
+  }
+
   if (searchParams?.state === 'owner-cash' || searchParams?.state === 'owner-movement') {
     return <ReviewShell><OwnerCorrectionReview screen={searchParams.state === 'owner-cash' ? 'cash' : 'movement'} large={searchParams.fixture === 'large'} /></ReviewShell>;
   }
