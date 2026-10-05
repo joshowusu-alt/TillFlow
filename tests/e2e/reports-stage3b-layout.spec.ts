@@ -57,32 +57,50 @@ for (const width of [320,390]) for (const screen of ['trading','analytics']) {
   });
 }
 
-for (const width of [390,1440]) for (const screen of ['trading','analytics','movement']) {
+for (const width of [320,390,768,1440]) for (const screen of ['trading','analytics','movement']) {
   test(`${screen} meets automated WCAG checks and has reachable focus at ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 }); await open(page,screen);
     await page.addScriptTag({ content: axe.source });
     const results = await page.evaluate(async () => (window as unknown as { axe: typeof axe }).axe.run('[data-stage3b-review]', { runOnly: { type: 'tag', values: ['wcag2a','wcag2aa','wcag21aa'] } }));
     expect(results.violations).toEqual([]);
     let checked = 0;
+    const names = new Set<string>();
     for (let index = 0; index < 32; index++) {
       await page.keyboard.press('Tab');
       await expect.poll(async () => page.evaluate(() => {
         const el = document.activeElement as HTMLElement;
-        if (!el?.closest('[data-stage3b-review]')) return true;
+        if (!el?.closest('[data-stage3b-review]')) return { clear: true };
         const rect = el.getBoundingClientRect();
         const bar = document.querySelector('.mobile-bottom-tab-bar')?.getBoundingClientRect();
-        return rect.top >= 0 && rect.bottom <= (bar?.height ? bar.top - 16 : innerHeight);
-      }), { timeout: 5000, message: 'Native keyboard focus should settle fully above the fixed bar' }).toBe(true);
+        return { clear: rect.top >= 0 && rect.bottom <= (bar?.height ? bar.top - 16 : innerHeight), name: el.innerText, top: rect.top, bottom: rect.bottom };
+      }), { timeout: 5000, message: 'Native keyboard focus should settle fully above the fixed bar' }).toEqual(expect.objectContaining({ clear: true }));
       const focus = await page.evaluate(() => {
         const el = document.activeElement as HTMLElement;
         if (!el?.closest('[data-stage3b-review]')) return null;
         const rect = el.getBoundingClientRect();
         const bar = document.querySelector('.mobile-bottom-tab-bar')?.getBoundingClientRect();
-        return { top: rect.top, bottom: rect.bottom, bar: bar?.height ? bar.top : innerHeight, outline: getComputedStyle(el).outlineStyle };
+        return { name: el.innerText, top: rect.top, bottom: rect.bottom, bar: bar?.height ? bar.top : innerHeight, outline: getComputedStyle(el).outlineStyle };
       });
-      if (focus) { checked++; expect(focus.top).toBeGreaterThanOrEqual(0); expect(focus.bottom).toBeLessThanOrEqual(focus.bar - (width < 768 ? 16 : 0)); expect(focus.outline).toBe('solid'); }
+      if (focus) { checked++; names.add(focus.name); expect(focus.top).toBeGreaterThanOrEqual(0); expect(focus.bottom).toBeLessThanOrEqual(focus.bar - (width < 1024 ? 16 : 0)); expect(focus.outline).toBe('solid'); }
     }
     expect(checked).toBeGreaterThan(3);
+    if (screen === 'trading') expect(names.has('Receipt origins')).toBe(true);
+    if (screen === 'movement') expect([...names].some(name => name.includes('All product figures'))).toBe(true);
+  });
+}
+
+for (const width of [390,1440]) {
+  test(`Trading pointer disclosure does not trigger keyboard correction at ${width}`, async ({page}) => {
+    await page.setViewportSize({width,height:844}); await open(page,'trading');
+    const summary=page.getByText('Receipt origins',{exact:true});
+    await summary.scrollIntoViewIfNeeded();
+    const before=await page.evaluate(()=>scrollY);
+    await summary.click();
+    await expect(summary.locator('..')).toHaveAttribute('open','');
+    expect(Math.abs(await page.evaluate(()=>scrollY)-before)).toBeLessThanOrEqual(1);
+    await page.keyboard.press('Space');
+    await expect(summary.locator('..')).not.toHaveAttribute('open','');
+    await expect(summary).toBeFocused();
   });
 }
 
