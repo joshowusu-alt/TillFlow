@@ -1,9 +1,14 @@
+import BusinessMovementProductCards from '@/components/reports/BusinessMovementProductCards';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import DownloadLink from '@/components/DownloadLink';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import { reportScopeLabel } from '@/lib/reports/scope-labels';
 import ReportAmountCard from '@/components/reports/ReportAmountCard';
+import BusinessMovementSummary from '@/components/reports/BusinessMovementSummary';
+import BusinessMovementInsight from '@/components/reports/BusinessMovementInsight';
+import FinancialAmount from '@/components/reports/FinancialAmount';
+import { movementGapCopy, visibleMovementInsights } from '@/lib/reports/business-movement/presentation';
 import EmptyState from '@/components/EmptyState';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
@@ -24,9 +29,6 @@ import {
   computeBusinessMovementWithMoneyFromDb,
   containsForbiddenStockLanguage,
   describeChangeVsComparison,
-  formatSignedGhPence,
-  ownerCategoryLabel,
-  ownerConfidenceHint,
   ownerInsightCopy,
   ownerPeriodChrome,
   ownerProductMovers,
@@ -38,73 +40,24 @@ import {
   singleCashierNote,
   type ChangePair,
   type OwnerPeriodLabels,
-  type RankedBusinessMovementInsight,
 } from '@/lib/reports/business-movement';
 
 export const dynamic = 'force-dynamic';
 
-function formatScopeInstant(value: Date, timeZone: string) {
-  return value.toLocaleString('en-GB', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone,
-  });
-}
-
-function changeHelper(pair: ChangePair, currency: string, labels: OwnerPeriodLabels): string {
+function changeHelper(pair: ChangePair, currency: string, labels: OwnerPeriodLabels, noun = 'activity'): string {
   const described = describeChangeVsComparison(pair, 'Change');
   const abs = formatMoney(Math.abs(pair.absoluteChange), currency);
   if (pair.comparison === 0 && pair.current > 0) {
     return `New in ${labels.currentFull} · ${abs}`;
   }
   if (pair.current === 0 && pair.comparison > 0) {
-    return `No sales in ${labels.currentFull} · was ${abs} in ${labels.comparisonFull}`;
+    return `No ${noun} in ${labels.currentFull} · was ${abs} in ${labels.comparisonFull}`;
   }
   const sign = pair.absoluteChange > 0 ? '+' : pair.absoluteChange < 0 ? '−' : '';
   if (described.usedPercentage && pair.percentageChange != null) {
     return `${sign}${abs} (${Math.abs(pair.percentageChange).toFixed(1)}%) vs ${labels.comparisonFull}`;
   }
   return `${sign}${abs} vs ${labels.comparisonFull}`;
-}
-
-function InsightCard({
-  insight,
-  labels,
-}: {
-  insight: RankedBusinessMovementInsight;
-  labels: OwnerPeriodLabels;
-}) {
-  const confidenceHint = ownerConfidenceHint(insight.confidence);
-  const copy = ownerInsightCopy(insight, labels);
-  return (
-    <article className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800">
-      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
-          {ownerCategoryLabel(insight.category)}
-        </span>
-      </div>
-      <dl className="space-y-2">
-        <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            What changed
-          </dt>
-          <dd>{copy.fact}</dd>
-        </div>
-        <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            What to check
-          </dt>
-          <dd className="text-slate-700">{copy.recommendedCheck}</dd>
-        </div>
-      </dl>
-      <details className="mt-2">
-        <summary className="flex min-h-11 cursor-pointer items-center text-xs font-semibold text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">Supporting figures</summary>
-        <p className="text-xs leading-5 text-slate-600">{copy.evidence}</p>
-        <p className="mt-1 text-xs leading-5 text-slate-600">{copy.signal}</p>
-        {confidenceHint ? <p className="mt-1 text-xs text-slate-600">Data confidence: {confidenceHint}</p> : null}
-      </details>
-    </article>
-  );
 }
 
 export default async function BusinessMovementReportPage({
@@ -266,6 +219,7 @@ export default async function BusinessMovementReportPage({
   }
 
   const scopeLabel = reportScopeLabel(selectedStoreId, stores);
+  const insights = visibleMovementInsights(summary.insights, result);
 
   return (
     <div className="space-y-6">
@@ -279,7 +233,7 @@ export default async function BusinessMovementReportPage({
           <>
             <p>
               This compares {chrome.currentFull} with {chrome.comparisonFull}. The totals below are what changed.
-              The notes under them say why that change showed up.
+              The notes show which recorded products and payments contributed; they do not establish the cause.
             </p>
             <p>
               Sales, confirmed payments, refunds and Mobile Money waiting for confirmation are operational figures for the selected period.
@@ -302,7 +256,7 @@ export default async function BusinessMovementReportPage({
               href={`/reports/money-received?${moneyQs.toString()}`}
               className="btn-secondary justify-center text-sm"
             >
-              Open Money Received
+              Open money received
             </Link>
             <DownloadLink
               href={`/exports/business-movement?${exportQs.toString()}`}
@@ -315,45 +269,20 @@ export default async function BusinessMovementReportPage({
           </div>
         }
       />
-      <details data-first-metric="">
-        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">Exact comparison dates</summary>
-        <p
-          className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-800"
-          data-testid="comparing-line"
-        >
-          {chrome.comparingLine}
-        </p>
-        <p className="mt-1 text-xs text-slate-500" data-testid="period-audit-range">
-          {chrome.currentRangeKeys} vs {chrome.comparisonRangeKeys}
-        </p>
-      </details>
+      <BusinessMovementSummary result={result} labels={chrome} strip={strip} />
 
-      <section
-        className="rounded-xl border border-slate-200 bg-white px-4 py-4 text-sm text-slate-800"
-        data-testid="owner-summary-strip"
-      >
-        <h2 className="text-lg font-semibold text-slate-900">In short</h2>
-        <p className="mt-2 leading-relaxed">{strip.paragraph}</p>
-        <p className="mt-2 text-xs text-slate-500">
-          {business.name} ·{' '}
-          {selectedStoreId === 'ALL'
-            ? CONSOLIDATED_LABEL
-            : stores.find((s) => s.id === selectedStoreId)?.name ?? selectedStoreId}{' '}
-          · {formatScopeInstant(p.currentStart, p.timeZone)} →{' '}
-          {formatScopeInstant(new Date(p.currentEndExclusive.getTime() - 1), p.timeZone)}
-        </p>
-      </section>
-
-      <ReportFilterCard columnsClassName="sm:grid-cols-4">
+      <details className="rounded-xl border border-slate-200 bg-white px-3 py-1">
+        <summary className="flex min-h-11 w-fit max-w-full cursor-pointer items-center rounded-lg px-1 text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">Change period or branch</summary>
+      <ReportFilterCard columnsClassName="md:grid-cols-2 xl:grid-cols-4">
         <label className="text-sm">
           <span className="mb-1 block text-slate-600">Period</span>
           <select className="input w-full" name="preset" defaultValue={selectedPreset}>
             <option value="last_full_calendar_month">Last full calendar month</option>
-            <option value="equal_length_custom">Custom equal-length window</option>
+            <option value="equal_length_custom">Custom dates (same-length comparison)</option>
           </select>
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-slate-600">Current from</span>
+          <span className="mb-1 block text-slate-600">From</span>
           <input
             className="input w-full"
             type="date"
@@ -362,7 +291,7 @@ export default async function BusinessMovementReportPage({
           />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-slate-600">Current to</span>
+          <span className="mb-1 block text-slate-600">To</span>
           <input
             className="input w-full"
             type="date"
@@ -371,7 +300,7 @@ export default async function BusinessMovementReportPage({
           />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-slate-600">Report branch filter</span>
+          <span className="mb-1 block text-slate-600">Branch</span>
           <select className="input w-full" name="storeId" defaultValue={selectedStoreId}>
             {opened.branch.offerAll ? <option value="ALL">{CONSOLIDATED_LABEL}</option> : null}
             {opened.branch.choices.map((store) => (
@@ -382,72 +311,57 @@ export default async function BusinessMovementReportPage({
           </select>
         </label>
       </ReportFilterCard>
+      </details>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <ReportAmountCard currency={currency}
-          label="Sales"
-          pence={result.headline.salesValuePence.current}
-          helper={changeHelper(result.headline.salesValuePence, currency, chrome)}
-          tone={
-            result.headline.salesValuePence.absoluteChange < 0
-              ? 'danger'
-              : result.headline.salesValuePence.absoluteChange > 0
-                ? 'success'
-                : 'default'
-          }
-        />
-        <ReportAmountCard currency={currency}
-          label="Money Received"
-          pence={result.money.moneyReceived.current}
+          label="Confirmed receipts"
+          pence={queryFailed ? null : result.money.moneyReceived.current}
           helper={
             queryFailed
-              ? 'Money layer unavailable'
+              ? 'Confirmed receipts could not be loaded'
               : changeHelper(result.money.moneyReceived, currency, chrome)
           }
           tone="accent"
         />
         <ReportAmountCard currency={currency}
           label="Refunds"
-          pence={result.money.refundOutflows.current}
-          helper={changeHelper(result.money.refundOutflows, currency, chrome)}
+          pence={queryFailed ? null : result.money.refundOutflows.current}
+          helper={queryFailed ? 'Refund figures could not be loaded' : changeHelper(result.money.refundOutflows, currency, chrome, 'refunds')}
           tone={result.money.refundOutflows.absoluteChange > 0 ? 'warn' : 'default'}
         />
         <ReportAmountCard currency={currency}
           label="MoMo to confirm"
-          pence={result.money.needsMomoConfirmation.current}
-          helper={changeHelper(result.money.needsMomoConfirmation, currency, chrome)}
+          pence={queryFailed ? null : result.money.needsMomoConfirmation.current}
+          helper={queryFailed ? 'Pending payments could not be loaded' : changeHelper(result.money.needsMomoConfirmation, currency, chrome, 'pending MoMo payments')}
           tone={result.money.needsMomoConfirmation.current > 0 ? 'warn' : 'default'}
         />
         <ReportAmountCard currency={currency}
-          label="Sales vs money in"
-          pence={gap == null ? null : Math.abs(gap)}
-          helper={
-            gap == null
-              ? 'Unavailable'
-              : gap > 0
-                ? `Sales ahead by ${formatMoney(gap, currency)} — timing, not an error`
-                : gap < 0
-                  ? `Money ahead by ${formatMoney(-gap, currency)} — timing, not an error`
-                  : `Aligned in ${chrome.currentFull}`
-          }
+          label="Sales and receipts gap"
+          pence={queryFailed || gap == null ? null : Math.abs(gap)}
+          helper={movementGapCopy(queryFailed ? null : gap, currency)}
           tone="default"
         />
       </div>
+
+      <p className="text-sm leading-6 text-slate-600">Refunds are shown separately here. Confirmed receipts are different from Today’s net money received.</p>
 
       <section className="space-y-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">What to look at</h2>
           <p className="text-sm text-slate-600">
-            The few movements that matter most in {chrome.currentFull}.
+            Recorded changes to review in {chrome.currentFull}.
           </p>
         </div>
         <div className="grid gap-3 lg:grid-cols-2">
-          {summary.insights.map((insight) => (
-            <InsightCard key={insight.id} insight={insight} labels={chrome} />
+          {insights.map((insight) => (
+            <BusinessMovementInsight key={insight.id} insight={insight} labels={chrome} currency={currency} />
           ))}
         </div>
       </section>
 
+      <BusinessMovementProductCards rows={productMovers} labels={chrome} currency={currency} />
+      <div className="hidden lg:block">
       <ReportTableCard title="Product movers">
         <caption className="mb-2 caption-top text-left text-sm text-slate-600">
           Products that grew, dropped, appeared, or had no sales in {chrome.currentFull}.
@@ -472,16 +386,17 @@ export default async function BusinessMovementReportPage({
             productMovers.map((row) => (
               <tr key={`${row.side}-${row.productId}`}>
                 <td>{row.productName}</td>
-                <td>{row.side}</td>
+                <td>{row.side === 'New product' ? 'No sales in the earlier period' : row.side}</td>
                 <td className="text-right">{formatMoney(row.currentPence, currency)}</td>
                 <td className="text-right">{formatMoney(row.comparisonPence, currency)}</td>
-                <td className="text-right">{formatSignedGhPence(row.changePence)}</td>
+                <td className="text-right">{row.changePence > 0 ? '+' : null}<FinancialAmount pence={row.changePence} currency={currency} variant="compact" /></td>
                 <td className="text-right">{row.qtyWording}</td>
               </tr>
             ))
           )}
         </tbody>
       </ReportTableCard>
+      </div>
 
       {branchNote ? (
         <section className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
@@ -510,7 +425,7 @@ export default async function BusinessMovementReportPage({
                 <td className="text-right">
                   {formatMoney(row.salesValuePence.comparison, currency)}
                 </td>
-                <td className="text-right">{formatSignedGhPence(row.salesValuePence.absoluteChange)}</td>
+                <td className="text-right">{row.salesValuePence.absoluteChange > 0 ? '+' : null}<FinancialAmount pence={row.salesValuePence.absoluteChange} currency={currency} variant="compact" /></td>
                 <td className="text-right">
                   {row.transactionCount.current} / {row.transactionCount.comparison}
                 </td>
@@ -547,7 +462,7 @@ export default async function BusinessMovementReportPage({
                 <td className="text-right">
                   {formatMoney(row.salesValuePence.comparison, currency)}
                 </td>
-                <td className="text-right">{formatSignedGhPence(row.salesValuePence.absoluteChange)}</td>
+                <td className="text-right">{row.salesValuePence.absoluteChange > 0 ? '+' : null}<FinancialAmount pence={row.salesValuePence.absoluteChange} currency={currency} variant="compact" /></td>
                 <td className="text-right">
                   {row.transactionCount.current} / {row.transactionCount.comparison}
                 </td>
@@ -562,7 +477,7 @@ export default async function BusinessMovementReportPage({
         <p className="mt-1">{OWNER_STOCK_DATA_NOTE}</p>
         <p className="mt-1">
           Sales use the time the invoice was created. Money Received uses the time confirmed money
-          came in. A gap is a timing check, not a balancing error.
+          came in. Different payment dates can cause a gap. This report does not reconcile individual sales and receipts, so the gap alone cannot confirm its cause.
         </p>
         {queryFailed ? (
           <p className="mt-2 text-amber-800">

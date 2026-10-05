@@ -13,7 +13,7 @@ vi.mock('next/navigation', () => ({
 const CUSTOMER_COPY = [
   'Sales, returns, receipts and profit for a trading period you choose.',
   'Trends in sales, categories, products and busy trading times across longer ranges.',
-  'How sales, confirmed payments, refunds and product sales changed between two equal periods.',
+  'How sales, confirmed payments, refunds and product sales changed between two periods.',
   'Track confirmed cash, MoMo, card and bank payments separately from sales.',
   'Review Mobile Money payments waiting for confirmation before they count as money received.',
   'Track collections still pending with the payment provider.',
@@ -190,8 +190,8 @@ describe('Reports navigation, Activity and More', () => {
     );
     for (const phrase of FORBIDDEN) expect(markup).not.toContain(phrase);
     expect(markup).not.toContain('Download last week');
-    expect(markup).toContain('Use this when you want to examine sales, returns, receipts and profit for a chosen trading period.');
-    expect(markup).toContain('Use this when you want to understand trends, categories, products and busy trading times across longer ranges.');
+    expect(markup).toContain('Review sales, returns, receipts and profit for a period you choose.');
+    expect(markup).toContain('Find sales trends, best-selling categories and products, and busy trading times.');
     expect(markup).toContain('Compare sales, confirmed payments, refunds and product sales with the previous month or a matching date range.');
   });
 

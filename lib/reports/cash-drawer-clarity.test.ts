@@ -8,34 +8,25 @@ const readSource = (path: string) => readFileSync(join(root, path), 'utf8');
 describe('Cash Drawer report clarity pass', () => {
   const page = readSource('app/(protected)/reports/cash-drawer/page.tsx');
 
-  it('adds cash-only scope copy without changing the route or title', () => {
-    expect(page).toContain('title="Cash Drawer Report"');
-    expect(page).toContain('Track cash expected and cash counted across all tills and shifts.');
-    expect(page).toContain('This report covers physical cash movements only');
-    expect(page).toContain('MoMo, card, and bank transfer receipts are electronic payments');
-    expect(page).toContain('href="/reports/dashboard#money-received"');
-    expect(page).toContain('Trading Report → Money received');
-    expect(page).toContain('href="/reports/receipts?period=today"');
+  it('uses a compact title and makes the physical-cash and shift-date scope explicit', () => {
+    expect(page).toContain('title="Cash drawer"');
+    expect(page).toContain('Shifts opened in this period');
+    expect(page).toContain('Physical cash in tills');
+    expect(page).toContain('Open till cash ledger');
     expect(page).not.toContain('storeId=ALL');
   });
 
-  it('uses owner-friendly stat labels, helpers, and Difference wording', () => {
-    expect(page).toContain('label="Cash expected"');
-    expect(page).toContain('What the till should hold based on recorded activity.');
-    expect(page).toContain("label={openShiftCount > 0 ? 'Cash counted (closed shifts only)' : 'Cash counted'}");
-    expect(page).toContain('Cash physically counted when the shift was closed.');
-    expect(page).toContain("label={openShiftCount > 0 ? 'Difference (closed shifts only)' : 'Difference'}");
-    expect(page).toContain('Positive = more than expected. Negative = less than expected.');
-    expect(page).toContain("tone={totalVariance === 0 ? 'default' : totalVariance > 0 ? 'success' : 'danger'}");
-    expect(page).not.toContain("label={openShiftCount > 0 ? 'Variance (closed shifts only)' : 'Variance'}");
+  it('delegates the closed-shift current-page totals without changing their calculation', () => {
+    expect(page).toContain('<CashDrawerSummary');
+    expect(page).toContain('expected={totalExpected}');
+    expect(page).toContain('counted={totalActual}');
+    expect(page).toContain('difference={totalVariance}');
+    expect(page).toContain('acceptedCount={acceptedClosed.length}');
   });
 
-  it('makes open-shift guidance explicit without changing the condition', () => {
-    expect(page).toContain('{openShiftCount > 0 && (');
-    expect(page).toContain("shift{openShiftCount > 1 ? 's' : ''} still open");
-    expect(page).toContain('Cash counted and difference are from closed shifts only.');
-    expect(page).toContain('Cash expected includes all shifts.');
-    expect(page).toContain('Close open shifts');
+  it('does not claim that open shifts are included in cash expected', () => {
+    expect(page).not.toContain('Cash expected includes all shifts.');
+    expect(page).toContain('Open shifts and invalid legacy cash counts are excluded from expected cash, counted cash and the difference.');
   });
 
   it('renames the movement section and explains negative amounts without changing service labels', () => {

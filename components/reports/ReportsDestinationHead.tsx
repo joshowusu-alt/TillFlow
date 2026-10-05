@@ -1,4 +1,4 @@
-import RefreshIndicator from '@/components/RefreshIndicator';
+import ReportsRefresh from '@/components/reports/ReportsRefresh';
 import type { ReactNode } from 'react';
 
 const FOCUS =
@@ -27,10 +27,10 @@ export default function ReportsDestinationHead({
 }) {
   return (
     <header className="min-w-0">
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
-        <h1 className="min-w-0 flex-1 font-display text-2xl font-semibold leading-tight text-ink">{title}</h1>
-        <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-2">
-          {showRefresh ? <RefreshIndicator fetchedAt={new Date().toISOString()} /> : null}
+      <div className="grid min-w-0 gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+        <h1 className="min-w-0 font-display text-2xl font-semibold leading-tight text-ink sm:text-3xl">{title}</h1>
+        <div className="flex min-w-0 flex-wrap items-center gap-2 lg:max-w-[42rem] lg:justify-end" data-report-header-actions>
+          {showRefresh ? <ReportsRefresh fetchedAt={new Date().toISOString()} /> : null}
           {actions}
         </div>
       </div>
@@ -48,11 +48,11 @@ export default function ReportsDestinationHead({
         </div>
       ) : null}
       {reading ? (
-        <details className="mt-3 rounded-2xl border border-slate-200 bg-white">
-          <summary className={`cursor-pointer list-none px-4 py-3 text-sm font-semibold text-ink ${FOCUS}`}>
+        <details className="mt-2">
+          <summary className={`w-fit max-w-full cursor-pointer px-1 text-sm font-semibold text-accent ${FOCUS}`}>
             <span className="inline-flex min-h-11 items-center">{readingTitle}</span>
           </summary>
-          <div className="space-y-3 border-t border-slate-100 px-4 py-3 text-sm leading-6 text-ink">
+          <div className="mt-1 max-w-3xl space-y-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-ink">
             {reading}
           </div>
         </details>

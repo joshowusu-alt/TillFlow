@@ -64,7 +64,7 @@ describe('Stage 3A navigation', () => {
   });
 
   it('shortens ledger group headings for Activity', () => {
-    expect(activityGroupHeading('Ledgers and controls')).toBe('Ledgers');
+    expect(activityGroupHeading('Ledgers and controls')).toBe('Stock, cash and controls');
     expect(activityGroupHeading('Reports')).toBe('Reports');
   });
 

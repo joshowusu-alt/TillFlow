@@ -237,13 +237,13 @@ describe('Business Movement 6H — owner UX polish', () => {
       'utf8',
     );
 
-    expect(page).toContain('data-testid="owner-summary-strip"');
-    expect(page).toContain('In short');
-    expect(page).toContain('What changed');
-    expect(page).toContain('Supporting figures');
-    expect(page).toContain('What to check');
+    expect(page).toContain('<BusinessMovementSummary');
+    const insight = readFileSync(join(root, 'components/reports/BusinessMovementInsight.tsx'), 'utf8');
+    expect(insight).toContain('What changed');
+    expect(insight).toContain('Supporting figures');
+    expect(insight).toContain('What to check');
     expect(page).toContain('Review MoMo confirmations');
-    expect(page).toContain('Open Money Received');
+    expect(page).toContain('Open money received');
     expect(page).toContain('Export CSV');
     expect(page).toContain('Data note');
     expect(page).toContain('singleBranchNote');
@@ -260,7 +260,7 @@ describe('Business Movement 6H — owner UX polish', () => {
     expect(page).not.toContain("insight.category.replace(/_/g, ' ')");
     expect(page).not.toContain('Leakage / quality notes');
 
-    const summaryIdx = page.indexOf('owner-summary-strip');
+    const summaryIdx = page.indexOf('<BusinessMovementSummary');
     const dataNoteIdx = page.lastIndexOf('Data note');
     const productIdx = page.indexOf('Product movers');
     expect(summaryIdx).toBeGreaterThan(0);
@@ -280,9 +280,12 @@ describe('Business Movement 6J — owner page period wording', () => {
       'utf8',
     );
 
-    expect(page).toContain('data-testid="comparing-line"');
+    expect(page).toContain('periodLabel={chrome.comparingLine}');
     expect(page).toContain('comparingLine');
-    expect(page).toContain('period-audit-range');
+    const comparison = readFileSync(join(root, 'components/reports/BusinessMovementSummary.tsx'), 'utf8');
+    expect(comparison).toContain('currentFromKey');
+    expect(comparison).toContain('comparisonFromKey');
+    expect(comparison).toContain('<time dateTime={from}>');
     expect(page).toContain('ownerInsightCopy');
     expect(page).not.toMatch(/last period/i);
     expect(page).not.toMatch(/comparison period/i);

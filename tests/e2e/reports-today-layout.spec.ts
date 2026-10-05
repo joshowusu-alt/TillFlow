@@ -1,10 +1,18 @@
 import axe from 'axe-core';
 import { test, expect, type Page } from '@playwright/test';
 
+// Measurements must follow hydration, font loading and the initial resume refresh.
+async function reviewPage(page: Page, path: string) {
+  await page.bringToFront();
+  await page.goto(path);
+  await page.waitForLoadState('networkidle');
+  await page.evaluate(async () => { await document.fonts.ready; });
+}
+
 for (const width of [320, 390] as const) {
   test(`More reports accessible name at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
-    await page.goto('/reviews/reports-today-layout?fixture=medium');
+    await reviewPage(page, '/reviews/reports-today-layout?fixture=medium');
     const more = page.getByRole('link', { name: 'More reports' });
     await expect(more).toBeVisible();
     const accessible = await more.evaluate((element) => {
@@ -21,7 +29,7 @@ for (const width of [320, 390] as const) {
 
 test('More reports is the visible desktop label', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/reviews/reports-today-layout?fixture=medium');
+  await reviewPage(page, '/reviews/reports-today-layout?fixture=medium');
   const more = page.getByRole('link', { name: 'More reports' });
   await expect(more).toBeVisible();
   await expect(more).toHaveText('More reports', { useInnerText: true });
@@ -36,7 +44,7 @@ for (const width of WIDTHS) {
 
     for (const fixture of FIXTURES) {
       test(`fixture ${fixture} stays on one line inside the sales card`, async ({ page }) => {
-        await page.goto(`/reviews/reports-today-layout?fixture=${fixture}`);
+        await reviewPage(page, `/reviews/reports-today-layout?fixture=${fixture}`);
         const card = page.locator('[data-today-sales-card]');
         await expect(card).toBeVisible();
         const money = page.locator('[data-today-money] [data-financial-amount]');
@@ -116,7 +124,7 @@ for (const width of [320, 390] as const) {
   for (const banner of BANNER_MODES) {
     test(`empty Today composition ${banner} @ ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 844 });
-      await page.goto(`/reviews/reports-today-layout?state=empty&banner=${banner}`);
+      await reviewPage(page, `/reviews/reports-today-layout?state=empty&banner=${banner}`);
       await expect(page.getByRole('heading', { name: 'No sales yet today' })).toBeVisible();
 
       const sell = await box(page, 'Open Sell');
@@ -228,7 +236,7 @@ async function focusedBox(page: Page): Promise<FocusBox | null> {
 
 async function assertCustomerFocusClearsBar(page: Page, path: string, width: number) {
   await page.setViewportSize({ width, height: 844 });
-  await page.goto(path);
+  await reviewPage(page, path);
   const seen: string[] = [];
   for (let step = 0; step < 28; step += 1) {
     await page.keyboard.press('Tab');
@@ -273,7 +281,7 @@ for (const width of [320, 390] as const) {
 
 test('desktop reports focus does not add mobile scroll margin or another bar', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/reviews/reports-today-layout?state=attention');
+  await reviewPage(page, '/reviews/reports-today-layout?state=attention');
   let box: FocusBox | null = null;
   for (let step = 0; step < 8; step += 1) {
     await page.keyboard.press('Tab');
@@ -290,7 +298,7 @@ test('desktop reports focus does not add mobile scroll margin or another bar', a
 
 test('calculation disclosure opens and closes from the keyboard', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/reviews/reports-today-layout?state=empty&banner=none');
+  await reviewPage(page, '/reviews/reports-today-layout?state=empty&banner=none');
   const help = page.getByRole('button', { name: 'How Today is calculated' });
   for (let step = 0; step < 12; step += 1) {
     if (await help.evaluate((element) => element === document.activeElement)) break;
@@ -311,7 +319,7 @@ test('calculation disclosure opens and closes from the keyboard', async ({ page 
 
 test('pointer click on the calculation disclosure does not jump the page', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/reviews/reports-today-layout?state=empty&banner=none');
+  await reviewPage(page, '/reviews/reports-today-layout?state=empty&banner=none');
   await page.evaluate(() => window.scrollTo(0, 0));
   const before = await page.evaluate(() => window.scrollY);
   const help = page.getByRole('button', { name: 'How Today is calculated' });
@@ -326,7 +334,7 @@ test('pointer click on the calculation disclosure does not jump the page', async
 
 test('Choose a branch focuses the visible working-location control', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/reviews/reports-today-layout?state=no-branch');
+  await reviewPage(page, '/reviews/reports-today-layout?state=no-branch');
   await expect(page.getByRole('link', { name: 'Back to Today' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Choose a branch' }).click();
   const focused = await page.evaluate(() => {
@@ -341,7 +349,7 @@ test('Choose a branch focuses the visible working-location control', async ({ pa
 
 test('short phone shows the sales hero and can scroll to supporting metrics', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 640 });
-  await page.goto('/reviews/reports-today-layout?state=clearance&banner=setup');
+  await reviewPage(page, '/reviews/reports-today-layout?state=clearance&banner=setup');
   const action = page.locator('[data-today-primary-action]');
   await expect(action).toBeVisible();
   await action.focus();
@@ -365,7 +373,7 @@ test('short phone shows the sales hero and can scroll to supporting metrics', as
 for (const width of [390, 1440] as const) {
   test(`reports section contrast at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/reviews/reports-today-layout?fixture=medium');
+    await reviewPage(page, '/reviews/reports-today-layout?fixture=medium');
     const more = page.getByRole('link', { name: 'More reports' });
     if (width < 640) await expect(more).toHaveText('More', { useInnerText: true });
     else await expect(more).toHaveText('More reports', { useInnerText: true });
@@ -386,7 +394,7 @@ for (const width of [320, 390, 768, 1024, 1440] as const) {
   for (const state of ['analytics-values', 'movement-values']) {
     test(`${state} readable complete amounts @ ${width}px`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 900 });
-      await page.goto(`/reviews/reports-today-layout?state=${state}`);
+      await reviewPage(page, `/reviews/reports-today-layout?state=${state}`);
       const amounts = page.locator('[data-financial-amount]');
       await expect(amounts.first()).toBeVisible();
       const measures = await amounts.evaluateAll(nodes => nodes.map(element => {
@@ -414,7 +422,7 @@ for (const width of [320, 390, 768, 1024, 1440] as const) {
   }
   test(`Trading closed filter is visible and keyboard opens @ ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/reviews/reports-today-layout?state=trading-filters');
+    await reviewPage(page, '/reviews/reports-today-layout?state=trading-filters');
     const summary = page.locator('.reports-filter-disclosure > summary');
     await expect(summary).toHaveAccessibleName('Adjust date range / branch');
     await expect(summary).toBeVisible();
@@ -430,7 +438,7 @@ for (const width of [320, 390, 768, 1024, 1440] as const) {
 for (const width of [320, 390, 768, 1024, 1440, 1920, 2560]) {
   test(`Option 2 hierarchy, chart and financial states @ ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/reviews/reports-today-layout?fixture=medium');
+    await reviewPage(page, '/reviews/reports-today-layout?fixture=medium');
     const active = page.getByRole('link', { name: 'Today', exact: true });
     await expect(active).toHaveAttribute('aria-current', 'page');
     expect(await active.evaluate(el => getComputedStyle(el).color)).toBe('rgb(255, 255, 255)');
@@ -442,7 +450,7 @@ for (const width of [320, 390, 768, 1024, 1440, 1920, 2560]) {
     expect(await hero.evaluate(el => getComputedStyle(el).backgroundImage)).toContain('linear-gradient');
     const heroAmount = hero.locator('[data-financial-amount]').first();
     expect(await heroAmount.evaluate(el => getComputedStyle(el).color)).toBe('rgb(255, 255, 255)');
-    await expect(page.getByText('Today so far', { exact: false }).first()).toBeVisible();
+    await expect(page.getByText('sales so far today', { exact: false }).first()).toBeVisible();
     await expect(page.locator('[data-week-chart]')).toBeVisible();
     await page.getByText('View daily sales figures', { exact: true }).click();
     const table = page.getByRole('table', { name: 'Daily sales over the last seven days' });
@@ -458,15 +466,15 @@ for (const width of [320, 390, 768, 1024, 1440, 1920, 2560]) {
       expect(Math.abs(heroBox!.y - attention!.y)).toBeLessThan(2);
     }
     await page.screenshot({ path: testInfo.outputPath(`today-option2-${width}.png`), fullPage: true });
-    await page.goto('/reviews/reports-today-layout?state=partial');
-    await expect(page.getByText('No confirmed payments yet today', { exact: true })).toBeVisible();
+    await reviewPage(page, '/reviews/reports-today-layout?state=partial');
+    await expect(page.getByText('No confirmed payments today', { exact: true })).toBeVisible();
     await expect(page.getByText('No till closed today', { exact: true })).toBeVisible();
     await expect(page.locator('[data-profit-state="incomplete"]')).toBeVisible();
     await expect(page.locator('[data-payment-mix-bar]')).toHaveCount(0);
-    await page.goto('/reviews/reports-today-layout?state=failed');
+    await reviewPage(page, '/reviews/reports-today-layout?state=failed');
     await expect(page.locator('.reports-today-surface').getByRole('alert')).toContainText('Today could not be loaded');
     await expect(page.locator('[data-financial-amount]')).toHaveCount(0);
-    await page.goto('/reviews/reports-today-layout?state=restricted');
+    await reviewPage(page, '/reviews/reports-today-layout?state=restricted');
     await expect(page.locator('.reports-today-surface').getByRole('status')).toContainText('Read-only');
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   });
@@ -476,7 +484,7 @@ for (const width of [320, 390, 1440]) {
   test(`Option 2 full content accessibility @ ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     for (const state of ['attention', 'empty', 'partial', 'failed', 'no-branch']) {
-      await page.goto(`/reviews/reports-today-layout?state=${state}`);
+      await reviewPage(page, `/reviews/reports-today-layout?state=${state}`);
       await page.addScriptTag({ content: axe.source });
       const violations = await page.evaluate(async () => {
         const runner = (window as unknown as { axe: { run: (node: Element, options: unknown) => Promise<{ violations: unknown[] }> } }).axe;
@@ -485,5 +493,67 @@ for (const width of [320, 390, 1440]) {
       expect(violations, state).toEqual([]);
       if (state === 'attention') await expect(page.locator('[data-today-attention] li')).toHaveCount(5);
     }
+  });
+}
+
+for (const width of [320, 390, 768, 1024, 1440, 1920, 2560]) {
+  for (const screen of ['cash', 'movement'] as const) {
+    test(`Owner correction ${screen}: readable header and complete amounts @ ${width}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await reviewPage(page, `/reviews/reports-today-layout?state=owner-${screen}&fixture=large`);
+      const heading = page.getByRole('heading', { level: 1 });
+      await expect(heading).toHaveText(screen === 'cash' ? 'Cash drawer' : 'Business movement');
+      const headerMeasure = await heading.evaluate(element => {
+        const title = element.getBoundingClientRect();
+        const actions = element.closest('header')!.querySelector('[data-report-header-actions]')!.getBoundingClientRect();
+        return { overlapX: Math.min(title.right, actions.right) - Math.max(title.left, actions.left), overlapY: Math.min(title.bottom, actions.bottom) - Math.max(title.top, actions.top) };
+      });
+      expect(headerMeasure.overlapX <= 1 || headerMeasure.overlapY <= 1).toBe(true);
+      const amounts = await page.locator('[data-financial-amount]:visible').evaluateAll(elements => elements.map(element => {
+        const node = element as HTMLElement;
+        return { font: parseFloat(getComputedStyle(node).fontSize), scroll: node.scrollWidth, client: node.clientWidth, text: node.innerText };
+      }));
+      expect(amounts.length).toBeGreaterThan(1);
+      for (const amount of amounts) {
+        expect(amount.font).toBeGreaterThanOrEqual(16);
+        expect(amount.scroll).toBeLessThanOrEqual(amount.client + 1);
+        expect(amount.text).not.toContain('…');
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    });
+  }
+}
+
+test('Business movement supporting evidence is disclosed with the keyboard', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await reviewPage(page, '/reviews/reports-today-layout?state=owner-movement');
+  const disclosure = page.locator('[data-movement-insight] summary').first();
+  await disclosure.focus();
+  await page.keyboard.press('Enter');
+  await expect(disclosure.locator('..')).toHaveAttribute('open', '');
+  await page.keyboard.press('Enter');
+  await expect(disclosure.locator('..')).not.toHaveAttribute('open', '');
+  await expect(page.getByText('Strong signal', { exact: false })).toHaveCount(0);
+  await expect(page.getByText('not an error', { exact: false })).toHaveCount(0);
+});
+
+test('Activity does not reserve a desktop column for one queue', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await reviewPage(page, '/reviews/reports-today-layout?state=activity');
+  const reports = await page.locator('a[href^="/reports/dashboard"]').boundingBox();
+  const queue = await page.locator('a[href^="/reports/momo-confirmation"]').boundingBox();
+  const ledger = await page.locator('a[href^="/reports/cash-drawer"]').boundingBox();
+  expect(reports && queue && ledger).toBeTruthy();
+  expect(Math.abs(reports!.x - queue!.x)).toBeLessThan(2);
+  expect(ledger!.x).toBeGreaterThan(reports!.x + reports!.width);
+});
+
+for (const width of [390, 1440]) {
+  test(`Owner movement accessibility @ ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await reviewPage(page, '/reviews/reports-today-layout?state=owner-movement');
+    await page.evaluate(axe.source);
+    const results = await page.evaluate(async () => (window as any).axe.run('[data-owner-correction-review]', { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } }));
+    expect(results.violations).toEqual([]);
   });
 }

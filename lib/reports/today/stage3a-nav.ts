@@ -50,7 +50,7 @@ const ACTIVITY_LINKS: Stage3aLink[] = [
     href: '/reports/dashboard',
     label: 'Trading',
     purpose: 'Sales, returns, receipts and profit for a trading period you choose.',
-    useWhen: 'Use this when you want to examine sales, returns, receipts and profit for a chosen trading period.',
+    useWhen: 'Review sales, returns, receipts and profit for a period you choose.',
     group: 'Reports',
     iconKey: 'reports',
     explore: 'Understand sales',
@@ -59,7 +59,7 @@ const ACTIVITY_LINKS: Stage3aLink[] = [
     href: '/reports/analytics',
     label: 'Sales analytics',
     purpose: 'Trends in sales, categories, products and busy trading times across longer ranges.',
-    useWhen: 'Use this when you want to understand trends, categories, products and busy trading times across longer ranges.',
+    useWhen: 'Find sales trends, best-selling categories and products, and busy trading times.',
     group: 'Reports',
     iconKey: 'analytics',
     explore: 'Understand sales',
@@ -67,7 +67,7 @@ const ACTIVITY_LINKS: Stage3aLink[] = [
   {
     href: '/reports/business-movement',
     label: 'Business movement',
-    purpose: 'How sales, confirmed payments, refunds and product sales changed between two equal periods.',
+    purpose: 'How sales, confirmed payments, refunds and product sales changed between two periods.',
     useWhen: 'Compare sales, confirmed payments, refunds and product sales with the previous month or a matching date range.',
     group: 'Reports',
     iconKey: 'profit',
@@ -295,7 +295,7 @@ export function stage3aExploreNextSteps(
 }
 
 export function activityGroupHeading(group: Stage3aGroup): string {
-  if (group === 'Ledgers and controls') return 'Ledgers';
+  if (group === 'Ledgers and controls') return 'Stock, cash and controls';
   return group;
 }
 
