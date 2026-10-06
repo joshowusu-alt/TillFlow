@@ -156,7 +156,7 @@ export default function ReportsTodayLayoutReviewPage({
   if (!isReportsStage3aAllowed()) notFound();
   if (['stage3b-trading', 'stage3b-analytics', 'stage3b-movement'].includes(searchParams?.state ?? '')) {
     const screen = searchParams!.state!.slice(8) as 'trading' | 'analytics' | 'movement';
-    const fixture = (['normal', 'large', 'negative', 'empty', 'incomplete', 'failed'].includes(searchParams?.fixture ?? '') ? searchParams!.fixture : 'normal') as Stage3bFixture;
+    const fixture = (['normal', 'large', 'negative', 'empty', 'incomplete', 'failed', 'debt', 'credit'].includes(searchParams?.fixture ?? '') ? searchParams!.fixture : 'normal') as Stage3bFixture;
     return <ReviewShell><Stage3bReview screen={screen} fixture={fixture} /></ReviewShell>;
   }
 

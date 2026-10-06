@@ -11,6 +11,37 @@ import { DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { normalizeGhanaPhone } from '@/lib/storefront-phone';
 import { parseTags, serializeTags } from '@/lib/contact-tags';
 import { linkPosCustomerToStorefront } from '@/lib/services/customer-linking';
+import { reconcileCustomerDebt } from '@/lib/reports/customer-debt-reconciliation';
+
+/** All accounts in the customer scope, independent of list search and pagination. */
+export async function getCustomerAccountSummary(businessId: string, storeId?: string) {
+  const customerWhere = { businessId, ...(storeId ? { storeId } : {}) };
+  const [accounts, invoices] = await Promise.all([
+    prisma.customer.findMany({ where: customerWhere, select: { id: true, creditLimitPence: true } }),
+    prisma.salesInvoice.findMany({
+      where: {
+        businessId,
+        customer: { is: customerWhere },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+      },
+      select: {
+        paymentStatus: true, totalPence: true,
+        customer: { select: { id: true, name: true } },
+        payments: { select: { amountPence: true, status: true } },
+      },
+    }),
+  ]);
+  const debt = reconcileCustomerDebt(invoices);
+  return {
+    customerCount: accounts.length,
+    customersWithBalanceCount: debt.accounts.filter(account => account.balancePence > 0).length,
+    outstandingBalancePence: debt.customerDuePence,
+    customerCreditPence: debt.customerCreditPence,
+    creditLimitCount: accounts.filter(account => account.creditLimitPence > 0).length,
+    balancesByCustomer: Object.fromEntries(debt.accounts.map(account => [account.id, account.balancePence])),
+    balanceDueCustomerIds: debt.accounts.filter(account => account.balancePence > 0).map(account => account.id),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Shared input / output types
@@ -97,13 +128,15 @@ export type CustomerListOptions = {
  */
 export async function getCustomers(businessId: string, opts: CustomerListOptions = {}) {
   const { search, page = 1, pageSize = DEFAULT_PAGE_SIZE, storeId, balanceDue } = opts;
+  const accountSummary = await getCustomerAccountSummary(businessId, storeId);
+  const balanceDueCustomerIds = balanceDue ? accountSummary.balanceDueCustomerIds : undefined;
 
   const where = {
     businessId,
     ...(storeId ? { storeId } : {}),
     ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
-    ...(balanceDue
-      ? { salesInvoices: { some: { paymentStatus: { in: ['UNPAID', 'PART_PAID'] as string[] } } } }
+    ...(balanceDueCustomerIds
+      ? { id: { in: balanceDueCustomerIds } }
       : {}),
   };
 
@@ -128,29 +161,9 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
     }),
   ]);
 
-  // Batch-load unpaid/part-paid invoices for every customer on this page in a
-  // single round-trip, then compute the per-customer balance in JS.
+  // Reuse the full-scope confirmed-payment summary for the visible account balances.
   const customerIds = customers.map((c) => c.id);
-  const [arInvoices, lifetimeStats, linkedStorefrontProfiles] = await Promise.all([
-    customerIds.length
-      ? prisma.salesInvoice.findMany({
-          where: {
-            customerId: { in: customerIds },
-            paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-          },
-          select: {
-            customerId: true,
-            paymentStatus: true,
-            totalPence: true,
-            payments: { select: { amountPence: true, status: true } },
-          },
-        })
-      : Promise.resolve([] as Array<{
-          customerId: string | null;
-          paymentStatus: string;
-          totalPence: number;
-          payments: { amountPence: number; status: string }[];
-        }>),
+  const [lifetimeStats, linkedStorefrontProfiles] = await Promise.all([
     customerIds.length
       ? prisma.salesInvoice.groupBy({
           by: ['customerId'],
@@ -240,15 +253,6 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
     lastPaymentMap.set(custId, payment.receivedAt);
   }
 
-  const balanceMap = new Map<string, number>();
-  for (const inv of arInvoices) {
-    if (!inv.customerId) continue;
-    balanceMap.set(
-      inv.customerId,
-      (balanceMap.get(inv.customerId) ?? 0) + receivableDocumentBalance(inv).balancePence,
-    );
-  }
-
   const lifetimeMap = new Map<string, { spentPence: number; lastSaleAt: Date | null; saleCount: number }>();
   for (const row of lifetimeStats) {
     if (!row.customerId) continue;
@@ -286,7 +290,7 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
     return {
       ...rest,
       tags: parseTags(tagsJson),
-      outstandingBalancePence: balanceMap.get(c.id) ?? 0,
+      outstandingBalancePence: accountSummary.balancesByCustomer[c.id] ?? 0,
       lifetimeSpentPence: inStoreSpentPence + onlineSpentPence,
       lastSaleAt,
       lastPaymentAt: lastPaymentMap.get(c.id) ?? null,
@@ -301,7 +305,7 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
   });
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  return { customers: customersWithBalance, totalCount, totalPages };
+  return { customers: customersWithBalance, totalCount, totalPages, accountSummary };
 }
 
 /**

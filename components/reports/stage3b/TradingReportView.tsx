@@ -7,6 +7,7 @@ export type TradingViewData = {
   grossProfit: number | null; grossProfitPercent: number | null; incompleteLineCount: number;
   expenses: number; profitAfterExpenses: number | null; netProfitPercent: number; allBranches: boolean;
   creditUnpaid: number; outstandingAR: number; outstandingAP: number; scopeHelper: string;
+  customerDebt: { invoiceDue: number; excess: number; creditBalance: number; netBalance: number; unlinkedDue: number; unlinkedExcess: number; unlinkedCount: number; scope: string; salesHref: string };
   receiptsHref: string; cashDrawerHref: string; analyticsHref: string; reorderHref: string;
   receiptOrigins: { label: string; pence: number }[];
   methods: { label: string; pence: number; href: string }[];
@@ -84,11 +85,28 @@ export default function TradingReportView({ data }: { data: TradingViewData }) {
 
     <div className="pt-2"><h2 className="font-display text-xl font-semibold text-ink">Current debts and stock</h2><p className="mt-1 text-sm text-slate-600">Current position across all periods. These figures do not follow the selected report dates.</p></div>
     <div className="grid min-w-0 grid-cols-2 gap-3">
-      <ReportMetric label="What customers owe overall" pence={data.outstandingAR} currency={c} helper="Current customer balances · all periods" href="/payments/customer-receipts" />
+      <ReportMetric label="What customers owe overall" pence={data.outstandingAR} currency={c} helper={`${data.customerDebt.scope} · linked customer accounts · amounts due after payments on each account · all periods`} href="/customers" />
       <ReportMetric label="What you owe suppliers" pence={data.outstandingAP} currency={c} helper="Current supplier balances · all periods. Record supplier payments when purchases are paid." href="/payments/supplier-payments" />
+      {data.customerDebt.creditBalance > 0 ? <ReportMetric label="Customer credit balances" pence={data.customerDebt.creditBalance} currency={c} helper="Excess confirmed payments after each account's invoices. These do not cancel another customer's debt." href="/customers" /> : null}
     </div>
+    {data.customerDebt ? <p className="text-sm leading-6 text-slate-600">Customer balances here follow the sales branch selected for Trading. Customers shows account balances across the account’s branches; those totals can differ for shared accounts. Pending or failed payments do not reduce balances.</p> : null}
+    {data.customerDebt && (data.customerDebt.unlinkedDue > 0 || data.customerDebt.unlinkedExcess > 0) ? <ReportSection title="Sale balances without a customer account" description={`${data.customerDebt.unlinkedCount} invoices with a remaining balance or excess payment. These are excluded from customer debt and ageing.`} action={<a href={data.customerDebt.salesHref} className={REPORT_LINK}>Review sales →</a>}>
+      <ReportValueBars rows={[
+        { label: 'Outstanding on unlinked sales', pence: data.customerDebt.unlinkedDue },
+        ...(data.customerDebt.unlinkedExcess > 0 ? [{ label: 'Excess confirmed payments on unlinked sales', pence: data.customerDebt.unlinkedExcess }] : []),
+      ]} currency={c} />
+      <p className="mt-3 text-sm leading-6 text-slate-600">An unconfirmed payment can leave a sale outstanding. Review the sale and its payment status before treating this as credit owed by a customer.</p>
+    </ReportSection> : null}
     <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-      <ReportSection title="Customer debt ageing" description="Current outstanding customer balances by age."><ReportValueBars rows={data.ageing} currency={c} /></ReportSection>
+      <ReportSection title="Customer debt ageing" description="Unpaid invoices linked to customer accounts, before excess payments on other invoices."><ReportValueBars rows={data.ageing} currency={c} />
+        {data.customerDebt && data.customerDebt.excess > 0 ? <div className="mt-3 border-t border-slate-200 pt-3"><ReportValueBars rows={[
+          { label: 'Unpaid customer invoices (ageing total)', pence: data.customerDebt.invoiceDue },
+          { label: 'Less excess confirmed payments', pence: data.customerDebt.excess },
+          { label: 'Net customer account balance', pence: data.customerDebt.netBalance },
+          ...(data.customerDebt.creditBalance > 0 ? [{ label: 'Add customer credit balances shown separately', pence: data.customerDebt.creditBalance }] : []),
+          { label: 'What customers owe', pence: data.outstandingAR },
+        ]} currency={c} /><p className="mt-2 text-sm text-slate-600">Excess payments remain visible. They have not been reassigned to other invoices or age buckets.</p></div> : null}
+      </ReportSection>
       <ReportSection title="Largest customer balances" action={<a href="/payments/customer-receipts" className={REPORT_LINK}>Receive payments →</a>}>
         <ReportValueBars rows={data.debtors.map(row => ({ label: row.name, pence: row.balance, href: `/customers/${encodeURIComponent(row.id)}` }))} currency={c} empty="No outstanding customer debts." />
       </ReportSection>

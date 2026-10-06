@@ -41,7 +41,7 @@ describe('customer list — debtor filter and status', () => {
     expect(src).not.toContain('Credit accounts, balances, and contact details.');
   });
 
-  it('renders the Customers stat strip using already-loaded page data', () => {
+  it('renders the Customers stat strip from the full-scope account summary', () => {
     expect(src).toContain('CustomerStatCard');
     expect(src).toContain('Total customers');
     expect(src).toContain('Customers with balance');
@@ -49,6 +49,8 @@ describe('customer list — debtor filter and status', () => {
     expect(src).toContain('totalCount.toLocaleString');
     expect(src).toContain('customersWithBalanceCount');
     expect(src).toContain('totalArOutstandingPence');
+    expect(src).toContain('accountSummary.customerCount');
+    expect(src).toContain('accountSummary.outstandingBalancePence');
   });
 
   it('keeps the add customer form closed by default', () => {
@@ -94,8 +96,8 @@ describe('customer service — getCustomers options', () => {
   });
 
   it('applies balanceDue filter in the Prisma where clause', () => {
-    expect(src).toContain("paymentStatus: { in: ['UNPAID', 'PART_PAID'");
-    expect(src).toContain('salesInvoices: { some');
+    expect(src).toContain('id: { in: balanceDueCustomerIds }');
+    expect(src).toContain('account.balancePence > 0');
   });
 
   it('batch-loads last payment date per customer', () => {

@@ -180,6 +180,7 @@ describe('Wave A re-gate fixtures', () => {
     }]);
     prismaMock.salesInvoice.findMany.mockResolvedValue([{
       customerId: 'c1',
+      customer: { id: 'c1', name: 'Ama' },
       paymentStatus: 'UNPAID',
       totalPence: 12833,
       payments: [{ amountPence: 6000 }],

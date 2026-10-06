@@ -382,14 +382,14 @@ export default async function TradingDashboardContent({
   void salesAgg;
 
   // AR / AP
-  const outstandingAR = tradingBalances.outstandingARPence;
+  const outstandingAR = tradingBalances.customerDebt.customerDuePence;
   const outstandingAP = tradingBalances.outstandingAPPence;
 
   // Debtor ageing buckets
   const bucketKeys = ['0–30 d', '31–60 d', '61–90 d', '90+ d'] as const;
   const ageingBuckets: Record<string, number> = Object.fromEntries(bucketKeys.map((k) => [k, 0]));
-  const debtorMap = new Map<string, { name: string; balance: number }>();
   for (const inv of outstandingSales) {
+    if (!inv.customer) continue;
     const balance = receivableDocumentBalance({
       paymentStatus: inv.paymentStatus,
       totalPence: inv.totalPence,
@@ -398,13 +398,11 @@ export default async function TradingDashboardContent({
     if (balance <= 0) continue;
     const bucket = getReceivableAgeBucket(inv.dueDate, inv.createdAt);
     ageingBuckets[bucket] += balance;
-    if (inv.customer) {
-      const d = debtorMap.get(inv.customer.id) ?? { name: inv.customer.name, balance: 0 };
-      d.balance += balance;
-      debtorMap.set(inv.customer.id, d);
-    }
   }
-  const topDebtorList = Array.from(debtorMap.entries()).map(([id, row]) => ({ id, ...row })).sort((a, b) => b.balance - a.balance).slice(0, 5);
+  const topDebtorList = tradingBalances.customerDebt.accounts
+    .filter(account => account.balancePence > 0)
+    .map(account => ({ id: account.id, name: account.name, balance: account.balancePence }))
+    .sort((a, b) => b.balance - a.balance).slice(0, 5);
 
   // Low stock
   const lowStock = balances
@@ -511,6 +509,17 @@ export default async function TradingDashboardContent({
     profitAfterExpenses: marginReady ? totalGrossMargin - income.otherExpenses : null,
     netProfitPercent: npPercent, allBranches: selectedStoreId === 'ALL', scopeHelper,
     creditUnpaid: salesRevenue.creditSalesOutstandingPence, outstandingAR, outstandingAP,
+    customerDebt: {
+      invoiceDue: tradingBalances.customerDebt.customerInvoiceDuePence,
+      excess: tradingBalances.customerDebt.customerExcessPence,
+      creditBalance: tradingBalances.customerDebt.customerCreditPence,
+      netBalance: tradingBalances.customerDebt.customerBalancePence,
+      unlinkedDue: tradingBalances.customerDebt.unlinkedDuePence,
+      unlinkedExcess: tradingBalances.customerDebt.unlinkedExcessPence,
+      unlinkedCount: tradingBalances.customerDebt.unlinkedInvoiceCount,
+      scope: selectedStoreId === 'ALL' ? 'Sales across all branches' : 'Sales in the selected branch',
+      salesHref: `/sales?${new URLSearchParams({ storeId: selectedStoreId }).toString()}`,
+    },
     receiptsHref, cashDrawerHref,
     analyticsHref: `/reports/analytics?${new URLSearchParams({ storeId: selectedStoreId }).toString()}`,
     reorderHref: `/reports/reorder-suggestions?${new URLSearchParams({ storeId: selectedStoreId }).toString()}`,
