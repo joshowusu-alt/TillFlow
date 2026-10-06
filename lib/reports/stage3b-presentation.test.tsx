@@ -16,6 +16,43 @@ function movement(failed = false) {
 }
 
 describe('Stage 3B presentation contracts', () => {
+  it('separates screenshot-sized unlinked balances from named customer debt and ageing', () => {
+    const html = renderToStaticMarkup(<TradingReportView data={stage3bTradingFixture('debt')} />);
+    const root = document.createElement('div'); root.innerHTML = html;
+    const debtMetric = [...root.querySelectorAll('[data-stage3b-metric]')].find(node => node.querySelector('dt')?.textContent === 'What customers owe overall');
+    expect(debtMetric?.textContent).toContain('GH₵648.50');
+    expect(debtMetric?.textContent).not.toContain('GH₵19,417.50');
+    expect(html).toContain('Sale balances without a customer account');
+    expect(html).toContain('GH₵18,769.00');
+    expect(html).toContain('excluded from customer debt and ageing');
+  });
+
+  it('shows the ageing-to-net bridge without assigning excess payments to other invoices', () => {
+    const data = stage3bTradingFixture('normal');
+    data.outstandingAR = 650_000;
+    data.customerDebt!.excess = 100_000;
+    data.customerDebt.netBalance = 650_000;
+    const html = renderToStaticMarkup(<TradingReportView data={data} />);
+    expect(html).toContain('Less excess confirmed payments');
+    expect(html).toContain('GH₵1,000.00');
+    expect(html).toContain('GH₵6,500.00');
+    expect(html).toContain('have not been reassigned');
+  });
+
+  it('does not let a different customer credit hide collectible debt', () => {
+    const data = stage3bTradingFixture('normal');
+    data.outstandingAR = 750_000;
+    data.customerDebt.excess = 900_000;
+    data.customerDebt.creditBalance = 900_000;
+    data.customerDebt.netBalance = -150_000;
+    const html = renderToStaticMarkup(<TradingReportView data={data} />);
+    const root = document.createElement('div'); root.innerHTML = html;
+    const due = [...root.querySelectorAll('[data-stage3b-metric]')].find(node => node.querySelector('dt')?.textContent === 'What customers owe overall');
+    expect(due?.textContent).toContain('GH₵7,500.00');
+    expect(html).toContain('Customer credit balances');
+    expect(html).toContain('GH₵9,000.00');
+    expect(html).toContain('−GH₵1,500.00');
+  });
   it('distinguishes period figures from current debts without changing values', () => {
     const data = stage3bTradingFixture('normal');
     const html = renderToStaticMarkup(<TradingReportView data={data} />);

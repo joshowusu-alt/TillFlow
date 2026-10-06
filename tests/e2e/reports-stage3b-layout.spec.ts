@@ -10,6 +10,36 @@ async function open(page: Page, screen: string, fixture = 'normal') {
   await expect(page.locator('[data-stage3b-review]')).toBeVisible();
 }
 
+for (const width of [320,390,768,1440]) {
+  test(`customer credits do not cancel another account's debt at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await open(page, 'trading', 'credit');
+    await expect(page.locator('[data-stage3b-metric]').filter({ hasText: 'What customers owe overall' })).toContainText('GH₵7,500.00');
+    await expect(page.locator('[data-stage3b-metric]').filter({ hasText: 'Customer credit balances' })).toContainText('GH₵9,000.00');
+    await expect(page.getByText('−GH₵1,500.00', { exact: true })).toBeVisible();
+    await expect(page.getByText('Excess confirmed payments on unlinked sales', { exact: true })).toBeVisible();
+    const amounts = await page.locator('[data-stage3b-review] [data-financial-amount]:visible').evaluateAll(nodes => nodes.map(el => ({ font: parseFloat(getComputedStyle(el).fontSize), right: el.getBoundingClientRect().right, parentRight: el.closest('.financial-fit')!.getBoundingClientRect().right })));
+    for (const amount of amounts) { expect(amount.font).toBeGreaterThanOrEqual(16); expect(amount.right).toBeLessThanOrEqual(amount.parentRight + 1); }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  });
+
+  test(`customer debt is separate from unlinked sales at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await open(page, 'trading', 'debt');
+    const headline = page.locator('[data-stage3b-metric]').filter({ hasText: 'What customers owe overall' });
+    await expect(headline).toContainText('GH₵648.50');
+    await expect(headline).not.toContainText('GH₵19,417.50');
+    const unlinked = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Sale balances without a customer account' }) });
+    await expect(unlinked).toContainText('GH₵18,769.00');
+    await expect(unlinked).toContainText('excluded from customer debt and ageing');
+    await unlinked.scrollIntoViewIfNeeded();
+    const figures = await unlinked.locator('[data-financial-amount]').evaluateAll(nodes => nodes.map(el => ({ font: parseFloat(getComputedStyle(el).fontSize), right: el.getBoundingClientRect().right, parentRight: el.closest('.financial-fit')!.getBoundingClientRect().right })));
+    for (const figure of figures) { expect(figure.font).toBeGreaterThanOrEqual(16); expect(figure.right).toBeLessThanOrEqual(figure.parentRight + 1); }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    if (process.env.REPORTS_SCREENSHOT_DIR) await page.screenshot({ path: path.join(process.env.REPORTS_SCREENSHOT_DIR, `customer-debt-${width}.png`), fullPage: true });
+  });
+}
+
 for (const width of [320,390,768,1024,1440,1920,2560]) {
   for (const screen of ['trading','analytics','movement']) {
     for (const fixture of ['normal','large']) {

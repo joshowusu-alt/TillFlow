@@ -2,7 +2,7 @@
 import type { AnalyticsData } from '@/app/(protected)/reports/analytics/AnalyticsClient';
 import type { TradingViewData } from '@/components/reports/stage3b/TradingReportView';
 
-export type Stage3bFixture = 'normal' | 'large' | 'negative' | 'empty' | 'incomplete' | 'failed';
+export type Stage3bFixture = 'normal' | 'large' | 'negative' | 'empty' | 'incomplete' | 'failed' | 'debt' | 'credit';
 export function stage3bTradingFixture(state: Stage3bFixture): TradingViewData {
   const sales = state === 'large' ? 1_234_567_890 : state === 'empty' ? 0 : 16_273_050;
   const receipt = state === 'large' ? 1_234_771_490 : state === 'empty' ? 0 : 16_476_650;
@@ -13,7 +13,8 @@ export function stage3bTradingFixture(state: Stage3bFixture): TradingViewData {
     grossProfit: profit, grossProfitPercent: profit == null ? null : state === 'negative' ? -100 : 25, incompleteLineCount: state === 'incomplete' ? 4 : 0,
     expenses: state === 'empty' ? 0 : 100_000, profitAfterExpenses: profit == null ? null : profit - 100_000,
     netProfitPercent: 20, allBranches: false, creditUnpaid: state === 'empty' ? 0 : 500_000,
-    outstandingAR: state === 'empty' ? 0 : 750_000, outstandingAP: state === 'empty' ? 0 : 420_000,
+    outstandingAR: state === 'empty' ? 0 : state === 'debt' ? 64_850 : 750_000, outstandingAP: state === 'empty' ? 0 : 420_000,
+    customerDebt: { invoiceDue: state === 'empty' ? 0 : state === 'debt' ? 64_850 : 750_000, excess: state === 'credit' ? 900_000 : 0, creditBalance: state === 'credit' ? 900_000 : 0, netBalance: state === 'credit' ? -150_000 : state === 'empty' ? 0 : state === 'debt' ? 64_850 : 750_000, unlinkedDue: state === 'debt' ? 1_876_900 : 0, unlinkedExcess: state === 'credit' ? 60_000 : 0, unlinkedCount: state === 'debt' ? 3 : state === 'credit' ? 1 : 0, scope: 'Sales in the selected branch', salesHref: '/sales?storeId=sample-branch' },
     scopeHelper: 'Sales and gross profit are filtered to this branch. Expenses cover the whole business.',
     receiptsHref: `/reports/money-received?${query}`, cashDrawerHref: `/reports/cash-drawer?${query}`,
     analyticsHref: '/reports/analytics?storeId=sample-branch', reorderHref: '/reports/reorder-suggestions?storeId=sample-branch',
@@ -21,8 +22,8 @@ export function stage3bTradingFixture(state: Stage3bFixture): TradingViewData {
     methods: [{ label: 'Physical cash', pence: state === 'negative' ? receipt + 50_000 : receipt, href: `/reports/money-received?${query}&method=CASH` }, { label: 'Mobile Money (MoMo)', pence: state === 'negative' ? -50_000 : 0, href: `/reports/money-received?${query}&method=MOBILE_MONEY` }],
     voidCount: 0, voidTotal: 0, returnCount: state === 'empty' ? 0 : 2, returnTotal: state === 'empty' ? 0 : 245_600,
     cashShiftCount: state === 'empty' ? 0 : 3, cashDiscrepancies: state === 'empty' ? 0 : 110_050,
-    adjustments: [], ageing: [{ label: '0–30 d', pence: state === 'empty' ? 0 : 750_000 }, { label: '31–60 d', pence: 0 }, { label: '61–90 d', pence: 0 }, { label: '90+ d', pence: 0 }],
-    debtors: state === 'empty' ? [] : [{ id: 'sample-customer', name: 'Sample customer', balance: 750_000 }],
+    adjustments: [], ageing: [{ label: '0–30 d', pence: state === 'empty' || state === 'debt' ? 0 : 750_000 }, { label: '31–60 d', pence: 0 }, { label: '61–90 d', pence: 0 }, { label: '90+ d', pence: state === 'debt' ? 64_850 : 0 }],
+    debtors: state === 'empty' ? [] : [{ id: 'sample-customer', name: 'Sample customer', balance: state === 'debt' ? 64_850 : 750_000 }],
     lowStock: state === 'empty' ? [] : [{ id: 'sample-balance', name: 'Sample milk 1L', quantity: '2 cartons', reorder: 12 }],
     bestItems: state === 'empty' ? [] : [{ id: 'rice', name: 'Sample rice 5kg', quantity: '61 bags', revenue: 905_000 }], livePulse: '', onShift: '',
   };

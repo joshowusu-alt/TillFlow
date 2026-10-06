@@ -17,6 +17,9 @@ import OperationalMetricCard from '@/components/OperationalMetricCard';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 function CreditStatusBadge({ balance, creditLimit }: { balance: number; creditLimit: number }) {
+  if (balance < 0) {
+    return <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">Credit balance</span>;
+  }
   if (balance === 0) {
     return <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Up to date</span>;
   }
@@ -83,7 +86,7 @@ export default async function CustomersPage({
   const balanceDue = searchParams?.balanceDue === '1';
   const selectedStoreId = store.id;
 
-  const { customers, totalCount, totalPages } = await measureServerOperation(
+  const { customers, totalCount, totalPages, accountSummary } = await measureServerOperation(
     'page.customers.load',
     () => getCustomers(business.id, {
       search: q || undefined,
@@ -100,9 +103,10 @@ export default async function CustomersPage({
     },
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
   );
-  const customersWithBalanceCount = customers.filter((customer) => customer.outstandingBalancePence > 0).length;
-  const totalArOutstandingPence = customers.reduce((sum, customer) => sum + customer.outstandingBalancePence, 0);
-  const creditLimitCount = customers.filter((customer) => customer.creditLimitPence > 0).length;
+  const customersWithBalanceCount = accountSummary.customersWithBalanceCount;
+  const totalArOutstandingPence = accountSummary.outstandingBalancePence;
+  const creditLimitCount = accountSummary.creditLimitCount;
+  const accountScope = business.customerScope === 'BRANCH' ? `${store.name} customer accounts` : 'All business customer accounts';
 
   return (
     <div className="operational-page space-y-4 sm:space-y-5">
@@ -115,33 +119,35 @@ export default async function CustomersPage({
       <p className="text-xs text-black/50">These are current customer balances across recorded sales and receipts, not limited to a date range.</p>
       <EffectiveStoreBanner
         storeName={store.name}
-        actionLabel={`Customer accounts and new customers on this page use ${store.name}.`}
+        actionLabel={business.customerScope === 'BRANCH' ? `Customer accounts and new customers on this page use ${store.name}.` : 'Customer accounts are shared across all branches.'}
       />
 
       <div className="operational-metric-grid operational-metric-grid--4">
         <CustomerStatCard
           label="Total customers"
-          value={totalCount.toLocaleString('en-GH')}
-          helper={q || balanceDue ? 'Matching current filters' : 'Customer accounts'}
+          value={accountSummary.customerCount.toLocaleString('en-GH')}
+          helper={accountScope}
         />
         <CustomerStatCard
           label="Customers with balance"
           value={customersWithBalanceCount.toLocaleString('en-GH')}
-          helper="Customers with an unpaid balance"
+          helper="All accounts in this scope with an unpaid balance"
         />
         <CustomerStatCard
           label="What customers owe"
           value={formatMoney(totalArOutstandingPence, business.currency)}
-          helper="Current balance across all customer accounts"
+          helper={`${accountScope} · amounts due after payments on each account · all periods`}
         />
         <CustomerStatCard
           label="Credit limits set"
           value={creditLimitCount.toLocaleString('en-GH')}
-          helper="Visible accounts with limits"
+          helper="All accounts in this scope with limits"
         />
       </div>
+      {accountSummary.customerCreditPence > 0 ? <p className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">Customer credit balances: <strong>{formatMoney(accountSummary.customerCreditPence, business.currency)}</strong>. These are shown separately and do not cancel another customer’s debt.</p> : null}
 
       {/* Search, branch filter, and debtor filter */}
+      {(q || balanceDue || totalPages > 1) ? <p className="text-xs text-slate-600">Summary figures cover all customer accounts in this scope. The list has {totalCount.toLocaleString('en-GH')} matching accounts.</p> : null}
       <div className="operational-filter-row">
         <div className="operational-search-shell">
           <Suspense><SearchFilter placeholder="Search customers by name..." /></Suspense>

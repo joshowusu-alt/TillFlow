@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { payableDocumentBalance, sumPayableBalances } from '@/lib/reports/payables-balance';
 import { receivableDocumentBalance, sumReceivableBalances } from '@/lib/reports/receivables-balance';
+import { reconcileCustomerDebt } from '@/lib/reports/customer-debt-reconciliation';
 
 const openStatus = { notIn: ['RETURNED', 'VOID'] as string[] };
 
@@ -34,6 +35,7 @@ export async function loadTradingOpenDocuments(businessId: string, storeId?: str
     outstandingPurchases,
     outstandingARPence: sumReceivableBalances(outstandingSales),
     outstandingAPPence: sumPayableBalances(outstandingPurchases),
+    customerDebt: reconcileCustomerDebt(outstandingSales),
   };
 }
 
