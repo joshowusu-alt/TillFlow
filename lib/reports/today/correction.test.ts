@@ -97,7 +97,8 @@ describe('Stage 3A navigation correction', () => {
       'app/(protected)/reports/business-movement/page.tsx',
     ]) {
       const source = readFileSync(join(root, file), 'utf8');
-      expect(source).toContain('ReportsDestinationHead');
+      expect(source).toMatch(/ReportHeader|BusinessMovementReportView/);
+      expect(readFileSync(join(root, 'components/reports/stage3b/ReportHeader.tsx'), 'utf8')).toContain('ReportsDestinationHead');
       expect(source).not.toContain('ReportsReturnPath');
       expect(source).not.toContain('Back to Activity');
       expect(source).not.toContain("href=\"/reports/command-center\"");

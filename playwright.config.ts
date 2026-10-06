@@ -211,7 +211,7 @@ export default defineConfig({
     },
     {
       name: 'reports-money-layout-chromium',
-      testMatch: /reports-(money-layout|today-layout)\.spec\.ts/,
+      testMatch: /reports-(money-layout|today-layout|stage3b-layout)\.spec\.ts/,
       retries: 0,
       timeout: 60_000,
       use: {

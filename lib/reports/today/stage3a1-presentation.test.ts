@@ -52,7 +52,10 @@ describe('Stage 3A.1 customer presentation', () => {
     expect(nav).toContain('Back to Today');
     for (const file of SHELL_PAGES) {
       const source = read(file);
-      expect(source, file).toContain('ReportsDestinationHead');
+      if (file.includes('/dashboard/') || file.includes('/analytics/')) expect(source, file).toContain('ReportHeader');
+      else if (file.includes('/business-movement/')) expect(source, file).toContain('BusinessMovementReportView');
+      else expect(source, file).toContain('ReportsDestinationHead');
+      expect(read('components/reports/stage3b/ReportHeader.tsx')).toContain('ReportsDestinationHead');
       expect(source, file).not.toContain('PageHeader');
       expect(source, file).not.toContain('aria-label="Reports location"');
     }

@@ -1,6 +1,5 @@
-import ReportAmountCard from '@/components/reports/ReportAmountCard';
+import TradingReportView from '@/components/reports/stage3b/TradingReportView';
 import { prisma } from '@/lib/prisma';
-import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { getIncomeStatement } from '@/lib/reports/financials';
 import { loadTradingPeriodMargin } from '@/lib/reports/trading-margin';
@@ -405,7 +404,7 @@ export default async function TradingDashboardContent({
       debtorMap.set(inv.customer.id, d);
     }
   }
-  const topDebtorList = Array.from(debtorMap.values()).sort((a, b) => b.balance - a.balance).slice(0, 5);
+  const topDebtorList = Array.from(debtorMap.entries()).map(([id, row]) => ({ id, ...row })).sort((a, b) => b.balance - a.balance).slice(0, 5);
 
   // Low stock
   const lowStock = balances
@@ -418,6 +417,7 @@ export default async function TradingDashboardContent({
       const product = bestSellerProductMap.get(group.productId);
       if (!product) return null;
       return {
+        id: group.productId,
         name: product.name,
         qty: group._sum.qtyBase ?? 0,
         revenue: group._sum.lineTotalPence ?? 0,
@@ -497,363 +497,38 @@ export default async function TradingDashboardContent({
       ]
     : [];
 
-  return (
-    <div className="space-y-4 sm:space-y-5" data-first-metric="">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-first-figure="">
-        <ReportAmountCard currency={currency}
-          label="Sales revenue"
-          pence={totalSales}
-          tone="accent"
-          helper="Recognised sales for this period (not money received)."
-        />
-        <ReportAmountCard currency={currency}
-          label={marginReady ? `Gross Profit (${gpPercent}%)` : 'Gross Profit'}
-          pence={marginReady ? totalGrossMargin : null} unavailableLabel="Costs incomplete"
-          tone={marginReady ? (gpPercent >= 20 ? 'success' : gpPercent >= 0 ? 'warn' : 'danger') : 'warn'}
-          helper={marginReady ? 'Profit before expenses.' : `${tradingMargin.incompleteLineCount} lines without authoritative cost. Sales above are still recognised.`}
-        />
-        <ReportAmountCard currency={currency} label="Expenses" pence={income.otherExpenses} helper={scopeHelper} />
-        <ReportAmountCard currency={currency}
-          label={selectedStoreId === 'ALL' ? (marginReady ? `Net Profit (${npPercent}%)` : 'Net Profit') : 'Profit after business-wide expenses'}
-          pence={marginReady ? totalGrossMargin - income.otherExpenses : null} unavailableLabel="Costs incomplete"
-          tone={marginReady ? (npPercent >= 10 ? 'success' : npPercent >= 0 ? 'warn' : 'danger') : 'warn'}
-          helper={selectedStoreId === 'ALL' ? 'Profit after expenses.' : 'Branch gross profit minus whole-business expenses. This is not branch net profit.'}
-        />
-        <ReportAmountCard currency={currency}
-          label="Credit sales (unpaid)"
-          pence={salesRevenue.creditSalesOutstandingPence}
-          helper="Unpaid portion of sales in this period. Not counted as money received."
-        />
-        <a href="/payments/supplier-payments" className="block min-w-0">
-          <ReportAmountCard currency={currency} label="What you owe suppliers" pence={outstandingAP} helper="Current supplier balances. Record supplier payments when purchases are paid." />
-        </a>
-      </div>
-
-      {headerPulse.length > 0 ? (
-        <p className="text-sm text-muted">{headerPulse.map((chip) => chip.label).join(' · ')}</p>
-      ) : null}
-      {isToday && activeCashierCount > 0 ? (
-        <div className="flex items-center gap-2 rounded-lg border border-black/5 bg-white px-3 py-2 text-xs shadow-sm">
-          <span className="text-black/50">On shift now</span>
-          <span className="font-semibold text-ink">
-            {openShifts.slice(0, 3).map((s) => s.user?.name ?? '—').join(', ')}
-            {openShifts.length > 3 ? ` +${openShifts.length - 3} more` : ''}
-          </span>
-        </div>
-      ) : null}
-
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-        <p>
-          <strong>Sales revenue</strong> ({formatMoney(totalSales, currency)}) can differ from{' '}
-          <strong>Money received</strong> ({formatMoney(totalPaymentReceipts, currency)}).
-          Credit sales raise revenue before cash arrives; later credit collections raise receipts without new revenue.
-          Physical Cash Drawer totals follow till/shift cash movements and will not always match cash receipts.
-        </p>
-        <p className="mt-1 text-xs text-slate-500">
-          What customers owe overall (all periods): {formatMoney(outstandingAR, currency)}.
-        </p>
-      </div>
-
-      {/* Data-quality warning: extremely negative GP almost always means wrong cost prices */}
-      {marginReady && gpPercent < -50 && totalSales > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <p className="font-semibold">⚠ Gross margin looks unusual ({gpPercent}%)</p>
-          <p className="mt-0.5 text-amber-700">
-            A margin this negative usually means product cost prices are set much higher than selling prices —
-            possibly entered in whole {currency} instead of pesewas/cents, or a cost per case was applied to
-            individual units. Go to <a href="/products" className="underline font-medium">Products</a> and
-            review <strong>cost price</strong> for your top-selling items.
-          </p>
-        </div>
-      )}
-
-      {/* Money received + Activity highlights */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card p-4 sm:p-6" id="money-received">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-base font-display font-semibold sm:text-lg">Money received</h2>
-              <p className="mt-1 text-xs leading-relaxed text-black/50">
-                Payment receipts by method for this period (from payment records). Includes money
-                received at sale and later credit collections. Tap a method to inspect supporting payments.
-              </p>
-            </div>
-            <a href={receiptsHref} className="shrink-0 text-xs font-medium text-accent underline-offset-2 hover:underline">
-              All receipts →
-            </a>
-          </div>
-          <div className="mb-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2">
-              <div className="text-emerald-800/70">Received at sale</div>
-              <div className="mt-0.5 font-semibold text-emerald-900">
-                {formatMoney(moneyReceived.receivedAtSalePence, currency)}
-              </div>
-            </div>
-            <div className="rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2">
-              <div className="text-amber-800/70">Later credit collected</div>
-              <div className="mt-0.5 font-semibold text-amber-900">
-                {formatMoney(moneyReceived.laterCreditCollectionPence, currency)}
-              </div>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 col-span-2 sm:col-span-1">
-              <div className="text-slate-600">Historical — not classified</div>
-              <div className="mt-0.5 font-semibold text-slate-800">
-                {formatMoney(moneyReceived.unknownHistoricalOriginPence, currency)}
-              </div>
-            </div>
-          </div>
-          {moneyReceived.unknownHistoricalOriginPence !== 0 ? (
-            <p className="mb-3 text-[11px] leading-relaxed text-black/50">
-              Some older payments have no durable receipt origin. They remain in the total above
-              and are not guessed from timestamps.
-            </p>
-          ) : null}
-          <div className="space-y-3 text-sm">
-            {(
-              [
-                { label: RECEIPT_METHOD_LABELS.CASH, key: 'CASH' as const, cls: 'bg-emerald-500', text: 'text-emerald-700' },
-                { label: RECEIPT_METHOD_LABELS.MOBILE_MONEY, key: 'MOBILE_MONEY' as const, cls: 'bg-amber-500', text: 'text-amber-700' },
-                { label: RECEIPT_METHOD_LABELS.CARD, key: 'CARD' as const, cls: 'bg-blue-500', text: 'text-accent' },
-                { label: RECEIPT_METHOD_LABELS.TRANSFER, key: 'TRANSFER' as const, cls: 'bg-purple-500', text: 'text-purple-700' },
-                { label: RECEIPT_METHOD_LABELS.UNKNOWN, key: 'UNKNOWN' as const, cls: 'bg-slate-400', text: 'text-slate-700' },
-              ] as const
-            ).map(({ label, key, cls, text }) => {
-              const amount = paymentSplit[key];
-              const pct = totalPaymentReceipts > 0 ? Math.round((amount / totalPaymentReceipts) * 100) : 0;
-              const href = moneyReceivedHref(scope, key);
-              return (
-                <a
-                  key={key}
-                  href={href}
-                  className="block rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                  aria-label={`View ${label} payment records: ${formatMoney(amount, currency)}`}
-                >
-                  <div className="mb-1 flex justify-between text-xs">
-                    <span className="text-black/60 underline-offset-2 group-hover:underline">{label}</span>
-                    <span className={`font-semibold ${text}`}>
-                      {formatMoney(amount, currency)} ({pct}%)
-                    </span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-black/5">
-                    <div className={`h-1.5 rounded-full ${cls}`} style={{ width: `${Math.min(pct, 100)}%` }} />
-                  </div>
-                </a>
-              );
-            })}
-          </div>
-          {moneyReceived.byMethod.UNKNOWN !== 0 ? (
-            <p className="mt-2 text-[11px] leading-relaxed text-black/50">
-              Unknown/Other includes stored payment methods outside the recognised set
-              (blank, differently cased, legacy or future values). They remain in the total.
-            </p>
-          ) : null}
-          <p className="mt-3 text-[11px] leading-relaxed text-black/45">
-            Electronic payments (MoMo, card, bank transfer) are listed here — not in the Cash Drawer.
-            Physical cash till movements: <a href={cashDrawerHref} className="font-medium underline underline-offset-2">Cash Drawer</a>.
-          </p>
-        </div>
-
-        <div className="card p-4 sm:p-6">
-          <div className="mb-4">
-            <h2 className="text-base font-display font-semibold sm:text-lg">Period activity highlights</h2>
-            <p className="mt-1 text-xs text-black/50">Returns, voids, and movement recorded during the selected period.</p>
-          </div>
-          {!hasActivity ? (
-            <div className="flex flex-col items-center py-6 text-center text-sm text-black/40">
-              <span>No voids, returns, adjustments, or cash variances in this period.</span>
-            </div>
-          ) : (
-            <div className="space-y-2 text-sm">
-              {todayVoids.length > 0 && (
-                <div className="flex justify-between rounded-lg bg-rose-50 px-3 py-2">
-                  <span className="text-rose-700">Voids ({todayVoids.length})</span>
-                  <span className="font-semibold text-rose-700">{formatMoney(voidTotal, currency)}</span>
-                </div>
-              )}
-              {todayReturns.length > 0 && (
-                <a href="/sales" className="flex justify-between rounded-lg bg-amber-50 px-3 py-2 hover:bg-amber-100/70">
-                  <span className="text-amber-700">Returns ({todayReturns.length})</span>
-                  <span className="font-semibold text-amber-700">{formatMoney(returnTotal, currency)}</span>
-                </a>
-              )}
-              {todayAdj.map((adj: any, i: number) => (
-                <div key={i} className="flex flex-col gap-1 rounded-lg bg-accentSoft px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
-                  <span className="text-accent">
-                    Stock adj · {adj.product.name} · {adj.direction} {adj.qtyBase}
-                  </span>
-                  <span className="text-accent/70">{adj.user.name}</span>
-                </div>
-              ))}
-              {cashVarTotal > 0 && (
-                <div className="rounded-lg bg-purple-50 px-3 py-2">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="font-medium text-purple-700">
-                        Total cash discrepancies ({todayCashVar.length} shift{todayCashVar.length !== 1 ? 's' : ''})
-                      </div>
-                      <div className="mt-0.5 text-xs leading-relaxed text-purple-700/70">
-                        Shortages and overages added without cancelling each other out. Cash Drawer shows the net difference.
-                      </div>
-                    </div>
-                    <span className="font-semibold text-purple-700 sm:text-right">{formatMoney(cashVarTotal, currency)}</span>
-                  </div>
-                  <a href={cashDrawerHref} className="mt-2 inline-flex text-xs font-medium text-purple-700 underline-offset-2 hover:underline">
-                    View Cash Drawer Report
-                  </a>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Debtor Ageing + Top Debtors */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card p-4 sm:p-6">
-          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Debtor Ageing</h2>
-          <div className="space-y-2 text-sm">
-            {bucketKeys.map((bucket) => (
-              <div key={bucket} className="flex justify-between">
-                <span className="text-black/60">{bucket}</span>
-                <span
-                  className={`font-semibold ${
-                    bucket === '90+ d' && ageingBuckets[bucket] > 0
-                      ? 'text-rose-600'
-                      : bucket === '61–90 d' && ageingBuckets[bucket] > 0
-                      ? 'text-amber-600'
-                      : ''
-                  }`}
-                >
-                  {formatMoney(ageingBuckets[bucket], currency)}
-                </span>
-              </div>
-            ))}
-            <div className="mt-3 border-t border-black/10 pt-2 flex justify-between font-semibold">
-              <span>Total AR</span>
-              <span>{formatMoney(outstandingAR, currency)}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="card p-4 sm:p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-base font-display font-semibold sm:text-lg">Top Debtors</h2>
-            <a href="/payments/customer-receipts" className="text-xs text-black/40 hover:text-black/70">
-              Receive payments →
-            </a>
-          </div>
-          <div className="space-y-2 text-sm">
-            {topDebtorList.length === 0 ? (
-              <div className="py-4 text-center text-black/40">No outstanding debts</div>
-            ) : (
-              topDebtorList.map((d) => (
-                <div key={d.name} className="flex flex-col gap-1 rounded-lg border border-black/5 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                  <span>{d.name}</span>
-                  <span className="font-semibold text-rose-600 sm:text-right">{formatMoney(d.balance, currency)}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Low Stock + Best Sellers */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card p-4 sm:p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-display font-semibold sm:text-lg">Stock needing attention</h2>
-            <a href="/reports/reorder-suggestions" className="text-xs text-black/40 hover:text-black/70">
-              Reorder →
-            </a>
-          </div>
-          <div className="space-y-2 text-sm">
-            {lowStock.length === 0 ? (
-              <div className="flex flex-col items-center py-6 text-center">
-                <div className="rounded-full bg-emerald-50 p-3">
-                  <svg className="h-5 w-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <div className="mt-2 text-sm text-black/70">All stock levels healthy</div>
-              </div>
-            ) : (
-              lowStock.map((balance) => {
-                const baseUnit = balance.product.productUnits.find((u) => u.isBaseUnit);
-                const packaging = getPrimaryPackagingUnit(
-                  balance.product.productUnits.map((pu) => ({
-                    conversionToBase: pu.conversionToBase,
-                    unit: pu.unit,
-                  }))
-                );
-                const mixed = formatMixedUnit({
-                  qtyBase: balance.qtyOnHandBase,
-                  baseUnit: baseUnit?.unit.name ?? 'unit',
-                  baseUnitPlural: baseUnit?.unit.pluralName,
-                  packagingUnit: packaging?.unit.name,
-                  packagingUnitPlural: packaging?.unit.pluralName,
-                  packagingConversion: packaging?.conversionToBase,
-                });
-                return (
-                  <div key={balance.id} className="flex flex-col gap-1 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <span className="font-medium">{balance.product.name}</span>
-                      {balance.product.reorderQtyBase > 0 && (
-                        <span className="ml-2 text-xs text-black/40">reorder {balance.product.reorderQtyBase}</span>
-                      )}
-                    </div>
-                    <span className="font-semibold text-rose-600 sm:text-right">{mixed}</span>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        <div className="card p-4 sm:p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-base font-display font-semibold sm:text-lg">Best-selling products by revenue</h2>
-            <a href="/reports/analytics" className="text-xs text-black/40 hover:text-black/70">
-              Sales analytics →
-            </a>
-          </div>
-          <div className="space-y-2 text-sm">
-            {bestItems.length === 0 ? (
-              <div className="py-6 text-center animate-fade-in-up">
-                <p className="text-black/40">No sales in selected range</p>
-                <div className="mt-2 flex justify-center gap-2">
-                  <a href="/pos" className="text-xs text-accent hover:underline">Open POS</a>
-                  <span className="text-black/20">|</span>
-                  <a href="/onboarding#demo" className="text-xs text-accent hover:underline">Run Demo Day</a>
-                </div>
-              </div>
-            ) : (
-              bestItems.map((item) => {
-                const baseUnit = item.units.find((u: any) => u.isBaseUnit);
-                const packaging = getPrimaryPackagingUnit(
-                  item.units.map((pu: any) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit }))
-                );
-                const mixed = formatMixedUnit({
-                  qtyBase: item.qty,
-                  baseUnit: baseUnit?.unit.name ?? 'unit',
-                  baseUnitPlural: baseUnit?.unit.pluralName,
-                  packagingUnit: packaging?.unit.name,
-                  packagingUnitPlural: packaging?.unit.pluralName,
-                  packagingConversion: packaging?.conversionToBase,
-                });
-                return (
-                  <div key={item.name} className="flex flex-col gap-1 rounded-lg border border-black/5 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <span className="font-medium">{item.name}</span>
-                      <span className="ml-2 text-xs text-black/40">{mixed}</span>
-                    </div>
-                    <span className="font-semibold text-emerald-700 sm:text-right">{formatMoney(item.revenue, currency)}</span>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const quantityLabel = (qty: number, units: { isBaseUnit: boolean; conversionToBase: number; unit: { name: string; pluralName: string } }[]) => {
+    const baseUnit = units.find(u => u.isBaseUnit);
+    const packaging = getPrimaryPackagingUnit(units.map(pu => ({ conversionToBase: pu.conversionToBase, unit: pu.unit })));
+    return formatMixedUnit({ qtyBase: qty, baseUnit: baseUnit?.unit.name ?? 'unit', baseUnitPlural: baseUnit?.unit.pluralName,
+      packagingUnit: packaging?.unit.name, packagingUnitPlural: packaging?.unit.pluralName, packagingConversion: packaging?.conversionToBase });
+  };
+  void hasActivity;
+  return <TradingReportView data={{
+    currency, totalSales, totalPaymentReceipts,
+    grossProfit: marginReady ? totalGrossMargin : null, grossProfitPercent: marginReady ? gpPercent : null,
+    incompleteLineCount: tradingMargin.incompleteLineCount, expenses: income.otherExpenses,
+    profitAfterExpenses: marginReady ? totalGrossMargin - income.otherExpenses : null,
+    netProfitPercent: npPercent, allBranches: selectedStoreId === 'ALL', scopeHelper,
+    creditUnpaid: salesRevenue.creditSalesOutstandingPence, outstandingAR, outstandingAP,
+    receiptsHref, cashDrawerHref,
+    analyticsHref: `/reports/analytics?${new URLSearchParams({ storeId: selectedStoreId }).toString()}`,
+    reorderHref: `/reports/reorder-suggestions?${new URLSearchParams({ storeId: selectedStoreId }).toString()}`,
+    receiptOrigins: [
+      { label: 'Received at sale', pence: moneyReceived.receivedAtSalePence },
+      { label: 'Later credit collected', pence: moneyReceived.laterCreditCollectionPence },
+      { label: 'Historical — not classified', pence: moneyReceived.unknownHistoricalOriginPence },
+    ],
+    methods: (['CASH', 'MOBILE_MONEY', 'CARD', 'TRANSFER', 'UNKNOWN'] as const).map(key => ({
+      label: RECEIPT_METHOD_LABELS[key], pence: paymentSplit[key], href: moneyReceivedHref(scope, key),
+    })),
+    voidCount: todayVoids.length, voidTotal, returnCount: todayReturns.length, returnTotal,
+    cashShiftCount: todayCashVar.length, cashDiscrepancies: cashVarTotal,
+    adjustments: todayAdj.map(row => ({ product: row.product.name, direction: row.direction, quantity: row.qtyBase, user: row.user.name })),
+    ageing: bucketKeys.map(label => ({ label, pence: ageingBuckets[label] })), debtors: topDebtorList,
+    lowStock: lowStock.map(row => ({ id: row.id, name: row.product.name, quantity: quantityLabel(row.qtyOnHandBase, row.product.productUnits), reorder: row.product.reorderQtyBase })),
+    bestItems: bestItems.map(row => ({ id: row.id, name: row.name, quantity: quantityLabel(row.qty, row.units), revenue: row.revenue })),
+    livePulse: headerPulse.map(chip => chip.label).join(' · '),
+    onShift: isToday && activeCashierCount > 0 ? openShifts.slice(0, 3).map(s => s.user?.name ?? '—').join(', ') + (openShifts.length > 3 ? ` +${openShifts.length - 3} more` : '') : '',
+  }} />;
 }

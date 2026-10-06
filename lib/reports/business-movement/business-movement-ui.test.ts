@@ -212,7 +212,7 @@ describe('Business Movement 6F — surface wiring', () => {
     const page = readFileSync(
       join(root, 'app/(protected)/reports/business-movement/page.tsx'),
       'utf8',
-    );
+    ) + readFileSync(join(root, 'components/reports/stage3b/BusinessMovementReportView.tsx'), 'utf8');
     const exportRoute = readFileSync(
       join(root, 'app/(protected)/exports/business-movement/route.ts'),
       'utf8',
@@ -220,7 +220,7 @@ describe('Business Movement 6F — surface wiring', () => {
     const hub = readFileSync(join(root, 'lib/reports/today/stage3a-nav.ts'), 'utf8');
 
     expect(page).toContain('title="Business movement"');
-    expect(page).toContain('ReportsDestinationHead');
+    expect(page).toContain('ReportHeader');
     expect(page).toContain("surfaceId: 'business_movement'");
     expect(page).toContain('Product movers');
     expect(exportRoute).toContain('COMPLETE_STREAM');
@@ -235,7 +235,7 @@ describe('Business Movement 6H — owner UX polish', () => {
     const page = readFileSync(
       join(root, 'app/(protected)/reports/business-movement/page.tsx'),
       'utf8',
-    );
+    ) + readFileSync(join(root, 'components/reports/stage3b/BusinessMovementReportView.tsx'), 'utf8');
 
     expect(page).toContain('<BusinessMovementSummary');
     const insight = readFileSync(join(root, 'components/reports/BusinessMovementInsight.tsx'), 'utf8');
@@ -278,14 +278,14 @@ describe('Business Movement 6J — owner page period wording', () => {
     const page = readFileSync(
       join(root, 'app/(protected)/reports/business-movement/page.tsx'),
       'utf8',
-    );
+    ) + readFileSync(join(root, 'components/reports/stage3b/BusinessMovementReportView.tsx'), 'utf8');
 
     expect(page).toContain('periodLabel={chrome.comparingLine}');
     expect(page).toContain('comparingLine');
     const comparison = readFileSync(join(root, 'components/reports/BusinessMovementSummary.tsx'), 'utf8');
     expect(comparison).toContain('currentFromKey');
     expect(comparison).toContain('comparisonFromKey');
-    expect(comparison).toContain('<time dateTime={from}>');
+    expect(comparison).toContain('<time dateTime={periods.currentFromKey}>');
     expect(page).toContain('ownerInsightCopy');
     expect(page).not.toMatch(/last period/i);
     expect(page).not.toMatch(/comparison period/i);

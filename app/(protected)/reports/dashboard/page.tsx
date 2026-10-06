@@ -2,8 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportFilterDisclosure from '@/components/reports/ReportFilterDisclosure';
-import RefreshIndicator from '@/components/RefreshIndicator';
-import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
+import ReportHeader from '@/components/reports/stage3b/ReportHeader';
 import { reportScopeLabel } from '@/lib/reports/scope-labels';
 import ReportSectionSkeleton from '@/components/reports/ReportSectionSkeleton';
 import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
@@ -74,31 +73,18 @@ export default async function DashboardPage({
   return (
     <div className="space-y-4 sm:space-y-5">
       {opened.readOnly ? <ReportReadOnlyBanner /> : null}
-      <ReportsDestinationHead
+      <ReportHeader
         title="Trading"
         scopeLabel={scopeLabel}
         periodLabel={isToday
           ? `Today (live) · ${scope.timeZone}`
           : `${scope.fromInputValue} to ${scope.toInputValue} · ${scope.timeZone}`}
-        showRefresh={false}
-        actions={<RefreshIndicator fetchedAt={new Date().toISOString()} autoRefreshMs={120_000} />}
       />
 
       <ReportFilterDisclosure>
         <div className="mt-2 space-y-2">
-          <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-            <p>
-              <strong>Sales revenue</strong> is recognised sales for this period.
-              <strong> Money received</strong> is payment receipts (including later credit collections).
-              They can differ when customers buy on credit or pay old balances.
-            </p>
-            <p className="mt-1">
-              Period uses the business timezone ({scope.timeZone}). Customer and supplier balances show the
-              current position, not only this period.
-            </p>
-          </div>
           <ReportFilterCard
-            columnsClassName={stores.length > 1 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}
+            columnsClassName={'md:grid-cols-2 xl:grid-cols-4'}
             submitLabel="Apply filters"
             submitTone="primary"
             actions={
