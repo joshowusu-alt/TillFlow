@@ -2,6 +2,8 @@ export type { MomoConfirmationRow, MomoConfirmationFilters, MomoConfirmationList
 export { MOMO_CONFIRMATION_STATUS } from './types';
 export {
   momoConfirmationPaymentWhere,
+  momoConfirmationReceiptScope,
+  summarizeMomoConfirmationPayments,
   listMomoConfirmationPayments,
   iterMomoConfirmationExportCsvChunks,
   listMomoConfirmationCashiers,

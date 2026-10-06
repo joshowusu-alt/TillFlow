@@ -7,8 +7,11 @@ import { resolveMoneyReceivedAccess } from '@/lib/reports/money-received/access'
 import {
   defaultMomoConfirmationStatusFilter,
   momoConfirmationPaymentWhere,
+  momoConfirmationReceiptScope,
   MOMO_CONFIRMATION_STATUS,
 } from '@/lib/reports/momo-confirmation';
+import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
+import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';
 import { listMomoConfirmationPayments, iterMomoConfirmationExportCsvChunks } from '@/lib/reports/momo-confirmation/query';
 
 describe('MoMo confirmation review — classification vs Money Received', () => {
@@ -38,6 +41,58 @@ describe('MoMo confirmation review — classification vs Money Received', () => 
       storeId: { in: ['store-1'] },
     });
     expect(JSON.stringify(where)).not.toContain('CONFIRMED');
+    expect(where.receivedAt).toEqual({
+      gte: new Date('2026-08-01T00:00:00.000Z'),
+      lt: new Date('2026-09-01T00:00:00.000Z'),
+    });
+  });
+
+  it('keeps an explicit period and lets the outstanding queue include older pending receipts', () => {
+    const period = momoConfirmationPaymentWhere({
+      businessId: 'biz-1',
+      branchIds: null,
+      periodStart: new Date('2026-09-06T00:00:00.000Z'),
+      periodEndExclusive: new Date('2026-10-07T00:00:00.000Z'),
+      status: 'PENDING_MANUAL',
+      saleStatus: 'ALL',
+      cashierUserId: 'ALL',
+      receiptScope: 'period',
+    });
+    const outstanding = momoConfirmationPaymentWhere({
+      businessId: 'biz-1',
+      branchIds: null,
+      periodStart: new Date('2026-09-06T00:00:00.000Z'),
+      periodEndExclusive: new Date('2026-10-07T00:00:00.000Z'),
+      status: 'PENDING_MANUAL',
+      saleStatus: 'ALL',
+      cashierUserId: 'ALL',
+      receiptScope: 'outstanding',
+    });
+    const recordedAt = new Date('2026-08-01T12:00:00.000Z');
+    const periodReceived = period.receivedAt as { gte: Date; lt: Date };
+    expect(recordedAt < periodReceived.gte || recordedAt >= periodReceived.lt).toBe(true);
+    expect(outstanding.receivedAt).toBeUndefined();
+    expect(outstanding.status).toBe('PENDING_MANUAL');
+    expect(momoConfirmationReceiptScope(undefined)).toBe('outstanding');
+    expect(momoConfirmationReceiptScope({ from: '2026-09-01', to: '2026-10-06' })).toBe('period');
+    expect(momoConfirmationReceiptScope({ queue: 'outstanding', from: '2026-09-01' })).toBe('outstanding');
+  });
+
+  it('treats a recorded manual MoMo tender as unpaid until the receipt is confirmed', () => {
+    const recorded = {
+      paymentStatus: 'PAID',
+      totalPence: 18_946_00,
+      payments: [{ amountPence: 18_946_00, status: 'PENDING_MANUAL' }],
+    };
+    expect(receivableDocumentBalance(recorded)).toMatchObject({ paidPence: 0, balancePence: 18_946_00 });
+    const confirmed = {
+      ...recorded,
+      payments: [{ amountPence: 18_946_00, status: 'CONFIRMED' }],
+    };
+    expect(receivableDocumentBalance(confirmed)).toMatchObject({ paidPence: 18_946_00, balancePence: 0 });
+    const window = defaultTenantLocalRange(new Date('2026-10-06T18:00:00.000Z'), 'Africa/Accra', 30);
+    const older = new Date('2026-08-07T12:00:00.000Z');
+    expect(older < window.startInclusive).toBe(true);
   });
 
   it('ALL status filter uses notIn classified statuses (same as unverified metric)', () => {

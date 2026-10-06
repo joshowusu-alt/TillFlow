@@ -41,9 +41,21 @@ export function momoConfirmationPaymentWhere(
 
   return {
     ...statusFilter,
-    receivedAt: { gte: filters.periodStart, lt: filters.periodEndExclusive },
+    ...(filters.receiptScope === 'outstanding'
+      ? {}
+      : { receivedAt: { gte: filters.periodStart, lt: filters.periodEndExclusive } }),
     salesInvoice: branchInvoiceFilter(filters),
   };
+}
+
+export function momoConfirmationReceiptScope(search: {
+  from?: string;
+  to?: string;
+  queue?: string;
+} | undefined): 'period' | 'outstanding' {
+  if (search?.queue === 'outstanding') return 'outstanding';
+  if (search?.from || search?.to || search?.queue === 'period') return 'period';
+  return 'outstanding';
 }
 
 function mapRow(r: {
@@ -164,6 +176,18 @@ export async function listMomoConfirmationPayments(
       queryError: err instanceof Error ? err.message : 'Query failed',
     };
   }
+}
+
+export async function summarizeMomoConfirmationPayments(
+  db: Db,
+  filters: MomoConfirmationFilters,
+): Promise<{ totalCount: number; totalAmountPence: number }> {
+  const where = momoConfirmationPaymentWhere(filters);
+  const [totalCount, sumAgg] = await Promise.all([
+    db.salesPayment.count({ where }),
+    db.salesPayment.aggregate({ where, _sum: { amountPence: true } }),
+  ]);
+  return { totalCount, totalAmountPence: sumAgg._sum.amountPence ?? 0 };
 }
 
 export async function* iterMomoConfirmationExportCsvChunks(
