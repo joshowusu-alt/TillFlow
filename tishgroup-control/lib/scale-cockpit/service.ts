@@ -247,7 +247,7 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
       lastOwnerDashboardViewAt: formatIsoDate(snapshot.ownerLastDashboardViewAt),
       lastReportViewAt: formatIsoDate(snapshot.ownerLastReportViewAt),
       lastLoginAt: formatIsoDate(snapshot.ownerLastLoginAt),
-      supportStatus: profile?.supportStatus ?? 'HEALTHY',
+      supportStatus: profile?.supportStatus ?? 'UNREVIEWED',
       openSupportIssueCount: support?.openCount ?? snapshot.openSupportIssueCount,
       highestSupportPriority: support?.highestPriority ?? null,
       hasCriticalSupportIssue: support?.hasCritical ?? snapshot.hasCriticalSupportIssue,
