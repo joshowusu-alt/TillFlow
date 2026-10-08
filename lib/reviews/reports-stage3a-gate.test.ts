@@ -8,6 +8,8 @@ import {
   REPORTS_MONEY_LAYOUT_REVIEW_PATH,
   REPORTS_STAGE3A_CONTEXT_REVIEW_PATH,
   REPORTS_STAGE3A_REVIEW_PATH,
+  REPORTS_STAGE3A1_DESTINATION_REVIEW_PATH,
+  REPORTS_STAGE3A1_REVIEW_PATH,
 } from '@/lib/reviews/reports-stage3a-gate';
 import { reviewAttentionSampleRows, reviewLinks, reviewSnapshot } from '@/lib/reports/today/review-samples';
 import { isQuietToday } from '@/lib/reports/today/model';
@@ -40,6 +42,12 @@ describe('Stage 3A review gate', () => {
     expect(money.status).toBe(404);
     expect(isReportsStage3aPath(REPORTS_MONEY_LAYOUT_REVIEW_PATH)).toBe(true);
     expect(isReportsStage3aPath(REPORTS_STAGE3A_CONTEXT_REVIEW_PATH)).toBe(true);
+    const presentation = middleware(new NextRequest(new URL(REPORTS_STAGE3A1_REVIEW_PATH, 'http://localhost')));
+    expect(presentation.status).toBe(404);
+    expect(presentation.headers.get('location')).toBeNull();
+    const destination = middleware(new NextRequest(new URL(REPORTS_STAGE3A1_DESTINATION_REVIEW_PATH, 'http://localhost')));
+    expect(destination.status).toBe(404);
+    expect(destination.headers.get('location')).toBeNull();
   });
 
   it('keeps empty Today next steps to four and distinct from healthy', () => {
