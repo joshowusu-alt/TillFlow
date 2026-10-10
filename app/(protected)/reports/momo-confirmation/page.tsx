@@ -278,13 +278,27 @@ export default async function MomoConfirmationReviewPage({
           <label className="label" htmlFor="from">
             From
           </label>
-          <input id="from" className="input" type="date" name="from" defaultValue={momoConfirmationDateInputValue(receiptScope, fromIso)} />
+          <input
+            id="from"
+            key={`from-${receiptScope}-${fromIso}`}
+            className="input"
+            type="date"
+            name="from"
+            defaultValue={momoConfirmationDateInputValue(receiptScope, fromIso)}
+          />
         </div>
         <div>
           <label className="label" htmlFor="to">
             To
           </label>
-          <input id="to" className="input" type="date" name="to" defaultValue={momoConfirmationDateInputValue(receiptScope, toIso)} />
+          <input
+            id="to"
+            key={`to-${receiptScope}-${toIso}`}
+            className="input"
+            type="date"
+            name="to"
+            defaultValue={momoConfirmationDateInputValue(receiptScope, toIso)}
+          />
         </div>
         <div>
           <label className="label" htmlFor="status">
