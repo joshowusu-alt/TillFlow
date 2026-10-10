@@ -3,6 +3,7 @@ export { MOMO_CONFIRMATION_STATUS } from './types';
 export {
   momoConfirmationPaymentWhere,
   momoConfirmationReceiptScope,
+  momoConfirmationDateInputValue,
   summarizeMomoConfirmationPayments,
   listMomoConfirmationPayments,
   iterMomoConfirmationExportCsvChunks,

@@ -58,6 +58,14 @@ export function momoConfirmationReceiptScope(search: {
   return 'outstanding';
 }
 
+/** Outstanding view must not submit the 30-day fallback dates, or Apply would hide older receipts. */
+export function momoConfirmationDateInputValue(
+  scope: 'period' | 'outstanding',
+  value: string,
+): string {
+  return scope === 'outstanding' ? '' : value;
+}
+
 function mapRow(r: {
   id: string;
   amountPence: number;

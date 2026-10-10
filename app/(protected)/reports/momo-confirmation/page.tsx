@@ -19,6 +19,7 @@ import {
   defaultMomoConfirmationStatusFilter,
   listMomoConfirmationCashiers,
   listMomoConfirmationPayments,
+  momoConfirmationDateInputValue,
   momoConfirmationReceiptScope,
   summarizeMomoConfirmationPayments,
   MOMO_CONFIRMATION_STATUS,
@@ -257,13 +258,13 @@ export default async function MomoConfirmationReviewPage({
           <label className="label" htmlFor="from">
             From
           </label>
-          <input id="from" className="input" type="date" name="from" defaultValue={fromIso} />
+          <input id="from" className="input" type="date" name="from" defaultValue={momoConfirmationDateInputValue(receiptScope, fromIso)} />
         </div>
         <div>
           <label className="label" htmlFor="to">
             To
           </label>
-          <input id="to" className="input" type="date" name="to" defaultValue={toIso} />
+          <input id="to" className="input" type="date" name="to" defaultValue={momoConfirmationDateInputValue(receiptScope, toIso)} />
         </div>
         <div>
           <label className="label" htmlFor="status">

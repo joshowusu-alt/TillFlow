@@ -7,6 +7,7 @@ import { resolveMoneyReceivedAccess } from '@/lib/reports/money-received/access'
 import {
   defaultMomoConfirmationStatusFilter,
   momoConfirmationPaymentWhere,
+  momoConfirmationDateInputValue,
   momoConfirmationReceiptScope,
   MOMO_CONFIRMATION_STATUS,
 } from '@/lib/reports/momo-confirmation';
@@ -74,8 +75,11 @@ describe('MoMo confirmation review — classification vs Money Received', () => 
     expect(outstanding.receivedAt).toBeUndefined();
     expect(outstanding.status).toBe('PENDING_MANUAL');
     expect(momoConfirmationReceiptScope(undefined)).toBe('outstanding');
+    expect(momoConfirmationReceiptScope({ from: '', to: '' })).toBe('outstanding');
     expect(momoConfirmationReceiptScope({ from: '2026-09-01', to: '2026-10-06' })).toBe('period');
     expect(momoConfirmationReceiptScope({ queue: 'outstanding', from: '2026-09-01' })).toBe('outstanding');
+    expect(momoConfirmationDateInputValue('outstanding', '2026-09-07')).toBe('');
+    expect(momoConfirmationDateInputValue('period', '2026-09-07')).toBe('2026-09-07');
   });
 
   it('treats a recorded manual MoMo tender as unpaid until the receipt is confirmed', () => {
