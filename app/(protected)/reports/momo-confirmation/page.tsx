@@ -21,6 +21,7 @@ import {
   listMomoConfirmationPayments,
   momoConfirmationDateInputValue,
   momoConfirmationReceiptScope,
+  summarizeMomoConfirmationActionability,
   summarizeMomoConfirmationPayments,
   MOMO_CONFIRMATION_STATUS,
 } from '@/lib/reports/momo-confirmation';
@@ -143,6 +144,24 @@ export default async function MomoConfirmationReviewPage({
   const currency = business.currency;
   const selectedStoreId = access.selectedStoreId;
   const queryFailed = Boolean(list.queryFailed);
+  let actionability = {
+    eligibleCount: list.totalCount,
+    eligibleAmountPence: list.totalAmountPence,
+    blockedCount: 0,
+    blockedAmountPence: 0,
+  };
+  if (!queryFailed) {
+    try {
+      actionability = await summarizeMomoConfirmationActionability(prisma, filters);
+    } catch {
+      actionability = {
+        eligibleCount: list.totalCount,
+        eligibleAmountPence: list.totalAmountPence,
+        blockedCount: 0,
+        blockedAmountPence: 0,
+      };
+    }
+  }
   let outsideCount = 0;
   let outsideAmountPence = 0;
   if (receiptScope === 'period' && !queryFailed) {
@@ -213,8 +232,9 @@ export default async function MomoConfirmationReviewPage({
           Money Received and do not reduce what customers owe.
         </p>
         <p className="mt-2">
-          Open <span className="font-medium">Review</span> to confirm one receipt. Confirmation is not a new receipt,
-          and it does not change the sale stamp.
+          Open <span className="font-medium">Review</span> to confirm one eligible receipt. Confirmation is not a new
+          receipt, and it does not change the sale stamp. Returned and void sales stay in this list for investigation,
+          with the reason confirmation is blocked and a link to the source sale.
         </p>
         <p className="mt-2 text-xs text-amber-900/80">
           {receiptScope === 'outstanding'
@@ -308,16 +328,25 @@ export default async function MomoConfirmationReviewPage({
         </div>
       </ReportFilterCard>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Payments needing confirmation"
-          value={queryFailed ? '—' : String(list.totalCount)}
+          label="Eligible to confirm"
+          value={queryFailed ? '—' : String(actionability.eligibleCount)}
+          helper="Returned and void receipts are excluded"
+        />
+        <StatCard
+          label="Eligible amount"
+          value={queryFailed ? '—' : formatMoney(actionability.eligibleAmountPence, currency)}
           helper="Not in Money Received yet"
         />
         <StatCard
-          label="Total amount"
-          value={queryFailed ? '—' : formatMoney(list.totalAmountPence, currency)}
-          helper="Sum of listed payment statuses"
+          label="Returned or void"
+          value={queryFailed ? '—' : String(actionability.blockedCount)}
+          helper={
+            queryFailed
+              ? 'Not confirmable'
+              : `${formatMoney(actionability.blockedAmountPence, currency)} stays visible and is not confirmable`
+          }
         />
         <StatCard
           label="Default view"
@@ -330,7 +359,7 @@ export default async function MomoConfirmationReviewPage({
         <p className="text-sm text-slate-600">
           {queryFailed
             ? 'List unavailable.'
-            : `${list.totalCount} matching payment${list.totalCount === 1 ? '' : 's'} · page ${list.page} of ${list.totalPages}.`}
+            : `${list.totalCount} listed payment${list.totalCount === 1 ? '' : 's'}, ${actionability.eligibleCount} eligible to confirm · page ${list.page} of ${list.totalPages}.`}
         </p>
         <MomoConfirmDrawer
           currency={currency}

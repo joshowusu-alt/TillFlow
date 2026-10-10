@@ -11,6 +11,7 @@ describePg('outstanding manual MoMo queue on an isolated PostgreSQL fixture', ()
   let storeId = '';
   let userId = '';
   let paymentId = '';
+  let tillId = '';
   const suffix = `momo-outstanding-${Date.now()}`;
   const receivedAt = new Date('2026-08-01T12:00:00.000Z');
 
@@ -25,7 +26,7 @@ describePg('outstanding manual MoMo queue on an isolated PostgreSQL fixture', ()
     userId = (await prisma.user.create({
       data: { businessId, email: `${suffix}@example.com`, name: 'Owner', role: 'OWNER', passwordHash: 'fixture' },
     })).id;
-    const tillId = (await prisma.till.create({ data: { storeId, name: 'Till' } })).id;
+    tillId = (await prisma.till.create({ data: { storeId, name: 'Till' } })).id;
     const invoice = await prisma.salesInvoice.create({
       data: {
         businessId,
@@ -124,6 +125,102 @@ describePg('outstanding manual MoMo queue on an isolated PostgreSQL fixture', ()
     expect(payment.receivedAt.toISOString()).toBe(receivedAt.toISOString());
     expect(receivableDocumentBalance(invoice).balancePence).toBe(0);
     expect(await prisma.auditLog.count({ where: { businessId, action: 'MOMO_PAYMENT_CONFIRM', entityId: paymentId } })).toBe(1);
+    expect(await prisma.salesPayment.count({ where: { salesInvoiceId: invoice.id } })).toBe(1);
+    expect(await prisma.journalEntry.count({ where: { businessId } })).toBe(journalsBefore);
+  });
+
+  it('blocks returned and void receipts and excludes them from the eligible total', async () => {
+    const { confirmMomoPayment, MomoConfirmError } = await import('@/lib/services/momo-confirmation');
+    const { summarizeMomoConfirmationActionability } = await import('@/lib/reports/momo-confirmation/query');
+    const actor = { userId, userName: 'Owner', userRole: 'OWNER', businessId };
+    for (const paymentStatus of ['RETURNED', 'VOID'] as const) {
+      const invoice = await prisma.salesInvoice.create({
+        data: {
+          businessId,
+          storeId,
+          tillId,
+          cashierUserId: userId,
+          paymentStatus,
+          subtotalPence: 5_200,
+          vatPence: 0,
+          totalPence: 5_200,
+          payments: {
+            create: {
+              method: 'MOBILE_MONEY',
+              amountPence: 5_200,
+              status: 'PENDING_MANUAL',
+              receivedAt: new Date('2026-06-08T19:52:09.608Z'),
+            },
+          },
+        },
+        include: { payments: true },
+      });
+      await expect(
+        confirmMomoPayment({
+          paymentId: invoice.payments[0].id,
+          reference: 'STMT-CLOSED',
+          note: 'Must not confirm a closed sale',
+          actor,
+          authorisedStoreIds: [storeId],
+        }),
+      ).rejects.toBeInstanceOf(MomoConfirmError);
+      const stillPending = await prisma.salesPayment.findUniqueOrThrow({ where: { id: invoice.payments[0].id } });
+      expect(stillPending.status).toBe('PENDING_MANUAL');
+    }
+    const summary = await summarizeMomoConfirmationActionability(prisma, {
+      businessId,
+      branchIds: [storeId],
+      periodStart: new Date('2026-01-01T00:00:00.000Z'),
+      periodEndExclusive: new Date('2026-11-01T00:00:00.000Z'),
+      status: 'PENDING_MANUAL',
+      saleStatus: 'ALL',
+      cashierUserId: 'ALL',
+      receiptScope: 'outstanding',
+    });
+    expect(summary.blockedCount).toBe(2);
+    expect(summary.blockedAmountPence).toBe(10_400);
+    expect(summary.eligibleCount).toBe(0);
+    expect(summary.eligibleAmountPence).toBe(0);
+  });
+
+  it('lets one of two concurrent confirmations win and writes a single audit', async () => {
+    const invoice = await prisma.salesInvoice.create({
+      data: {
+        businessId,
+        storeId,
+        tillId,
+        cashierUserId: userId,
+        paymentStatus: 'PAID',
+        subtotalPence: 4_100,
+        vatPence: 0,
+        totalPence: 4_100,
+        payments: {
+          create: {
+            method: 'MOBILE_MONEY',
+            amountPence: 4_100,
+            status: 'PENDING_MANUAL',
+            receivedAt: new Date('2026-08-02T12:00:00.000Z'),
+          },
+        },
+      },
+      include: { payments: true },
+    });
+    const racedPaymentId = invoice.payments[0].id;
+    const journalsBefore = await prisma.journalEntry.count({ where: { businessId } });
+    const { confirmMomoPayment } = await import('@/lib/services/momo-confirmation');
+    const actor = { userId, userName: 'Owner', userRole: 'OWNER', businessId };
+    const attempt = () =>
+      confirmMomoPayment({
+        paymentId: racedPaymentId,
+        reference: 'STMT-RACE',
+        note: 'Concurrent confirmation attempt',
+        actor,
+        authorisedStoreIds: [storeId],
+      });
+    const [left, right] = await Promise.all([attempt(), attempt()]);
+    expect([left.alreadyConfirmed, right.alreadyConfirmed].sort()).toEqual([false, true]);
+    expect(await prisma.salesPayment.count({ where: { salesInvoiceId: invoice.id, status: 'CONFIRMED' } })).toBe(1);
+    expect(await prisma.auditLog.count({ where: { businessId, action: 'MOMO_PAYMENT_CONFIRM', entityId: racedPaymentId } })).toBe(1);
     expect(await prisma.journalEntry.count({ where: { businessId } })).toBe(journalsBefore);
   });
 });

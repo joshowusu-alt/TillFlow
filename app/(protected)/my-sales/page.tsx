@@ -13,6 +13,7 @@ import {
   summarizePaymentMethods,
 } from '@/lib/services/cashier-my-sales';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
+import { MomoPendingQualification } from '@/components/MomoPendingQualification';
 
 function formatPaymentLabel(method: string) {
   return method.replace(/_/g, ' ');
@@ -63,7 +64,7 @@ export default async function MySalesPage({
         totalPence: true,
         store: { select: { name: true } },
         shift: { select: { till: { select: { name: true } } } },
-        payments: { select: { method: true, amountPence: true } },
+        payments: { select: { method: true, amountPence: true, status: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * DEFAULT_PAGE_SIZE,
@@ -164,8 +165,15 @@ export default async function MySalesPage({
                     }
                     subtitle={sale.store.name}
                     aside={
-                      <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>
-                        {sale.paymentStatus.replace('_', ' ')}
+                      <span className="text-right">
+                        <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>
+                          {sale.paymentStatus.replace('_', ' ')}
+                        </span>
+                        <MomoPendingQualification
+                          invoiceStatus={sale.paymentStatus}
+                          payments={sale.payments}
+                          currency={business.currency}
+                        />
                       </span>
                     }
                   />

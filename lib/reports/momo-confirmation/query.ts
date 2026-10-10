@@ -66,6 +66,61 @@ export function momoConfirmationDateInputValue(
   return scope === 'outstanding' ? '' : value;
 }
 
+const BLOCKED_CONFIRMATION_SALE_STATUSES = ['RETURNED', 'VOID'] as const;
+
+export async function summarizeMomoConfirmationActionability(
+  db: Db,
+  filters: MomoConfirmationFilters,
+): Promise<{
+  eligibleCount: number;
+  eligibleAmountPence: number;
+  blockedCount: number;
+  blockedAmountPence: number;
+}> {
+  const listedWhere = momoConfirmationPaymentWhere(filters);
+  const invoice = (listedWhere.salesInvoice ?? {}) as Prisma.SalesInvoiceWhereInput;
+  const explicit = typeof invoice.paymentStatus === 'string' ? invoice.paymentStatus : null;
+  const listed = await summarizeMomoConfirmationPayments(db, filters);
+
+  if (explicit === 'RETURNED' || explicit === 'VOID') {
+    return {
+      eligibleCount: 0,
+      eligibleAmountPence: 0,
+      blockedCount: listed.totalCount,
+      blockedAmountPence: listed.totalAmountPence,
+    };
+  }
+  if (explicit) {
+    return {
+      eligibleCount: listed.totalCount,
+      eligibleAmountPence: listed.totalAmountPence,
+      blockedCount: 0,
+      blockedAmountPence: 0,
+    };
+  }
+
+  const eligibleWhere: Prisma.SalesPaymentWhereInput = {
+    ...listedWhere,
+    salesInvoice: { ...invoice, paymentStatus: { notIn: [...BLOCKED_CONFIRMATION_SALE_STATUSES] } },
+  };
+  const blockedWhere: Prisma.SalesPaymentWhereInput = {
+    ...listedWhere,
+    salesInvoice: { ...invoice, paymentStatus: { in: [...BLOCKED_CONFIRMATION_SALE_STATUSES] } },
+  };
+  const [eligibleCount, eligibleSum, blockedCount, blockedSum] = await Promise.all([
+    db.salesPayment.count({ where: eligibleWhere }),
+    db.salesPayment.aggregate({ where: eligibleWhere, _sum: { amountPence: true } }),
+    db.salesPayment.count({ where: blockedWhere }),
+    db.salesPayment.aggregate({ where: blockedWhere, _sum: { amountPence: true } }),
+  ]);
+  return {
+    eligibleCount,
+    eligibleAmountPence: eligibleSum._sum.amountPence ?? 0,
+    blockedCount,
+    blockedAmountPence: blockedSum._sum.amountPence ?? 0,
+  };
+}
+
 function mapRow(r: {
   id: string;
   amountPence: number;

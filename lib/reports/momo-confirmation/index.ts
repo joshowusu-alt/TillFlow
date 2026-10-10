@@ -1,9 +1,11 @@
 export type { MomoConfirmationRow, MomoConfirmationFilters, MomoConfirmationListResult } from './types';
 export { MOMO_CONFIRMATION_STATUS } from './types';
+export { momoConfirmationSaleBlockReason } from './block-reason';
 export {
   momoConfirmationPaymentWhere,
   momoConfirmationReceiptScope,
   momoConfirmationDateInputValue,
+  summarizeMomoConfirmationActionability,
   summarizeMomoConfirmationPayments,
   listMomoConfirmationPayments,
   iterMomoConfirmationExportCsvChunks,

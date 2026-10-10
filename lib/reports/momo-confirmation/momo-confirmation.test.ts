@@ -9,6 +9,8 @@ import {
   momoConfirmationPaymentWhere,
   momoConfirmationDateInputValue,
   momoConfirmationReceiptScope,
+  momoConfirmationSaleBlockReason,
+  summarizeMomoConfirmationActionability,
   MOMO_CONFIRMATION_STATUS,
 } from '@/lib/reports/momo-confirmation';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
@@ -253,6 +255,46 @@ describe('MoMo confirmation review — list and export', () => {
     expect(csv).not.toContain('PARTIAL_EXPORT_CAP');
     expect(findMany.mock.calls[0][0].where.salesInvoice.businessId).toBe('biz-1');
     expect(findMany.mock.calls[0][0].where.salesInvoice.storeId).toEqual({ in: ['store-1'] });
+  });
+});
+
+describe('MoMo confirmation review — returned and void receipts', () => {
+  it('explains why returned and void sales cannot be confirmed', () => {
+    expect(momoConfirmationSaleBlockReason('RETURNED')).toMatch(/returned/i);
+    expect(momoConfirmationSaleBlockReason('RETURNED')).toMatch(/do not confirm/i);
+    expect(momoConfirmationSaleBlockReason('VOID')).toMatch(/voided/i);
+    expect(momoConfirmationSaleBlockReason('PAID')).toBeNull();
+  });
+
+  it('keeps returned and void amounts out of the eligible confirmation total', async () => {
+    const count = vi.fn(async ({ where }: { where: { salesInvoice?: { paymentStatus?: unknown } } }) => {
+      const status = where.salesInvoice?.paymentStatus;
+      if (status && typeof status === 'object' && 'in' in status) return 1;
+      if (status && typeof status === 'object' && 'notIn' in status) return 2;
+      return 3;
+    });
+    const aggregate = vi.fn(async ({ where }: { where: { salesInvoice?: { paymentStatus?: unknown } } }) => {
+      const status = where.salesInvoice?.paymentStatus;
+      if (status && typeof status === 'object' && 'in' in status) return { _sum: { amountPence: 5_200 } };
+      return { _sum: { amountPence: 10_000 } };
+    });
+    const summary = await summarizeMomoConfirmationActionability(
+      { salesPayment: { count, aggregate } } as never,
+      {
+        businessId: 'biz-1',
+        branchIds: null,
+        periodStart: new Date('2026-08-01T00:00:00.000Z'),
+        periodEndExclusive: new Date('2026-09-01T00:00:00.000Z'),
+        status: 'PENDING_MANUAL',
+        saleStatus: 'ALL',
+        cashierUserId: 'ALL',
+        receiptScope: 'outstanding',
+      },
+    );
+    expect(summary.eligibleCount).toBe(2);
+    expect(summary.eligibleAmountPence).toBe(10_000);
+    expect(summary.blockedCount).toBe(1);
+    expect(summary.blockedAmountPence).toBe(5_200);
   });
 });
 
