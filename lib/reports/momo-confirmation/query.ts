@@ -41,8 +41,83 @@ export function momoConfirmationPaymentWhere(
 
   return {
     ...statusFilter,
-    receivedAt: { gte: filters.periodStart, lt: filters.periodEndExclusive },
+    ...(filters.receiptScope === 'outstanding'
+      ? {}
+      : { receivedAt: { gte: filters.periodStart, lt: filters.periodEndExclusive } }),
     salesInvoice: branchInvoiceFilter(filters),
+  };
+}
+
+export function momoConfirmationReceiptScope(search: {
+  from?: string;
+  to?: string;
+  queue?: string;
+} | undefined): 'period' | 'outstanding' {
+  if (search?.queue === 'outstanding') return 'outstanding';
+  if (search?.from || search?.to || search?.queue === 'period') return 'period';
+  return 'outstanding';
+}
+
+/** Outstanding view must not submit the 30-day fallback dates, or Apply would hide older receipts. */
+export function momoConfirmationDateInputValue(
+  scope: 'period' | 'outstanding',
+  value: string,
+): string {
+  return scope === 'outstanding' ? '' : value;
+}
+
+const BLOCKED_CONFIRMATION_SALE_STATUSES = ['RETURNED', 'VOID'] as const;
+
+export async function summarizeMomoConfirmationActionability(
+  db: Db,
+  filters: MomoConfirmationFilters,
+): Promise<{
+  eligibleCount: number;
+  eligibleAmountPence: number;
+  blockedCount: number;
+  blockedAmountPence: number;
+}> {
+  const listedWhere = momoConfirmationPaymentWhere(filters);
+  const invoice = (listedWhere.salesInvoice ?? {}) as Prisma.SalesInvoiceWhereInput;
+  const explicit = typeof invoice.paymentStatus === 'string' ? invoice.paymentStatus : null;
+  const listed = await summarizeMomoConfirmationPayments(db, filters);
+
+  if (explicit === 'RETURNED' || explicit === 'VOID') {
+    return {
+      eligibleCount: 0,
+      eligibleAmountPence: 0,
+      blockedCount: listed.totalCount,
+      blockedAmountPence: listed.totalAmountPence,
+    };
+  }
+  if (explicit) {
+    return {
+      eligibleCount: listed.totalCount,
+      eligibleAmountPence: listed.totalAmountPence,
+      blockedCount: 0,
+      blockedAmountPence: 0,
+    };
+  }
+
+  const eligibleWhere: Prisma.SalesPaymentWhereInput = {
+    ...listedWhere,
+    salesInvoice: { ...invoice, paymentStatus: { notIn: [...BLOCKED_CONFIRMATION_SALE_STATUSES] } },
+  };
+  const blockedWhere: Prisma.SalesPaymentWhereInput = {
+    ...listedWhere,
+    salesInvoice: { ...invoice, paymentStatus: { in: [...BLOCKED_CONFIRMATION_SALE_STATUSES] } },
+  };
+  const [eligibleCount, eligibleSum, blockedCount, blockedSum] = await Promise.all([
+    db.salesPayment.count({ where: eligibleWhere }),
+    db.salesPayment.aggregate({ where: eligibleWhere, _sum: { amountPence: true } }),
+    db.salesPayment.count({ where: blockedWhere }),
+    db.salesPayment.aggregate({ where: blockedWhere, _sum: { amountPence: true } }),
+  ]);
+  return {
+    eligibleCount,
+    eligibleAmountPence: eligibleSum._sum.amountPence ?? 0,
+    blockedCount,
+    blockedAmountPence: blockedSum._sum.amountPence ?? 0,
   };
 }
 
@@ -164,6 +239,18 @@ export async function listMomoConfirmationPayments(
       queryError: err instanceof Error ? err.message : 'Query failed',
     };
   }
+}
+
+export async function summarizeMomoConfirmationPayments(
+  db: Db,
+  filters: MomoConfirmationFilters,
+): Promise<{ totalCount: number; totalAmountPence: number }> {
+  const where = momoConfirmationPaymentWhere(filters);
+  const [totalCount, sumAgg] = await Promise.all([
+    db.salesPayment.count({ where }),
+    db.salesPayment.aggregate({ where, _sum: { amountPence: true } }),
+  ]);
+  return { totalCount, totalAmountPence: sumAgg._sum.amountPence ?? 0 };
 }
 
 export async function* iterMomoConfirmationExportCsvChunks(

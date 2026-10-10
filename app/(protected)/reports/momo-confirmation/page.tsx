@@ -19,6 +19,10 @@ import {
   defaultMomoConfirmationStatusFilter,
   listMomoConfirmationCashiers,
   listMomoConfirmationPayments,
+  momoConfirmationDateInputValue,
+  momoConfirmationReceiptScope,
+  summarizeMomoConfirmationActionability,
+  summarizeMomoConfirmationPayments,
   MOMO_CONFIRMATION_STATUS,
 } from '@/lib/reports/momo-confirmation';
 import MomoConfirmDrawer from './MomoConfirmDrawer';
@@ -40,6 +44,7 @@ export default async function MomoConfirmationReviewPage({
     cashierUserId?: string;
     page?: string;
     pageSize?: string;
+    queue?: string;
   };
 }) {
   const opened = await openLiveReport({
@@ -118,6 +123,7 @@ export default async function MomoConfirmationReviewPage({
   const pageSize = Math.min(100, Math.max(1, parseInt(searchParams?.pageSize ?? '25', 10) || 25));
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
   const periodEndExclusive = to;
+  const receiptScope = momoConfirmationReceiptScope(searchParams);
 
   const filters = {
     businessId: access.businessId,
@@ -127,6 +133,7 @@ export default async function MomoConfirmationReviewPage({
     status: statusFilter,
     saleStatus: saleStatusFilter,
     cashierUserId: cashierFilter,
+    receiptScope,
   };
 
   const [list, cashiers] = await Promise.all([
@@ -137,10 +144,49 @@ export default async function MomoConfirmationReviewPage({
   const currency = business.currency;
   const selectedStoreId = access.selectedStoreId;
   const queryFailed = Boolean(list.queryFailed);
+  let actionability = {
+    eligibleCount: list.totalCount,
+    eligibleAmountPence: list.totalAmountPence,
+    blockedCount: 0,
+    blockedAmountPence: 0,
+  };
+  if (!queryFailed) {
+    try {
+      actionability = await summarizeMomoConfirmationActionability(prisma, filters);
+    } catch {
+      actionability = {
+        eligibleCount: list.totalCount,
+        eligibleAmountPence: list.totalAmountPence,
+        blockedCount: 0,
+        blockedAmountPence: 0,
+      };
+    }
+  }
+  let outsideCount = 0;
+  let outsideAmountPence = 0;
+  if (receiptScope === 'period' && !queryFailed) {
+    try {
+      const outstanding = await summarizeMomoConfirmationPayments(prisma, {
+        ...filters,
+        receiptScope: 'outstanding',
+      });
+      outsideCount = Math.max(0, outstanding.totalCount - list.totalCount);
+      outsideAmountPence = Math.max(0, outstanding.totalAmountPence - list.totalAmountPence);
+    } catch {
+      outsideCount = 0;
+      outsideAmountPence = 0;
+    }
+  }
 
   const exportQs = new URLSearchParams({
-    from: fromIso,
-    to: toIso,
+    ...(receiptScope === 'period' ? { from: fromIso, to: toIso } : { queue: 'outstanding' }),
+    storeId: selectedStoreId,
+    status: statusFilter,
+    saleStatus: saleStatusFilter,
+    cashierUserId: cashierFilter,
+  });
+  const outstandingQs = new URLSearchParams({
+    queue: 'outstanding',
     storeId: selectedStoreId,
     status: statusFilter,
     saleStatus: saleStatusFilter,
@@ -180,13 +226,31 @@ export default async function MomoConfirmationReviewPage({
 
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
         <p>
-          These rows are usually recorded as <span className="font-medium">{MOMO_CONFIRMATION_STATUS}</span>{' '}
-          when Mobile Money was taken without a confirmed provider collection. Open <span className="font-medium">Review</span>{' '}
-          to confirm money that was already received — this is not a new receipt.
+          A payment recorded at checkout is not a confirmed receipt. These rows stay{' '}
+          <span className="font-medium">{MOMO_CONFIRMATION_STATUS}</span> until an owner or manager checks that the
+          money arrived. The sale can already say paid because the tender was recorded. Pending receipts stay out of
+          Money Received and do not reduce what customers owe.
+        </p>
+        <p className="mt-2">
+          Open <span className="font-medium">Review</span> to confirm one eligible receipt. Confirmation is not a new
+          receipt, and it does not change the sale stamp. Returned and void sales stay in this list for investigation,
+          with the reason confirmation is blocked and a link to the source sale.
         </p>
         <p className="mt-2 text-xs text-amber-900/80">
-          After confirmation the amount appears in Money Received using the original payment date, not today.
+          {receiptScope === 'outstanding'
+            ? 'This list includes every outstanding receipt, including payments recorded before the usual 30-day report window. Apply a date range only when you want to limit the list.'
+            : 'This list follows the selected dates. After confirmation the amount appears in Money Received on the original payment date, not today.'}
         </p>
+        {receiptScope === 'period' && outsideCount > 0 ? (
+          <p className="mt-2 text-sm">
+            {outsideCount.toLocaleString('en-GH')} receipt{outsideCount === 1 ? '' : 's'} totalling{' '}
+            {formatMoney(outsideAmountPence, currency)} {outsideCount === 1 ? 'was' : 'were'} recorded outside this
+            date range and still need confirmation.{' '}
+            <Link href={`/reports/momo-confirmation?${outstandingQs.toString()}`} className="font-semibold underline">
+              Show every outstanding receipt
+            </Link>
+          </p>
+        ) : null}
       </div>
 
       {queryFailed && (
@@ -214,13 +278,27 @@ export default async function MomoConfirmationReviewPage({
           <label className="label" htmlFor="from">
             From
           </label>
-          <input id="from" className="input" type="date" name="from" defaultValue={fromIso} />
+          <input
+            id="from"
+            key={`from-${receiptScope}-${fromIso}`}
+            className="input"
+            type="date"
+            name="from"
+            defaultValue={momoConfirmationDateInputValue(receiptScope, fromIso)}
+          />
         </div>
         <div>
           <label className="label" htmlFor="to">
             To
           </label>
-          <input id="to" className="input" type="date" name="to" defaultValue={toIso} />
+          <input
+            id="to"
+            key={`to-${receiptScope}-${toIso}`}
+            className="input"
+            type="date"
+            name="to"
+            defaultValue={momoConfirmationDateInputValue(receiptScope, toIso)}
+          />
         </div>
         <div>
           <label className="label" htmlFor="status">
@@ -264,16 +342,25 @@ export default async function MomoConfirmationReviewPage({
         </div>
       </ReportFilterCard>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Payments needing confirmation"
-          value={queryFailed ? '—' : String(list.totalCount)}
+          label="Eligible to confirm"
+          value={queryFailed ? '—' : String(actionability.eligibleCount)}
+          helper="Returned and void receipts are excluded"
+        />
+        <StatCard
+          label="Eligible amount"
+          value={queryFailed ? '—' : formatMoney(actionability.eligibleAmountPence, currency)}
           helper="Not in Money Received yet"
         />
         <StatCard
-          label="Total amount"
-          value={queryFailed ? '—' : formatMoney(list.totalAmountPence, currency)}
-          helper="Sum of listed payment statuses"
+          label="Returned or void"
+          value={queryFailed ? '—' : String(actionability.blockedCount)}
+          helper={
+            queryFailed
+              ? 'Not confirmable'
+              : `${formatMoney(actionability.blockedAmountPence, currency)} stays visible and is not confirmable`
+          }
         />
         <StatCard
           label="Default view"
@@ -286,7 +373,7 @@ export default async function MomoConfirmationReviewPage({
         <p className="text-sm text-slate-600">
           {queryFailed
             ? 'List unavailable.'
-            : `${list.totalCount} matching payment${list.totalCount === 1 ? '' : 's'} · page ${list.page} of ${list.totalPages}.`}
+            : `${list.totalCount} listed payment${list.totalCount === 1 ? '' : 's'}, ${actionability.eligibleCount} eligible to confirm · page ${list.page} of ${list.totalPages}.`}
         </p>
         <MomoConfirmDrawer
           currency={currency}
@@ -320,8 +407,7 @@ export default async function MomoConfirmationReviewPage({
         basePath="/reports/momo-confirmation"
         pageSize={pageSize}
         searchParams={{
-          from: fromIso,
-          to: toIso,
+          ...(receiptScope === 'period' ? { from: fromIso, to: toIso, queue: 'period' } : { queue: 'outstanding' }),
           storeId: selectedStoreId,
           status: statusFilter,
           saleStatus: saleStatusFilter,

@@ -7,6 +7,7 @@ import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/Repor
 import { useToast } from '@/components/ToastProvider';
 import { formatMoney } from '@/lib/format';
 import { confirmMomoPaymentAction } from '@/app/actions/momo-confirmation';
+import { momoConfirmationSaleBlockReason } from '@/lib/reports/momo-confirmation/block-reason';
 
 export type MomoConfirmRowView = {
   paymentId: string;
@@ -150,15 +151,30 @@ export default function MomoConfirmDrawer({
                 <td>
                   <span className="font-medium text-amber-900">{row.status}</span>
                 </td>
-                <td>{row.saleStatus}</td>
+                <td>
+                  <div>{row.saleStatus}</div>
+                  {parentBlocksConfirm(row.saleStatus) ? (
+                    <p className="mt-1 max-w-xs text-xs text-red-800">
+                      {momoConfirmationSaleBlockReason(row.saleStatus)}
+                    </p>
+                  ) : null}
+                </td>
                 <td className="text-right tabular-nums">{formatMoney(row.amountPence, currency)}</td>
                 <td className="text-right">
+                  {parentBlocksConfirm(row.saleStatus) ? (
+                    <a
+                      href={`/sales/${row.salesInvoiceId}`}
+                      className="text-sm font-semibold text-red-800 underline-offset-2 hover:underline"
+                    >
+                      Open sale
+                    </a>
+                  ) : null}
                   <button
                     type="button"
-                    className="btn-secondary px-3 py-1 text-sm"
+                    className="btn-secondary ml-2 px-3 py-1 text-sm"
                     onClick={() => openRow(row)}
                   >
-                    Review
+                    {parentBlocksConfirm(row.saleStatus) ? 'View' : 'Review'}
                   </button>
                 </td>
               </tr>
@@ -259,7 +275,13 @@ export default function MomoConfirmDrawer({
 
             {blocked ? (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
-                This sale was {selected.saleStatus.toLowerCase()}. Review only — do not confirm.
+                <p>{momoConfirmationSaleBlockReason(selected.saleStatus)}</p>
+                <a
+                  href={`/sales/${selected.salesInvoiceId}`}
+                  className="mt-2 inline-block font-semibold underline"
+                >
+                  Open source sale
+                </a>
               </div>
             ) : (
               <div className="space-y-3">

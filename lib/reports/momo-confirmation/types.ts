@@ -49,4 +49,10 @@ export type MomoConfirmationFilters = {
   saleStatus: string | null;
   /** Cashier user id, or null/'ALL'. */
   cashierUserId: string | null;
+  /**
+   * `period` keeps receivedAt inside the selected dates.
+   * `outstanding` lists every still-unconfirmed receipt, including those older than the default report window.
+   * Omitted means `period`, so existing date-scoped callers stay unchanged.
+   */
+  receiptScope?: 'period' | 'outstanding';
 };
