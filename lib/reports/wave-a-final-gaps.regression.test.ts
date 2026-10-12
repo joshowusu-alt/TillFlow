@@ -228,10 +228,13 @@ describe('final Wave A gaps', () => {
     expect(productSum + (data.kpis.unallocatedSalesDifferencePence ?? 0)).toBe(data.kpis.totalSales);
   });
 
-  it('return-service Math.max is a journal reversal, not a published receivable balance', () => {
+  it('journal reversal does not replace the signed published receivable contract', () => {
     const source = readFileSync(join(process.cwd(), 'lib/services/returns.ts'), 'utf8');
     const onboarding = readFileSync(join(process.cwd(), 'app/actions/onboarding.ts'), 'utf8');
-    expect(source).toContain('const arReversal = Math.max(invoice.totalPence - totalPaid, 0)');
+    const invoice = { paymentStatus: 'PAID', totalPence: 10000,
+      payments: [{ status: 'CONFIRMED', amountPence: 12000 }] };
+    expect(receivableDocumentBalance(invoice).balancePence).toBe(-2000);
+    expect(receivableDocumentBalance({ ...invoice, paymentStatus: 'RETURNED' }).balancePence).toBe(0);
     expect(source).toContain('accountCode: ACCOUNT_CODES.ar, creditPence: arReversal');
     expect(source).not.toContain('receivableDocumentBalance');
     expect(onboarding).toContain('prisma.purchaseInvoice.count');
