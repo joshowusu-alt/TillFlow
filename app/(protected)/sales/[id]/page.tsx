@@ -6,6 +6,8 @@ import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
+import { MomoPendingQualification } from '@/components/MomoPendingQualification';
+import { pendingMomoReceipt } from '@/lib/payments/pending-momo-receipt';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +40,14 @@ export default async function SaleDetailPage({ params }: { params: { id: string 
       <div className="card space-y-3 p-5">
         <div className="text-sm text-black/60">{formatDateTime(invoice.createdAt)}</div>
         <div className="text-sm">Customer: {invoice.customer?.name ?? 'Walk-in'}</div>
-        <div className="text-sm">Status: {invoice.paymentStatus}</div>
+        <div className="text-sm">
+          Status: {invoice.paymentStatus}
+          <MomoPendingQualification
+            invoiceStatus={invoice.paymentStatus}
+            payments={invoice.payments}
+            currency={business.currency}
+          />
+        </div>
         <RemainingBalance
           amountPence={invoice.totalPence}
           paidPence={paidPence}
@@ -70,6 +79,12 @@ export default async function SaleDetailPage({ params }: { params: { id: string 
               <span>
                 {displayDocumentNumber('customer_receipt', payment.transactionNumber, payment.id)} ·{' '}
                 {payment.method} · {payment.receiptOrigin ?? 'Historic'}
+                {pendingMomoReceipt({
+                  invoiceStatus: invoice.paymentStatus,
+                  payments: [payment],
+                }).label
+                  ? ' · MoMo confirmation pending'
+                  : ''}
               </span>
               <span className="tabular-nums">{formatMoney(payment.amountPence, business.currency)}</span>
             </li>

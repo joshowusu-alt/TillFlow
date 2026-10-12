@@ -7,6 +7,7 @@ import { openCashDrawer, isCashDrawerEnabled } from '@/lib/hardware';
 import { buildEscPosReceipt, toHexString } from '@/lib/escpos';
 import { ensureQzConnection, printRawEscPos } from '@/lib/qz';
 import { reportPrintEvent } from '@/lib/print-telemetry';
+import { pendingMomoReceipt } from '@/lib/payments/pending-momo-receipt';
 
 type ReceiptClientProps = {
   business: {
@@ -37,10 +38,12 @@ type ReceiptClientProps = {
     discountPence?: number;
     cashReceivedPence?: number;
     changeDuePence?: number;
+    paymentStatus?: string;
   };
   payments: {
     method: string;
     amountPence: number;
+    status?: string | null;
     reference?: string | null;
     network?: string | null;
     payerMsisdn?: string | null;
@@ -85,6 +88,13 @@ export default function ReceiptClient({
     .reduce((sum, payment) => sum + payment.amountPence, 0);
   const transferPaid = payments
     .filter((payment) => payment.method === 'TRANSFER')
+    .reduce((sum, payment) => sum + payment.amountPence, 0);
+  const momoPending = pendingMomoReceipt({
+    invoiceStatus: invoice.paymentStatus ?? (isReturned ? 'RETURNED' : ''),
+    payments,
+  });
+  const momoConfirmedPaid = payments
+    .filter((payment) => payment.method === 'MOBILE_MONEY' && payment.status === 'CONFIRMED')
     .reduce((sum, payment) => sum + payment.amountPence, 0);
   const momoPaid = payments
     .filter((payment) => payment.method === 'MOBILE_MONEY')
@@ -433,10 +443,18 @@ export default function ReceiptClient({
           ) : null}
           {momoPaid > 0 ? (
             <>
-              <div className="flex justify-between">
-                <span>Paid (MoMo)</span>
-                <span>{formatMoney(momoPaid, business.currency)}</span>
-              </div>
+              {momoConfirmedPaid > 0 ? (
+                <div className="flex justify-between">
+                  <span>Paid (MoMo)</span>
+                  <span>{formatMoney(momoConfirmedPaid, business.currency)}</span>
+                </div>
+              ) : null}
+              {momoPending.label ? (
+                <div className="flex justify-between font-medium text-amber-900" data-testid="momo-confirmation-pending">
+                  <span>{momoPending.label}</span>
+                  <span>{formatMoney(momoPending.pendingMomoPence, business.currency)}</span>
+                </div>
+              ) : null}
               {momoPayments.map((payment, index) => (
                 <div
                   key={`${payment.reference ?? 'momo'}-${index}`}

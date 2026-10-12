@@ -48,11 +48,13 @@ export async function GET(request: Request) {
   }
 
   const periodEndExclusive = dateRange.end;
+  const receiptScope = searchParams.get('queue') === 'outstanding' ? 'outstanding' as const : 'period' as const;
   const filters = {
     businessId: access.businessId,
     branchIds: access.branchIds,
     periodStart: dateRange.start,
     periodEndExclusive,
+    receiptScope,
     status:
       statusParam === 'ALL'
         ? 'ALL'
@@ -61,9 +63,7 @@ export async function GET(request: Request) {
     cashierUserId: cashierParam === 'ALL' || !cashierParam ? 'ALL' : cashierParam,
   };
 
-  const filename = `momo-confirmation-${dateRange.start.toISOString().slice(0, 10)}-${dateRange.end
-    .toISOString()
-    .slice(0, 10)}.csv`;
+  const filename = `momo-confirmation-${receiptScope === 'outstanding' ? 'outstanding' : `${dateRange.start.toISOString().slice(0, 10)}-${dateRange.end.toISOString().slice(0, 10)}`}.csv`;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({

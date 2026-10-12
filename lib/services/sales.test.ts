@@ -23,7 +23,8 @@ const {
     customer: { findFirst: vi.fn() },
     account: { findMany: vi.fn() },
     user: { findFirst: vi.fn() },
-    mobileMoneyCollection: { findFirst: vi.fn() },
+    mobileMoneyCollection: { findFirst: vi.fn(), update: vi.fn() },
+    mobileMoneyStatusLog: { create: vi.fn() },
     salesInvoice: { create: vi.fn(), aggregate: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() },
     businessSequence: { create: vi.fn(), update: vi.fn(), upsert: vi.fn() },
     stockMovement: { createMany: vi.fn() },
@@ -243,6 +244,8 @@ beforeEach(() => {
   prismaMock.account.findMany.mockResolvedValue(defaultAccounts);
   prismaMock.customer.findFirst.mockResolvedValue(null);
   prismaMock.mobileMoneyCollection.findFirst.mockResolvedValue(null);
+  prismaMock.mobileMoneyCollection.update.mockResolvedValue({});
+  prismaMock.mobileMoneyStatusLog.create.mockResolvedValue({});
   prismaMock.productUnit.findMany.mockResolvedValue([makeProductUnit()]);
   prismaMock.salesInvoice.findFirst.mockResolvedValue(null);
   prismaMock.businessSequence.create.mockResolvedValue({ nextVal: 1 });
@@ -1666,5 +1669,131 @@ describe('createSale — open till is mandatory regardless of the stored flag', 
 
     expect(prismaMock.salesInvoice.create).not.toHaveBeenCalled();
     expect((prismaMock as any).shift.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('createSale — recorded MoMo is not a confirmed receipt', () => {
+  function createdPayments() {
+    return prismaMock.salesInvoice.create.mock.calls[0][0].data.payments.create as Array<{
+      method: string;
+      amountPence: number;
+      status: string;
+      receiptOrigin: string;
+      collectionId: string | null;
+    }>;
+  }
+
+  it('stamps the invoice paid when manual MoMo covers the total, and leaves the receipt pending', async () => {
+    await createSale(makeBaseInput({
+      paymentStatus: 'PAID',
+      payments: [{ method: 'MOBILE_MONEY', amountPence: 500, network: 'MTN' }],
+    }));
+
+    const invoice = prismaMock.salesInvoice.create.mock.calls[0][0].data;
+    expect(invoice.paymentStatus).toBe('PAID');
+    expect(invoice.customerId).toBeNull();
+    expect(createdPayments()).toEqual([
+      expect.objectContaining({
+        method: 'MOBILE_MONEY',
+        amountPence: 500,
+        status: 'PENDING_MANUAL',
+        receiptOrigin: 'RECEIVED_AT_SALE',
+        collectionId: null,
+      }),
+    ]);
+    expect(postJournalEntryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('confirms MoMo only when a provider collection is already confirmed', async () => {
+    prismaMock.mobileMoneyCollection.findFirst.mockResolvedValue({
+      id: 'col-1',
+      salesInvoiceId: null,
+      amountPence: 500,
+      providerReference: 'ref-1',
+      providerTransactionId: 'txn-1',
+      network: 'MTN',
+      payerMsisdn: '0000000000',
+      provider: 'MTN',
+    });
+    prismaMock.mobileMoneyCollection.update.mockResolvedValue({});
+
+    await createSale(makeBaseInput({
+      paymentStatus: 'PAID',
+      momoCollectionId: 'col-1',
+      payments: [{ method: 'MOBILE_MONEY', amountPence: 500 }],
+    }));
+
+    expect(createdPayments()[0]).toEqual(expect.objectContaining({
+      status: 'CONFIRMED',
+      collectionId: 'col-1',
+      reference: 'txn-1',
+    }));
+  });
+
+  it('keeps cash confirmed and manual MoMo pending on a mixed tender', async () => {
+    await createSale(makeBaseInput({
+      paymentStatus: 'PAID',
+      payments: [
+        { method: 'CASH', amountPence: 200 },
+        { method: 'MOBILE_MONEY', amountPence: 300 },
+      ],
+    }));
+
+    const payments = createdPayments();
+    expect(payments).toEqual(expect.arrayContaining([
+      expect.objectContaining({ method: 'CASH', amountPence: 200, status: 'CONFIRMED' }),
+      expect.objectContaining({ method: 'MOBILE_MONEY', amountPence: 300, status: 'PENDING_MANUAL' }),
+    ]));
+    expect(prismaMock.salesInvoice.create.mock.calls[0][0].data.paymentStatus).toBe('PAID');
+  });
+
+  it('requires a customer for a partial manual MoMo tender and does not treat it as paid', async () => {
+    prismaMock.customer.findFirst.mockResolvedValue({
+      id: 'cust-1',
+      storeId: STORE_ID,
+      creditLimitPence: 0,
+      loyaltyPointsBalance: 0,
+    });
+
+    await createSale(makeBaseInput({
+      paymentStatus: 'PART_PAID',
+      customerId: 'cust-1',
+      payments: [{ method: 'MOBILE_MONEY', amountPence: 200 }],
+    }));
+
+    const invoice = prismaMock.salesInvoice.create.mock.calls[0][0].data;
+    expect(invoice.paymentStatus).toBe('PART_PAID');
+    expect(invoice.customerId).toBe('cust-1');
+    expect(createdPayments()[0].status).toBe('PENDING_MANUAL');
+  });
+
+  it('replays an offline manual MoMo sale as pending on the captured shift', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-later', expectedCashPence: 0 });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public';
+    prismaMock.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) => {
+      const sql = Array.isArray(strings) ? strings.join(' ') : String(strings ?? '');
+      if (sql.includes('"openKey"') && sql.includes('FOR UPDATE')) {
+        return [{ id: 'shift-original', status: 'CLOSED', openKey: null }];
+      }
+      return [{ id: 'shift-later' }];
+    });
+
+    try {
+      await createSale(makeBaseInput({
+        capturedShiftId: 'shift-original',
+        externalRef: 'OFFLINE_SYNC:momo-1',
+        payments: [{ method: 'MOBILE_MONEY', amountPence: 500 }],
+      }));
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    const invoice = prismaMock.salesInvoice.create.mock.calls[0][0].data;
+    expect(invoice.saleSource).toBe('LATE_OFFLINE');
+    expect(invoice.paymentStatus).toBe('PAID');
+    expect(invoice.payments.create[0].status).toBe('PENDING_MANUAL');
+    expect(postJournalEntryMock).toHaveBeenCalledTimes(1);
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
   });
 });

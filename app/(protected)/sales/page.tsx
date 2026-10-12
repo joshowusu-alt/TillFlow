@@ -10,6 +10,7 @@ import { getBusinessStores } from '@/lib/services/stores';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { localDateInstant } from '@/lib/reports/reporting-clock';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
+import { MomoPendingQualification } from '@/components/MomoPendingQualification';
 
 export default async function SalesPage({
   searchParams,
@@ -62,7 +63,7 @@ export default async function SalesPage({
         store: { select: { name: true } },
         customer: { select: { name: true } },
         salesReturn: { select: { id: true } },
-        payments: { select: { amountPence: true } },
+        payments: { select: { method: true, amountPence: true, status: true } },
         _count: { select: { lines: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -177,7 +178,16 @@ export default async function SalesPage({
                 <DataCardHeader
                   title={<Link href={`/receipts/${sale.id}`} className="font-mono text-primary hover:underline">{receiptRef}</Link>}
                   subtitle={sale.customer?.name ?? 'Walk-in'}
-                  aside={<span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>}
+                  aside={
+                    <span className="text-right">
+                      <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>
+                      <MomoPendingQualification
+                        invoiceStatus={sale.paymentStatus}
+                        payments={sale.payments}
+                        currency={business.currency}
+                      />
+                    </span>
+                  }
                 />
                 <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                   <DataCardField label="Date" value={<span className="text-black/65">{sale.createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} {sale.createdAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>} />
@@ -280,6 +290,11 @@ export default async function SalesPage({
                     <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.customer?.name ?? 'Walk-in'}</td>
                     <td className="px-3 py-3">
                       <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>
+                      <MomoPendingQualification
+                        invoiceStatus={sale.paymentStatus}
+                        payments={sale.payments}
+                        currency={business.currency}
+                      />
                     </td>
                     <td className="px-3 py-3 text-sm font-semibold">
                       {formatMoney(sale.totalPence, business.currency)}
