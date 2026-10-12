@@ -1,5 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import { isPendingMomo, receiptLedgerFields, settledReceiptSplit } from '@/lib/payments/receipt-ledger';
+import { lockSalesInvoiceForUpdate } from './money-idempotency';
 import { prisma } from '@/lib/prisma';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
@@ -864,6 +866,9 @@ async function createSaleImpl(input: CreateSaleInput) {
     Math.round(input.changeDuePence ?? Math.max(cashReceivedPence - cashPence, 0)),
   );
 
+  for (const payment of payments) {
+    if (payment.method !== 'MOBILE_MONEY') payment.status = 'CONFIRMED';
+  }
   // When a confirmed MoMo collection exists, attach it; otherwise treat
   // MoMo as a manually-recorded payment (staff verify the receipt visually
   // and end-of-day reconciliation catches discrepancies).
@@ -899,7 +904,7 @@ async function createSaleImpl(input: CreateSaleInput) {
     // catches any discrepancies.
     for (const payment of payments) {
       if (payment.method !== 'MOBILE_MONEY') continue;
-      payment.status = payment.status ?? 'PENDING_MANUAL';
+      payment.status = 'PENDING_MANUAL';
     }
   }
 
@@ -1031,6 +1036,7 @@ async function createSaleImpl(input: CreateSaleInput) {
           payerMsisdn: payment.payerMsisdn ?? null,
           provider: payment.provider ?? null,
           status: payment.status ?? 'CONFIRMED',
+          ...receiptLedgerFields(payment),
           collectionId: payment.collectionId ?? null,
           // Checkout / original sale workflow — including split-tender components
           // and part-paid deposits created with the invoice.
@@ -1074,6 +1080,7 @@ async function createSaleImpl(input: CreateSaleInput) {
                     payerMsisdn: payment.payerMsisdn ?? null,
                     provider: payment.provider ?? null,
                     status: payment.status ?? 'CONFIRMED',
+                    ...receiptLedgerFields(payment),
                     collectionId: payment.collectionId ?? null,
                     receiptOrigin: RECEIPT_ORIGIN.RECEIVED_AT_SALE,
                     businessId: input.businessId,
@@ -1357,7 +1364,7 @@ async function createSaleImpl(input: CreateSaleInput) {
     }
 
     // Journal entry inside tx — accounting must be atomic with the sale
-    const paymentSplit = splitPayments(payments);
+    const paymentSplit = settledReceiptSplit(payments);
     const arAmount = total - paymentSplit.totalPence;
     const journalLines: JournalLine[] = [
       ...debitCashBankLines(paymentSplit),
@@ -1499,6 +1506,9 @@ export async function amendSale(input: AmendSaleInput) {
 
   if (!invoice) throw new Error('Sale not found');
   if (invoice.salesReturn) throw new Error('Cannot amend a returned or voided sale');
+  if (invoice.payments.some(isPendingMomo)) {
+    throw new UserError('Reconcile pending MoMo receipts before amending this sale.');
+  }
   if (['RETURNED', 'VOID'].includes(invoice.paymentStatus)) {
     throw new Error('Cannot amend a returned or voided sale');
   }
@@ -1617,6 +1627,21 @@ export async function amendSale(input: AmendSaleInput) {
   const newPaymentStatus = derivePaymentStatus(newTotal, effectivePaid);
 
   const result = await prisma.$transaction(async (tx) => {
+    await lockSalesInvoiceForUpdate(tx as any, input.businessId, invoice.id);
+    const current = await tx.salesInvoice.findFirst({
+      where: { id: invoice.id, businessId: input.businessId },
+      select: { paymentStatus: true, totalPence: true,
+        lines: { select: { id: true, qtyBase: true, lineTotalPence: true } },
+        payments: { select: { id: true, method: true, status: true, amountPence: true } } },
+    });
+    if (!current || ['RETURNED', 'VOID'].includes(current.paymentStatus)
+      || current.payments.some(isPendingMomo)
+      || current.totalPence !== invoice.totalPence || current.lines.length !== invoice.lines.length
+      || current.lines.some(line => !invoice.lines.some(old => old.id === line.id && old.qtyBase === line.qtyBase && old.lineTotalPence === line.lineTotalPence))
+      || current.payments.length !== invoice.payments.length
+      || current.payments.some(payment => !invoice.payments.some(old => old.id === payment.id && old.amountPence === payment.amountPence && old.status === payment.status))) {
+      throw new UserError('Sale changed or has pending MoMo. Refresh and reconcile it before amending.');
+    }
     // Re-read inventory inside transaction to prevent TOCTOU race
     const inventoryMap = await fetchInventoryMap(invoice.storeId, Array.from(allAffectedProductIds), tx);
 
@@ -1752,6 +1777,7 @@ export async function amendSale(input: AmendSaleInput) {
             salesInvoiceId: invoice.id,
             method: refundMethod,
             amountPence: -refundAmount, // negative = refund
+            ...receiptLedgerFields({ method: refundMethod, status: 'CONFIRMED' }),
             branchId: invoice.branchId ?? null,
             // Amendment refund: direction is amount sign. Origin is UNCLASSIFIED —
             // the amend workflow does not establish sale-time vs later-collection.
@@ -1790,6 +1816,8 @@ export async function amendSale(input: AmendSaleInput) {
             salesInvoiceId: invoice.id,
             method: additionalPaymentMethod,
             amountPence: additionalPaymentNeeded,
+            status: additionalPaymentMethod === 'MOBILE_MONEY' ? 'PENDING_MANUAL' : 'CONFIRMED',
+            ...receiptLedgerFields({ method: additionalPaymentMethod, status: additionalPaymentMethod === 'MOBILE_MONEY' ? 'PENDING_MANUAL' : 'CONFIRMED' }),
             branchId: invoice.branchId ?? null,
             // Amendment add: sale already existed; action is amend, not checkout or
             // debtor collection — persist UNCLASSIFIED rather than inventing meaning.
@@ -1873,7 +1901,7 @@ export async function amendSale(input: AmendSaleInput) {
       journalLines.push(
         additionalPaymentMethod === 'CASH'
           ? { accountCode: ACCOUNT_CODES.cash, debitPence: additionalPaymentNeeded }
-          : { accountCode: ACCOUNT_CODES.bank, debitPence: additionalPaymentNeeded }
+          : { accountCode: additionalPaymentMethod === 'MOBILE_MONEY' ? ACCOUNT_CODES.ar : ACCOUNT_CODES.bank, debitPence: additionalPaymentNeeded }
       );
     }
     // Reverse order-level discount that is cleared by the amendment (new discount is always 0)

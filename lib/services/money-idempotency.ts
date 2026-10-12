@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { UserError } from '@/lib/action-utils';
-import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
+import { isPostgresDatabaseUrl, isPostgresRuntimeEnv, isSqliteDatabaseUrl } from '@/lib/database-runtime';
 
 export const MONEY_IDEMPOTENCY_ERROR = {
   IDEMPOTENCY_REQUIRED: 'IDEMPOTENCY_REQUIRED',
@@ -188,7 +188,8 @@ export function isPrismaUniqueConstraintOn(error: unknown, fields: string[]): bo
 }
 
 export function canUseSelectForUpdate(tx: { $queryRaw?: unknown }): boolean {
-  return typeof tx?.$queryRaw === 'function' && isPostgresDatabaseUrl(process.env.DATABASE_URL);
+  return typeof tx?.$queryRaw === 'function' && !isSqliteDatabaseUrl(process.env.DATABASE_URL)
+    && (isPostgresDatabaseUrl(process.env.DATABASE_URL) || isPostgresRuntimeEnv());
 }
 
 export async function lockSalesInvoiceForUpdate(

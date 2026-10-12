@@ -4,6 +4,9 @@ import type { Role } from '@/lib/auth';
 import { isUnverifiedLegacyStatus } from '@/lib/reports/money-received/compute';
 import { CONFIRMED_PAYMENT_STATUS } from '@/lib/reports/money-received/types';
 import { MOMO_CONFIRMATION_STATUS } from '@/lib/reports/momo-confirmation/types';
+import { postJournalEntry } from '@/lib/accounting';
+import { RECEIPT_LEDGER_V1, pendingMomoConfirmationLines } from '@/lib/payments/receipt-ledger';
+import { lockSalesInvoiceForUpdate } from './money-idempotency';
 
 const CONFIRM_ROLES: readonly Role[] = ['OWNER', 'MANAGER'];
 const BLOCKED_PARENT_SALE_STATUSES = new Set(['RETURNED', 'VOID']);
@@ -65,6 +68,8 @@ const paymentSelect = {
   receivedAt: true,
   reference: true,
   receiptOrigin: true,
+  ledgerTreatment: true,
+  confirmedAt: true,
   collectionId: true,
   branchId: true,
   network: true,
@@ -120,8 +125,9 @@ function toJson(value: unknown): string {
 
 /**
  * Confirm a stuck manual MoMo payment (PENDING_MANUAL / unclassified).
- * Reporting-gate only: status → CONFIRMED, optional empty-reference fill, transactional AuditLog.
- * Does not change receivedAt, receiptOrigin, invoice status, GL, or cash drawer.
+ * V1 receipts move AR to Bank atomically with confirmation. Legacy NULL treatment
+ * keeps its previous posting and never debits Bank a second time.
+ * receivedAt and the invoice stamp remain unchanged; confirmedAt dates the GL transfer.
  */
 export async function confirmMomoPayment(
   input: ConfirmMomoPaymentInput,
@@ -136,7 +142,7 @@ export async function confirmMomoPayment(
   const evidence = assertEvidence(input.reference, input.note);
 
   return prisma.$transaction(async (tx) => {
-    const payment = await tx.salesPayment.findUnique({
+    let payment = await tx.salesPayment.findUnique({
       where: { id: paymentId },
       select: paymentSelect,
     });
@@ -157,6 +163,15 @@ export async function confirmMomoPayment(
       throw new MomoConfirmError('METHOD');
     }
 
+    await lockSalesInvoiceForUpdate(tx as any, input.actor.businessId, payment.salesInvoiceId);
+    payment = await tx.salesPayment.findUnique({ where: { id: payment.id }, select: paymentSelect });
+    if (!payment) throw new MomoConfirmError('NOT_FOUND');
+    if (payment.salesInvoice.businessId !== input.actor.businessId) throw new MomoConfirmError('TENANT');
+    if (!input.authorisedStoreIds.includes(payment.salesInvoice.storeId)) throw new MomoConfirmError('BRANCH');
+    if (BLOCKED_PARENT_SALE_STATUSES.has(payment.salesInvoice.paymentStatus)) {
+      throw new MomoConfirmError('PARENT_RETURNED_VOID');
+    }
+
     if (payment.status === CONFIRMED_PAYMENT_STATUS) {
       return {
         paymentId: payment.id,
@@ -172,10 +187,6 @@ export async function confirmMomoPayment(
       throw new MomoConfirmError('STATUS');
     }
 
-    if (BLOCKED_PARENT_SALE_STATUSES.has(payment.salesInvoice.paymentStatus)) {
-      throw new MomoConfirmError('PARENT_RETURNED_VOID');
-    }
-
     if (payment.collection?.status === PROVIDER_CONFIRMED_COLLECTION) {
       throw new MomoConfirmError('PROVIDER_CONFIRMED');
     }
@@ -188,6 +199,7 @@ export async function confirmMomoPayment(
       where: { id: payment.id, status: payment.status },
       data: {
         status: CONFIRMED_PAYMENT_STATUS,
+        confirmedAt,
         ...(shouldFillReference ? { reference: evidence.reference } : {}),
       },
     });
@@ -207,6 +219,20 @@ export async function confirmMomoPayment(
           reference: raced.reference,
         };
       }
+      throw new MomoConfirmError('STATUS');
+    }
+
+    if (payment.ledgerTreatment === RECEIPT_LEDGER_V1) {
+      await postJournalEntry({
+        businessId: input.actor.businessId,
+        description: 'MoMo receipt confirmed',
+        referenceType: 'MOMO_PAYMENT_CONFIRM',
+        referenceId: payment.id,
+        entryDate: confirmedAt,
+        lines: pendingMomoConfirmationLines(payment.amountPence),
+        prismaClient: tx as any,
+      });
+    } else if (payment.ledgerTreatment != null) {
       throw new MomoConfirmError('STATUS');
     }
 
@@ -247,6 +273,7 @@ export async function confirmMomoPayment(
           originalReceivedAt: payment.receivedAt.toISOString(),
           saleStatus: payment.salesInvoice.paymentStatus,
           receiptOrigin: payment.receiptOrigin,
+          ledgerTreatment: payment.ledgerTreatment,
           collectionId: payment.collectionId,
         }),
         branchId: payment.branchId ?? payment.salesInvoice.storeId,
