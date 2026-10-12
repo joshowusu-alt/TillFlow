@@ -147,6 +147,7 @@ jobs:
 
       - name: Checkout, shift, and payment concurrency (Postgres)
         env:
+          TILLFLOW_INCLUDE_PG_TESTS: '1'
           TZ: Africa/Accra
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
           POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
@@ -154,6 +155,7 @@ jobs:
         run: |
           set -euo pipefail
           files=(
+            lib/services/receipt-ledger.pg.test.ts
             lib/services/checkout-shift-cashdrawer-rtx.test.ts
             lib/services/payments-concurrency.test.ts
             lib/services/purchases-concurrency.test.ts

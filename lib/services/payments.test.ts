@@ -658,14 +658,10 @@ describe('payments service', () => {
 
     expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
     expect(prismaMock.shift.findFirst).not.toHaveBeenCalled();
-    const journalLines = postJournalEntryMock.mock.calls[0][0].lines;
-    expect(journalLines).toEqual(
-      expect.arrayContaining([
-        { accountCode: '1010', debitPence: 200000 },
-        { accountCode: '1100', creditPence: 200000 },
-      ])
-    );
-    expect(journalLines.some((line: any) => line.accountCode === '4000')).toBe(false);
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
+    expect(prismaMock.salesPayment.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'PENDING_MANUAL', ledgerTreatment: 'CONFIRMED_RECEIPTS_AR_V1' }),
+    }));
   });
 
   it('replays an identical customer receipt without additional financial effects', async () => {

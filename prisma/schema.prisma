@@ -1379,6 +1379,9 @@ model SalesPayment {
   // New write paths must persist RECEIVED_AT_SALE | LATER_CREDIT_COLLECTION | UNCLASSIFIED.
   // See lib/payments/receipt-origin.ts. Do not infer from timestamps.
   receiptOrigin  String?
+  // NULL is legacy posting treatment; never infer it from receipt dates.
+  ledgerTreatment String?
+  confirmedAt DateTime?
   collectionId   String?
   branchId       String?
   qaTag          String?

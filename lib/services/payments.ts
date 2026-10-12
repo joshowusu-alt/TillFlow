@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { receiptLedgerFields, settledReceiptSplit } from '@/lib/payments/receipt-ledger';
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import {
@@ -242,6 +243,10 @@ async function recordCustomerPaymentImpl(
   if (!invoiceBase) throw new Error('Invoice not found');
 
   const split = splitPayments(newPayments);
+  const settledSplit = settledReceiptSplit(newPayments.map((payment) => ({
+    ...payment,
+    status: payment.method === 'MOBILE_MONEY' ? 'PENDING_MANUAL' : 'CONFIRMED',
+  })));
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -305,6 +310,8 @@ async function recordCustomerPaymentImpl(
             businessId,
             method: payment.method,
             amountPence: payment.amountPence,
+            status: payment.method === 'MOBILE_MONEY' ? 'PENDING_MANUAL' : 'CONFIRMED',
+            ...receiptLedgerFields({ method: payment.method, status: payment.method === 'MOBILE_MONEY' ? 'PENDING_MANUAL' : 'CONFIRMED' }),
             reference: payment.reference ?? null,
             receiptOrigin: RECEIPT_ORIGIN.LATER_CREDIT_COLLECTION,
             transactionNumber,
@@ -346,14 +353,14 @@ async function recordCustomerPaymentImpl(
         include: { payments: true },
       });
 
-      await postJournalEntry({
+      if (settledSplit.totalPence > 0) await postJournalEntry({
         businessId,
         description: `Customer receipt ${invoice.id}`,
         referenceType: 'CUSTOMER_RECEIPT',
         referenceId: invoice.id,
         lines: [
-          ...debitCashBankLines(split),
-          { accountCode: ACCOUNT_CODES.ar, creditPence: split.totalPence },
+          ...debitCashBankLines(settledSplit),
+          { accountCode: ACCOUNT_CODES.ar, creditPence: settledSplit.totalPence },
         ].filter(Boolean) as JournalLine[],
         prismaClient: tx as any,
       });

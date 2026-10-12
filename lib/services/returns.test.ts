@@ -56,6 +56,8 @@ const {
     till: { findFirst: vi.fn() },
     shift: { findFirst: vi.fn() },
     stockMovement: { createMany: vi.fn() },
+    salesPayment: { updateMany: vi.fn() },
+    journalEntry: { findMany: vi.fn() },
     $transaction: vi.fn(),
   };
 
@@ -180,6 +182,12 @@ function setupSuccessfulMocks(invoice = makeInvoice()) {
   prismaMock.salesReturn.create.mockResolvedValue(CREATED_RETURN);
   prismaMock.salesInvoice.update.mockResolvedValue({});
   prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
+  prismaMock.journalEntry.findMany.mockResolvedValue([{ lines: [{
+    account: { code: '1010' },
+    debitPence: (invoice.payments as { method: string; amountPence: number; status?: string; ledgerTreatment?: string }[])
+      .filter(p => p.method !== 'CASH' && !(p.ledgerTreatment === 'CONFIRMED_RECEIPTS_AR_V1' && p.status !== 'CONFIRMED'))
+      .reduce((sum, p) => sum + p.amountPence, 0), creditPence: 0,
+  }] }]);
   mockFetchInventoryMap.mockResolvedValue(
     new Map([['prod-1', { qtyOnHandBase: 10, avgCostBasePence: 1000 }]])
   );
@@ -195,6 +203,33 @@ function setupSuccessfulMocks(invoice = makeInvoice()) {
 describe('createSalesReturn', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it.each([
+    ['pending MoMo', [{ method: 'MOBILE_MONEY', amountPence: 5200, status: 'PENDING_MANUAL' }]],
+    ['confirmed MoMo', [{ method: 'MOBILE_MONEY', amountPence: 5200, status: 'CONFIRMED' }]],
+    ['cash', [{ method: 'CASH', amountPence: 5200, status: 'CONFIRMED' }]],
+    ['mixed', [{ method: 'CASH', amountPence: 2000, status: 'CONFIRMED' }, { method: 'MOBILE_MONEY', amountPence: 3200, status: 'PENDING_MANUAL' }]],
+    ['new pending MoMo', [{ method: 'MOBILE_MONEY', amountPence: 5200, status: 'PENDING_MANUAL', ledgerTreatment: 'CONFIRMED_RECEIPTS_AR_V1' }]],
+  ])('fully tendered %s VOID satisfies the journal balance contract', async (_label, payments) => {
+    setupSuccessfulMocks(makeInvoice({
+      totalPence: 5200,
+      subtotalPence: 5200,
+      payments,
+    }));
+    mockPostJournalEntry.mockImplementationOnce(async ({ lines }) => {
+      const debit = lines.reduce((sum: number, line: { debitPence?: number }) => sum + (line.debitPence ?? 0), 0);
+      const credit = lines.reduce((sum: number, line: { creditPence?: number }) => sum + (line.creditPence ?? 0), 0);
+      if (debit !== credit) throw new Error(`Unbalanced journal entry: ${debit} != ${credit}`);
+    });
+    await createSalesReturn(makeInput({ type: 'VOID' }));
+    const lines = mockPostJournalEntry.mock.calls[0][0].lines;
+    const credits = lines.reduce((sum: number, line: { creditPence?: number }) => sum + (line.creditPence ?? 0), 0);
+    expect(credits).toBe(7200);
+    if (_label === 'new pending MoMo') {
+      expect(lines).toContainEqual({ accountCode: '1100', creditPence: 5200 });
+      expect(lines.some((line: { accountCode: string }) => line.accountCode === '1010')).toBe(false);
+    }
   });
 
   it('1. full paid RETURN — SalesReturn.create called with correct refundAmountPence', async () => {
@@ -214,6 +249,14 @@ describe('createSalesReturn', () => {
     expect(mockPostJournalEntry).toHaveBeenCalledTimes(1);
   });
 
+  it('refuses a mixed confirmed-tender void before changing records', async () => {
+    setupSuccessfulMocks(makeInvoice({ totalPence: 5200, subtotalPence: 5200,
+      payments: [{ method: 'CASH', amountPence: 2000 }, { method: 'CARD', amountPence: 3200 }] }));
+    await expect(createSalesReturn(makeInput({ type: 'VOID' }))).rejects.toThrow('mixed confirmed tender');
+    expect(prismaMock.salesReturn.create).not.toHaveBeenCalled();
+    expect(mockPostJournalEntry).not.toHaveBeenCalled();
+  });
+
   it('1b. full paid RETURN — inventory upserted with original qty restored', async () => {
     setupSuccessfulMocks();
 
@@ -229,7 +272,7 @@ describe('createSalesReturn', () => {
     );
   });
 
-  it('2. VOID — refundAmountPence is 0 and no cash drawer entry recorded', async () => {
+  it('2. cash VOID records the actual refund and drawer reversal', async () => {
     setupSuccessfulMocks();
 
     await createSalesReturn(makeInput({ type: 'VOID' }));
@@ -237,13 +280,13 @@ describe('createSalesReturn', () => {
     expect(prismaMock.salesReturn.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          refundAmountPence: 0,
-          refundMethod: null,
+          refundAmountPence: 5000,
+          refundMethod: 'CASH',
           type: 'VOID',
         }),
       })
     );
-    expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
+    expect(mockRecordCashDrawerEntryTx).toHaveBeenCalledWith(prismaMock, expect.objectContaining({ amountPence: -5000 }));
   });
 
   it('3. partial refund — capped at totalPaid when requested amount exceeds it', async () => {

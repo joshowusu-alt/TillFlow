@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { RECEIPT_LEDGER_V1, isPendingMomo } from '@/lib/payments/receipt-ledger';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { UserError } from '@/lib/action-utils';
 import { type JournalLine } from './shared';
@@ -9,7 +10,7 @@ import {
   upsertInventoryBalance
 } from './shared';
 import { getOpenCashShiftForPayment, recordCashDrawerEntryTx } from './cash-drawer';
-import { assertMoneyMovementTenantChain } from './money-idempotency';
+import { assertMoneyMovementTenantChain, lockSalesInvoiceForUpdate } from './money-idempotency';
 import { detectVoidFrequencyRisk } from './risk-monitor';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
@@ -115,22 +116,52 @@ async function createSalesReturnImpl(input: {
   });
   if (existingReturn) throw new Error('Sale already returned');
 
-  const paidByMethod = summarisePayments(invoice.payments);
-
-  const totalPaid = paidByMethod.total;
-  const refundAmount =
-    input.type === 'VOID'
-      ? 0
-      : Math.min(input.refundAmountPence ?? totalPaid, totalPaid);
-
-  // For credit/part-paid sales the AR reversal handles the unpaid portion separately;
-  // refundAmount is already capped at totalPaid above, so no further guard needed.
-  const arReversal = Math.max(invoice.totalPence - totalPaid, 0);
-  const refundMethod = input.type === 'RETURN' ? input.refundMethod ?? 'CASH' : null;
-
-  const qtyByProduct = buildQtyByProductMap(invoice.lines);
-
+  const invoiceId = invoice.id;
   const result = await prisma.$transaction(async (tx) => {
+    await lockSalesInvoiceForUpdate(tx as any, input.businessId, invoiceId);
+    const invoice = await tx.salesInvoice.findFirst({
+      where: { id: invoiceId, businessId: input.businessId },
+      include: { business: true, store: true, payments: true, lines: { include: { product: true } } },
+    });
+    if (!invoice || ['RETURNED', 'VOID'].includes(invoice.paymentStatus)) throw new UserError('Sale already returned or voided');
+    const pending = invoice.payments.filter(isPendingMomo);
+    if (pending.some(p => p.ledgerTreatment != null && p.ledgerTreatment !== RECEIPT_LEDGER_V1)) {
+      throw new UserError('Receipt posting treatment requires reconciliation.');
+    }
+    const settled = invoice.payments.filter(p => !isPendingMomo(p));
+    const totalPaid = summarisePayments(settled).total;
+    const pendingTotal = pending.reduce((sum, p) => sum + p.amountPence, 0);
+    const legacyPending = pending.filter(p => p.ledgerTreatment == null).reduce((sum, p) => sum + p.amountPence, 0);
+    if (legacyPending > 0) {
+      // Legacy receipt rows lack a posting discriminator. Require matching original
+      // ledger evidence before reversing Bank; never invent an historical debit.
+      const originalEntries = await tx.journalEntry.findMany({
+        where: { businessId: input.businessId, referenceId: { in: [invoice.id, ...invoice.payments.map(p => p.id)] },
+          referenceType: { in: ['SALES_INVOICE', 'CUSTOMER_RECEIPT', 'MOMO_PAYMENT_CONFIRM'] } },
+        include: { lines: { include: { account: true } } },
+      });
+      const bookedBank = originalEntries.flatMap(entry => entry.lines)
+        .filter(line => line.account.code === ACCOUNT_CODES.bank)
+        .reduce((sum, line) => sum + line.debitPence - line.creditPence, 0);
+      const expectedBank = legacyPending + settled.filter(p => p.method !== 'CASH')
+        .reduce((sum, p) => sum + p.amountPence, 0);
+      if (bookedBank !== expectedBank) {
+        throw new UserError('Legacy Bank postings require reconciliation before reversing this sale.');
+      }
+    }
+    const tenderMethods = [...new Set(settled.filter(p => p.amountPence > 0).map(p => p.method))];
+    if (input.type === 'VOID' && tenderMethods.length > 1) {
+      throw new UserError('Use a return with an explicit refund method for a sale with mixed confirmed tender.');
+    }
+    const refundAmount = input.type === 'VOID' ? totalPaid : Math.min(input.refundAmountPence ?? totalPaid, totalPaid);
+    if (refundAmount < 0 || refundAmount !== totalPaid || totalPaid + pendingTotal > invoice.totalPence) {
+      throw new UserError('A full-sale reversal must refund confirmed receipts in full. Reconcile partial refunds separately.');
+    }
+    const refundMethod = input.type === 'VOID'
+      ? (tenderMethods[0] ?? null)
+      : input.refundMethod ?? 'CASH';
+    const arReversal = invoice.totalPence - totalPaid - legacyPending;
+    const qtyByProduct = buildQtyByProductMap(invoice.lines);
     // Re-read inventory inside transaction to prevent TOCTOU race
     const inventoryMap = await fetchInventoryMap(invoice.storeId, Array.from(qtyByProduct.keys()), tx);
     const avgCostMap = buildAvgCostMap(invoice.lines, inventoryMap);
@@ -201,7 +232,9 @@ async function createSalesReturnImpl(input: {
         storeId: invoice.storeId,
         productId: line.productId,
         qtyBase: line.qtyBase,
-        unitCostBasePence: avgCostMap.get(line.productId) ?? line.product.defaultCostBasePence,
+        unitCostBasePence: line.lineCostPence != null && line.qtyBase > 0
+          ? Math.round(line.lineCostPence / line.qtyBase)
+          : avgCostMap.get(line.productId) ?? line.product.defaultCostBasePence,
         type: 'SALES_RETURN',
         referenceType: 'SALES_RETURN',
         referenceId: created.id,
@@ -211,7 +244,7 @@ async function createSalesReturnImpl(input: {
 
     const cogsTotal = invoice.lines.reduce((sum, line) => {
       const avgCost = avgCostMap.get(line.productId) ?? line.product.defaultCostBasePence;
-      return sum + avgCost * line.qtyBase;
+      return sum + (line.lineCostPence ?? avgCost * line.qtyBase);
     }, 0);
 
     const journalLines: JournalLine[] = [
@@ -226,7 +259,8 @@ async function createSalesReturnImpl(input: {
           ? { accountCode: ACCOUNT_CODES.cash, creditPence: refundAmount }
           : { accountCode: ACCOUNT_CODES.bank, creditPence: refundAmount }
         : null,
-      arReversal > 0 ? { accountCode: ACCOUNT_CODES.ar, creditPence: arReversal } : null
+      arReversal > 0 ? { accountCode: ACCOUNT_CODES.ar, creditPence: arReversal } : null,
+      legacyPending > 0 ? { accountCode: ACCOUNT_CODES.bank, creditPence: legacyPending } : null,
     ].filter(Boolean) as JournalLine[];
 
     await postJournalEntry({
@@ -238,6 +272,8 @@ async function createSalesReturnImpl(input: {
       prismaClient: tx as any
     });
 
+    // The closed parent blocks confirmation. Preserve the recorded receipt claim
+    // so returned/void pending rows remain visible for investigation.
     return created;
   });
 

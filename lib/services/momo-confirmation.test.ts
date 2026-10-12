@@ -27,6 +27,7 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 vi.mock('@/lib/accounting', () => ({
+  ACCOUNT_CODES: { bank: '1010', ar: '1100' },
   postJournalEntry: vi.fn(),
 }));
 
@@ -138,7 +139,7 @@ describe('confirmMomoPayment', () => {
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
     expect(prismaMock.salesPayment.updateMany).toHaveBeenCalledWith({
       where: { id: 'pay-1', status: 'PENDING_MANUAL' },
-      data: { status: 'CONFIRMED', reference: 'MTN-TXN-9988' },
+      data: { status: 'CONFIRMED', reference: 'MTN-TXN-9988', confirmedAt: expect.any(Date) },
     });
     expect(prismaMock.auditLog.create).toHaveBeenCalledTimes(1);
     const audit = prismaMock.auditLog.create.mock.calls[0][0].data;
@@ -285,7 +286,7 @@ describe('confirmMomoPayment', () => {
 
     expect(prismaMock.salesPayment.updateMany).toHaveBeenCalledWith({
       where: { id: 'pay-1', status: 'PENDING_MANUAL' },
-      data: { status: 'CONFIRMED' },
+      data: { status: 'CONFIRMED', confirmedAt: expect.any(Date) },
     });
   });
 
@@ -300,7 +301,7 @@ describe('confirmMomoPayment', () => {
     expect(prismaMock.salesInvoice.update).not.toHaveBeenCalled();
 
     const serviceSrc = readFileSync(join(process.cwd(), 'lib/services/momo-confirmation.ts'), 'utf8');
-    expect(serviceSrc).not.toContain('postJournalEntry');
+    expect(serviceSrc).toContain('payment.ledgerTreatment === RECEIPT_LEDGER_V1');
     expect(serviceSrc).not.toContain('recordCashDrawerEntryTx');
     expect(serviceSrc).not.toContain("from '@/lib/audit'");
     expect(serviceSrc).toContain('tx.auditLog.create');
