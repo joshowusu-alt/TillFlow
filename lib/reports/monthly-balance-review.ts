@@ -30,8 +30,8 @@ export function computeMonthlyBalanceRows(accounts: Account[], opening: Sum[], m
     const openingDebitNet = (before?.debitPence ?? 0) - (before?.creditPence ?? 0);
     const closingDebitNet = openingDebitNet + debitPence - creditPence;
     const normalSign = ['LIABILITY', 'EQUITY', 'INCOME'].includes(account.type) ? -1 : 1;
-    return { ...account, openingPence: normalSign * openingDebitNet, debitPence, creditPence,
-      closingPence: normalSign * closingDebitNet, closingDebitNet };
+    return { ...account, openingPence: openingDebitNet === 0 ? 0 : normalSign * openingDebitNet, debitPence, creditPence,
+      closingPence: closingDebitNet === 0 ? 0 : normalSign * closingDebitNet, closingDebitNet };
   });
 }
 

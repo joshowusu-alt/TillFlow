@@ -62,7 +62,10 @@ describe('recorded monthly balances', () => {
     expect(rows[1]).toMatchObject({ openingPence: 1500, closingPence: 1900, closingDebitNet: -1900 });
   });
   it('keeps zero-activity accounts visible without certifying them', () => {
-    expect(computeMonthlyBalanceRows(accounts, [], [])[0]).toMatchObject({ openingPence: 0, closingPence: 0 });
+    const rows = computeMonthlyBalanceRows(accounts, [], []);
+    expect(rows[0]).toMatchObject({ openingPence: 0, closingPence: 0 });
+    expect(Object.is(rows[1].openingPence, -0)).toBe(false);
+    expect(Object.is(rows[1].closingPence, -0)).toBe(false);
   });
   it('scopes accounts and both journal relations and returns unexplained differences', async () => {
     const db = {
