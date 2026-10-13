@@ -51,9 +51,9 @@ export const IMPROVE_RECORDS_ISSUE_DEFS: Record<
     key: 'MISSING_COST',
     heading: 'Review missing cost evidence',
     explanation:
-      'These products have stock or earlier sales without reliable cost evidence. Updating today’s product cost does not repair an earlier sale or its accounting entries. Review historical sales separately.',
+      'These products need confirmed stock value or earlier sale-cost evidence. Sales can continue. Updating today’s product cost does not establish an opening stock value or repair an earlier sale or its accounting entries. Review stock records and historical sales separately.',
     href: '/products?issue=MISSING_COST',
-    recordStatusLabel: 'Missing reliable cost',
+    recordStatusLabel: 'Stock value needs review',
     homeReturnHref: HOME_RETURN,
   },
   STOCK_SETUP_GAP: {

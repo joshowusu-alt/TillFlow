@@ -28,7 +28,7 @@ describe('incomplete-stock disclosure helpers', () => {
         profitMayBeIncomplete: true,
       })
     );
-    expect(message).toMatch(/quantity without a confirmed cost/i);
+    expect(message).toMatch(/need confirmed stock value/i);
   });
 
   it('describes sold-only missing cost without claiming stock qty', () => {

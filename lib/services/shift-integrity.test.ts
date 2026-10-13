@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('./shared/inventory-utils', async () => ({ ...await vi.importActual<typeof import('./shared/inventory-utils')>('./shared/inventory-utils'), lockInventoryValues: vi.fn().mockResolvedValue(undefined) }));
 import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
 import { resolvePosTillId } from '@/lib/pos/till-context';
 

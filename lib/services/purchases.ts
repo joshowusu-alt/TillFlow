@@ -589,7 +589,6 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   };
 
   const _doInventory = async (client: any, invoiceId: string) => {
-    await lockInventoryValues(client, store.id, Array.from(productTotals.keys()));
     const inventoryMap = await fetchInventoryMap(
       store.id,
       Array.from(productTotals.keys()),
@@ -661,6 +660,9 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   const runWithMoneyTx = async (
     client: any,
   ): Promise<{ created: Awaited<ReturnType<typeof _doInvoice>>; replayed: boolean }> => {
+    // Stock locks must precede shared journal/document counters, matching sales.
+    // Taking them after posting the purchase journal can deadlock a concurrent sale.
+    await lockInventoryValues(client, store.id, Array.from(productTotals.keys()));
     try {
       return { created: await _doInvoice(client), replayed: false };
     } catch (error) {

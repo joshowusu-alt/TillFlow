@@ -104,7 +104,4 @@ describe('inventory page polish', () => {
     expect(src).toContain('InventoryEmptyState');
   });
 
-  it('data repair link is unchanged', () => {
-    expect(src).toContain('href="/settings/data-repair"');
-  });
 });

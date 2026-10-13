@@ -230,4 +230,12 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     await expect(transfers.approveAndCompleteStockTransfer({ businessId, transferId: transfer.id, approvedByUserId: userId })).rejects.toThrow('Only pending');
     expect(await inventoryPosting([original.id, transfer.id])).toBe(1000);
   }, 60000);
+  it('amends old lines using original COGS before allocating replacement stock', async () => {
+    const p = await product(); const a = await buy(p, 1, 1000); const sale = await sell(p, 1); const b = await buy(p, 1, 2000);
+    await sales.amendSale({ businessId, salesInvoiceId: sale.id, userId, reason: 'Replace fixture line', keepLineIds: [], newLines: [{ productId: p, unitId, qtyInUnit: 1 }], additionalPaymentMethod: 'TRANSFER' });
+    expect(await stock(p)).toMatchObject({ qtyOnHandBase: 1, knownValuePence: 1500, avgCostBasePence: 1500 });
+    expect(await db.salesInvoiceLine.findFirstOrThrow({ where: { salesInvoiceId: sale.id } })).toMatchObject({ lineCostPence: 1500, costBasis: 'INVENTORY_VALUE_V1' });
+    expect((await stock(p)).knownValuePence).toBe(await inventoryPosting([a.id, b.id, sale.id]));
+    await balanced([a.id, b.id, sale.id]);
+  }, 60000);
 });

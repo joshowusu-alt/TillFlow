@@ -571,8 +571,8 @@ export default async function ProductsPage({
                               : issueDef?.recordStatusLabel}
                           </span>
                           {issueKey === 'MISSING_COST' ? (
-                            <Link href={historicalMissingCostProductIds.has(product.id) ? '/sales' : `/products/${product.id}#cost`} className="btn-primary min-h-[44px] text-xs">
-                              {historicalMissingCostProductIds.has(product.id) ? 'Review sales' : 'Edit cost'}
+                            <Link href={historicalMissingCostProductIds.has(product.id) ? '/sales' : '/inventory'} className="btn-primary min-h-[44px] text-xs">
+                              {historicalMissingCostProductIds.has(product.id) ? 'Review sales' : 'Review stock value'}
                             </Link>
                           ) : null}
                           {issueKey === 'UNUSED_CATALOGUE' || issueKey === 'STOCK_SETUP_GAP' ? (
@@ -722,8 +722,8 @@ export default async function ProductsPage({
                           <td className="px-3 py-3">
                             <div className="flex flex-wrap gap-2">
                               {issueKey === 'MISSING_COST' ? (
-                                <Link href={historicalMissingCostProductIds.has(product.id) ? '/sales' : `/products/${product.id}#cost`} className="btn-primary text-xs">
-                                  {historicalMissingCostProductIds.has(product.id) ? 'Review sales' : 'Edit cost'}
+                                <Link href={historicalMissingCostProductIds.has(product.id) ? '/sales' : '/inventory'} className="btn-primary text-xs">
+                                  {historicalMissingCostProductIds.has(product.id) ? 'Review sales' : 'Review stock value'}
                                 </Link>
                               ) : null}
                               {issueKey === 'UNUSED_CATALOGUE' || issueKey === 'STOCK_SETUP_GAP' ? (
