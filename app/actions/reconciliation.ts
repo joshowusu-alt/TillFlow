@@ -10,6 +10,7 @@ import {
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { formString, formPence, formOptionalString } from '@/lib/form-helpers';
+import { buildPaymentReconciliationRows } from '@/lib/reports/payment-reconciliation';
 import type { ActionResult } from '@/lib/action-utils';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting-clock';
@@ -19,6 +20,7 @@ import { localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting
 // ---------------------------------------------------------------------------
 
 export type ReconciliationRow = {
+  storeId: string;
   date: string;
   method: string;
   systemTotalPence: number;
@@ -48,15 +50,17 @@ export async function getReconciliationSummary(params: {
   storeId?: string;
 }): Promise<ActionResult<ReconciliationRow[]>> {
   return safeAction(async () => {
-    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER'], { requireWrite: false });
     const { from, to, storeId } = params;
     const business = await prisma.business.findUnique({
       where: { id: businessId },
       select: { timezone: true },
     });
     const zone = requireReportTimeZone(business?.timezone);
-    const start = localDateInstant(formatBusinessLocalDateKey(from, zone), 'start', zone) ?? from;
-    const endExclusive = localDateInstant(formatBusinessLocalDateKey(to, zone), 'endExclusive', zone) ?? to;
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime())) return err('Invalid date range');
+    const start = from;
+    const endExclusive = to;
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(to.getTime()) || start >= to) return err('Invalid date range');
 
     // Get all stores for this business if no specific store
     const stores = storeId
@@ -72,28 +76,22 @@ export async function getReconciliationSummary(params: {
     const payments = await prisma.salesPayment.findMany({
       where: {
         method: { in: ['CARD', 'TRANSFER'] },
+        status: 'CONFIRMED',
+        receivedAt: { gte: start, lt: endExclusive },
         salesInvoice: {
           businessId,
           storeId: { in: storeIds },
-          createdAt: { gte: start, lt: endExclusive },
         },
       },
       select: {
         method: true,
         amountPence: true,
+        receivedAt: true,
         salesInvoice: {
           select: { storeId: true, createdAt: true },
         },
       },
     });
-
-    // Group by date + method + storeId
-    const systemMap = new Map<string, number>();
-    for (const p of payments) {
-      const dateKey = p.salesInvoice.createdAt.toISOString().slice(0, 10);
-      const key = `${p.salesInvoice.storeId}|${dateKey}|${p.method}`;
-      systemMap.set(key, (systemMap.get(key) ?? 0) + p.amountPence);
-    }
 
     // Get existing reconciliation records
     const existing = await prisma.paymentReconciliation.findMany({
@@ -104,35 +102,7 @@ export async function getReconciliationSummary(params: {
       },
     });
 
-    const reconMap = new Map<string, (typeof existing)[0]>();
-    for (const r of existing) {
-      const dateKey = r.date.toISOString().slice(0, 10);
-      const key = `${r.storeId}|${dateKey}|${r.paymentMethod}`;
-      reconMap.set(key, r);
-    }
-
-    // Merge: all unique date+method combos
-    const allKeys = new Set([...systemMap.keys(), ...reconMap.keys()]);
-    const rows: ReconciliationRow[] = [];
-
-    for (const key of allKeys) {
-      const [, dateStr, method] = key.split('|');
-      const systemTotal = systemMap.get(key) ?? 0;
-      const recon = reconMap.get(key);
-
-      rows.push({
-        date: dateStr,
-        method,
-        systemTotalPence: recon?.systemTotalPence ?? systemTotal,
-        actualTotalPence: recon?.actualTotalPence ?? null,
-        variancePence: recon?.variancePence ?? null,
-        status: recon?.status ?? 'PENDING',
-        id: recon?.id ?? null,
-      });
-    }
-
-    // Sort by date desc, then method
-    rows.sort((a, b) => b.date.localeCompare(a.date) || a.method.localeCompare(b.method));
+    const rows = buildPaymentReconciliationRows(payments, existing, zone);
     return ok(rows);
   });
 }
@@ -163,17 +133,22 @@ export async function reconcilePaymentAction(formData: FormData): Promise<void> 
       select: { timezone: true },
     });
     const zone = requireReportTimeZone(business?.timezone);
-    const date = localDateInstant(dateStr, 'start', zone) ?? new Date(dateStr);
+    const date = localDateInstant(dateStr, 'start', zone);
+    if (!date || formatBusinessLocalDateKey(date, zone) !== dateStr) return err('Invalid date');
+    if (!Number.isSafeInteger(actualTotalPence) || actualTotalPence < 0 || actualTotalPence > 2147483647 || !formString(formData, 'actualTotal') || !Number.isFinite(Number(formString(formData, 'actualTotal').replace(/,/g, '')))) return err('Enter a valid non-negative statement total');
+    const store = await prisma.store.findFirst({ where: { id: storeId, businessId }, select: { id: true } });
+    if (!store) return err('Branch not found');
     const dayEndExclusive = localDateInstant(dateStr, 'endExclusive', zone) ?? date;
 
     // Calculate system total for that date/method/store
     const payments = await prisma.salesPayment.findMany({
       where: {
         method: paymentMethod,
+        status: 'CONFIRMED',
+        receivedAt: { gte: date, lt: dayEndExclusive },
         salesInvoice: {
           businessId,
           storeId,
-          createdAt: { gte: date, lt: dayEndExclusive },
         },
       },
       select: { amountPence: true },
@@ -231,8 +206,9 @@ export async function getPaymentTransactions(params: {
   storeId?: string;
 }): Promise<ActionResult<ReconciliationTransaction[]>> {
   return safeAction(async () => {
-    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER'], { requireWrite: false });
     const { date, method, storeId } = params;
+    if (!['CARD', 'TRANSFER'].includes(method) || !Number.isFinite(date.getTime())) return err('Invalid date or payment method');
 
     const business = await prisma.business.findUnique({
       where: { id: businessId },
@@ -250,10 +226,11 @@ export async function getPaymentTransactions(params: {
     const payments = await prisma.salesPayment.findMany({
       where: {
         method,
+        status: 'CONFIRMED',
+        receivedAt: { gte: dayStart, lt: dayEndExclusive },
         salesInvoice: {
           businessId,
           ...storeFilter,
-          createdAt: { gte: dayStart, lt: dayEndExclusive },
         },
       },
       select: {

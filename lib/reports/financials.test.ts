@@ -121,6 +121,23 @@ describe('getBalanceSheet asOf filtering', () => {
     expect(sheet.totalAssets).toBe(sheet.totalLiabilities + sheet.totalEquity);
   });
 
+  it('preserves recorded stock and ledger profit when operational profit differs', async () => {
+    prismaMock.journalLine.groupBy.mockResolvedValue([
+      { accountId: 'acc-inv', _sum: { debitPence: 30000, creditPence: 0 } },
+      { accountId: 'acc-revenue', _sum: { debitPence: 0, creditPence: 100000 } },
+      { accountId: 'acc-cogs', _sum: { debitPence: 60000, creditPence: 0 } },
+    ]);
+    prismaMock.salesInvoice.findMany.mockResolvedValue([{
+      paymentStatus: 'PAID', discountPence: 0, salesReturn: null,
+      lines: [{ lineSubtotalPence: 100000, lineDiscountPence: 0, promoDiscountPence: 0,
+        lineCostPence: 50000, qtyBase: 1, product: { defaultCostBasePence: 50000 } }],
+    }]);
+    const sheet = await getBalanceSheet(bizId, new Date('2026-04-01'));
+    expect(sheet.assets.find(a => a.accountCode === '1200')?.balancePence).toBe(30000);
+    expect(sheet.equity.find(e => e.accountCode === 'CURRENT_PROFIT')?.balancePence).toBe(40000);
+    expect(sheet.reconciliation).toMatchObject({ operationalProfitPence: 50000, journalProfitPence: 40000, profitDifferencePence: 10000, equationDifferencePence: -10000, status: 'UNRECONCILED' });
+  });
+
   it('includes net income in equity when income/expense entries exist', async () => {
     prismaMock.journalLine.groupBy.mockResolvedValue([
       { accountId: 'acc-revenue', _sum: { debitPence: 0, creditPence: 100000 } },

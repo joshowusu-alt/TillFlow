@@ -192,9 +192,10 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
     if (accountType === 'EXPENSE') journalExpenseTotal += balance;
   }
 
-  // Adjustment: sale-line NP vs journal NP — applied to inventory to keep BS balanced
+  // Preserve the journal balances. A difference is reconciliation evidence,
+  // never a reason to manufacture a stock adjustment in a read-only report.
   const journalNP = journalIncomeTotal - journalExpenseTotal;
-  const npAdjustment = income.netProfit == null ? 0 : income.netProfit - journalNP;
+  const profitDifferencePence = income.netProfit == null ? null : income.netProfit - journalNP;
 
   const assets: StatementLine[] = [];
   const liabilities: StatementLine[] = [];
@@ -204,10 +205,6 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
   for (const entry of map.values()) {
     if (entry.accountCode === ACCOUNT_CODES.cash && legacyCapital > 0) {
       entry.balancePence += legacyCapital;
-    }
-    // Adjust inventory to reflect sale-line COGS (keeps BS balanced)
-    if (entry.accountCode === ACCOUNT_CODES.inventory && npAdjustment !== 0) {
-      entry.balancePence += npAdjustment;
     }
     if (entry.type === 'ASSET') assets.push(entry);
     if (entry.type === 'LIABILITY') liabilities.push(entry);
@@ -234,13 +231,13 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
     });
   }
 
-  // Use sale-line-based NP (matches Income Statement)
-  if (income.netProfit != null && income.netProfit !== 0) {
+  // Equity follows recorded ledger profit; operational profit is compared separately.
+  if (journalNP !== 0) {
     equity.push({
       accountCode: 'CURRENT_PROFIT',
       name: 'Net Profit to Date',
       type: 'EQUITY',
-      balancePence: income.netProfit
+      balancePence: journalNP
     });
   }
 
@@ -248,7 +245,19 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
   const totalLiabilities = liabilities.reduce((sum, line) => sum + line.balancePence, 0);
   const totalEquity = equity.reduce((sum, line) => sum + line.balancePence, 0);
 
-  return { assets, liabilities, equity, totalAssets, totalLiabilities, totalEquity };
+  return {
+    assets, liabilities, equity, totalAssets, totalLiabilities, totalEquity,
+    reconciliation: {
+      journalProfitPence: journalNP,
+      operationalProfitPence: income.netProfit,
+      profitDifferencePence,
+      equationDifferencePence: totalAssets - totalLiabilities - totalEquity,
+      profitIncomplete: income.netProfit == null,
+      stockValueIncomplete: income.stockValueIncomplete,
+      // Agreement of these calculations alone does not certify real balances.
+      status: 'UNRECONCILED' as const,
+    },
+  };
 }
 
 const cachedBalanceSheet = unstable_cache(
