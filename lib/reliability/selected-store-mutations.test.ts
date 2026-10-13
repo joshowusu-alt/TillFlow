@@ -50,8 +50,10 @@ describe('selected-store mutation fail-closed', () => {
     expect(read('app/(protected)/inventory/adjustments/page.tsx')).toContain('resolveSoleOrSelectedStoreId');
     expect(read('app/(protected)/purchases/page.tsx')).not.toContain('stores[0]');
     expect(read('app/(protected)/settings/page.tsx')).toContain('resolveSoleOrSelectedStoreId');
+    // Each comparison carries its own business-scoped branch; it must not
+    // substitute a page-wide selection for rows from different branches.
     expect(read('app/(protected)/payments/reconciliation/card-transfer/page.tsx')).toContain(
-      'resolveSoleOrSelectedStoreId',
+      'storeId={row.storeId}',
     );
     expect(read('app/actions/settings.ts')).toContain('requireSelectedStoreContext');
     expect(read('app/actions/settings.ts')).not.toContain('withBusinessStoreContext');
