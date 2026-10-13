@@ -85,7 +85,7 @@ export async function getIncompleteStockSnapshot(businessId: string): Promise<In
     const hasCost = row.knownValuePence != null && row.unvaluedQtyBase === 0;
     if (!hasCost) {
       costReviewProductIds.push(row.productId);
-      unvaluedQtyBase += row.qtyOnHandBase;
+      unvaluedQtyBase += row.knownValuePence != null && row.unvaluedQtyBase != null ? row.unvaluedQtyBase : row.qtyOnHandBase;
     }
   }
 

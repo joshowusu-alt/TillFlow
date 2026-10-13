@@ -76,7 +76,9 @@ describe('inventory valuation audit: historical cost evidence', () => {
   it('keeps quantity-only receipts incomplete despite a positive current default cost', async () => {
     db.salesInvoiceLine.findMany.mockResolvedValue([]);
     db.inventoryBalance.findMany.mockResolvedValue([{ productId: 'mixed', qtyOnHandBase: 2, avgCostBasePence: 1000, knownValuePence: 1000, unvaluedQtyBase: 1, product: { defaultCostBasePence: 2000 } }]);
-    expect((await getIncompleteStockSnapshot('review-business')).stockValueIncomplete).toBe(true);
+    const result = await getIncompleteStockSnapshot('review-business');
+    expect(result.stockValueIncomplete).toBe(true);
+    expect(result.unvaluedQtyBase).toBe(1);
   });
   it('accepts verified zero rounding allocations and rejects unknown-cost markers', () => {
     const line = { lineSubtotalPence: 1000, lineDiscountPence: 0, promoDiscountPence: 0, lineCostPence: 0, qtyBase: 1 };

@@ -50,6 +50,7 @@ export default async function ProductsPage({
     q?: string;
     page?: string;
     created?: string;
+    stock?: string;
     barcodesGenerated?: string;
     barcodesFailed?: string;
     missingCost?: string;
@@ -318,11 +319,11 @@ export default async function ProductsPage({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
               </svg>
               <div className="flex-1">
-                <span className="text-sm font-semibold text-success">Product added to your catalogue.</span>
-                <span className="ml-1.5 text-sm text-ink/70">Add opening stock on the product form or from Opening Stock setup before your first sale.</span>
+                <span className="text-sm font-semibold text-success">{searchParams?.stock === '1' ? 'Product added with opening stock.' : 'Product added to your catalogue.'}</span>
+                <span className="ml-1.5 text-sm text-ink/70">{searchParams?.stock === '1' ? 'Stock is ready for sale. Costs left blank remain incomplete.' : 'Add opening stock on the product form or from Opening Stock setup before your first sale.'}</span>
               </div>
-              <Link href="/setup/opening-stock" className="flex-shrink-0 text-xs font-semibold text-accent hover:underline">
-                Add opening stock &rarr;
+              <Link href={searchParams?.stock === '1' ? '/inventory' : '/setup/opening-stock'} className="flex-shrink-0 text-xs font-semibold text-accent hover:underline">
+                {searchParams?.stock === '1' ? 'Review stock' : 'Add opening stock'} &rarr;
               </Link>
             </div>
           )}
