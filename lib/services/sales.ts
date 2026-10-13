@@ -985,7 +985,7 @@ async function createSaleImpl(input: CreateSaleInput) {
 
     const transactionCosts = lineDetails.map(line => ({
       costPence: (costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence) * line.qtyBase,
-      costBasis: null as string | null,
+      costBasis: line.qtyBase <= 0 ? UNVERIFIED_STOCK_V1 : null as string | null,
     }));
     const valuationUpdates = new Map<string, StockValue>();
     if (shouldApplyInventoryMovements) {
@@ -993,7 +993,8 @@ async function createSaleImpl(input: CreateSaleInput) {
       const currentInventory = await fetchInventoryMap(input.storeId, productIds, tx as any);
       stockMovementInventoryMap = currentInventory;
       for (const [productId, qtyBase] of qtyByProduct) {
-        const indexes = lineDetails.map((line, index) => line.productId === productId ? index : -1).filter(index => index >= 0);
+        const indexes = lineDetails.map((line, index) => line.productId === productId && line.qtyBase > 0 ? index : -1).filter(index => index >= 0);
+        if (indexes.length === 0) continue;
         const sample = lineDetails[indexes[0]];
         const before = currentInventory.get(productId);
         const cost = resolveSaleUnitCostBasePence(currentInventory, productId, sample.productUnit.product);

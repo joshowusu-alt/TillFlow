@@ -71,7 +71,7 @@ export function issueStockValue(before: StockValue, qty: number, legacyUnitCost:
       avgCostBasePence: newQty > 0 ? roundValueRatio(knownValuePence, 1, newQty) : 0,
     } };
   }
-  if (hasTrackedValue(before) || (before.unvaluedQtyBase ?? 0) > 0) {
+  if (hasTrackedValue(before) || (before.unvaluedQtyBase ?? 0) > 0 || legacyUnitCost <= 0) {
     // With unknown costs we cannot choose which money value left the mixed pool.
     // Sales remain available, but neither COGS nor remaining value is invented.
     return { costPence: 0, costBasis: UNVERIFIED_STOCK_V1, after: {
