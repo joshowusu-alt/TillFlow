@@ -17,6 +17,10 @@ cost displayed to staff.
   not supply missing evidence. Sales remain available; affected line costs and
   profit are marked incomplete. If issuing from a mixed known/unknown pool cannot
   establish which value remains, remaining value becomes unverified.
+- Opening setup preserves the selected unit's entered cost, including packs.
+  A blank product-opening cost does not fall back to the catalogue price.
+  Product creation and owner-funded opening stock commit together through the
+  opening-equity path, rather than an unpaid purchase without a supplier.
 - A verified zero-pesewa rounding allocation carries a cost-basis marker. Reports
   distinguish it from missing cost rather than inventing free goods.
 - Valued adjustments preserve exact money. Unknown costs require review before
@@ -41,6 +45,7 @@ No Production financial data is used for tests or changed by this work.
 Pure valuation tests exercise conservation across 3,030 stock pools, original-cost
 returns, pack rounding, unknown-cost sales, legacy balances and arithmetic bounds.
 PostgreSQL integration cases use the guarded disposable localhost CI database and
-compare exact stock value with balanced inventory journal entries. Hosted CI is
+compare exact stock value with balanced inventory journal entries, and verify
+atomic product/opening-stock creation and failure rollback. Hosted CI is
 the authoritative database and browser gate; passing unit tests alone is not a
 release approval.

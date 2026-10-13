@@ -395,11 +395,12 @@ async function syncDefaultCostManagedInventoryBalances(
  */
 export async function createProduct(
   businessId: string,
-  data: ProductCoreInput
+  data: ProductCoreInput,
+  db?: any,
 ): Promise<{ id: string; name: string }> {
   return measureServerOperation(
     'action.product.create',
-    () => createProductImpl(businessId, data),
+    () => createProductImpl(businessId, data, db),
     {
       businessId,
       action: 'createProductAction',
@@ -411,7 +412,8 @@ export async function createProduct(
 
 async function createProductImpl(
   businessId: string,
-  data: ProductCoreInput
+  data: ProductCoreInput,
+  db?: any,
 ): Promise<{ id: string; name: string }> {
   const normalized = normalizeCoreProductInput(data);
   validateProductValues(normalized);
@@ -420,7 +422,7 @@ async function createProductImpl(
   await assertSupplierBelongsToBusiness(businessId, normalized.preferredSupplierId);
   await assertNoDuplicateProductName(businessId, normalized.name);
 
-  const product = await prisma.product.create({
+  const product = await (db ?? prisma).product.create({
     data: {
       businessId,
       name: normalized.name,

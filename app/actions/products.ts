@@ -27,7 +27,7 @@ import {
 } from '@/lib/services/products';
 import { revalidatePosCatalog, revalidatePosInventory } from '@/lib/cache/pos-tags';
 import { saveProductImageFile, validateExternalProductImageUrl } from '@/lib/services/storage';
-import { createPurchase } from '@/lib/services/purchases';
+import { recordOpeningInventory } from '@/lib/services/opening-inventory';
 import { persistActivationSnapshot } from '@/lib/activation-snapshot';
 import {
   formatProductPriceWarnings,
@@ -150,34 +150,22 @@ export async function createProductAction(formData: FormData): Promise<void> {
       );
     }
 
-    const product = await createProduct(businessId, fields);
-
     let openingStockStoreId: string | null = null;
     if (openingStockQty > 0 && openingStockUnitId) {
       const selected = await requireSelectedStoreContext(
         ['MANAGER', 'OWNER'],
         readOperationalStoreCookie(),
       );
-      await createPurchase({
-        businessId,
-        storeId: selected.storeId,
-        supplierId: null,
-        paymentStatus: 'UNPAID',
-        dueDate: null,
-        payments: [],
-        lines: [
-          {
-            productId: product.id,
-            unitId: openingStockUnitId,
-            qtyInUnit: openingStockQty,
-            unitCostPence: openingStockCostPence,
-          },
-        ],
-        userId: user.id,
-        stockMovementType: 'OPENING',
-      });
       openingStockStoreId = selected.storeId;
     }
+    const product = openingStockStoreId ? await prisma.$transaction(async tx => {
+      const created = await createProduct(businessId, fields, tx);
+      await recordOpeningInventory({ businessId, storeId: openingStockStoreId!, userId: user.id,
+        referenceId: `product-opening:${created.id}`, description: 'Product opening stock — Opening Balance Equity',
+        lines: [{ productId: created.id, unitId: openingStockUnitId, qtyInUnit: openingStockQty, unitCostPence: openingStockCostPence }],
+      }, tx);
+      return created;
+    }, { timeout: 20000 }) : await createProduct(businessId, fields);
 
     await persistActivationSnapshot(businessId).catch(() => {});
 

@@ -253,4 +253,30 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     const { getIncompleteStockSnapshot } = await import('@/lib/reports/incomplete-stock');
     expect((await getIncompleteStockSnapshot(businessId)).soldWithoutCostProductIds).not.toContain(p);
   }, 60000);
+  it('creates a product and its owner-funded opening stock together without a credit purchase', async () => {
+    const { createProduct } = await import('./products');
+    const p = await singleton.$transaction(async tx => {
+      const created = await createProduct(businessId, { name: `Atomic opening ${Date.now()}`, sku: null, barcode: null, categoryId: null, imageUrl: null,
+        sellingPriceBasePence: 2000, defaultCostBasePence: 1000, minimumMarginThresholdBps: null, vatRateBps: 0, promoBuyQty: 0, promoGetQty: 0,
+        baseUnitId: unitId, packagingUnitId: unitId, packagingConversion: 1 }, tx);
+      await opening.recordOpeningInventory({ businessId, storeId, referenceId: `product-opening:${created.id}`, lines: [{ productId: created.id, unitId, qtyInUnit: 2, unitCostPence: 1000 }] }, tx);
+      return created;
+    });
+    expect(await stock(p.id)).toMatchObject({ qtyOnHandBase: 2, knownValuePence: 2000, unvaluedQtyBase: 0 });
+    expect(await db.purchaseInvoice.count({ where: { lines: { some: { productId: p.id } } } })).toBe(0);
+    expect(await inventoryPosting([`product-opening:${p.id}`])).toBe(2000);
+  }, 60000);
+  it('rolls back product creation when its opening-stock movement fails', async () => {
+    const { createProduct } = await import('./products');
+    const name = `Opening rollback ${Date.now()}`;
+    await expect(singleton.$transaction(async tx => {
+      const created = await createProduct(businessId, { name, sku: null, barcode: null, categoryId: null, imageUrl: null,
+        sellingPriceBasePence: 2000, defaultCostBasePence: 1000, minimumMarginThresholdBps: null, vatRateBps: 0, promoBuyQty: 0, promoGetQty: 0,
+        baseUnitId: unitId, packagingUnitId: unitId, packagingConversion: 1 }, tx);
+      const movement = vi.spyOn(tx.stockMovement, 'createMany').mockRejectedValueOnce(new Error('Injected opening failure'));
+      try { await opening.recordOpeningInventory({ businessId, storeId, referenceId: `product-opening:${created.id}`, lines: [{ productId: created.id, unitId, qtyInUnit: 1, unitCostPence: 1000 }] }, tx); }
+      finally { movement.mockRestore(); }
+    })).rejects.toThrow('Injected opening failure');
+    expect(await db.product.count({ where: { businessId, name } })).toBe(0);
+  }, 60000);
 });
