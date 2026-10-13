@@ -80,8 +80,10 @@ export default async function ProductsPage({
   const issueActive = Boolean(issueKey) || issueDenied || invalidIssue;
 
   let issueProductWhere: Prisma.ProductWhereInput | null = null;
+  const historicalMissingCostProductIds = new Set<string>();
   if (issueKey === 'MISSING_COST') {
     const incompleteStock = await getIncompleteStockSnapshot(business.id);
+    incompleteStock.soldWithoutCostProductIds.forEach(id => historicalMissingCostProductIds.add(id));
     const ids = incompleteStock.allMissingCostProductIds;
     issueProductWhere = { id: ids.length > 0 ? { in: ids } : { in: ['__none__'] } };
   } else if (issueKey === 'UNUSED_CATALOGUE' || issueKey === 'STOCK_SETUP_GAP') {
@@ -93,7 +95,7 @@ export default async function ProductsPage({
 
   const productWhere = {
     businessId: business.id,
-    active: true,
+    active: issueKey === 'MISSING_COST' ? undefined : true,
     ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
     ...(issueProductWhere ?? {}),
   } as Prisma.ProductWhereInput;
@@ -107,6 +109,7 @@ export default async function ProductsPage({
         where: productWhere,
         select: {
           id: true,
+          active: true,
           name: true,
           imageUrl: true,
           sellingPriceBasePence: true,
@@ -563,11 +566,13 @@ export default async function ProductsPage({
                       {issueKey ? (
                         <>
                           <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-                            {issueDef?.recordStatusLabel}
+                            {historicalMissingCostProductIds.has(product.id)
+                              ? `Earlier sale cost missing${product.active ? '' : ' · Archived'}`
+                              : issueDef?.recordStatusLabel}
                           </span>
                           {issueKey === 'MISSING_COST' ? (
-                            <Link href={`/products/${product.id}#cost`} className="btn-primary min-h-[44px] text-xs">
-                              Edit cost
+                            <Link href={historicalMissingCostProductIds.has(product.id) ? '/sales' : `/products/${product.id}#cost`} className="btn-primary min-h-[44px] text-xs">
+                              {historicalMissingCostProductIds.has(product.id) ? 'Review sales' : 'Edit cost'}
                             </Link>
                           ) : null}
                           {issueKey === 'UNUSED_CATALOGUE' || issueKey === 'STOCK_SETUP_GAP' ? (
@@ -705,7 +710,9 @@ export default async function ProductsPage({
                         <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">
                           {issueKey ? (
                             <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
-                              {issueDef?.recordStatusLabel}
+                              {historicalMissingCostProductIds.has(product.id)
+                                ? `Earlier sale cost missing${product.active ? '' : ' · Archived'}`
+                                : issueDef?.recordStatusLabel}
                             </span>
                           ) : (
                             preview
@@ -715,8 +722,8 @@ export default async function ProductsPage({
                           <td className="px-3 py-3">
                             <div className="flex flex-wrap gap-2">
                               {issueKey === 'MISSING_COST' ? (
-                                <Link href={`/products/${product.id}#cost`} className="btn-primary text-xs">
-                                  Edit cost
+                                <Link href={historicalMissingCostProductIds.has(product.id) ? '/sales' : `/products/${product.id}#cost`} className="btn-primary text-xs">
+                                  {historicalMissingCostProductIds.has(product.id) ? 'Review sales' : 'Edit cost'}
                                 </Link>
                               ) : null}
                               {issueKey === 'UNUSED_CATALOGUE' || issueKey === 'STOCK_SETUP_GAP' ? (
