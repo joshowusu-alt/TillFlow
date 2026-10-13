@@ -52,6 +52,22 @@ export default async function MonthlyBalanceReviewPage({ searchParams }: { searc
       <div><label className="label" htmlFor="review-month">Month</label><input className="input" id="review-month" type="month" name="month" defaultValue={month} required /></div>
       <button className="btn-secondary" type="submit">Review month</button>
     </form>
+    {searchParams?.account && !entries ? <p role="alert" className="card p-4">Choose an account shown above and a valid page.</p> : null}
+    {entries ? <section id="account-entries" className="card space-y-3 p-5">
+      <h2 className="text-lg font-semibold">{entries.account.name}: recorded entries</h2>
+      <p className="text-sm text-black/70">{entries.total} entries in this month · showing up to {entries.pageSize} per page. Month totals above include all entries, not just this page.</p>
+      {entries.rows.length === 0 ? <p>No entries on this page.</p> : entries.rows.map(line => <article key={line.id} className="space-y-1 rounded-xl border border-black/10 p-3">
+        <p className="text-xs text-black/60">{new Intl.DateTimeFormat('en-GB', { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(line.journalEntry.entryDate)}</p>
+        <p className="font-semibold break-words">{line.journalEntry.description}</p>
+        <p className="text-sm">Debit {money(line.debitPence)} · Credit {money(line.creditPence)}</p>
+        {line.memo ? <p className="text-sm break-words">{line.memo}</p> : null}
+        <p className="text-xs text-black/60 break-all">Record: {line.journalEntry.referenceType ?? 'Journal'} {line.journalEntry.referenceId ?? line.id}</p>
+      </article>)}
+      <div className="flex flex-wrap gap-3">
+        {entries.page > 1 ? <Link className="btn-secondary" href={`/payments/reconciliation/balances?month=${encodeURIComponent(month)}&account=${entries.account.code}&page=${entries.page - 1}#account-entries`}>Previous entries</Link> : null}
+        {entries.page * entries.pageSize < entries.total ? <Link className="btn-secondary" href={`/payments/reconciliation/balances?month=${encodeURIComponent(month)}&account=${entries.account.code}&page=${entries.page + 1}#account-entries`}>Next entries</Link> : null}
+      </div>
+    </section> : null}
     <div className="card space-y-2 p-5">
       <h2 className="font-semibold">Differences to investigate</h2>
       <p>Month’s debits minus credits: <strong>{money(review.movementDifferencePence)}</strong></p>
@@ -73,22 +89,7 @@ export default async function MonthlyBalanceReviewPage({ searchParams }: { searc
         <Link className="btn-ghost mt-3 text-sm" href={`/payments/reconciliation/balances?month=${encodeURIComponent(month)}&account=${row.code}#account-entries`}>View recorded entries</Link>
       </article>)}
     </div>
-    {searchParams?.account && !entries ? <p role="alert" className="card p-4">Choose an account shown above and a valid page.</p> : null}
-    {entries ? <section id="account-entries" className="card space-y-3 p-5">
-      <h2 className="text-lg font-semibold">{entries.account.name}: recorded entries</h2>
-      <p className="text-sm text-black/70">{entries.total} entries in this month · showing up to {entries.pageSize} per page. Month totals above include all entries, not just this page.</p>
-      {entries.rows.length === 0 ? <p>No entries on this page.</p> : entries.rows.map(line => <article key={line.id} className="space-y-1 rounded-xl border border-black/10 p-3">
-        <p className="text-xs text-black/60">{new Intl.DateTimeFormat('en-GB', { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(line.journalEntry.entryDate)}</p>
-        <p className="font-semibold break-words">{line.journalEntry.description}</p>
-        <p className="text-sm">Debit {money(line.debitPence)} · Credit {money(line.creditPence)}</p>
-        {line.memo ? <p className="text-sm break-words">{line.memo}</p> : null}
-        <p className="text-xs text-black/60 break-all">Record: {line.journalEntry.referenceType ?? 'Journal'} {line.journalEntry.referenceId ?? line.id}</p>
-      </article>)}
-      <div className="flex flex-wrap gap-3">
-        {entries.page > 1 ? <Link className="btn-secondary" href={`/payments/reconciliation/balances?month=${encodeURIComponent(month)}&account=${entries.account.code}&page=${entries.page - 1}#account-entries`}>Previous entries</Link> : null}
-        {entries.page * entries.pageSize < entries.total ? <Link className="btn-secondary" href={`/payments/reconciliation/balances?month=${encodeURIComponent(month)}&account=${entries.account.code}&page=${entries.page + 1}#account-entries`}>Next entries</Link> : null}
-      </div>
-    </section> : null}
+
     <div className="card space-y-3 p-5">
       <h2 className="font-semibold">Evidence needed for this month</h2>
       <p className="text-sm">Bank and MoMo: statements with opening and closing balances, receipts, payments, fees and transfers. The Bank ledger currently combines electronic money; it does not establish a separate balance for each bank account or wallet.</p>
