@@ -236,6 +236,7 @@ async function _buildEodSummaryPayload(
     ]);
 
   const totalSales = salesInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
+  const profitIncomplete = salesInvoices.some(invoice => invoice.grossMarginPence == null);
   const totalGrossProfit = salesInvoices.reduce(
     (sum, invoice) => sum + (invoice.grossMarginPence ?? 0),
     0
@@ -259,7 +260,7 @@ async function _buildEodSummaryPayload(
     `Scope: ${scopeLabel}`,
     '',
     `Sales: ${fmt(totalSales, currency)} (${transactionCount} tx)`,
-    `Gross Profit: ${fmt(totalGrossProfit, currency)} (${gpPct}%)`,
+    profitIncomplete ? 'Gross Profit: Incomplete — some sales have no confirmed cost.' : `Gross Profit: ${fmt(totalGrossProfit, currency)} (${gpPct}%)`,
     '',
     'Payment Split:',
     `- Cash: ${fmt(paymentSplit.CASH ?? 0, currency)}`,

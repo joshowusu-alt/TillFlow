@@ -68,7 +68,7 @@ export async function GET(request: Request) {
         lineSubtotalPence: line.lineSubtotalPence,
         lineDiscountPence: line.lineDiscountPence,
         promoDiscountPence: line.promoDiscountPence,
-        lineCostPence: line.lineCostPence,
+        lineCostPence: line.lineCostPence, costBasis: line.costBasis,
         qtyBase: line.qtyBase,
         defaultCostBasePence: line.product.defaultCostBasePence,
       })),

@@ -258,7 +258,7 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     const p = await singleton.$transaction(async tx => {
       const created = await createProduct(businessId, { name: `Atomic opening ${Date.now()}`, sku: null, barcode: null, categoryId: null, imageUrl: null,
         sellingPriceBasePence: 2000, defaultCostBasePence: 1000, minimumMarginThresholdBps: null, vatRateBps: 0, promoBuyQty: 0, promoGetQty: 0,
-        baseUnitId: unitId, packagingUnitId: unitId, packagingConversion: 1 }, tx);
+        baseUnitId: unitId, packagingUnitId: '', packagingConversion: 0 }, tx);
       await opening.recordOpeningInventory({ businessId, storeId, referenceId: `product-opening:${created.id}`, lines: [{ productId: created.id, unitId, qtyInUnit: 2, unitCostPence: 1000 }] }, tx);
       return created;
     });
@@ -272,7 +272,7 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     await expect(singleton.$transaction(async tx => {
       const created = await createProduct(businessId, { name, sku: null, barcode: null, categoryId: null, imageUrl: null,
         sellingPriceBasePence: 2000, defaultCostBasePence: 1000, minimumMarginThresholdBps: null, vatRateBps: 0, promoBuyQty: 0, promoGetQty: 0,
-        baseUnitId: unitId, packagingUnitId: unitId, packagingConversion: 1 }, tx);
+        baseUnitId: unitId, packagingUnitId: '', packagingConversion: 0 }, tx);
       const movement = vi.spyOn(tx.stockMovement, 'createMany').mockRejectedValueOnce(new Error('Injected opening failure'));
       try { await opening.recordOpeningInventory({ businessId, storeId, referenceId: `product-opening:${created.id}`, lines: [{ productId: created.id, unitId, qtyInUnit: 1, unitCostPence: 1000 }] }, tx); }
       finally { movement.mockRestore(); }
