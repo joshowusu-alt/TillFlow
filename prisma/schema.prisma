@@ -1171,6 +1171,8 @@ model InventoryBalance {
   productId        String
   qtyOnHandBase    Int      @default(0)
   avgCostBasePence Int      @default(0)
+  knownValuePence  Int?
+  unvaluedQtyBase  Int?
   qaTag            String?
   qaRunId          String?
   updatedAt        DateTime @updatedAt
@@ -1190,6 +1192,8 @@ model StockMovement {
   beforeQtyBase     Int?
   afterQtyBase      Int?
   unitCostBasePence Int?
+  valuePence        Int?
+  costBasis         String?
   type              String
   referenceType     String?
   referenceId       String?
@@ -1273,7 +1277,7 @@ model SalesInvoice {
   taxRateBps                 Int       @default(0)
   vatPence                   Int
   totalPence                 Int
-  grossMarginPence           Int       @default(0)
+  grossMarginPence           Int?      @default(0)
   cashReceivedPence          Int       @default(0)
   changeDuePence             Int       @default(0)
   loyaltyPointsEarned        Int       @default(0)
@@ -1354,6 +1358,7 @@ model SalesInvoiceLine {
   lineVatPence              Int
   lineTotalPence            Int
   lineCostPence             Int      @default(0)
+  costBasis                 String?
   createdAt                 DateTime @default(now())
 
   salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)

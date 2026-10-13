@@ -31,6 +31,7 @@ export const SURFACE_IDS = [
   'reorder_suggestions',
   'income_statement',
   'balance_sheet',
+  'monthly_balance_review',
   'cash_flow_statement',
   'export_financials',
   'cash_drawer_report',
@@ -198,6 +199,9 @@ export const SURFACE_CATALOGUE: Record<SurfaceId, SurfaceSpec> = {
     rangeCapped: true,
   }),
   balance_sheet: plain('balance_sheet', 'GROWTH', 'ACCOUNTING_WHOLE_BUSINESS', { VIEW: viewOm }, {
+    rangeCapped: true,
+  }),
+  monthly_balance_review: plain('monthly_balance_review', 'GROWTH', 'ACCOUNTING_WHOLE_BUSINESS', { VIEW: viewOm }, {
     rangeCapped: true,
   }),
   cash_flow_statement: plain('cash_flow_statement', 'GROWTH', 'ACCOUNTING_WHOLE_BUSINESS', { VIEW: viewOm }, {

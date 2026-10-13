@@ -230,7 +230,7 @@ async function _getOwnerDashboardSnapshot(
 				lineSubtotalPence: true,
 				lineDiscountPence: true,
 				promoDiscountPence: true,
-				lineCostPence: true,
+				lineCostPence: true, costBasis: true,
 				qtyBase: true,
 				product: { select: { defaultCostBasePence: true } },
 				salesInvoice: { select: { createdAt: true, paymentStatus: true, discountPence: true } },
@@ -550,7 +550,7 @@ async function _getOwnerDashboardSnapshot(
 		lineSubtotalPence: number;
 		lineDiscountPence?: number;
 		promoDiscountPence?: number;
-		lineCostPence: number;
+		lineCostPence: number; costBasis?: string | null;
 		qtyBase: number;
 		product: { defaultCostBasePence: number };
 		salesInvoice?: { createdAt: Date; paymentStatus: string; discountPence?: number };
@@ -559,7 +559,7 @@ async function _getOwnerDashboardSnapshot(
 		if (!(line.salesInvoice.createdAt >= yesterdayStart && line.salesInvoice.createdAt < yesterdayEnd)) return false;
 		return !['RETURNED', 'VOID'].includes(line.salesInvoice.paymentStatus);
 	});
-	const yesterdayGrouped = new Map<string, { paymentStatus: string; discountPence: number; lines: Array<{ lineSubtotalPence: number; lineDiscountPence: number; promoDiscountPence: number; lineCostPence: number; qtyBase: number; defaultCostBasePence: number }> }>();
+	const yesterdayGrouped = new Map<string, { paymentStatus: string; discountPence: number; lines: Array<{ lineSubtotalPence: number; lineDiscountPence: number; promoDiscountPence: number; lineCostPence: number; costBasis?: string | null; qtyBase: number; defaultCostBasePence: number }> }>();
 	yesterdayLines.forEach((line, index) => {
 		const key = line.salesInvoiceId ?? `line-${index}`;
 		const invoice = yesterdayGrouped.get(key) ?? {
@@ -571,7 +571,7 @@ async function _getOwnerDashboardSnapshot(
 			lineSubtotalPence: line.lineSubtotalPence,
 			lineDiscountPence: line.lineDiscountPence ?? 0,
 			promoDiscountPence: line.promoDiscountPence ?? 0,
-			lineCostPence: line.lineCostPence,
+			lineCostPence: line.lineCostPence, costBasis: line.costBasis,
 			qtyBase: line.qtyBase,
 			defaultCostBasePence: line.product.defaultCostBasePence,
 		});

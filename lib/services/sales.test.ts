@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('./shared/inventory-utils', async () => ({ ...await vi.importActual<typeof import('./shared/inventory-utils')>('./shared/inventory-utils'), lockInventoryValues: vi.fn().mockResolvedValue(undefined) }));
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -757,8 +758,8 @@ describe('createSale — payments & stock', () => {
     expect(batchDecrementInventoryBalanceMock).not.toHaveBeenCalled();
     expect((prismaMock as any).inventoryBalance.upsert).toHaveBeenCalledWith({
       where: { storeId_productId: { storeId: STORE_ID, productId: PRODUCT_ID } },
-      update: { qtyOnHandBase: -3, avgCostBasePence: 300 },
-      create: { storeId: STORE_ID, productId: PRODUCT_ID, qtyOnHandBase: -3, avgCostBasePence: 300 },
+      update: { qtyOnHandBase: -3, avgCostBasePence: 300, knownValuePence: null, unvaluedQtyBase: null },
+      create: { storeId: STORE_ID, productId: PRODUCT_ID, qtyOnHandBase: -3, avgCostBasePence: 300, knownValuePence: null, unvaluedQtyBase: null },
     });
   });
 

@@ -111,8 +111,8 @@ describe('transfer Store B → Store A', () => {
       approvedByUserId: 'mgr-1',
     });
 
-    expect(upsertInventoryBalance).toHaveBeenCalledWith(prismaMock, STORE_B, 'prod-1', 8, 100);
-    expect(upsertInventoryBalance).toHaveBeenCalledWith(prismaMock, STORE_A, 'prod-1', 3, expect.any(Number));
+    expect(upsertInventoryBalance).toHaveBeenCalledWith(prismaMock, STORE_B, 'prod-1', 8, 100, expect.objectContaining({ knownValuePence: null }));
+    expect(upsertInventoryBalance).toHaveBeenCalledWith(prismaMock, STORE_A, 'prod-1', 3, expect.any(Number), expect.objectContaining({ knownValuePence: null }));
     expect(prismaMock.stockMovement.createMany).toHaveBeenCalledWith({
       data: expect.arrayContaining([
         expect.objectContaining({ storeId: STORE_B, qtyBase: -2, type: 'TRANSFER_OUT' }),

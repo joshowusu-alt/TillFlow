@@ -76,7 +76,7 @@ export async function loadAnalyticsReport({
                 promoDiscountPence: true,
                 lineVatPence: true,
                 lineTotalPence: true,
-                lineCostPence: true,
+                lineCostPence: true, costBasis: true,
                 product: {
                   select: {
                     name: true,
@@ -133,7 +133,7 @@ export async function loadAnalyticsReport({
             lineSubtotalPence: line.lineSubtotalPence,
             lineDiscountPence: line.lineDiscountPence,
             promoDiscountPence: line.promoDiscountPence,
-            lineCostPence: line.lineCostPence,
+            lineCostPence: line.lineCostPence, costBasis: line.costBasis,
             qtyBase: line.qtyBase,
             defaultCostBasePence: line.product.defaultCostBasePence,
           })),
@@ -266,7 +266,7 @@ export async function loadAnalyticsReport({
           lineSubtotalPence: line.lineSubtotalPence,
           lineDiscountPence: line.lineDiscountPence,
           promoDiscountPence: line.promoDiscountPence,
-          lineCostPence: line.lineCostPence,
+          lineCostPence: line.lineCostPence, costBasis: line.costBasis,
           qtyBase: line.qtyBase,
           defaultCostBasePence: line.product.defaultCostBasePence,
         })),

@@ -7,7 +7,8 @@
 
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, ensureChartOfAccounts, postJournalEntry } from '@/lib/accounting';
-import { fetchInventoryMap, incrementInventoryBalance } from '@/lib/services/shared/inventory-utils';
+import { fetchInventoryMap, lockInventoryValues, upsertInventoryBalance } from '@/lib/services/shared/inventory-utils';
+import { receiveStockValue, INVENTORY_VALUE_V1 } from '@/lib/inventory-value';
 
 export type OpeningInventoryLine = {
   productId: string;
@@ -15,6 +16,8 @@ export type OpeningInventoryLine = {
   qtyInUnit: number;
   /** Base-unit cost in pence. Omit or 0 = quantity only, no valuation journal. */
   unitCostBasePence?: number | null;
+  /** Exact cost per selected unit (e.g. a pack), before base-unit rounding. */
+  unitCostPence?: number | null;
 };
 
 export type RecordOpeningInventoryResult = {
@@ -25,14 +28,6 @@ export type RecordOpeningInventoryResult = {
   journalPosted: boolean;
   referenceId: string;
 };
-
-function weightedAvgCost(beforeQty: number, beforeCost: number, addQty: number, addCost: number): number {
-  const totalQty = beforeQty + addQty;
-  if (totalQty <= 0) return addCost > 0 ? addCost : beforeCost;
-  if (addCost <= 0) return beforeCost;
-  if (beforeQty <= 0 || beforeCost <= 0) return addCost;
-  return Math.round((beforeQty * beforeCost + addQty * addCost) / totalQty);
-}
 
 export async function recordOpeningInventory(
   input: {
@@ -47,6 +42,8 @@ export async function recordOpeningInventory(
   db?: any,
 ): Promise<RecordOpeningInventoryResult> {
   const client = db ?? prisma;
+  const store = await client.store.findFirst({ where: { id: input.storeId, businessId: input.businessId }, select: { id: true } });
+  if (!store) throw new Error('Opening stock branch does not belong to this business.');
   const lines = input.lines.filter((l) => l.productId && l.unitId && l.qtyInUnit > 0);
   if (lines.length === 0) {
     return {
@@ -80,7 +77,7 @@ export async function recordOpeningInventory(
   }
 
   const unitIds = [...new Set(lines.map((l) => l.unitId))];
-  const productUnits = await prisma.productUnit.findMany({
+  const productUnits: { productId: string; unitId: string; conversionToBase: number; product: { id: string; businessId: string; defaultCostBasePence: number } }[] = await client.productUnit.findMany({
     where: {
       productId: { in: [...new Set(lines.map((l) => l.productId))] },
       unitId: { in: unitIds },
@@ -102,7 +99,6 @@ export async function recordOpeningInventory(
   }
 
   const productIds = [...new Set(lines.map((l) => l.productId))];
-  const inventoryMap = await fetchInventoryMap(input.storeId, productIds);
 
   type Applied = {
     productId: string;
@@ -110,7 +106,6 @@ export async function recordOpeningInventory(
     qtyBase: number;
     unitCostBasePence: number;
     lineValuePence: number;
-    newAvgCost: number;
   };
 
   const applied: Applied[] = [];
@@ -124,13 +119,9 @@ export async function recordOpeningInventory(
     const qtyBase = Math.round(line.qtyInUnit * pu.conversionToBase);
     if (qtyBase <= 0) continue;
 
-    const costBase = Math.max(0, Math.round(line.unitCostBasePence ?? 0));
-    const before = inventoryMap.get(line.productId) ?? { qtyOnHandBase: 0, avgCostBasePence: 0 };
-    const lineValue = costBase > 0 ? costBase * qtyBase : 0;
-    const newAvg =
-      costBase > 0
-        ? weightedAvgCost(before.qtyOnHandBase, before.avgCostBasePence, qtyBase, costBase)
-        : before.avgCostBasePence;
+    const unitCost = line.unitCostPence == null ? null : Math.max(0, Math.round(line.unitCostPence));
+    const costBase = unitCost == null ? Math.max(0, Math.round(line.unitCostBasePence ?? 0)) : Math.round(unitCost / pu.conversionToBase);
+    const lineValue = unitCost == null ? costBase * qtyBase : Math.round(unitCost * line.qtyInUnit);
 
     applied.push({
       productId: line.productId,
@@ -138,15 +129,10 @@ export async function recordOpeningInventory(
       qtyBase,
       unitCostBasePence: costBase,
       lineValuePence: lineValue,
-      newAvgCost: newAvg,
     });
 
-    inventoryMap.set(line.productId, {
-      qtyOnHandBase: before.qtyOnHandBase + qtyBase,
-      avgCostBasePence: newAvg,
-    });
 
-    if (costBase > 0) {
+    if (lineValue > 0) {
       valuedPence += lineValue;
       valuedUnits += qtyBase;
     } else {
@@ -158,14 +144,17 @@ export async function recordOpeningInventory(
   await ensureChartOfAccounts(input.businessId);
 
   const applyOpening = async (tx: any) => {
+    await lockInventoryValues(tx, input.storeId, productIds);
+    const replay = await tx.stockMovement.findFirst({ where: {
+      storeId: input.storeId, referenceType: 'OPENING_BALANCE_INVENTORY', referenceId: input.referenceId,
+    }, select: { id: true } });
+    if (replay) return false;
+    const inventoryMap = await fetchInventoryMap(input.storeId, productIds, tx);
     for (const row of applied) {
-      await incrementInventoryBalance(
-        tx,
-        input.storeId,
-        row.productId,
-        row.qtyBase,
-        row.newAvgCost
-      );
+      const value = receiveStockValue(inventoryMap.get(row.productId), row.qtyBase,
+        row.lineValuePence > 0 ? row.lineValuePence : null);
+      await upsertInventoryBalance(tx, input.storeId, row.productId, value.qtyOnHandBase, value.avgCostBasePence, value);
+      inventoryMap.set(row.productId, value);
     }
 
     if (applied.length > 0) {
@@ -176,6 +165,8 @@ export async function recordOpeningInventory(
           type: 'OPENING',
           qtyBase: row.qtyBase,
           unitCostBasePence: row.unitCostBasePence > 0 ? row.unitCostBasePence : null,
+          valuePence: row.lineValuePence > 0 ? row.lineValuePence : null,
+          costBasis: row.lineValuePence > 0 ? INVENTORY_VALUE_V1 : null,
           referenceType: 'OPENING_BALANCE_INVENTORY',
           referenceId: input.referenceId,
           userId: input.userId ?? null,
@@ -196,13 +187,12 @@ export async function recordOpeningInventory(
         prismaClient: tx as any,
       });
     }
+    return true;
   };
 
-  if (db) {
-    await applyOpening(client);
-  } else {
-    await prisma.$transaction(applyOpening);
-  }
+  const appliedOnce = db ? await applyOpening(client) : await prisma.$transaction(applyOpening);
+  if (!appliedOnce) return { valuedUnits: 0, unvaluedUnits: 0, valuedPence: 0,
+    costReviewProductIds: [], journalPosted: false, referenceId: input.referenceId };
 
   return {
     valuedUnits,

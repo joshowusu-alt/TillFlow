@@ -562,7 +562,7 @@ describe('purchase unit conversion', () => {
     expect(prismaMock.purchaseInvoice.create.mock.calls[0][0].data.transactionNumber).toBe('PUR-000001');
     expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
     expect(prismaMock.moneyIdempotency.create).not.toHaveBeenCalled();
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a new credit purchase without a supplier', async () => {

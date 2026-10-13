@@ -1,4 +1,6 @@
 import { Prisma } from '@prisma/client';
+import { receiveStockValue, INVENTORY_VALUE_V1 } from '@/lib/inventory-value';
+import { lockInventoryValues, upsertInventoryBalance as writeInventoryValue } from './shared/inventory-utils';
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry, ensureChartOfAccounts } from '@/lib/accounting';
 import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
@@ -11,7 +13,7 @@ import {
   type PaymentInput,
   type JournalLine
 } from './shared';
-import { fetchInventoryMap, incrementInventoryBalance } from './shared';
+import { fetchInventoryMap } from './shared';
 import {
   EXPLICIT_CASH_TILL_REQUIRED_MSG,
   getOpenCashShiftForPayment,
@@ -434,17 +436,19 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
 
   const productTotals = new Map<
     string,
-    { qtyBase: number; costPence: number; defaultCostBasePence: number }
+    { qtyBase: number; costPence: number; unknownQty: number; defaultCostBasePence: number }
   >();
   for (const line of lineDetails) {
     const existing =
       productTotals.get(line.productId) ?? {
         qtyBase: 0,
         costPence: 0,
+        unknownQty: 0,
         defaultCostBasePence: line.productUnit.product.defaultCostBasePence
       };
     existing.qtyBase += line.qtyBase;
     existing.costPence += line.lineSubtotal;
+    if (line.lineSubtotal <= 0) existing.unknownQty += line.qtyBase;
     productTotals.set(line.productId, existing);
   }
 
@@ -510,10 +514,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   // Nested `lines: { create: [...150] }` inside a $transaction generates
   // 150 sequential round-trips (150 × 30 ms RTT = 4.5 s) — right at the limit.
   //
-  // Solution: avoid $transaction for the normal path. Use createMany for all
-  // child records — each createMany is ONE SQL INSERT statement = 1 RTT.
-  // For inventory: use array-form $transaction([...ops]) which sends all upserts
-  // in a single HTTP batch to Turso (~30 ms total regardless of count).
+  // Use createMany for child records so a large purchase remains efficient
+  // inside the single invoice/journal/inventory transaction.
   const _doInvoice = async (client: any) => {
     // 1. Invoice header — 1 RTT. New purchases get a PUR- presentation number.
     const transactionNumber = await reserveNextDocumentNumber(client, input.businessId, 'purchase');
@@ -596,15 +598,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     // Pre-compute avg cost for all products
     const upsertArgs = Array.from(productTotals.entries()).map(([productId, totals]) => {
       const inv = inventoryMap.get(productId);
-      const onHand = inv?.qtyOnHandBase ?? 0;
-      const currentAvg =
-        inv?.avgCostBasePence && inv.avgCostBasePence > 0
-          ? inv.avgCostBasePence
-          : totals.defaultCostBasePence;
-      const existingValue = onHand * currentAvg;
-      const newQty = onHand + totals.qtyBase;
-      const newAvg = newQty > 0 ? Math.round((existingValue + totals.costPence) / newQty) : 0;
-      return { productId, qtyBase: totals.qtyBase, newAvg };
+      const value = receiveStockValue(inv, totals.qtyBase, totals.costPence > 0 ? totals.costPence : null, totals.unknownQty);
+      return { productId, value };
     });
 
     if (upsertArgs.length > 0) {
@@ -612,20 +607,22 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
 
       if (isPostgres && typeof client.$executeRaw === 'function') {
         const sid = store.id;
-        const values = upsertArgs.map(({ productId, qtyBase, newAvg }) =>
-          Prisma.sql`(gen_random_uuid()::text, ${sid}, ${productId}, ${qtyBase}, ${newAvg}, NOW())`
+        const values = upsertArgs.map(({ productId, value }) =>
+          Prisma.sql`(gen_random_uuid()::text, ${sid}, ${productId}, ${value.qtyOnHandBase}, ${value.avgCostBasePence}, ${value.knownValuePence ?? null}, ${value.unvaluedQtyBase ?? null}, NOW())`
         );
         await client.$executeRaw`
-          INSERT INTO "InventoryBalance" ("id", "storeId", "productId", "qtyOnHandBase", "avgCostBasePence", "updatedAt")
+          INSERT INTO "InventoryBalance" ("id", "storeId", "productId", "qtyOnHandBase", "avgCostBasePence", "knownValuePence", "unvaluedQtyBase", "updatedAt")
           VALUES ${Prisma.join(values)}
           ON CONFLICT ("storeId", "productId") DO UPDATE SET
-            "qtyOnHandBase" = "InventoryBalance"."qtyOnHandBase" + EXCLUDED."qtyOnHandBase",
+            "qtyOnHandBase" = EXCLUDED."qtyOnHandBase",
             "avgCostBasePence" = EXCLUDED."avgCostBasePence",
+            "knownValuePence" = EXCLUDED."knownValuePence",
+            "unvaluedQtyBase" = EXCLUDED."unvaluedQtyBase",
             "updatedAt" = NOW()
         `;
       } else {
-        for (const { productId, qtyBase, newAvg } of upsertArgs) {
-          await incrementInventoryBalance(client, store.id, productId, qtyBase, newAvg);
+        for (const { productId, value } of upsertArgs) {
+          await writeInventoryValue(client, store.id, productId, value.qtyOnHandBase, value.avgCostBasePence, value);
         }
       }
     }
@@ -640,6 +637,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         productId: line.productId,
         qtyBase: line.qtyBase,
         unitCostBasePence: line.unitCostBasePence,
+        valuePence: line.lineSubtotal,
+        costBasis: line.lineSubtotal > 0 ? INVENTORY_VALUE_V1 : null,
         type: movementType,
         referenceType,
         referenceId: invoiceId,
@@ -661,6 +660,9 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   const runWithMoneyTx = async (
     client: any,
   ): Promise<{ created: Awaited<ReturnType<typeof _doInvoice>>; replayed: boolean }> => {
+    // Stock locks must precede shared journal/document counters, matching sales.
+    // Taking them after posting the purchase journal can deadlock a concurrent sale.
+    await lockInventoryValues(client, store.id, Array.from(productTotals.keys()));
     try {
       return { created: await _doInvoice(client), replayed: false };
     } catch (error) {
@@ -684,22 +686,17 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   };
 
   let invoice: Awaited<ReturnType<typeof _doInvoice>>;
-  // Paid money always needs one commit. A supplied key on unpaid/credit
-  // also needs one commit so a later inventory failure cannot leave a
-  // replayable MoneyIdempotency success without stock.
-  const needsAtomicMoney = payments.length > 0 || Boolean(idempotencyKey);
+  // Every purchase changes inventory and the ledger, including unpaid credit.
+  // A later stock/link failure must roll back the invoice and all its postings.
   if (db) {
     const { created, replayed } = await runWithMoneyTx(db);
     invoice = replayed ? created : await finishInvoice(created, db);
-  } else if (needsAtomicMoney) {
+  } else {
     invoice = await prisma.$transaction(async (tx) => {
       const { created, replayed } = await runWithMoneyTx(tx);
       if (replayed) return created;
       return finishInvoice(created, tx);
     });
-  } else {
-    const { created, replayed } = await runWithMoneyTx(prisma);
-    invoice = replayed ? created : await finishInvoice(created, prisma);
   }
 
   return invoice;

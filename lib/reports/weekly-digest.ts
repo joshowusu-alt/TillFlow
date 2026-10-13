@@ -40,7 +40,7 @@ type DigestLine = {
   lineSubtotalPence: number;
   lineDiscountPence: number;
   promoDiscountPence: number;
-  lineCostPence: number;
+  lineCostPence: number; costBasis?: string | null;
   lineVatPence: number;
   lineTotalPence: number;
   product: { name: string; defaultCostBasePence: number };
@@ -82,7 +82,7 @@ function toMarginInvoices(invoices: DigestInvoice[]): MarginInvoiceInput[] {
       lineSubtotalPence: line.lineSubtotalPence,
       lineDiscountPence: line.lineDiscountPence,
       promoDiscountPence: line.promoDiscountPence,
-      lineCostPence: line.lineCostPence,
+      lineCostPence: line.lineCostPence, costBasis: line.costBasis,
       qtyBase: line.qtyBase,
       defaultCostBasePence: line.product.defaultCostBasePence,
       productId: line.productId,
@@ -189,7 +189,7 @@ async function _getWeeklyDigestData(
             lineSubtotalPence: true,
             lineDiscountPence: true,
             promoDiscountPence: true,
-        lineCostPence: true,
+        lineCostPence: true, costBasis: true,
         lineVatPence: true,
         lineTotalPence: true,
         product: { select: { name: true, defaultCostBasePence: true } },
@@ -212,7 +212,7 @@ async function _getWeeklyDigestData(
             lineSubtotalPence: true,
             lineDiscountPence: true,
             promoDiscountPence: true,
-        lineCostPence: true,
+        lineCostPence: true, costBasis: true,
         lineVatPence: true,
         lineTotalPence: true,
         product: { select: { name: true, defaultCostBasePence: true } },

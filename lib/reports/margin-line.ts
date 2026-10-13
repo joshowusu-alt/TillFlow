@@ -8,6 +8,8 @@
  * only when the caller proves the line cost is missing.
  */
 
+import { INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
+
 export type MarginState = 'READY' | 'INCOMPLETE_COSTS';
 
 export type MarginCostEvidence = 'AUTHORITATIVE_ZERO' | 'MISSING';
@@ -27,6 +29,7 @@ export type MarginLineInput = {
   lineDiscountPence: number;
   promoDiscountPence: number;
   lineCostPence: number;
+  costBasis?: string | null;
   qtyBase: number;
   qtyInUnit?: number;
   defaultCostBasePence?: number | null;
@@ -91,6 +94,10 @@ export type ResolvedLineCost =
 export function resolveAuthoritativeLineCost(line: MarginLineInput): ResolvedLineCost {
   if (line.qtyBase === 0 && (line.qtyInUnit ?? 0) > 0) {
     return { authoritative: false, costPence: null };
+  }
+  if (line.costBasis === UNVERIFIED_STOCK_V1) return { authoritative: false, costPence: null };
+  if (line.costBasis === INVENTORY_VALUE_V1 && line.lineCostPence >= 0) {
+    return { authoritative: true, costPence: line.lineCostPence };
   }
   if (line.costEvidence === 'AUTHORITATIVE_ZERO') {
     return { authoritative: true, costPence: 0 };

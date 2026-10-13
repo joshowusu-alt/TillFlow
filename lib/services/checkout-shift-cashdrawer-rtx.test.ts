@@ -11,6 +11,8 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Stock-lock concurrency is exercised by the live PostgreSQL valuation suite.
+vi.mock('./shared/inventory-utils', async () => ({ ...await vi.importActual<typeof import('./shared/inventory-utils')>('./shared/inventory-utils'), lockInventoryValues: vi.fn().mockResolvedValue(undefined) }));
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks (must mirror the shape expected by sales.ts)

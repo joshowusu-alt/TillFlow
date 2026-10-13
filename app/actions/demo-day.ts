@@ -36,7 +36,7 @@ async function applyInventoryRestores(storeId: string | undefined, inventoryRest
     Array.from(inventoryRestores.entries()).map(([productId, qtyBase]) =>
       prisma.inventoryBalance.upsert({
         where: { storeId_productId: { storeId, productId } },
-        update: { qtyOnHandBase: { increment: qtyBase } },
+        update: { qtyOnHandBase: { increment: qtyBase }, knownValuePence: null, unvaluedQtyBase: null },
         create: {
           storeId,
           productId,
@@ -340,7 +340,7 @@ export async function generateDemoDay(): Promise<{ ok: boolean; salesCount: numb
       for (const [productId, qtyBase] of inventoryDecrements) {
         await prisma.inventoryBalance.upsert({
           where: { storeId_productId: { storeId: store.id, productId } },
-          update: { qtyOnHandBase: { decrement: qtyBase } },
+          update: { qtyOnHandBase: { decrement: qtyBase }, knownValuePence: null, unvaluedQtyBase: null },
           create: { storeId: store.id, productId, qtyOnHandBase: -qtyBase },
         });
       }

@@ -31,6 +31,8 @@ on:
       - 'lib/reports/money-received-unknown-method.pg.test.ts'
       - 'lib/reports/money-received-store-scope.pg.test.ts'
       - 'lib/reports/reporting-scope.ts'
+      - 'lib/reports/monthly-balance-review*'
+      - 'app/(protected)/payments/reconciliation/balances/**'
       - 'docs/migration/P1_SLICE1_SQL_ONLY_CONSTRAINTS.md'
       - 'docs/migration/P1_SLICE2A_CONTRACT.md'
       - 'docs/migration/P1_SLICE2B_CONTRACT.md'
@@ -38,6 +40,8 @@ on:
       - 'lib/migration/**'
       - 'lib/services/migration/**'
       - 'lib/services/sales.ts'
+      - 'lib/services/inventory-valuation.pg.test.ts'
+      - 'lib/reports/incomplete-stock.ts'
       - 'lib/services/shifts.ts'
       - 'lib/services/cash-drawer.ts'
       - 'lib/services/returns.ts'
@@ -130,6 +134,12 @@ jobs:
           TILLFLOW_INCLUDE_PG_TESTS: '1'
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
           POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+      - name: Monthly balance review PostgreSQL suite
+        run: npx vitest run --reporter=dot lib/reports/monthly-balance-review.pg.test.ts
+        env:
+          TILLFLOW_INCLUDE_PG_TESTS: '1'
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+          POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
 
       - name: Migration P1 Slice 2B PostgreSQL behavioural suite
         run: node scripts/migration-p1-slice2b-pg-test.cjs
@@ -155,6 +165,10 @@ jobs:
         run: |
           set -euo pipefail
           files=(
+            lib/services/inventory-valuation.pg.test.ts
+            lib/services/stocktake-completion-concurrency.pg.test.ts
+            lib/services/inventory-reversal-concurrency.pg.test.ts
+            lib/services/inventory-increase-concurrency.test.ts
             lib/services/receipt-ledger.pg.test.ts
             lib/services/checkout-shift-cashdrawer-rtx.test.ts
             lib/services/payments-concurrency.test.ts

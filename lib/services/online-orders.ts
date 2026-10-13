@@ -246,7 +246,7 @@ export async function restoreOnlineOrderInventoryReservation(input: {
           storeId: input.storeId,
         },
         data: {
-          qtyOnHandBase: { increment: line.qtyBase },
+          qtyOnHandBase: { increment: line.qtyBase }, knownValuePence: null, unvaluedQtyBase: null,
         },
       }),
     ),
@@ -1036,7 +1036,7 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
           qtyOnHandBase: { gte: qtyBase },
         },
         data: {
-          qtyOnHandBase: { decrement: qtyBase },
+          qtyOnHandBase: { decrement: qtyBase }, knownValuePence: null, unvaluedQtyBase: null,
         },
       });
 

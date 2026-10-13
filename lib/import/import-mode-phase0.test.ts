@@ -17,6 +17,7 @@ vi.mock('@/lib/prisma', () => {
   };
   return {
     prisma: {
+      store: { findFirst: vi.fn().mockResolvedValue({ id: 's1' }) },
       stockMovement,
       productUnit,
       account,
@@ -45,6 +46,8 @@ vi.mock('@/lib/accounting', async () => {
 vi.mock('@/lib/services/shared/inventory-utils', () => ({
   fetchInventoryMap: vi.fn().mockResolvedValue(new Map()),
   incrementInventoryBalance: vi.fn().mockResolvedValue(undefined),
+  upsertInventoryBalance: vi.fn().mockResolvedValue(undefined),
+  lockInventoryValues: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { prisma } from '@/lib/prisma';

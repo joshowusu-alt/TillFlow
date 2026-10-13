@@ -272,7 +272,7 @@ export async function loadToday(db: Db, input: TodayLoadInput): Promise<TodaySna
         lineSubtotalPence: true,
         lineDiscountPence: true,
         promoDiscountPence: true,
-        lineCostPence: true,
+        lineCostPence: true, costBasis: true,
         qtyBase: true,
         qtyInUnit: true,
         product: { select: { name: true, businessId: true } },
@@ -384,7 +384,7 @@ export async function loadToday(db: Db, input: TodayLoadInput): Promise<TodaySna
         lineSubtotalPence: number;
         lineDiscountPence: number;
         promoDiscountPence: number;
-        lineCostPence: number;
+        lineCostPence: number; costBasis?: string | null;
         qtyBase: number;
         qtyInUnit: number;
         productId: string;
@@ -405,7 +405,7 @@ export async function loadToday(db: Db, input: TodayLoadInput): Promise<TodaySna
         lineSubtotalPence: line.lineSubtotalPence,
         lineDiscountPence: line.lineDiscountPence,
         promoDiscountPence: line.promoDiscountPence,
-        lineCostPence: line.lineCostPence,
+        lineCostPence: line.lineCostPence, costBasis: line.costBasis,
         qtyBase: line.qtyBase,
         qtyInUnit: line.qtyInUnit,
         productId: line.productId,

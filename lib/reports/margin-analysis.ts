@@ -7,7 +7,7 @@ type MarginAnalysisLine = {
 	lineSubtotalPence: number;
 	lineDiscountPence?: number;
 	promoDiscountPence?: number;
-	lineCostPence: number;
+	lineCostPence: number; costBasis?: string | null;
 	createdAt: Date;
 	product: {
 		name: string;
@@ -106,7 +106,7 @@ export function summarizeMarginAnalysis(
 			lineSubtotalPence: line.lineSubtotalPence,
 			lineDiscountPence: line.lineDiscountPence ?? 0,
 			promoDiscountPence: line.promoDiscountPence ?? 0,
-			lineCostPence: line.lineCostPence,
+			lineCostPence: line.lineCostPence, costBasis: line.costBasis,
 			qtyBase: line.qtyBase,
 			defaultCostBasePence: line.product.defaultCostBasePence,
 		});
@@ -216,7 +216,7 @@ export async function getMarginAnalysisSnapshot({
 				lineSubtotalPence: true,
 				lineDiscountPence: true,
 				promoDiscountPence: true,
-				lineCostPence: true,
+				lineCostPence: true, costBasis: true,
 				salesInvoice: {
 					select: {
 						id: true,
@@ -246,7 +246,7 @@ export async function getMarginAnalysisSnapshot({
 			lineSubtotalPence: line.lineSubtotalPence,
 			lineDiscountPence: line.lineDiscountPence,
 			promoDiscountPence: line.promoDiscountPence,
-			lineCostPence: line.lineCostPence,
+			lineCostPence: line.lineCostPence, costBasis: line.costBasis,
 			createdAt: line.salesInvoice.createdAt,
 			product: line.product,
 		}));

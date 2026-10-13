@@ -50,6 +50,7 @@ export default async function ProductsPage({
     q?: string;
     page?: string;
     created?: string;
+    stock?: string;
     barcodesGenerated?: string;
     barcodesFailed?: string;
     missingCost?: string;
@@ -80,8 +81,10 @@ export default async function ProductsPage({
   const issueActive = Boolean(issueKey) || issueDenied || invalidIssue;
 
   let issueProductWhere: Prisma.ProductWhereInput | null = null;
+  const historicalMissingCostProductIds = new Set<string>();
   if (issueKey === 'MISSING_COST') {
     const incompleteStock = await getIncompleteStockSnapshot(business.id);
+    incompleteStock.soldWithoutCostProductIds.forEach(id => historicalMissingCostProductIds.add(id));
     const ids = incompleteStock.allMissingCostProductIds;
     issueProductWhere = { id: ids.length > 0 ? { in: ids } : { in: ['__none__'] } };
   } else if (issueKey === 'UNUSED_CATALOGUE' || issueKey === 'STOCK_SETUP_GAP') {
@@ -93,7 +96,7 @@ export default async function ProductsPage({
 
   const productWhere = {
     businessId: business.id,
-    active: true,
+    active: issueKey === 'MISSING_COST' ? undefined : true,
     ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
     ...(issueProductWhere ?? {}),
   } as Prisma.ProductWhereInput;
@@ -107,6 +110,7 @@ export default async function ProductsPage({
         where: productWhere,
         select: {
           id: true,
+          active: true,
           name: true,
           imageUrl: true,
           sellingPriceBasePence: true,
@@ -315,11 +319,11 @@ export default async function ProductsPage({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
               </svg>
               <div className="flex-1">
-                <span className="text-sm font-semibold text-success">Product added to your catalogue.</span>
-                <span className="ml-1.5 text-sm text-ink/70">Add opening stock on the product form or from Opening Stock setup before your first sale.</span>
+                <span className="text-sm font-semibold text-success">{searchParams?.stock === '1' ? 'Product added with opening stock.' : 'Product added to your catalogue.'}</span>
+                <span className="ml-1.5 text-sm text-ink/70">{searchParams?.stock === '1' ? 'Stock is ready for sale. Costs left blank remain incomplete.' : 'Add opening stock on the product form or from Opening Stock setup before your first sale.'}</span>
               </div>
-              <Link href="/setup/opening-stock" className="flex-shrink-0 text-xs font-semibold text-accent hover:underline">
-                Add opening stock &rarr;
+              <Link href={searchParams?.stock === '1' ? '/inventory' : '/setup/opening-stock'} className="flex-shrink-0 text-xs font-semibold text-accent hover:underline">
+                {searchParams?.stock === '1' ? 'Review stock' : 'Add opening stock'} &rarr;
               </Link>
             </div>
           )}
@@ -563,11 +567,13 @@ export default async function ProductsPage({
                       {issueKey ? (
                         <>
                           <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-                            {issueDef?.recordStatusLabel}
+                            {historicalMissingCostProductIds.has(product.id)
+                              ? `Earlier sale cost missing${product.active ? '' : ' · Archived'}`
+                              : issueDef?.recordStatusLabel}
                           </span>
                           {issueKey === 'MISSING_COST' ? (
-                            <Link href={`/products/${product.id}#cost`} className="btn-primary min-h-[44px] text-xs">
-                              Edit cost
+                            <Link href={historicalMissingCostProductIds.has(product.id) ? '/sales' : '/inventory'} className="btn-primary min-h-[44px] text-xs">
+                              {historicalMissingCostProductIds.has(product.id) ? 'Review sales' : 'Review stock value'}
                             </Link>
                           ) : null}
                           {issueKey === 'UNUSED_CATALOGUE' || issueKey === 'STOCK_SETUP_GAP' ? (
@@ -705,7 +711,9 @@ export default async function ProductsPage({
                         <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">
                           {issueKey ? (
                             <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
-                              {issueDef?.recordStatusLabel}
+                              {historicalMissingCostProductIds.has(product.id)
+                                ? `Earlier sale cost missing${product.active ? '' : ' · Archived'}`
+                                : issueDef?.recordStatusLabel}
                             </span>
                           ) : (
                             preview
@@ -715,8 +723,8 @@ export default async function ProductsPage({
                           <td className="px-3 py-3">
                             <div className="flex flex-wrap gap-2">
                               {issueKey === 'MISSING_COST' ? (
-                                <Link href={`/products/${product.id}#cost`} className="btn-primary text-xs">
-                                  Edit cost
+                                <Link href={historicalMissingCostProductIds.has(product.id) ? '/sales' : '/inventory'} className="btn-primary text-xs">
+                                  {historicalMissingCostProductIds.has(product.id) ? 'Review sales' : 'Review stock value'}
                                 </Link>
                               ) : null}
                               {issueKey === 'UNUSED_CATALOGUE' || issueKey === 'STOCK_SETUP_GAP' ? (

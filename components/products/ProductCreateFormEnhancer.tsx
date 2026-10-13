@@ -67,10 +67,13 @@ export function OpeningStockFields({
             min={0}
             step="0.01"
             inputMode="decimal"
-            placeholder="Uses base cost if blank"
+            placeholder="Leave blank if unknown"
           />
         </div>
       </div>
+      <p className="text-xs text-black/50">
+        Enter the cost for the selected stock unit. Blank cost keeps stock value and affected profit incomplete; sales can continue. Valued opening stock is recorded against opening balance equity.
+      </p>
       <p className="text-xs text-black/50">
         Skip for now? You must{' '}
         <a href="/setup/opening-stock" className="font-semibold text-accent underline">

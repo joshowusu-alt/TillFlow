@@ -268,7 +268,8 @@ describe('createSalesReturn', () => {
       'store-1',
       'prod-1',
       12,
-      1000
+      1000,
+      expect.objectContaining({ qtyOnHandBase: 12, knownValuePence: null })
     );
   });
 
@@ -362,7 +363,8 @@ describe('createSalesReturn', () => {
       'store-1',
       'prod-2',
       8,
-      2000
+      2000,
+      expect.objectContaining({ qtyOnHandBase: 8, knownValuePence: null })
     );
   });
 });
@@ -379,7 +381,7 @@ describe('createPurchaseReturn cash drawer', () => {
       business: { vatEnabled: false },
       store: {},
       payments: [{ method: 'CASH', amountPence: 5000 }],
-      lines: [{ productId: 'prod-1', qtyBase: 1, product: { defaultCostBasePence: 1000 } }],
+      lines: [{ productId: 'prod-1', qtyBase: 1, lineSubtotalPence: 5000, product: { defaultCostBasePence: 1000 } }],
     });
     prismaMock.purchaseReturn.findUnique.mockResolvedValue(null);
     prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) =>

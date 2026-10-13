@@ -13,7 +13,7 @@ import {
   ReconcileForm,
   TransactionDrillDown,
 } from './ReconciliationClient';
-import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
+
 import { getBusinessDayBounds } from '@/lib/notifications/utils';
 import { addLocalDays, localDateInstant, localDateKey } from '@/lib/reports/reporting-clock';
 
@@ -62,7 +62,7 @@ export default async function CardTransferReconciliationPage({
     .filter((r) => r.method === 'TRANSFER')
     .reduce((sum, r) => sum + r.systemTotalPence, 0);
   const reconciledCount = rows.filter((r) => r.status === 'RECONCILED').length;
-  const pendingCount = rows.filter((r) => r.status === 'PENDING').length;
+  const pendingCount = rows.filter((r) => ['PENDING', 'REVIEW_REQUIRED'].includes(r.status)).length;
   const discrepancyCount = rows.filter((r) => r.status === 'DISCREPANCY').length;
 
   // Drill-down: parse detail param (date|method)
@@ -75,22 +75,23 @@ export default async function CardTransferReconciliationPage({
       drillDate = d;
       drillMethod = m;
       drillDownTransactions = await getPaymentTransactions({
-        date: new Date(d),
+        date: localDateInstant(d, 'start', business.timezone) ?? new Date(NaN),
         method: m,
         storeId: selectedStoreId,
       });
     }
   }
 
-  const resolvedStoreId = resolveSoleOrSelectedStoreId(stores, selectedStoreId) ?? '';
+
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Card & Transfer Reconciliation"
-        subtitle="Match card/transfer sales against bank & POS terminal statements."
+        subtitle="Compare confirmed card and transfer receipts with statement totals. Uses the date money was received."
       />
 
+      <p className="text-sm text-black/70">This is a daily receipts comparison, not a full bank reconciliation. Bank fees, outgoing payments, transfers between accounts and settlement timing must be checked separately. A changed receipt total requires review again.</p>
       {/* Filters */}
       <form className="card grid gap-3 p-4 sm:grid-cols-4" method="GET">
         <div>
@@ -130,9 +131,9 @@ export default async function CardTransferReconciliationPage({
       </form>
 
       {/* Error */}
-      {searchParams?.error ? (
+      {searchParams?.error || !summaryResult.success ? (
         <div className="rounded-xl border border-rose/30 bg-rose/10 px-4 py-3 text-sm text-rose">
-          {searchParams.error}
+          {searchParams?.error ?? (!summaryResult.success ? summaryResult.error : '')}
         </div>
       ) : null}
 
@@ -237,13 +238,13 @@ export default async function CardTransferReconciliationPage({
                   const detailKey = `${row.date}|${row.method}`;
 
                   return (
-                    <tr key={detailKey} className="rounded-xl bg-white align-top">
+                    <tr key={`${row.storeId}|${detailKey}`} className="rounded-xl bg-white align-top">
                       <td className="px-3 py-3 text-sm">
                         <Link
                           className="text-emerald-700 hover:underline"
-                          href={`/payments/reconciliation/card-transfer?from=${fromKey}&to=${toKey}&storeId=${displayStoreId}&detail=${detailKey}`}
+                          href={`/payments/reconciliation/card-transfer?from=${fromKey}&to=${toKey}&storeId=${row.storeId}&detail=${detailKey}`}
                         >
-                          {row.date}
+                          {row.date} · {stores.find(s => s.id === row.storeId)?.name ?? 'Branch'}
                         </Link>
                       </td>
                       <td className="px-3 py-3">
@@ -268,11 +269,11 @@ export default async function CardTransferReconciliationPage({
                         <span className={`pill ${statusTone}`}>{row.status}</span>
                       </td>
                       <td className="px-3 py-3">
-                        {resolvedStoreId ? (
+                        {row.storeId ? (
                           <ReconcileForm
                             date={row.date}
                             method={row.method}
-                            storeId={resolvedStoreId}
+                            storeId={row.storeId}
                             systemTotalPence={row.systemTotalPence}
                             currency={business.currency}
                           />
@@ -321,12 +322,12 @@ export default async function CardTransferReconciliationPage({
                         ? 'text-accent'
                         : 'text-rose';
                 const detailKey = `${row.date}|${row.method}`;
-                const detailHref = `/payments/reconciliation/card-transfer?from=${fromKey}&to=${toKey}&storeId=${displayStoreId}&detail=${detailKey}`;
+                const detailHref = `/payments/reconciliation/card-transfer?from=${fromKey}&to=${toKey}&storeId=${row.storeId}&detail=${detailKey}`;
 
                 return (
-                  <DataCard key={detailKey}>
+                  <DataCard key={`${row.storeId}|${detailKey}`}>
                     <DataCardHeader
-                      title={row.date}
+                      title={`${row.date} · ${stores.find(s => s.id === row.storeId)?.name ?? 'Branch'}`}
                       subtitle={row.method === 'CARD' ? 'Card' : 'Transfer'}
                       aside={
                         <span className="font-semibold tabular-nums">
@@ -364,11 +365,11 @@ export default async function CardTransferReconciliationPage({
                       <Link className="btn-ghost text-xs text-center" href={detailHref}>
                         View transactions
                       </Link>
-                      {resolvedStoreId ? (
+                      {row.storeId ? (
                         <ReconcileForm
                           date={row.date}
                           method={row.method}
-                          storeId={resolvedStoreId}
+                          storeId={row.storeId}
                           systemTotalPence={row.systemTotalPence}
                           currency={business.currency}
                         />
