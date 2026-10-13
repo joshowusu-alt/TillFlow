@@ -16,6 +16,8 @@ export type OpeningInventoryLine = {
   qtyInUnit: number;
   /** Base-unit cost in pence. Omit or 0 = quantity only, no valuation journal. */
   unitCostBasePence?: number | null;
+  /** Exact cost per selected unit (e.g. a pack), before base-unit rounding. */
+  unitCostPence?: number | null;
 };
 
 export type RecordOpeningInventoryResult = {
@@ -117,8 +119,9 @@ export async function recordOpeningInventory(
     const qtyBase = Math.round(line.qtyInUnit * pu.conversionToBase);
     if (qtyBase <= 0) continue;
 
-    const costBase = Math.max(0, Math.round(line.unitCostBasePence ?? 0));
-    const lineValue = costBase > 0 ? costBase * qtyBase : 0;
+    const unitCost = line.unitCostPence == null ? null : Math.max(0, Math.round(line.unitCostPence));
+    const costBase = unitCost == null ? Math.max(0, Math.round(line.unitCostBasePence ?? 0)) : Math.round(unitCost / pu.conversionToBase);
+    const lineValue = unitCost == null ? costBase * qtyBase : Math.round(unitCost * line.qtyInUnit);
 
     applied.push({
       productId: line.productId,
@@ -129,7 +132,7 @@ export async function recordOpeningInventory(
     });
 
 
-    if (costBase > 0) {
+    if (lineValue > 0) {
       valuedPence += lineValue;
       valuedUnits += qtyBase;
     } else {
@@ -149,7 +152,7 @@ export async function recordOpeningInventory(
     const inventoryMap = await fetchInventoryMap(input.storeId, productIds, tx);
     for (const row of applied) {
       const value = receiveStockValue(inventoryMap.get(row.productId), row.qtyBase,
-        row.unitCostBasePence > 0 ? row.lineValuePence : null);
+        row.lineValuePence > 0 ? row.lineValuePence : null);
       await upsertInventoryBalance(tx, input.storeId, row.productId, value.qtyOnHandBase, value.avgCostBasePence, value);
       inventoryMap.set(row.productId, value);
     }
@@ -162,8 +165,8 @@ export async function recordOpeningInventory(
           type: 'OPENING',
           qtyBase: row.qtyBase,
           unitCostBasePence: row.unitCostBasePence > 0 ? row.unitCostBasePence : null,
-          valuePence: row.unitCostBasePence > 0 ? row.lineValuePence : null,
-          costBasis: row.unitCostBasePence > 0 ? INVENTORY_VALUE_V1 : null,
+          valuePence: row.lineValuePence > 0 ? row.lineValuePence : null,
+          costBasis: row.lineValuePence > 0 ? INVENTORY_VALUE_V1 : null,
           referenceType: 'OPENING_BALANCE_INVENTORY',
           referenceId: input.referenceId,
           userId: input.userId ?? null,

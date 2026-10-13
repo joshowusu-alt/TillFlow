@@ -238,4 +238,19 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     expect((await stock(p)).knownValuePence).toBe(await inventoryPosting([a.id, b.id, sale.id]));
     await balanced([a.id, b.id, sale.id]);
   }, 60000);
+  it('records opening pack cost exactly and supports verified sub-pesewa unit allocations', async () => {
+    const p = await product(); const pack = await db.unit.create({ data: { name: `Opening pack ${p}`, pluralName: 'Packs' } }); extraUnitIds.push(pack.id);
+    await db.productUnit.create({ data: { productId: p, unitId: pack.id, conversionToBase: 3 } });
+    const referenceId = `opening-pack-${p}`;
+    await opening.recordOpeningInventory({ businessId, storeId, referenceId, lines: [{ productId: p, unitId: pack.id, qtyInUnit: 1, unitCostPence: 1 }] });
+    expect(await stock(p)).toMatchObject({ qtyOnHandBase: 3, knownValuePence: 1, unvaluedQtyBase: 0, avgCostBasePence: 0 });
+    const sale = await sell(p, 1);
+    const line = await db.salesInvoiceLine.findFirstOrThrow({ where: { salesInvoiceId: sale.id } });
+    expect(line).toMatchObject({ lineCostPence: 0, costBasis: 'INVENTORY_VALUE_V1' });
+    const { resolveAuthoritativeLineCost } = await import('@/lib/reports/margin-line');
+    expect(resolveAuthoritativeLineCost(line).authoritative).toBe(true);
+    expect(await inventoryPosting([referenceId, sale.id])).toBe((await stock(p)).knownValuePence);
+    const { getIncompleteStockSnapshot } = await import('@/lib/reports/incomplete-stock');
+    expect((await getIncompleteStockSnapshot(businessId)).soldWithoutCostProductIds).not.toContain(p);
+  }, 60000);
 });

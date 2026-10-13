@@ -136,7 +136,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
     const openingStockCostPence =
       formPence(formData, 'openingStockCostPence') > 0
         ? formPence(formData, 'openingStockCostPence')
-        : fields.defaultCostBasePence;
+        : 0;
     const confirmPriceWarning = formData.get('confirmPriceWarning') === '1';
 
     const priceWarnings = getProductPriceWarnings({

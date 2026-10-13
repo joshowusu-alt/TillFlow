@@ -84,7 +84,7 @@ export async function createOpeningStockAction(
           productId: l.productId,
           unitId: l.unitId,
           qtyInUnit: l.qtyInUnit,
-          unitCostBasePence: l.unitCostPence > 0 ? l.unitCostPence : 0,
+          unitCostPence: l.unitCostPence > 0 ? l.unitCostPence : 0,
         }));
         const applyEquity = async () => {
           try {
