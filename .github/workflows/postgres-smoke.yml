@@ -31,6 +31,8 @@ on:
       - 'lib/reports/money-received-unknown-method.pg.test.ts'
       - 'lib/reports/money-received-store-scope.pg.test.ts'
       - 'lib/reports/reporting-scope.ts'
+      - 'lib/reports/monthly-balance-review*'
+      - 'app/(protected)/payments/reconciliation/balances/**'
       - 'docs/migration/P1_SLICE1_SQL_ONLY_CONSTRAINTS.md'
       - 'docs/migration/P1_SLICE2A_CONTRACT.md'
       - 'docs/migration/P1_SLICE2B_CONTRACT.md'
@@ -128,6 +130,8 @@ jobs:
 
       - name: Money received reporting PostgreSQL suite
         run: npx vitest run --reporter=dot lib/reports/money-received.pg.test.ts lib/reports/money-received-scale.pg.test.ts lib/reports/money-received-unknown-method.pg.test.ts lib/reports/money-received-store-scope.pg.test.ts
+      - name: Monthly balance review PostgreSQL suite
+        run: npx vitest run --reporter=dot lib/reports/monthly-balance-review.pg.test.ts
         env:
           TILLFLOW_INCLUDE_PG_TESTS: '1'
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public

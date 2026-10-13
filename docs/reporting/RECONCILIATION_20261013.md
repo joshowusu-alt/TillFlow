@@ -27,3 +27,15 @@ The balance-sheet calculation preserves ledger inventory and ledger profit. Oper
 5. Show a balance sheet only with clear evidence/completeness status; validate cash flow against reconciled account movements.
 
 Inventory PRs #125 and #126 remain separate dependencies and unreleased at the start of this work. This foundation introduces no schema migration and changes no Production data.
+
+## Monthly review workspace
+
+The next stage adds `/payments/reconciliation/balances`, available to the authenticated business's owner and manager. Open `?month=2026-03` to start the agreed March review. The normal default is the current business-local month, so the product does not impose this owner's historical start date on other businesses.
+
+It shows every recorded account's opening balance, period debits and credits, and closing balance. Closed months use exact business-local calendar boundaries; the current month stops at the read time, excluding later-dated journals. All amounts remain signed. Month and closing trial-balance differences remain visible and are never automatically offset. A legacy opening-capital field is disclosed separately and is not silently added to the ledger.
+
+Account details are paginated with a stable timestamp/ID order; full-period totals are not limited to a displayed page. Both account and journal business scope are enforced. Opening, movement and selected details share one serializable read transaction.
+
+The ledger currently combines electronic money under Bank. Neither that combined balance nor a zero trial-balance difference establishes a separate verified bank or MoMo-wallet balance. The workspace displays awaiting-evidence status, has no posting or reconciliation sign-off controls, and does not import or persist statements. Individual account mapping and statement transaction matching remain the next evidence-dependent stage. Balance sheet and cash flow remain withheld.
+
+Tests include business-local month boundaries, DST and leap months, partial-month future exclusion, negative balances, foreign-account refusal, tied-timestamp pagination, rendered evidence warnings, and PostgreSQL journal fixtures. The PostgreSQL workflow now runs these checks when the monthly review files change.

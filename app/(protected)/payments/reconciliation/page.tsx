@@ -76,6 +76,7 @@ export default async function MomoReconciliationPage({
       <PageHeader
         title="MoMo Reconciliation"
         subtitle="Track pending, failed and confirmed collections. Re-check status before retrying."
+        secondaryCta={{ label: 'Monthly balance review', href: '/payments/reconciliation/balances' }}
       />
 
       <form className="card grid gap-3 p-4 sm:grid-cols-4" method="GET">
