@@ -76,6 +76,7 @@ export function resolveAvgCost(
   defaultCostBasePence: number
 ): number {
   const inv = inventoryMap.get(productId);
+  if (inv?.knownValuePence != null && inv.unvaluedQtyBase === 0) return inv.avgCostBasePence;
   return inv?.avgCostBasePence && inv.avgCostBasePence > 0
     ? inv.avgCostBasePence
     : defaultCostBasePence;
