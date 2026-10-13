@@ -7,6 +7,8 @@
 
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { prisma as defaultPrisma } from '@/lib/prisma';
+import { isPostgresRuntimeEnv } from '@/lib/database-runtime';
+import type { StockValue } from '@/lib/inventory-value';
 
 // Prisma transaction clients are Omit<PrismaClient, connection methods>,
 // so we widen the tx parameter to accept both.
@@ -19,6 +21,8 @@ type PrismaOrTx = PrismaClient | Omit<PrismaClient, '$connect' | '$disconnect' |
 export type InventorySnapshot = {
   qtyOnHandBase: number;
   avgCostBasePence: number;
+  knownValuePence?: number | null;
+  unvaluedQtyBase?: number | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -41,9 +45,24 @@ export async function fetchInventoryMap(
   return new Map(
     balances.map((b: any) => [
       b.productId,
-      { qtyOnHandBase: b.qtyOnHandBase, avgCostBasePence: b.avgCostBasePence }
+      { qtyOnHandBase: b.qtyOnHandBase, avgCostBasePence: b.avgCostBasePence,
+        knownValuePence: b.knownValuePence, unvaluedQtyBase: b.unvaluedQtyBase }
     ])
   );
+}
+
+export async function lockInventoryValues(tx: any, storeId: string, productIds: string[]) {
+  const ids = [...new Set(productIds)].sort();
+  if (isPostgresRuntimeEnv(process.env) && typeof tx.$queryRaw === 'function') {
+    if (ids.length > 0) await tx.$queryRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${storeId}), hashtext(p.id))::text AS locked
+      FROM (SELECT unnest(ARRAY[${Prisma.join(ids)}]::text[]) AS id ORDER BY id) p
+    `;
+    if (ids.length > 0) await tx.$queryRaw`
+      SELECT "id" FROM "InventoryBalance" WHERE "storeId" = ${storeId}
+      AND "productId" IN (${Prisma.join(ids)}) ORDER BY "productId" FOR UPDATE
+    `;
+  }
 }
 
 /**
@@ -70,12 +89,13 @@ export async function upsertInventoryBalance(
   storeId: string,
   productId: string,
   qtyOnHandBase: number,
-  avgCostBasePence: number
+  avgCostBasePence: number,
+  value?: Pick<StockValue, 'knownValuePence' | 'unvaluedQtyBase'>
 ): Promise<void> {
   await tx.inventoryBalance.upsert({
     where: { storeId_productId: { storeId, productId } },
-    update: { qtyOnHandBase, avgCostBasePence },
-    create: { storeId, productId, qtyOnHandBase, avgCostBasePence }
+    update: { qtyOnHandBase, avgCostBasePence, knownValuePence: value?.knownValuePence ?? null, unvaluedQtyBase: value?.unvaluedQtyBase ?? null },
+    create: { storeId, productId, qtyOnHandBase, avgCostBasePence, knownValuePence: value?.knownValuePence ?? null, unvaluedQtyBase: value?.unvaluedQtyBase ?? null }
   });
 }
 
@@ -93,7 +113,7 @@ export async function decrementInventoryBalance(
 ): Promise<number> {
   const updated = await tx.inventoryBalance.update({
     where: { storeId_productId: { storeId, productId } },
-    data: { qtyOnHandBase: { decrement: qtyBase } },
+    data: { qtyOnHandBase: { decrement: qtyBase }, knownValuePence: null, unvaluedQtyBase: null },
     select: { qtyOnHandBase: true },
   });
   if (!options?.allowNegativeQuantity && updated.qtyOnHandBase < 0) {
@@ -112,7 +132,7 @@ export async function batchDecrementInventoryBalance(
   tx: any,
   storeId: string,
   decrements: Map<string, number>, // productId -> qtyBase to subtract
-  options?: { allowNegativeQuantity?: boolean },
+  options?: { allowNegativeQuantity?: boolean; values?: Map<string, StockValue> },
 ): Promise<void> {
   if (decrements.size === 0) return;
 
@@ -125,10 +145,16 @@ export async function batchDecrementInventoryBalance(
     ' '
   );
   const productIdList = Prisma.join(entries.map(([id]) => id));
+  const valueCases = Prisma.join(entries.map(([id]) => Prisma.sql`WHEN ${id} THEN ${options?.values?.get(id)?.knownValuePence ?? null}`), ' ');
+  const unknownCases = Prisma.join(entries.map(([id]) => Prisma.sql`WHEN ${id} THEN ${options?.values?.get(id)?.unvaluedQtyBase ?? null}`), ' ');
+  const avgCases = Prisma.join(entries.map(([id]) => Prisma.sql`WHEN ${id} THEN ${options?.values?.get(id)?.avgCostBasePence ?? null}`), ' ');
 
   const result = await tx.$queryRaw<{ productId: string; qtyOnHandBase: number }[]>`
     UPDATE "InventoryBalance"
-    SET "qtyOnHandBase" = "qtyOnHandBase" - CASE "productId" ${caseWhen} END
+    SET "qtyOnHandBase" = "qtyOnHandBase" - CASE "productId" ${caseWhen} END,
+        "knownValuePence" = CAST(CASE "productId" ${valueCases} END AS INTEGER),
+        "unvaluedQtyBase" = CAST(CASE "productId" ${unknownCases} END AS INTEGER),
+        "avgCostBasePence" = COALESCE(CAST(CASE "productId" ${avgCases} END AS INTEGER), "avgCostBasePence")
     WHERE "storeId" = ${storeId}
       AND "productId" IN (${productIdList})
     RETURNING "productId", "qtyOnHandBase"
@@ -161,6 +187,7 @@ export async function incrementInventoryBalance(
     update: {
       qtyOnHandBase: { increment: qtyBase },
       avgCostBasePence: newAvgCostBasePence,
+      knownValuePence: null, unvaluedQtyBase: null,
     },
     create: { storeId, productId, qtyOnHandBase: qtyBase, avgCostBasePence: newAvgCostBasePence },
   });
@@ -178,7 +205,7 @@ export async function incrementInventoryBalanceQtyOnly(
 ): Promise<number> {
   const updated = await tx.inventoryBalance.update({
     where: { storeId_productId: { storeId, productId } },
-    data: { qtyOnHandBase: { increment: qtyBase } },
+    data: { qtyOnHandBase: { increment: qtyBase }, knownValuePence: null, unvaluedQtyBase: null },
     select: { qtyOnHandBase: true },
   });
   return updated.qtyOnHandBase as number;

@@ -6,6 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { UserError } from '@/lib/action-utils';
+import { allocateLineValues, issueStockValue, receiveStockValue, INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1, type StockValue } from '@/lib/inventory-value';
+import { lockInventoryValues } from './shared/inventory-utils';
 import {
   filterPositivePayments,
   splitPayments,
@@ -981,6 +983,33 @@ async function createSaleImpl(input: CreateSaleInput) {
       attachedShiftId = openShift?.id ?? null;
     }
 
+    const transactionCosts = lineDetails.map(line => ({
+      costPence: (costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence) * line.qtyBase,
+      costBasis: null as string | null,
+    }));
+    const valuationUpdates = new Map<string, StockValue>();
+    if (shouldApplyInventoryMovements) {
+      await lockInventoryValues(tx, input.storeId, productIds);
+      const currentInventory = await fetchInventoryMap(input.storeId, productIds, tx as any);
+      stockMovementInventoryMap = currentInventory;
+      for (const [productId, qtyBase] of qtyByProduct) {
+        const indexes = lineDetails.map((line, index) => line.productId === productId ? index : -1).filter(index => index >= 0);
+        const sample = lineDetails[indexes[0]];
+        const before = currentInventory.get(productId);
+        const cost = resolveSaleUnitCostBasePence(currentInventory, productId, sample.productUnit.product);
+        costByProduct.set(productId, cost);
+        if (enforceInventory && (before?.qtyOnHandBase ?? 0) < qtyBase) throw new UserError('Insufficient on hand');
+        if (qtyBase <= 0 || !before || before.qtyOnHandBase < qtyBase) {
+          indexes.forEach(index => { transactionCosts[index] = { costPence: 0, costBasis: UNVERIFIED_STOCK_V1 }; });
+          continue;
+        }
+        const issued = issueStockValue(before, qtyBase, cost);
+        const shares = allocateLineValues(issued.costPence, indexes.map(index => lineDetails[index].qtyBase));
+        indexes.forEach((index, offset) => { transactionCosts[index] = { costPence: shares[offset], costBasis: issued.costBasis }; });
+        if (before.knownValuePence != null || before.unvaluedQtyBase != null) valuationUpdates.set(productId, issued.after);
+      }
+    }
+
     const invoiceCreateData = {
       businessId: input.businessId,
       storeId: store.id,
@@ -1002,13 +1031,14 @@ async function createSaleImpl(input: CreateSaleInput) {
       discountOverrideReasonCode: input.discountOverrideReasonCode ?? null,
       discountOverrideReason: input.discountOverrideReason ?? null,
       discountApprovedByUserId,
-      grossMarginPence: grossMarginEstimate,
+      grossMarginPence: transactionCosts.some(cost => cost.costBasis === UNVERIFIED_STOCK_V1)
+        ? null : subtotal - transactionCosts.reduce((sum, cost) => sum + cost.costPence, 0),
       cashReceivedPence: cashPence > 0 ? cashReceivedPence : 0,
       changeDuePence: cashPence > 0 ? changeDuePence : 0,
       externalRef: input.externalRef ?? null,
       createdAt: input.createdAt ?? undefined,
       lines: {
-        create: lineDetails.map((line) => ({
+        create: lineDetails.map((line, index) => ({
           productId: line.productId,
           unitId: line.unitId,
           qtyInUnit: line.qtyInUnit,
@@ -1020,7 +1050,8 @@ async function createSaleImpl(input: CreateSaleInput) {
           lineSubtotalPence: line.lineSubtotal,
           lineVatPence: line.lineVat,
           lineTotalPence: line.lineTotal,
-          lineCostPence: (costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence) * line.qtyBase,
+          lineCostPence: transactionCosts[index].costPence,
+          costBasis: transactionCosts[index].costBasis,
         }))
       },
       payments: {
@@ -1301,7 +1332,9 @@ async function createSaleImpl(input: CreateSaleInput) {
         measureCheckoutStage(
           'action.checkout.inventory-update',
           input,
-          async () => batchDecrementInventoryBalance(tx, input.storeId, qtyByProduct),
+          async () => valuationUpdates.size > 0
+            ? batchDecrementInventoryBalance(tx, input.storeId, qtyByProduct, { values: valuationUpdates })
+            : batchDecrementInventoryBalance(tx, input.storeId, qtyByProduct),
           { stage: 'inventory-update', rowCount: qtyByProduct.size },
           CHECKOUT_STAGE_THRESHOLDS_MS.inventoryUpdate,
         ),
@@ -1310,7 +1343,7 @@ async function createSaleImpl(input: CreateSaleInput) {
       const inventoryMapInTx = await measureCheckoutStage(
         'action.checkout.inventory-update',
         input,
-        async () => fetchInventoryMap(input.storeId, productIds, tx as any),
+        async () => stockMovementInventoryMap,
         { stage: 'inventory-update', rowCount: productIds.length },
         CHECKOUT_STAGE_THRESHOLDS_MS.inventoryUpdate,
       );
@@ -1328,7 +1361,7 @@ async function createSaleImpl(input: CreateSaleInput) {
         );
 
         txPromises.push(
-          upsertInventoryBalance(tx, input.storeId, productId, onHand - qtyBase, avgCost),
+          upsertInventoryBalance(tx, input.storeId, productId, onHand - qtyBase, avgCost, valuationUpdates.get(productId)),
         );
       }
     }
@@ -1339,7 +1372,7 @@ async function createSaleImpl(input: CreateSaleInput) {
           'action.checkout.stock-movements',
           input,
           async () => tx.stockMovement.createMany({
-            data: lineDetails.map((line) => {
+            data: lineDetails.map((line, index) => {
               const beforeQtyBase = stockMovementInventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
               return {
                 storeId: input.storeId,
@@ -1347,6 +1380,8 @@ async function createSaleImpl(input: CreateSaleInput) {
                 qtyBase: -line.qtyBase,
                 beforeQtyBase,
                 afterQtyBase: beforeQtyBase - line.qtyBase,
+                valuePence: transactionCosts[index].costBasis === UNVERIFIED_STOCK_V1 ? null : -transactionCosts[index].costPence,
+                costBasis: transactionCosts[index].costBasis,
                 unitCostBasePence:
                   costByProduct.get(line.productId) ??
                   line.productUnit.product.defaultCostBasePence,
@@ -1374,10 +1409,7 @@ async function createSaleImpl(input: CreateSaleInput) {
         ? { accountCode: ACCOUNT_CODES.vatPayable, creditPence: vatTotal }
         : null
     ].filter(Boolean) as JournalLine[];
-    const cogsTotal = lineDetails.reduce((sum, line) => {
-      const cost = costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence;
-      return sum + cost * line.qtyBase;
-    }, 0);
+    const cogsTotal = transactionCosts.reduce((sum, cost) => sum + cost.costPence, 0);
     journalLines.push({ accountCode: ACCOUNT_CODES.cogs, debitPence: cogsTotal });
     journalLines.push({ accountCode: ACCOUNT_CODES.inventory, creditPence: cogsTotal });
     txPromises.push(
@@ -1428,7 +1460,7 @@ async function createSaleImpl(input: CreateSaleInput) {
       void error;
     });
 
-    detectNegativeMarginRisk({
+    if (invoice.grossMarginPence !== null) detectNegativeMarginRisk({
       businessId: input.businessId,
       storeId: input.storeId,
       cashierUserId: input.cashierUserId,
@@ -1643,6 +1675,7 @@ export async function amendSale(input: AmendSaleInput) {
       throw new UserError('Sale changed or has pending MoMo. Refresh and reconcile it before amending.');
     }
     // Re-read inventory inside transaction to prevent TOCTOU race
+    await lockInventoryValues(tx, invoice.storeId, Array.from(allAffectedProductIds));
     const inventoryMap = await fetchInventoryMap(invoice.storeId, Array.from(allAffectedProductIds), tx);
 
     // Validate stock for newly added items
@@ -1672,6 +1705,27 @@ export async function amendSale(input: AmendSaleInput) {
       );
     }
 
+    const amendedValues = new Map<string, StockValue>();
+    const addedCosts = newLineDetails.map(() => ({ costPence: 0, costBasis: null as string | null }));
+    for (const productId of allAffectedProductIds) {
+      let value = inventoryMap.get(productId);
+      const removed = removedLines.filter(line => line.productId === productId);
+      const restoredQty = removedQtyByProduct.get(productId) ?? 0;
+      if (restoredQty > 0) {
+        const originalCost = removed.reduce((sum, line) => sum + line.lineCostPence, 0);
+        const unknownQty = removed.reduce((sum, line) => sum + (line.costBasis === UNVERIFIED_STOCK_V1 || (line.lineCostPence <= 0 && line.costBasis !== INVENTORY_VALUE_V1) ? line.qtyBase : 0), 0);
+        value = receiveStockValue(value, restoredQty, originalCost, unknownQty);
+      }
+      const addedQty = addedQtyByProduct.get(productId) ?? 0;
+      if (addedQty > 0 && value) {
+        const issued = issueStockValue(value, addedQty, avgCostMap.get(productId) ?? 0);
+        const indexes = newLineDetails.flatMap((line, index) => line.productId === productId ? [index] : []);
+        const allocations = allocateLineValues(issued.costPence, indexes.map(index => newLineDetails[index].qtyBase));
+        indexes.forEach((index, offset) => { addedCosts[index] = { costPence: allocations[offset], costBasis: issued.costBasis }; });
+        value = issued.after;
+      }
+      if (value) amendedValues.set(productId, value);
+    }
     const txPromises: Promise<any>[] = [];
 
     // 1. Delete removed lines
@@ -1690,7 +1744,7 @@ export async function amendSale(input: AmendSaleInput) {
     if (newLineDetails.length > 0) {
       txPromises.push(
         tx.salesInvoiceLine.createMany({
-          data: newLineDetails.map((line) => ({
+          data: newLineDetails.map((line, index) => ({
             salesInvoiceId: invoice.id,
             productId: line.productId,
             unitId: line.unitId,
@@ -1703,7 +1757,8 @@ export async function amendSale(input: AmendSaleInput) {
             lineSubtotalPence: line.lineSubtotal,
             lineVatPence: line.lineVat,
             lineTotalPence: line.lineTotal,
-            lineCostPence: (avgCostMap.get(line.productId) ?? line.productUnit.product.defaultCostBasePence) * line.qtyBase,
+            lineCostPence: addedCosts[index].costPence,
+            costBasis: addedCosts[index].costBasis,
           })),
         })
       );
@@ -1715,6 +1770,8 @@ export async function amendSale(input: AmendSaleInput) {
         where: { id: invoice.id },
         data: {
           subtotalPence: newSubtotal,
+          grossMarginPence: keptLines.some(line => line.costBasis === UNVERIFIED_STOCK_V1 || (line.lineCostPence <= 0 && line.costBasis !== INVENTORY_VALUE_V1)) || addedCosts.some(line => line.costBasis === UNVERIFIED_STOCK_V1)
+            ? null : newSubtotal - keptLines.reduce((sum, line) => sum + line.lineCostPence, 0) - addedCosts.reduce((sum, line) => sum + line.costPence, 0),
           vatPence: newVat,
           totalPence: newTotal,
           discountPence: 0, // order-level discount is cleared on amend
@@ -1729,8 +1786,9 @@ export async function amendSale(input: AmendSaleInput) {
       const restored = removedQtyByProduct.get(productId) ?? 0;
       const deducted = addedQtyByProduct.get(productId) ?? 0;
       const finalOnHand = onHand + restored - deducted;
-      const avgCost = avgCostMap.get(productId) ?? 0;
-      txPromises.push(upsertInventoryBalance(tx, invoice.storeId, productId, finalOnHand, avgCost));
+      const value = amendedValues.get(productId);
+      const avgCost = value?.avgCostBasePence ?? avgCostMap.get(productId) ?? 0;
+      txPromises.push(upsertInventoryBalance(tx, invoice.storeId, productId, finalOnHand, avgCost, value));
     }
 
     // 5. Create stock movements for restored items
@@ -1742,6 +1800,8 @@ export async function amendSale(input: AmendSaleInput) {
             productId: line.productId,
             qtyBase: line.qtyBase, // positive = stock returned
             unitCostBasePence: avgCostMap.get(line.productId) ?? line.product.defaultCostBasePence,
+            valuePence: line.lineCostPence,
+            costBasis: line.costBasis,
             type: 'SALE_AMENDMENT',
             referenceType: 'SALES_INVOICE',
             referenceId: invoice.id,
@@ -1755,11 +1815,13 @@ export async function amendSale(input: AmendSaleInput) {
     if (newLineDetails.length > 0) {
       txPromises.push(
         tx.stockMovement.createMany({
-          data: newLineDetails.map((line) => ({
+          data: newLineDetails.map((line, index) => ({
             storeId: invoice.storeId,
             productId: line.productId,
             qtyBase: -line.qtyBase, // negative = stock sold
             unitCostBasePence: avgCostMap.get(line.productId) ?? line.productUnit.product.defaultCostBasePence,
+            valuePence: addedCosts[index].costBasis === UNVERIFIED_STOCK_V1 ? null : -addedCosts[index].costPence,
+            costBasis: addedCosts[index].costBasis,
             type: 'SALE_AMENDMENT',
             referenceType: 'SALES_INVOICE',
             referenceId: invoice.id,
@@ -1851,14 +1913,8 @@ export async function amendSale(input: AmendSaleInput) {
     // 9. Post corrective journal entry
     const removedSubtotal = removedLines.reduce((sum, l) => sum + l.lineTotalPence - l.lineVatPence, 0);
     const removedVatTotal = removedLines.reduce((sum, l) => sum + l.lineVatPence, 0);
-    const removedCogs = removedLines.reduce((sum, l) => {
-      const avgCost = avgCostMap.get(l.productId) ?? l.product.defaultCostBasePence;
-      return sum + avgCost * l.qtyBase;
-    }, 0);
-    const addedCogs = newLineDetails.reduce((sum, l) => {
-      const avgCost = avgCostMap.get(l.productId) ?? l.productUnit.product.defaultCostBasePence;
-      return sum + avgCost * l.qtyBase;
-    }, 0);
+    const removedCogs = removedLines.reduce((sum, line) => sum + line.lineCostPence, 0);
+    const addedCogs = addedCosts.reduce((sum, line) => sum + line.costPence, 0);
 
     const journalLines: JournalLine[] = [];
 

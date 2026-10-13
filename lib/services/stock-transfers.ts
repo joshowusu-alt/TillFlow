@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { resolveAvgCost, upsertInventoryBalance } from './shared';
+import { fetchInventoryMap, lockInventoryValues } from './shared/inventory-utils';
+import { issueStockValue, receiveStockValue, INVENTORY_VALUE_V1 } from '@/lib/inventory-value';
 
 export async function requestStockTransfer(input: {
   businessId: string;
@@ -48,7 +50,7 @@ export async function requestStockTransfer(input: {
     if (!validProductIds.has(line.productId)) {
       throw new Error('Transfer contains an unknown product.');
     }
-    if (!Number.isFinite(line.qtyBase) || line.qtyBase <= 0) {
+    if (!Number.isSafeInteger(line.qtyBase) || line.qtyBase <= 0) {
       throw new Error('Transfer quantity must be greater than zero.');
     }
   }
@@ -107,37 +109,28 @@ export async function approveAndCompleteStockTransfer(input: {
   }
 
   const productIds = transfer.lines.map((line) => line.productId);
-  const sourceBalances = await prisma.inventoryBalance.findMany({
-    where: { storeId: transfer.fromStoreId, productId: { in: productIds } },
-    select: { productId: true, qtyOnHandBase: true, avgCostBasePence: true },
-  });
-  const sourceBalanceMap = new Map(sourceBalances.map((balance) => [balance.productId, balance]));
-
-  for (const line of transfer.lines) {
-    const source = sourceBalanceMap.get(line.productId);
-    const available = source?.qtyOnHandBase ?? 0;
-    if (available < line.qtyBase) {
-      throw new Error(
-        `Insufficient stock in source branch for product ${line.productId}. Available ${available}, requested ${line.qtyBase}.`
-      );
-    }
-  }
-
   return prisma.$transaction(async (tx) => {
+    for (const storeId of [transfer.fromStoreId, transfer.toStoreId].sort()) await lockInventoryValues(tx, storeId, productIds);
+    const current = await tx.stockTransfer.findFirst({ where: { id: transfer.id, businessId: input.businessId }, select: { status: true } });
+    if (current?.status !== 'PENDING') throw new Error('Only pending transfers can be approved.');
+    const sourceBalanceMap = await fetchInventoryMap(transfer.fromStoreId, productIds, tx);
     let totalTransferCostPence = 0;
 
     for (const line of transfer.lines) {
-      const source = sourceBalanceMap.get(line.productId)!;
+      const source = sourceBalanceMap.get(line.productId);
+      if (!source || source.qtyOnHandBase < line.qtyBase) throw new Error('Insufficient stock in source branch.');
       const sourceBefore = source.qtyOnHandBase;
       const sourceAfter = sourceBefore - line.qtyBase;
       const avgCost = resolveAvgCost(new Map([[line.productId, source]]), line.productId, source.avgCostBasePence);
-      totalTransferCostPence += Math.round(avgCost * line.qtyBase);
+      const issued = issueStockValue(source, line.qtyBase, avgCost);
+      totalTransferCostPence += issued.costPence;
 
-      await upsertInventoryBalance(tx, transfer.fromStoreId, line.productId, sourceAfter, avgCost);
+      await upsertInventoryBalance(tx, transfer.fromStoreId, line.productId, sourceAfter, issued.after.avgCostBasePence, issued.after);
+      sourceBalanceMap.set(line.productId, issued.after);
 
       const targetExisting = await tx.inventoryBalance.findFirst({
         where: { storeId: transfer.toStoreId, productId: line.productId },
-        select: { qtyOnHandBase: true, avgCostBasePence: true },
+        select: { qtyOnHandBase: true, avgCostBasePence: true, knownValuePence: true, unvaluedQtyBase: true },
       });
       const targetBefore = targetExisting?.qtyOnHandBase ?? 0;
       const targetExistingCost = targetExisting?.avgCostBasePence ?? 0;
@@ -164,7 +157,8 @@ export async function approveAndCompleteStockTransfer(input: {
         );
       }
 
-      await upsertInventoryBalance(tx, transfer.toStoreId, line.productId, targetAfter, blendedTargetCost);
+      const received = receiveStockValue(targetExisting ?? undefined, line.qtyBase, issued.costBasis === INVENTORY_VALUE_V1 ? issued.costPence : null);
+      await upsertInventoryBalance(tx, transfer.toStoreId, line.productId, targetAfter, issued.costBasis === INVENTORY_VALUE_V1 ? received.avgCostBasePence : blendedTargetCost, received);
 
       await tx.stockMovement.createMany({
         data: [
@@ -175,6 +169,8 @@ export async function approveAndCompleteStockTransfer(input: {
             beforeQtyBase: sourceBefore,
             afterQtyBase: sourceAfter,
             unitCostBasePence: avgCost,
+            valuePence: issued.costBasis === INVENTORY_VALUE_V1 ? -issued.costPence : null,
+            costBasis: issued.costBasis,
             type: 'TRANSFER_OUT',
             referenceType: 'STOCK_TRANSFER',
             referenceId: transfer.id,
@@ -189,6 +185,8 @@ export async function approveAndCompleteStockTransfer(input: {
             // Record the cost of the inbound stock itself (source WAC), not the
             // post-blend destination WAC — the movement reflects what arrived.
             unitCostBasePence: avgCost,
+            valuePence: issued.costBasis === INVENTORY_VALUE_V1 ? issued.costPence : null,
+            costBasis: issued.costBasis,
             type: 'TRANSFER_IN',
             referenceType: 'STOCK_TRANSFER',
             referenceId: transfer.id,

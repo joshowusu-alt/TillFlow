@@ -4,6 +4,8 @@ import { createPurchase } from '@/lib/services/purchases';
 import { EXPLICIT_CASH_TILL_REQUIRED_MSG } from '@/lib/services/cash-drawer';
 import { createSupplier } from '@/lib/services/suppliers';
 import { prisma } from '@/lib/prisma';
+import { removeRecordedStockValue } from '@/lib/inventory-value';
+import { lockInventoryValues } from '@/lib/services/shared/inventory-utils';
 import { redirect } from 'next/navigation';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { toPence, formString, formInt, formDate, formOptionalString } from '@/lib/form-helpers';
@@ -352,14 +354,16 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
     // Atomically reverse inventory and delete all related records
     await prisma.$transaction(async (tx) => {
       // Reverse inventory: subtract the quantities that were added
+      await lockInventoryValues(tx, invoice.storeId, invoice.lines.map(line => line.productId));
       for (const line of invoice.lines) {
         const balance = await tx.inventoryBalance.findFirst({
           where: { storeId: invoice.storeId, productId: line.productId },
         });
         if (balance) {
+          const value = removeRecordedStockValue(balance, line.qtyBase, line.lineSubtotalPence);
           await tx.inventoryBalance.update({
             where: { id: balance.id },
-            data: { qtyOnHandBase: Math.max(0, balance.qtyOnHandBase - line.qtyBase) },
+            data: { qtyOnHandBase: value.qtyOnHandBase, avgCostBasePence: value.avgCostBasePence, knownValuePence: value.knownValuePence, unvaluedQtyBase: value.unvaluedQtyBase },
           });
         }
       }

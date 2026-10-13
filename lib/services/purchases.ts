@@ -1,4 +1,6 @@
 import { Prisma } from '@prisma/client';
+import { receiveStockValue, INVENTORY_VALUE_V1 } from '@/lib/inventory-value';
+import { lockInventoryValues, upsertInventoryBalance as writeInventoryValue } from './shared/inventory-utils';
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry, ensureChartOfAccounts } from '@/lib/accounting';
 import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
@@ -11,7 +13,7 @@ import {
   type PaymentInput,
   type JournalLine
 } from './shared';
-import { fetchInventoryMap, incrementInventoryBalance } from './shared';
+import { fetchInventoryMap } from './shared';
 import {
   EXPLICIT_CASH_TILL_REQUIRED_MSG,
   getOpenCashShiftForPayment,
@@ -434,17 +436,19 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
 
   const productTotals = new Map<
     string,
-    { qtyBase: number; costPence: number; defaultCostBasePence: number }
+    { qtyBase: number; costPence: number; unknownQty: number; defaultCostBasePence: number }
   >();
   for (const line of lineDetails) {
     const existing =
       productTotals.get(line.productId) ?? {
         qtyBase: 0,
         costPence: 0,
+        unknownQty: 0,
         defaultCostBasePence: line.productUnit.product.defaultCostBasePence
       };
     existing.qtyBase += line.qtyBase;
     existing.costPence += line.lineSubtotal;
+    if (line.lineSubtotal <= 0) existing.unknownQty += line.qtyBase;
     productTotals.set(line.productId, existing);
   }
 
@@ -585,6 +589,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   };
 
   const _doInventory = async (client: any, invoiceId: string) => {
+    await lockInventoryValues(client, store.id, Array.from(productTotals.keys()));
     const inventoryMap = await fetchInventoryMap(
       store.id,
       Array.from(productTotals.keys()),
@@ -594,15 +599,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     // Pre-compute avg cost for all products
     const upsertArgs = Array.from(productTotals.entries()).map(([productId, totals]) => {
       const inv = inventoryMap.get(productId);
-      const onHand = inv?.qtyOnHandBase ?? 0;
-      const currentAvg =
-        inv?.avgCostBasePence && inv.avgCostBasePence > 0
-          ? inv.avgCostBasePence
-          : totals.defaultCostBasePence;
-      const existingValue = onHand * currentAvg;
-      const newQty = onHand + totals.qtyBase;
-      const newAvg = newQty > 0 ? Math.round((existingValue + totals.costPence) / newQty) : 0;
-      return { productId, qtyBase: totals.qtyBase, newAvg };
+      const value = receiveStockValue(inv, totals.qtyBase, totals.costPence > 0 ? totals.costPence : null, totals.unknownQty);
+      return { productId, value };
     });
 
     if (upsertArgs.length > 0) {
@@ -610,20 +608,22 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
 
       if (isPostgres && typeof client.$executeRaw === 'function') {
         const sid = store.id;
-        const values = upsertArgs.map(({ productId, qtyBase, newAvg }) =>
-          Prisma.sql`(gen_random_uuid()::text, ${sid}, ${productId}, ${qtyBase}, ${newAvg}, NOW())`
+        const values = upsertArgs.map(({ productId, value }) =>
+          Prisma.sql`(gen_random_uuid()::text, ${sid}, ${productId}, ${value.qtyOnHandBase}, ${value.avgCostBasePence}, ${value.knownValuePence ?? null}, ${value.unvaluedQtyBase ?? null}, NOW())`
         );
         await client.$executeRaw`
-          INSERT INTO "InventoryBalance" ("id", "storeId", "productId", "qtyOnHandBase", "avgCostBasePence", "updatedAt")
+          INSERT INTO "InventoryBalance" ("id", "storeId", "productId", "qtyOnHandBase", "avgCostBasePence", "knownValuePence", "unvaluedQtyBase", "updatedAt")
           VALUES ${Prisma.join(values)}
           ON CONFLICT ("storeId", "productId") DO UPDATE SET
-            "qtyOnHandBase" = "InventoryBalance"."qtyOnHandBase" + EXCLUDED."qtyOnHandBase",
+            "qtyOnHandBase" = EXCLUDED."qtyOnHandBase",
             "avgCostBasePence" = EXCLUDED."avgCostBasePence",
+            "knownValuePence" = EXCLUDED."knownValuePence",
+            "unvaluedQtyBase" = EXCLUDED."unvaluedQtyBase",
             "updatedAt" = NOW()
         `;
       } else {
-        for (const { productId, qtyBase, newAvg } of upsertArgs) {
-          await incrementInventoryBalance(client, store.id, productId, qtyBase, newAvg);
+        for (const { productId, value } of upsertArgs) {
+          await writeInventoryValue(client, store.id, productId, value.qtyOnHandBase, value.avgCostBasePence, value);
         }
       }
     }
@@ -638,6 +638,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         productId: line.productId,
         qtyBase: line.qtyBase,
         unitCostBasePence: line.unitCostBasePence,
+        valuePence: line.lineSubtotal,
+        costBasis: line.lineSubtotal > 0 ? INVENTORY_VALUE_V1 : null,
         type: movementType,
         referenceType,
         referenceId: invoiceId,

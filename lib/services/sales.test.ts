@@ -671,7 +671,7 @@ describe('createSale — payments & stock', () => {
       }));
 
       // Lock (FOR UPDATE) plus the cash-drawer CTE.
-      expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
+      expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(4);
       // The old two-call path must not be used on Postgres.
       expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
       expect((prismaMock as any).cashDrawerEntry?.create).not.toHaveBeenCalled();
@@ -712,8 +712,8 @@ describe('createSale — payments & stock', () => {
         lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
       }));
 
-      expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
-      const fragments = prismaMock.$queryRaw.mock.calls[0]?.[0] as string[] | undefined;
+      expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(3);
+      const fragments = prismaMock.$queryRaw.mock.calls[2]?.[0] as string[] | undefined;
       const sql = Array.isArray(fragments) ? fragments.join(' ') : String(fragments ?? '');
       expect(sql).toContain('FOR UPDATE');
       expect(sql).not.toContain('CASH_SALE');
@@ -757,8 +757,8 @@ describe('createSale — payments & stock', () => {
     expect(batchDecrementInventoryBalanceMock).not.toHaveBeenCalled();
     expect((prismaMock as any).inventoryBalance.upsert).toHaveBeenCalledWith({
       where: { storeId_productId: { storeId: STORE_ID, productId: PRODUCT_ID } },
-      update: { qtyOnHandBase: -3, avgCostBasePence: 300 },
-      create: { storeId: STORE_ID, productId: PRODUCT_ID, qtyOnHandBase: -3, avgCostBasePence: 300 },
+      update: { qtyOnHandBase: -3, avgCostBasePence: 300, knownValuePence: null, unvaluedQtyBase: null },
+      create: { storeId: STORE_ID, productId: PRODUCT_ID, qtyOnHandBase: -3, avgCostBasePence: 300, knownValuePence: null, unvaluedQtyBase: null },
     });
   });
 

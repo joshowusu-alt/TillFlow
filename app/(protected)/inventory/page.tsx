@@ -70,7 +70,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
           },
           inventoryBalances: {
             where: { storeId: store.id },
-            select: { qtyOnHandBase: true, avgCostBasePence: true }
+            select: { qtyOnHandBase: true, avgCostBasePence: true, knownValuePence: true, unvaluedQtyBase: true }
           }
         },
         orderBy: { name: 'asc' },
@@ -117,6 +117,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
       packaging,
       qtyOnHand,
       avgCostBase,
+      stockValue: qtyOnHand === 0 ? 0 : balance?.knownValuePence != null && balance.unvaluedQtyBase === 0 ? balance.knownValuePence : null,
       hasCostDrift,
       formatted,
       isLow,
@@ -185,12 +186,9 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
 
         {costDriftCount > 0 ? (
           <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-            <p className="font-semibold">Some inventory balances still differ from the current product base cost.</p>
+            <p className="font-semibold">Some average costs differ from the current product default.</p>
             <p className="mt-1 text-sky-800">
-              Sales and margin reports will continue using the inventory average cost until those balances are repaired or replaced by new authoritative inbound stock.
-              <Link href="/settings/data-repair" className="ml-1 font-medium underline">
-                Open Data Repair
-              </Link>
+              This can be normal with weighted-average costing. The average cost is rounded for display; confirmed stock value keeps the exact amount. Missing costs remain incomplete until reviewed.
             </p>
           </div>
         ) : null}
@@ -200,7 +198,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
           {inventoryRows.length === 0 ? (
             <InventoryEmptyState q={q} />
           ) : (
-            inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, hasCostDrift, isLow, isOut }) => (
+            inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, stockValue, hasCostDrift, isLow, isOut }) => (
               <div
                 key={product.id}
                 className={`rounded-2xl border px-4 py-4 shadow-sm transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100 ${isOut ? 'border-rose-200 bg-rose-50' : isLow ? 'border-amber-200 bg-amber-50' : 'border-black/5 bg-white'}`}
@@ -218,6 +216,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
                   <div>
                     <div className="text-xs uppercase tracking-[0.16em] text-black/40">Avg cost</div>
                     <div className="mt-1 font-semibold text-ink">{formatMoney(avgCostBase, business.currency)}</div>
+                    <div className="mt-1 text-xs text-black/60">Stock value: {stockValue == null ? 'Incomplete — cost review needed' : formatMoney(stockValue, business.currency)}</div>
                     {hasCostDrift ? (
                       <div className="mt-1 text-xs font-medium text-sky-700">
                         Default cost is {formatMoney(product.defaultCostBasePence, business.currency)}
@@ -236,7 +235,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
                   </div>
                   {hasCostDrift ? (
                     <div className="col-span-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-                      Inventory is still carrying an older average cost, so profitability may look wrong until repaired.
+                      Average cost reflects stock receipts and can differ from the current default cost.
                     </div>
                   ) : null}
                 </div>
@@ -267,7 +266,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
                   </td>
                 </tr>
               ) : (
-                inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, hasCostDrift, isLow, isOut }) => (
+                inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, stockValue, hasCostDrift, isLow, isOut }) => (
                   <tr
                     key={product.id}
                     className={`rounded-xl transition-all duration-150 motion-reduce:transform-none motion-reduce:transition-none ${
@@ -282,6 +281,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
                     <td className={`px-3 py-3 font-semibold ${isOut ? 'text-rose-600' : isLow ? 'text-amber-700' : ''}`}>{formatted}</td>
                     <td className="px-3 py-3 text-sm font-semibold">
                       {formatMoney(avgCostBase, business.currency)}
+                      <div className="mt-1 text-xs font-normal text-black/60">Stock value: {stockValue == null ? 'Incomplete — cost review needed' : formatMoney(stockValue, business.currency)}</div>
                     </td>
                     <td className={`px-3 py-3 text-sm ${hasCostDrift ? 'font-semibold text-sky-700' : 'text-black/60'}`}>
                       {formatMoney(product.defaultCostBasePence, business.currency)}

@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma';
+import { receiveStockValue, removeRecordedStockValue, INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
+import { lockInventoryValues } from './shared/inventory-utils';
 import { RECEIPT_LEDGER_V1, isPendingMomo } from '@/lib/payments/receipt-ledger';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { UserError } from '@/lib/action-utils';
@@ -162,6 +164,7 @@ async function createSalesReturnImpl(input: {
       : input.refundMethod ?? 'CASH';
     const arReversal = invoice.totalPence - totalPaid - legacyPending;
     const qtyByProduct = buildQtyByProductMap(invoice.lines);
+    await lockInventoryValues(tx, invoice.storeId, Array.from(qtyByProduct.keys()));
     // Re-read inventory inside transaction to prevent TOCTOU race
     const inventoryMap = await fetchInventoryMap(invoice.storeId, Array.from(qtyByProduct.keys()), tx);
     const avgCostMap = buildAvgCostMap(invoice.lines, inventoryMap);
@@ -222,9 +225,12 @@ async function createSalesReturnImpl(input: {
     }
 
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
-      const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
-      const avgCost = avgCostMap.get(productId) ?? 0;
-      await upsertInventoryBalance(tx, invoice.storeId, productId, onHand + qtyBase, avgCost);
+      const originalLines = invoice.lines.filter(line => line.productId === productId);
+      const originalCost = originalLines.reduce((sum, line) => sum + (line.lineCostPence ?? (avgCostMap.get(productId) ?? 0) * line.qtyBase), 0);
+      const unknownQty = originalLines.filter(line => line.costBasis === UNVERIFIED_STOCK_V1 ||
+        (line.lineCostPence === 0 && line.costBasis !== INVENTORY_VALUE_V1)).reduce((sum, line) => sum + line.qtyBase, 0);
+      const value = receiveStockValue(inventoryMap.get(productId), qtyBase, originalCost, unknownQty);
+      await upsertInventoryBalance(tx, invoice.storeId, productId, value.qtyOnHandBase, value.avgCostBasePence, value);
     }
 
     await tx.stockMovement.createMany({
@@ -232,6 +238,8 @@ async function createSalesReturnImpl(input: {
         storeId: invoice.storeId,
         productId: line.productId,
         qtyBase: line.qtyBase,
+        valuePence: line.lineCostPence,
+        costBasis: line.costBasis,
         unitCostBasePence: line.lineCostPence != null && line.qtyBase > 0
           ? Math.round(line.lineCostPence / line.qtyBase)
           : avgCostMap.get(line.productId) ?? line.product.defaultCostBasePence,
@@ -360,6 +368,7 @@ async function createPurchaseReturnImpl(input: {
 
   const result = await prisma.$transaction(async (tx) => {
     // Re-read inventory inside transaction to prevent TOCTOU race
+    await lockInventoryValues(tx, invoice.storeId, Array.from(qtyByProduct.keys()));
     const inventoryMap = await fetchInventoryMap(invoice.storeId, Array.from(qtyByProduct.keys()), tx);
     const avgCostMap = buildAvgCostMap(invoice.lines, inventoryMap);
 
@@ -425,7 +434,10 @@ async function createPurchaseReturnImpl(input: {
       if (nextOnHand < 0) {
         throw new Error('Return would result in negative stock');
       }
-      await upsertInventoryBalance(tx, invoice.storeId, productId, nextOnHand, avgCost);
+      const originalValue = invoice.lines.filter(line => line.productId === productId).reduce((sum, line) => sum + line.lineSubtotalPence, 0);
+      const before = inventoryMap.get(productId);
+      const value = before ? removeRecordedStockValue(before, qtyBase, originalValue) : undefined;
+      await upsertInventoryBalance(tx, invoice.storeId, productId, nextOnHand, value?.avgCostBasePence ?? avgCost, value);
     }
 
     await tx.stockMovement.createMany({
@@ -434,6 +446,8 @@ async function createPurchaseReturnImpl(input: {
         productId: line.productId,
         qtyBase: -line.qtyBase,
         unitCostBasePence: avgCostMap.get(line.productId) ?? line.product.defaultCostBasePence,
+        valuePence: -line.lineSubtotalPence,
+        costBasis: INVENTORY_VALUE_V1,
         type: 'PURCHASE_RETURN',
         referenceType: 'PURCHASE_RETURN',
         referenceId: created.id,
@@ -441,10 +455,7 @@ async function createPurchaseReturnImpl(input: {
       }))
     });
 
-    const inventoryCreditTotal = invoice.lines.reduce((sum, line) => {
-      const avgCost = avgCostMap.get(line.productId) ?? line.product.defaultCostBasePence;
-      return sum + avgCost * line.qtyBase;
-    }, 0);
+    const inventoryCreditTotal = invoice.lines.reduce((sum, line) => sum + line.lineSubtotalPence, 0);
 
     const journalLines: JournalLine[] = [
       { accountCode: ACCOUNT_CODES.inventory, creditPence: inventoryCreditTotal },

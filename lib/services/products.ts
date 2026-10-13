@@ -323,6 +323,7 @@ async function syncDefaultCostManagedInventoryBalances(
   const candidateBalances = await tx.inventoryBalance.findMany({
     where: {
       productId: input.productId,
+      knownValuePence: null,
       OR: [
         { avgCostBasePence: { lte: 0 } },
         { avgCostBasePence: { not: input.defaultCostBasePence } },

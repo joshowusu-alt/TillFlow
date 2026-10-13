@@ -121,7 +121,7 @@ function marginFromSaleLines(lines: Array<{
   lineSubtotalPence: number;
   lineDiscountPence?: number;
   promoDiscountPence?: number;
-  lineCostPence: number;
+  lineCostPence: number; costBasis?: string | null;
   qtyBase: number;
   product: { defaultCostBasePence: number };
   salesInvoiceId?: string;
@@ -139,7 +139,7 @@ function marginFromSaleLines(lines: Array<{
       lineSubtotalPence: line.lineSubtotalPence,
       lineDiscountPence: line.lineDiscountPence ?? 0,
       promoDiscountPence: line.promoDiscountPence ?? 0,
-      lineCostPence: line.lineCostPence,
+      lineCostPence: line.lineCostPence, costBasis: line.costBasis,
       qtyBase: line.qtyBase,
       defaultCostBasePence: line.product.defaultCostBasePence,
     });
@@ -380,7 +380,7 @@ async function getTodayKPIsSqlite(
         lineSubtotalPence: true,
         lineDiscountPence: true,
         promoDiscountPence: true,
-        lineCostPence: true,
+        lineCostPence: true, costBasis: true,
         qtyBase: true,
         product: { select: { id: true, defaultCostBasePence: true } },
         salesInvoice: { select: { createdAt: true, paymentStatus: true, discountPence: true } },
@@ -456,7 +456,7 @@ async function getTodayKPIsSqlite(
       lineSubtotalPence: line.lineSubtotalPence,
       lineDiscountPence: line.lineDiscountPence ?? 0,
       promoDiscountPence: line.promoDiscountPence ?? 0,
-      lineCostPence: line.lineCostPence,
+      lineCostPence: line.lineCostPence, costBasis: line.costBasis,
       qtyBase: line.qtyBase,
       defaultCostBasePence: line.product.defaultCostBasePence,
     });
@@ -694,7 +694,7 @@ async function _getTodayKPIs(
         lineSubtotalPence: true,
         lineDiscountPence: true,
         promoDiscountPence: true,
-        lineCostPence: true,
+        lineCostPence: true, costBasis: true,
         qtyBase: true,
         product: { select: { id: true, defaultCostBasePence: true } },
       },
@@ -715,7 +715,7 @@ async function _getTodayKPIs(
         lineSubtotalPence: true,
         lineDiscountPence: true,
         promoDiscountPence: true,
-        lineCostPence: true,
+        lineCostPence: true, costBasis: true,
         qtyBase: true,
         product: { select: { defaultCostBasePence: true } },
         salesInvoice: { select: { paymentStatus: true, discountPence: true } },
@@ -772,7 +772,7 @@ async function _getTodayKPIs(
       lineSubtotalPence: line.lineSubtotalPence,
       lineDiscountPence: line.lineDiscountPence ?? 0,
       promoDiscountPence: line.promoDiscountPence ?? 0,
-      lineCostPence: line.lineCostPence,
+      lineCostPence: line.lineCostPence, costBasis: line.costBasis,
       qtyBase: line.qtyBase,
       defaultCostBasePence: line.product.defaultCostBasePence,
     });

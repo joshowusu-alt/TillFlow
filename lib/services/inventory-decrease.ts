@@ -1,6 +1,8 @@
 import { createHash } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { hasCompleteValue, issueStockValue, INVENTORY_VALUE_V1 } from '@/lib/inventory-value';
+import { upsertInventoryBalance } from './shared/inventory-utils';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { ensureInventoryDecreaseAccounts } from '@/lib/accounting-inventory-decrease-accounts';
 import { assertAccount5100SafeForInventoryLoss } from '@/lib/accounting-inventory-loss-5100';
@@ -87,6 +89,8 @@ export type InventoryDecreaseResult = {
 type LockedBalance = {
   qtyOnHandBase: number;
   avgCostBasePence: number;
+  knownValuePence?: number | null;
+  unvaluedQtyBase?: number | null;
 };
 
 function hasPrismaErrorCode(error: unknown, code: string): boolean {
@@ -228,7 +232,7 @@ async function lockInventoryBalance(
 ): Promise<LockedBalance | null> {
   if (isPostgresDatabaseUrl(process.env.DATABASE_URL)) {
     const rows = await tx.$queryRaw<LockedBalance[]>`
-      SELECT "qtyOnHandBase", "avgCostBasePence"
+      SELECT "qtyOnHandBase", "avgCostBasePence", "knownValuePence", "unvaluedQtyBase"
       FROM "InventoryBalance"
       WHERE "storeId" = ${storeId} AND "productId" = ${productId}
       FOR UPDATE
@@ -238,7 +242,7 @@ async function lockInventoryBalance(
 
   return tx.inventoryBalance.findUnique({
     where: { storeId_productId: { storeId, productId } },
-    select: { qtyOnHandBase: true, avgCostBasePence: true },
+    select: { qtyOnHandBase: true, avgCostBasePence: true, knownValuePence: true, unvaluedQtyBase: true },
   });
 }
 
@@ -429,6 +433,7 @@ async function createInventoryDecreaseImpl(
       );
     }
 
+    if ((balance.unvaluedQtyBase ?? 0) > 0) throw new InventoryDecreaseError(INVENTORY_DECREASE_ERROR.MISSING_VALUATION, 'Review missing stock costs before posting a valued adjustment.');
     const unitCostBasePence = balance.avgCostBasePence;
     if (!Number.isInteger(unitCostBasePence) || unitCostBasePence <= 0) {
       throw new InventoryDecreaseError(
@@ -437,7 +442,8 @@ async function createInventoryDecreaseImpl(
       );
     }
 
-    const valuePence = checkedMul(unitCostBasePence, qtyBase);
+    const exact = hasCompleteValue(balance) ? issueStockValue(balance, qtyBase, unitCostBasePence) : null;
+    const valuePence = exact?.costPence ?? checkedMul(unitCostBasePence, qtyBase);
     const beforeQty = balance.qtyOnHandBase;
     const afterQty = beforeQty - qtyBase;
     const transactionNumber = await reserveNextDocumentNumber(
@@ -468,6 +474,7 @@ async function createInventoryDecreaseImpl(
     });
 
     await decrementInventoryBalance(tx, store.id, input.productId, qtyBase);
+    if (exact) await upsertInventoryBalance(tx, store.id, input.productId, exact.after.qtyOnHandBase, exact.after.avgCostBasePence, exact.after);
 
     await tx.stockMovement.create({
       data: {
@@ -477,6 +484,8 @@ async function createInventoryDecreaseImpl(
         beforeQtyBase: beforeQty,
         afterQtyBase: afterQty,
         unitCostBasePence,
+        valuePence: -valuePence,
+        costBasis: exact ? INVENTORY_VALUE_V1 : null,
         type: 'ADJUSTMENT',
         referenceType: 'STOCK_ADJUSTMENT',
         referenceId: created.id,

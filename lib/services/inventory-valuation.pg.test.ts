@@ -142,18 +142,17 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     expect(target).toMatchObject({ qtyOnHandBase: 4, avgCostBasePence: 1500 });
     expect(source.qtyOnHandBase * source.avgCostBasePence + target.qtyOnHandBase * target.avgCostBasePence).toBe(await inventoryPosting([a.id, b.id, request.id]));
   }, 60000);
-  // The following cases intentionally characterize unresolved valuation gaps.
-  // Passing here proves the discrepancy, not a reconciled/approved contract.
-  it('audit evidence: returning an old sale after restocking leaves a valuation gap', async () => {
+  it('restores an old sale at original cost after restocking', async () => {
     const p = await product(); const a = await buy(p, 1, 1000); const sale = await sell(p, 1); const b = await buy(p, 1, 2000);
     const returned = await returns.createSalesReturn({ businessId, salesInvoiceId: sale.id, userId, managerApprovedByUserId: userId, type: 'RETURN', reasonCode: 'WRONG_ITEM' });
     const current = await stock(p); const ledger = await inventoryPosting([a.id, sale.id, b.id, returned.id]);
     expect(current.qtyOnHandBase).toBe(2);
     expect(ledger).toBe(3000);
-    expect(current.qtyOnHandBase * current.avgCostBasePence - ledger).toBe(1000);
+    expect(current.knownValuePence).toBe(ledger);
+    expect(current.avgCostBasePence).toBe(1500);
     await balanced([a.id, sale.id, b.id, returned.id]);
   }, 60000);
-  it('audit evidence: rounded pack costs differ from the actual purchase value', async () => {
+  it('keeps exact pack value separate from rounded display cost and conserves all COGS', async () => {
     const p = await product(); const pack = await db.unit.create({ data: { name: `Pack ${p}`, pluralName: 'Packs' } });
     extraUnitIds.push(pack.id);
     await db.productUnit.create({ data: { productId: p, unitId: pack.id, conversionToBase: 3 } });
@@ -161,13 +160,22 @@ describePg('isolated inventory valuation and COGS evidence', () => {
       const current = await stock(p); const ledger = await inventoryPosting([purchase.id]);
       expect(ledger).toBe(1000);
       expect(current.qtyOnHandBase * current.avgCostBasePence - ledger).toBe(-1);
+      expect(current.knownValuePence).toBe(ledger);
+      const a = await sell(p, 1); const b = await sell(p, 1); const c = await sell(p, 1);
+      expect((await stock(p)).knownValuePence).toBe(0);
+      expect(await inventoryPosting([purchase.id, a.id, b.id, c.id])).toBe(0);
   }, 60000);
-  it('audit evidence: adding quantity-only opening stock can overstate valued stock', async () => {
+  it('keeps quantity-only opening stock incomplete and permits sales without false cost evidence', async () => {
     const p = await product(); const a = await buy(p, 1, 1000); const referenceId = `qty-only-${p}`;
     const result = await opening.recordOpeningInventory({ businessId, storeId, referenceId, lines: [{ productId: p, unitId, qtyInUnit: 1 }] });
     expect(result.unvaluedUnits).toBe(1); expect(result.journalPosted).toBe(false);
     const current = await stock(p);
-    expect(current.qtyOnHandBase * current.avgCostBasePence - await inventoryPosting([a.id, referenceId])).toBe(1000);
+    expect(current).toMatchObject({ knownValuePence: 1000, unvaluedQtyBase: 1 });
+    const { getIncompleteStockSnapshot } = await import('@/lib/reports/incomplete-stock');
+    expect((await getIncompleteStockSnapshot(businessId)).costReviewProductIds).toContain(p);
+    const sale = await sell(p, 1);
+    expect(await db.salesInvoice.findUniqueOrThrow({ where: { id: sale.id } })).toMatchObject({ grossMarginPence: null });
+    expect(await db.salesInvoiceLine.findFirstOrThrow({ where: { salesInvoiceId: sale.id } })).toMatchObject({ costBasis: 'UNVERIFIED_STOCK_V1', lineCostPence: 0 });
   }, 60000);
   it.each(['UNPAID', 'PAID'] as const)('rolls back a %s purchase when stock-movement creation fails', async paymentStatus => {
     const p = await product();
@@ -194,5 +202,32 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     const current = await stock(p);
     expect(current).toMatchObject({ qtyOnHandBase: 20, avgCostBasePence: 1200 });
     expect(current.qtyOnHandBase * current.avgCostBasePence).toBe(await inventoryPosting([a.id, b.id]));
+  }, 60000);
+  it('preserves exact value when a purchase and sale run concurrently', async () => {
+    const p = await product(); const original = await buy(p, 3, 1001);
+    const [purchase, sale] = await Promise.all([buy(p, 2, 1500), sell(p, 1)]);
+    expect((await stock(p)).knownValuePence).toBe(await inventoryPosting([original.id, purchase.id, sale.id]));
+    await balanced([original.id, purchase.id, sale.id]);
+  }, 60000);
+  it('returns a purchase at its original cost after a price change', async () => {
+    const p = await product(); const a = await buy(p, 1, 1000); const b = await buy(p, 1, 2000);
+    const returned = await returns.createPurchaseReturn({ businessId, purchaseInvoiceId: a.id, userId, type: 'RETURN' });
+    expect(await stock(p)).toMatchObject({ qtyOnHandBase: 1, knownValuePence: 2000, avgCostBasePence: 2000 });
+    expect((await stock(p)).knownValuePence).toBe(await inventoryPosting([a.id, b.id, returned.id]));
+    await balanced([a.id, b.id, returned.id]);
+  }, 60000);
+  it('preserves the rounding remainder during branch transfer', async () => {
+    const p = await product(); const other = await db.store.create({ data: { businessId, name: `Rounding destination ${p}` } });
+    const pack = await db.unit.create({ data: { name: `Transfer pack ${p}`, pluralName: 'Packs' } }); extraUnitIds.push(pack.id);
+    await db.productUnit.create({ data: { productId: p, unitId: pack.id, conversionToBase: 3 } });
+    const original = await purchases.createPurchase({ businessId, storeId, supplierId, userId, paymentStatus: 'UNPAID', payments: [], lines: [{ productId: p, unitId: pack.id, qtyInUnit: 1, unitCostPence: 1000 }] });
+    const transfer = await transfers.requestStockTransfer({ businessId, requestedByUserId: userId, fromStoreId: storeId, toStoreId: other.id, lines: [{ productId: p, qtyBase: 2 }] });
+    await transfers.approveAndCompleteStockTransfer({ businessId, transferId: transfer.id, approvedByUserId: userId });
+    const target = await db.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId: other.id, productId: p } } });
+    expect((await stock(p)).knownValuePence! + target.knownValuePence!).toBe(1000);
+    expect(target.knownValuePence).toBe(667);
+    expect(await db.stockMovement.count({ where: { referenceId: transfer.id } })).toBe(2);
+    await expect(transfers.approveAndCompleteStockTransfer({ businessId, transferId: transfer.id, approvedByUserId: userId })).rejects.toThrow('Only pending');
+    expect(await inventoryPosting([original.id, transfer.id])).toBe(1000);
   }, 60000);
 });

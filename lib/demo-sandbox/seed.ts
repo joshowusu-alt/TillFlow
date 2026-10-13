@@ -155,7 +155,7 @@ export async function seedAdomRetailDemoBusiness(): Promise<{ businessId: string
         qtyOnHandBase: p.openingQty,
         avgCostBasePence: p.costPricePence,
       },
-      update: { qtyOnHandBase: p.openingQty },
+      update: { qtyOnHandBase: p.openingQty, knownValuePence: null, unvaluedQtyBase: null },
     });
   }
 

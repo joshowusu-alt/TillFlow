@@ -9,6 +9,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
 
 export type IncompleteStockSnapshot = {
   productsWithUnvaluedQty: number;
@@ -24,13 +25,6 @@ export type IncompleteStockSnapshot = {
   stockValueIncomplete: boolean;
   profitMayBeIncomplete: boolean;
 };
-
-function productHasReliableCost(input: {
-  defaultCostBasePence: number | null | undefined;
-  avgCostBasePence?: number | null | undefined;
-}): boolean {
-  return (input.avgCostBasePence ?? 0) > 0 || (input.defaultCostBasePence ?? 0) > 0;
-}
 
 export async function getIncompleteStockSnapshot(businessId: string): Promise<IncompleteStockSnapshot> {
   const stores = await prisma.store.findMany({
@@ -62,12 +56,17 @@ export async function getIncompleteStockSnapshot(businessId: string): Promise<In
         productId: true,
         qtyOnHandBase: true,
         avgCostBasePence: true,
+        knownValuePence: true,
+        unvaluedQtyBase: true,
         product: { select: { defaultCostBasePence: true, active: true } },
       },
     }),
     prisma.salesInvoiceLine.findMany({
       where: {
-        lineCostPence: { lte: 0 },
+        OR: [
+          { costBasis: UNVERIFIED_STOCK_V1 },
+          { lineCostPence: { lte: 0 }, OR: [{ costBasis: null }, { costBasis: { not: INVENTORY_VALUE_V1 } }] },
+        ],
         salesInvoice: {
           businessId,
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
@@ -83,10 +82,7 @@ export async function getIncompleteStockSnapshot(businessId: string): Promise<In
   const costReviewProductIds: string[] = [];
   let unvaluedQtyBase = 0;
   for (const row of balances) {
-    const hasCost = productHasReliableCost({
-      defaultCostBasePence: row.product.defaultCostBasePence,
-      avgCostBasePence: row.avgCostBasePence,
-    });
+    const hasCost = row.knownValuePence != null && row.unvaluedQtyBase === 0;
     if (!hasCost) {
       costReviewProductIds.push(row.productId);
       unvaluedQtyBase += row.qtyOnHandBase;
@@ -94,8 +90,8 @@ export async function getIncompleteStockSnapshot(businessId: string): Promise<In
   }
 
   // Today's product or another branch's cost cannot establish historical COGS.
-  // There is no persisted authority for an intentional zero cost yet, so zero
-  // remains incomplete rather than being silently treated as a free product.
+  // Exact-value allocations can legitimately round to zero; their persisted
+  // authority distinguishes them from unknown costs.
   const soldWithoutCostProductIds = soldLines.map((line) => line.productId);
 
   const uniqueStocked = [...new Set(costReviewProductIds)];
@@ -118,7 +114,7 @@ export async function getIncompleteStockSnapshot(businessId: string): Promise<In
 export function incompleteStockDisclosureMessage(snapshot: IncompleteStockSnapshot): string | null {
   if (!snapshot.profitMayBeIncomplete) return null;
   if (snapshot.stockValueIncomplete) {
-    return `Stock value and profit are incomplete — ${snapshot.productsWithUnvaluedQty} product(s) have quantity without a confirmed cost.`;
+    return `Stock value is incomplete — ${snapshot.productsWithUnvaluedQty} product(s) need confirmed stock value. Sales can continue; profit for sales without confirmed cost is incomplete.`;
   }
   return `Profit may be incomplete — ${snapshot.missingCostProductCount} product(s) were sold without a reliable cost.`;
 }
