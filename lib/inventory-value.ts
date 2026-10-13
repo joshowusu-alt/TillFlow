@@ -48,7 +48,7 @@ export function receiveStockValue(before: StockValue | undefined, qty: number, v
     const oldValue = Math.max(start.qtyOnHandBase, 0) * start.avgCostBasePence;
     const avg = value == null ? start.avgCostBasePence : Math.round((oldValue + value) / newQty);
     return { qtyOnHandBase: newQty, avgCostBasePence: avg, knownValuePence: null,
-      unvaluedQtyBase: unknownQty > 0 ? newQty : null };
+      unvaluedQtyBase: unknownQty > 0 || (start.unvaluedQtyBase ?? 0) > 0 ? newQty : null };
   }
   const knownValuePence = integer(start.knownValuePence! + (value ?? 0), 'known stock value');
   const unvaluedQtyBase = integer(start.unvaluedQtyBase! + unknownQty, 'unvalued quantity');

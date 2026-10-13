@@ -28,6 +28,13 @@ describe('exact weighted-average stock value', () => {
     expect(value.knownValuePence).toBeNull();
     expect(hasCompleteValue(value)).toBe(false);
   });
+  it('does not lose unknown-cost evidence after a subsequent costed purchase', () => {
+    const mixed = receiveStockValue(receiveStockValue(undefined, 1, 1000), 1, null);
+    const sold = issueStockValue(mixed, 1, 1000);
+    const restocked = receiveStockValue(sold.after, 1, 2000);
+    expect(restocked.unvaluedQtyBase).toBe(2);
+    expect(issueStockValue(restocked, 1, 1500).costBasis).toBe(UNVERIFIED_STOCK_V1);
+  });
   it('distinguishes a verified zero allocation from missing cost', () => {
     const sale = issueStockValue(receiveStockValue(undefined, 3, 1), 1, 0);
     expect(sale).toMatchObject({ costPence: 0, costBasis: INVENTORY_VALUE_V1 });
