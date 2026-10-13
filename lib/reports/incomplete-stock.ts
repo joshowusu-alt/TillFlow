@@ -3,7 +3,7 @@
  *
  * Missing cost covers:
  * - on-hand quantity with no positive average or default cost
- * - products sold (non-void/returned) where line cost was missing and cost is still unreliable
+ * - products sold (non-void/returned) without a positive stored sale-line cost
  *
  * Missing cost is never treated as zero profit intentionally — it means profit is incomplete.
  */
@@ -15,7 +15,7 @@ export type IncompleteStockSnapshot = {
   unvaluedQtyBase: number;
   /** Products with on-hand qty and no reliable cost. */
   costReviewProductIds: string[];
-  /** Products sold with unreliable/missing line cost that still lack a reliable cost. */
+  /** Products sold without positive stored line-cost evidence, regardless of current costs. */
   soldWithoutCostProductIds: string[];
   /** Union of stocked + sold missing-cost product IDs (for filtered product review). */
   allMissingCostProductIds: string[];
@@ -72,19 +72,9 @@ export async function getIncompleteStockSnapshot(businessId: string): Promise<In
           businessId,
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
-        product: { active: true },
       },
       select: {
         productId: true,
-        product: {
-          select: {
-            defaultCostBasePence: true,
-            inventoryBalances: {
-              where: { storeId: { in: storeIds } },
-              select: { avgCostBasePence: true },
-            },
-          },
-        },
       },
       distinct: ['productId'],
     }),
@@ -103,20 +93,10 @@ export async function getIncompleteStockSnapshot(businessId: string): Promise<In
     }
   }
 
-  const soldWithoutCostProductIds: string[] = [];
-  for (const line of soldLines) {
-    const bestAvg = Math.max(
-      0,
-      ...line.product.inventoryBalances.map((b) => b.avgCostBasePence ?? 0)
-    );
-    const hasCost = productHasReliableCost({
-      defaultCostBasePence: line.product.defaultCostBasePence,
-      avgCostBasePence: bestAvg,
-    });
-    if (!hasCost) {
-      soldWithoutCostProductIds.push(line.productId);
-    }
-  }
+  // Today's product or another branch's cost cannot establish historical COGS.
+  // There is no persisted authority for an intentional zero cost yet, so zero
+  // remains incomplete rather than being silently treated as a free product.
+  const soldWithoutCostProductIds = soldLines.map((line) => line.productId);
 
   const uniqueStocked = [...new Set(costReviewProductIds)];
   const uniqueSold = [...new Set(soldWithoutCostProductIds)];

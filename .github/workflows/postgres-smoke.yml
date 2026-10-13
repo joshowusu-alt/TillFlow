@@ -38,6 +38,8 @@ on:
       - 'lib/migration/**'
       - 'lib/services/migration/**'
       - 'lib/services/sales.ts'
+      - 'lib/services/inventory-valuation.pg.test.ts'
+      - 'lib/reports/incomplete-stock.ts'
       - 'lib/services/shifts.ts'
       - 'lib/services/cash-drawer.ts'
       - 'lib/services/returns.ts'
@@ -155,6 +157,10 @@ jobs:
         run: |
           set -euo pipefail
           files=(
+            lib/services/inventory-valuation.pg.test.ts
+            lib/services/stocktake-completion-concurrency.pg.test.ts
+            lib/services/inventory-reversal-concurrency.pg.test.ts
+            lib/services/inventory-increase-concurrency.test.ts
             lib/services/receipt-ledger.pg.test.ts
             lib/services/checkout-shift-cashdrawer-rtx.test.ts
             lib/services/payments-concurrency.test.ts
