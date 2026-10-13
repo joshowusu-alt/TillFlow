@@ -98,6 +98,18 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     const p = await product(); await buy(p, 1, 1000); const sale = await sell(p, 1); await buy(p, 1, 2000);
     expect((await db.salesInvoiceLine.findFirstOrThrow({ where: { salesInvoiceId: sale.id } })).lineCostPence).toBe(1000);
   }, 60000);
+  it('keeps an archived historical zero-cost sale incomplete after current costs are added', async () => {
+    const p = await product();
+    await db.inventoryBalance.create({ data: { productId: p, storeId, qtyOnHandBase: 1, avgCostBasePence: 0 } });
+    const sale = await sell(p, 1);
+    await db.product.update({ where: { id: p }, data: { defaultCostBasePence: 2000, active: false } });
+    await db.inventoryBalance.update({ where: { storeId_productId: { storeId, productId: p } }, data: { avgCostBasePence: 2000 } });
+    const { getIncompleteStockSnapshot } = await import('@/lib/reports/incomplete-stock');
+    const result = await getIncompleteStockSnapshot(businessId);
+    expect(result.soldWithoutCostProductIds).toContain(p);
+    expect(result.profitMayBeIncomplete).toBe(true);
+    expect((await db.salesInvoiceLine.findFirstOrThrow({ where: { salesInvoiceId: sale.id } })).lineCostPence).toBe(0);
+  }, 60000);
   it('rejects overselling without a new invoice, stock movement or journal', async () => {
     const p = await product(); await buy(p, 1, 1000);
     const before = await db.salesInvoice.count({ where: { businessId } });
