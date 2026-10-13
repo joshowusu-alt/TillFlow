@@ -21,6 +21,8 @@ cost displayed to staff.
   A blank product-opening cost does not fall back to the catalogue price.
   Product creation and owner-funded opening stock commit together through the
   opening-equity path, rather than an unpaid purchase without a supplier.
+  A proven sole branch works without a selection cookie; multiple branches still
+  require explicit server-validated selection, including stale-cookie checks.
 - A verified zero-pesewa rounding allocation carries a cost-basis marker. Reports
   distinguish it from missing cost rather than inventing free goods.
 - Valued adjustments preserve exact money. Unknown costs require review before
