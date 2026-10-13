@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), review: vi.fn(), entries: vi.fn(), transaction: vi.fn() }));
-vi.mock('@/lib/auth', () => ({ requireBusiness: mocks.auth }));
+vi.mock('@/lib/entitlements/live-report', () => ({ openLiveReport: mocks.auth }));
 vi.mock('@/lib/prisma', () => ({ prisma: { $transaction: mocks.transaction } }));
 vi.mock('@/lib/reports/monthly-balance-review', async () => ({
   ...await vi.importActual('@/lib/reports/monthly-balance-review'),
@@ -14,7 +14,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-10-13T12:00:00Z'));
-  mocks.auth.mockResolvedValue({ business: { id: 'business-a', timezone: 'Africa/Accra', currency: 'GHS' } });
+  mocks.auth.mockResolvedValue({ ok: true, business: { id: 'business-a', timezone: 'Africa/Accra', currency: 'GHS' } });
   mocks.transaction.mockImplementation(async fn => fn({}));
   mocks.review.mockResolvedValue({
     window: { start: new Date('2026-03-01'), partial: false }, throughLocalDate: '2026-03-31', legacyCapitalPence: 50000,
@@ -27,7 +27,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); });
 describe('monthly balance review page', () => {
   it('shows missing evidence, signed amounts and legacy warning without a sign-off control', async () => {
     render(await MonthlyBalanceReviewPage({ searchParams: { month: '2026-03' } }));
-    expect(mocks.auth).toHaveBeenCalledWith(['MANAGER', 'OWNER']);
+    expect(mocks.auth).toHaveBeenCalledWith(expect.objectContaining({ surfaceId: 'monthly_balance_review' }));
     expect(screen.getByText(/Awaiting evidence/)).toBeInTheDocument();
     expect(screen.getByText(/legacy opening-capital field/)).toBeInTheDocument();
     expect(screen.getByText(/end of 2026-02-28/)).toBeInTheDocument();
@@ -40,6 +40,13 @@ describe('monthly balance review page', () => {
     render(await MonthlyBalanceReviewPage({ searchParams: { month: '2026-11' } }));
     expect(screen.getByRole('heading', { name: 'Choose a valid month' })).toBeInTheDocument();
     expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+  it('returns access denial before reading any ledger or transaction data', async () => {
+    mocks.auth.mockResolvedValue({ ok: false, denial: <p>Report access denied</p> });
+    render(await MonthlyBalanceReviewPage({ searchParams: { month: '2026-03' } }));
+    expect(screen.getByText('Report access denied')).toBeInTheDocument();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.review).not.toHaveBeenCalled();
   });
   it('does not query a foreign account passed in the URL', async () => {
     render(await MonthlyBalanceReviewPage({ searchParams: { month: '2026-03', account: '9999' } }));

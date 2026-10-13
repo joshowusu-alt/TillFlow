@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
-import { requireBusiness } from '@/lib/auth';
+import { openLiveReport } from '@/lib/entitlements/live-report';
 import { prisma } from '@/lib/prisma';
 import { formatMoney } from '@/lib/format';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
@@ -9,10 +9,24 @@ import { getMonthlyAccountEntries, getMonthlyBalanceReview, monthlyReviewWindow 
 export const dynamic = 'force-dynamic';
 
 export default async function MonthlyBalanceReviewPage({ searchParams }: { searchParams?: { month?: string; account?: string; page?: string } }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   const now = new Date();
-  const month = searchParams?.month ?? formatBusinessLocalDateKey(now, business.timezone).slice(0, 7);
-  try { monthlyReviewWindow(month, business.timezone, now); } catch {
+  const opened = await openLiveReport({
+    surfaceId: 'monthly_balance_review', search: searchParams,
+    range: ({ timezone }) => {
+      const selected = searchParams?.month ?? formatBusinessLocalDateKey(now, timezone).slice(0, 7);
+      try {
+        const window = monthlyReviewWindow(selected, timezone, now);
+        return { fromLocalDate: `${selected}-01`, toLocalDate: formatBusinessLocalDateKey(new Date(window.endExclusive.getTime() - 1), timezone), preset: 'CUSTOM' };
+      } catch {
+        return { fromLocalDate: `${selected}-01`, toLocalDate: `${selected}-01`, preset: 'CUSTOM' };
+      }
+    },
+  });
+  if (!opened.ok) return opened.denial;
+  const { business } = opened;
+  const timezone = business.timezone!;
+  const month = searchParams?.month ?? formatBusinessLocalDateKey(now, timezone).slice(0, 7);
+  try { monthlyReviewWindow(month, timezone, now); } catch {
     return <div className="card p-5"><h1 className="text-xl font-semibold">Choose a valid month</h1><p>Select a month that has started.</p><Link className="btn-secondary mt-3" href="/payments/reconciliation/balances">Back to monthly review</Link></div>;
   }
   const requestedPage = Number(searchParams?.page ?? '1');
@@ -20,13 +34,13 @@ export default async function MonthlyBalanceReviewPage({ searchParams }: { searc
   // One consistent read: a backdated posting must not land between opening,
   // movement and detail reads and create a misleading comparison.
   const { review, entries } = await prisma.$transaction(async tx => {
-    const snapshot = await getMonthlyBalanceReview(tx, business.id, month, business.timezone, now);
+    const snapshot = await getMonthlyBalanceReview(tx, business.id, month, timezone, now);
     const validAccount = searchParams?.account && snapshot.rows.some(row => row.code === searchParams.account);
-    const detail = validAccount && validPage ? await getMonthlyAccountEntries(tx, business.id, searchParams!.account!, month, business.timezone, now, requestedPage) : null;
+    const detail = validAccount && validPage ? await getMonthlyAccountEntries(tx, business.id, searchParams!.account!, month, timezone, now, requestedPage) : null;
     return { review: snapshot, entries: detail };
   }, { isolationLevel: 'Serializable', maxWait: 5000, timeout: 15000 });
   const money = (amount: number) => formatMoney(amount, business.currency);
-  const openingDate = formatBusinessLocalDateKey(new Date(review.window.start.getTime() - 1), business.timezone);
+  const openingDate = formatBusinessLocalDateKey(new Date(review.window.start.getTime() - 1), timezone);
   return <div className="space-y-5">
     <PageHeader title="Monthly balance review" subtitle="Compare recorded balances with your statements and supporting records." secondaryCta={{ label: 'Back to reconciliation', href: '/payments/reconciliation' }} />
     <div className="card space-y-2 p-5">
@@ -64,7 +78,7 @@ export default async function MonthlyBalanceReviewPage({ searchParams }: { searc
       <h2 className="text-lg font-semibold">{entries.account.name}: recorded entries</h2>
       <p className="text-sm text-black/70">{entries.total} entries in this month · showing up to {entries.pageSize} per page. Month totals above include all entries, not just this page.</p>
       {entries.rows.length === 0 ? <p>No entries on this page.</p> : entries.rows.map(line => <article key={line.id} className="space-y-1 rounded-xl border border-black/10 p-3">
-        <p className="text-xs text-black/60">{new Intl.DateTimeFormat('en-GB', { timeZone: business.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(line.journalEntry.entryDate)}</p>
+        <p className="text-xs text-black/60">{new Intl.DateTimeFormat('en-GB', { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(line.journalEntry.entryDate)}</p>
         <p className="font-semibold break-words">{line.journalEntry.description}</p>
         <p className="text-sm">Debit {money(line.debitPence)} · Credit {money(line.creditPence)}</p>
         {line.memo ? <p className="text-sm break-words">{line.memo}</p> : null}

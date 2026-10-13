@@ -36,6 +36,7 @@ export_sales_by_supplier GROWTH STORE_DIMENSIONAL yes true EXPORT:OM:DENY:DENY a
 reorder_suggestions GROWTH STORE_DIMENSIONAL yes false VIEW:OM:RO:DENY
 income_statement GROWTH ACCOUNTING_WHOLE_BUSINESS - true VIEW:OM:RO:DENY
 balance_sheet GROWTH ACCOUNTING_WHOLE_BUSINESS - true VIEW:OM:RO:DENY
+monthly_balance_review GROWTH ACCOUNTING_WHOLE_BUSINESS - true VIEW:OM:RO:DENY
 cash_flow_statement GROWTH ACCOUNTING_WHOLE_BUSINESS - true VIEW:OM:RO:DENY
 export_financials GROWTH ACCOUNTING_WHOLE_BUSINESS - true EXPORT:OM:DENY:DENY audit
 cash_drawer_report STARTER STORE_DIMENSIONAL yes false VIEW:OM:RO:DENY
@@ -160,6 +161,8 @@ describe('surface catalogue contract', () => {
     const allowed = new Set([
       'app/(protected)/layout.tsx',
       'app/(protected)/payments/supplier-aging/page.tsx',
+      'app/(protected)/payments/reconciliation/balances/page.tsx',
+      'app/(protected)/payments/reconciliation/balances/page.test.tsx',
       'app/(protected)/reports/analytics/page.tsx',
       'app/(protected)/reports/audit-log/page.tsx',
       'app/(protected)/reports/balance-sheet/page.tsx',
