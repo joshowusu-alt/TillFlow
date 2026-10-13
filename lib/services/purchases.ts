@@ -510,10 +510,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   // Nested `lines: { create: [...150] }` inside a $transaction generates
   // 150 sequential round-trips (150 × 30 ms RTT = 4.5 s) — right at the limit.
   //
-  // Solution: avoid $transaction for the normal path. Use createMany for all
-  // child records — each createMany is ONE SQL INSERT statement = 1 RTT.
-  // For inventory: use array-form $transaction([...ops]) which sends all upserts
-  // in a single HTTP batch to Turso (~30 ms total regardless of count).
+  // Use createMany for child records so a large purchase remains efficient
+  // inside the single invoice/journal/inventory transaction.
   const _doInvoice = async (client: any) => {
     // 1. Invoice header — 1 RTT. New purchases get a PUR- presentation number.
     const transactionNumber = await reserveNextDocumentNumber(client, input.businessId, 'purchase');
@@ -684,22 +682,17 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   };
 
   let invoice: Awaited<ReturnType<typeof _doInvoice>>;
-  // Paid money always needs one commit. A supplied key on unpaid/credit
-  // also needs one commit so a later inventory failure cannot leave a
-  // replayable MoneyIdempotency success without stock.
-  const needsAtomicMoney = payments.length > 0 || Boolean(idempotencyKey);
+  // Every purchase changes inventory and the ledger, including unpaid credit.
+  // A later stock/link failure must roll back the invoice and all its postings.
   if (db) {
     const { created, replayed } = await runWithMoneyTx(db);
     invoice = replayed ? created : await finishInvoice(created, db);
-  } else if (needsAtomicMoney) {
+  } else {
     invoice = await prisma.$transaction(async (tx) => {
       const { created, replayed } = await runWithMoneyTx(tx);
       if (replayed) return created;
       return finishInvoice(created, tx);
     });
-  } else {
-    const { created, replayed } = await runWithMoneyTx(prisma);
-    invoice = replayed ? created : await finishInvoice(created, prisma);
   }
 
   return invoice;
