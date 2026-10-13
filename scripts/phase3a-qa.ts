@@ -7,6 +7,7 @@ import {
 import { createSale } from '../lib/services/sales';
 import { createSalesReturn } from '../lib/services/returns';
 import { createInventoryDecrease } from '../lib/services/inventory-decrease';
+import { recordOpeningInventory } from '../lib/services/opening-inventory';
 import { ensureOrganizationAndBranches } from '../lib/services/branches';
 import { approveAndCompleteStockTransfer, requestStockTransfer } from '../lib/services/stock-transfers';
 import { resolveEffectiveSellingPricePence } from '../lib/services/shared';
@@ -483,33 +484,21 @@ async function run() {
         })
       )?.inventoryAdjustmentRiskThresholdBase ?? 50;
     const riskQty = Math.max(riskThreshold + 1, 2);
-    const riskBalance = await prisma.inventoryBalance.findUnique({
-      where: {
-        storeId_productId: { storeId: mainStore.id, productId: saleLine.productId },
-      },
-      select: { qtyOnHandBase: true, avgCostBasePence: true },
+    // A fresh valued fixture exercises the loss journal without certifying the
+    // unknown-cost stock used by the earlier checkout scenarios.
+    const riskProduct = await prisma.product.create({ data: {
+      businessId: business.id, name: `Phase3A valued risk fixture ${Date.now()}`,
+      sellingPriceBasePence: 500, defaultCostBasePence: 100,
+      productUnits: { create: { unitId: saleLine.unitId, isBaseUnit: true, conversionToBase: 1 } },
+    } });
+    await recordOpeningInventory({ businessId: business.id, storeId: mainStore.id, userId: owner.id,
+      referenceId: `phase3a-risk:${riskProduct.id}`,
+      lines: [{ productId: riskProduct.id, unitId: saleLine.unitId, qtyInUnit: riskQty + 5, unitCostPence: 100 }],
     });
-    if (!riskBalance || riskBalance.qtyOnHandBase < riskQty || riskBalance.avgCostBasePence <= 0) {
-      await prisma.inventoryBalance.upsert({
-        where: {
-          storeId_productId: { storeId: mainStore.id, productId: saleLine.productId },
-        },
-        update: {
-          qtyOnHandBase: Math.max(riskBalance?.qtyOnHandBase ?? 0, riskQty + 5),
-          avgCostBasePence: Math.max(riskBalance?.avgCostBasePence ?? 0, 100),
-        },
-        create: {
-          storeId: mainStore.id,
-          productId: saleLine.productId,
-          qtyOnHandBase: riskQty + 5,
-          avgCostBasePence: 100,
-        },
-      });
-    }
     await createInventoryDecrease({
       businessId: business.id,
       storeId: mainStore.id,
-      productId: saleLine.productId,
+      productId: riskProduct.id,
       unitId: saleLine.unitId,
       qtyInUnit: riskQty,
       reasonCode: 'WASTAGE',
