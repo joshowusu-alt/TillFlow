@@ -157,7 +157,7 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     const current = await stock(p);
     expect(current.qtyOnHandBase * current.avgCostBasePence - await inventoryPosting([a.id, referenceId])).toBe(1000);
   }, 60000);
-  it('rolls back an unpaid purchase when stock-movement creation fails', async () => {
+  it.each(['UNPAID', 'PAID'] as const)('rolls back a %s purchase when stock-movement creation fails', async paymentStatus => {
     const p = await product();
     const before = await db.purchaseInvoice.count({ where: { businessId } });
     const journalsBefore = await db.journalEntry.count({ where: { businessId } });
@@ -167,10 +167,14 @@ describePg('isolated inventory valuation and COGS evidence', () => {
         const movementFailure = vi.spyOn(tx.stockMovement, 'createMany').mockRejectedValueOnce(new Error('Injected stock-movement failure'));
         try { return await callback(tx); } finally { movementFailure.mockRestore(); }
       }, options)) as typeof singleton.$transaction);
-    try { await expect(buy(p, 1, 1000)).rejects.toThrow('Injected stock-movement failure'); } finally { injected.mockRestore(); }
+    const key = `rollback-${p}`;
+    const extra = paymentStatus === 'PAID' ? { paymentStatus, payments: [{ method: 'TRANSFER' as const, amountPence: 1000 }], idempotencyKey: key } : {};
+    try { await expect(buy(p, 1, 1000, extra)).rejects.toThrow('Injected stock-movement failure'); } finally { injected.mockRestore(); }
     expect(await db.purchaseInvoice.count({ where: { businessId } })).toBe(before);
     expect(await db.journalEntry.count({ where: { businessId } })).toBe(journalsBefore);
     expect(await db.inventoryBalance.findUnique({ where: { storeId_productId: { storeId, productId: p } } })).toBeNull();
+    expect(await db.moneyIdempotency.count({ where: { businessId, key } })).toBe(0);
+    expect(await db.purchasePayment.count({ where: { businessId, purchaseInvoice: { lines: { some: { productId: p } } } } })).toBe(0);
   }, 60000);
   it('reconciles concurrent distinct credit purchases on the same product', async () => {
     const p = await product();
