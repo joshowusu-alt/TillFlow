@@ -4,6 +4,7 @@ import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '
 import { getMonthlyAccountEntries, getMonthlyBalanceReview } from './monthly-balance-review';
 
 import { getBalanceSheet } from './financials';
+import { getRecordedMoneyMovement } from './recorded-money';
 vi.mock('next/cache', () => ({ unstable_cache: (fn: unknown) => fn }));
 
 const describePg = canRunLivePostgresTests() ? describe : describe.skip;
@@ -34,6 +35,7 @@ describePg('monthly balance review with isolated PostgreSQL journals', () => {
       { journalEntryId: entry.id, accountId: capitalId, debitPence: Math.max(0, -entry.amount), creditPence: Math.max(0, entry.amount) },
     ]) });
     await db.journalEntry.create({ data: { businessId: businessIds[1], description: 'Other business', entryDate: new Date('2026-03-10'), lines: { create: { accountId: foreignBank, debitPence: 500000, creditPence: 0 } } } });
+    await db.journalEntry.create({ data: { businessId: businessIds[1], description: 'Foreign journal referencing local account', entryDate: new Date('2026-03-10'), lines: { create: { accountId: bankId, debitPence: 900000, creditPence: 0 } } } });
   });
   afterAll(async () => {
     if (!db) return;
@@ -56,6 +58,12 @@ describePg('monthly balance review with isolated PostgreSQL journals', () => {
     expect(sheet.totalEquity).toBe(-450);
     expect(sheet.legacyCapitalPence).toBe(12345);
     expect(sheet.reconciliation).toMatchObject({ equationDifferencePence: 0, status: 'UNRECONCILED' });
+  });
+  it('ties recorded money movement to the statement using exact boundaries and no undated capital', async () => {
+    const movement = await getRecordedMoneyMovement(db, businessIds[0], new Date('2026-03-01'), new Date('2026-04-01'));
+    const sheet = await getBalanceSheet(businessIds[0], new Date('2026-04-01'));
+    expect(movement).toMatchObject({ beginningCashPence: 1000, netMovementPence: -1450, endingCashPence: -450 });
+    expect(movement.endingCashPence).toBe(sheet.assets.filter(row => ['1000', '1010'].includes(row.accountCode)).reduce((sum, row) => sum + row.balancePence, 0));
   });
   it('paginates all 57 entries without capping the month total or skipping tied timestamps', async () => {
     const first = await getMonthlyAccountEntries(db, businessIds[0], '1010', '2026-03', 'Africa/Accra', now);
