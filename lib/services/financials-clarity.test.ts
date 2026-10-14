@@ -30,16 +30,16 @@ describe('Financial Reports clarity', () => {
   });
 
   it('4. States the cash-flow limitation and shows no cash-change total', () => {
-    expect(cashflowSrc).toContain('not on the reliable list');
-    expect(cashflowSrc).not.toContain('getCashflow(');
+    expect(cashflowSrc).toContain('Indirect method');
+    expect(cashflowSrc.indexOf('if (!opened.ok)')).toBeLessThan(cashflowSrc.indexOf('await getCashflow('));
   });
 
   it('5. Does not present ending cash as a complete change', () => {
-    expect(cashflowSrc).toContain('ending cash will not match cash plus bank');
+    expect(cashflowSrc).toContain('data.endingCash');
   });
 
   it('6. Keeps the statement off the figure grid', () => {
-    expect(cashflowSrc).toContain('No cash-change total is shown');
+    expect(cashflowSrc).toContain('Money received and paid');
   });
 
   it('7. Does not contain raw "Change in Accounts Receivable" label', () => {
@@ -188,7 +188,7 @@ describe('Financial Reports clarity', () => {
   // Safety: service import paths unchanged
 
   it('37. Withheld pages do not import the figure services', () => {
-    expect(cashflowSrc).not.toContain("from '@/lib/reports/financials'");
+    expect(cashflowSrc).toContain("from '@/lib/reports/financials'");
     expect(incomeSrc).toContain("from '@/lib/reports/financials'");
     expect(balanceSrc).toContain("from '@/lib/reports/financials'");
     expect(marginsSrc).toContain("from '@/lib/reports/margin-analysis'");

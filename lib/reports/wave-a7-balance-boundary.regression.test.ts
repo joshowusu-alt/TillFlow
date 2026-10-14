@@ -258,54 +258,41 @@ describe('A7 getAccountBalance — asOf is an exclusive boundary instant', () =>
 describe('A7 getCashflow — opening/closing balances use exclusive period boundaries', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resetRecorders();
     ledger.journalLines = [...CASH_BOUNDARY_LINES, ...AR_BOUNDARY_LINES];
-
-    prismaMock.business.findUniqueOrThrow.mockResolvedValue({ id: BIZ, openingCapitalPence: 0 });
-    prismaMock.openingBalance.findMany.mockResolvedValue([]);
-    prismaMock.account.findMany.mockResolvedValue(ledger.accounts);
-    prismaMock.journalLine.groupBy.mockResolvedValue([]);
-    prismaMock.salesInvoice.findMany.mockResolvedValue([]);
-    prismaMock.salesInvoiceLine.findMany.mockResolvedValue([]);
-    prismaMock.store.findMany.mockResolvedValue([]);
-    prismaMock.inventoryBalance.findMany.mockResolvedValue([]);
+    prismaMock.$transaction = vi.fn(async fn => fn(prismaMock)) as never;
+    prismaMock.account.findMany.mockResolvedValue(ledger.accounts.filter(a => ['1000', '1010'].includes(a.code)));
+    prismaMock.journalLine.groupBy.mockImplementation(async ({ where }) => {
+      const grouped = new Map<string, { accountId: string; _sum: { debitPence: number; creditPence: number } }>();
+      for (const line of ledger.journalLines) {
+        if (!['acc-cash', 'acc-bank'].includes(line.accountId)) continue;
+        const f = where.journalEntry.entryDate;
+        if (f.lt && line.entryDate >= f.lt || f.gte && line.entryDate < f.gte) continue;
+        const row = grouped.get(line.accountId) ?? { accountId: line.accountId, _sum: { debitPence: 0, creditPence: 0 } };
+        row._sum.debitPence += line.debitPence; row._sum.creditPence += line.creditPence;
+        grouped.set(line.accountId, row);
+      }
+      return [...grouped.values()];
+    });
+    prismaMock.journalEntry.findMany.mockImplementation(async ({ where }) => ledger.journalLines
+      .filter(line => line.entryDate >= where.entryDate.gte && line.entryDate < where.entryDate.lt)
+      .map((line, i) => ({ id: String(i), referenceType: 'SALES_INVOICE', lines: [{ ...line, account: ledger.accounts.find(a => a.id === line.accountId) }] })));
   });
-
-  it('beginningCash excludes the cash journal stamped exactly at period start', async () => {
+  it('excludes the start instant from opening and the end instant from closing', async () => {
     const cashflow = await getCashflow(BIZ, START, END);
     expect(cashflow.beginningCash).toBe(100);
+    expect(cashflow.endingCash).toBe(700);
+    expect(cashflow.money.netMovementPence).toBe(600);
   });
-
-  it('arChange equals only the in-period AR movement [start, end)', async () => {
+  it('includes only in-period working-capital movements', async () => {
     const cashflow = await getCashflow(BIZ, START, END);
-    // endAr(30+50+70=150) - startAr(30) = 120; the 90 at end is next period's.
-    expect(cashflow.arChange).toBe(120);
+    expect(cashflow.adjustments.find(row => row.key === '1100')?.amountPence).toBe(-120);
   });
-
-  it('every point-in-time balance lookup uses `lt` at start and end for AR/AP/inventory/cash', async () => {
+  it('keeps both business relations and exact half-open period filters on the cash-flow snapshot', async () => {
     await getCashflow(BIZ, START, END);
-
-    // 7 lookups: AR/AP/inventory at start+end, cash at start.
-    const filters = entryDateFilters();
-    expect(filters).toHaveLength(7);
-    for (const filter of filters) {
-      expect(filter).not.toHaveProperty('lte');
-      expect(Object.keys(filter)).toEqual(['lt']);
-    }
-
-    const byAccount = new Map<string, DateFilter[]>();
-    for (const where of recorded.journalAggregate) {
-      const list = byAccount.get(where.accountId ?? '') ?? [];
-      list.push(where.journalEntry?.entryDate ?? {});
-      byAccount.set(where.accountId ?? '', list);
-    }
-
-    // AR / AP / inventory: both boundaries; cash: start only.
-    for (const accountId of ['acc-ar', 'acc-ap', 'acc-inv']) {
-      const instants = (byAccount.get(accountId) ?? []).map((f) => iso(f.lt)).sort();
-      expect(instants).toEqual([START.toISOString(), END.toISOString()]);
-    }
-    expect((byAccount.get('acc-cash') ?? []).map((f) => iso(f.lt))).toEqual([START.toISOString()]);
+    const calls = prismaMock.journalLine.groupBy.mock.calls;
+    expect(calls[0][0].where).toMatchObject({ account: { businessId: BIZ }, journalEntry: { businessId: BIZ, entryDate: { lt: START } } });
+    expect(calls[1][0].where.journalEntry.entryDate).toEqual({ gte: START, lt: END });
+    expect(prismaMock.journalEntry.findMany.mock.calls[0][0].where).toEqual({ businessId: BIZ, entryDate: { gte: START, lt: END } });
   });
 });
 

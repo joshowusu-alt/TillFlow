@@ -38,7 +38,7 @@ describe('Stage 3A navigation', () => {
     const activity = stage3aLinks('activity', allowed).map((link) => link.href);
     const more = stage3aLinks('more', allowed).map((link) => link.href);
     expect(activity).toEqual(['/reports/dashboard']);
-    expect(more).toEqual(['/reports/balance-sheet', '/reports/income-statement', '/reports/exports', '/reports/owner']);
+    expect(more).toEqual(['/reports/cashflow', '/reports/balance-sheet', '/reports/income-statement', '/reports/exports', '/reports/owner']);
     for (const href of STAGE_3A_WITHHELD_HREFS) {
       expect(activity).not.toContain(href);
       expect(more).not.toContain(href);
