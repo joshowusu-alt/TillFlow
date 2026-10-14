@@ -7,6 +7,7 @@ vi.mock('next/cache', () => ({
 
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
+    $transaction: vi.fn(),
     business: { findUniqueOrThrow: vi.fn() },
     journalLine: { groupBy: vi.fn() },
     account: { findMany: vi.fn() },
@@ -43,6 +44,7 @@ describe('getBalanceSheet asOf filtering', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.$transaction.mockImplementation((fn) => fn(prismaMock));
     prismaMock.business.findUniqueOrThrow.mockResolvedValue({
       id: bizId,
       openingCapitalPence: 0,
@@ -93,6 +95,7 @@ describe('getBalanceSheet asOf filtering', () => {
       expect.objectContaining({
         by: ['accountId'],
         where: {
+          account: { businessId: bizId },
           journalEntry: {
             businessId: bizId,
             entryDate: { lt: asOf },
@@ -102,23 +105,15 @@ describe('getBalanceSheet asOf filtering', () => {
     );
   });
 
-  it('includes opening capital in assets and equity when set', async () => {
-    prismaMock.business.findUniqueOrThrow.mockResolvedValue({
-      id: bizId,
-      openingCapitalPence: 100000,
-    });
+  it('discloses undated legacy capital without manufacturing cash or equity', async () => {
+    prismaMock.business.findUniqueOrThrow.mockResolvedValue({ openingCapitalPence: 100000 });
     prismaMock.journalLine.groupBy.mockResolvedValue([]);
-
     const sheet = await getBalanceSheet(bizId, new Date('2024-12-31'));
-
-    // Opening capital shows as Cash on Hand asset
-    expect(sheet.totalAssets).toBe(100000);
-    // Owner's Capital appears in equity
-    const ownerCapital = sheet.equity.find(e => e.accountCode === 'OWNER_CAPITAL');
-    expect(ownerCapital).toBeTruthy();
-    expect(ownerCapital!.balancePence).toBe(100000);
-    // Balance sheet should balance: assets = liabilities + equity
-    expect(sheet.totalAssets).toBe(sheet.totalLiabilities + sheet.totalEquity);
+    expect(sheet.totalAssets).toBe(0);
+    expect(sheet.totalEquity).toBe(0);
+    expect(sheet.legacyCapitalPence).toBe(100000);
+    expect(sheet.reconciliation.status).toBe('UNRECONCILED');
+    expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({ isolationLevel: 'Serializable' }));
   });
 
   it('preserves recorded stock and ledger profit when operational profit differs', async () => {

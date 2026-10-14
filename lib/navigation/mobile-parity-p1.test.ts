@@ -12,6 +12,13 @@ import {
 import { NAV_GROUPS } from '@/lib/navigation-config';
 import { getFeatures } from '@/lib/features';
 
+it('keeps monthly review available under Money when MoMo is disabled', () => {
+  for (const areas of [OWNER_BROWSE_AREAS, MANAGER_MENU_SECTIONS]) {
+    expect(areas.find(area => area.id === 'money')?.items.some(item => item.href === '/payments/reconciliation/balances')).toBe(true);
+  }
+  expect(NAV_GROUPS.find(group => group.id === 'money')?.items.find(item => item.href === '/payments/reconciliation/balances')).toMatchObject({ minimumPlan: 'GROWTH', roles: ['MANAGER', 'OWNER'] });
+});
+
 const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 const ownerContext = {

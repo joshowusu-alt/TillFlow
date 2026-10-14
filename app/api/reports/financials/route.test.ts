@@ -14,7 +14,7 @@ describe('financial exports preserve reconciliation limits', () => {
     vi.resetAllMocks();
     mocks.guard.mockResolvedValue({ ok: true, branch: { kind: 'label' }, business: { id: 'b1', currency: 'GHS', timezone: 'Africa/Accra' },
       decision: { appliedRange: { fromLocalDate: '2026-03-01', toLocalDate: '2026-03-31' } } });
-    mocks.balance.mockResolvedValue({ assets: [], liabilities: [], equity: [], totalAssets: 1000, totalLiabilities: 200, totalEquity: 500,
+    mocks.balance.mockResolvedValue({ assets: [], liabilities: [], equity: [], totalAssets: 1000, totalLiabilities: 200, totalEquity: 500, legacyCapitalPence: 0,
       reconciliation: { equationDifferencePence: 300, journalProfitPence: -100, operationalProfitPence: null,
         profitDifferencePence: null, profitIncomplete: true, stockValueIncomplete: true, status: 'UNRECONCILED' } });
     mocks.cashflow.mockResolvedValue({ netProfit: null, arChange: 100, apChange: -100, invChange: 300,

@@ -78,10 +78,10 @@ describe('Stage 3A navigation correction', () => {
     const balance = readFileSync(join(root, 'app/(protected)/reports/balance-sheet/page.tsx'), 'utf8');
     const forecast = readFileSync(join(root, 'app/(protected)/reports/cashflow-forecast/page.tsx'), 'utf8');
     const cashflow = readFileSync(join(root, 'app/(protected)/reports/cashflow/page.tsx'), 'utf8');
-    expect(balance).toContain('This statement is withheld');
+    expect(balance).toContain('Based on your recorded entries');
     expect(balance).toContain('openLiveReport');
-    expect(balance).not.toContain('getBalanceSheet');
-    expect(balance).not.toContain('formatMoney');
+    expect(balance).toContain('getBalanceSheet');
+    expect(balance).toContain('formatMoney');
     expect(forecast).toContain('This estimate is withheld');
     expect(forecast).not.toContain('getCashflowForecast');
     expect(forecast).not.toContain('formatMoney');

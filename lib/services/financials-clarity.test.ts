@@ -130,14 +130,14 @@ describe('Financial Reports clarity', () => {
     expect(balanceSrc).toContain('export default async function BalanceSheetPage');
   });
 
-  it('26. Says the balance sheet is withheld', () => {
-    expect(balanceSrc).toContain('This statement is withheld');
-    expect(balanceSrc).toContain('No figures are shown');
+  it('26. Explains recorded statement basis', () => {
+    expect(balanceSrc).toContain('Based on your recorded entries');
+    expect(balanceSrc).toContain('Differences to review');
   });
 
-  it('27. Does not show receivable figures', () => {
+  it('27. Loads the guarded ledger statement', () => {
     expect(balanceSrc).not.toContain('Money customers owe you');
-    expect(balanceSrc).not.toContain('getBalanceSheet');
+    expect(balanceSrc).toContain('getBalanceSheet');
   });
 
   it('28. Does not show an inventory plug', () => {
@@ -190,7 +190,7 @@ describe('Financial Reports clarity', () => {
   it('37. Withheld pages do not import the figure services', () => {
     expect(cashflowSrc).not.toContain("from '@/lib/reports/financials'");
     expect(incomeSrc).toContain("from '@/lib/reports/financials'");
-    expect(balanceSrc).not.toContain("from '@/lib/reports/financials'");
+    expect(balanceSrc).toContain("from '@/lib/reports/financials'");
     expect(marginsSrc).toContain("from '@/lib/reports/margin-analysis'");
     expect(forecastSrc).not.toContain("from '@/lib/reports/forecast'");
   });
@@ -210,7 +210,7 @@ describe('Financial Reports clarity', () => {
   it('39. Export links remain on statements that still show figures', () => {
     expect(cashflowSrc).not.toContain('Export CSV');
     expect(incomeSrc).toContain('Export CSV');
-    expect(balanceSrc).not.toContain('Export CSV');
+    expect(balanceSrc).toContain('Export CSV');
     expect(marginsSrc).toContain('Excel');
     expect(marginsSrc).toContain('Print / PDF');
   });

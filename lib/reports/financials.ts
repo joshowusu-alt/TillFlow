@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 import { unstable_cache } from 'next/cache';
@@ -24,12 +25,12 @@ function applyBalance(type: AccountType, debit: number, credit: number) {
   return credit - debit;
 }
 
-async function _getIncomeStatement(businessId: string, startIso: string, endIso: string) {
+async function _getIncomeStatement(businessId: string, startIso: string, endIso: string, db: Prisma.TransactionClient = prisma) {
   const start = new Date(startIso);
   const end = new Date(endIso);
 
   const [saleInvoices, grouped, accounts] = await Promise.all([
-    prisma.salesInvoice.findMany({
+    db.salesInvoice.findMany({
       where: {
         businessId,
         createdAt: { gte: start, lt: end },
@@ -51,14 +52,14 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
       },
     }),
     // Journals still needed for non-COGS expenses
-    prisma.journalLine.groupBy({
+    db.journalLine.groupBy({
       by: ['accountId'],
       where: {
         journalEntry: { businessId, entryDate: { gte: start, lt: end } }
       },
       _sum: { debitPence: true, creditPence: true },
     }),
-    prisma.account.findMany({
+    db.account.findMany({
       where: { businessId },
       select: { id: true, code: true, type: true },
     }),
@@ -108,7 +109,7 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
     }
   }
 
-  const incomplete = await getIncompleteStockSnapshot(businessId);
+  const incomplete = await getIncompleteStockSnapshot(businessId, db);
 
   return {
     revenue,
@@ -144,28 +145,23 @@ export function getIncomeStatement(businessId: string, start: Date, end: Date) {
   );
 }
 
-async function _getBalanceSheet(businessId: string, asOfIso: string) {
+async function readBalanceSheet(db: Prisma.TransactionClient, businessId: string, asOfIso: string) {
   const asOf = new Date(asOfIso);
 
-  const [business, obRecords, grouped, accounts, income] = await Promise.all([
-    prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { openingCapitalPence: true } }),
-    prisma.openingBalance.findMany({ where: { businessId } }),
-    prisma.journalLine.groupBy({
+  const [business, grouped, accounts, income] = await Promise.all([
+    db.business.findUniqueOrThrow({ where: { id: businessId }, select: { openingCapitalPence: true } }),
+    db.journalLine.groupBy({
       by: ['accountId'],
-      where: { journalEntry: { businessId, entryDate: { lt: asOf } } },
+      where: { account: { businessId }, journalEntry: { businessId, entryDate: { lt: asOf } } },
       _sum: { debitPence: true, creditPence: true },
     }),
-    prisma.account.findMany({
+    db.account.findMany({
       where: { businessId },
       select: { id: true, code: true, name: true, type: true },
     }),
     // Sale-line-based NP (consistent with Income Statement)
-    _getIncomeStatement(businessId, new Date(0).toISOString(), asOfIso),
+    _getIncomeStatement(businessId, new Date(0).toISOString(), asOfIso, db),
   ]);
-
-  // Backward compat: use legacy openingCapitalPence only when no OB records exist
-  const hasOBRecords = obRecords.length > 0;
-  const legacyCapital = !hasOBRecords ? (business.openingCapitalPence ?? 0) : 0;
 
   const accountMap = new Map(accounts.map(a => [a.id, a]));
 
@@ -201,34 +197,10 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
   const liabilities: StatementLine[] = [];
   const equity: StatementLine[] = [];
 
-  // Legacy: add openingCapitalPence to Cash if no OpeningBalance records exist
   for (const entry of map.values()) {
-    if (entry.accountCode === ACCOUNT_CODES.cash && legacyCapital > 0) {
-      entry.balancePence += legacyCapital;
-    }
     if (entry.type === 'ASSET') assets.push(entry);
     if (entry.type === 'LIABILITY') liabilities.push(entry);
     if (entry.type === 'EQUITY') equity.push(entry);
-  }
-
-  // Legacy fallback: If no journal cash account but legacy capital exists
-  if (legacyCapital > 0 && !assets.find(a => a.accountCode === ACCOUNT_CODES.cash)) {
-    assets.push({
-      accountCode: ACCOUNT_CODES.cash,
-      name: 'Cash on Hand',
-      type: 'ASSET',
-      balancePence: legacyCapital,
-    });
-  }
-
-  // Legacy fallback: synthetic Owner's Capital equity line
-  if (legacyCapital > 0) {
-    equity.push({
-      accountCode: 'OWNER_CAPITAL',
-      name: "Owner's Capital",
-      type: 'EQUITY',
-      balancePence: legacyCapital,
-    });
   }
 
   // Equity follows recorded ledger profit; operational profit is compared separately.
@@ -247,6 +219,7 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
 
   return {
     assets, liabilities, equity, totalAssets, totalLiabilities, totalEquity,
+    legacyCapitalPence: business.openingCapitalPence ?? 0,
     reconciliation: {
       journalProfitPence: journalNP,
       operationalProfitPence: income.netProfit,
@@ -260,9 +233,16 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
   };
 }
 
+async function _getBalanceSheet(businessId: string, asOfIso: string) {
+  if (!Number.isFinite(new Date(asOfIso).getTime())) throw new Error('Choose a valid statement date');
+  return prisma.$transaction(tx => readBalanceSheet(tx, businessId, asOfIso), {
+    isolationLevel: 'Serializable', maxWait: 5000, timeout: 15000,
+  });
+}
+
 const cachedBalanceSheet = unstable_cache(
   _getBalanceSheet,
-  ['report-balance-sheet'],
+  ['report-balance-sheet-ledger-v2'],
   { revalidate: 900, tags: ['reports'] }
 );
 

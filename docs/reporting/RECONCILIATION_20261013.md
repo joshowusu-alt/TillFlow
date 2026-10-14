@@ -39,3 +39,24 @@ Account details are paginated with a stable timestamp/ID order; full-period tota
 The ledger currently combines electronic money under Bank. Neither that combined balance nor a zero trial-balance difference establishes a separate verified bank or MoMo-wallet balance. The workspace displays awaiting-evidence status, has no posting or reconciliation sign-off controls, and does not import or persist statements. Individual account mapping and statement transaction matching remain the next evidence-dependent stage. Balance sheet and cash flow remain withheld.
 
 Tests include business-local month boundaries, DST and leap months, partial-month future exclusion, negative balances, foreign-account refusal, tied-timestamp pagination, rendered evidence warnings, and PostgreSQL journal fixtures. The PostgreSQL workflow now runs these checks when the monthly review files change.
+
+## Balance-sheet presentation revision — 14 October 2026
+
+External business records are not a prerequisite for shipping a correct software report. Businesses own their opening balances and reconciliation. The statement presents recorded ledger balances without certifying them or posting corrections.
+
+The balance-sheet screen is being enabled under Reports > More reports > Balance sheet. Money > Monthly balance review is linked independently of MoMo enablement on desktop and mobile, and from the card/transfer page. Cash-flow statement and forecast remain withheld pending their own calculation review.
+
+Statement amounts use dated journals strictly before the business-local end-of-day boundary; today stops at the request time. The entire ledger and operational-profit comparison are read within one serializable transaction. Both account and journal tenant relations are scoped. Recorded inventory and ledger profit remain unchanged by comparison differences. Negative balances remain visible.
+
+Undated legacy opening capital is shown separately and excluded from both cash and equity. The report makes no assumption about its effective date or whether a journal already represents it. This may change displayed totals compared with the old download, but does not change any underlying records. Current stock-cost warnings are explicitly labelled as current, not as reconstructed historical stock counts.
+
+Business visibility uses the existing entitlement policy:
+
+| Surface | Owner / manager on Growth or Pro | Starter | Cashier |
+| --- | --- | --- | --- |
+| Balance sheet | Whole-business recorded figures, differences and warnings | Upgrade notice; no figures | Denied |
+| Monthly balance review | Recorded account balances and entries | Upgrade notice; no figures | Denied |
+| Financial export | Available when billing permits exports | Denied | Denied |
+| Cash-flow statement / forecast | Still withheld | Existing access restrictions | Denied |
+
+Restricted billing can allow read-only report viewing while denying exports. Foreign business or explicit branch scope is refused before statement queries. No statement matching, reconciliation sign-off, data repair, or historical backfill is included.

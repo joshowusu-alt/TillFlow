@@ -212,7 +212,7 @@ describe('Reports navigation, Activity and More', () => {
     expect(manager.map((link) => link.label).join(' ')).not.toContain('Owner brief');
     const source = readFileSync('lib/reports/today/stage3a-nav.ts', 'utf8');
     expect(source).not.toContain("label: 'Download last week'");
-    expect(source).not.toContain("href: '/reports/balance-sheet'");
+    expect(source).toContain("href: '/reports/balance-sheet'");
   });
 });
 

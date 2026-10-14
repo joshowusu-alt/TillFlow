@@ -6,6 +6,7 @@ vi.mock('next/cache', () => ({
 
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
+    $transaction: vi.fn(),
     business: { findUniqueOrThrow: vi.fn() },
     journalLine: { groupBy: vi.fn() },
     account: { findMany: vi.fn() },
@@ -47,6 +48,7 @@ describe('other operating income (4100) reporting', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.$transaction.mockImplementation((fn) => fn(prismaMock));
     prismaMock.business.findUniqueOrThrow.mockResolvedValue({
       id: bizId,
       openingCapitalPence: 0,
