@@ -20,12 +20,26 @@ describe('balance-sheet business presentation', () => {
   afterEach(() => vi.useRealTimers());
   it('shows signed recorded balances, warnings, legacy disclosure and review navigation', async () => {
     const html = renderToStaticMarkup(await Page({ searchParams: { asOf: '2026-03-31' } }));
-    expect(html).toContain('Bank (1010)'); expect(html).toContain('-1.00');
-    expect(html).toContain('Cost information needs review'); expect(html).toContain('Costs incomplete');
-    expect(html).toContain('Undated opening capital'); expect(html).toContain('not added to cash or equity');
-    expect(html).toContain('No external balances have been verified');
+    expect(html).toContain('Bank &amp; MoMo'); expect(html).toContain('-1.00');
+    expect(html).toContain('Some sales have no product cost recorded');
+    expect(html.indexOf('Financial position')).toBeLessThan(html.indexOf('Report notes'));
+    expect(html).toContain('Opening capital setting'); expect(html).toContain('separate from the opening balance entries');
+    expect(html).not.toContain('No external balances');
+    expect(html).not.toContain('cannot be confirmed');
+    expect(html).not.toContain('CURRENT_PROFIT');
     expect(html).toContain('/payments/reconciliation/balances?month=2026-03');
     expect(mocks.sheet).toHaveBeenCalledWith('biz', new Date('2026-03-31T21:00:00Z'));
+  });
+  it('shows a clean statement when no specific entry issues exist', async () => {
+    const sheet = await mocks.sheet();
+    sheet.legacyCapitalPence = 0;
+    sheet.reconciliation = { ...sheet.reconciliation, equationDifferencePence: 0, stockValueIncomplete: false, profitIncomplete: false };
+    mocks.sheet.mockResolvedValue(sheet);
+    const html = renderToStaticMarkup(await Page({}));
+    expect(html).not.toContain('Report notes');
+    expect(html).not.toContain('Entry difference');
+    expect(html).not.toContain('unverified');
+    expect(html).toContain('Total liabilities and equity');
   });
   it('excludes future-dated entries from today even before the local day ends', async () => {
     await Page({});

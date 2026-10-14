@@ -78,7 +78,7 @@ describe('Stage 3A navigation correction', () => {
     const balance = readFileSync(join(root, 'app/(protected)/reports/balance-sheet/page.tsx'), 'utf8');
     const forecast = readFileSync(join(root, 'app/(protected)/reports/cashflow-forecast/page.tsx'), 'utf8');
     const cashflow = readFileSync(join(root, 'app/(protected)/reports/cashflow/page.tsx'), 'utf8');
-    expect(balance).toContain('Based on your recorded entries');
+    expect(balance).toContain('Your financial position from recorded opening balances and transactions.');
     expect(balance).toContain('openLiveReport');
     expect(balance).toContain('getBalanceSheet');
     expect(balance).toContain('formatMoney');

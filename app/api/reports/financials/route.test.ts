@@ -14,7 +14,7 @@ describe('financial exports preserve reconciliation limits', () => {
     vi.resetAllMocks();
     mocks.guard.mockResolvedValue({ ok: true, branch: { kind: 'label' }, business: { id: 'b1', currency: 'GHS', timezone: 'Africa/Accra' },
       decision: { appliedRange: { fromLocalDate: '2026-03-01', toLocalDate: '2026-03-31' } } });
-    mocks.balance.mockResolvedValue({ assets: [], liabilities: [], equity: [], totalAssets: 1000, totalLiabilities: 200, totalEquity: 500, legacyCapitalPence: 0,
+    mocks.balance.mockResolvedValue({ assets: [{ accountCode: '1010', name: 'Bank', balancePence: -100 }, { accountCode: '1200', name: 'Inventory', balancePence: 1100 }], liabilities: [], equity: [{ accountCode: 'CURRENT_PROFIT', name: 'Net Profit to Date', balancePence: -100 }], totalAssets: 1000, totalLiabilities: 200, totalEquity: 500, legacyCapitalPence: 0,
       reconciliation: { equationDifferencePence: 300, journalProfitPence: -100, operationalProfitPence: null,
         profitDifferencePence: null, profitIncomplete: true, stockValueIncomplete: true, status: 'UNRECONCILED' } });
     mocks.cashflow.mockResolvedValue({ netProfit: null, arChange: 100, apChange: -100, invChange: 300,
@@ -26,23 +26,25 @@ describe('financial exports preserve reconciliation limits', () => {
     const csv = await response.text();
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
-    expect(csv).toContain('Unreconciled — actual business balances have not been verified');
-    expect(csv).toContain('Incomplete — cost review needed');
-    expect(csv).toMatch(/"Balance equation difference","[^"]*3\.00"/);
-    expect(csv).toMatch(/"Ledger profit","[^"]*-1\.00"/);
-    expect(csv).toContain('"Operational less ledger profit","Costs incomplete"');
+    expect(csv).not.toContain('Unreconciled');
+    expect(csv).toContain('Recorded opening balances and transactions');
+    expect(csv).toContain('Some sales have no product cost recorded');
+    expect(csv).toMatch(/"Entry difference","[^"]*3\.00"/);
+    expect(csv).toMatch(/"Profit to date","[^"]*-1\.00"/);
+    expect(csv).not.toContain('Operational less ledger profit');
     expect(csv).toMatch(/"Total Assets","[^"]*10\.00"/);
   });
 
-  it('does not treat zero differences and complete costs as verified balances', async () => {
+  it('keeps a complete statement free of reconciliation disclaimers and zero-difference notes', async () => {
     const fixture = await mocks.balance();
     fixture.reconciliation = { ...fixture.reconciliation, equationDifferencePence: 0, profitDifferencePence: 0,
       operationalProfitPence: -100, profitIncomplete: false, stockValueIncomplete: false };
     mocks.balance.mockResolvedValue(fixture);
     const csv = await (await GET(request('balance-sheet'))).text();
-    expect(csv).toContain('Unreconciled — actual business balances have not been verified');
-    expect(csv).toContain('Recorded costs; external evidence not verified');
-    expect(csv).toMatch(/"Operational less ledger profit","[^"]*0\.00"/);
+    expect(csv).not.toContain('Unreconciled');
+    expect(csv).not.toContain('external evidence');
+    expect(csv).not.toContain('REPORT NOTES');
+    expect(csv).not.toContain('Entry difference');
   });
 
   it('identifies cash-flow figures as estimates without claiming bank or MoMo coverage', async () => {

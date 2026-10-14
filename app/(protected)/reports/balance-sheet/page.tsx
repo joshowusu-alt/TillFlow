@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
-import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
 import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { localDateInstant } from '@/lib/reports/reporting-clock';
@@ -27,43 +26,51 @@ export default async function BalanceSheetPage({ searchParams }: {
   const sheet = await getBalanceSheet(business.id, new Date(Math.min(end.getTime(), now.getTime())));
   const money = (amount: number) => formatMoney(amount === 0 ? 0 : amount, business.currency);
   const diagnostic = sheet.reconciliation;
-  return <div className="space-y-5">
-    {opened.readOnly ? <ReportReadOnlyBanner /> : null}
-    <ReportsDestinationHead title="Balance sheet" scopeLabel={opened.branch.kind === 'label' ? opened.branch.label : undefined}
-      periodLabel={key + ' · ' + zone + (key === formatBusinessLocalDateKey(now, zone) ? ' · through now' : ' · end of day')}
+  const today = formatBusinessLocalDateKey(now, zone);
+  const dateLabel = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(key + 'T12:00:00Z'));
+  const missingStockCosts = key === today && diagnostic.stockValueIncomplete;
+  const hasNotes = missingStockCosts || diagnostic.profitIncomplete || sheet.legacyCapitalPence !== 0 || diagnostic.equationDifferencePence !== 0;
+  const groups = [
+    { name: 'Assets', rows: sheet.assets, total: sheet.totalAssets },
+    { name: 'Liabilities', rows: sheet.liabilities, total: sheet.totalLiabilities },
+    { name: 'Equity', rows: sheet.equity, total: sheet.totalEquity },
+  ];
+  const accountName = (row: { accountCode: string; name: string }) => row.accountCode === 'CURRENT_PROFIT' ? 'Profit to date' : row.accountCode === '1010' ? 'Bank & MoMo' : row.name;
+  return <div className="space-y-6">
+    <ReportsDestinationHead title="Balance sheet" scopeLabel="Whole business"
+      periodLabel={'As at ' + dateLabel + (key === today ? ' · Today so far' : '')}
       actions={<DownloadLink className="btn-secondary" href={'/api/reports/financials?type=balance-sheet&from=' + key + '&to=' + key}>Export CSV</DownloadLink>} />
-    <form className="card flex flex-wrap items-end gap-3 p-5" method="GET">
-      <label className="label">Statement date<input className="input" type="date" name="asOf" defaultValue={key} max={formatBusinessLocalDateKey(now, zone)} required /></label>
-      <button className="btn-secondary" type="submit">Review date</button>
+    <p className="text-sm text-ink/70">Your financial position from recorded opening balances and transactions.</p>
+    <form className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 print:hidden" method="GET">
+      <label className="label w-full sm:w-auto">Statement date<input className="input mt-1 w-full sm:w-48" type="date" name="asOf" defaultValue={key} max={today} required /></label>
+      <button className="btn-secondary" type="submit">Update report</button>
     </form>
-    <section className="card space-y-2 p-5" aria-label="Statement basis">
-      <h2 className="font-semibold">Based on your recorded entries</h2>
-      <p>No external balances have been verified by TillFlow. Your business is responsible for confirming opening balances and checking its records. The statement does not make corrections or certify reconciliation.</p>
-      <p>Assets, liabilities and equity retain their recorded signs. Profit in equity comes from the ledger. Differences are shown below and are never added to inventory.</p>
-      <p>The Bank account currently combines electronic money; it does not establish a separate balance for each bank account or MoMo wallet.</p>
-    </section>
-    {diagnostic.stockValueIncomplete || diagnostic.profitIncomplete ? <section className="card p-5" aria-label="Cost completeness">
-      <h2 className="font-semibold">Cost information needs review</h2>
-      {diagnostic.stockValueIncomplete ? <p>Current stock includes quantities without confirmed costs. Recorded inventory below may be incomplete; it is not a reconstructed physical stock valuation for this date.</p> : null}
-      {diagnostic.profitIncomplete ? <p>Some sales through this date lack confirmed costs. Recorded ledger profit is shown, while operational profit cannot be confirmed.</p> : null}
+    <dl className="grid gap-3 sm:grid-cols-3" aria-label="Financial position">
+      {groups.map(group => <div key={group.name} className="card min-w-0 border-t-2 border-t-accent/20 p-5 sm:p-6">
+        <dt className="text-xs font-semibold uppercase tracking-wide text-ink/60">Total {group.name.toLowerCase()}</dt>
+        <dd className="mt-3 break-words text-2xl font-semibold tabular-nums tracking-tight text-ink sm:text-3xl">{money(group.total)}</dd>
+      </div>)}
+    </dl>
+    <div className="card overflow-hidden border border-slate-200/80 shadow-sm">
+      <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:px-6"><h2 className="text-base font-semibold">Financial position</h2><p className="mt-1 text-xs text-ink/60">{business.currency} · {dateLabel}</p></div>
+      {groups.map(group => <section key={group.name} className="border-b border-black/5 p-5 last:border-0 sm:px-6" aria-label={group.name}>
+        <h3 className="mb-4 text-xs font-semibold uppercase tracking-widest text-accent">{group.name}</h3>
+        {group.rows.length === 0 ? <p className="mb-3 text-sm text-ink/50">No entries for this date.</p> : <dl className="space-y-3.5">
+          {[...group.rows].sort((a, b) => a.accountCode.localeCompare(b.accountCode)).map(row => <div className="flex items-baseline justify-between gap-4 text-sm" key={row.accountCode}>
+            <dt className="min-w-0 break-words">{accountName(row)}</dt><dd className="shrink-0 text-right font-medium tabular-nums text-ink">{money(row.balancePence)}</dd>
+          </div>)}
+        </dl>}
+        <p className="mt-4 flex items-baseline justify-between gap-4 border-t border-slate-200 pt-3 text-sm font-semibold"><span>Total {group.name.toLowerCase()}</span><span className="shrink-0 tabular-nums">{money(group.total)}</span></p>
+      </section>)}
+      <div className="flex items-baseline justify-between gap-4 border-t border-accent/10 bg-accentSoft px-5 py-5 text-sm font-semibold text-accent sm:px-6"><span>Total liabilities and equity</span><span className="shrink-0 tabular-nums">{money(sheet.totalLiabilities + sheet.totalEquity)}</span></div>
+    </div>
+    {hasNotes ? <section className="space-y-2 rounded-xl border border-slate-200/80 bg-white/60 px-5 py-4 text-sm leading-relaxed text-ink/70" aria-label="Report notes">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink/70">Report notes</h2>
+      {missingStockCosts ? <p>Some stock has no cost entry. <Link className="font-semibold text-accent underline" href="/products?issue=MISSING_COST">View missing product costs</Link></p> : null}
+      {diagnostic.profitIncomplete ? <p>Some sales have no product cost recorded. Profit to date above uses the posted income and expense entries.</p> : null}
+      {sheet.legacyCapitalPence !== 0 ? <p>Opening capital setting: {money(sheet.legacyCapitalPence)}. This undated setting is separate from the opening balance entries included above. <Link className="font-semibold text-accent underline" href="/settings">View opening balance settings</Link></p> : null}
+      {diagnostic.equationDifferencePence !== 0 ? <p>Entry difference: {money(diagnostic.equationDifferencePence)}. Assets differ from liabilities and equity by this amount. <Link className="font-semibold text-accent underline" href={'/payments/reconciliation/balances?month=' + key.slice(0, 7)}>View account entries</Link></p> : null}
     </section> : null}
-    {sheet.legacyCapitalPence !== 0 ? <section className="card p-5" aria-label="Legacy opening capital">
-      <h2 className="font-semibold">Undated opening capital: {money(sheet.legacyCapitalPence)}</h2>
-      <p>This older setting is disclosed separately. It is not added to cash or equity because it has no dated ledger entry. Check opening records before making any correction.</p>
-    </section> : null}
-    {[{ name: 'Assets', rows: sheet.assets, total: sheet.totalAssets }, { name: 'Liabilities', rows: sheet.liabilities, total: sheet.totalLiabilities }, { name: 'Equity', rows: sheet.equity, total: sheet.totalEquity }].map(group => <section key={group.name} className="card space-y-3 p-5">
-      <h2 className="text-lg font-semibold">{group.name}</h2>
-      {group.rows.length === 0 ? <p>No recorded balances.</p> : <dl className="space-y-2">{group.rows.map(row => <div className="flex justify-between gap-4" key={row.accountCode}><dt>{row.name} ({row.accountCode})</dt><dd className="text-right tabular-nums">{money(row.balancePence)}</dd></div>)}</dl>}
-      <p className="flex justify-between gap-4 border-t pt-3 font-semibold"><span>Total {group.name.toLowerCase()}</span><span>{money(group.total)}</span></p>
-    </section>)}
-    <section className="card space-y-2 p-5" aria-label="Statement differences">
-      <h2 className="font-semibold">Differences to review</h2>
-      <p>Assets minus liabilities and equity: {money(diagnostic.equationDifferencePence)}</p>
-      <p>Ledger profit: {money(diagnostic.journalProfitPence)}</p>
-      <p>Operational profit: {diagnostic.operationalProfitPence == null ? 'Costs incomplete' : money(diagnostic.operationalProfitPence)}</p>
-      <p>Operational less ledger profit: {diagnostic.profitDifferencePence == null ? 'Costs incomplete' : money(diagnostic.profitDifferencePence)}</p>
-      <p>A zero difference means the recorded calculations agree. It does not confirm that every transaction was recorded or checked against statements.</p>
-      <Link className="btn-secondary inline-block" href={'/payments/reconciliation/balances?month=' + key.slice(0, 7)}>Open monthly balance review</Link>
-    </section>
+    <div className="border-t border-slate-200 pt-4 text-sm print:hidden"><Link className="font-semibold text-accent" href={'/payments/reconciliation/balances?month=' + key.slice(0, 7)}>Open monthly account review →</Link></div>
   </div>;
 }
