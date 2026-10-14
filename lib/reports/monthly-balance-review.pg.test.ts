@@ -1,7 +1,10 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
 import { getMonthlyAccountEntries, getMonthlyBalanceReview } from './monthly-balance-review';
+
+import { getBalanceSheet } from './financials';
+vi.mock('next/cache', () => ({ unstable_cache: (fn: unknown) => fn }));
 
 const describePg = canRunLivePostgresTests() ? describe : describe.skip;
 describePg('monthly balance review with isolated PostgreSQL journals', () => {
@@ -45,6 +48,14 @@ describePg('monthly balance review with isolated PostgreSQL journals', () => {
     const review = await db.$transaction(tx => getMonthlyBalanceReview(tx, businessIds[0], '2026-03', 'Africa/Accra', now), { isolationLevel: 'Serializable' });
     expect(review.rows.find(row => row.id === bankId)).toMatchObject({ openingPence: 1000, debitPence: 2550, creditPence: 4000, closingPence: -450 });
     expect(review).toMatchObject({ movementDifferencePence: 0, closingDifferencePence: 0 });
+  });
+  it('shows the same ledger balance in the statement without undated capital or next-month entries', async () => {
+    await db.business.update({ where: { id: businessIds[0] }, data: { openingCapitalPence: 12345 } });
+    const sheet = await getBalanceSheet(businessIds[0], new Date('2026-04-01'));
+    expect(sheet.totalAssets).toBe(-450);
+    expect(sheet.totalEquity).toBe(-450);
+    expect(sheet.legacyCapitalPence).toBe(12345);
+    expect(sheet.reconciliation).toMatchObject({ equationDifferencePence: 0, status: 'UNRECONCILED' });
   });
   it('paginates all 57 entries without capping the month total or skipping tied timestamps', async () => {
     const first = await getMonthlyAccountEntries(db, businessIds[0], '1010', '2026-03', 'Africa/Accra', now);

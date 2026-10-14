@@ -33,6 +33,17 @@ function input(overrides: Partial<SurfaceAccessInput> = {}): SurfaceAccessInput 
 }
 
 describe('live report decision wiring', () => {
+  it('limits balance-sheet and monthly review to Growth/Pro owners and managers', () => {
+    for (const surfaceId of ['balance_sheet', 'monthly_balance_review']) {
+      for (const plan of ['GROWTH', 'PRO']) for (const role of ['OWNER', 'MANAGER']) {
+        expect(decideSurfaceAccess(input({ surfaceId, business: { plan } as never,
+          actor: { kind: 'USER', userId: 'user-1', businessId: 'biz-1', role, active: true } })).ok).toBe(true);
+      }
+      expect(decideSurfaceAccess(input({ surfaceId, business: { plan: 'STARTER' } as never })).ok).toBe(false);
+      expect(decideSurfaceAccess(input({ surfaceId,
+        actor: { kind: 'USER', userId: 'user-1', businessId: 'biz-1', role: 'CASHIER', active: true } }))).toMatchObject({ ok: false, reason: 'ROLE_FORBIDDEN' });
+    }
+  });
   it('does not copy selectedPlan into the decision input', () => {
     const built = buildSurfaceAccessInput({
       surfaceId: 'trading_report',
@@ -184,8 +195,9 @@ describe('live report decision wiring', () => {
       expect(gate).toBeGreaterThanOrEqual(0);
       expect(gate).toBeLessThan(source.indexOf(query));
     }
+    const balance = readFileSync('app/(protected)/reports/balance-sheet/page.tsx', 'utf8');
+    expect(balance.indexOf('if (!opened.ok)')).toBeLessThan(balance.indexOf('await getBalanceSheet('));
     for (const [file, query] of [
-      ['app/(protected)/reports/balance-sheet/page.tsx', 'getBalanceSheet'],
       ['app/(protected)/reports/cashflow/page.tsx', 'getCashflow'],
       ['app/(protected)/reports/cashflow-forecast/page.tsx', 'getCashflowForecast'],
     ] as const) {

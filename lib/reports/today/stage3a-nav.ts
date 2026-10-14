@@ -9,7 +9,6 @@ import type { NavIconKey } from '@/lib/navigation-config';
  */
 
 export const STAGE_3A_WITHHELD_HREFS = [
-  '/reports/balance-sheet',
   '/reports/cashflow',
   '/reports/cashflow-forecast',
   '/reports/weekly-digest',
@@ -156,6 +155,7 @@ const ACTIVITY_LINKS: Stage3aLink[] = [
 ];
 
 const MORE_LINKS: Stage3aLink[] = [
+  { href: '/reports/balance-sheet', label: 'Balance sheet', purpose: 'Recorded assets, liabilities and equity at a date, with differences and cost warnings.', group: 'Statements', iconKey: 'balanceSheet', explore: 'Review statements' },
   {
     href: '/reports/income-statement',
     label: 'Income statement',
@@ -204,6 +204,7 @@ const WITHHELD = new Set<string>(STAGE_3A_WITHHELD_HREFS);
 
 /** These screens reject a branch id. A store query would be an invalid scope. */
 const NO_STORE_SCOPE = new Set([
+  '/reports/balance-sheet',
   '/reports/income-statement',
   '/reports/exports',
   '/reports/owner',
@@ -307,7 +308,6 @@ export type ReportReturnPath = {
 };
 
 const WITHHELD_TITLES: Record<(typeof STAGE_3A_WITHHELD_HREFS)[number], string> = {
-  '/reports/balance-sheet': 'Balance sheet',
   '/reports/cashflow': 'Cash-flow statement',
   '/reports/cashflow-forecast': 'Cash-flow forecast',
   '/reports/weekly-digest': 'Weekly digest',

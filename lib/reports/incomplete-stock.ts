@@ -8,6 +8,7 @@
  * Missing cost is never treated as zero profit intentionally — it means profit is incomplete.
  */
 
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
 
@@ -26,8 +27,8 @@ export type IncompleteStockSnapshot = {
   profitMayBeIncomplete: boolean;
 };
 
-export async function getIncompleteStockSnapshot(businessId: string): Promise<IncompleteStockSnapshot> {
-  const stores = await prisma.store.findMany({
+export async function getIncompleteStockSnapshot(businessId: string, db: Prisma.TransactionClient = prisma): Promise<IncompleteStockSnapshot> {
+  const stores = await db.store.findMany({
     where: { businessId },
     select: { id: true },
   });
@@ -47,7 +48,7 @@ export async function getIncompleteStockSnapshot(businessId: string): Promise<In
   const storeIds = stores.map((s) => s.id);
 
   const [balances, soldLines] = await Promise.all([
-    prisma.inventoryBalance.findMany({
+    db.inventoryBalance.findMany({
       where: {
         storeId: { in: storeIds },
         qtyOnHandBase: { gt: 0 },
@@ -61,7 +62,7 @@ export async function getIncompleteStockSnapshot(businessId: string): Promise<In
         product: { select: { defaultCostBasePence: true, active: true } },
       },
     }),
-    prisma.salesInvoiceLine.findMany({
+    db.salesInvoiceLine.findMany({
       where: {
         OR: [
           { costBasis: UNVERIFIED_STOCK_V1 },

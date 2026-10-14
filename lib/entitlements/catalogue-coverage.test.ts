@@ -190,6 +190,8 @@ describe('surface catalogue contract', () => {
       'app/(protected)/settings/analytics/page.tsx',
       'app/(protected)/settings/online-store/analytics/page.tsx',
       'app/api/reports/financials/route.ts',
+      'app/api/reports/financials/route.test.ts',
+      'app/(protected)/reports/balance-sheet/page.test.tsx',
       'app/api/reports/weekly-digest/route.ts',
       'components/TopNav.tsx',
       'components/reports/ReportSurfaceDenial.tsx',

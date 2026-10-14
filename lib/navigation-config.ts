@@ -132,6 +132,7 @@ export const NAV_GROUPS: NavigationGroup[] = [
       { href: '/payments/supplier-payments', label: 'Supplier Payments', roles: ['MANAGER', 'OWNER'], iconKey: 'payments', description: 'Pay suppliers and clear balances.' },
       { href: '/payments/supplier-aging', label: 'Supplier Aging', roles: ['MANAGER', 'OWNER'], iconKey: 'supplierAging', description: 'See overdue supplier balances.' },
       { href: '/payments/reconciliation', label: 'MoMo Reconciliation', roles: ['MANAGER', 'OWNER'], iconKey: 'reconciliation', description: 'Match mobile money collections.' },
+      { href: '/payments/reconciliation/balances', label: 'Monthly balance review', roles: ['MANAGER', 'OWNER'], iconKey: 'reconciliation', minimumPlan: 'GROWTH', description: 'Review recorded opening balances, movements and closing balances.' },
       { href: '/payments/reconciliation/card-transfer', label: 'Card/Transfer Reconciliation', roles: ['MANAGER', 'OWNER'], iconKey: 'reconciliation', description: 'Reconcile bank and card payments.' },
       { href: '/reports/cash-drawer', label: 'Cash drawer', roles: ['MANAGER', 'OWNER'], iconKey: 'cashDrawer', description: 'Review expected cash, counted cash, and the difference.' },
     ],

@@ -74,12 +74,25 @@ export async function GET(request: Request) {
       ['Net Profit', moneyOrIncomplete(data.netProfit)],
     ];
   } else if (type === 'balance-sheet') {
-    const data = await getBalanceSheet(business.id, to);
-    filename = `balance-sheet-${to.toISOString().slice(0, 10)}.csv`;
+    const statementDate = applied?.toLocalDate ?? formatBusinessLocalDateKey(new Date(to.getTime() - 1), month.timeZone);
+    if (statementDate > formatBusinessLocalDateKey(now, month.timeZone)) {
+      return NextResponse.json({ error: 'Choose a statement date that is not in the future' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
+    }
+    const data = await getBalanceSheet(business.id, new Date(Math.min(to.getTime(), now.getTime())));
+    filename = `balance-sheet-${statementDate}.csv`;
     rows = [
-      ['Balance Sheet', `As of ${to.toDateString()}`],
+      ['Balance Sheet', `As of ${statementDate} (${month.timeZone}); today stops at request time`],
       ['Currency', currency],
+      ['Verification status', 'Unreconciled — actual business balances have not been verified'],
+      ['Basis', 'Recorded ledger balances; no automatic corrections or balancing adjustments'],
+      ['Stock value', data.reconciliation.stockValueIncomplete ? 'Incomplete — cost review needed' : 'Recorded costs; external evidence not verified'],
+      ['Profit completeness', data.reconciliation.profitIncomplete ? 'Costs incomplete' : 'Recorded costs; external evidence not verified'],
+      ['Balance equation difference', formatMoney(data.reconciliation.equationDifferencePence, currency)],
+      ['Ledger profit', formatMoney(data.reconciliation.journalProfitPence, currency)],
+      ['Operational profit', moneyOrIncomplete(data.reconciliation.operationalProfitPence)],
+      ['Operational less ledger profit', moneyOrIncomplete(data.reconciliation.profitDifferencePence)],
       [],
+      ['Undated legacy opening capital (excluded from statement)', formatMoney(data.legacyCapitalPence, currency)],
       ['ASSETS'],
       ...data.assets.map((a) => [a.name, formatMoney(a.balancePence, currency)]),
       ['Total Assets', formatMoney(data.totalAssets, currency)],
@@ -98,6 +111,10 @@ export async function GET(request: Request) {
     rows = [
       ['Cashflow Statement', `${from.toDateString()} - ${to.toDateString()}`],
       ['Currency', currency],
+      ['Verification status', 'Unreconciled — actual business balances have not been verified'],
+      ['Basis', 'Indirect operating cash estimate; bank and MoMo statements have not been matched'],
+      ['Cash coverage', 'Beginning cash is the cash-on-hand ledger plus applicable legacy capital; this is not a combined bank and MoMo balance'],
+      ['Ending cash basis', 'Calculated from beginning cash and estimated operating cash; not a verified closing account balance'],
       [],
       ['Line Item', 'Amount'],
       ['Net Profit', moneyOrIncomplete(data.netProfit)],

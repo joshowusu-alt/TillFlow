@@ -140,6 +140,7 @@ export const OWNER_BROWSE_AREAS: MobileBrowseArea[] = [
       { href: '/payments/supplier-payments', label: 'Supplier payments', iconKey: 'payments', roles: ['OWNER'] },
       { href: '/payments/supplier-aging', label: 'Supplier Ageing', iconKey: 'supplierAging', roles: ['OWNER'] },
       { href: '/payments/reconciliation', label: 'MoMo reconciliation', iconKey: 'reconciliation', roles: ['OWNER'] },
+      { href: '/payments/reconciliation/balances', label: 'Monthly balance review', iconKey: 'reconciliation', roles: ['OWNER'], minimumPlan: 'GROWTH' },
       {
         href: '/payments/reconciliation/card-transfer',
         label: 'Card/Transfer reconciliation',
@@ -248,6 +249,7 @@ export const MANAGER_MENU_SECTIONS: MobileBrowseArea[] = [
       { href: '/payments/supplier-payments', label: 'Supplier payments', iconKey: 'payments', roles: ['MANAGER'] },
       { href: '/payments/supplier-aging', label: 'Supplier Ageing', iconKey: 'supplierAging', roles: ['MANAGER'] },
       { href: '/payments/reconciliation', label: 'MoMo reconciliation', iconKey: 'reconciliation', roles: ['MANAGER'] },
+      { href: '/payments/reconciliation/balances', label: 'Monthly balance review', iconKey: 'reconciliation', roles: ['MANAGER'], minimumPlan: 'GROWTH' },
       {
         href: '/payments/reconciliation/card-transfer',
         label: 'Card/Transfer reconciliation',
@@ -283,6 +285,7 @@ export const MANAGER_MENU_SECTIONS: MobileBrowseArea[] = [
  * Used by navigation parity tests — keep in sync with OWNER_BROWSE_AREAS / MANAGER_MENU_SECTIONS.
  */
 export const CRITICAL_MOBILE_OPERATIONAL_HREFS = [
+  '/payments/reconciliation/balances',
   '/payments/supplier-aging',
   '/payments/reconciliation',
   '/payments/reconciliation/card-transfer',

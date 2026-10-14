@@ -88,6 +88,7 @@ export default async function CardTransferReconciliationPage({
     <div className="space-y-6">
       <PageHeader
         title="Card & Transfer Reconciliation"
+        secondaryCta={{ label: 'Monthly balance review', href: '/payments/reconciliation/balances' }}
         subtitle="Compare confirmed card and transfer receipts with statement totals. Uses the date money was received."
       />
 
