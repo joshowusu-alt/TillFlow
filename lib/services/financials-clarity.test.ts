@@ -131,8 +131,8 @@ describe('Financial Reports clarity', () => {
   });
 
   it('26. Explains recorded statement basis', () => {
-    expect(balanceSrc).toContain('Based on your recorded entries');
-    expect(balanceSrc).toContain('Differences to review');
+    expect(balanceSrc).toContain('Your financial position from recorded opening balances and transactions.');
+    expect(balanceSrc).toContain('Report notes');
   });
 
   it('27. Loads the guarded ledger statement', () => {

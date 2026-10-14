@@ -83,18 +83,10 @@ export async function GET(request: Request) {
     rows = [
       ['Balance Sheet', `As of ${statementDate} (${month.timeZone}); today stops at request time`],
       ['Currency', currency],
-      ['Verification status', 'Unreconciled — actual business balances have not been verified'],
-      ['Basis', 'Recorded ledger balances; no automatic corrections or balancing adjustments'],
-      ['Stock value', data.reconciliation.stockValueIncomplete ? 'Incomplete — cost review needed' : 'Recorded costs; external evidence not verified'],
-      ['Profit completeness', data.reconciliation.profitIncomplete ? 'Costs incomplete' : 'Recorded costs; external evidence not verified'],
-      ['Balance equation difference', formatMoney(data.reconciliation.equationDifferencePence, currency)],
-      ['Ledger profit', formatMoney(data.reconciliation.journalProfitPence, currency)],
-      ['Operational profit', moneyOrIncomplete(data.reconciliation.operationalProfitPence)],
-      ['Operational less ledger profit', moneyOrIncomplete(data.reconciliation.profitDifferencePence)],
+      ['Basis', 'Recorded opening balances and transactions'],
       [],
-      ['Undated legacy opening capital (excluded from statement)', formatMoney(data.legacyCapitalPence, currency)],
       ['ASSETS'],
-      ...data.assets.map((a) => [a.name, formatMoney(a.balancePence, currency)]),
+      ...data.assets.map((a) => [a.accountCode === '1010' ? 'Bank & MoMo' : a.name, formatMoney(a.balancePence, currency)]),
       ['Total Assets', formatMoney(data.totalAssets, currency)],
       [],
       ['LIABILITIES'],
@@ -102,9 +94,16 @@ export async function GET(request: Request) {
       ['Total Liabilities', formatMoney(data.totalLiabilities, currency)],
       [],
       ['EQUITY'],
-      ...data.equity.map((e) => [e.name, formatMoney(e.balancePence, currency)]),
+      ...data.equity.map((e) => [e.accountCode === 'CURRENT_PROFIT' ? 'Profit to date' : e.name, formatMoney(e.balancePence, currency)]),
       ['Total Equity', formatMoney(data.totalEquity, currency)],
+      ['Total Liabilities and Equity', formatMoney(data.totalLiabilities + data.totalEquity, currency)],
     ];
+    const notes: string[][] = [];
+    if (statementDate === formatBusinessLocalDateKey(now, month.timeZone) && data.reconciliation.stockValueIncomplete) notes.push(['Stock costs', 'Some stock has no cost entry']);
+    if (data.reconciliation.profitIncomplete) notes.push(['Sales costs', 'Some sales have no product cost recorded; profit to date uses posted income and expense entries']);
+    if (data.legacyCapitalPence !== 0) notes.push(['Undated opening capital setting (separate from opening balance entries)', formatMoney(data.legacyCapitalPence, currency)]);
+    if (data.reconciliation.equationDifferencePence !== 0) notes.push(['Entry difference', formatMoney(data.reconciliation.equationDifferencePence, currency)]);
+    if (notes.length) rows.push([], ['REPORT NOTES'], ...notes);
   } else if (type === 'cashflow') {
     const data = await getCashflow(business.id, from, to);
     filename = `cashflow-${from.toISOString().slice(0, 10)}.csv`;

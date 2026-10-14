@@ -60,3 +60,9 @@ Business visibility uses the existing entitlement policy:
 | Cash-flow statement / forecast | Still withheld | Existing access restrictions | Denied |
 
 Restricted billing can allow read-only report viewing while denying exports. Foreign business or explicit branch scope is refused before statement queries. No statement matching, reconciliation sign-off, data repair, or historical backfill is included.
+
+## Owner presentation correction — 14 October 2026
+
+The balance sheet is the report of recorded opening balances and transactions. Reconciliation is a separate workflow and is not a prerequisite for displaying those records. Remove blanket external-verification and certification disclaimers from the statement and its CSV. Lead with assets, liabilities and equity, then account detail. Use business-facing account labels instead of internal codes.
+
+Specific entry issues remain factual and conditional below the statement: missing stock costs (current-date reports only), sales without recorded product costs, a separate undated opening-capital setting, or a nonzero equation difference. A complete statement has no generic warning or zero-difference diagnostics block. Missing-cost and account-entry links lead to existing workflows. Amounts, dates, ledger calculations, permissions and reconciliation functions are unchanged.
