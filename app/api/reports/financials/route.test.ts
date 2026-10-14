@@ -17,8 +17,12 @@ describe('financial exports preserve reconciliation limits', () => {
     mocks.balance.mockResolvedValue({ assets: [{ accountCode: '1010', name: 'Bank', balancePence: -100 }, { accountCode: '1200', name: 'Inventory', balancePence: 1100 }], liabilities: [], equity: [{ accountCode: 'CURRENT_PROFIT', name: 'Net Profit to Date', balancePence: -100 }], totalAssets: 1000, totalLiabilities: 200, totalEquity: 500, legacyCapitalPence: 0,
       reconciliation: { equationDifferencePence: 300, journalProfitPence: -100, operationalProfitPence: null,
         profitDifferencePence: null, profitIncomplete: true, stockValueIncomplete: true, status: 'UNRECONCILED' } });
-    mocks.cashflow.mockResolvedValue({ netProfit: null, arChange: 100, apChange: -100, invChange: 300,
-      netCashFromOps: null, beginningCash: 500, endingCash: null });
+    mocks.cashflow.mockResolvedValue({ netProfit: 300, excludedProfit: 0, adjustments: [],
+      netCashFromOps: 300, directOperatingPence: 300, beginningCash: 500, endingCash: 800,
+      investingPence: 0, financingPence: 0, openingEntriesPence: 0, otherPence: 0, otherEntryCount: 0,
+      operatingDifferencePence: 0, movementDifferencePence: 0,
+      directRows: [{ key: 'Customers-in', label: 'Customers — money received', amountPence: 300 }],
+      money: { netMovementPence: 300 } });
   });
 
   it('downloads ledger figures with signed differences and incomplete-cost disclosures', async () => {
@@ -47,12 +51,19 @@ describe('financial exports preserve reconciliation limits', () => {
     expect(csv).not.toContain('Entry difference');
   });
 
-  it('identifies cash-flow figures as estimates without claiming bank or MoMo coverage', async () => {
+  it('exports the indirect statement with combined recorded money and no blanket disclaimers', async () => {
     const csv = await (await GET(request('cashflow'))).text();
-    expect(csv).toContain('bank and MoMo statements have not been matched');
-    expect(csv).toContain('not a combined bank and MoMo balance');
-    expect(csv).toContain('not a verified closing account balance');
-    expect(csv).toContain('"Ending Cash","Costs incomplete"');
+    expect(csv).toContain('"Method","Indirect"');
+    expect(csv).toContain('Net profit from posted entries');
+    expect(csv).toMatch(/"Closing cash, bank and MoMo","[^"]*8\.00"/);
+    expect(csv).not.toContain('Unreconciled');
+    expect(csv).not.toContain('estimate');
+  });
+  it('exports receipts and payments from the same period and closing balance', async () => {
+    const csv = await (await GET(request('cashflow&view=direct'))).text();
+    expect(csv).toContain('Customers — money received');
+    expect(csv).not.toContain('Net profit from posted entries');
+    expect(csv).toMatch(/"Closing cash, bank and MoMo","[^"]*8\.00"/);
   });
 
   it('preserves access denial before loading any financial figures', async () => {

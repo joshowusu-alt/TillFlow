@@ -4,6 +4,7 @@ import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '
 import { getMonthlyAccountEntries, getMonthlyBalanceReview } from './monthly-balance-review';
 
 import { getBalanceSheet } from './financials';
+import { getCashflowStatement } from './cashflow-statement';
 import { getRecordedMoneyMovement } from './recorded-money';
 vi.mock('next/cache', () => ({ unstable_cache: (fn: unknown) => fn }));
 
@@ -64,6 +65,31 @@ describePg('monthly balance review with isolated PostgreSQL journals', () => {
     const sheet = await getBalanceSheet(businessIds[0], new Date('2026-04-01'));
     expect(movement).toMatchObject({ beginningCashPence: 1000, netMovementPence: -1450, endingCashPence: -450 });
     expect(movement.endingCashPence).toBe(sheet.assets.filter(row => ['1000', '1010'].includes(row.accountCode)).reduce((sum, row) => sum + row.balancePence, 0));
+  });
+  it('ties the indirect report and money detail to the same balance-sheet close', async () => {
+    const flow = await getCashflowStatement(db, businessIds[0], new Date('2026-03-01'), new Date('2026-04-01'));
+    const sheet = await getBalanceSheet(businessIds[0], new Date('2026-04-01'));
+    expect(flow).toMatchObject({ beginningCash: 1000, endingCash: -450, netCashFromOps: 0, directOperatingPence: 0, financingPence: -1450, movementDifferencePence: 0, operatingDifferencePence: 0 });
+    expect(flow.endingCash).toBe(sheet.assets.filter(row => ['1000', '1010'].includes(row.accountCode)).reduce((sum, row) => sum + row.balancePence, 0));
+  });
+  it('reconciles accrual sales, purchases, refunds and transfers in PostgreSQL', async () => {
+    const business = await db.business.create({ data: { name: tag + '-cashflow', currency: 'GHS', timezone: 'Africa/Accra' } });
+    businessIds.push(business.id);
+    const chart: Record<string, string> = { '1000': 'ASSET', '1010': 'ASSET', '1100': 'ASSET', '1200': 'ASSET', '2000': 'LIABILITY', '3000': 'EQUITY', '4000': 'INCOME', '5000': 'EXPENSE', '6000': 'EXPENSE' };
+    const ids = new Map<string, string>();
+    for (const [code, type] of Object.entries(chart)) ids.set(code, (await db.account.create({ data: { businessId: business.id, code, name: code, type } })).id);
+    const post = async (referenceType: string, values: Record<string, number>, date = '2026-03-15') => db.journalEntry.create({ data: { businessId: business.id, description: 'Isolated cash-flow fixture', referenceType, entryDate: new Date(date), lines: { create: Object.entries(values).map(([code, amount]) => ({ accountId: ids.get(code)!, debitPence: Math.max(0, amount), creditPence: Math.max(0, -amount) })) } } });
+    await post('OPENING_BALANCE_CASH_BANK', { '1010': 10000, '3000': -10000 }, '2026-02-28');
+    await post('SALES_INVOICE', { '1000': 3000, '1100': 2000, '4000': -5000, '1200': -1500, '5000': 1500 }, '2026-03-01');
+    await post('PURCHASE_INVOICE', { '1010': -1200, '1200': 1700, '2000': -500 });
+    await post('EXPENSE', { '1010': -400, '6000': 400 });
+    await post('SALES_RETURN', { '1000': -300, '4000': 300, '1200': 100, '5000': -100 });
+    await post('TRANSFER', { '1000': -1000, '1010': 1000 });
+    await post('SALES_INVOICE', { '1010': 99999, '4000': -99999 }, '2026-04-01');
+    const flow = await getCashflowStatement(db, business.id, new Date('2026-03-01'), new Date('2026-04-01'));
+    const sheet = await getBalanceSheet(business.id, new Date('2026-04-01'));
+    expect(flow).toMatchObject({ netProfit: 2900, netCashFromOps: 1100, directOperatingPence: 1100, beginningCash: 10000, endingCash: 11100, movementDifferencePence: 0, operatingDifferencePence: 0, otherEntryCount: 0 });
+    expect(flow.endingCash).toBe(sheet.assets.filter(row => ['1000', '1010'].includes(row.accountCode)).reduce((sum, row) => sum + row.balancePence, 0));
   });
   it('paginates all 57 entries without capping the month total or skipping tied timestamps', async () => {
     const first = await getMonthlyAccountEntries(db, businessIds[0], '1010', '2026-03', 'Africa/Accra', now);

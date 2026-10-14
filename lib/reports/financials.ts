@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES } from '@/lib/accounting';
+import { getCashflowStatement } from './cashflow-statement';
 import { unstable_cache } from 'next/cache';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import {
@@ -276,7 +277,7 @@ export async function getAccountBalance(businessId: string, code: string, asOfEx
   const agg = await prisma.journalLine.aggregate({
     where: {
       accountId: account.id,
-      journalEntry: { entryDate: { lt: asOfExclusive } },
+      journalEntry: { businessId, entryDate: { lt: asOfExclusive } },
     },
     _sum: { debitPence: true, creditPence: true },
   });
@@ -287,74 +288,14 @@ export async function getAccountBalance(businessId: string, code: string, asOfEx
   );
 }
 
-async function _getCashflow(businessId: string, startIso: string, endIso: string) {
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-
-  const [business, obRecords, income] = await Promise.all([
-    prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { openingCapitalPence: true } }),
-    prisma.openingBalance.findMany({ where: { businessId } }),
-    cachedIncomeStatement(businessId, startIso, endIso)
-  ]);
-
-  // Backward compat: use legacy field only when no OB records
-  const hasOBRecords = obRecords.length > 0;
-  const legacyCapital = !hasOBRecords ? (business.openingCapitalPence ?? 0) : 0;
-
-  // When OB records exist, opening cash = Cash OB + Bank OB (both flow through journals)
-  const obCashBank = hasOBRecords
-    ? obRecords
-        .filter(ob => ob.accountCode === ACCOUNT_CODES.cash || ob.accountCode === ACCOUNT_CODES.bank)
-        .reduce((sum, ob) => sum + ob.amountPence, 0)
-    : 0;
-
-  const [startAr, endAr, startAp, endAp, startInv, endInv, startCash] = await Promise.all([
-    getAccountBalance(businessId, ACCOUNT_CODES.ar, start),
-    getAccountBalance(businessId, ACCOUNT_CODES.ar, end),
-    getAccountBalance(businessId, ACCOUNT_CODES.ap, start),
-    getAccountBalance(businessId, ACCOUNT_CODES.ap, end),
-    getAccountBalance(businessId, ACCOUNT_CODES.inventory, start),
-    getAccountBalance(businessId, ACCOUNT_CODES.inventory, end),
-    getAccountBalance(businessId, ACCOUNT_CODES.cash, start),
-  ]);
-
-  const arChange = endAr - startAr;
-  const apChange = endAp - startAp;
-  const invChange = endInv - startInv;
-
-  const netCashFromOps = income.netProfit == null
-    ? null
-    : income.netProfit - arChange - invChange + apChange;
-  // Legacy path uses openingCapitalPence; new path uses journal-based balances
-  const beginningCash = startCash + legacyCapital;
-  const endingCash = netCashFromOps == null ? null : beginningCash + netCashFromOps;
-
-  return {
-    netProfit: income.netProfit,
-    arChange,
-    apChange,
-    invChange,
-    netCashFromOps,
-    openingCapital: hasOBRecords ? obCashBank : legacyCapital,
-    beginningCash,
-    endingCash
-  };
-}
-
-const cachedCashflow = unstable_cache(
-  _getCashflow,
-  ['report-cashflow'],
-  { revalidate: 300, tags: ['reports'] }
-);
-
 export function getCashflow(businessId: string, start: Date, end: Date) {
   return measureServerOperation(
     'report.cashflow.snapshot',
-    () => cachedCashflow(businessId, start.toISOString(), end.toISOString()),
+    () => getCashflowStatement(prisma, businessId, start, end),
     {
       businessId,
       route: '/reports/cashflow',
-      cacheState: 'cached-wrapper',
+      cacheState: 'uncached-snapshot',
     },
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' }
   );

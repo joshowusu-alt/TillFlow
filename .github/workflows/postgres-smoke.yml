@@ -33,6 +33,8 @@ on:
       - 'lib/reports/reporting-scope.ts'
       - 'lib/reports/monthly-balance-review*'
       - 'lib/reports/recorded-money*'
+      - 'lib/reports/cashflow-statement*'
+      - 'lib/reports/financials.ts'
       - 'app/(protected)/payments/reconciliation/balances/**'
       - 'docs/migration/P1_SLICE1_SQL_ONLY_CONSTRAINTS.md'
       - 'docs/migration/P1_SLICE2A_CONTRACT.md'

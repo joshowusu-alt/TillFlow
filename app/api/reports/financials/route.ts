@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { guardLiveReport } from '@/lib/entitlements/live-report';
 import { getIncomeStatement, getBalanceSheet, getCashflow } from '@/lib/reports/financials';
+import { cashflowStatementRows } from '@/lib/reports/cashflow-statement';
 import { formatMoney } from '@/lib/format';
 import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
@@ -105,31 +106,33 @@ export async function GET(request: Request) {
     if (data.reconciliation.equationDifferencePence !== 0) notes.push(['Entry difference', formatMoney(data.reconciliation.equationDifferencePence, currency)]);
     if (notes.length) rows.push([], ['REPORT NOTES'], ...notes);
   } else if (type === 'cashflow') {
-    const data = await getCashflow(business.id, from, to);
-    filename = `cashflow-${from.toISOString().slice(0, 10)}.csv`;
+    const end = new Date(Math.min(to.getTime(), now.getTime()));
+    if (from >= end || (applied?.toLocalDate ?? search.to ?? '') > formatBusinessLocalDateKey(now, month.timeZone)) {
+      return NextResponse.json({ error: 'Choose a valid period ending today or earlier' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
+    }
+    const data = await getCashflow(business.id, from, end);
+    const direct = search.view === 'direct';
+    filename = 'cashflow-' + (direct ? 'receipts-payments' : 'indirect') + '-' + from.toISOString().slice(0, 10) + '.csv';
     rows = [
-      ['Cashflow Statement', `${from.toDateString()} - ${to.toDateString()}`],
+      ['Cash-flow statement', (applied?.fromLocalDate ?? search.from ?? from.toISOString()) + ' to ' + (applied?.toLocalDate ?? search.to ?? to.toISOString())],
+      ['Method', direct ? 'Money received and paid' : 'Indirect'],
       ['Currency', currency],
-      ['Verification status', 'Unreconciled — actual business balances have not been verified'],
-      ['Basis', 'Indirect operating cash estimate; bank and MoMo statements have not been matched'],
-      ['Cash coverage', 'Beginning cash is the cash-on-hand ledger plus applicable legacy capital; this is not a combined bank and MoMo balance'],
-      ['Ending cash basis', 'Calculated from beginning cash and estimated operating cash; not a verified closing account balance'],
-      [],
-      ['Line Item', 'Amount'],
-      ['Net Profit', moneyOrIncomplete(data.netProfit)],
-      ['AR Change', formatMoney(data.arChange, currency)],
-      ['AP Change', formatMoney(data.apChange, currency)],
-      ['Inventory Change', formatMoney(data.invChange, currency)],
-      ['Net Cash from Operations', moneyOrIncomplete(data.netCashFromOps)],
-      [],
-      ['Beginning Cash', formatMoney(data.beginningCash, currency)],
-      ['Ending Cash', moneyOrIncomplete(data.endingCash)],
+      ['Basis', 'Recorded opening balances and transactions; cash, bank and MoMo'],
+      ['Time zone', month.timeZone],
+      [], ['Line item', 'Amount'],
+      ...cashflowStatementRows(data, direct).map(row => [row.label, formatMoney(row.amountPence, currency)]),
     ];
+    if (data.missingSaleCostCount) rows.push(['Sales costs', 'Some sales have no product cost entry; profit uses posted income and expenses']);
+    if (data.otherEntryCount) rows.push(['Other movement entries', String(data.otherEntryCount)]);
+    if (data.operatingDifferencePence !== 0 || data.movementDifferencePence !== 0) rows.push(
+      ['Operating entry difference', formatMoney(data.operatingDifferencePence, currency)],
+      ['Money movement difference', formatMoney(data.movementDifferencePence, currency)],
+    );
   } else {
     return NextResponse.json({ error: 'Unknown report type' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
   }
 
-  const csv = rows.map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n');
+  const csv = rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
 
   return new NextResponse(csv, {
     headers: {

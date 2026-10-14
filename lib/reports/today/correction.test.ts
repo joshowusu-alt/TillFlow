@@ -85,9 +85,9 @@ describe('Stage 3A navigation correction', () => {
     expect(forecast).toContain('This estimate is withheld');
     expect(forecast).not.toContain('getCashflowForecast');
     expect(forecast).not.toContain('formatMoney');
-    expect(cashflow).toContain('not on the reliable list');
+    expect(cashflow).toContain('Indirect method');
     expect(cashflow).toContain('openLiveReport');
-    expect(cashflow).not.toContain('getCashflow(');
+    expect(cashflow.indexOf('if (!opened.ok)')).toBeLessThan(cashflow.indexOf('await getCashflow('));
   });
 
   it('uses shared Reports destination context on Trading, Sales analytics and Business movement', () => {

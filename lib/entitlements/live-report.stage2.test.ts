@@ -197,8 +197,9 @@ describe('live report decision wiring', () => {
     }
     const balance = readFileSync('app/(protected)/reports/balance-sheet/page.tsx', 'utf8');
     expect(balance.indexOf('if (!opened.ok)')).toBeLessThan(balance.indexOf('await getBalanceSheet('));
+    const cashflow = readFileSync('app/(protected)/reports/cashflow/page.tsx', 'utf8');
+    expect(cashflow.indexOf('if (!opened.ok)')).toBeLessThan(cashflow.indexOf('await getCashflow('));
     for (const [file, query] of [
-      ['app/(protected)/reports/cashflow/page.tsx', 'getCashflow'],
       ['app/(protected)/reports/cashflow-forecast/page.tsx', 'getCashflowForecast'],
     ] as const) {
       const source = readFileSync(file, 'utf8');
