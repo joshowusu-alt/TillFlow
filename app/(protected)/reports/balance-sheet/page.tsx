@@ -36,41 +36,41 @@ export default async function BalanceSheetPage({ searchParams }: {
     { name: 'Equity', rows: sheet.equity, total: sheet.totalEquity },
   ];
   const accountName = (row: { accountCode: string; name: string }) => row.accountCode === 'CURRENT_PROFIT' ? 'Profit to date' : row.accountCode === '1010' ? 'Bank & MoMo' : row.name;
-  return <div className="space-y-5">
+  return <div className="space-y-6">
     <ReportsDestinationHead title="Balance sheet" scopeLabel="Whole business"
       periodLabel={'As at ' + dateLabel + (key === today ? ' · Today so far' : '')}
       actions={<DownloadLink className="btn-secondary" href={'/api/reports/financials?type=balance-sheet&from=' + key + '&to=' + key}>Export CSV</DownloadLink>} />
     <p className="text-sm text-ink/70">Your financial position from recorded opening balances and transactions.</p>
-    <form className="flex flex-wrap items-end gap-3" method="GET">
-      <label className="label">Statement date<input className="input mt-1" type="date" name="asOf" defaultValue={key} max={today} required /></label>
+    <form className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 print:hidden" method="GET">
+      <label className="label w-full sm:w-auto">Statement date<input className="input mt-1 w-full sm:w-48" type="date" name="asOf" defaultValue={key} max={today} required /></label>
       <button className="btn-secondary" type="submit">Update report</button>
     </form>
     <dl className="grid gap-3 sm:grid-cols-3" aria-label="Financial position">
-      {groups.map(group => <div key={group.name} className="card min-w-0 p-5">
-        <dt className="text-sm text-ink/60">Total {group.name.toLowerCase()}</dt>
-        <dd className="mt-2 break-words text-2xl font-bold tabular-nums tracking-tight">{money(group.total)}</dd>
+      {groups.map(group => <div key={group.name} className="card min-w-0 border-t-2 border-t-accent/20 p-5 sm:p-6">
+        <dt className="text-xs font-semibold uppercase tracking-wide text-ink/60">Total {group.name.toLowerCase()}</dt>
+        <dd className="mt-3 break-words text-2xl font-semibold tabular-nums tracking-tight text-ink sm:text-3xl">{money(group.total)}</dd>
       </div>)}
     </dl>
-    <div className="card overflow-hidden">
-      <div className="border-b border-black/10 px-5 py-4 sm:px-6"><h2 className="font-semibold">Financial position</h2><p className="mt-1 text-xs text-ink/60">{business.currency} · {dateLabel}</p></div>
+    <div className="card overflow-hidden border border-slate-200/80 shadow-sm">
+      <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:px-6"><h2 className="text-base font-semibold">Financial position</h2><p className="mt-1 text-xs text-ink/60">{business.currency} · {dateLabel}</p></div>
       {groups.map(group => <section key={group.name} className="border-b border-black/5 p-5 last:border-0 sm:px-6" aria-label={group.name}>
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink/60">{group.name}</h3>
-        {group.rows.length === 0 ? <p className="mb-3 text-sm text-ink/50">No entries for this date.</p> : <dl className="space-y-3">
+        <h3 className="mb-4 text-xs font-semibold uppercase tracking-widest text-accent">{group.name}</h3>
+        {group.rows.length === 0 ? <p className="mb-3 text-sm text-ink/50">No entries for this date.</p> : <dl className="space-y-3.5">
           {[...group.rows].sort((a, b) => a.accountCode.localeCompare(b.accountCode)).map(row => <div className="flex items-baseline justify-between gap-4 text-sm" key={row.accountCode}>
-            <dt className="min-w-0 break-words">{accountName(row)}</dt><dd className="shrink-0 text-right tabular-nums">{money(row.balancePence)}</dd>
+            <dt className="min-w-0 break-words">{accountName(row)}</dt><dd className="shrink-0 text-right font-medium tabular-nums text-ink">{money(row.balancePence)}</dd>
           </div>)}
         </dl>}
-        <p className="mt-4 flex items-baseline justify-between gap-4 border-t border-black/10 pt-3 text-sm font-semibold"><span>Total {group.name.toLowerCase()}</span><span className="shrink-0 tabular-nums">{money(group.total)}</span></p>
+        <p className="mt-4 flex items-baseline justify-between gap-4 border-t border-slate-200 pt-3 text-sm font-semibold"><span>Total {group.name.toLowerCase()}</span><span className="shrink-0 tabular-nums">{money(group.total)}</span></p>
       </section>)}
-      <div className="flex items-baseline justify-between gap-4 bg-accentSoft px-5 py-4 text-sm font-semibold sm:px-6"><span>Total liabilities and equity</span><span className="shrink-0 tabular-nums">{money(sheet.totalLiabilities + sheet.totalEquity)}</span></div>
+      <div className="flex items-baseline justify-between gap-4 border-t border-accent/10 bg-accentSoft px-5 py-5 text-sm font-semibold text-accent sm:px-6"><span>Total liabilities and equity</span><span className="shrink-0 tabular-nums">{money(sheet.totalLiabilities + sheet.totalEquity)}</span></div>
     </div>
-    {hasNotes ? <section className="space-y-2 text-sm" aria-label="Report notes">
-      <h2 className="font-semibold">Report notes</h2>
+    {hasNotes ? <section className="space-y-2 rounded-xl border border-slate-200/80 bg-white/60 px-5 py-4 text-sm leading-relaxed text-ink/70" aria-label="Report notes">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink/70">Report notes</h2>
       {missingStockCosts ? <p>Some stock has no cost entry. <Link className="font-semibold text-accent underline" href="/products?issue=MISSING_COST">View missing product costs</Link></p> : null}
       {diagnostic.profitIncomplete ? <p>Some sales have no product cost recorded. Profit to date above uses the posted income and expense entries.</p> : null}
       {sheet.legacyCapitalPence !== 0 ? <p>Opening capital setting: {money(sheet.legacyCapitalPence)}. This undated setting is separate from the opening balance entries included above. <Link className="font-semibold text-accent underline" href="/settings">View opening balance settings</Link></p> : null}
       {diagnostic.equationDifferencePence !== 0 ? <p>Entry difference: {money(diagnostic.equationDifferencePence)}. Assets differ from liabilities and equity by this amount. <Link className="font-semibold text-accent underline" href={'/payments/reconciliation/balances?month=' + key.slice(0, 7)}>View account entries</Link></p> : null}
     </section> : null}
-    <div className="border-t border-black/10 pt-4 text-sm"><Link className="font-semibold text-accent" href={'/payments/reconciliation/balances?month=' + key.slice(0, 7)}>Open monthly account review →</Link></div>
+    <div className="border-t border-slate-200 pt-4 text-sm print:hidden"><Link className="font-semibold text-accent" href={'/payments/reconciliation/balances?month=' + key.slice(0, 7)}>Open monthly account review →</Link></div>
   </div>;
 }
