@@ -31,6 +31,17 @@ describe('cash-flow report and supporting detail', () => {
     await Page({ searchParams: { from: '2020-01-01', to: '2026-04-02' } });
     expect(mocks.cashflow).toHaveBeenCalledWith('biz', new Date('2026-03-31T21:00:00Z'), new Date('2026-04-02T10:00:00Z'));
   });
+  it('defaults to the new business-local month while UTC is still in the previous month', async () => {
+    vi.setSystemTime(new Date('2026-03-31T22:00:00Z'));
+    await Page({});
+    expect(mocks.cashflow).toHaveBeenCalledWith('biz', new Date('2026-03-31T21:00:00Z'), new Date('2026-03-31T22:00:00Z'));
+  });
+  it('shows a specific missing-sale-cost note without hiding recorded cash', async () => {
+    const fixture = await mocks.cashflow(); mocks.cashflow.mockResolvedValue({ ...fixture, missingSaleCostCount: 1 });
+    const html = renderToStaticMarkup(await Page({}));
+    expect(html).toContain('Some sales have no product cost entry');
+    expect(html).toContain('7.00');
+  });
   it('shows specific entry differences below the figures without changing closing cash', async () => {
     const fixture = await mocks.cashflow();
     mocks.cashflow.mockResolvedValue({ ...fixture, operatingDifferencePence: 10, otherEntryCount: 1 });

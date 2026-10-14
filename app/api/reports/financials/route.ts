@@ -112,7 +112,7 @@ export async function GET(request: Request) {
     }
     const data = await getCashflow(business.id, from, end);
     const direct = search.view === 'direct';
-    filename = 'cashflow-' + (direct ? 'receipts-payments' : 'indirect') + '-' + from.toISOString().slice(0, 10) + '.csv';
+    filename = 'cashflow-' + (direct ? 'receipts-payments' : 'indirect') + '-' + formatBusinessLocalDateKey(from, month.timeZone) + '.csv';
     rows = [
       ['Cash-flow statement', (applied?.fromLocalDate ?? search.from ?? from.toISOString()) + ' to ' + (applied?.toLocalDate ?? search.to ?? to.toISOString())],
       ['Method', direct ? 'Money received and paid' : 'Indirect'],

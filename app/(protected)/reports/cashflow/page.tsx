@@ -3,7 +3,7 @@ import DownloadLink from '@/components/DownloadLink';
 import Link from 'next/link';
 import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
-import { localDateInstant } from '@/lib/reports/reporting-clock';
+import { businessMonthWindow, localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { getCashflow } from '@/lib/reports/financials';
 import { cashflowStatementRows } from '@/lib/reports/cashflow-statement';
 import { formatMoney } from '@/lib/format';
@@ -15,13 +15,15 @@ export default async function CashflowPage({ searchParams }: {
   const opened = await openLiveReport({ surfaceId: 'cash_flow_statement', search: searchParams,
     range: ({ timezone }) => {
       const today = formatBusinessLocalDateKey(now, timezone);
-      return { fromLocalDate: searchParams?.from ?? today.slice(0, 8) + '01', toLocalDate: searchParams?.to ?? today, preset: searchParams?.from || searchParams?.to ? 'CUSTOM' : 'MONTH_TO_DATE' };
+      const monthStart = formatBusinessLocalDateKey(businessMonthWindow(now, requireReportTimeZone(timezone)).startInclusive, timezone);
+      return { fromLocalDate: searchParams?.from ?? monthStart, toLocalDate: searchParams?.to ?? today, preset: searchParams?.from || searchParams?.to ? 'CUSTOM' : 'MONTH_TO_DATE' };
     },
   });
   if (!opened.ok) return opened.denial;
   const { business } = opened;
   const today = formatBusinessLocalDateKey(now, business.timezone!);
-  const from = opened.decision.appliedRange?.fromLocalDate ?? searchParams?.from ?? today.slice(0, 8) + '01';
+  const monthStart = formatBusinessLocalDateKey(businessMonthWindow(now, business.timezone!).startInclusive, business.timezone!);
+  const from = opened.decision.appliedRange?.fromLocalDate ?? searchParams?.from ?? monthStart;
   const to = opened.decision.appliedRange?.toLocalDate ?? searchParams?.to ?? today;
   const start = localDateInstant(from, 'start', business.timezone!);
   const end = localDateInstant(to, 'endExclusive', business.timezone!);

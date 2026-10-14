@@ -66,6 +66,13 @@ describe('financial exports preserve reconciliation limits', () => {
     expect(csv).toMatch(/"Closing cash, bank and MoMo","[^"]*8\.00"/);
   });
 
+  it('uses the business-local date in cash-flow filenames', async () => {
+    const fixture = await mocks.guard(); fixture.business.timezone = 'Africa/Nairobi'; mocks.guard.mockResolvedValue(fixture);
+    const response = await GET(request('cashflow'));
+    expect(response.headers.get('Content-Disposition')).toContain('cashflow-indirect-2026-03-01.csv');
+    expect(mocks.cashflow).toHaveBeenCalledWith('b1', new Date('2026-02-28T21:00:00Z'), new Date('2026-03-31T21:00:00Z'));
+  });
+
   it('preserves access denial before loading any financial figures', async () => {
     mocks.guard.mockResolvedValue({ ok: false, body: { reason: 'FORBIDDEN' }, status: 403, headers: { 'Cache-Control': 'no-store' } });
     expect((await GET(request('balance-sheet'))).status).toBe(403);
