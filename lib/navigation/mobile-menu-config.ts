@@ -303,6 +303,7 @@ export const CRITICAL_MOBILE_OPERATIONAL_HREFS = [
 
 /** Cashier More sheet links — mirrors desktop Sell/Admin for cashiers when POS hides bottom tabs. */
 export const CASHIER_MENU_ITEMS: MobileNavLink[] = [
+  { href: '/online-orders', label: 'Online Orders', roles: ['CASHIER'], iconKey: 'orders', requiresFeature: 'onlineStorefront' },
   {
     href: CASHIER_MY_SALES_ROUTE,
     label: 'My Sales',

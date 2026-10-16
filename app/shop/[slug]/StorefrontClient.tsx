@@ -10,6 +10,7 @@ import { resolveBrandStyles } from '@/lib/storefront-branding';
 import { getPaymentInstructionDetails } from '@/lib/storefront-payments';
 import type { PublicStorefront } from '@/lib/services/online-orders';
 import MerchantBrandBadge from '@/components/MerchantBrandBadge';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 const ALL_CATEGORIES = '__all__';
 const CATALOG_PAGE_SIZE = 24;
@@ -251,6 +252,23 @@ function sortRecommendationProducts(a: RecommendationProductLike, b: Recommendat
 
 const PRODUCTS_PER_PAGE = 24;
 
+function PickupDetails({ storefront, store }: {
+  storefront: PublicStorefront;
+  store: PublicStorefront['stores'][number] | null;
+}) {
+  const address = store?.address || storefront.address;
+  const phone = store?.phone || storefront.phone;
+  return <section aria-label="Collection details" className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 text-sm text-slate-700">
+    <h3 className="font-bold text-slate-950">Collect from {store?.name || storefront.name}</h3>
+    <p className="mt-1">{address || 'Contact the store to confirm the collection address before travelling.'}</p>
+    {storefront.openStatus ? <p className="mt-2 font-semibold">{storefront.openStatus.shortLabel}{storefront.openStatus.detail ? ` · ${storefront.openStatus.detail}` : ''}</p>
+      : <p className="mt-2">Opening hours have not been provided. Check with the store before travelling.</p>}
+    {storefront.prepMinutes > 0 && storefront.openStatus?.isOpen ? <p>Preparation estimate: about {storefront.prepMinutes} minutes after payment is confirmed.</p> : null}
+    <p className="mt-2">Pickup only. Wait until your order is marked ready before travelling.</p>
+    {phone ? <a className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-blue-200 bg-white px-3 font-semibold text-blue-900" href={`tel:${phone}`}>Call the store</a> : null}
+  </section>;
+}
+
 function ProductDetailSheet({
   product,
   storefront,
@@ -274,6 +292,8 @@ function ProductDetailSheet({
   adjustCartProduct: (productId: string, delta: number) => void;
   primaryStyle: React.CSSProperties;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(true, dialogRef, onClose);
   const selected = selectionState[product.id];
   const selectedUnit = selected ? getUnitFromProduct(product, selected.unitId) : undefined;
   const unitPrice = selectedUnit
@@ -292,7 +312,9 @@ function ProductDetailSheet({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+      ref={dialogRef}
       role="dialog"
+      tabIndex={-1}
       aria-modal="true"
       aria-label={displayName}
     >
@@ -436,25 +458,12 @@ export default function StorefrontClient({
   const initialCategoryId = searchParams?.get('category') ?? ALL_CATEGORIES;
   const CART_STORAGE_KEY = `tillflow_cart_${storefront.slug}`;
   const RECENTLY_VIEWED_STORAGE_KEY = `tillflow_viewed_${storefront.slug}`;
-  const [cart, setCart] = useState<PosCartLine[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const raw = localStorage.getItem(`tillflow_cart_${storefront.slug}`);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as { savedAt?: number; lines?: PosCartLine[] } | PosCartLine[];
-      // Support both old format (plain array) and new format ({ savedAt, lines })
-      const lines = Array.isArray(parsed) ? parsed : (parsed.lines ?? []);
-      const savedAt = Array.isArray(parsed) ? 0 : (parsed.savedAt ?? 0);
-      if (savedAt && Date.now() - savedAt > CART_TTL_MS) {
-        localStorage.removeItem(`tillflow_cart_${storefront.slug}`);
-        return [];
-      }
-      const productIds = new Set(storefront.products.map((product) => product.id));
-      return lines.filter((line) => productIds.has(line.productId));
-    } catch {
-      return [];
-    }
-  });
+  const [cart, setCart] = useState<PosCartLine[]>([]);
+  const [cartRestored, setCartRestored] = useState(false);
+  const [cartRestoring, setCartRestoring] = useState(false);
+  const [cartProducts, setCartProducts] = useState(storefront.products);
+  const checkoutKeyRef = useRef<string | null>(null);
+  const checkoutPayloadRef = useRef('');
   const [catalogProducts, setCatalogProducts] = useState<PublicStorefront['products']>(() => storefront.products);
   const [catalogTotal, setCatalogTotal] = useState(storefront.totalProductCount ?? storefront.products.length);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -477,6 +486,26 @@ export default function StorefrontClient({
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
   const [storefrontSessionId, setStorefrontSessionId] = useState('');
   const [detailProduct, setDetailProduct] = useState<StorefrontProduct | null>(null);
+  const mobileCartRef = useRef<HTMLDivElement>(null);
+  const mobileCheckoutRef = useRef<HTMLDivElement>(null);
+  const closeMobileCart = useCallback(() => setMobileStep('browse'), []);
+  const closeMobileCheckout = useCallback(() => setMobileStep('cart'), []);
+  useFocusTrap(mobileStep === 'cart' && !detailProduct, mobileCartRef, closeMobileCart);
+  useFocusTrap(mobileStep === 'checkout' && !detailProduct, mobileCheckoutRef, closeMobileCheckout);
+  useEffect(() => {
+    if (mobileStep === 'browse' && !detailProduct) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [mobileStep, detailProduct]);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const media = window.matchMedia('(min-width: 1024px)');
+    const resetMobilePanel = () => { if (media.matches) setMobileStep('browse'); };
+    media.addEventListener('change', resetMobilePanel);
+    return () => media.removeEventListener('change', resetMobilePanel);
+  }, []);
+  const closeProductDetails = useCallback(() => setDetailProduct(null), []);
   const [qtyEditingProductId, setQtyEditingProductId] = useState<string | null>(null);
   const catalogAbortRef = useRef<AbortController | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -501,10 +530,56 @@ export default function StorefrontClient({
   }
 
   useEffect(() => {
+    let cancelled = false;
+    async function restore() {
+      let restored = true;
+      setCartRestoring(true);
+      try {
+        const raw = localStorage.getItem(CART_STORAGE_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        if (saved.savedAt && Date.now() - saved.savedAt > CART_TTL_MS) return;
+        const lines: PosCartLine[] = (Array.isArray(saved) ? saved : saved.lines ?? [])
+          .filter((line: PosCartLine) => typeof line.productId === 'string' && typeof line.unitId === 'string'
+            && Number.isInteger(line.qtyInUnit) && line.qtyInUnit > 0 && line.qtyInUnit <= MAX_CART_QTY).slice(0, 50);
+        if (!lines.length) return;
+        const params = new URLSearchParams({ slug: storefront.slug, ids: [...new Set(lines.map(line => line.productId))].join(','), limit: '50' });
+        const response = await fetch(`/api/storefront/catalog?${params}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error('Could not restore basket');
+        const payload = await response.json() as CatalogResponse;
+        if (cancelled) return;
+        setCartProducts(previous => [...new Map([...previous, ...payload.products].map(product => [product.id, product])).values()]);
+        setCart(lines.filter(line => payload.products.some(product => product.id === line.productId && product.units.some(unit => unit.id === line.unitId))));
+        if (saved.storeId && storefront.stores.some(store => store.id === saved.storeId)) setSelectedStoreId(saved.storeId);
+        checkoutKeyRef.current = saved.checkoutKey ?? null;
+        checkoutPayloadRef.current = saved.checkoutPayload ?? '';
+        setCartRestored(true);
+      } catch {
+        restored = false;
+        if (!cancelled) setError('Your saved basket could not be restored. Refresh to try again.');
+      } finally {
+        if (!cancelled) { setCartRestoring(false); setCartRestored(restored); }
+      }
+    }
+    void restore();
+    return () => { cancelled = true; };
+  }, [CART_STORAGE_KEY, storefront.slug, storefront.stores]);
+
+  useEffect(() => {
+    setCartProducts(previous => {
+      const products = new Map(previous.map(product => [product.id, product]));
+      for (const product of catalogProducts) products.set(product.id, product);
+      return [...products.values()];
+    });
+  }, [catalogProducts]);
+
+  useEffect(() => {
+    if (!cartRestored) return;
     try {
-      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), lines: cart }));
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), lines: cart, storeId: selectedStoreId,
+        checkoutKey: checkoutKeyRef.current, checkoutPayload: checkoutPayloadRef.current }));
     } catch {}
-  }, [cart, CART_STORAGE_KEY]);
+  }, [cart, cartRestored, selectedStoreId, CART_STORAGE_KEY]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -767,7 +842,9 @@ export default function StorefrontClient({
     }
   }
 
-  const productMap = useMemo(() => buildProductMap(productsForStore), [productsForStore]);
+  const productMap = useMemo(() => buildProductMap(cartProducts.map(product => ({
+    ...product, onHandBase: selectedStoreId ? product.onHandByStore[selectedStoreId] ?? 0 : product.onHandBase,
+  }))), [cartProducts, selectedStoreId]);
   const cartDetails = useMemo(
     () => buildCartDetails(cart, productMap, storefront.vatEnabled),
     [cart, productMap, storefront.vatEnabled],
@@ -783,6 +860,7 @@ export default function StorefrontClient({
 
   function handleStoreChange(nextStoreId: string) {
     if (nextStoreId === selectedStoreId) return;
+    if (cart.length && !window.confirm('Changing pickup branch will clear your basket. Continue?')) return;
     setSelectedStoreId(nextStoreId);
     setCart([]);
     setError(null);
@@ -886,7 +964,8 @@ export default function StorefrontClient({
   const suggestedProducts = recommendationState.products;
   const showRecentlyViewed =
     recentlyViewedProducts.length >= 2 && selectedCategoryId === ALL_CATEGORIES && searchQuery.trim().length === 0;
-  const showInitialEmptySkeleton = !isMounted && storefront.products.length === 0;
+  const cataloguePending = catalogLoading || searchQuery !== debouncedSearchQuery;
+  const showInitialEmptySkeleton = cataloguePending || (!isMounted && storefront.products.length === 0);
 
   function addToCart(productId: string) {
     const current = selectionState[productId];
@@ -907,6 +986,10 @@ export default function StorefrontClient({
       return;
     }
 
+    if (cart.length >= 50 && !cart.some(line => line.productId === productId && line.unitId === current.unitId)) {
+      setError('Your basket can contain up to 50 different items. Place this order before starting another basket.');
+      return;
+    }
     setError(null);
     rememberViewedProduct(productId);
     trackEvent('add_to_cart', productId);
@@ -915,7 +998,7 @@ export default function StorefrontClient({
       if (existing) {
         return prev.map((line) =>
           line.id === existing.id
-            ? { ...line, qtyInUnit: line.qtyInUnit + current.qtyInUnit }
+            ? { ...line, qtyInUnit: Math.min(MAX_CART_QTY, line.qtyInUnit + current.qtyInUnit) }
             : line,
         );
       }
@@ -970,12 +1053,22 @@ export default function StorefrontClient({
     }
     try {
       trackEvent('checkout_start', null, { items: cart.length, totalPence: orderTotal });
+      const checkoutPayload = JSON.stringify({ selectedStoreId, customerName, customerPhone, customerEmail, customerNotes, cart });
+      if (checkoutPayloadRef.current !== checkoutPayload || !checkoutKeyRef.current) {
+        checkoutKeyRef.current = crypto.randomUUID();
+        checkoutPayloadRef.current = checkoutPayload;
+      }
+      try {
+        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), lines: cart, storeId: selectedStoreId,
+          checkoutKey: checkoutKeyRef.current, checkoutPayload }));
+      } catch { /* In-memory retry identity still works when browser storage is unavailable. */ }
       const response = await fetch('/api/storefront/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
         body: JSON.stringify({
           slug: storefront.slug,
+          checkoutKey: checkoutKeyRef.current,
           storeId: selectedStoreId,
           customerName,
           customerPhone,
@@ -1053,7 +1146,7 @@ export default function StorefrontClient({
   );
   const paymentReady = paymentDetails.ready;
   const checkoutReady =
-    paymentReady &&
+    paymentReady && cartRestored && !cartRestoring &&
     cart.length > 0 &&
     customerName.trim().length > 0 &&
     customerPhone.trim().length > 0;
@@ -1315,7 +1408,7 @@ export default function StorefrontClient({
 
               <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-black/45">
                 <span>
-                {filteredProducts.length === 0
+                {cataloguePending ? 'Searching products…' : filteredProducts.length === 0
                   ? searchQuery.trim()
                     ? `No results for "${searchQuery.trim()}"`
                     : selectedCategory
@@ -1334,11 +1427,11 @@ export default function StorefrontClient({
               <section className="mt-4 rounded-3xl border border-black/5 bg-white p-3 shadow-sm">
                 <div className="mb-3 flex items-end justify-between gap-3">
                   <div>
-                    <h2 className="text-sm font-extrabold text-ink">Popular in this shop</h2>
-                    <p className="text-xs text-black/45">Fast picks customers are likely to need today.</p>
+                    <h2 className="text-sm font-extrabold text-ink">Explore this shop</h2>
+                    <p className="text-xs text-black/45">A selection of available products.</p>
                   </div>
                   <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
-                    Curated picks
+                    Available now
                   </span>
                 </div>
                 <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -1941,6 +2034,7 @@ export default function StorefrontClient({
               </div>
               <div className="mt-4 space-y-4">
                 {!paymentReady && cart.length > 0 ? <CheckoutUnavailableBanner /> : null}
+                <PickupDetails storefront={storefront} store={selectedStore} />
                 {storefront.pickupInstructions ? (
                   <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900">
                     <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-sky-700">Pickup instructions</div>
@@ -2034,6 +2128,12 @@ export default function StorefrontClient({
 
       {/* ── MOBILE CART PANEL ──────────────────────────────── */}
       <div
+        style={{ display: mobileStep === 'cart' ? undefined : 'none' }}
+        ref={mobileCartRef}
+        tabIndex={-1}
+        aria-label="Shopping basket"
+        role="dialog"
+        aria-modal="true"
         className={`fixed inset-x-0 top-0 z-50 flex h-[100dvh] flex-col bg-white transition-transform duration-300 ease-in-out lg:hidden ${
           mobileStep === 'cart' ? 'translate-y-0' : 'translate-y-full pointer-events-none'
         }`}
@@ -2209,6 +2309,12 @@ export default function StorefrontClient({
 
       {/* ── MOBILE CHECKOUT PANEL ──────────────────────────── */}
         <div
+          style={{ display: mobileStep === 'checkout' ? undefined : 'none' }}
+          ref={mobileCheckoutRef}
+          tabIndex={-1}
+          aria-label="Pickup checkout"
+          role="dialog"
+          aria-modal="true"
           className={`fixed inset-x-0 top-0 z-50 flex h-[var(--visual-viewport-height)] flex-col overflow-hidden bg-white transition-transform duration-300 ease-in-out lg:hidden ${
             mobileStep === 'checkout' ? 'translate-y-0' : 'translate-y-full pointer-events-none'
           }`}
@@ -2237,6 +2343,7 @@ export default function StorefrontClient({
               <CheckoutUnavailableBanner />
             </div>
           ) : null}
+          <PickupDetails storefront={storefront} store={selectedStore} />
           {storefront.pickupInstructions ? (
             <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
               <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-sky-700">Pickup instructions</div>
@@ -2361,7 +2468,7 @@ export default function StorefrontClient({
         <ProductDetailSheet
           product={detailProduct}
           storefront={storefront}
-          onClose={() => setDetailProduct(null)}
+          onClose={closeProductDetails}
           onAddToCart={addToCart}
           selectionState={selectionState}
           setSelectionState={setSelectionState}

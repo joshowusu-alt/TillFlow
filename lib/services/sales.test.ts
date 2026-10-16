@@ -18,6 +18,7 @@ const {
 } = vi.hoisted(() => ({
   prismaMock: {
     business: { findUnique: vi.fn() },
+    onlineOrder: { findFirst: vi.fn(), updateMany: vi.fn(), update: vi.fn() },
     store: { findFirst: vi.fn() },
     till: { findFirst: vi.fn() },
     productUnit: { findMany: vi.fn() },
@@ -1796,5 +1797,45 @@ describe('createSale — recorded MoMo is not a confirmed receipt', () => {
     expect(invoice.payments.create[0].status).toBe('PENDING_MANUAL');
     expect(postJournalEntryMock).toHaveBeenCalledTimes(1);
     expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('online order posting', () => {
+  const order = () => ({ id: 'web-1', orderNumber: 'ABC123', paymentStatus: 'PAID', status: 'PAID', vatPence: 225, totalPence: 1725,
+    business: { storefrontPaymentMode: 'MOMO_NUMBER' },
+    lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1, qtyBase: 1, conversionToBase: 1,
+      unitPricePence: 1500, lineSubtotalPence: 1500, lineVatPence: 225, lineTotalPence: 1725 }] });
+  const input = () => makeBaseInput({ onlineOrderId: 'web-1', bypassOpenTillRequirement: true, saleSource: 'ONLINE_ORDER',
+    externalRef: 'WEB-ABC123', skipInventoryMovements: true, payments: [{ method: 'MOBILE_MONEY', amountPence: 1725 }] });
+
+  it('posts captured prices and VAT, confirms a manager-verified receipt and links the invoice in the same transaction', async () => {
+    prismaMock.onlineOrder.findFirst.mockResolvedValue(order());
+    prismaMock.onlineOrder.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.onlineOrder.update.mockResolvedValue({});
+    getOpenShiftForTillMock.mockResolvedValue(null);
+    // Current price is 500 and current VAT is disabled: neither may replace the order values.
+    await createSale(input());
+    const invoice = prismaMock.salesInvoice.create.mock.calls[0][0].data;
+    expect(invoice.totalPence).toBe(1725);
+    expect(invoice.vatPence).toBe(225);
+    expect(invoice.lines.create[0]).toMatchObject({ unitPricePence: 1500, lineVatPence: 225, lineTotalPence: 1725 });
+    expect(invoice.payments.create[0]).toMatchObject({ method: 'MOBILE_MONEY', status: 'CONFIRMED', amountPence: 1725 });
+    expect(prismaMock.onlineOrder.update).toHaveBeenCalledWith({ where: { id: 'web-1' }, data: { salesInvoiceId: 'inv-1' } });
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ active: false, email: 'online-system+biz-1@tillflow.system' }) }));
+    expect(postJournalEntryMock.mock.calls[0][0].lines).toEqual(expect.arrayContaining([expect.objectContaining({ creditPence: 225 })]));
+  });
+
+  it('does not create a sale if cancellation wins the transaction lock', async () => {
+    prismaMock.onlineOrder.findFirst.mockResolvedValue(order());
+    prismaMock.onlineOrder.updateMany.mockResolvedValue({ count: 0 });
+    await expect(createSale(input())).rejects.toThrow('Online order changed');
+    expect(prismaMock.salesInvoice.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a cancelled or foreign order before any posting', async () => {
+    prismaMock.onlineOrder.findFirst.mockResolvedValue(null);
+    await expect(createSale(input())).rejects.toThrow('Invalid online order sale context');
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 });

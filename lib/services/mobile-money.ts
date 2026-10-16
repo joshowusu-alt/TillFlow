@@ -1,7 +1,7 @@
+import { syncOnlineOrderPaymentStatus } from './online-order-payment-sync';
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { getMobileMoneyProvider, resolveBusinessProvider } from '@/lib/payments/providers';
-import { buildOnlineOrderStatusSnapshot, notifyOrderStatusChange } from '@/lib/services/online-order-status-stream';
 import type {
   CheckStatusResult,
   CollectionNetwork,
@@ -130,101 +130,6 @@ function buildProviderRecord(
   };
 }
 
-async function syncOnlineOrderPaymentStatus(collectionId: string, status: string, observedAt: Date) {
-  const order = await prisma.onlineOrder.findFirst({
-    where: { paymentCollectionId: collectionId },
-    select: {
-      id: true,
-      status: true,
-      paymentStatus: true,
-      fulfillmentStatus: true,
-      paidAt: true,
-      fulfilledAt: true,
-      paymentConfirmedAt: true,
-      preparingAt: true,
-      readyAt: true,
-      collectedAt: true,
-      cancelledAt: true,
-      salesInvoiceId: true,
-    },
-  });
-
-  if (!order) {
-    return;
-  }
-
-  if (status === 'CONFIRMED') {
-    await prisma.$transaction(async (tx) => {
-      const updated = await tx.onlineOrder.update({
-        where: { id: order.id },
-        data: {
-          status:
-            order.status === 'AWAITING_PAYMENT' || order.status === 'PAYMENT_FAILED'
-              ? 'PAID'
-              : order.status,
-          paymentStatus: 'PAID',
-          paidAt: order.paidAt ?? observedAt,
-          paymentConfirmedAt: order.paymentConfirmedAt ?? observedAt,
-        },
-        select: {
-          id: true,
-          status: true,
-          paymentStatus: true,
-          fulfillmentStatus: true,
-          paidAt: true,
-          fulfilledAt: true,
-          paymentConfirmedAt: true,
-          preparingAt: true,
-          readyAt: true,
-          collectedAt: true,
-          cancelledAt: true,
-        },
-      });
-
-      await notifyOrderStatusChange(tx, buildOnlineOrderStatusSnapshot(updated));
-    });
-
-    // Commit the order to a SalesInvoice + decrement inventory. Imported here
-    // (rather than at the top of the file) to avoid a circular import via sales.ts.
-    if (!order.salesInvoiceId) {
-      try {
-        const { commitOnlineOrderSale } = await import('@/lib/services/online-order-commit');
-        await commitOnlineOrderSale(order.id);
-      } catch (commitError) {
-        console.error('[online-order-commit] Failed to commit sale for order', order.id, commitError);
-      }
-    }
-    return;
-  }
-
-  if (status === 'FAILED' || status === 'TIMEOUT') {
-    await prisma.$transaction(async (tx) => {
-      const updated = await tx.onlineOrder.update({
-        where: { id: order.id },
-        data: {
-          status: order.status === 'AWAITING_PAYMENT' ? 'PAYMENT_FAILED' : order.status,
-          paymentStatus: 'FAILED',
-        },
-        select: {
-          id: true,
-          status: true,
-          paymentStatus: true,
-          fulfillmentStatus: true,
-          paidAt: true,
-          fulfilledAt: true,
-          paymentConfirmedAt: true,
-          preparingAt: true,
-          readyAt: true,
-          collectedAt: true,
-          cancelledAt: true,
-        },
-      });
-
-      await notifyOrderStatusChange(tx, buildOnlineOrderStatusSnapshot(updated));
-    });
-  }
-}
-
 async function applyProviderStatusUpdate(
   collection: {
     id: string;
@@ -278,9 +183,14 @@ async function applyProviderStatusUpdate(
   }
 
   const updatedCollection = await prisma.$transaction(async (tx) => {
+    // Serialize stale webhook/poll results against the current collection row.
+    const current = await tx.mobileMoneyCollection.update({
+      where: { id: collection.id }, data: { lastCheckedAt: observedAt },
+    });
     const updated = await tx.mobileMoneyCollection.update({
       where: { id: collection.id },
-      data: updateData,
+      data: current.status === 'CONFIRMED' && nextStatus !== 'CONFIRMED'
+        ? { lastCheckedAt: observedAt } : updateData,
     });
 
     await tx.mobileMoneyStatusLog.create({
@@ -294,13 +204,13 @@ async function applyProviderStatusUpdate(
       },
     });
 
-    if (collection.salesInvoiceId) {
+    if (current.salesInvoiceId) {
       const nextReference =
         result.providerTransactionId ?? result.providerReference ?? undefined;
       await tx.salesPayment.updateMany({
         where: { collectionId: collection.id },
         data: {
-          status: nextStatus,
+          status: updated.status,
           ...(nextReference ? { reference: nextReference } : {}),
         },
       });
@@ -309,7 +219,7 @@ async function applyProviderStatusUpdate(
     return updated;
   });
 
-  await syncOnlineOrderPaymentStatus(collection.id, nextStatus, observedAt);
+  await syncOnlineOrderPaymentStatus(collection.id, updatedCollection.status, observedAt);
   return updatedCollection;
 }
 

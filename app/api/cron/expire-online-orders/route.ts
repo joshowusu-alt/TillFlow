@@ -1,3 +1,4 @@
+import { onlineOrderExpiryHours } from '@/lib/online-order-expiry';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hasValidCronSecret } from '@/lib/cron-auth';
@@ -5,23 +6,17 @@ import { restoreOnlineOrderInventoryReservation } from '@/lib/services/online-or
 import { buildOnlineOrderStatusSnapshot, notifyOrderStatusChange } from '@/lib/services/online-order-status-stream';
 import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
 
-const DEFAULT_EXPIRY_HOURS = 2;
-
-function getExpiryHours() {
-  const value = Number(process.env.ONLINE_ORDER_EXPIRY_HOURS ?? DEFAULT_EXPIRY_HOURS);
-  return Number.isFinite(value) && value > 0 ? value : DEFAULT_EXPIRY_HOURS;
-}
-
 export async function GET(req: NextRequest) {
   if (!hasValidCronSecret(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const expiryHours = getExpiryHours();
+  const expiryHours = onlineOrderExpiryHours();
   const cutoff = new Date(Date.now() - expiryHours * 60 * 60 * 1000);
   const orders = await prisma.onlineOrder.findMany({
     where: {
-      status: 'AWAITING_PAYMENT',
+      status: { in: ['AWAITING_PAYMENT', 'PAYMENT_FAILED'] },
+      paymentStatus: { not: 'PAID' },
       createdAt: { lt: cutoff },
     },
     select: {
@@ -45,7 +40,8 @@ export async function GET(req: NextRequest) {
         const result = await tx.onlineOrder.updateMany({
           where: {
             id: order.id,
-            status: 'AWAITING_PAYMENT',
+            status: { in: ['AWAITING_PAYMENT', 'PAYMENT_FAILED'] },
+            paymentStatus: { not: 'PAID' },
           },
           data: {
             status: 'CANCELLED',

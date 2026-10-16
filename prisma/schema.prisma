@@ -958,6 +958,8 @@ model Unit {
 
 model OnlineOrder {
   id                  String   @id @default(cuid())
+  checkoutKey         String?
+  checkoutFingerprint String?
   businessId          String
   storeId             String
   customerId          String?
@@ -999,6 +1001,7 @@ model OnlineOrder {
   lines             OnlineOrderLine[]
 
   @@unique([businessId, orderNumber])
+  @@unique([businessId, checkoutKey])
   @@index([businessId, createdAt])
   @@index([storeId, createdAt])
   @@index([businessId, status, createdAt])

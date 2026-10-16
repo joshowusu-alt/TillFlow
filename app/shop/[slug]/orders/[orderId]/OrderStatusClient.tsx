@@ -56,6 +56,7 @@ type PublicOrder = {
   totalPence: number;
   currency: string;
   createdAt: string | Date;
+  paymentDeadlineAt?: string;
   paidAt: string | Date | null;
   fulfilledAt: string | Date | null;
   paymentConfirmedAt?: string | Date | null;
@@ -600,6 +601,10 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
               <div className="mt-0.5 font-semibold text-amber-950">Pay exactly {formatMoney(order.totalPence, order.currency)}</div>
             </div>
             <div className="px-5 py-4 text-sm text-black/65">
+              {order.paymentDeadlineAt ? <p className="mb-3 rounded-xl bg-amber-50 p-3 text-amber-950">
+                Payment must be confirmed by {formatDateTime(new Date(order.paymentDeadlineAt))}. Unconfirmed orders expire and reserved stock is released.
+                If you have sent payment, contact the store now using your order reference.
+              </p> : null}
               {paymentConfig.mode === 'MERCHANT_SHORTCODE' ? (
                 <ol className="list-decimal space-y-2 pl-4">
                   <li>Open your MoMo app or dial the USSD code.</li>
@@ -614,7 +619,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
                   <li>Open your banking app or visit your branch.</li>
                   <li>Transfer <span className="font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</span>{order.bankAccountNumber ? <> to account <span className="font-mono font-bold text-ink">{order.bankAccountNumber}</span></> : null}{order.bankName ? ` (${order.bankName})` : ''}.</li>
                   <li>Use <span className="font-mono font-bold text-ink">{order.orderNumber}</span> as the narration / reference.</li>
-                  <li>Come back here to confirm when done.</li>
+                  <li>Contact the store with your reference after paying. Your order updates after the store verifies receipt.</li>
                 </ol>
               ) : order.momoPayoutNumber ? (
                 <ol className="list-decimal space-y-2 pl-4">

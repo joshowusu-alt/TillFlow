@@ -7,6 +7,7 @@ import { formAction, withBusinessContext } from '@/lib/action-utils';
 import { getFeatures } from '@/lib/features';
 import { formOptionalString, formString } from '@/lib/form-helpers';
 import { prisma } from '@/lib/prisma';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import {
   invalidateStorefrontBusinessCache,
   normalizeStorefrontSlug,
@@ -487,10 +488,14 @@ export async function updateStorefrontCategoryMappingsAction(formData: FormData)
 
 export async function updateOnlineOrderStatusAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { user, businessId } = await withBusinessContext(['CASHIER', 'MANAGER', 'OWNER']);
     const business = await requireOnlineStorefrontAccess(businessId);
     const orderId = formString(formData, 'orderId');
     const nextStatus = formString(formData, 'nextStatus');
+    const { store } = await requireBusinessAndOptionalStore(['CASHIER', 'MANAGER', 'OWNER']);
+    if (user.role === 'CASHIER' && !['PROCESSING', 'READY_FOR_PICKUP', 'COMPLETED'].includes(nextStatus)) {
+      throw new Error('A manager must confirm payments, cancel orders and handle refunds.');
+    }
 
     const order = await prisma.onlineOrder.findFirst({
       where: { id: orderId, businessId },
@@ -512,7 +517,7 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
         },
       },
     });
-    if (!order) {
+    if (!order || (user.role === 'CASHIER' && (!store || order.storeId !== store.id))) {
       throw new Error('Online order not found.');
     }
 
@@ -537,88 +542,106 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
     let commitSale = false;
     const now = new Date();
 
-    switch (nextStatus) {
-      case 'MARK_PAID':
-        if (order.paymentStatus === 'PAID') {
-          throw new Error('Order is already marked as paid.');
-        }
-        if (order.status !== 'AWAITING_PAYMENT' && order.status !== 'PAYMENT_FAILED') {
-          throw new Error('Only orders awaiting payment can be marked as paid.');
-        }
-        data.status = 'PAID';
-        data.fulfillmentStatus = 'PENDING';
-        data.paymentStatus = 'PAID';
-        data.paidAt = now;
-        data.paymentConfirmedAt = now;
-        commitSale = true;
-        break;
-      case 'PROCESSING':
-        if (order.paymentStatus !== 'PAID') {
-          throw new Error('Only paid orders can move into processing.');
-        }
-        data.status = 'PROCESSING';
-        data.fulfillmentStatus = 'PROCESSING';
-        data.fulfilledAt = null;
-        data.preparingAt = now;
-        break;
-      case 'READY_FOR_PICKUP':
-        if (order.paymentStatus !== 'PAID') {
-          throw new Error('Only paid orders can be marked ready for pickup.');
-        }
-        data.status = 'READY_FOR_PICKUP';
-        data.fulfillmentStatus = 'READY';
-        data.fulfilledAt = null;
-        data.readyAt = now;
-        break;
-      case 'COMPLETED':
-        if (order.paymentStatus !== 'PAID') {
-          throw new Error('Only paid orders can be completed.');
-        }
-        data.status = 'COMPLETED';
-        data.fulfillmentStatus = 'COMPLETED';
-        data.fulfilledAt = now;
-        data.collectedAt = now;
-        break;
-      case 'CANCELLED': {
-        // For paid orders that already have a SalesInvoice, reverse the sale
-        // (restoring inventory + posting the corrective journal entry) and flag
-        // the customer's MoMo refund for manual follow-up.
-        if (order.paymentStatus === 'PAID' && order.salesInvoiceId && !order.refundStatus) {
-          await createSalesReturn({
-            businessId,
-            salesInvoiceId: order.salesInvoiceId,
-            userId: user.id,
-            type: 'RETURN',
-            reasonCode: 'CUSTOMER_CANCELLED',
-            refundMethod: 'MOBILE_MONEY',
-            refundAmountPence: order.totalPence,
-            reason: 'Online order cancelled by merchant',
-            managerApprovedByUserId: user.id,
-            managerApprovalMode: 'INLINE',
-          });
-        }
-        const shouldRestoreReservedInventory = order.paymentStatus !== 'PAID' || !order.salesInvoiceId;
-        if (shouldRestoreReservedInventory) {
-          await restoreOnlineOrderInventoryReservation({
-            storeId: order.storeId,
-            lines: order.lines,
-          });
-        }
-        data.status = 'CANCELLED';
-        data.fulfillmentStatus = 'CANCELLED';
-        data.fulfilledAt = null;
-        data.cancelledAt = now;
-        if (order.paymentStatus === 'PAID' && !order.refundStatus) {
-          data.refundStatus = 'MANUAL_REFUND_NEEDED';
-          data.refundedAt = now;
-        }
-        break;
-      }
-      default:
-        throw new Error('Unsupported online order status change.');
+    if (['COMPLETED', 'CANCELLED'].includes(order.status)) throw new Error('This order is already closed.');
+    const allowed: Record<string, string[]> = {
+      MARK_PAID: ['AWAITING_PAYMENT', 'PAYMENT_FAILED'],
+      PROCESSING: ['PAID'], READY_FOR_PICKUP: ['PROCESSING'], COMPLETED: ['READY_FOR_PICKUP'],
+      CANCELLED: ['AWAITING_PAYMENT', 'PAYMENT_FAILED', 'PAID', 'PROCESSING', 'READY_FOR_PICKUP'],
+    };
+    if (!allowed[nextStatus]?.includes(order.status)) throw new Error('Refresh the order before changing its status.');
+    if (['PROCESSING', 'READY_FOR_PICKUP', 'COMPLETED'].includes(nextStatus) && !order.salesInvoiceId) {
+      throw new Error('The sale has not posted yet. Ask a manager to retry sale posting before preparing this order.');
     }
-
     const updatedOrder = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.onlineOrder.updateMany({
+        where: { id: order.id, businessId, status: order.status, paymentStatus: order.paymentStatus,
+          salesInvoiceId: order.salesInvoiceId, refundStatus: order.refundStatus },
+        data: { updatedAt: now },
+      });
+      if (claimed.count !== 1) throw new Error('This order changed in another session. Refresh and try again.');
+      switch (nextStatus) {
+        case 'MARK_PAID':
+          if (order.paymentStatus === 'PAID') {
+            throw new Error('Order is already marked as paid.');
+          }
+          if (order.status !== 'AWAITING_PAYMENT' && order.status !== 'PAYMENT_FAILED') {
+            throw new Error('Only orders awaiting payment can be marked as paid.');
+          }
+          data.status = 'PAID';
+          data.fulfillmentStatus = 'PENDING';
+          data.paymentStatus = 'PAID';
+          data.paidAt = now;
+          data.paymentConfirmedAt = now;
+          commitSale = true;
+          break;
+        case 'PROCESSING':
+          if (order.paymentStatus !== 'PAID') {
+            throw new Error('Only paid orders can move into processing.');
+          }
+          data.status = 'PROCESSING';
+          data.fulfillmentStatus = 'PROCESSING';
+          data.fulfilledAt = null;
+          data.preparingAt = now;
+          break;
+        case 'READY_FOR_PICKUP':
+          if (order.paymentStatus !== 'PAID') {
+            throw new Error('Only paid orders can be marked ready for pickup.');
+          }
+          data.status = 'READY_FOR_PICKUP';
+          data.fulfillmentStatus = 'READY';
+          data.fulfilledAt = null;
+          data.readyAt = now;
+          break;
+        case 'COMPLETED':
+          if (order.paymentStatus !== 'PAID') {
+            throw new Error('Only paid orders can be completed.');
+          }
+          data.status = 'COMPLETED';
+          data.fulfillmentStatus = 'COMPLETED';
+          data.fulfilledAt = now;
+          data.collectedAt = now;
+          break;
+        case 'CANCELLED': {
+          // For paid orders that already have a SalesInvoice, reverse the sale
+          // (restoring inventory + posting the corrective journal entry) and flag
+          // the customer's MoMo refund for manual follow-up.
+          if (order.paymentStatus === 'PAID' && order.salesInvoiceId && !order.refundStatus) {
+            await createSalesReturn({
+              tx,
+              businessId,
+              salesInvoiceId: order.salesInvoiceId,
+              userId: user.id,
+              type: 'RETURN',
+              reasonCode: 'CUSTOMER_CANCELLED',
+              refundMethod: 'MOBILE_MONEY',
+              refundAmountPence: order.totalPence,
+              reason: 'Online order cancelled by merchant',
+              managerApprovedByUserId: user.id,
+              managerApprovalMode: 'INLINE',
+            });
+          }
+          const shouldRestoreReservedInventory = order.paymentStatus !== 'PAID' || !order.salesInvoiceId;
+          if (shouldRestoreReservedInventory) {
+            await restoreOnlineOrderInventoryReservation({
+              storeId: order.storeId,
+              lines: order.lines,
+              tx,
+            });
+          }
+          data.status = 'CANCELLED';
+          data.fulfillmentStatus = 'CANCELLED';
+          data.fulfilledAt = null;
+          data.cancelledAt = now;
+          if (order.paymentStatus === 'PAID' && !order.refundStatus) {
+            data.refundStatus = 'MANUAL_REFUND_NEEDED';
+            data.refundedAt = null;
+          }
+          break;
+        }
+        default:
+          throw new Error('Unsupported online order status change.');
+      }
+
       const updated = await tx.onlineOrder.update({
         where: { id: order.id },
         data,
@@ -652,12 +675,13 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
 
     if (commitSale) {
       // For manual reference orders, commit the sale to a SalesInvoice +
-      // decrement inventory now that the merchant has confirmed payment.
+      // consume the existing reservation without decrementing stock twice.
       try {
         const { commitOnlineOrderSale } = await import('@/lib/services/online-order-commit');
         await commitOnlineOrderSale(order.id);
       } catch (commitError) {
         console.error('[online-order-commit] Failed after manual mark-paid', order.id, commitError);
+        throw new Error('Payment was confirmed, but sale posting needs attention. Use Retry sale posting before preparing the order.');
       }
     }
 
@@ -679,6 +703,20 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
     if (business.storefrontSlug) {
       revalidatePath(`/shop/${business.storefrontSlug}/orders/${order.id}`);
     }
+    redirect('/online-orders');
+  }, '/online-orders');
+}
+
+export async function retryOnlineOrderSaleAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    await requireOnlineStorefrontAccess(businessId);
+    const orderId = formString(formData, 'orderId');
+    const order = await prisma.onlineOrder.findFirst({ where: { id: orderId, businessId } });
+    if (!order || order.paymentStatus !== 'PAID' || order.status === 'CANCELLED') throw new Error('Only paid active orders can be posted.');
+    const { commitOnlineOrderSale } = await import('@/lib/services/online-order-commit');
+    if (!await commitOnlineOrderSale(order.id)) throw new Error('The sale could not post. Contact support before preparing this order.');
+    revalidatePath('/online-orders');
     redirect('/online-orders');
   }, '/online-orders');
 }
@@ -731,15 +769,19 @@ export async function batchMarkPreparingAction(formData: FormData): Promise<void
 
     await prisma.$transaction(async (tx) => {
       const candidates = await tx.onlineOrder.findMany({
-        where: { storeId, status: 'PAID', paymentStatus: 'PAID' },
+        where: { businessId, storeId, status: 'PAID', paymentStatus: 'PAID', salesInvoiceId: { not: null } },
         select: { id: true },
       });
 
       const preparingAt = new Date();
       for (const candidate of candidates) {
-        const updated = await tx.onlineOrder.update({
-          where: { id: candidate.id },
+        const claimed = await tx.onlineOrder.updateMany({
+          where: { id: candidate.id, businessId, status: 'PAID', paymentStatus: 'PAID', salesInvoiceId: { not: null } },
           data: { status: 'PROCESSING', fulfillmentStatus: 'PROCESSING', preparingAt },
+        });
+        if (!claimed.count) continue;
+        const updated = await tx.onlineOrder.findUniqueOrThrow({
+          where: { id: candidate.id },
           select: {
             id: true,
             status: true,
@@ -774,7 +816,7 @@ export async function markOrderRefundedAction(formData: FormData): Promise<void>
       select: { id: true, refundStatus: true },
     });
     if (!order) throw new Error('Order not found');
-    if (order.refundStatus === 'REFUNDED') throw new Error('Order already marked as refunded');
+    if (order.refundStatus !== 'MANUAL_REFUND_NEEDED') throw new Error('Only an outstanding refund can be marked as refunded');
 
     await prisma.onlineOrder.update({
       where: { id: orderId },

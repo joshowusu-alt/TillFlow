@@ -17,56 +17,40 @@ function buildSystemUserEmail(businessId: string) {
 export async function ensureOnlineSalesInfra(businessId: string, storeId: string) {
   const userEmail = buildSystemUserEmail(businessId);
 
-  let user = await prisma.user.findFirst({
-    where: { businessId, email: userEmail },
+  const placeholderHash = createHash('sha256').update(randomBytes(16)).digest('hex');
+  const user = await prisma.user.upsert({
+    where: { email: userEmail }, update: {},
+    create: { businessId, name: ONLINE_USER_NAME, email: userEmail,
+      passwordHash: `disabled:${placeholderHash}`, role: 'OWNER', active: false },
     select: { id: true },
   });
-  if (!user) {
-    const placeholderHash = createHash('sha256')
-      .update(`online-system:${businessId}:${randomBytes(16).toString('hex')}`)
-      .digest('hex');
-    user = await prisma.user.create({
-      data: {
-        businessId,
-        name: ONLINE_USER_NAME,
-        email: userEmail,
-        passwordHash: `disabled:${placeholderHash}`,
-        role: 'OWNER',
-        active: false,
-      },
-      select: { id: true },
-    });
-  }
-
-  let till = await prisma.till.findFirst({
-    where: { storeId, name: ONLINE_TILL_NAME },
-    select: { id: true },
+  const existingTill = await prisma.till.findFirst({
+    where: { storeId, name: ONLINE_TILL_NAME }, orderBy: { createdAt: 'asc' }, select: { id: true },
   });
-  if (!till) {
-    till = await prisma.till.create({
-      data: { storeId, name: ONLINE_TILL_NAME, active: true },
-      select: { id: true },
-    });
-  }
+  const till = existingTill ?? await prisma.till.upsert({
+    where: { id: `online-${createHash('sha256').update(storeId).digest('hex').slice(0, 32)}` }, update: {},
+    create: { id: `online-${createHash('sha256').update(storeId).digest('hex').slice(0, 32)}`,
+      storeId, name: ONLINE_TILL_NAME, active: true }, select: { id: true },
+  });
 
   return { cashierUserId: user.id, tillId: till.id };
 }
 
 /**
  * Idempotently commits a paid online order to the canonical SalesInvoice path:
- * decrements inventory, posts the journal entry, and links the MoMo collection
+ * consumes the existing inventory reservation, posts the journal entry and links the receipt
  * to the sale. Safe to call multiple times — a unique constraint on
  * `OnlineOrder.salesInvoiceId` prevents duplicates.
  */
 export async function commitOnlineOrderSale(orderId: string): Promise<string | null> {
   const order = await prisma.onlineOrder.findUnique({
     where: { id: orderId },
-    include: { lines: true },
+    include: { lines: { orderBy: { id: 'asc' } }, business: { select: { storefrontPaymentMode: true } } },
   });
 
   if (!order) return null;
   if (order.salesInvoiceId) return order.salesInvoiceId;
-  if (order.paymentStatus !== 'PAID') return null;
+  if (order.paymentStatus !== 'PAID' || order.status === 'CANCELLED') return null;
 
   const { tillId, cashierUserId } = await ensureOnlineSalesInfra(order.businessId, order.storeId);
 
@@ -77,10 +61,11 @@ export async function commitOnlineOrderSale(orderId: string): Promise<string | n
       tillId,
       cashierUserId,
       skipInventoryMovements: true,
+      onlineOrderId: order.id,
+      saleSource: 'ONLINE_ORDER',
       paymentStatus: 'PAID',
-      // Manual reference orders won't have a paymentCollectionId — createSale
-      // accepts that case by recording the MoMo payment as PENDING_MANUAL.
-      payments: [{ method: 'MOBILE_MONEY', amountPence: order.totalPence }],
+      // Manual receipts have already been verified by a manager on this order.
+      payments: [{ method: order.business.storefrontPaymentMode === 'BANK_TRANSFER' ? 'TRANSFER' : 'MOBILE_MONEY', amountPence: order.totalPence }],
       momoCollectionId: order.paymentCollectionId ?? null,
       bypassOpenTillRequirement: true,
       externalRef: `WEB-${order.orderNumber}`,
@@ -106,18 +91,6 @@ export async function commitOnlineOrderSale(orderId: string): Promise<string | n
     });
     if (refreshed?.salesInvoiceId) return refreshed.salesInvoiceId;
 
-    // Stock ran out between checkout and payment confirmation. The customer's
-    // MoMo has already been collected, so flag the order for manual refund and
-    // let the merchant follow up through the online-orders dashboard.
-    const message = error instanceof Error ? error.message : '';
-    if (/insufficient on hand/i.test(message)) {
-      await prisma.onlineOrder.update({
-        where: { id: orderId },
-        data: { refundStatus: 'MANUAL_REFUND_NEEDED' },
-      });
-      console.error('[online-order-commit] Stock unavailable after payment for order', orderId);
-      return null;
-    }
     throw error;
   }
 }

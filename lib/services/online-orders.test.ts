@@ -12,6 +12,10 @@ const prismaMock = vi.hoisted(() => ({
   business: {
     findFirst: vi.fn(),
   },
+  onlineOrder: { findUnique: vi.fn(), create: vi.fn(), findFirst: vi.fn() },
+  inventoryBalance: { updateMany: vi.fn() },
+  storefrontCustomer: { findUnique: vi.fn() },
+  $transaction: vi.fn(),
   storefrontCategoryMapping: {
     findMany: vi.fn(),
   },
@@ -26,6 +30,7 @@ const prismaMock = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('@/lib/services/storefront-notifications', () => ({ enqueueOrderNotificationSafe: vi.fn().mockResolvedValue(undefined) }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -215,5 +220,34 @@ describe('getStorefrontCatalogPage', () => {
         storefrontPublished: true,
       },
     });
+  });
+});
+
+
+describe('durable checkout retry', () => {
+  const input = { slug: 'retry-shop', storeId: 'store-1', customerName: 'Ama', customerPhone: '0241234567',
+    checkoutKey: '11111111-1111-4111-8111-111111111111', items: [{ productId: 'p1', unitId: 'u1', qtyInUnit: 1 }] };
+  beforeEach(() => {
+    prismaMock.business.findFirst.mockResolvedValue({ id: 'biz-1', name: 'Shop', storefrontSlug: 'retry-shop',
+      storefrontEnabled: true, plan: 'PRO', storeMode: 'SINGLE_STORE', currency: 'GHS', vatEnabled: false,
+      storefrontPaymentMode: 'MOMO_NUMBER', storefrontMomoNumber: '0241234567', storefrontMomoNetwork: 'MTN',
+      stores: [{ id: 'store-1' }] });
+    prismaMock.product.findMany.mockResolvedValue([{ id: 'p1', name: 'Rice', sellingPriceBasePence: 1000, vatRateBps: 0,
+      productUnits: [{ unitId: 'u1', conversionToBase: 1, sellingPricePence: 1000, unit: { id: 'u1', name: 'Piece' } }] }]);
+    prismaMock.onlineOrder.findUnique.mockResolvedValue(null);
+    prismaMock.onlineOrder.findFirst.mockResolvedValue(null);
+    prismaMock.inventoryBalance.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.storefrontCustomer.findUnique.mockResolvedValue(null);
+    prismaMock.onlineOrder.create.mockImplementation(async ({ data }: any) => ({ ...data, id: 'order-1' }));
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+  });
+  it('returns the original order after a lost checkout response without reserving stock again', async () => {
+    const first = await createOnlineCheckout(input);
+    const saved = prismaMock.onlineOrder.create.mock.calls[0][0].data;
+    prismaMock.onlineOrder.findUnique.mockResolvedValue({ ...saved, id: 'order-1' });
+    expect(await createOnlineCheckout(input)).toEqual(first);
+    expect(prismaMock.inventoryBalance.updateMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.onlineOrder.create).toHaveBeenCalledTimes(1);
+    await expect(createOnlineCheckout({ ...input, items: [{ ...input.items[0], qtyInUnit: 2 }] })).rejects.toThrow('different basket');
   });
 });

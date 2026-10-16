@@ -1,4 +1,5 @@
-import { randomUUID } from 'crypto';
+import { onlineOrderPaymentDeadline } from '@/lib/online-order-expiry';
+import { createHash, randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { UserError } from '@/lib/action-utils';
 import { getFeatures } from '@/lib/features';
@@ -109,6 +110,7 @@ export type PublicStorefront = {
 };
 
 export type StorefrontCatalogQuery = {
+  productIds?: string[];
   search?: string | null;
   categoryId?: string | null;
   offset?: number;
@@ -122,6 +124,7 @@ export type OnlineCheckoutItemInput = {
 };
 
 export type CreateOnlineCheckoutInput = {
+  checkoutKey?: string | null;
   slug: string;
   storeId: string;
   customerName: string;
@@ -545,6 +548,7 @@ async function getStorefrontProductRows(businessId: string, storeIds: string[], 
     businessId,
     active: true,
     storefrontPublished: true,
+    ...(query.productIds ? { id: { in: query.productIds.slice(0, 50) } } : {}),
   };
   if (normalized.search) {
     // Postgres `contains` is case-sensitive by default. Without mode:'insensitive'
@@ -984,6 +988,25 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
   if (!store) {
     throw new UserError('Choose a pickup store before checking out.');
   }
+  const checkoutKey = input.checkoutKey?.trim() || null;
+  if (checkoutKey && !/^[a-zA-Z0-9-]{16,100}$/.test(checkoutKey)) throw new UserError('Invalid checkout reference. Refresh and try again.');
+  const checkoutFingerprint = createHash('sha256').update(JSON.stringify({
+    storeId: store.id, customerName, customerPhone, customerEmail, customerNotes,
+    items: input.items.map(item => ({ productId: item.productId, unitId: item.unitId, qtyInUnit: item.qtyInUnit }))
+      .sort((a, b) => `${a.productId}:${a.unitId}`.localeCompare(`${b.productId}:${b.unitId}`)),
+  })).digest('hex');
+  const findReplay = async () => {
+    if (!checkoutKey) return null;
+    const existing = await prisma.onlineOrder.findUnique({ where: { businessId_checkoutKey: { businessId: business.id, checkoutKey } } });
+    if (existing && existing.checkoutFingerprint !== checkoutFingerprint) throw new UserError('This checkout reference was already used for a different basket. Refresh and try again.');
+    return existing;
+  };
+  const responseFor = (order: { id: string; orderNumber: string; publicToken: string }) => ({
+    orderId: order.id, orderNumber: order.orderNumber, publicToken: order.publicToken,
+    redirectPath: `/shop/${business.storefrontSlug}/orders/${order.id}?token=${encodeURIComponent(order.publicToken)}`,
+  });
+  const replay = await findReplay();
+  if (replay) return responseFor(replay);
   const productIds = [...new Set(input.items.map((item) => item.productId))];
 
   const products = await prisma.product.findMany({
@@ -1068,6 +1091,8 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
     return tx.onlineOrder.create({
       data: {
         businessId: business.id,
+        checkoutKey,
+        checkoutFingerprint,
         storeId: store.id,
         customerId: resolvedCustomerId,
         publicToken,
@@ -1103,6 +1128,13 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
         orderNumber: true,
       },
     });
+  }).catch(async (error) => {
+    // The losing concurrent transaction rolls back its stock reservation.
+    if (checkoutKey && error?.code === 'P2002') {
+      const replay = await findReplay();
+      if (replay) return replay;
+    }
+    throw error;
   });
 
   // Enqueue ORDER_RECEIVED SMS notification (soft-fail — never aborts checkout)
@@ -1241,6 +1273,7 @@ export async function getPublicOnlineOrder(input: {
 
   return {
     ...order,
+    paymentDeadlineAt: onlineOrderPaymentDeadline(order.createdAt).toISOString(),
     storefrontSlug: order.business.storefrontSlug,
     storefrontName: order.business.name,
     storefrontPhone: order.business.phone,

@@ -22,6 +22,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const slug = String(body?.slug ?? '');
+    if (Array.isArray(body?.items) && body.items.length > MAX_CART_LINES) {
+      return NextResponse.json({ error: 'Your basket can contain up to 50 different items.' }, { status: 400 });
+    }
     const ip = clientIp(request);
 
     const throttle = await consumeStorefrontCheckoutAttempt(slug, ip);
@@ -36,6 +39,7 @@ export async function POST(request: NextRequest) {
 
     const result = await createOnlineCheckout({
       slug,
+      checkoutKey: body?.checkoutKey ? String(body.checkoutKey).slice(0, 100) : null,
       storeId: String(body?.storeId ?? '').slice(0, 64),
       customerName: String(body?.customerName ?? '').trim().slice(0, 120),
       customerPhone: String(body?.customerPhone ?? '').trim().slice(0, 30),

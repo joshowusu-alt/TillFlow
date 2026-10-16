@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
+import OnlineOrderAttentionBanner from '@/components/OnlineOrderAttentionBanner';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
-import { getBusinessPlan } from '@/lib/features';
+import { getBusinessPlan, getFeatures } from '@/lib/features';
 import TopNav from '@/components/TopNav';
 import BottomTabBar from '@/components/BottomTabBar';
 import ProtectedBusinessScope from '@/components/ProtectedBusinessScope';
@@ -187,6 +188,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         addonOnlineStorefront={Boolean((business as any).addonOnlineStorefront)}
         allowedReportHrefs={[...(await visibleReportHrefs())]}
       />
+
+      {!shouldRestrictPage && getFeatures((business as any).plan ?? business.mode, (business as any).storeMode, { onlineStorefront: Boolean((business as any).addonOnlineStorefront) }).onlineStorefront && ['CASHIER', 'MANAGER', 'OWNER'].includes(user.role) ? (
+        <OnlineOrderAttentionBanner key={`${business.id}:${store?.id ?? 'all'}`} scopeKey={`${business.id}:${store?.id ?? 'all'}`} />
+      ) : null}
 
       {needsOnboarding && !pathname.includes('/onboarding') && (
         <Suspense fallback={null}>

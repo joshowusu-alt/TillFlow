@@ -242,6 +242,11 @@ async function tryImmediateDispatch(outboxId: string): Promise<void> {
       },
     });
     if (!row || row.status !== 'PENDING') return;
+    const claimed = await prisma.messageOutbox.updateMany({
+      where: { id: outboxId, status: 'PENDING', lockedAt: null },
+      data: { lockedAt: new Date(), lastError: 'LOCKED:immediate' },
+    });
+    if (claimed.count !== 1) return;
 
     const sendResult = await sendStorefrontSms({
       to: row.recipient,
@@ -252,13 +257,14 @@ async function tryImmediateDispatch(outboxId: string): Promise<void> {
     if (sendResult.ok) {
       await prisma.messageOutbox.update({
         where: { id: outboxId },
-        data: { status: 'SENT', sentAt: new Date(), attempts: { increment: 1 } },
+        data: { status: 'SENT', sentAt: new Date(), attempts: { increment: 1 }, lockedAt: null, lastError: null },
       });
     } else {
       await prisma.messageOutbox.update({
         where: { id: outboxId },
         data: {
           attempts: { increment: 1 },
+          lockedAt: null,
           lastError: sendResult.error.slice(0, 500),
           nextAttemptAt: new Date(Date.now() + 60_000),
         },

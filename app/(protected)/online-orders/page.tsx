@@ -1,7 +1,7 @@
 import PageHeader from '@/components/PageHeader';
 import StorefrontUpgradeNotice from '@/components/StorefrontUpgradeNotice';
-import { recheckOnlineOrderPaymentAction, updateOnlineOrderStatusAction, batchMarkPreparingAction, markOrderRefundedAction } from '@/app/actions/online-storefront';
-import { requireBusiness } from '@/lib/auth';
+import { retryOnlineOrderSaleAction, recheckOnlineOrderPaymentAction, updateOnlineOrderStatusAction, batchMarkPreparingAction, markOrderRefundedAction } from '@/app/actions/online-storefront';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatDateTime, formatMoney, formatGhanaPhoneForDisplay, toTitleCase } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
@@ -79,7 +79,8 @@ function AgeBadge({ createdAt, status }: { createdAt: Date | string; status: str
   return <span className="text-[10px] text-black/40">{label}</span>;
 }
 
-function NextStepCTA({ order }: {
+function NextStepCTA({ order, canManage = true }: {
+  canManage?: boolean;
   order: {
     id: string;
     status: string;
@@ -89,6 +90,7 @@ function NextStepCTA({ order }: {
 }) {
   const done = order.status === 'COMPLETED' || order.status === 'CANCELLED';
   if (done) return null;
+  if (!canManage && order.paymentStatus !== 'PAID') return <p className="text-xs text-amber-800">A manager must verify payment before preparation.</p>;
   const recheckPaymentAction = recheckOnlineOrderPaymentAction.bind(null, order.id);
 
   const canCancel = order.status !== 'COMPLETED' && order.status !== 'CANCELLED';
@@ -123,7 +125,7 @@ function NextStepCTA({ order }: {
           {nextLabel}
         </button>
       </form>
-      {canCancel ? (
+      {canCancel && canManage ? (
         <form action={updateOnlineOrderStatusAction} className="w-full sm:w-auto">
           <input type="hidden" name="orderId" value={order.id} />
           <input type="hidden" name="nextStatus" value="CANCELLED" />
@@ -132,7 +134,7 @@ function NextStepCTA({ order }: {
           </button>
         </form>
       ) : null}
-      {order.status === 'AWAITING_PAYMENT' && order.paymentCollectionId ? (
+      {canManage && order.status === 'AWAITING_PAYMENT' && order.paymentCollectionId ? (
         <form action={recheckPaymentAction} className="w-full sm:w-auto">
           <button type="submit" className="btn-ghost w-full justify-center sm:w-auto">
             Re-check payment
@@ -146,9 +148,12 @@ function NextStepCTA({ order }: {
 export default async function OnlineOrdersPage({
   searchParams,
 }: {
-  searchParams?: { status?: string };
+  searchParams?: { status?: string; order?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { user, business, store } = await requireBusinessAndOptionalStore(['CASHIER', 'MANAGER', 'OWNER']);
+  const canManage = user.role !== 'CASHIER';
+  if (!canManage && !store) return <p>Select a branch in the header to view online orders.</p>;
+  const branchFilter = store ? { storeId: store.id } : {};
   const features = getFeatures(
     (business as any).plan ?? (business.mode as any),
     (business as any).storeMode as any,
@@ -164,7 +169,7 @@ export default async function OnlineOrdersPage({
 
   const [orders, summary] = await Promise.all([
     prisma.onlineOrder.findMany({
-      where: { businessId: business.id, ...statusFilter },
+      where: { businessId: business.id, ...branchFilter, ...statusFilter, ...(searchParams?.order ? { id: searchParams.order } : {}) },
       orderBy: { createdAt: 'desc' },
       take: 100,
         select: {
@@ -206,7 +211,7 @@ export default async function OnlineOrdersPage({
     }),
     prisma.onlineOrder.groupBy({
       by: ['status'],
-      where: { businessId: business.id },
+      where: { businessId: business.id, ...branchFilter },
       _count: { _all: true },
     }),
   ]);
@@ -328,7 +333,7 @@ export default async function OnlineOrdersPage({
       </nav>
 
       {/* Batch preparing banner — shown when any PAID orders need processing */}
-      {(() => {
+      {canManage && (() => {
         const paidOrders = orders.filter((o) => o.status === 'PAID');
         if (paidOrders.length === 0) return null;
         // Group by store
@@ -375,7 +380,7 @@ export default async function OnlineOrdersPage({
                   {`No orders with status "${STATUS_TABS.find(t => t.key === activeTab)?.label}".`}
                 </div>
               ) : (
-                orders.map((order) => <OrderCard key={order.id} order={order} />)
+                orders.map((order) => <OrderCard key={order.id} order={order} canManage={canManage} />)
               )}
             </div>
           );
@@ -407,7 +412,7 @@ export default async function OnlineOrdersPage({
                   <span className="text-xs text-black/40">Newest first</span>
                 </div>
                 <div className="space-y-3">
-                  {actionOrders.map((order) => <OrderCard key={order.id} order={order} />)}
+                  {actionOrders.map((order) => <OrderCard key={order.id} order={order} canManage={canManage} />)}
                 </div>
               </div>
             )}
@@ -420,7 +425,7 @@ export default async function OnlineOrdersPage({
                   <div className="text-xs text-black/35">{historyOrders.length} archived</div>
                 </div>
                 <div className="space-y-2.5">
-                  {historyOrders.map((order) => <OrderCard key={order.id} order={order} compact />)}
+                  {historyOrders.map((order) => <OrderCard key={order.id} order={order} compact canManage={canManage} />)}
                 </div>
               </div>
             )}
@@ -457,7 +462,7 @@ type OrderRow = {
   lines: Array<{ id: string; productName: string; qtyInUnit: number; unitName: string }>;
 };
 
-function OrderCard({ order, compact = false }: { order: OrderRow; compact?: boolean }) {
+function OrderCard({ order, compact = false, canManage = true }: { order: OrderRow; compact?: boolean; canManage?: boolean }) {
   const statusDone = order.status === 'COMPLETED' || order.status === 'CANCELLED';
   const statusBorderClass = ({
     AWAITING_PAYMENT: 'border-l-4 border-l-amber-400',
@@ -471,7 +476,7 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
   } as Record<string, string>)[order.status] ?? 'border-l-2 border-l-slate-200';
 
   return (
-    <div className={`overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm transition hover:shadow-md ${statusDone ? 'opacity-80' : ''}`}>
+    <div id={`order-${order.id}`} className={`scroll-mt-48 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm transition hover:shadow-md ${statusDone ? 'opacity-80' : ''}`}>
       <div className={`flex flex-col gap-3 ${compact ? 'p-3.5 lg:py-3' : 'p-4 sm:p-5'} lg:flex-row lg:items-start ${statusBorderClass}`}>
         <div className="min-w-0 space-y-2 lg:flex-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -543,7 +548,16 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
             </div>
           </div>
 
-          {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
+          {order.paymentStatus === 'PAID' && !order.salesInvoiceId && order.status !== 'CANCELLED' ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
+              <p>Payment confirmed. Sale posting needs attention before preparation.</p>
+              {canManage ? <form action={retryOnlineOrderSaleAction} className="mt-2">
+                <input type="hidden" name="orderId" value={order.id} />
+                <button className="btn-secondary" type="submit">Retry sale posting</button>
+              </form> : <p>Ask your manager to retry sale posting.</p>}
+            </div>
+          ) : null}
+          {canManage && order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
             <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 space-y-2">
               <p className="text-xs text-rose-800 font-medium">
                 Payment was received but this order was cancelled. The customer needs a manual refund.
@@ -582,6 +596,7 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
 
         <div className="flex-shrink-0 lg:w-[13rem]">
           <NextStepCTA
+            canManage={canManage}
             order={{
               id: order.id,
               status: order.status,
