@@ -12,6 +12,8 @@ import { ensureControlPlaneBusinessBootstrap } from '@/lib/control-plane-bootstr
 import { resolveRegisterPlanSelection } from '@/lib/plan-pricing';
 import { createTrialSubscription } from '@/lib/subscription-lifecycle';
 import { enqueueSubscriptionReminder } from '@/lib/subscription-reminders';
+import { CHART_OF_ACCOUNTS } from '@/lib/accounting';
+import { isValidRegisterEmail, REGISTER_CURRENCIES } from '@/lib/register/advance';
 import { resolveRegisterQaTag } from '@/lib/reliability/preview-qa-tag';
 
 /**
@@ -58,6 +60,10 @@ export async function register(formData: FormData) {
     redirect('/register?error=weak');
   }
 
+  if (!isValidRegisterEmail(email) || businessName.length > 120 || ownerName.length > 120 || !REGISTER_CURRENCIES.includes(currency)) {
+    redirect('/register?error=invalid');
+  }
+
   // Check if email already taken
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -67,6 +73,8 @@ export async function register(formData: FormData) {
   // Create Business → Store → Till → Owner (all in one transaction)
   const passwordHash = await bcrypt.hash(password, 10);
 
+  const token = randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
   const result = await prisma.$transaction(async (tx) => {
     const business = await tx.business.create({
       data: {
@@ -104,25 +112,36 @@ export async function register(formData: FormData) {
       },
     });
 
-    return { business, store, owner };
-  });
+    // Required setup must succeed before the business can be committed.
+    await seedEssentials(tx, business.id);
+    await ensureControlPlaneBusinessBootstrap(tx as any, {
+      businessId: business.id,
+      ownerName,
+      ownerEmail: owner.email,
+      plan: business.plan,
+      addonOnlineStorefront: business.addonOnlineStorefront,
+      billingCadence: business.billingInterval,
+      status: business.subscriptionStatus ?? business.planStatus,
+      supportStatus: 'UNREVIEWED',
+      notes: 'Awaiting first Tishgroup commercial review after signup.',
+      startedAt: business.planSetAt,
+      referralSource,
+      referredByName,
+      referredByPhone,
+      sourceChannel,
+      referralStatus: 'TRIAL_STARTED',
+    });
 
-  await ensureControlPlaneBusinessBootstrap(prisma as any, {
-    businessId: result.business.id,
-    ownerName,
-    ownerEmail: result.owner.email,
-    plan: result.business.plan,
-    addonOnlineStorefront: result.business.addonOnlineStorefront,
-    billingCadence: result.business.billingInterval,
-    status: result.business.subscriptionStatus ?? result.business.planStatus,
-    supportStatus: 'UNREVIEWED',
-    notes: 'Awaiting first Tishgroup commercial review after signup.',
-    startedAt: result.business.planSetAt,
-    referralSource,
-    referredByName,
-    referredByPhone,
-    sourceChannel,
-    referralStatus: 'TRIAL_STARTED',
+    await tx.session.create({ data: { token, userId: owner.id, expiresAt } });
+    return { business, store, owner };
+  }, { timeout: 30_000 }).catch((error: unknown) => {
+    // Two requests can pass the precheck together; the unique constraint wins.
+    const conflict = error as { code?: string; meta?: { target?: string | string[] } };
+    const target = conflict?.meta?.target;
+    if (conflict?.code === 'P2002' && (Array.isArray(target) ? target.includes('email') : target?.includes('email'))) {
+      redirect('/register?error=exists');
+    }
+    throw error;
   });
 
   await enqueueSubscriptionReminder(
@@ -145,14 +164,8 @@ export async function register(formData: FormData) {
 
   // Registration always creates a clean business. The public demo is a separate
   // read-only fixture under /demo and does not write seeded demo data here.
-  await seedEssentials(result.business.id);
 
-  // Auto-login
-  const token = randomBytes(32).toString('hex');
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
-  await prisma.session.create({
-    data: { token, userId: result.owner.id, expiresAt },
-  });
+  // Session was committed atomically with the new business.
   const cookieStore = cookies();
   cookieStore.set(getBusinessSessionCookieName(result.business.id), token, {
     httpOnly: true,
@@ -174,10 +187,9 @@ export async function register(formData: FormData) {
 // ---------------------------------------------------------------------------
 // Essentials seeder — only chart of accounts and units (for fresh businesses)
 // ---------------------------------------------------------------------------
-async function seedEssentials(businessId: string) {
-  try {
+async function seedEssentials(tx: import('@prisma/client').Prisma.TransactionClient, businessId: string) {
     // Units (global / shared) — create if missing
-    const existingUnits = await prisma.unit.findMany();
+    const existingUnits = await tx.unit.findMany();
     const unitNames = new Set(existingUnits.map(u => u.name));
 
     const unitDefs = [
@@ -194,40 +206,17 @@ async function seedEssentials(businessId: string) {
 
     const missingUnits = unitDefs.filter(u => !unitNames.has(u.name));
     if (missingUnits.length > 0) {
-      await prisma.unit.createMany({ data: missingUnits });
+      await tx.unit.createMany({ data: missingUnits });
     }
 
-    // Chart of Accounts — required for accounting to work
-    await prisma.account.createMany({
-      data: [
-        { businessId, code: '1000', name: 'Cash on Hand', type: 'ASSET' },
-        { businessId, code: '1010', name: 'Bank', type: 'ASSET' },
-        { businessId, code: '1100', name: 'Accounts Receivable', type: 'ASSET' },
-        { businessId, code: '1200', name: 'Inventory', type: 'ASSET' },
-        { businessId, code: '1300', name: 'VAT Receivable', type: 'ASSET' },
-        { businessId, code: '2000', name: 'Accounts Payable', type: 'LIABILITY' },
-        { businessId, code: '2100', name: 'VAT Payable', type: 'LIABILITY' },
-        { businessId, code: '3000', name: 'Retained Earnings', type: 'EQUITY' },
-        { businessId, code: '3200', name: 'Opening Balance Equity', type: 'EQUITY' },
-        { businessId, code: '4000', name: 'Sales Revenue', type: 'INCOME' },
-        { businessId, code: '5000', name: 'Cost of Goods Sold', type: 'EXPENSE' },
-        { businessId, code: '6000', name: 'Operating Expenses', type: 'EXPENSE' },
-        { businessId, code: '6100', name: 'Rent', type: 'EXPENSE' },
-        { businessId, code: '6200', name: 'Utilities', type: 'EXPENSE' },
-        { businessId, code: '6300', name: 'Salaries', type: 'EXPENSE' },
-        { businessId, code: '6400', name: 'Repairs & Maintenance', type: 'EXPENSE' },
-        { businessId, code: '6500', name: 'Fuel & Transport', type: 'EXPENSE' },
-        { businessId, code: '6600', name: 'Marketing', type: 'EXPENSE' },
-      ],
+    await tx.account.createMany({
+      data: CHART_OF_ACCOUNTS.map(account => ({ businessId, ...account })),
     });
 
     // Default walk-in customer
-    await prisma.customer.create({
+    await tx.customer.create({
       data: { businessId, name: 'Walk-in Customer' },
     });
 
     console.log(`[register] Essentials seeded for business ${businessId}`);
-  } catch (err) {
-    console.error('[register] Failed to seed essentials:', err);
-  }
 }
