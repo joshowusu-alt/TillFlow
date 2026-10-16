@@ -372,12 +372,12 @@ export default async function ProductsPage({
               >
                 <ProductFormSection title="Essential" description="Name, identity, and the price you sell at.">
                   <div>
-                    <label className="label">Name</label>
-                    <input className="input" name="name" required />
+                    <label className="label" htmlFor="create-product-name">Name</label>
+                    <input className="input" id="create-product-name" name="name" required />
                   </div>
                   <div>
-                    <label className="label">SKU</label>
-                    <input className="input" name="sku" />
+                    <label className="label" htmlFor="create-product-sku">SKU</label>
+                    <input className="input" id="create-product-sku" name="sku" />
                   </div>
                   <div>
                     <label className="label">Barcode</label>
@@ -388,8 +388,8 @@ export default async function ProductsPage({
                     <ProductImageInput fileUploadEnabled={fileUploadEnabled} />
                   </div>
                   <div>
-                    <label className="label">Category</label>
-                    <select className="input" name="categoryId">
+                    <label className="label" htmlFor="create-product-categoryId">Category</label>
+                    <select className="input" id="create-product-categoryId" name="categoryId">
                       <option value="">Uncategorised</option>
                       {categories.map((cat) => (
                         <option key={cat.id} value={cat.id}>
@@ -402,20 +402,20 @@ export default async function ProductsPage({
                     </div>
                   </div>
                   <div>
-                    <label className="label">Base Price ({getCurrencySymbol(business.currency)})</label>
-                    <input className="input" name="sellingPriceBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
+                    <label className="label" htmlFor="create-product-sellingPriceBasePence">Base Price ({getCurrencySymbol(business.currency)})</label>
+                    <input className="input" id="create-product-sellingPriceBasePence" name="sellingPriceBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
                     <div className="mt-1 text-xs text-black/50">Price per base unit, e.g. 5.00 for {getCurrencySymbol(business.currency)}5.00.</div>
                   </div>
                   <div>
-                    <label className="label">Base Cost ({getCurrencySymbol(business.currency)})</label>
-                    <input className="input" name="defaultCostBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
+                    <label className="label" htmlFor="create-product-defaultCostBasePence">Base Cost ({getCurrencySymbol(business.currency)})</label>
+                    <input className="input" id="create-product-defaultCostBasePence" name="defaultCostBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
                     <div className="mt-1 text-xs text-black/50">Cost per base unit, e.g. 3.50 for {getCurrencySymbol(business.currency)}3.50.</div>
                   </div>
                 </ProductFormSection>
                 <ProductFormSection title="Stock and purchasing" description="Supplier, units, and optional opening quantity.">
                   <div>
-                    <label className="label">Preferred supplier</label>
-                    <select className="input" name="preferredSupplierId">
+                    <label className="label" htmlFor="create-product-preferredSupplierId">Preferred supplier</label>
+                    <select className="input" id="create-product-preferredSupplierId" name="preferredSupplierId">
                       <option value="">No preferred supplier</option>
                       {suppliers.map((supplier) => (
                         <option key={supplier.id} value={supplier.id}>
@@ -440,22 +440,22 @@ export default async function ProductsPage({
                 </ProductFormSection>
                 <ProductFormSection title="Advanced" description="Margin target, tax, and promotions. Leave blank to use business defaults.">
                   <div>
-                    <label className="label">Target Margin Override (%)</label>
-                    <input className="input" name="minimumMarginThresholdPercent" type="number" min={0} max={100} step="0.01" placeholder={defaultMarginThresholdPercent} />
+                    <label className="label" htmlFor="create-product-minimumMarginThresholdPercent">Target Margin Override (%)</label>
+                    <input className="input" id="create-product-minimumMarginThresholdPercent" name="minimumMarginThresholdPercent" type="number" min={0} max={100} step="0.01" placeholder={defaultMarginThresholdPercent} />
                     <div className="mt-1 text-xs text-black/50">Optional. Leave blank to inherit the business default target of {defaultMarginThresholdPercent}%.</div>
                   </div>
                   <div>
-                    <label className="label">VAT Rate (bps)</label>
-                    <input className="input" name="vatRateBps" type="number" min={0} defaultValue={0} />
+                    <label className="label" htmlFor="create-product-vatRateBps">VAT Rate (bps)</label>
+                    <input className="input" id="create-product-vatRateBps" name="vatRateBps" type="number" min={0} defaultValue={0} />
                   </div>
                   <div>
-                    <label className="label">Promo Buy Qty (base units)</label>
-                    <input className="input" name="promoBuyQty" type="number" min={0} defaultValue={0} />
+                    <label className="label" htmlFor="create-product-promoBuyQty">Promo Buy Qty (base units)</label>
+                    <input className="input" id="create-product-promoBuyQty" name="promoBuyQty" type="number" min={0} defaultValue={0} />
                     <div className="mt-1 text-xs text-black/50">Buy X units to trigger a promo.</div>
                   </div>
                   <div>
-                    <label className="label">Promo Get Qty (base units)</label>
-                    <input className="input" name="promoGetQty" type="number" min={0} defaultValue={0} />
+                    <label className="label" htmlFor="create-product-promoGetQty">Promo Get Qty (base units)</label>
+                    <input className="input" id="create-product-promoGetQty" name="promoGetQty" type="number" min={0} defaultValue={0} />
                     <div className="mt-1 text-xs text-black/50">Free units given when promo applies.</div>
                   </div>
                 </ProductFormSection>

@@ -323,7 +323,8 @@ export default function OpeningStockClient({
                             type="number"
                             min="0"
                             step="1"
-                            placeholder="Qty"
+                            aria-label="Quantity"
+                      placeholder="Qty"
                             value={row.qty}
                             onChange={e => updateRow(row.id, 'qty', e.target.value)}
                           />
@@ -336,7 +337,8 @@ export default function OpeningStockClient({
                           type="number"
                           min="0"
                           step="0.01"
-                          placeholder="0.00"
+                          aria-label="Cost per unit"
+                      placeholder="0.00"
                           value={row.cost}
                           onChange={e => updateRow(row.id, 'cost', e.target.value)}
                         />
@@ -393,6 +395,7 @@ export default function OpeningStockClient({
                       type="number"
                       min="0"
                       step="1"
+                      aria-label="Quantity"
                       placeholder="Qty"
                       value={row.qty}
                       onChange={e => updateRow(row.id, 'qty', e.target.value)}
@@ -404,6 +407,7 @@ export default function OpeningStockClient({
                       type="number"
                       min="0"
                       step="0.01"
+                      aria-label="Cost per unit"
                       placeholder="0.00"
                       value={row.cost}
                       onChange={e =>
@@ -415,6 +419,7 @@ export default function OpeningStockClient({
                     <button
                       type="button"
                       onClick={() => removeRow(row.id)}
+                      aria-label="Remove stock item"
                       className="text-black/30 hover:text-rose-500 transition"
                     >
                       <svg
@@ -462,6 +467,7 @@ export default function OpeningStockClient({
             type="number"
             min="0"
             step="0.01"
+            aria-label={`Opening cash (${currency})`}
             placeholder="e.g. 500.00"
             value={cashInput}
             onChange={e => setCashInput(e.target.value)}
