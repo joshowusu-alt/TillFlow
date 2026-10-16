@@ -54,7 +54,7 @@ Baseline review: 5/10. This checklist is the agreed scope. A code checkmark does
 - [ ] Verify hosting plan supports these schedules and observe actual invocations.
 - [ ] Send a small number of test SMS messages to an explicitly authorised test recipient and verify delivery/retries.
 - [ ] Verify existing visit/product/cart/checkout/order analytics and use them to identify drop-off.
-- [ ] Publish the review branch/draft PR after explicit GitHub destination approval.
+- [x] Publish the review branch/draft PR after explicit GitHub destination approval (PR #134).
 - [ ] Restore Vercel access for team `joshua-owusus-projects`, inspect project `supermarket-pos`, and confirm isolated Preview database configuration before enabling this branch's deployment.
 - [ ] Apply additive migrations to isolated Preview and complete all hosted acceptance checks with fictional operational data.
 - [ ] Present the tested release candidate and remaining risks before any production release decision.
@@ -66,3 +66,11 @@ Baseline review: 5/10. This checklist is the agreed scope. A code checkmark does
 3. Provide one authorised test SMS recipient and approve a maximum of five test messages to that number. These are for order-received, payment-confirmed, ready-for-pickup and failure/retry validation.
 
 Neon access is working. Read-only inspection has verified the separate project `tillflow-preview` (`divine-art-49113159`), branch `br-calm-scene-zaiqf94o`, database `tillflow_preview`. Do not reset or use the shared Preview database as disposable test data; use an isolated child branch for operational testing.
+
+## Isolated Preview deployment — 17 October 2026
+
+- Dedicated Neon branch: `storefront-reliability-134` (`br-lucky-sea-zan9633f`) in project `tillflow-preview`.
+- Both Prisma runtime and direct migration connections saved as Vercel Secret variables, restricted to `fix/storefront-reliability-alerts`, after explicit user approval.
+- Parent contains 54 applied migrations and zero online orders; checkout-key migration is pending the hosted build.
+- Direct PostgreSQL from the local workspace is unavailable (P1001); use the hosted build for migration and deployed application for integration verification.
+- Automatic Preview deployment enabled after verifying both branch-specific variables. Production variables unchanged.

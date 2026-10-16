@@ -2,8 +2,7 @@
   "buildCommand": "npm run build:vercel",
   "git": {
     "deploymentEnabled": {
-      "ci/p0b-prisma-migration-lock": false,
-      "fix/storefront-reliability-alerts": false
+      "ci/p0b-prisma-migration-lock": false
     }
   },
   "regions": [
