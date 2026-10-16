@@ -466,7 +466,7 @@ export default function StorefrontClient({
   const checkoutPayloadRef = useRef('');
   const [catalogProducts, setCatalogProducts] = useState<PublicStorefront['products']>(() => storefront.products);
   const [catalogTotal, setCatalogTotal] = useState(storefront.totalProductCount ?? storefront.products.length);
-  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [selectionState, setSelectionState] = useState<ProductSelectionState>(() => initialSelections(storefront));
   const [selectedStoreId, setSelectedStoreId] = useState<string>(() => storefront.stores[0]?.id ?? '');

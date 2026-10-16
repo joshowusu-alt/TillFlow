@@ -69,6 +69,7 @@ type PublicOrder = {
   storefrontName: string;
   storefrontPhone: string | null;
   pickupInstructions: string | null;
+  pickupPrepMinutes?: number;
   momoPayoutNumber: string | null;
   momoPayoutNetwork: string | null;
   paymentMode: string | null;
@@ -571,9 +572,15 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
             <svg className="h-4 w-4 shrink-0 text-black/30" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-xs text-black/50">Orders are usually ready for pickup within <span className="font-semibold text-black/65">30–60 minutes</span> of payment being confirmed.</p>
+            <p className="text-xs text-black/50">{order.pickupPrepMinutes && order.pickupPrepMinutes > 0 ? `Estimated preparation: ${order.pickupPrepMinutes} minutes after payment is confirmed. ` : 'Preparation time has not been provided. '}Wait until your order is marked ready before travelling.</p>
           </div>
         )}
+
+        <section aria-label="Pickup location" className="mt-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-black/5">
+          <h2 className="text-sm font-semibold text-ink">Collect from {order.pickupStoreName || 'your selected branch'}</h2>
+          <p className="mt-1 text-xs text-black/60">{order.pickupStoreAddress || 'Pickup address has not been provided. Contact the store before travelling.'}</p>
+          {order.pickupInstructions ? <p className="mt-1 text-xs text-black/60">{order.pickupInstructions}</p> : null}
+        </section>
 
         {/* Reference + amount — always visible */}
         <div className="mt-3 grid grid-cols-2 gap-3">

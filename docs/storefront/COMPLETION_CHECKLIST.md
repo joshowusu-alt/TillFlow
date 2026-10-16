@@ -74,3 +74,13 @@ Neon access is working. Read-only inspection has verified the separate project `
 - Parent contains 54 applied migrations and zero online orders; checkout-key migration is pending the hosted build.
 - Direct PostgreSQL from the local workspace is unavailable (P1001); use the hosted build for migration and deployed application for integration verification.
 - Automatic Preview deployment enabled after verifying both branch-specific variables. Production variables unchanged.
+
+### First hosted acceptance results
+
+- Deployment `dpl_Aa97YdC5RoiZQvfQpVtC26FbfRPT`, commit `c39b10359e38ef5b4418abd50716431e649478ff`, reached READY; checkout migration applied successfully (verified through Neon).
+- Fixture storefront `storefront-preview-134`: 65 fictional products, two branches, SMS disabled.
+- Browser: basket retains biscuits while searching rice; both items hydrate after refresh; cancelling branch switch preserves basket and GH₵96 total.
+- Checkout: order `ORD-JVQB`, two lines, total 9600 pence, retry key persisted. Central stock decreases 100→99 for each item; North stays 100.
+- Analytics: view, add_to_cart and checkout_start persisted. Product-view and conversion reporting still need verification.
+- Acceptance found and corrected a brief false empty search state on reload, unsupported 30–60 minute preparation claim, and missing pickup location on the pending order screen. Follow-up typecheck, lint and 10 order-service unit tests passed.
+- Remaining: full financial transitions, concurrency, permissions, two staff sessions, phone checks, actual catalogue corrections, SMS delivery and release checks.

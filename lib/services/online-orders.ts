@@ -1204,6 +1204,7 @@ export async function getPublicOnlineOrder(input: {
           name: true,
           phone: true,
           storefrontPickupInstructions: true,
+          storefrontPickupPrepMinutes: true,
           storefrontSlug: true,
           logoUrl: true,
           logoWidth: true,
@@ -1278,6 +1279,7 @@ export async function getPublicOnlineOrder(input: {
     storefrontName: order.business.name,
     storefrontPhone: order.business.phone,
     pickupInstructions: order.business.storefrontPickupInstructions,
+    pickupPrepMinutes: order.business.storefrontPickupPrepMinutes,
     branding: {
       logoUrl: order.business.storefrontLogoUrl ?? order.business.logoUrl ?? null,
       logoWidth: (order.business as any).logoWidth ?? null,
