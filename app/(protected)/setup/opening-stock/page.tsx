@@ -133,6 +133,7 @@ export default async function OpeningStockPage({
 
       {!resolved && !invalidIssue ? (
         <OpeningStockClient
+          returnToSetup={!business.onboardingCompletedAt}
           products={products}
           currency={business.currency}
           existingCapitalPence={(business as any).openingCapitalPence ?? 0}

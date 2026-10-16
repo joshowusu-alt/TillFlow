@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
 import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared';
 import { createOpeningStockAction } from '@/app/actions/opening-stock';
@@ -35,11 +36,14 @@ export default function OpeningStockClient({
   products,
   currency,
   existingCapitalPence,
+  returnToSetup = false,
 }: {
   products: ProductDto[];
   currency: string;
   existingCapitalPence: number;
+  returnToSetup?: boolean;
 }) {
+  const router = useRouter();
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cashInput, setCashInput] = useState(
     existingCapitalPence > 0 ? String(existingCapitalPence / 100) : ''
@@ -129,6 +133,9 @@ export default function OpeningStockClient({
         return;
       }
       setResult((res as { success: true; data: OpeningStockResult }).data);
+      // Cache revalidation can remount this form. Resume the new-business journey
+      // explicitly instead of leaving the owner on a cleared entry screen.
+      if (returnToSetup) router.push('/onboarding');
     });
   };
 
