@@ -47,9 +47,12 @@ describe('storefront basket continuity', () => {
     expect(within(cart).getByText('1 × Piece')).toBeInTheDocument();
     expect(within(cart).queryByText('Cart is empty')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add Rice to cart' }));
+    await waitFor(() => {
+      expect(within(cart).getAllByText('1 × Piece')).toHaveLength(2);
+      expect(within(cart).getAllByText(/30\.00/).length).toBeGreaterThan(0);
+    });
     expect(within(cart).getByText('Toffee')).toBeInTheDocument();
     expect(within(cart).getByText('Rice')).toBeInTheDocument();
-    expect(within(cart).getAllByText(/30\.00/).length).toBeGreaterThan(0);
   });
 
   it('restores a saved item absent from the first catalogue page', async () => {
