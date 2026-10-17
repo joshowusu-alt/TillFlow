@@ -1,0 +1,70 @@
+import { randomUUID } from 'crypto';
+import { NextRequest, NextResponse } from 'next/server';
+import { isRedirectError } from 'next/dist/client/components/redirect';
+import { prisma } from '@/lib/prisma';
+import { storefrontPreviewOwner, QA_BUSINESS, QA_STORE } from '@/lib/services/storefront-preview-guard';
+import { createOnlineCheckout } from '@/lib/services/online-orders';
+import { commitOnlineOrderSale } from '@/lib/services/online-order-commit';
+import { expireOnlineOrders } from '@/lib/services/online-order-expiry-runner';
+import { updateOnlineOrderStatusAction } from '@/app/actions/online-storefront';
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+function verify(value: unknown, message: string): asserts value { if (!value) throw new Error(message); }
+async function cancel(id: string) {
+  const form = new FormData(); form.set('orderId', id); form.set('nextStatus', 'CANCELLED');
+  try { await updateOnlineOrderStatusAction(form); }
+  catch (error) { if (!isRedirectError(error)) throw error; }
+}
+export async function POST(request: NextRequest) {
+  if (request.headers.get('origin') !== new URL(request.url).origin || !await storefrontPreviewOwner()) {
+    return NextResponse.json({ error: 'not_available' }, { status: 404 });
+  }
+  const scenario = String((await request.formData()).get('scenario'));
+  if (!['checkout_retry', 'posting_retry', 'cancel_posting', 'expiry_race'].includes(scenario)) return NextResponse.json({ error: 'unknown_test' }, { status: 400 });
+  const runId = randomUUID();
+  try {
+    const before = await prisma.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId: QA_STORE, productId: 'sf134-product-2' } } });
+    const input = { slug: 'storefront-preview-134', storeId: QA_STORE, checkoutKey: runId,
+      customerName: `Fictional QA ${scenario}`, customerPhone: '0240000134',
+      items: [{ productId: 'sf134-product-2', unitId: 'cmthpyqwt000cl7z5zdjgfpvs', qtyInUnit: 1 }] };
+    const order = scenario === 'checkout_retry' ? await Promise.all([createOnlineCheckout(input), createOnlineCheckout(input)]).then(results => {
+      verify(results[0].orderId === results[1].orderId, 'Retry created different orders'); return results[0];
+    }) : await createOnlineCheckout(input);
+    const orderId = order.orderId;
+    const afterCheckout = await prisma.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId: QA_STORE, productId: 'sf134-product-2' } } });
+    verify(afterCheckout.qtyOnHandBase === before.qtyOnHandBase - 1, 'Checkout did not reserve exactly one unit');
+    if (scenario === 'posting_retry' || scenario === 'cancel_posting') {
+      await prisma.onlineOrder.update({ where: { id: orderId }, data: { status: 'PAID', paymentStatus: 'PAID', paidAt: new Date(), paymentConfirmedAt: new Date() } });
+      if (scenario === 'posting_retry') {
+        const invoices = await Promise.all([commitOnlineOrderSale(orderId), commitOnlineOrderSale(orderId)]);
+        verify(invoices[0] && invoices[0] === invoices[1], 'Posting retry created different invoices');
+      } else {
+        const outcomes = await Promise.allSettled([cancel(orderId), commitOnlineOrderSale(orderId)]);
+        let current = await prisma.onlineOrder.findUniqueOrThrow({ where: { id: orderId } });
+        // If posting won between the cancellation read and claim, the safe stale
+        // cancellation rejection is expected. Retry through the normal action.
+        if (current.status !== 'CANCELLED') await cancel(orderId);
+        current = await prisma.onlineOrder.findUniqueOrThrow({ where: { id: orderId } });
+        verify(current.status === 'CANCELLED' && current.refundStatus === 'MANUAL_REFUND_NEEDED', 'Cancellation did not preserve the refund obligation');
+        verify(outcomes.some(result => result.status === 'fulfilled'), 'Neither concurrent command completed');
+      }
+    }
+    if (scenario === 'expiry_race') {
+      await prisma.onlineOrder.update({ where: { id: orderId }, data: { status: 'PAYMENT_FAILED', paymentStatus: 'FAILED', createdAt: new Date(Date.now() - 7 * 86400000) } });
+      await Promise.all([expireOnlineOrders(QA_BUSINESS), expireOnlineOrders(QA_BUSINESS)]);
+      const expired = await prisma.onlineOrder.findUniqueOrThrow({ where: { id: orderId } });
+      verify(expired.status === 'CANCELLED' && expired.paymentStatus === 'EXPIRED', 'Failed-payment reservation did not expire');
+    }
+    const current = await prisma.onlineOrder.findUniqueOrThrow({ where: { id: orderId } });
+    const stock = await prisma.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId: QA_STORE, productId: 'sf134-product-2' } } });
+    const invoices = await prisma.salesInvoice.count({ where: { businessId: QA_BUSINESS, externalRef: `WEB-${current.orderNumber}` } });
+    verify(invoices <= 1, 'Duplicate invoice');
+    verify(stock.qtyOnHandBase === before.qtyOnHandBase - (current.status === 'CANCELLED' ? 0 : 1), 'Stock was reserved or restored more than once');
+    return NextResponse.json({ passed: true, scenario, runId, orderId, reference: current.orderNumber,
+      status: current.status, invoiceCount: invoices, stockBefore: before.qtyOnHandBase, stockAfter: stock.qtyOnHandBase });
+  } catch (error) {
+    console.error('[storefront-acceptance]', scenario, runId, error);
+    return NextResponse.json({ passed: false, scenario, runId, error: error instanceof Error ? error.message : 'Acceptance check failed' }, { status: 500 });
+  }
+}

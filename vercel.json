@@ -50,6 +50,9 @@
     },
     "app/api/**": {
       "maxDuration": 15
+    },
+    "app/api/qa/storefront-reliability/route.ts": {
+      "maxDuration": 60
     }
   }
 }
