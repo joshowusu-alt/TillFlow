@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { audit } from '@/lib/audit';
+import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { formAction, withBusinessContext } from '@/lib/action-utils';
 import { getFeatures } from '@/lib/features';
 import { formOptionalString, formString } from '@/lib/form-helpers';
@@ -15,6 +16,7 @@ import {
 } from '@/lib/services/online-orders';
 import { buildOnlineOrderStatusSnapshot, notifyOrderStatusChange } from '@/lib/services/online-order-status-stream';
 import { createSalesReturn } from '@/lib/services/returns';
+import { recordUnpostedOrderRefundDue } from '@/lib/services/online-order-refunds';
 import { checkMobileMoneyCollectionStatus } from '@/lib/services/mobile-money';
 import { DAY_KEYS, makeDefaultWeeklyHours, serializeWeeklyHours, type WeeklyHours } from '@/lib/business-hours';
 import { normalizePaymentMode, paymentConfigIsReady } from '@/lib/storefront-payments';
@@ -604,8 +606,12 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
         case 'CANCELLED': {
           // For paid orders that already have a SalesInvoice, reverse the sale
           // (restoring inventory + posting the corrective journal entry) and flag
-          // the customer's MoMo refund for manual follow-up.
+          // the customer's refund for manual follow-up without claiming money left Bank.
           if (order.paymentStatus === 'PAID' && order.salesInvoiceId && !order.refundStatus) {
+            const receipt = await tx.salesPayment.findFirst({
+              where: { salesInvoiceId: order.salesInvoiceId, status: 'CONFIRMED' },
+              orderBy: { receivedAt: 'asc' }, select: { method: true },
+            });
             await createSalesReturn({
               tx,
               businessId,
@@ -613,7 +619,8 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
               userId: user.id,
               type: 'RETURN',
               reasonCode: 'CUSTOMER_CANCELLED',
-              refundMethod: 'MOBILE_MONEY',
+              refundMethod: receipt?.method === 'TRANSFER' ? 'TRANSFER' : 'MOBILE_MONEY',
+              deferRefund: true,
               refundAmountPence: order.totalPence,
               reason: 'Online order cancelled by merchant',
               managerApprovedByUserId: user.id,
@@ -627,6 +634,9 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
               lines: order.lines,
               tx,
             });
+          }
+          if (order.paymentStatus === 'PAID' && !order.salesInvoiceId) {
+            await recordUnpostedOrderRefundDue(tx, { ...order, businessId });
           }
           data.status = 'CANCELLED';
           data.fulfillmentStatus = 'CANCELLED';
@@ -813,18 +823,46 @@ export async function markOrderRefundedAction(formData: FormData): Promise<void>
 
     const order = await prisma.onlineOrder.findFirst({
       where: { id: orderId, businessId },
-      select: { id: true, refundStatus: true },
+      select: { id: true, refundStatus: true, salesInvoiceId: true, totalPence: true },
     });
     if (!order) throw new Error('Order not found');
     if (order.refundStatus !== 'MANUAL_REFUND_NEEDED') throw new Error('Only an outstanding refund can be marked as refunded');
 
-    await prisma.onlineOrder.update({
-      where: { id: orderId },
-      data: {
-        refundStatus: 'REFUNDED',
-        refundNote: refundNote?.trim() || null,
-        refundedAt: new Date(),
-      },
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.onlineOrder.updateMany({
+        where: { id: orderId, businessId, refundStatus: 'MANUAL_REFUND_NEEDED' },
+        data: { refundStatus: 'REFUNDED', refundNote: refundNote?.trim() || null, refundedAt: new Date() },
+      });
+      if (claimed.count !== 1) throw new Error('This refund changed in another session. Refresh and try again.');
+      let refundDuePence = 0;
+      if (order.salesInvoiceId) {
+        const reversal = await tx.salesReturn.findUnique({ where: { salesInvoiceId: order.salesInvoiceId } });
+        if (reversal) {
+          // Older returns already credited Bank at cancellation. Settle only an
+          // evidenced payable, so those historical refunds are never posted twice.
+          const liability = await tx.journalLine.aggregate({
+            where: { journalEntry: { businessId, referenceType: 'SALES_RETURN', referenceId: reversal.id },
+              account: { code: ACCOUNT_CODES.customerRefundsPayable } },
+            _sum: { creditPence: true },
+          });
+          refundDuePence = liability._sum.creditPence ?? 0;
+        }
+      } else {
+        const liability = await tx.journalLine.aggregate({
+          where: { journalEntry: { businessId, referenceType: 'ONLINE_ORDER_REFUND_DUE', referenceId: orderId },
+            account: { code: ACCOUNT_CODES.customerRefundsPayable } },
+          _sum: { creditPence: true },
+        });
+        refundDuePence = liability._sum.creditPence ?? 0;
+      }
+      if (refundDuePence > 0) await postJournalEntry({ businessId,
+            description: `Online order refund ${orderId}`,
+            referenceType: 'ONLINE_ORDER_REFUND', referenceId: orderId,
+            lines: [
+              { accountCode: ACCOUNT_CODES.customerRefundsPayable, debitPence: refundDuePence },
+              { accountCode: ACCOUNT_CODES.bank, creditPence: refundDuePence },
+            ], prismaClient: tx as any,
+          });
     });
     revalidatePath('/online-orders');
     redirect('/online-orders');

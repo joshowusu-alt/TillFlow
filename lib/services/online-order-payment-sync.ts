@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { recordUnpostedOrderRefundDue } from './online-order-refunds';
 import { buildOnlineOrderStatusSnapshot, notifyOrderStatusChange } from './online-order-status-stream';
 import { enqueueOrderNotificationSafe } from './storefront-notifications';
 
@@ -26,6 +27,7 @@ export async function syncOnlineOrderPaymentStatus(collectionId: string, status:
       // Expiry already released the reservation. A late payment requires a refund, not a new sale.
       ...(cancelled && order.refundStatus !== 'REFUNDED' ? { refundStatus: 'MANUAL_REFUND_NEEDED', refundedAt: null } : {}),
     } : { status: order.status === 'AWAITING_PAYMENT' ? 'PAYMENT_FAILED' : order.status, paymentStatus: 'FAILED' } });
+    if (confirmed && cancelled) await recordUnpostedOrderRefundDue(tx, { ...order, paidAt: order.paidAt ?? observedAt });
     await notifyOrderStatusChange(tx, buildOnlineOrderStatusSnapshot(updated));
     return { id: order.id, post: confirmed && !closed && !order.salesInvoiceId, notify: confirmed && !closed };
   });

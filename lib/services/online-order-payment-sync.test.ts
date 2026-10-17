@@ -4,6 +4,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: { $transaction: async (fn: (tx: unknown
   onlineOrder: { updateMany: mocks.claim, findUnique: mocks.find, update: mocks.update },
 }) } }));
 vi.mock('./online-order-status-stream', () => ({ buildOnlineOrderStatusSnapshot: (v: unknown) => v, notifyOrderStatusChange: mocks.notify }));
+vi.mock('./online-order-refunds', () => ({ recordUnpostedOrderRefundDue: vi.fn() }));
 vi.mock('./online-order-commit', () => ({ commitOnlineOrderSale: mocks.post }));
 vi.mock('./storefront-notifications', () => ({ enqueueOrderNotificationSafe: mocks.sms }));
 import { syncOnlineOrderPaymentStatus } from './online-order-payment-sync';

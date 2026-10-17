@@ -60,6 +60,8 @@ export async function createSalesReturn(input: {
   managerApprovalMode?: string | null;
   type: 'RETURN' | 'VOID';
   tx?: Prisma.TransactionClient;
+  /** Record an authorised refund liability; no money has left the business yet. */
+  deferRefund?: boolean;
 }) {
   return measureServerOperation(
     'action.sales-return.create',
@@ -85,6 +87,8 @@ async function createSalesReturnImpl(input: {
   managerApprovalMode?: string | null;
   type: 'RETURN' | 'VOID';
   tx?: Prisma.TransactionClient;
+  /** Record an authorised refund liability; no money has left the business yet. */
+  deferRefund?: boolean;
 }) {
   const db = input.tx ?? prisma;
   const invoice = await db.salesInvoice.findFirst({
@@ -193,7 +197,7 @@ async function createSalesReturnImpl(input: {
       data: { paymentStatus: input.type === 'VOID' ? 'VOID' : 'RETURNED' }
     });
 
-    if (refundAmount > 0 && refundMethod === 'CASH') {
+    if (refundAmount > 0 && refundMethod === 'CASH' && !input.deferRefund) {
       if (!invoice.tillId) {
         throw new UserError('Open till is required before recording a cash refund.');
       }
@@ -261,13 +265,15 @@ async function createSalesReturnImpl(input: {
 
     const journalLines: JournalLine[] = [
       { accountCode: ACCOUNT_CODES.sales, debitPence: invoice.subtotalPence },
-      invoice.business.vatEnabled && invoice.vatPence > 0
+      invoice.vatPence > 0
         ? { accountCode: ACCOUNT_CODES.vatPayable, debitPence: invoice.vatPence }
         : null,
       cogsTotal > 0 ? { accountCode: ACCOUNT_CODES.inventory, debitPence: cogsTotal } : null,
       cogsTotal > 0 ? { accountCode: ACCOUNT_CODES.cogs, creditPence: cogsTotal } : null,
       refundAmount > 0
-        ? refundMethod === 'CASH'
+        ? input.deferRefund
+          ? { accountCode: ACCOUNT_CODES.customerRefundsPayable, creditPence: refundAmount }
+          : refundMethod === 'CASH'
           ? { accountCode: ACCOUNT_CODES.cash, creditPence: refundAmount }
           : { accountCode: ACCOUNT_CODES.bank, creditPence: refundAmount }
         : null,

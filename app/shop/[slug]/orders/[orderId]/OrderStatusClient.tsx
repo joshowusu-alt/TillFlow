@@ -577,9 +577,9 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
         )}
 
         <section aria-label="Pickup location" className="mt-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-black/5">
-          <h2 className="text-sm font-semibold text-ink">Collect from {order.pickupStoreName || 'your selected branch'}</h2>
+          <h2 className="text-sm font-semibold text-ink">{isCancelled ? 'Pickup branch: ' : 'Collect from '}{order.pickupStoreName || 'your selected branch'}</h2>
           <p className="mt-1 text-xs text-black/60">{order.pickupStoreAddress || 'Pickup address has not been provided. Contact the store before travelling.'}</p>
-          {order.pickupInstructions ? <p className="mt-1 text-xs text-black/60">{order.pickupInstructions}</p> : null}
+          {!isCancelled && order.pickupInstructions ? <p className="mt-1 text-xs text-black/60">{order.pickupInstructions}</p> : null}
         </section>
 
         {/* Reference + amount — always visible */}

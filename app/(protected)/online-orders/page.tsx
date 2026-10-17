@@ -227,7 +227,7 @@ export default async function OnlineOrdersPage({
     {
       label: 'Awaiting payment',
       value: awaiting,
-      helper: awaiting > 0 ? 'Confirm MoMo or cash' : 'Clear',
+      helper: awaiting > 0 ? 'Verify payment received' : 'Clear',
       activeClass: 'ring-1 ring-amber-200 bg-amber-50/70 text-amber-700',
       valueClass: awaiting > 0 ? 'text-amber-600' : 'text-slate-300',
     },
@@ -406,7 +406,7 @@ export default async function OnlineOrdersPage({
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
                     <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">
-                    {actionOrders.length} {actionOrders.length === 1 ? 'order' : 'orders'} need attention
+                    {actionOrders.length} {actionOrders.length === 1 ? 'order needs' : 'orders need'} attention
                     </div>
                   </div>
                   <span className="text-xs text-black/40">Newest first</span>

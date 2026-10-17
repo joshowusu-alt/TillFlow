@@ -84,3 +84,13 @@ Neon access is working. Read-only inspection has verified the separate project `
 - Analytics: view, add_to_cart and checkout_start persisted. Product-view and conversion reporting still need verification.
 - Acceptance found and corrected a brief false empty search state on reload, unsupported 30–60 minute preparation claim, and missing pickup location on the pending order screen. Follow-up typecheck, lint and 10 order-service unit tests passed.
 - Remaining: full financial transitions, concurrency, permissions, two staff sessions, phone checks, actual catalogue corrections, SMS delivery and release checks.
+
+### Financial and staff acceptance — 17 October
+
+- Existing Preview owner signed in. Expired copied trial renewed only on the isolated test branch.
+- `ORD-JVQB`: manager confirmation → preparing → ready → collected. One ONLINE_ORDER invoice, one CONFIRMED TRANSFER receipt of 9600 pence; system cashier remains disabled. Journal debits/credits both 10600 pence (includes COGS).
+- Banner persists through preparation/ready and refresh; disappears after collection. North branch hides Central orders and banner; switching back restores them.
+- `ORD-NUMW`: unpaid cancellation closes order without creating a sale. `ORD-HG49`: paid cancellation creates one return, restores stock, sets MANUAL_REFUND_NEEDED and leaves refundedAt null.
+- Found/fixed: bank-transfer return incorrectly labelled mobile money; refund journal credited Bank before actual refund payment. New storefront cancellations now credit Customer Refunds Payable; claimed manager settlement clears payable and credits Bank once. Historical refunds without that liability are not charged again. Payments arriving after cancellation without an invoice are booked to Bank/refund liability, not sales.
+- Captured VAT is reversed even when merchant disables VAT after sale. Cancelled order pages no longer instruct customers to collect. Staff payment hint is tender-neutral; singular attention count corrected.
+- Follow-up validation: 42 tests passed across return/action/provider/refund/financial suites; typecheck and lint passed. Hosted verification of these follow-up fixes remains pending.
