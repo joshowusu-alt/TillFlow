@@ -105,7 +105,7 @@ function ProductImage({
   if (!effectiveSrc || failed) {
     return (
       <div className={`relative flex h-full w-full items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_20%_15%,rgba(16,185,129,0.13),transparent_34%),linear-gradient(135deg,#fbfdff,#eef6ff_52%,#f0fdf4)] ${inStock ? '' : 'opacity-60'}`}>
-        <div className="absolute inset-x-3 top-3 truncate rounded-full bg-white/60 px-2 py-1 text-center text-[8px] font-black uppercase tracking-[0.16em] text-black/35">
+        <div className="absolute inset-x-3 top-3 truncate rounded-full bg-white/60 px-2 py-1 text-center text-[8px] font-black uppercase tracking-[0.16em] text-slate-600">
           {categoryName ? toTitleCase(categoryName) : 'Store pick'}
         </div>
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-slate-400 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
@@ -264,7 +264,8 @@ function PickupDetails({ storefront, store }: {
     {storefront.openStatus ? <p className="mt-2 font-semibold">{storefront.openStatus.shortLabel}{storefront.openStatus.detail ? ` · ${storefront.openStatus.detail}` : ''}</p>
       : <p className="mt-2">Opening hours have not been provided. Check with the store before travelling.</p>}
     {storefront.prepMinutes > 0 && storefront.openStatus?.isOpen ? <p>Preparation estimate: about {storefront.prepMinutes} minutes after payment is confirmed.</p> : null}
-    <p className="mt-2">Pickup only. Wait until your order is marked ready before travelling.</p>
+    <p className="mt-2 font-semibold">Wait until your order is marked ready before travelling.</p>
+    {storefront.pickupInstructions ? <div className="mt-3 border-t border-blue-200 pt-3"><h4 className="font-semibold text-slate-900">Store pickup instructions</h4><p className="mt-1 whitespace-pre-line">{storefront.pickupInstructions}</p></div> : null}
     {phone ? <a className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-blue-200 bg-white px-3 font-semibold text-blue-900" href={`tel:${phone}`}>Call the store</a> : null}
   </section>;
 }
@@ -349,7 +350,7 @@ function ProductDetailSheet({
 
         <div className="max-h-[60vh] overflow-y-auto p-4 pb-[env(safe-area-inset-bottom)]">
           {displayCategory ? (
-            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-black/35">{displayCategory}</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600">{displayCategory}</div>
           ) : null}
           <h2 className="mt-1 text-xl font-black text-ink">{displayName}</h2>
           <div className="mt-1.5 text-2xl font-black text-ink">{unitPrice}</div>
@@ -1337,14 +1338,14 @@ export default function StorefrontClient({
                   Search products
                 </label>
                 <div className="relative">
-                  <svg className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                  <svg className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
                   </svg>
                   <input
                     id="storefront-search"
                     name="q"
                     type="search"
-                    className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-20 text-[15px] font-medium text-ink shadow-none outline-none transition placeholder:text-black/35 focus:border-blue-200 focus:shadow-[0_10px_28px_rgba(15,23,42,0.06)] focus:ring-4 focus:ring-blue-100/70"
+                    className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-20 text-[15px] font-medium text-ink shadow-none outline-none transition placeholder:text-slate-600 focus:border-blue-200 focus:shadow-[0_10px_28px_rgba(15,23,42,0.06)] focus:ring-4 focus:ring-blue-100/70"
                     placeholder="Search products"
                     value={searchQuery}
                     onChange={(e) => handleSearch(e.target.value)}
@@ -1406,7 +1407,7 @@ export default function StorefrontClient({
                 </div>
               )}
 
-              <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-black/45">
+              <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-slate-600">
                 <span>
                 {cataloguePending ? 'Searching products…' : filteredProducts.length === 0
                   ? searchQuery.trim()
@@ -1428,7 +1429,7 @@ export default function StorefrontClient({
                 <div className="mb-3 flex items-end justify-between gap-3">
                   <div>
                     <h2 className="text-sm font-extrabold text-ink">Explore this shop</h2>
-                    <p className="text-xs text-black/45">A selection of available products.</p>
+                    <p className="text-xs text-slate-600">A selection of available products.</p>
                   </div>
                   <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
                     Available now
@@ -1545,7 +1546,7 @@ export default function StorefrontClient({
                       </button>
                       {categorySuggestions.length > 0 ? (
                         <div className="mt-4">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/35">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
                             Try
                           </div>
                           <div className="mt-2 flex flex-wrap justify-center gap-2">
@@ -1632,7 +1633,7 @@ export default function StorefrontClient({
                   {/* Card body */}
                   <div className="flex flex-1 flex-col p-3">
                     {displayCategory && (
-                      <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-black/35">
+                      <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-600">
                         {displayCategory}
                       </div>
                     )}
@@ -1686,7 +1687,7 @@ export default function StorefrontClient({
                           })}
                         </div>
                       ) : product.units[0] ? (
-                        <div className="mt-1 text-[10px] font-semibold text-black/35">{toTitleCase(product.units[0].name)}</div>
+                        <div className="mt-1 text-[10px] font-semibold text-slate-600">{toTitleCase(product.units[0].name)}</div>
                       ) : null}
 
                       {inStock && !productInCart ? (
@@ -1811,12 +1812,12 @@ export default function StorefrontClient({
                 {hasMoreProducts && (
                   <div ref={loadMoreSentinelRef} className="mt-6 flex flex-col items-center gap-2 py-2">
                     {catalogLoading ? (
-                      <div className="flex items-center gap-2 text-sm text-black/40">
+                      <div className="flex items-center gap-2 text-sm text-slate-600">
                         <SpinnerIcon className="h-4 w-4 animate-spin" />
                         Loading more…
                       </div>
                     ) : null}
-                    <span className="text-[11px] text-black/35">
+                    <span className="text-[11px] text-slate-600">
                       Showing {catalogProducts.length} of {catalogTotal}
                     </span>
                   </div>
@@ -1826,7 +1827,7 @@ export default function StorefrontClient({
                   <section className="mt-8">
                     <div className="mb-3">
                       <h2 className="text-sm font-semibold text-ink">Recently viewed</h2>
-                      <p className="text-xs text-black/45">Jump back to products you explored earlier.</p>
+                      <p className="text-xs text-slate-600">Jump back to products you explored earlier.</p>
                     </div>
 
                     <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
@@ -1852,7 +1853,7 @@ export default function StorefrontClient({
                               </div>
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-medium text-ink">{toTitleCase(product.name)}</div>
-                                <div className="text-xs text-black/45">{price}</div>
+                                <div className="text-xs text-slate-600">{price}</div>
                               </div>
                             </button>
                             <button
@@ -1873,7 +1874,7 @@ export default function StorefrontClient({
             )}
 
             <footer className="mt-6 flex flex-col items-center gap-2 border-t border-black/5 pb-3 pt-5 text-center">
-              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] font-medium text-black/45">
+              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] font-medium text-slate-600">
                 <span>Secure checkout</span>
                 <span className="text-black/20" aria-hidden="true">·</span>
                 <span>Pickup only</span>
@@ -1901,7 +1902,7 @@ export default function StorefrontClient({
                   <div>
                     <h2 className="text-base font-semibold text-ink">Your cart</h2>
                     {cartDetails.length > 0 ? (
-                      <div className="text-[11px] text-black/45">{cartUnitCount} item{cartUnitCount !== 1 ? 's' : ''} ready for pickup</div>
+                      <div className="text-[11px] text-slate-600">{cartUnitCount} item{cartUnitCount !== 1 ? 's' : ''} ready for pickup</div>
                     ) : null}
                   </div>
                 </div>
@@ -1910,7 +1911,7 @@ export default function StorefrontClient({
                     {cartItemCount}
                   </span>
                 ) : (
-                  <span className="text-xs text-black/40">Empty</span>
+                  <span className="text-xs text-slate-600">Empty</span>
                 )}
               </div>
 
@@ -1962,7 +1963,7 @@ export default function StorefrontClient({
                   <div className="mb-3">
                     <h3 className="text-sm font-semibold text-ink">{recommendationState.label}</h3>
                     {recommendationState.description ? (
-                      <p className="text-xs text-black/45">{recommendationState.description}</p>
+                      <p className="text-xs text-slate-600">{recommendationState.description}</p>
                     ) : null}
                   </div>
                   <div className="space-y-2">
@@ -1984,7 +1985,7 @@ export default function StorefrontClient({
                           </button>
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-medium text-ink">{toTitleCase(product.name)}</div>
-                            <div className="text-xs text-black/45">{price}</div>
+                            <div className="text-xs text-slate-600">{price}</div>
                           </div>
                           <button
                             type="button"
@@ -2021,12 +2022,12 @@ export default function StorefrontClient({
               )}
             </div>
 
-            {/* Checkout section */}
-            <div className="mt-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/5">
+            {/* Checkout opens once there are items to order. */}
+            {cart.length > 0 ? <div className="mt-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-base font-semibold text-ink">Checkout</h2>
-                  <p className="mt-0.5 text-xs text-black/45">A quick pickup order. No password needed.</p>
+                  <p className="mt-0.5 text-xs text-slate-600">A quick pickup order. No password needed.</p>
                 </div>
                 <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">
                   Secure
@@ -2035,12 +2036,6 @@ export default function StorefrontClient({
               <div className="mt-4 space-y-4">
                 {!paymentReady && cart.length > 0 ? <CheckoutUnavailableBanner /> : null}
                 <PickupDetails storefront={storefront} store={selectedStore} />
-                {storefront.pickupInstructions ? (
-                  <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900">
-                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-sky-700">Pickup instructions</div>
-                    {storefront.pickupInstructions}
-                  </div>
-                ) : null}
                 <div>
                   <label htmlFor="checkout-name-desktop" className="block text-sm font-medium text-black/70">Full name</label>
                   <input id="checkout-name-desktop" name="name" className="input mt-1.5" placeholder="e.g. Ama Mensah" value={customerName} onChange={(e) => setCustomerName(e.target.value)} autoComplete="name" required />
@@ -2064,7 +2059,7 @@ export default function StorefrontClient({
                     required
                     aria-describedby="checkout-phone-desktop-hint"
                   />
-                  <p id="checkout-phone-desktop-hint" className="mt-1 text-[11px] text-black/45">
+                  <p id="checkout-phone-desktop-hint" className="mt-1 text-[11px] text-slate-600">
                     {storefront.paymentConfig.mode === 'MOMO_NUMBER' || storefront.paymentConfig.mode === 'MERCHANT_SHORTCODE'
                       ? 'Use the Ghana number you receive MoMo or WhatsApp updates on.'
                       : 'Your Ghana phone number for order updates.'}
@@ -2081,11 +2076,11 @@ export default function StorefrontClient({
                   </div>
                 ) : null}
                 <div>
-                  <label htmlFor="checkout-email-desktop" className="block text-sm font-medium text-black/70">Email <span className="text-black/35 font-normal">(optional)</span></label>
+                  <label htmlFor="checkout-email-desktop" className="block text-sm font-medium text-black/70">Email <span className="text-slate-600 font-normal">(optional)</span></label>
                   <input id="checkout-email-desktop" name="email" className="input mt-1.5" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
                 </div>
                 <div>
-                  <label htmlFor="checkout-notes-desktop" className="block text-sm font-medium text-black/70">Pickup note <span className="text-black/35 font-normal">(optional)</span></label>
+                  <label htmlFor="checkout-notes-desktop" className="block text-sm font-medium text-black/70">Pickup note <span className="text-slate-600 font-normal">(optional)</span></label>
                   <textarea id="checkout-notes-desktop" name="notes" className="input mt-1.5 min-h-[80px]" placeholder="Anything the store should know" value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} />
                 </div>
                 <PaymentPreviewCard
@@ -2116,11 +2111,11 @@ export default function StorefrontClient({
                         ? `Place order (${cartUnitCount} item${cartUnitCount === 1 ? '' : 's'})`
                         : 'Place order'}
                 </button>
-                <div className="text-center text-[11px] text-black/40">
+                <div className="text-center text-[11px] text-slate-600">
                   After placing your order, you&apos;ll receive payment instructions and a unique reference code.
                 </div>
               </div>
-            </div>
+            </div> : null}
           </aside>
 
         </div>
@@ -2151,7 +2146,7 @@ export default function StorefrontClient({
           </button>
           <div className="flex-1 text-center">
             <h2 className="font-semibold text-ink">Your cart</h2>
-            {cartDetails.length > 0 ? <div className="text-[10px] text-black/40">{cartUnitCount} item{cartUnitCount !== 1 ? 's' : ''}</div> : null}
+            {cartDetails.length > 0 ? <div className="text-[10px] text-slate-600">{cartUnitCount} item{cartUnitCount !== 1 ? 's' : ''}</div> : null}
           </div>
           {cartItemCount > 0 ? (
             <span className="rounded-full px-2.5 py-0.5 text-xs font-bold text-white" style={primaryStyle}>
@@ -2184,7 +2179,7 @@ export default function StorefrontClient({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium text-ink">{toTitleCase(line.product.name)}</div>
-                      <div className="text-xs text-black/45">{toTitleCase(line.unit.name)}</div>
+                      <div className="text-xs text-slate-600">{toTitleCase(line.unit.name)}</div>
                     </div>
                     <div className="shrink-0 text-right">
                       <div className="text-sm font-semibold text-ink">{formatMoney(line.total, storefront.currency)}</div>
@@ -2214,7 +2209,7 @@ export default function StorefrontClient({
                     <button
                       type="button"
                       aria-label={`Remove ${toTitleCase(line.product.name)} from cart`}
-                      className="text-[11px] font-medium text-black/35 transition hover:text-rose-600"
+                      className="text-[11px] font-medium text-slate-600 transition hover:text-rose-600"
                       onClick={() => setCart((prev) => prev.filter((c) => c.id !== line.id))}
                     >
                       Remove
@@ -2230,7 +2225,7 @@ export default function StorefrontClient({
               <div className="mb-3">
                 <h3 className="text-sm font-semibold text-ink">{recommendationState.label}</h3>
                 {recommendationState.description ? (
-                  <p className="text-xs text-black/45">{recommendationState.description}</p>
+                  <p className="text-xs text-slate-600">{recommendationState.description}</p>
                 ) : null}
               </div>
               <div className="space-y-2">
@@ -2252,7 +2247,7 @@ export default function StorefrontClient({
                       </button>
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-ink">{toTitleCase(product.name)}</div>
-                        <div className="text-xs text-black/45">{price}</div>
+                        <div className="text-xs text-slate-600">{price}</div>
                       </div>
                       <button
                         type="button"
@@ -2332,7 +2327,7 @@ export default function StorefrontClient({
           </button>
           <div className="flex-1 text-center">
             <h2 className="font-semibold text-ink">Checkout</h2>
-            <div className="text-[10px] text-black/40">Pickup order</div>
+            <div className="text-[10px] text-slate-600">Pickup order</div>
           </div>
           <span className="text-sm font-bold text-ink">{formatMoney(orderTotal, storefront.currency)}</span>
         </div>
@@ -2353,7 +2348,7 @@ export default function StorefrontClient({
           <div className="mb-4">
             <div className="mb-3 overflow-hidden rounded-2xl border border-black/5 bg-white">
               <div className="border-b border-black/5 bg-black/[0.02] px-3 py-2">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">Order summary</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">Order summary</div>
               </div>
               <div className="divide-y divide-black/5 text-sm">
                 {cartDetails.map((item) => (
@@ -2379,7 +2374,7 @@ export default function StorefrontClient({
           <div className="rounded-2xl border border-black/5 bg-white p-4">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-ink">Your details</h3>
-              <p className="mt-0.5 text-xs text-black/45">Used only to confirm payment and pickup.</p>
+              <p className="mt-0.5 text-xs text-slate-600">Used only to confirm payment and pickup.</p>
             </div>
             <div className="space-y-4">
             <div>
@@ -2405,7 +2400,7 @@ export default function StorefrontClient({
                 required
                 aria-describedby="checkout-phone-mobile-hint"
               />
-              <p id="checkout-phone-mobile-hint" className="mt-1 text-[10px] text-black/45">
+              <p id="checkout-phone-mobile-hint" className="mt-1 text-[10px] text-slate-600">
                 {storefront.paymentConfig.mode === 'MOMO_NUMBER' || storefront.paymentConfig.mode === 'MERCHANT_SHORTCODE'
                   ? 'Use the Ghana number you receive MoMo or WhatsApp updates on.'
                   : 'Your Ghana phone number for order updates.'}
@@ -2422,11 +2417,11 @@ export default function StorefrontClient({
               </div>
             ) : null}
             <div>
-              <label htmlFor="checkout-email-mobile" className="block text-sm font-medium text-black/70">Email <span className="text-black/35 font-normal">(optional)</span></label>
+              <label htmlFor="checkout-email-mobile" className="block text-sm font-medium text-black/70">Email <span className="text-slate-600 font-normal">(optional)</span></label>
               <input id="checkout-email-mobile" name="email" className="input mt-1" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
             </div>
             <div>
-              <label htmlFor="checkout-notes-mobile" className="block text-sm font-medium text-black/70">Pickup note <span className="text-black/35 font-normal">(optional)</span></label>
+              <label htmlFor="checkout-notes-mobile" className="block text-sm font-medium text-black/70">Pickup note <span className="text-slate-600 font-normal">(optional)</span></label>
               <textarea id="checkout-notes-mobile" name="notes" className="input mt-1 min-h-[80px]" placeholder="Anything the store should know" value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} />
             </div>
             {paymentReady && !checkoutReady && cart.length > 0 ? (
@@ -2457,7 +2452,7 @@ export default function StorefrontClient({
                   ? `Place order (${cartUnitCount} item${cartUnitCount === 1 ? '' : 's'})`
                   : 'Place order'}
           </button>
-          <div className="mt-3 text-center text-[11px] text-black/40">
+          <div className="mt-3 text-center text-[11px] text-slate-600">
             After placing your order, you&apos;ll receive payment instructions and a unique reference code.
           </div>
         </div>

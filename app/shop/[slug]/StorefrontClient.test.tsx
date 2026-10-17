@@ -68,6 +68,9 @@ it('states pickup expectations and does not claim sales popularity for generated
   await waitFor(() => expect(screen.queryByText('Loading products…')).not.toBeInTheDocument());
   expect(screen.getByText('Explore this shop')).toBeInTheDocument();
   expect(screen.queryByText('Popular in this shop')).not.toBeInTheDocument();
+  expect(within(screen.getByRole('complementary')).queryByRole('heading', { name: 'Checkout' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Add Toffee to cart' }));
+  expect(within(screen.getByRole('complementary')).getByRole('heading', { name: 'Checkout' })).toBeInTheDocument();
   expect(within(screen.getByRole('complementary')).getByText(/Wait until your order is marked ready before travelling/)).toBeInTheDocument();
   expect(within(screen.getByRole('complementary')).getByText(/Opening hours have not been provided/)).toBeInTheDocument();
 });
