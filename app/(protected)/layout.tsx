@@ -11,6 +11,7 @@ import { getMerchantSubscriptionMessage } from '@/lib/subscription-lifecycle';
 import { getOwnerSetupBannerState } from '@/lib/activation-setup-progress';
 import { getActivationStatusLabel } from '@/lib/activation-display';
 import BusinessNameSaver from '@/components/BusinessNameSaver';
+import DismissibleSetupBanner from '@/components/DismissibleSetupBanner';
 import LaunchSessionCompletion from '@/components/LaunchSessionCompletion';
 import StaleOperationalStoreGuard from '@/components/StaleOperationalStoreGuard';
 import MoneyOperationKeySync from '@/components/MoneyOperationKeySync';
@@ -117,6 +118,7 @@ async function OwnerSetupBanner({
         </div>
         <Link
           href="/onboarding"
+          prefetch={false}
           className="inline-flex w-full flex-shrink-0 items-center justify-center rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-accent/90 sm:ml-4 sm:w-auto sm:text-sm"
         >
           {cta} &rarr;
@@ -189,9 +191,11 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       />
 
       {needsOnboarding && !pathname.includes('/onboarding') && (
-        <Suspense fallback={null}>
-          <OwnerSetupBanner businessId={business.id} pathname={pathname} compact={reportsBannerCompact} />
-        </Suspense>
+        <DismissibleSetupBanner businessId={business.id}>
+          <Suspense fallback={null}>
+            <OwnerSetupBanner businessId={business.id} pathname={pathname} compact={reportsBannerCompact} />
+          </Suspense>
+        </DismissibleSetupBanner>
       )}
 
       {billingPrimaryBanner && !pathname.includes('/settings/billing') && (

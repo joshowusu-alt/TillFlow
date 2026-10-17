@@ -263,9 +263,7 @@ describe('ReadinessJourney Phase 1 setup', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/Supermarket saved/i);
     expect(screen.getByTestId(ONBOARDING_ADD_PRODUCT_MANUALLY_TESTID)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Choose business type' })).not.toBeInTheDocument();
-    await waitFor(() => {
-      expect(refreshMock).toHaveBeenCalled();
-    });
+    expect(refreshMock).not.toHaveBeenCalled();
 
     view.rerender(<ReadinessJourney initial={{ ...gettingReady, businessCategory: null }} />);
     expect(screen.getByRole('heading', { name: 'Add or import a product' })).toBeInTheDocument();

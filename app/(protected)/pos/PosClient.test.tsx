@@ -370,6 +370,7 @@ describe('PosClient desktop layout', () => {
       expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(1);
     });
     expect(refreshMock).toHaveBeenCalled();
+    expect(sessionStorage.getItem('tillflow:setup-banner-dismissed:biz-1')).toBe('1');
 
     const payload = mockedCompleteSaleAction.mock.calls[0][0];
     expect(payload.paymentStatus).toBe('PAID');

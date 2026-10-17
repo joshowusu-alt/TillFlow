@@ -100,6 +100,7 @@ export default function GettingStartedClient({ userName }: Props) {
         <div className="text-center space-y-3">
           <Link
             href="/onboarding"
+            prefetch={false}
             className="block w-full rounded-2xl bg-gradient-to-r from-accent to-accent/80 py-4 text-base font-bold text-white shadow-xl shadow-accent/25 transition-all hover:shadow-2xl hover:-translate-y-0.5"
           >
             Complete My Setup

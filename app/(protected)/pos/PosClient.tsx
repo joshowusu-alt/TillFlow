@@ -54,7 +54,7 @@ import {
 import type { BarcodeScanResolution } from '@/lib/payments/pos-barcode';
 import type { PosProduct } from '@/lib/payments/pos-cart';
 import { completeSaleAction } from '@/app/actions/sales';
-import { dispatchNavKpiRefresh } from '@/lib/navigation/nav-kpi-events';
+import { dispatchNavKpiRefresh, dispatchSetupBannerDismiss } from '@/lib/navigation/nav-kpi-events';
 import {
   getLastReceiptStorageKey,
   getParkedCartsStorageKey,
@@ -1148,8 +1148,9 @@ export default function PosClient({
         }
         showSaleSuccess({ receiptId, totalPence, transactionNumber }, 3000);
         dispatchNavKpiRefresh();
-        // The setup banner lives in the protected layout. Refresh it once the
-        // sale has marked onboarding complete, without leaving POS.
+        // Hide the setup banner in this tab even if the layout refresh is
+        // dropped. Offline queueing must not reach this branch.
+        dispatchSetupBannerDismiss(business.id);
         router.refresh();
       } else {
         setSaleError(result.error);

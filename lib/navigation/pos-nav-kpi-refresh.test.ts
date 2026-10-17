@@ -21,8 +21,9 @@ describe('POS nav KPI refresh after checkout', () => {
   it('POS checkout dispatches nav KPI refresh after a successful sale', () => {
     const posClient = read('app/(protected)/pos/PosClient.tsx');
 
-    expect(posClient).toContain("import { dispatchNavKpiRefresh } from '@/lib/navigation/nav-kpi-events'");
+    expect(posClient).toContain("import { dispatchNavKpiRefresh, dispatchSetupBannerDismiss } from '@/lib/navigation/nav-kpi-events'");
     expect(posClient).toContain('dispatchNavKpiRefresh()');
+    expect(posClient).toContain('dispatchSetupBannerDismiss(business.id)');
     expect(posClient.indexOf('dispatchNavKpiRefresh()')).toBeGreaterThan(
       posClient.indexOf('if (result.success)'),
     );

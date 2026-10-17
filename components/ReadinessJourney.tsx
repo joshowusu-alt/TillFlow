@@ -741,9 +741,9 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
         upNext: journey.upNext,
       };
     });
-    // Refresh outside the save transition so a stale router payload cannot
-    // land in the same commit as the optimistic journey update.
-    window.setTimeout(() => router.refresh(), 0);
+    // Do not refresh the router here. Saving already returns on this page, and
+    // another refresh replaces the checklist with the route loading skeleton
+    // and can leave that skeleton mounted.
   };
 
   const saveStatus = saveNotice ? (

@@ -27,7 +27,8 @@ describe('Home and POS skeleton state selection', () => {
     const content = read('app/(protected)/onboarding/OwnerReadinessContent.tsx');
     expect(page).not.toContain('ChecklistReadinessSkeleton');
     expect(content).toContain('needsFullReadiness');
-    expect(content).toContain('fallback={<ChecklistReadinessSkeleton />}');
+    expect(content).toContain('return await IncompleteOwnerHome()');
+    expect(content).not.toContain('fallback={<ChecklistReadinessSkeleton />}');
     expect(content).toContain('OwnerHomeCompletedStream');
   });
 
