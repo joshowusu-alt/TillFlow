@@ -61,10 +61,15 @@ export async function POST(request: NextRequest) {
     const invoices = await prisma.salesInvoice.count({ where: { businessId: QA_BUSINESS, externalRef: `WEB-${current.orderNumber}` } });
     verify(invoices <= 1, 'Duplicate invoice');
     verify(stock.qtyOnHandBase === before.qtyOnHandBase - (current.status === 'CANCELLED' ? 0 : 1), 'Stock was reserved or restored more than once');
-    return NextResponse.json({ passed: true, scenario, runId, orderId, reference: current.orderNumber,
-      status: current.status, invoiceCount: invoices, stockBefore: before.qtyOnHandBase, stockAfter: stock.qtyOnHandBase });
+    const result = { passed: true, scenario, runId, orderId, reference: current.orderNumber,
+      status: current.status, invoiceCount: invoices, stockBefore: before.qtyOnHandBase, stockAfter: stock.qtyOnHandBase };
+    await prisma.storefrontEvent.create({ data: { businessId: QA_BUSINESS, storeSlug: 'storefront-preview-134',
+      eventType: 'qa_acceptance', sessionId: runId, metadata: JSON.stringify(result) } });
+    return NextResponse.redirect(new URL('/qa/storefront', request.url), 303);
   } catch (error) {
     console.error('[storefront-acceptance]', scenario, runId, error);
-    return NextResponse.json({ passed: false, scenario, runId, error: error instanceof Error ? error.message : 'Acceptance check failed' }, { status: 500 });
+    await prisma.storefrontEvent.create({ data: { businessId: QA_BUSINESS, storeSlug: 'storefront-preview-134',
+      eventType: 'qa_acceptance', sessionId: runId, metadata: JSON.stringify({ passed: false, scenario, runId, error: error instanceof Error ? error.message : 'Acceptance check failed' }) } });
+    return NextResponse.redirect(new URL('/qa/storefront', request.url), 303);
   }
 }
