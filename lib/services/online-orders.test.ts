@@ -253,6 +253,9 @@ describe('durable checkout retry', () => {
     expect(await createOnlineCheckout(input)).toEqual(first);
     expect(prismaMock.inventoryBalance.updateMany).toHaveBeenCalledTimes(1);
     expect(prismaMock.onlineOrder.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.storefrontEvent.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.storefrontEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      eventType: 'order_placed', metadata: JSON.stringify({ orderId: 'order-1' }) }) });
     expect(saved.lines.create[0]).toMatchObject({ lineCostPence: 33, costBasis: 'INVENTORY_VALUE_V1' });
     expect(JSON.parse(saved.paymentConfigJson)).toMatchObject({ mode: 'MOMO_NUMBER', momoNumber: '0241234567' });
     expect(prismaMock.inventoryBalance.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: {

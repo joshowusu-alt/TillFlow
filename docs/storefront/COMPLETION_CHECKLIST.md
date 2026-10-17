@@ -111,3 +111,7 @@ Neon access is working. Read-only inspection has verified the separate project `
 - Additive migration `20261017003000_storefront_reservation_snapshot`: nullable payment snapshot and line cost/basis columns; existing orders retain legacy fallback.
 - Local validation: 139 tests passed across nine financial/order/payment suites; typecheck and targeted lint passed. Hosted exact-value regression is pending this commit's deployment.
 - Catalogue release manifest prepared: six clear category corrections, 34 mixed-brand decisions and 196 explicit-size range candidates. Production catalogue edits, merchant product facts/images and final selection remain pending.
+
+- Exact-value follow-up deployment `ERNwDhGTXj1ofMTEEMWNKPNvKrty` (`f142a07`) reached READY; additive migration verified applied on the isolated branch. Concurrent checkout retry now proves quantity 3→2, known value 100→67, captured cost 33 and exactly one stock movement.
+- Conversion recording moved into the checkout transaction so serverless shutdown and response retries cannot drop or duplicate a placed-order event. SMS rendering now uses the captured payout destination.
+- Final focused regression: 167 tests passed across 14 suites, including payment, stock costing, refunds, branch attention permissions, customer access, taxonomy, SMS enqueue deduplication and cron authentication. Typecheck and targeted lint passed.

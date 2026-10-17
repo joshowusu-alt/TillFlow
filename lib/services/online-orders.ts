@@ -1147,6 +1147,11 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
     });
     await tx.stockMovement.createMany({ data: movements.map(movement => ({ ...movement, storeId: store.id,
       type: 'ONLINE_ORDER_RESERVATION', referenceType: 'ONLINE_ORDER', referenceId: created.id })) });
+    // Conversion is part of the order transaction: neither a lost response nor a
+    // serverless process ending can omit it or count a retry as a second order.
+    await tx.storefrontEvent.create({ data: { businessId: business.id, storeSlug: business.storefrontSlug,
+      eventType: 'order_placed', sessionId: input.sessionId?.trim().slice(0, 120) || checkoutKey || publicToken,
+      metadata: JSON.stringify({ orderId: created.id }) } });
     return created;
   }).catch(async (error) => {
     // The losing concurrent transaction rolls back its stock reservation.
@@ -1160,15 +1165,6 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
   // Enqueue ORDER_RECEIVED SMS notification (soft-fail — never aborts checkout)
   await enqueueOrderNotificationSafe({ orderId: order.id, eventType: 'ORDER_RECEIVED' });
 
-  if (input.sessionId) {
-    recordStorefrontEvent({
-      businessId: business.id,
-      storeSlug: business.storefrontSlug,
-      eventType: 'order_placed',
-      sessionId: input.sessionId,
-      metadata: { orderId: order.id },
-    }).catch((eventError) => console.error('[storefront-event]', eventError));
-  }
 
   // Manual reference flow: order is created in AWAITING_PAYMENT state. Customer
   // sends MoMo to the store's payout number using the order reference, then the
