@@ -14,6 +14,7 @@ import StorefrontAccessCard from '@/components/StorefrontAccessCard';
 import StorefrontBrandingCard from '@/components/StorefrontBrandingCard';
 import StorefrontCategoryImageManager from '@/components/StorefrontCategoryImageManager';
 import SettingsSection from '@/components/SettingsSection';
+import StorefrontSmsSettings from '@/components/StorefrontSmsSettings';
 import { normalizePaymentMode, paymentConfigIsReady } from '@/lib/storefront-payments';
 import { buildStorefrontUrl } from '@/lib/storefront-url';
 import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
@@ -304,6 +305,7 @@ export default async function OnlineStoreSettingsPage({
 
       <form action={updateStorefrontSettingsAction} className="space-y-4">
         <SettingsSection
+          keepMounted
           title="Store identity & branding"
           description="Public name, headline, description, and brand colours."
           eyebrow="Identity"
@@ -399,6 +401,7 @@ export default async function OnlineStoreSettingsPage({
         </SettingsSection>
 
         <SettingsSection
+          keepMounted
           title="Ordering & payment"
           description="Choose how customers place orders and see payment instructions."
           eyebrow="Checkout"
@@ -417,99 +420,12 @@ export default async function OnlineStoreSettingsPage({
           />
         </SettingsSection>
 
-        <SettingsSection
-          title="SMS notifications"
-          description="Send customers automatic SMS updates when their order status changes."
-          eyebrow="Messaging"
-          defaultOpen={false}
-        >
-          {(() => {
-            const hubtelConfigured = Boolean(
-              process.env.HUBTEL_CLIENT_ID && process.env.HUBTEL_CLIENT_SECRET,
-            );
-            const arkeselConfigured = Boolean(process.env.ARKESEL_API_KEY);
-            const smsConfigured = hubtelConfigured || arkeselConfigured;
-            return (
-              <div className="space-y-4">
-                {smsConfigured ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                      <span className="text-base">✅</span>
-                      <span>
-                        <strong>SMS provider connected</strong> via{' '}
-                        {hubtelConfigured ? 'Hubtel' : 'Arkesel'}.
-                      </span>
-                    </div>
-                    {arkeselConfigured && !hubtelConfigured && (
-                      <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-2 text-xs text-blue-800 space-y-1">
-                        <p className="font-medium">Arkesel checklist</p>
-                        <ul className="list-disc pl-4 space-y-0.5 text-blue-700">
-                          <li>Using the <strong>Main API key</strong> (not a sub-key) from Arkesel → SMS → API → Main SMS API Info</li>
-                          <li>Sender ID <strong>&quot;TillFlow&quot;</strong> is registered — go to Arkesel → SMS → Sender IDs to check or add it</li>
-                          <li>Account has SMS credits (check balance on your Arkesel dashboard)</li>
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 space-y-3">
-                    <p className="font-semibold">⚠️ SMS provider not connected</p>
-                    <div>
-                      <p className="font-medium text-amber-800 mb-1">Option A — Arkesel (recommended, simpler)</p>
-                      <p className="text-amber-700 text-xs mb-1">
-                        Sign up free at <strong>account.arkesel.com</strong> → SMS → API → <strong>Main SMS API Info</strong> → Generate new key → copy it.
-                        You get 10 free credits instantly.
-                      </p>
-                      <p className="text-amber-700 text-xs mb-1 font-medium">⚠️ Use the Main API key, not a sub-key (sub-keys have no SMS balance by default).</p>
-                      <code className="block font-mono text-xs text-amber-900 bg-amber-100 rounded px-2 py-1">ARKESEL_API_KEY</code>
-                    </div>
-                    <div>
-                      <p className="font-medium text-amber-800 mb-1">Option B — Hubtel</p>
-                      <ul className="space-y-0.5 font-mono text-xs text-amber-900">
-                        <li>HUBTEL_CLIENT_ID</li>
-                        <li>HUBTEL_CLIENT_SECRET</li>
-                        <li>HUBTEL_SMS_SENDER_ID <span className="font-sans font-normal text-amber-700">(optional)</span></li>
-                      </ul>
-                      <p className="mt-1 text-xs text-amber-700">Get from <strong>developers.hubtel.com → Manage API Keys</strong>.</p>
-                    </div>
-                    <p className="text-xs text-amber-700">Add whichever key(s) you choose to your Vercel project environment variables, then redeploy.</p>
-                  </div>
-                )}
-                <p className="text-sm text-black/55">
-                  When enabled, customers receive a short branded SMS at key moments: order placed, payment confirmed, ready for pickup, and cancellation. Standard SMS rates apply — disabled by default.
-                </p>
-                <label className="flex items-center gap-3 rounded-2xl border border-black/5 bg-black/[0.03] px-4 py-3">
-                  <input
-                    type="checkbox"
-                    name="smsNotificationsEnabled"
-                    defaultChecked={storefrontBusiness.smsNotificationsEnabled}
-                    className="h-4 w-4"
-                    disabled={!smsConfigured}
-                  />
-                  <span className={`text-sm font-medium ${smsConfigured ? 'text-ink' : 'text-black/40'}`}>
-                    Enable SMS order notifications{!smsConfigured ? ' (requires SMS provider connection above)' : ''}
-                  </span>
-                </label>
-                <div>
-                  <label className="label">
-                    Custom sender ID{' '}
-                    <span className="font-normal text-black/40">(optional)</span>
-                  </label>
-                  <input
-                    className="input max-w-xs"
-                    name="smsSenderId"
-                    defaultValue={storefrontBusiness.smsSenderId ?? ''}
-                    placeholder="TillFlow"
-                    maxLength={11}
-                  />
-                  <div className="mt-1 text-xs text-black/50">
-                    Leave blank to use <strong>TillFlow</strong> as the sender. Custom sender IDs (max 11 chars) must be pre-approved by your SMS provider.
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-        </SettingsSection>
+        <StorefrontSmsSettings
+          enabled={storefrontBusiness.smsNotificationsEnabled}
+          senderId={storefrontBusiness.smsSenderId}
+          provider={process.env.HUBTEL_CLIENT_ID && process.env.HUBTEL_CLIENT_SECRET
+            ? 'Hubtel' : process.env.ARKESEL_API_KEY ? 'Arkesel' : null}
+        />
 
         <button type="submit" className="btn-primary">
           Save storefront settings

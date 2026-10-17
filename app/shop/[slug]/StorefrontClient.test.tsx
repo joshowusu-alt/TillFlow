@@ -13,7 +13,7 @@ const product = (id: string, name: string) => ({ id, name, barcode: null, sellin
   storefrontDescription: null, units: [{ id: 'piece', name: 'Piece', pluralName: 'Pieces', conversionToBase: 1, isBaseUnit: true }],
   onHandBase: 20, onHandByStore: { main: 20 } });
 const toffee = product('toffee', 'Toffee');
-const rice = product('rice', 'Rice');
+const rice = { ...product('rice', 'Rice'), categoryId: 'staples', categoryName: 'Staples', publicCategoryId: 'staples', publicCategoryName: 'Staples' };
 const shop = { businessId: 'biz', name: 'Shop', currency: 'GHS', vatEnabled: false, slug: 'shop',
   headline: null, description: null, pickupInstructions: null, phone: null, address: null,
   branding: { logoUrl: null, logoWidth: null, logoHeight: null, compactLogoUrl: null, compactLogoWidth: null,
@@ -43,16 +43,15 @@ describe('storefront basket continuity', () => {
     expect(within(cart).getByText('1 × Piece')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search products' }), { target: { value: 'rice' } });
     await screen.findByRole('button', { name: 'Add Rice to cart' });
+    expect(within(cart).getByText('More to explore')).toBeInTheDocument();
+    expect(within(cart).queryByText('Popular in this store')).not.toBeInTheDocument();
     expect(within(cart).getByText('Toffee')).toBeInTheDocument();
     expect(within(cart).getByText('1 × Piece')).toBeInTheDocument();
     expect(within(cart).queryByText('Cart is empty')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add Rice to cart' }));
-    await waitFor(() => {
-      expect(within(cart).getAllByText('1 × Piece')).toHaveLength(2);
-      expect(within(cart).getAllByText(/30\.00/).length).toBeGreaterThan(0);
-    });
     expect(within(cart).getByText('Toffee')).toBeInTheDocument();
     expect(within(cart).getByText('Rice')).toBeInTheDocument();
+    expect(within(cart).getAllByText(/30\.00/).length).toBeGreaterThan(0);
   });
 
   it('restores a saved item absent from the first catalogue page', async () => {

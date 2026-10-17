@@ -958,8 +958,8 @@ export default function StorefrontClient({
 
     return {
       products: fallbackCandidates.slice(0, maxFallbackSuggestions),
-      label: 'Popular in this store',
-      description: 'Premium picks to round out your order.',
+      label: 'More to explore',
+      description: 'Other available products from this shop.',
     };
   }, [cart, cartProductIds, productMap, productsForStore]);
   const suggestedProducts = recommendationState.products;
@@ -969,17 +969,9 @@ export default function StorefrontClient({
   const showInitialEmptySkeleton = cataloguePending || (!isMounted && storefront.products.length === 0);
 
   function addToCart(productId: string) {
-    // The add button is rendered from the catalogue immediately. cartProducts,
-    // and therefore productMap, only catches up in an effect. A click in that
-    // gap used to no-op, leaving the previous total on screen.
-    const listed = productsForStore.find((item) => item.id === productId);
-    const product = productMap.get(productId) ?? listed;
-    const current = selectionState[productId]?.unitId
-      ? selectionState[productId]
-      : listed?.units[0]?.id
-        ? { unitId: listed.units[0].id, qtyInUnit: selectionState[productId]?.qtyInUnit ?? 1 }
-        : undefined;
-    if (!product || !current?.unitId) {
+    const current = selectionState[productId];
+    const product = productMap.get(productId);
+    if (!product || !current || !current.unitId) {
       setError('This product is not available right now.');
       return;
     }

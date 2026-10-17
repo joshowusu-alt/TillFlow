@@ -76,6 +76,8 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
     const storefrontPrimaryColorRaw = formOptionalString(formData, 'storefrontPrimaryColor');
     const storefrontAccentColorRaw = formOptionalString(formData, 'storefrontAccentColor');
     const storefrontTaglineRaw = formOptionalString(formData, 'storefrontTagline');
+    // Missing collapsed/legacy controls must not opt a merchant out.
+    const smsSettingsSubmitted = formData.get('smsSettingsIncluded') === '1' || formData.has('smsNotificationsEnabled');
     const smsNotificationsEnabled = formData.get('smsNotificationsEnabled') === 'on';
     const smsSenderIdRaw = formOptionalString(formData, 'smsSenderId');
     const smsSenderId = smsSenderIdRaw?.trim().slice(0, 11) || null;
@@ -177,8 +179,8 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
         storefrontPrimaryColor,
         storefrontAccentColor,
         storefrontTagline,
-        smsNotificationsEnabled,
-        smsSenderId,
+        ...(smsSettingsSubmitted ? { smsNotificationsEnabled } : {}),
+        ...(formData.has('smsSenderId') ? { smsSenderId } : {}),
       },
     });
 
@@ -194,6 +196,8 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
         source: 'online-storefront-settings',
         storefrontEnabled,
         storefrontSlug,
+        smsSettingsSubmitted,
+        ...(smsSettingsSubmitted ? { smsNotificationsEnabled } : {}),
       },
     }).catch((error) => console.error('[audit]', error));
 
