@@ -63,4 +63,6 @@ Database-target guard tests run without modifying any Prisma URL environment var
 
 Pickup address follow-up: the business already has an address. The single-branch storefront header/checkout used it, but the public order page omitted it when the branch field was empty. A shared resolver now provides the same single-branch fallback to checkout and order status; multi-branch orders require their selected branch address. Added fallback/isolation tests. No merchant address value is copied into source or fixtures.
 
-Pickup follow-up validation: 77 tests passed across seven affected order, pickup, taxonomy, expiry, alert and repository-safety suites; typecheck and targeted lint pass. A separate fictional single-branch shop is prepared for hosted address-fallback acceptance.
+Pickup follow-up validation: 77 tests passed across seven affected order, pickup, taxonomy, expiry, alert and repository-safety suites; typecheck and targeted lint pass. Hosted order ORD-ETUP proved the same saved business address is now retained from checkout to the order page, with no branch address set and SMS disabled.
+
+Latest focused regression: 181 tests passed across 17 order, payment, refund, inventory-cost, attention, taxonomy, pickup, customer and cron suites. Typecheck/lint pass. Optional catalogue-visibility-hold.sql is prepared and PostgreSQL-tested: exactly 34 review listings held, unrelated listing still published, idempotent rerun, duplicate-name rejection. These production data changes remain unapplied pending release/data approval.

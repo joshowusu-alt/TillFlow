@@ -24,7 +24,7 @@ The release SQL is tested, repeatable and rejects stale product names/categories
 
 ## Listings requiring a product/variant check
 
-Recommended release policy: hide genuinely ambiguous listings from online ordering until the supplied product is confirmed; keep POS stock and sales available. Some slash notation may describe one product, so verify it rather than assuming every slash is a different brand. No automatic substitutions.
+Recommended release policy: hide genuinely ambiguous listings from online ordering until the supplied product is confirmed; keep POS stock and sales available. Some slash notation may describe one product, so verify it rather than assuming every slash is a different brand. No automatic substitutions. The optional `catalogue-visibility-hold.sql` is prepared and tested for this exact 34-listing hold; apply only with the release/data approval.
 
 | Listing | Confirmed supplied product, size and selling unit |
 | --- | --- |
