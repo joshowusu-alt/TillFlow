@@ -17,7 +17,7 @@ Updated 17 October 2026. Scope: storefront only. Draft PR #134 targets master. P
 
 ## Acceptance evidence
 
-- Dedicated Neon project `tillflow-preview`, branch `storefront-reliability-134` (`br-lucky-sea-zan9633f`); parent untouched. Runtime/migration secrets are restricted to `fix/storefront-reliability-alerts` in Vercel project `supermarket-pos`.
+- Dedicated Neon project `tillflow-preview`, branch `storefront-reliability-134`; parent untouched. Runtime/migration secrets are restricted to `fix/storefront-reliability-alerts` in Vercel project `supermarket-pos`.
 - Fictional storefront `storefront-preview-134`, two branches and 65 fictional products. SMS disabled. No real payment/provider calls made.
 - Additive checkout-key and reservation/payment-snapshot migrations applied successfully to isolated Preview. Both Prisma schemas aligned.
 - 167 targeted tests passed across 14 suites: sales, returns, order actions/services, payment sync/commit, refunds, financials, attention permissions, customer access, taxonomy, SMS enqueue and cron authentication. Typecheck and targeted lint pass.
@@ -49,4 +49,6 @@ Updated 17 October 2026. Scope: storefront only. Draft PR #134 targets master. P
 
 GitHub upload/commit, branch publication and draft PR creation; isolated database connection to this exact storefront Preview and its deployment. These approvals do not need to be requested again. Vercel browser access and Preview owner sign-in work; no additional login is currently required.
 
-CI follow-up: full unit run identified two repository contracts (QA-route inventory and invoice-mapping source scope). Removed the temporary QA API route, retained the existing security contract, and narrowed the performance source test to the invoice create block. All 32 contract tests and nine Preview guard tests pass; final broad CI is pending.
+CI follow-up: full unit run identified two repository contracts (QA-route inventory and invoice-mapping source scope). Removed the temporary QA API route, retained the existing security contract, and narrowed the performance source test to the invoice create block. All 32 repository contract tests pass; final broad CI is pending.
+
+Database-target guard tests run without modifying any Prisma URL environment variable. All 136 database/security/performance contract tests pass together. The existing runtime Preview guard remains unchanged. Authenticated hosted retry `ORD-WSQJ` passed with exactly one conversion event. Customer refunded labels and product-level order counts are verified in the hosted UI. Internal infrastructure identifiers have been omitted from this checklist.
