@@ -180,7 +180,7 @@ export default async function OnlineOrdersPage({
     ? { status: 'CANCELLED', refundStatus: 'MANUAL_REFUND_NEEDED' }
     : activeTab === 'AWAITING_PAYMENT'
     ? { status: { in: ['AWAITING_PAYMENT', 'PAYMENT_FAILED'] } }
-    : activeTab !== 'all' ? { status: activeTab as string } : {};
+    : { status: activeTab };
 
   const phoneDigits = query.replace(/[^\d]/g, '');
   const phoneSearch = phoneDigits.startsWith('0') ? `233${phoneDigits.slice(1)}` : phoneDigits;
