@@ -1,10 +1,8 @@
-import { Suspense } from 'react';
 import { getReadiness, markOnboardingCompleteAfterFirstSale } from '@/app/actions/onboarding';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import { getOwnerHomeCriticalShell } from '@/lib/owner-home/critical-shell';
 import OwnerHomeCompletedStream from '@/components/owner-home/OwnerHomeCompletedStream';
 import OnboardingClient from './OnboardingClient';
-import ChecklistReadinessSkeleton from './ChecklistReadinessSkeleton';
 
 async function IncompleteOwnerHome() {
   const readiness = await measureServerOperation(
@@ -21,11 +19,11 @@ export default async function OwnerReadinessContent() {
   const shell = await getOwnerHomeCriticalShell();
 
   if (shell.needsFullReadiness) {
-    return (
-      <Suspense fallback={<ChecklistReadinessSkeleton />}>
-        <IncompleteOwnerHome />
-      </Suspense>
-    );
+    // Await the checklist in this segment. A nested Suspense fallback under
+    // loading.tsx never resolved after a client transition, so /onboarding
+    // stayed on "Preparing setup checklist" until a full reload. loading.tsx
+    // is the only skeleton; this return replaces it with the checklist.
+    return await IncompleteOwnerHome();
   }
 
   // Phase 1: complete only after a genuine successful sale — never from Start selling alone.

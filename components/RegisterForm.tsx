@@ -13,6 +13,8 @@ import { canAdvanceRegisterStep1, canAdvanceRegisterStep2 } from '@/lib/register
 const errorMessages: Record<string, string> = {
   missing: 'Please fill in all fields.',
   weak: 'Password must be at least 6 characters.',
+  throttled: 'Too many signup attempts. Please wait before trying again.',
+  invalid: 'Check your email, business name, owner name and currency.',
   exists: 'An account with that email already exists. Please sign in instead.',
 };
 
@@ -43,6 +45,7 @@ export default function RegisterForm({ error }: RegisterFormProps) {
   const [selectedPlan, setSelectedPlan] = useState<BusinessPlan>('STARTER');
   const [addonOnlineStorefront, setAddonOnlineStorefront] = useState(false);
   const [billingInterval, setBillingInterval] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY');
+  const [currency, setCurrency] = useState('GHS');
   const [referralSource, setReferralSource] = useState('');
   const [referredByName, setReferredByName] = useState('');
   const [referredByPhone, setReferredByPhone] = useState('');
@@ -100,20 +103,23 @@ export default function RegisterForm({ error }: RegisterFormProps) {
 
       {/* Error banner */}
       {error && (
-        <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+        <div role="alert" className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {errorMessages[error] || 'Something went wrong. Please try again.'}
         </div>
       )}
 
       {/* Step 1: Business info */}
       {step === 1 && (
-        <div className="space-y-4">
+        <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); if (canAdvanceFrom1) setStep(2); }}>
           <div>
-            <label className="label">Business Name</label>
+            <label className="label" htmlFor="register-business">Business Name</label>
             <input
               type="text"
               className="input"
               placeholder="e.g. El-Shaddai Supermarket"
+              id="register-business"
+              required
+              maxLength={120}
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
               autoComplete="organization"
@@ -121,36 +127,41 @@ export default function RegisterForm({ error }: RegisterFormProps) {
             />
           </div>
           <div>
-            <label className="label">Your Name</label>
+            <label className="label" htmlFor="register-owner">Your Name</label>
             <input
               type="text"
               className="input"
               placeholder="e.g. Kingsley Atakorah"
+              id="register-owner"
+              required
+              maxLength={120}
               value={ownerName}
               onChange={(e) => setOwnerName(e.target.value)}
               autoComplete="name"
             />
           </div>
           <button
-            type="button"
-            onClick={() => setStep(2)}
+            type="submit"
             disabled={!canAdvanceFrom1}
             className={accentClasses.nextBtn}
           >
             Next — Account Details
           </button>
-        </div>
+        </form>
       )}
 
       {/* Step 2: Account credentials */}
       {step === 2 && (
-        <div className="space-y-4">
+        <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); if (canAdvanceFrom2) setStep(3); }}>
           <div>
-            <label className="label">Email</label>
+            <label className="label" htmlFor="register-email">Email</label>
             <input
               type="email"
               className="input"
               placeholder="you@yourstore.com"
+              id="register-email"
+              required
+              maxLength={254}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="off"
@@ -158,11 +169,13 @@ export default function RegisterForm({ error }: RegisterFormProps) {
             />
           </div>
           <div>
-            <label className="label">Password</label>
+            <label className="label" htmlFor="register-password">Password</label>
             <input
               type="password"
               className="input"
               placeholder="At least 6 characters"
+              id="register-password"
+              required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
@@ -179,15 +192,14 @@ export default function RegisterForm({ error }: RegisterFormProps) {
               Back
             </button>
             <button
-              type="button"
-              onClick={() => setStep(3)}
+              type="submit"
               disabled={!canAdvanceFrom2}
               className={`flex-[2] ${accentClasses.nextBtn}`}
             >
               Next — Choose Plan
             </button>
           </div>
-        </div>
+        </form>
       )}
 
       {/* Step 3 (fresh only): Plan selection */}
@@ -230,6 +242,7 @@ export default function RegisterForm({ error }: RegisterFormProps) {
             ] as const).map((plan) => (
               <button
                 key={plan.id}
+                aria-pressed={selectedPlan === plan.id}
                 type="button"
                 onClick={() => {
                   setSelectedPlan(plan.id);
@@ -294,9 +307,11 @@ export default function RegisterForm({ error }: RegisterFormProps) {
             <div>
               <p className="text-sm font-semibold text-black/70 mb-1">Choose how you want to pay</p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Billing interval">
               <button
                 type="button"
+                aria-label="Monthly"
+                aria-pressed={billingInterval === 'MONTHLY'}
                 onClick={() => setBillingInterval('MONTHLY')}
                 className={`rounded-xl border-2 p-3 text-left transition ${
                   billingInterval === 'MONTHLY'
@@ -309,6 +324,8 @@ export default function RegisterForm({ error }: RegisterFormProps) {
               </button>
               <button
                 type="button"
+                aria-label="Annual"
+                aria-pressed={billingInterval === 'ANNUAL'}
                 onClick={() => setBillingInterval('ANNUAL')}
                 className={`rounded-xl border-2 p-3 text-left transition ${
                   billingInterval === 'ANNUAL'
@@ -330,7 +347,7 @@ export default function RegisterForm({ error }: RegisterFormProps) {
                   <>
                     <p>Online Storefront: +GHS {pricing.addOnMonthlyGhs}/month</p>
                     {billingInterval === 'ANNUAL' ? (
-                      <p>Monthly equivalent: GHS {pricing.totalMonthlyGhs}/month</p>
+                      <p>Monthly price before annual discount: GHS {pricing.totalMonthlyGhs}/month</p>
                     ) : null}
                   </>
                 ) : null}
@@ -343,7 +360,7 @@ export default function RegisterForm({ error }: RegisterFormProps) {
             {billingInterval === 'ANNUAL' ? (
               <>
                 <p className="font-semibold text-black/80 pt-1">
-                  Total today: GHS {pricing.totalDueGhs.toLocaleString('en-GH')}/year
+                  Subscription after your trial: GHS {pricing.totalDueGhs.toLocaleString('en-GH')}/year
                 </p>
                 <p className="text-emerald-700">
                   You save: GHS {pricing.annualSavingsGhs.toLocaleString('en-GH')} compared with monthly payments.
@@ -351,7 +368,7 @@ export default function RegisterForm({ error }: RegisterFormProps) {
               </>
             ) : (
               <p className="font-semibold text-black/80 pt-1">
-                Total today: GHS {pricing.totalMonthlyGhs}/month
+                Subscription after your trial: GHS {pricing.totalMonthlyGhs}/month
               </p>
             )}
           </div>
@@ -396,31 +413,39 @@ export default function RegisterForm({ error }: RegisterFormProps) {
           <input type="hidden" name="sourceChannel" value="INBOUND" />
           <input type="hidden" name="qaTag" value="" />
 
+          <div className="space-y-2">
+            <label htmlFor="referral-source" className="block text-sm font-semibold text-black/70">
+              How did you hear about TillFlow? (optional)
+            </label>
+            <select
+              id="referral-source"
+              value={referralSource}
+              onChange={(e) => setReferralSource(e.target.value)}
+              className="input w-full"
+            >
+              <option value="">Select…</option>
+              <option value="WHATSAPP_GROUP">WhatsApp group</option>
+              <option value="EXISTING_CUSTOMER">Existing customer</option>
+              <option value="FAMILY_FRIEND">Family / friend</option>
+              <option value="AGENT_REFERRAL">Agent referral</option>
+              <option value="SOCIAL_MEDIA">Social media</option>
+              <option value="WEBSITE">Website</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
           <details className="rounded-xl border border-black/8 bg-white/80 px-4 py-3 text-sm">
-            <summary className="cursor-pointer font-semibold text-black/70">How did you hear about TillFlow? (optional)</summary>
+            <summary className="cursor-pointer font-semibold text-black/70">Referrer details (optional)</summary>
             <div className="mt-3 space-y-3">
-              <select
-                value={referralSource}
-                onChange={(e) => setReferralSource(e.target.value)}
-                className="input w-full"
-              >
-                <option value="">Select…</option>
-                <option value="WHATSAPP_GROUP">WhatsApp group</option>
-                <option value="EXISTING_CUSTOMER">Existing customer</option>
-                <option value="FAMILY_FRIEND">Family / friend</option>
-                <option value="AGENT_REFERRAL">Agent referral</option>
-                <option value="SOCIAL_MEDIA">Social media</option>
-                <option value="WEBSITE">Website</option>
-                <option value="OTHER">Other</option>
-              </select>
               <input
                 className="input w-full"
+                aria-label="Referred by (name)"
                 placeholder="Referred by (name)"
                 value={referredByName}
                 onChange={(e) => setReferredByName(e.target.value)}
               />
               <input
                 className="input w-full"
+                aria-label="Referrer phone (optional)"
                 placeholder="Referrer phone (optional)"
                 value={referredByPhone}
                 onChange={(e) => setReferredByPhone(e.target.value)}
@@ -429,8 +454,8 @@ export default function RegisterForm({ error }: RegisterFormProps) {
           </details>
 
           <div>
-            <label className="label">Currency</label>
-            <select name="currency" className="input" defaultValue="GHS">
+            <label className="label" htmlFor="register-currency">Currency</label>
+            <select id="register-currency" name="currency" className="input" value={currency} onChange={(e) => setCurrency(e.target.value)}>
               {CURRENCIES.map((c) => (
                 <option key={c.value} value={c.value}>{c.label}</option>
               ))}

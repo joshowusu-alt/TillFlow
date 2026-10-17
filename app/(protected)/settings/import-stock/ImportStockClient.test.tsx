@@ -153,3 +153,18 @@ describe('REL-IMP-P104-01 CSV parse and import preview', () => {
     expect(screen.queryByText('No products yet.')).not.toBeInTheDocument();
   });
 });
+
+
+describe('import row explanations', () => {
+  it('renders invalid quantity-unit reasons in a native disclosure rather than a title-only tooltip', async () => {
+    renderImporter();
+    fireEvent.click(screen.getByTestId('import-mode-OPENING_STOCK'));
+    const contents = 'name,sku,selling_price,cost_price,quantity,base_unit,qty_in\nFixture product,INVALID-UNIT,10,5,2,Piece,unknown\n';
+    const file = new File([contents], 'invalid-unit.csv', { type: 'text/csv' });
+    Object.defineProperty(file, 'text', { value: async () => contents });
+    await act(async () => { fireEvent.change(screen.getByTestId('import-stock-file-input'), { target: { files: [file] } }); });
+    const reasons = await screen.findAllByText(/Stock count unit.*unknown/);
+    expect(reasons.length).toBeGreaterThan(0);
+    expect(reasons[0].closest('details')?.querySelector('summary')).toHaveTextContent('Fix required');
+  });
+});

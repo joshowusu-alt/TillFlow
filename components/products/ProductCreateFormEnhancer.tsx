@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { isRedirectError } from 'next/dist/client/components/redirect';
 import { getProductPriceWarnings } from '@/lib/product-price-guards';
 
 type OpeningStockFieldsProps = {
@@ -110,7 +111,9 @@ export default function ProductCreateFormEnhancer({
 }: ProductCreateFormEnhancerProps) {
   const [blocked, setBlocked] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [draft, setDraft] = useState({ sell: 0, cost: 0, qty: 0 });
+  const saveStarted = useRef(false);
 
   const warnings = useMemo(
     () =>
@@ -157,10 +160,42 @@ export default function ProductCreateFormEnhancer({
     setBlocked(false);
   };
 
+  async function submitCreate(formData: FormData) {
+    if (saveStarted.current) return;
+    saveStarted.current = true;
+    setSaveError(null);
+    try {
+      await createAction(formData);
+    } catch (error) {
+      if (isRedirectError(error)) throw error;
+      const message = error instanceof Error ? error.message.trim() : '';
+      setSaveError(
+        message && !/prisma|P\d{4}|ECONN|fetch failed/i.test(message)
+          ? message
+          : 'Could not save this product. Nothing was added — please try again.',
+      );
+    } finally {
+      saveStarted.current = false;
+    }
+  }
+
+  const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    handleSubmit(event);
+    if (event.defaultPrevented) return;
+    // Next invokes function form actions during this submit. jsdom does not,
+    // so schedule the same handler after the event. The ref ignores the
+    // second call when both run.
+    const formData = new FormData(event.currentTarget);
+    queueMicrotask(() => {
+      if (saveStarted.current) return;
+      void submitCreate(formData);
+    });
+  };
+
   return (
     <form
-      action={createAction}
-      onSubmit={handleSubmit}
+      action={submitCreate}
+      onSubmit={handleFormSubmit}
       onChange={(e) => {
         refreshDraft(e.currentTarget);
         if (!confirmed) setBlocked(false);
@@ -175,6 +210,12 @@ export default function ProductCreateFormEnhancer({
           units={units}
           defaultBaseUnitId={defaultBaseUnitId}
         />
+      ) : null}
+
+      {saveError ? (
+        <p role="alert" className="md:col-span-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-900">
+          {saveError}
+        </p>
       ) : null}
 
       {blocked && warnings.length > 0 ? (

@@ -114,16 +114,18 @@ function moneyCell(pence: number, currency: string) {
 function StatusBadge({ status, errors, warnings }: { status: RowStatus; errors: string[]; warnings: string[] }) {
   if (status === 'error') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700" title={errors.join(' · ')}>
-        ✕ Fix required
-      </span>
+      <details className="max-w-sm text-xs text-red-700">
+        <summary className="min-h-11 cursor-pointer rounded-xl bg-red-100 px-2 py-2 font-medium">✕ Fix required</summary>
+        <ul className="mt-2 space-y-1 break-words">{errors.map((message, index) => <li key={index}>{message}</li>)}</ul>
+      </details>
     );
   }
   if (status === 'warning') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700" title={warnings.join(' · ')}>
-        ! Resolve below
-      </span>
+      <details className="max-w-sm text-xs text-amber-800">
+        <summary className="min-h-11 cursor-pointer rounded-xl bg-amber-100 px-2 py-2 font-medium">! Resolve below</summary>
+        <ul className="mt-2 space-y-1 break-words">{warnings.map((message, index) => <li key={index}>{message}</li>)}</ul>
+      </details>
     );
   }
   return (

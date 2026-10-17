@@ -48,6 +48,25 @@ export function formatMixedUnit({
   return `${qtyBase} ${pluralize(qtyBase, baseUnit, baseUnitPlural)}`;
 }
 
+/**
+ * Catalogue column label. Shows the real base unit ("piece"), not a sample
+ * quantity such as "2 pieces". Packaging is described as a conversion.
+ */
+export function formatCatalogueUnitLabel(input: {
+  baseName?: string | null;
+  basePlural?: string | null;
+  packagingName?: string | null;
+  packagingConversion?: number | null;
+}): string {
+  const base = input.baseName?.trim() || 'unit';
+  const pack = input.packagingName?.trim();
+  const conversion = input.packagingConversion ?? 0;
+  if (pack && conversion > 1) {
+    return `${base} · 1 ${pack} = ${conversion} ${pluralize(conversion, base, input.basePlural ?? undefined)}`;
+  }
+  return base;
+}
+
 export function getPrimaryPackagingUnit<T extends { conversionToBase: number; unit: UnitLabel }>(
   units: T[]
 ) {

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
 import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared';
 import { createOpeningStockAction } from '@/app/actions/opening-stock';
@@ -35,11 +36,14 @@ export default function OpeningStockClient({
   products,
   currency,
   existingCapitalPence,
+  returnToSetup = false,
 }: {
   products: ProductDto[];
   currency: string;
   existingCapitalPence: number;
+  returnToSetup?: boolean;
 }) {
+  const router = useRouter();
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cashInput, setCashInput] = useState(
     existingCapitalPence > 0 ? String(existingCapitalPence / 100) : ''
@@ -129,6 +133,9 @@ export default function OpeningStockClient({
         return;
       }
       setResult((res as { success: true; data: OpeningStockResult }).data);
+      // Cache revalidation can remount this form. Resume the new-business journey
+      // explicitly instead of leaving the owner on a cleared entry screen.
+      if (returnToSetup) router.push('/onboarding');
     });
   };
 
@@ -154,9 +161,10 @@ export default function OpeningStockClient({
         <div>
           <h2 className="text-xl font-bold">Opening capital recorded!</h2>
           <p className="mt-1 text-sm text-black/50">
-            Your Balance Sheet now reflects your starting position.
+            Your opening stock is recorded. Opening cash is saved separately; it does not open a till or post a cash journal.
           </p>
         </div>
+        {result.missingCostCount > 0 ? <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">Some stock has no recorded cost. The stock value is incomplete; review missing costs before relying on it.</p> : null}
         <div className="grid gap-3 text-left sm:grid-cols-3">
           <div className="rounded-xl border border-black/10 bg-white p-4">
             <div className="text-xs text-black/50">Stock value</div>
@@ -323,7 +331,8 @@ export default function OpeningStockClient({
                             type="number"
                             min="0"
                             step="1"
-                            placeholder="Qty"
+                            aria-label="Quantity"
+                      placeholder="Qty"
                             value={row.qty}
                             onChange={e => updateRow(row.id, 'qty', e.target.value)}
                           />
@@ -336,7 +345,8 @@ export default function OpeningStockClient({
                           type="number"
                           min="0"
                           step="0.01"
-                          placeholder="0.00"
+                          aria-label="Cost per unit"
+                      placeholder="0.00"
                           value={row.cost}
                           onChange={e => updateRow(row.id, 'cost', e.target.value)}
                         />
@@ -393,6 +403,7 @@ export default function OpeningStockClient({
                       type="number"
                       min="0"
                       step="1"
+                      aria-label="Quantity"
                       placeholder="Qty"
                       value={row.qty}
                       onChange={e => updateRow(row.id, 'qty', e.target.value)}
@@ -404,6 +415,7 @@ export default function OpeningStockClient({
                       type="number"
                       min="0"
                       step="0.01"
+                      aria-label="Cost per unit"
                       placeholder="0.00"
                       value={row.cost}
                       onChange={e =>
@@ -415,6 +427,7 @@ export default function OpeningStockClient({
                     <button
                       type="button"
                       onClick={() => removeRow(row.id)}
+                      aria-label="Remove stock item"
                       className="text-black/30 hover:text-rose-500 transition"
                     >
                       <svg
@@ -453,7 +466,7 @@ export default function OpeningStockClient({
       <div className="card p-6 space-y-3">
         <h2 className="text-base font-semibold">Step 2 — Cash on hand</h2>
         <p className="text-xs text-black/50">
-          How much cash do you have in the till right now?
+          Record your starting cash reference. This does not open a till or post a cash journal. Use Opening Balances for the accounting entry.
         </p>
         <div className="max-w-xs">
           <label className="label">Cash ({currency})</label>
@@ -462,6 +475,7 @@ export default function OpeningStockClient({
             type="number"
             min="0"
             step="0.01"
+            aria-label={`Opening cash (${currency})`}
             placeholder="e.g. 500.00"
             value={cashInput}
             onChange={e => setCashInput(e.target.value)}

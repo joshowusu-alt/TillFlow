@@ -15,6 +15,8 @@ describe('register wizard enablement', () => {
 
   it('requires a non-empty email and a password of at least 6 characters on step 2', () => {
     expect(canAdvanceRegisterStep2('', 'abcdef')).toBe(false);
+    expect(canAdvanceRegisterStep2('invalid', 'abcdef')).toBe(false);
+    expect(canAdvanceRegisterStep2('a b@example.com', 'abcdef')).toBe(false);
     expect(canAdvanceRegisterStep2('owner@example.com', 'abc')).toBe(false);
     expect(canAdvanceRegisterStep2('owner@example.com', 'abcdef')).toBe(true);
   });

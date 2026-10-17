@@ -9,6 +9,10 @@ import { getParkedCartsStorageKey, getPosTillStorageKey } from '@/lib/business-s
 import { completeSaleAction } from '@/app/actions/sales';
 
 const searchParamsGet = vi.hoisted(() => vi.fn((_key?: string) => null as string | null));
+const refreshMock = vi.hoisted(() => vi.fn());
+const summarySidebarSpy = vi.hoisted(() => ({
+  props: null as null | { onCompleteSale?: () => void },
+}));
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
@@ -18,7 +22,7 @@ vi.mock('next/link', () => ({
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: (key: string) => searchParamsGet(key) }),
-  useRouter: () => ({ prefetch: vi.fn() }),
+  useRouter: () => ({ prefetch: vi.fn(), refresh: refreshMock }),
 }));
 
 vi.mock('@/app/actions/sales', () => ({ completeSaleAction: vi.fn() }));
@@ -31,7 +35,10 @@ vi.mock('@/lib/offline', () => ({ queueOfflineSale: vi.fn() }));
 const mockedCompleteSaleAction = vi.mocked(completeSaleAction);
 
 vi.mock('./components/SummarySidebar', () => ({
-  default: () => <div data-testid="summary-sidebar">Summary Sidebar</div>,
+  default: (props: { onCompleteSale?: () => void }) => {
+    summarySidebarSpy.props = props;
+    return <div data-testid="summary-sidebar">Summary Sidebar</div>;
+  },
 }));
 vi.mock('./components/KeyboardHelpModal', () => ({
   default: ({ show }: { show: boolean }) => (show ? <div data-testid="keyboard-help-modal" /> : null),
@@ -315,6 +322,17 @@ describe('PosClient desktop layout', () => {
       expect(document.querySelector('.keyboard-safe-fixed-bottom')).not.toBeNull();
     });
     expect(screen.getAllByRole('button', { name: /Complete Cash Sale/i }).length).toBeGreaterThan(0);
+    const inlineComplete = screen.getByTestId('pos-complete-checkout');
+    expect(inlineComplete.className).toContain('hidden');
+    expect(inlineComplete.className).toContain('lg:inline-flex');
+    expect(inlineComplete.className).not.toContain('md:inline-flex');
+    expect(inlineComplete).not.toHaveAttribute('aria-hidden');
+    expect(inlineComplete).not.toHaveAttribute('tabindex');
+    const tabletBar = document.querySelector('[data-pos-mobile-checkout-bar="true"]');
+    expect(tabletBar?.className).toContain('md:block');
+    expect(tabletBar?.className).toContain('lg:hidden');
+    expect(tabletBar?.textContent).toMatch(/Complete Cash Sale/i);
+    expect(summarySidebarSpy.props?.onCompleteSale).toBeUndefined();
   });
 
   it('hides due date for Paid and requires an explicit decision for Unpaid', async () => {
@@ -351,6 +369,8 @@ describe('PosClient desktop layout', () => {
     await waitFor(() => {
       expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(1);
     });
+    expect(refreshMock).toHaveBeenCalled();
+    expect(sessionStorage.getItem('tillflow:setup-banner-dismissed:biz-1')).toBe('1');
 
     const payload = mockedCompleteSaleAction.mock.calls[0][0];
     expect(payload.paymentStatus).toBe('PAID');

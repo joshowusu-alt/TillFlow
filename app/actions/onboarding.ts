@@ -385,21 +385,29 @@ export async function getReadiness(): Promise<ReadinessData> {
  * Phase 1: set onboardingCompletedAt only after a genuine successful sale exists.
  * Preserves existing timestamps — never overwrites.
  */
-export async function markOnboardingCompleteAfterFirstSale(businessId: string): Promise<void> {
+export async function markOnboardingCompleteAfterFirstSale(
+  businessId: string,
+  options?: { assumeSaleExists?: boolean },
+): Promise<void> {
   const business = await prisma.business.findUnique({
     where: { id: businessId },
     select: { onboardingCompletedAt: true },
   });
   if (!business || business.onboardingCompletedAt) return;
 
-  const saleCount = await prisma.salesInvoice.count({
-    where: {
-      businessId,
-      paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-      OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
-    },
-  });
-  if (saleCount < 1) return;
+  // Checkout already committed the invoice in this request. A follow-up count
+  // can miss it on the Postgres pooler and leave onboardingCompletedAt unset,
+  // so the layout keeps rendering the first-sale banner.
+  if (!options?.assumeSaleExists) {
+    const saleCount = await prisma.salesInvoice.count({
+      where: {
+        businessId,
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
+      },
+    });
+    if (saleCount < 1) return;
+  }
 
   await prisma.business.update({
     where: { id: businessId },
@@ -458,5 +466,8 @@ export async function updateOnboardingBusinessProfile(input: {
   });
   revalidateTag(`readiness-${business.id}`);
   revalidateTag('control-portfolio');
+  // Do not invalidate the onboarding page path from here. The owner is already
+  // on it, and that refresh shows loading.tsx and can leave the checklist
+  // skeleton mounted. The journey updates in place.
   return { ok: true };
 }

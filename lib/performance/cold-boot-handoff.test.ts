@@ -37,8 +37,11 @@ describe('Trust Breakers T2b: cold boot launch handoff', () => {
     expect(onboardingPage).not.toContain('LaunchSessionCompletion');
     expect(onboardingClient).not.toContain('LaunchSessionCompletion');
     expect(onboardingPage).toContain('OwnerReadinessContent');
-    expect(ownerContent).toContain('<Suspense');
-    expect(ownerContent).toContain('ChecklistReadinessSkeleton');
+    expect(ownerContent).toContain('return await IncompleteOwnerHome()');
+    expect(ownerContent).not.toContain('<Suspense');
+    expect(ownerContent).not.toContain('ChecklistReadinessSkeleton');
+    expect(read('components/owner-home/OwnerHomeCompletedStream.tsx')).toContain('<Suspense');
+    expect(read('app/(protected)/onboarding/HomeInstantLoading.tsx')).toContain('ChecklistReadinessSkeleton');
   });
 
   it('gates branded root loading to an intentional launch session', () => {

@@ -10,6 +10,7 @@ import {
   safeAction,
   ok,
   err,
+  UserError,
   type ActionResult,
 } from '@/lib/action-utils';
 import { readOperationalStoreCookie } from '@/lib/reliability/operational-store-cookie';
@@ -122,6 +123,20 @@ async function parseProductFields(formData: FormData): Promise<ProductCoreInput>
   };
 }
 
+async function assertSelectableUnitsExist(unitIds: string[]) {
+  const unique = [...new Set(unitIds.map((id) => id.trim()).filter(Boolean))];
+  if (unique.length === 0) {
+    throw new UserError('Please select a base unit.');
+  }
+  const found = await prisma.unit.findMany({
+    where: { id: { in: unique } },
+    select: { id: true },
+  });
+  if (found.length !== unique.length) {
+    throw new UserError('The selected unit is no longer available. Choose a unit and try again.');
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Actions
 // ---------------------------------------------------------------------------
@@ -158,6 +173,14 @@ export async function createProductAction(formData: FormData): Promise<void> {
       );
       openingStockStoreId = selected.storeId;
     }
+    const unitIds = [
+      fields.baseUnitId,
+      fields.packagingUnitId,
+      openingStockUnitId,
+      ...(fields.unitConfigs ?? []).map((config) => config.unitId),
+    ].filter((id): id is string => Boolean(id && id.trim()));
+    await assertSelectableUnitsExist(unitIds);
+
     const product = openingStockStoreId ? await prisma.$transaction(async tx => {
       const created = await createProduct(businessId, fields, tx);
       await recordOpeningInventory({ businessId, storeId: openingStockStoreId!, userId: user.id,
@@ -167,7 +190,11 @@ export async function createProductAction(formData: FormData): Promise<void> {
       return created;
     }, { timeout: 20000 }) : await createProduct(businessId, fields);
 
-    await persistActivationSnapshot(businessId).catch(() => {});
+    // The snapshot re-reads the whole business before this redirect. Awaiting it
+    // held the create request open on Postgres long enough to time out, so the
+    // first save neither finished nor showed an error. The product is already
+    // committed; the snapshot can catch up without blocking the response.
+    void persistActivationSnapshot(businessId).catch(() => {});
 
     audit({
       businessId,
@@ -187,6 +214,11 @@ export async function createProductAction(formData: FormData): Promise<void> {
     }
     revalidateTag(`readiness-${businessId}`);
     revalidateOwnerDashboardCache();
+    // Invalidate the client router cache before redirecting back to this page.
+    // Without this, Create product keeps the previous list (count 0) and hides
+    // the success banner until a manual reload.
+    revalidatePath('/products');
+    revalidatePath('/onboarding');
     revalidatePath('/inventory', 'layout');
     const createdQuery = openingStockQty > 0 ? 'created=1&stock=1' : 'created=1';
     redirect(`/products?${createdQuery}`);

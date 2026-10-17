@@ -141,7 +141,8 @@ export async function recordOpeningInventory(
     }
   }
 
-  await ensureChartOfAccounts(input.businessId);
+  // Reuse an enclosing transaction; a second SQLite writer deadlocks setup.
+  await ensureChartOfAccounts(input.businessId, client);
 
   const applyOpening = async (tx: any) => {
     await lockInventoryValues(tx, input.storeId, productIds);

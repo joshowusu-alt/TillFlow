@@ -199,7 +199,7 @@ export async function createSaleAction(formData: FormData): Promise<void> {
         'action.checkout.revalidate',
         async () => {
           const { markOnboardingCompleteAfterFirstSale } = await import('@/app/actions/onboarding');
-          await markOnboardingCompleteAfterFirstSale(businessId);
+          await markOnboardingCompleteAfterFirstSale(businessId, { assumeSaleExists: true });
           revalidateTag(`today-sales-${businessId}`);
           revalidateTag(`readiness-${businessId}`);
           revalidateTag('reports');
@@ -444,12 +444,26 @@ export async function completeSaleAction(data: {
       void error;
     });
 
+    // The POS layout banner keys off onboardingCompletedAt. Record the first sale
+    // before responding so a refresh of this page can drop the banner.
+    try {
+      const { markOnboardingCompleteAfterFirstSale } = await import('@/app/actions/onboarding');
+      await markOnboardingCompleteAfterFirstSale(businessId, { assumeSaleExists: true });
+    } catch (error) {
+      appLog('error', 'checkout_onboarding_complete_failed', { businessId, storeId: data.storeId });
+      void error;
+    }
+    revalidateTag(`readiness-${businessId}`);
+    revalidatePath('/pos', 'layout');
+    // The banner is rendered by the protected layout, which is the layout for
+    // every protected URL. Invalidating only a /pos layout file (there is none)
+    // leaves that parent render cached.
+    revalidatePath('/', 'layout');
+
     // Do not block the success response on cache revalidation — sale is already committed.
     void measureServerOperation(
       'action.checkout.revalidate',
       async () => {
-        const { markOnboardingCompleteAfterFirstSale } = await import('@/app/actions/onboarding');
-        await markOnboardingCompleteAfterFirstSale(businessId);
         revalidateTag(`today-sales-${businessId}`);
         revalidateTag(`readiness-${businessId}`);
         revalidateTag('reports');

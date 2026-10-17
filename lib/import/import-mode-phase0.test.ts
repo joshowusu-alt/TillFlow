@@ -51,7 +51,7 @@ vi.mock('@/lib/services/shared/inventory-utils', () => ({
 }));
 
 import { prisma } from '@/lib/prisma';
-import { postJournalEntry } from '@/lib/accounting';
+import { postJournalEntry, ensureChartOfAccounts } from '@/lib/accounting';
 import { recordOpeningInventory } from '@/lib/services/opening-inventory';
 import { incompleteStockDisclosureMessage } from '@/lib/reports/incomplete-stock';
 
@@ -96,6 +96,15 @@ describe('recordOpeningInventory', () => {
         product: { id: 'p1', businessId: 'b1', defaultCostBasePence: 0 },
       },
     ]);
+  });
+
+  it('initializes accounts on the enclosing transaction instead of opening a second writer', async () => {
+    const tx = { ...prisma };
+    await recordOpeningInventory({
+      businessId: 'b1', storeId: 's1', referenceId: 'nested-opening',
+      lines: [{ productId: 'p1', unitId: 'u1', qtyInUnit: 10, unitCostBasePence: 200 }],
+    }, tx);
+    expect(ensureChartOfAccounts).toHaveBeenCalledWith('b1', tx);
   });
 
   it('posts Inventory / Opening Balance Equity for valued qty', async () => {

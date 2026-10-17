@@ -54,7 +54,7 @@ import {
 import type { BarcodeScanResolution } from '@/lib/payments/pos-barcode';
 import type { PosProduct } from '@/lib/payments/pos-cart';
 import { completeSaleAction } from '@/app/actions/sales';
-import { dispatchNavKpiRefresh } from '@/lib/navigation/nav-kpi-events';
+import { dispatchNavKpiRefresh, dispatchSetupBannerDismiss } from '@/lib/navigation/nav-kpi-events';
 import {
   getLastReceiptStorageKey,
   getParkedCartsStorageKey,
@@ -1148,6 +1148,10 @@ export default function PosClient({
         }
         showSaleSuccess({ receiptId, totalPence, transactionNumber }, 3000);
         dispatchNavKpiRefresh();
+        // Hide the setup banner in this tab even if the layout refresh is
+        // dropped. Offline queueing must not reach this branch.
+        dispatchSetupBannerDismiss(business.id);
+        router.refresh();
       } else {
         setSaleError(result.error);
       }
@@ -2427,8 +2431,9 @@ export default function PosClient({
             ) : null}
 
             <div className="flex flex-col gap-2 md:flex-row">
+              {/* Desktop complete control, next to Park Sale. Hidden below lg, where the tablet bar or phone sheet is the only complete button. */}
               <button
-                className={`btn-primary hidden flex-1 py-3 text-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent md:inline-flex md:items-center md:justify-center ${
+                className={`btn-primary hidden flex-1 py-3 text-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent lg:inline-flex lg:items-center lg:justify-center ${
                   paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
                 }`}
                 type="button"
@@ -2572,10 +2577,6 @@ export default function PosClient({
           onToggleParkedPanel={() => setShowParkedPanel(!showParkedPanel)}
           onRecallParked={(id) => { handleRecallParkedCart(id); setShowParkedPanel(false); }}
           onDeleteParked={deleteParkedCart}
-          completeLabel={completeLabel}
-          canSubmit={canSubmit}
-          isCompletingSale={isCompletingSale}
-          onCompleteSale={handleCompleteSale}
         />
       </div>
 

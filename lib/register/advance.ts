@@ -1,11 +1,15 @@
-/** Client-side register wizard enablement. Keep in sync with RegisterForm. */
+/** Shared registration validation; server actions must not trust hidden form fields. */
+export const REGISTER_CURRENCIES: readonly string[] = ['GHS', 'NGN', 'KES', 'UGX', 'TZS', 'ZAR', 'XOF', 'XAF', 'GBP', 'USD', 'EUR'];
+export function isValidRegisterEmail(email: string) {
+  return email.trim().length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
 
 export function canAdvanceRegisterStep1(businessName: string, ownerName: string) {
   return businessName.trim().length > 0 && ownerName.trim().length > 0;
 }
 
 export function canAdvanceRegisterStep2(email: string, password: string) {
-  return email.trim().length > 0 && password.length >= 6;
+  return isValidRegisterEmail(email) && password.length >= 6;
 }
 
 export type RegisterAdvanceDiagnosisInput = {

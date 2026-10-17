@@ -1,6 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import { requireBusiness } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { listSelectableUnits } from '@/lib/units/list-selectable-units';
 // ImportStockLoader is a "use client" component that dynamically loads
 // ImportStockClient (which imports xlsx). Importing it here gives RSC a
 // client reference — webpack never follows the xlsx import chain into the
@@ -41,10 +41,7 @@ export default async function ImportStockPage({
   const statedCount = Math.max(0, parseInt(searchParams?.count ?? '', 10) || gapCount);
 
   const [units, importHistory] = await Promise.all([
-    prisma.unit.findMany({
-      select: { id: true, name: true, pluralName: true },
-      orderBy: { name: 'asc' },
-    }),
+    listSelectableUnits(business.id),
     listProductImports(8),
   ]);
 
@@ -85,7 +82,11 @@ export default async function ImportStockPage({
         </div>
       </div>
       <ImportStockLoader
-        units={units}
+        units={units.map((unit) => ({
+          id: unit.id,
+          name: unit.name,
+          pluralName: unit.pluralName || unit.name,
+        }))}
         currency={business.currency}
         initialMode={stockGapIssue ? 'OPENING_STOCK' : initialMode}
       />

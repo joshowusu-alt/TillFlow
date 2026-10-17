@@ -30,7 +30,9 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
     expect(ownerContent).not.toContain('completeOnboarding()');
     expect(ownerContent).toContain('<OnboardingClient readiness={readiness} />');
     expect(ownerContent).toContain('IncompleteOwnerHome');
-    expect(ownerContent).toContain('ChecklistReadinessSkeleton');
+    expect(ownerContent).toContain('return await IncompleteOwnerHome()');
+    expect(ownerContent).not.toContain('ChecklistReadinessSkeleton');
+    expect(ownerContent).not.toContain('<Suspense');
   });
 
   it('preserves auth and role gates on the top-level page', () => {
