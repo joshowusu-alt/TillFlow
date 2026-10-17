@@ -1,3 +1,4 @@
+import { resolveStorefrontPickupAddress } from '@/lib/storefront-pickup';
 import { onlineOrderPaymentDeadline } from '@/lib/online-order-expiry';
 import { createHash, randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
@@ -889,7 +890,7 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
     stores: business.stores.map((store) => ({
       id: store.id,
       name: store.name,
-      address: store.address,
+      address: resolveStorefrontPickupAddress(store.address, business.address, business.stores.length),
       phone: store.phone,
     })),
     products: catalogPage.products,
@@ -1222,6 +1223,8 @@ export async function getPublicOnlineOrder(input: {
           id: true,
           name: true,
           phone: true,
+          address: true,
+          _count: { select: { stores: true } },
           storefrontPickupInstructions: true,
           storefrontPickupPrepMinutes: true,
           storefrontSlug: true,
@@ -1334,7 +1337,7 @@ export async function getPublicOnlineOrder(input: {
     bankBranch: config.bankBranch,
     storeMessage: config.paymentNote,
     pickupStoreName: order.store?.name ?? null,
-    pickupStoreAddress: order.store?.address ?? null,
+    pickupStoreAddress: order.store ? resolveStorefrontPickupAddress(order.store.address, order.business.address, order.business._count?.stores ?? 0) : null,
   };
 }
 

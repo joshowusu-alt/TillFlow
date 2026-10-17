@@ -4,7 +4,7 @@ Production is unchanged. These are the facts and catalogue decisions needed for 
 
 ## Pickup details
 
-- Exact Main Branch pickup address and a recognisable landmark: **needed**.
+- The saved business address now supplies pickup guidance for single-branch shops, consistently at checkout and on the order page. Confirm it remains accurate; add a more precise landmark if needed.
 - Opening days/hours: **needed**, or explicitly keep the honest “hours not provided; contact the store” message.
 - Preparation estimate: **needed**, or keep “wait for ready confirmation” without inventing a duration.
 - Existing merchant shortcode and business contact are configured. Confirm they remain the intended customer payment/contact details; do not send account credentials.

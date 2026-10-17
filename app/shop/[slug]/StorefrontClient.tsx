@@ -256,7 +256,7 @@ function PickupDetails({ storefront, store }: {
   storefront: PublicStorefront;
   store: PublicStorefront['stores'][number] | null;
 }) {
-  const address = store?.address || storefront.address;
+  const address = store?.address || null;
   const phone = store?.phone || storefront.phone;
   return <section aria-label="Collection details" className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 text-sm text-slate-700">
     <h3 className="font-bold text-slate-950">Collect from {store?.name || storefront.name}</h3>
@@ -1219,13 +1219,13 @@ export default function StorefrontClient({
                     {formatGhanaPhoneForDisplay(selectedStore?.phone ?? storefront.phone ?? '')}
                   </a>
                 ) : null}
-                {(selectedStore?.address ?? storefront.address) ? (
+                {selectedStore?.address ? (
                   <span className="inline-flex min-h-7 items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.14] px-2.5 py-1 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.88 }}>
                     <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
                     </svg>
-                    <span className="truncate">{selectedStore?.address ?? storefront.address}</span>
+                    <span className="truncate">{selectedStore?.address}</span>
                   </span>
                 ) : null}
                 <span className="inline-flex min-h-7 items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.14] px-2.5 py-1 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.86 }}>

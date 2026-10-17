@@ -298,3 +298,11 @@ it('shows captured payment instructions after the shop changes its payout accoun
     bankAccountName: 'Original shop', bankAccountNumber: 'ORIGINAL-134', bankBranch: 'Original branch', storeMessage: 'Original note',
     momoPayoutNumber: null });
 });
+
+it('retains the single-branch business pickup address on the public order page', async () => {
+  prismaMock.onlineOrder.findFirst.mockResolvedValue({ id: 'o1', createdAt: new Date(), paymentConfigJson: null,
+    business: { storefrontSlug: 'shop', address: 'Fictional Station', _count: { stores: 1 } },
+    store: { id: 's1', name: 'Main', address: null },
+  });
+  expect(await getPublicOnlineOrder({ slug: 'shop', orderId: 'o1', token: 'token' })).toMatchObject({ pickupStoreAddress: 'Fictional Station' });
+});
