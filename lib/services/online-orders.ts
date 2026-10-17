@@ -1184,6 +1184,8 @@ export async function getPublicOnlineOrder(input: {
       orderNumber: true,
       status: true,
       paymentStatus: true,
+      refundStatus: true,
+      refundedAt: true,
       fulfillmentStatus: true,
       fulfillmentMethod: true,
       customerName: true,

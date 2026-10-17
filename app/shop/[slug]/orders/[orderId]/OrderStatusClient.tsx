@@ -45,6 +45,8 @@ type PublicOrder = {
   orderNumber: string;
   status: string;
   paymentStatus: string;
+  refundStatus?: string | null;
+  refundedAt?: string | Date | null;
   fulfillmentStatus: string;
   fulfillmentMethod: string;
   customerName: string;
@@ -351,6 +353,12 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
   }, [order.id, order.storefrontSlug]);
 
   useEffect(() => {
+    if (order.status !== 'CANCELLED' || order.paymentStatus !== 'PAID' || order.refundStatus === 'REFUNDED') return;
+    const timer = window.setInterval(() => void refreshStatus(), 15_000);
+    return () => window.clearInterval(timer);
+  }, [order.status, order.paymentStatus, order.refundStatus, refreshStatus]);
+
+  useEffect(() => {
     if (terminal) {
       return;
     }
@@ -478,7 +486,11 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
   } as const;
   const statusConfig = getStatusConfig(order.status);
   const activeStep = isCancelled ? -1 : getActiveStep(order.status);
-  const heroMessage: string | null = statusConfig.message ?? (
+  const heroMessage: string | null = isCancelled && order.paymentStatus === 'PAID'
+    ? order.refundStatus === 'REFUNDED'
+      ? 'The store has marked your refund as paid. Contact the store with your order reference if it has not arrived.'
+      : 'Your payment was received and a refund is outstanding. Contact the store with your order reference. Do not send another payment.'
+    : statusConfig.message ?? (
     awaitingPayment && !paymentDetails.manual
       ? `Send exactly ${formatMoney(order.totalPence, order.currency)} using reference ${order.orderNumber} to confirm your order.`
       : awaitingPayment && paymentDetails.manual

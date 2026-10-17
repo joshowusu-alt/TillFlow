@@ -165,9 +165,11 @@ export default async function OnlineOrdersPage({
   }
 
   const activeTab: StatusKey = isValidStatus(searchParams?.status) ? searchParams!.status! : 'all';
-  const statusFilter = activeTab !== 'all' ? { status: activeTab as string } : {};
+  const statusFilter = activeTab === 'AWAITING_PAYMENT'
+    ? { status: { in: ['AWAITING_PAYMENT', 'PAYMENT_FAILED'] } }
+    : activeTab !== 'all' ? { status: activeTab as string } : {};
 
-  const [orders, summary] = await Promise.all([
+  const [orders, summary, refundNeeded] = await Promise.all([
     prisma.onlineOrder.findMany({
       where: { businessId: business.id, ...branchFilter, ...statusFilter, ...(searchParams?.order ? { id: searchParams.order } : {}) },
       orderBy: { createdAt: 'desc' },
@@ -214,15 +216,16 @@ export default async function OnlineOrdersPage({
       where: { businessId: business.id, ...branchFilter },
       _count: { _all: true },
     }),
+    prisma.onlineOrder.count({ where: { businessId: business.id, ...branchFilter, status: 'CANCELLED', refundStatus: 'MANUAL_REFUND_NEEDED' } }),
   ]);
 
   const countFor = (s: string) => summary.find((r) => r.status === s)?._count._all ?? 0;
-  const awaiting = countFor('AWAITING_PAYMENT');
+  const awaiting = countFor('AWAITING_PAYMENT') + countFor('PAYMENT_FAILED');
   const paid = countFor('PAID');
   const processing = countFor('PROCESSING');
   const ready = countFor('READY_FOR_PICKUP');
-  const totalActive = awaiting + paid + processing + ready;
-  const archived = countFor('COMPLETED') + countFor('CANCELLED');
+  const totalActive = awaiting + paid + processing + ready + refundNeeded;
+  const archived = countFor('COMPLETED') + countFor('CANCELLED') - refundNeeded;
   const statusSummaries = [
     {
       label: 'Awaiting payment',
@@ -387,12 +390,11 @@ export default async function OnlineOrdersPage({
         }
 
         // All tab: split action-needed vs history
-        const actionOrders = orders.filter((o) =>
-          ['AWAITING_PAYMENT', 'PAID', 'PROCESSING', 'READY_FOR_PICKUP'].includes(o.status),
-        );
-        const historyOrders = orders.filter((o) =>
-          !['AWAITING_PAYMENT', 'PAID', 'PROCESSING', 'READY_FOR_PICKUP'].includes(o.status),
-        );
+        const needsAttention = (o: typeof orders[number]) =>
+          ['AWAITING_PAYMENT', 'PAYMENT_FAILED', 'PAID', 'PROCESSING', 'READY_FOR_PICKUP'].includes(o.status) ||
+          (o.status === 'CANCELLED' && o.refundStatus === 'MANUAL_REFUND_NEEDED');
+        const actionOrders = orders.filter(needsAttention);
+        const historyOrders = orders.filter(o => !needsAttention(o));
 
         if (orders.length === 0) {
           return <div className="card p-6 text-sm text-black/55">No online orders yet.</div>;
