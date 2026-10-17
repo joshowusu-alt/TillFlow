@@ -206,7 +206,7 @@ export async function expectUniqueQaProductRowVisible(
 /**
  * Open create only when needed. Do not assert heading "Add product"
  * (that h2 lives inside a closed <details>; hash #product-create only scrolls).
- * Labels lack htmlFor — assert named controls inside the opened details form.
+ * Base unit is a labelled combobox. Reject leaked tenant units and require piece.
  */
 export async function openSellableQaProductCreateForm(page: Page) {
   await expect(page).toHaveURL(/\/products(?:\?|#|$)/);
@@ -230,6 +230,14 @@ export async function openSellableQaProductCreateForm(page: Page) {
   await expect(form.getByRole('button', { name: /Create product/i })).toBeVisible();
   await expect(form.locator('label', { hasText: /^Name$/ })).toBeVisible();
   await expect(form.locator('label', { hasText: /^SKU$/ })).toBeVisible();
+  const baseUnit = form.getByRole('combobox', { name: 'Base unit' });
+  await expect(baseUnit).toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+  const optionTexts = await baseUnit.locator('option').allTextContents();
+  const leaked = optionTexts.find((text) => /Piece-\d+/i.test(text) || /walkthrough unit/i.test(text));
+  if (leaked) {
+    throw new Error(`Product base unit leaked a non-standard unit: ${leaked}`);
+  }
+  await expect(baseUnit.locator('option:checked')).toHaveText(/^piece$/i);
   return form;
 }
 
@@ -258,6 +266,11 @@ export async function fillSellableQaProductForm(
   await form.getByRole('button', { name: /Create product/i }).click({
     timeout: RELIABILITY_ACTION_TIMEOUT_MS,
   });
+  await expect(page.getByTestId('product-created-banner')).toBeVisible({
+    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+  });
+  await expect(page.getByRole('link', { name: /Products \(0\)/ })).toHaveCount(0);
+  await expect(page.getByText('2 pieces', { exact: true })).toHaveCount(0);
 }
 
 /**

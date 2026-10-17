@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/ToastProvider';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -18,6 +18,7 @@ import {
   formatHomeAttentionActionSummary,
 } from '@/lib/home-attention-presentation';
 import BusinessProfileEditor from '@/components/onboarding/BusinessProfileEditor';
+import { BUSINESS_CATEGORY_LABELS, computeOnboardingJourney } from '@/lib/onboarding-journey';
 import {
   HOME_RESUME_STALE_MS,
   useRouterRefreshOnVisibility,
@@ -698,11 +699,58 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
   const [data, setData] = useState(initial);
   const [isBusy, setIsBusy] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const pendingBusinessProfileRef = useRef<{ name: string; businessCategory: string } | null>(null);
   const { toast: showToast } = useToast();
 
   useEffect(() => {
+    const pending = pendingBusinessProfileRef.current;
+    if (pending) {
+      const caughtUp =
+        initial.businessName.trim() === pending.name &&
+        (initial.businessCategory ?? '') === pending.businessCategory;
+      if (!caughtUp) return;
+      pendingBusinessProfileRef.current = null;
+    }
     setData(initial);
   }, [initial]);
+
+  const handleBusinessProfileSaved = (saved: { name: string; businessCategory: string }) => {
+    pendingBusinessProfileRef.current = saved;
+    const label = BUSINESS_CATEGORY_LABELS[saved.businessCategory] ?? 'Business type';
+    const message = `${label} saved.`;
+    setSaveNotice(message);
+    showToast(message, 'success');
+    setData((prev) => {
+      const journey = computeOnboardingJourney({
+        name: saved.name,
+        businessCategory: saved.businessCategory,
+        validProductCount: prev.validProductCount,
+        sellableProductCount: prev.sellableProductCount,
+        productCount: prev.productCount,
+        saleCount: prev.saleCount,
+        onboardingCompletedAt: prev.onboardingCompletedAt,
+      });
+      return {
+        ...prev,
+        businessName: saved.name,
+        businessCategory: saved.businessCategory,
+        businessCategoryLabel: label,
+        journey,
+        stages: journey.stages,
+        upNext: journey.upNext,
+      };
+    });
+    // Refresh outside the save transition so a stale router payload cannot
+    // land in the same commit as the optimistic journey update.
+    window.setTimeout(() => router.refresh(), 0);
+  };
+
+  const saveStatus = saveNotice ? (
+    <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+      {saveNotice}
+    </p>
+  ) : null;
 
   useRouterRefreshOnVisibility(router, {
     enabled: data.onboardingComplete,
@@ -836,7 +884,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
                         businessName={data.businessName}
                         businessCategory={data.businessCategory}
                         businessCategoryLabel={data.businessCategoryLabel}
-                        onSaved={() => router.refresh()}
+                        onSaved={handleBusinessProfileSaved}
                       />
                     </div>
                   </div>
@@ -859,6 +907,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
               );
             })}
           </div>
+          {saveStatus}
         </div>
       </div>
     );
@@ -874,6 +923,8 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
             {data.stuckMessage ?? data.ownerMessage}
           </p>
         </div>
+
+        {saveStatus}
 
         {upNext ? (
           <div className="mb-5 rounded-2xl border-2 border-accent/25 bg-white p-4 shadow-sm">
@@ -919,7 +970,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
                         businessName={data.businessName}
                         businessCategory={data.businessCategory}
                         businessCategoryLabel={data.businessCategoryLabel}
-                        onSaved={() => router.refresh()}
+                        onSaved={handleBusinessProfileSaved}
                       />
                     </div>
                   </div>
@@ -966,7 +1017,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
                       businessName={data.businessName}
                       businessCategory={data.businessCategory}
                       businessCategoryLabel={data.businessCategoryLabel}
-                      onSaved={() => router.refresh()}
+                      onSaved={handleBusinessProfileSaved}
                     />
                   </div>
                 ) : null}

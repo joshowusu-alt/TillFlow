@@ -372,4 +372,13 @@ describe('Preview QA owner provisioning', () => {
     expect(source('tests/e2e/helpers/preview-qa-owner.ts')).toContain('noWaitAfter: true');
     expect(source('tests/e2e/helpers/preview-qa-owner.ts')).not.toMatch(/waitUntil:\s*'load'/);
   });
+
+  it('checks business type saved without reloading the setup page', () => {
+    const helper = source('tests/e2e/helpers/preview-qa-owner.ts');
+    expect(helper).toContain('assertOnboardingBusinessTypeSaved');
+    expect(helper).toContain('onboarding-add-product-manually');
+    expect(helper).toContain('Choose business type');
+    expect(helper).toContain('Add or import a product');
+    expect(helper).not.toContain('page.reload(');
+  });
 });

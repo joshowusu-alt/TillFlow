@@ -418,6 +418,29 @@ async function readOnboardingBusinessTypeState(page: Page) {
   };
 }
 
+/** Saved setup must move Up next without a reload. Status text is client state. */
+async function assertOnboardingBusinessTypeSaved(page: Page) {
+  await page
+    .getByRole('status')
+    .filter({ hasText: /saved/i })
+    .waitFor({ timeout: PREVIEW_QA_STAGE_TIMEOUT_MS });
+  const staleUpNext = await page.getByRole('heading', { name: 'Choose business type', exact: true }).count();
+  if (staleUpNext > 0) {
+    throw new PreviewQaOwnerBlockedError(
+      'Blocked at business creation: Up next stayed on Choose business type after save. field=Business type status=stale',
+      { stage: 'business creation' },
+    );
+  }
+  const productHeading = await page
+    .getByRole('heading', { name: 'Add or import a product', exact: true })
+    .count();
+  if (productHeading > 0) {
+    await page.getByTestId('onboarding-add-product-manually').waitFor({
+      timeout: PREVIEW_QA_STAGE_TIMEOUT_MS,
+    });
+  }
+}
+
 export async function completeOnboardingBusinessType(page: Page) {
   try {
     await gotoStage(page, '/onboarding');
@@ -425,7 +448,10 @@ export async function completeOnboardingBusinessType(page: Page) {
     let saveClicked = false;
     while (Date.now() < deadline) {
       const current = await readOnboardingBusinessTypeState(page);
-      if (current.state === 'already-complete') return;
+      if (current.state === 'already-complete') {
+        if (saveClicked) await assertOnboardingBusinessTypeSaved(page);
+        return;
+      }
       if (current.state === 'needs-selection') {
         await current.picker.selectOption('SUPERMARKET', { timeout: PREVIEW_QA_STAGE_TIMEOUT_MS });
         continue;

@@ -2,7 +2,8 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ReadinessJourney from '@/components/ReadinessJourney';
-import type { ReadinessData } from '@/app/actions/onboarding';
+import { updateOnboardingBusinessProfile, type ReadinessData } from '@/app/actions/onboarding';
+import { computeOnboardingJourney } from '@/lib/onboarding-journey';
 import {
   ONBOARDING_ADD_PRODUCT_MANUALLY_NAME,
   ONBOARDING_ADD_PRODUCT_MANUALLY_TESTID,
@@ -215,6 +216,61 @@ describe('ReadinessJourney Phase 1 setup', () => {
 
     fireEvent.click(startButtons[0]);
     expect(pushMock).toHaveBeenCalledWith('/pos');
+  });
+
+  it('advances Up next as soon as business type is saved and ignores a stale refresh', async () => {
+    vi.mocked(updateOnboardingBusinessProfile).mockResolvedValueOnce({ ok: true });
+    const journey = computeOnboardingJourney({
+      name: 'New Shop',
+      businessCategory: null,
+      validProductCount: 0,
+      sellableProductCount: 0,
+      productCount: 0,
+      saleCount: 0,
+      onboardingCompletedAt: null,
+    });
+    const gettingReady: ReadinessData = {
+      ...baseReadinessData,
+      businessName: 'New Shop',
+      businessCategory: null,
+      businessCategoryLabel: null,
+      onboardingComplete: false,
+      onboardingCompletedAt: null,
+      productCount: 0,
+      validProductCount: 0,
+      sellableProductCount: 0,
+      saleCount: 0,
+      activationStatusLabel: 'Getting ready',
+      ownerMessage: 'Choose your business type to continue.',
+      stuckMessage: null,
+      journey,
+      stages: journey.stages,
+      upNext: journey.upNext,
+    };
+
+    const view = render(<ReadinessJourney initial={gettingReady} />);
+    expect(screen.getByRole('heading', { name: 'Choose business type' })).toBeInTheDocument();
+    expect(screen.queryByTestId(ONBOARDING_ADD_PRODUCT_MANUALLY_TESTID)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Business type' }), {
+      target: { value: 'SUPERMARKET' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Add or import a product' })).toBeInTheDocument();
+    });
+    expect(screen.getByRole('status')).toHaveTextContent(/Supermarket saved/i);
+    expect(screen.getByTestId(ONBOARDING_ADD_PRODUCT_MANUALLY_TESTID)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Choose business type' })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(refreshMock).toHaveBeenCalled();
+    });
+
+    view.rerender(<ReadinessJourney initial={{ ...gettingReady, businessCategory: null }} />);
+    expect(screen.getByRole('heading', { name: 'Add or import a product' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Choose business type' })).not.toBeInTheDocument();
+    expect(screen.getByTestId(ONBOARDING_ADD_PRODUCT_MANUALLY_TESTID)).toBeInTheDocument();
   });
 });
 

@@ -315,6 +315,14 @@ describe('PosClient desktop layout', () => {
       expect(document.querySelector('.keyboard-safe-fixed-bottom')).not.toBeNull();
     });
     expect(screen.getAllByRole('button', { name: /Complete Cash Sale/i }).length).toBeGreaterThan(0);
+    const inlineComplete = screen.getByTestId('pos-complete-checkout');
+    expect(inlineComplete).toHaveAttribute('aria-hidden', 'true');
+    expect(inlineComplete).toHaveAttribute('tabindex', '-1');
+    expect(
+      screen.getAllByRole('button', { name: /Complete Cash Sale/i }).every(
+        (button) => button.getAttribute('data-testid') !== 'pos-complete-checkout',
+      ),
+    ).toBe(true);
   });
 
   it('hides due date for Paid and requires an explicit decision for Unpaid', async () => {

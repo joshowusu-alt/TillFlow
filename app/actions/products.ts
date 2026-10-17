@@ -187,6 +187,11 @@ export async function createProductAction(formData: FormData): Promise<void> {
     }
     revalidateTag(`readiness-${businessId}`);
     revalidateOwnerDashboardCache();
+    // Invalidate the client router cache before redirecting back to this page.
+    // Without this, Create product keeps the previous list (count 0) and hides
+    // the success banner until a manual reload.
+    revalidatePath('/products');
+    revalidatePath('/onboarding');
     revalidatePath('/inventory', 'layout');
     const createdQuery = openingStockQty > 0 ? 'created=1&stock=1' : 'created=1';
     redirect(`/products?${createdQuery}`);

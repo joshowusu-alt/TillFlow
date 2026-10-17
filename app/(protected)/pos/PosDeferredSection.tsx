@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { listSelectableUnits } from '@/lib/units/list-selectable-units';
 import { unstable_cache } from 'next/cache';
 import PosWelcomeShelf from '@/components/pos/PosWelcomeShelf';
 import { PosDeferredApply, type PosDeferredPayload } from '@/components/pos/PosProgressiveShell';
@@ -13,8 +14,8 @@ import {
 
 function getCachedUnits(businessId: string) {
   return unstable_cache(
-    () => prisma.unit.findMany({ select: { id: true, name: true } }),
-    ['pos-units', businessId],
+    () => listSelectableUnits(businessId),
+    ['pos-selectable-units', businessId],
     { revalidate: 300, tags: ['pos-units'] },
   )();
 }

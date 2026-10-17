@@ -13,6 +13,7 @@ import RemainingBalance from '@/components/RemainingBalance';
 import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
+import { listSelectableUnits } from '@/lib/units/list-selectable-units';
 import PurchaseFormClient from './PurchaseFormClient';
 import DeletePurchaseButton from './DeletePurchaseButton';
 import RecordPurchaseButton from './RecordPurchaseButton';
@@ -101,7 +102,7 @@ export default async function PurchasesPage({
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
-    prisma.unit.findMany({ select: { id: true, name: true } }),
+    listSelectableUnits(business.id),
     prisma.purchaseInvoice.count({ where: purchaseWhere }),
     prisma.purchaseInvoice.findMany({
       where: purchaseWhere,

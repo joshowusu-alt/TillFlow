@@ -307,9 +307,10 @@ export default function RegisterForm({ error }: RegisterFormProps) {
             <div>
               <p className="text-sm font-semibold text-black/70 mb-1">Choose how you want to pay</p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Billing interval">
               <button
                 type="button"
+                aria-label="Monthly"
                 aria-pressed={billingInterval === 'MONTHLY'}
                 onClick={() => setBillingInterval('MONTHLY')}
                 className={`rounded-xl border-2 p-3 text-left transition ${
@@ -323,6 +324,7 @@ export default function RegisterForm({ error }: RegisterFormProps) {
               </button>
               <button
                 type="button"
+                aria-label="Annual"
                 aria-pressed={billingInterval === 'ANNUAL'}
                 onClick={() => setBillingInterval('ANNUAL')}
                 className={`rounded-xl border-2 p-3 text-left transition ${
@@ -411,24 +413,29 @@ export default function RegisterForm({ error }: RegisterFormProps) {
           <input type="hidden" name="sourceChannel" value="INBOUND" />
           <input type="hidden" name="qaTag" value="" />
 
+          <div className="space-y-2">
+            <label htmlFor="referral-source" className="block text-sm font-semibold text-black/70">
+              How did you hear about TillFlow? (optional)
+            </label>
+            <select
+              id="referral-source"
+              value={referralSource}
+              onChange={(e) => setReferralSource(e.target.value)}
+              className="input w-full"
+            >
+              <option value="">Select…</option>
+              <option value="WHATSAPP_GROUP">WhatsApp group</option>
+              <option value="EXISTING_CUSTOMER">Existing customer</option>
+              <option value="FAMILY_FRIEND">Family / friend</option>
+              <option value="AGENT_REFERRAL">Agent referral</option>
+              <option value="SOCIAL_MEDIA">Social media</option>
+              <option value="WEBSITE">Website</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
           <details className="rounded-xl border border-black/8 bg-white/80 px-4 py-3 text-sm">
-            <summary className="cursor-pointer font-semibold text-black/70">How did you hear about TillFlow? (optional)</summary>
+            <summary className="cursor-pointer font-semibold text-black/70">Referrer details (optional)</summary>
             <div className="mt-3 space-y-3">
-              <select
-                aria-label="How did you hear about TillFlow?"
-                value={referralSource}
-                onChange={(e) => setReferralSource(e.target.value)}
-                className="input w-full"
-              >
-                <option value="">Select…</option>
-                <option value="WHATSAPP_GROUP">WhatsApp group</option>
-                <option value="EXISTING_CUSTOMER">Existing customer</option>
-                <option value="FAMILY_FRIEND">Family / friend</option>
-                <option value="AGENT_REFERRAL">Agent referral</option>
-                <option value="SOCIAL_MEDIA">Social media</option>
-                <option value="WEBSITE">Website</option>
-                <option value="OTHER">Other</option>
-              </select>
               <input
                 className="input w-full"
                 aria-label="Referred by (name)"

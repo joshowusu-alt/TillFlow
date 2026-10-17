@@ -4,6 +4,7 @@ import { memo, useState, useCallback } from 'react';
 import { quickCreateProductAction } from '@/app/actions/products';
 import BarcodeScanInput from '@/components/BarcodeScanInput';
 import ProductUnitPricingEditor, { type EditableProductUnitConfig } from '@/components/ProductUnitPricingEditor';
+import { defaultBaseUnitId } from '@/lib/units/selectable-units';
 
 type UnitDto = {
   id: string;
@@ -35,10 +36,11 @@ type QuickAddPanelProps = {
 };
 
 function buildDefaultUnitConfigs(units: { id: string; name: string }[]): EditableProductUnitConfig[] {
-  return units[0]
+  const unitId = defaultBaseUnitId(units);
+  return unitId
     ? [
         {
-          unitId: units[0].id,
+          unitId,
           conversionToBase: 1,
           isBaseUnit: true,
         },

@@ -10,7 +10,9 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol, DEFAULT_PAGE_SIZE } from '@/lib/format';
-import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
+import { formatCatalogueUnitLabel, getPrimaryPackagingUnit } from '@/lib/units';
+import { defaultBaseUnitId } from '@/lib/units/selectable-units';
+import { listSelectableUnits } from '@/lib/units/list-selectable-units';
 import { createProductAction } from '@/app/actions/products';
 import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from '@/app/actions/categories';
 import BarcodeScanInput from '@/components/BarcodeScanInput';
@@ -39,6 +41,28 @@ import type { Prisma } from '@prisma/client';
 
 function ProductStatCard({ label, value, helper }: { label: string; value: string; helper: string }) {
   return <OperationalMetricCard label={label} value={value} helper={helper} />;
+}
+
+function catalogueUnitLabel(product: {
+  productUnits: {
+    isBaseUnit: boolean;
+    conversionToBase: number;
+    unit: { name: string; pluralName?: string | null };
+  }[];
+}) {
+  const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
+  const packaging = getPrimaryPackagingUnit(
+    product.productUnits.map((pu) => ({
+      conversionToBase: pu.conversionToBase,
+      unit: { name: pu.unit.name, pluralName: pu.unit.pluralName ?? undefined },
+    })),
+  );
+  return formatCatalogueUnitLabel({
+    baseName: baseUnit?.unit.name,
+    basePlural: baseUnit?.unit.pluralName,
+    packagingName: packaging?.unit.name,
+    packagingConversion: packaging?.conversionToBase,
+  });
 }
 
 export default async function ProductsPage({
@@ -140,9 +164,7 @@ export default async function ProductsPage({
           _count: { select: { products: true } }
         }
       }),
-      prisma.unit.findMany({
-        select: { id: true, name: true }
-      }),
+      listSelectableUnits(business.id),
       prisma.supplier.findMany({
         where: { businessId: business.id },
         select: { id: true, name: true },
@@ -167,6 +189,7 @@ export default async function ProductsPage({
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
   );
   const totalProductPages = Math.max(1, Math.ceil(totalProductCount / DEFAULT_PAGE_SIZE));
+  const preferredBaseUnitId = defaultBaseUnitId(units);
   const activeTab = searchParams?.tab || 'products';
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
   const canBulkGenerateBarcodes = isManager && features.advancedOps && !issueActive;
@@ -314,7 +337,7 @@ export default async function ProductsPage({
       {(activeTab === 'products' || issueActive) && !issueResolved && (
         <>
           {searchParams?.created === '1' && !issueActive && (
-            <div className="flex items-center gap-3 rounded-2xl border border-success/20 bg-success/5 px-5 py-3.5">
+            <div role="status" data-testid="product-created-banner" className="flex items-center gap-3 rounded-2xl border border-success/20 bg-success/5 px-5 py-3.5">
               <svg className="h-5 w-5 flex-shrink-0 text-success" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
               </svg>
@@ -430,12 +453,14 @@ export default async function ProductsPage({
                   <div className="md:col-span-3">
                     <ProductUnitPricingEditor
                       units={units}
+                      defaultBaseUnitId={preferredBaseUnitId}
                       currencySymbol={getCurrencySymbol(business.currency)}
                     />
                   </div>
                   <OpeningStockFields
                     currencySymbol={getCurrencySymbol(business.currency)}
                     units={units}
+                    defaultBaseUnitId={preferredBaseUnitId}
                   />
                 </ProductFormSection>
                 <ProductFormSection title="Advanced" description="Margin target, tax, and promotions. Leave blank to use business defaults.">
@@ -508,18 +533,7 @@ export default async function ProductsPage({
                 </div>
                 </CompactMobileListItem>
               ) : products.map((product) => {
-                const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
-                const packaging = getPrimaryPackagingUnit(
-                  product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit }))
-                );
-                const preview = formatMixedUnit({
-                  qtyBase: packaging?.conversionToBase ? packaging.conversionToBase + 2 : 2,
-                  baseUnit: baseUnit?.unit.name ?? 'unit',
-                  baseUnitPlural: baseUnit?.unit.pluralName,
-                  packagingUnit: packaging?.unit.name,
-                  packagingUnitPlural: packaging?.unit.pluralName,
-                  packagingConversion: packaging?.conversionToBase
-                });
+                const unitLabel = catalogueUnitLabel(product);
 
                 return (
                   <CompactMobileListItem key={product.id}>
@@ -561,7 +575,7 @@ export default async function ProductsPage({
                       <DataCardField label="Base price" value={<span className="font-semibold text-ink">{formatMoney(product.sellingPriceBasePence, business.currency)}</span>} />
                       <DataCardField label="Default cost" value={<span className="font-semibold text-ink">{formatMoney(product.defaultCostBasePence, business.currency)}</span>} />
                       <DataCardField label="Preferred supplier" value={<span className="text-black/65">{product.preferredSupplier?.name ?? 'None'}</span>} className="col-span-2" />
-                      <DataCardField label="Unit display" value={<span className="text-black/65">{preview}</span>} className="col-span-2" />
+                      <DataCardField label="Unit display" value={<span className="text-black/65">{unitLabel}</span>} className="col-span-2" />
                     </div>
                     <DataCardActions>
                       {issueKey ? (
@@ -651,18 +665,7 @@ export default async function ProductsPage({
                     </tr>
                   )}
                   {products.map((product) => {
-                    const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
-                    const packaging = getPrimaryPackagingUnit(
-                      product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit }))
-                    );
-                    const preview = formatMixedUnit({
-                      qtyBase: packaging?.conversionToBase ? packaging.conversionToBase + 2 : 2,
-                      baseUnit: baseUnit?.unit.name ?? 'unit',
-                      baseUnitPlural: baseUnit?.unit.pluralName,
-                      packagingUnit: packaging?.unit.name,
-                      packagingUnitPlural: packaging?.unit.pluralName,
-                      packagingConversion: packaging?.conversionToBase
-                    });
+                    const unitLabel = catalogueUnitLabel(product);
                     return (
                       <tr key={product.id} className="rounded-xl bg-white transition-colors duration-150 hover:bg-slate-50">
                         <td className="hidden sm:table-cell px-3 py-3 w-10">
@@ -716,7 +719,7 @@ export default async function ProductsPage({
                                 : issueDef?.recordStatusLabel}
                             </span>
                           ) : (
-                            preview
+                            unitLabel
                           )}
                         </td>
                         {issueKey ? (

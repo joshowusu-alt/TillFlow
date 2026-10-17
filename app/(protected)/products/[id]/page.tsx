@@ -7,6 +7,8 @@ import { requireBusinessStore } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { formatMoney, getCurrencySymbol } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
+import { defaultBaseUnitId } from '@/lib/units/selectable-units';
+import { listSelectableUnits } from '@/lib/units/list-selectable-units';
 import { updateProductAction } from '@/app/actions/products';
 import DeleteProductButton from './DeleteProductButton';
 import BarcodeFieldWithGenerate from '@/components/BarcodeFieldWithGenerate';
@@ -41,9 +43,7 @@ export default async function ProductDetailPage({
           preferredSupplier: { select: { id: true, name: true } }
         }
     }),
-    prisma.unit.findMany({
-      select: { id: true, name: true, pluralName: true }
-    }),
+    listSelectableUnits(business.id),
     prisma.category.findMany({
       where: { businessId: business.id },
       orderBy: { sortOrder: 'asc' }
@@ -291,6 +291,7 @@ export default async function ProductDetailPage({
             <div className="lg:col-span-3">
               <ProductUnitPricingEditor
                 units={units}
+                defaultBaseUnitId={defaultBaseUnitId(units)}
                 currencySymbol={getCurrencySymbol(business.currency)}
                 basePricePence={product.sellingPriceBasePence}
                 baseCostPence={product.defaultCostBasePence}

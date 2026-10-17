@@ -168,6 +168,11 @@ describe('Reliability QA product identity', () => {
     expect(helper).toContain('qaProductVisibleTableRows');
     expect(helper).toContain('gotoQaProductList');
     expect(helper).toContain('openSellableQaProductCreateForm');
+    expect(helper).toContain("name: 'Base unit'");
+    expect(helper).toContain('product-created-banner');
+    expect(helper).toContain('Piece-\\d+');
+    expect(helper).toContain('walkthrough unit');
+    expect(helper).toContain("getByText('2 pieces', { exact: true })");
     expect(helper).not.toMatch(/getByRole\('heading',\s*\{\s*name:\s*'Add product'/);
     expect(helper).not.toContain("locator('input[name=\"name\"]').first()");
     expect(spec).toContain('ensureSellableQaProduct');

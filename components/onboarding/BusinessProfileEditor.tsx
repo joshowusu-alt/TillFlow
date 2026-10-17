@@ -9,7 +9,7 @@ type Props = {
   businessName: string;
   businessCategory: string | null;
   businessCategoryLabel: string | null;
-  onSaved?: () => void;
+  onSaved?: (saved: { name: string; businessCategory: string }) => void;
   /** One-line summary (Name · Type) with quiet Edit — for completed journey rows. */
   compact?: boolean;
 };
@@ -73,7 +73,7 @@ export default function BusinessProfileEditor({
       setDisplayCategory(category || null);
       setDisplayCategoryLabel(BUSINESS_CATEGORY_LABELS[category] ?? category);
       setEditing(false);
-      onSaved?.();
+      onSaved?.({ name: trimmed, businessCategory: category });
     });
   };
 

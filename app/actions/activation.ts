@@ -76,7 +76,8 @@ export async function updateBusinessCategory(category: string): Promise<{ ok: bo
     where: { id: business.id },
     data: { businessCategory: normalized },
   });
-  const { revalidateTag } = await import('next/cache');
+  const { revalidatePath, revalidateTag } = await import('next/cache');
   revalidateTag(`readiness-${business.id}`);
+  revalidatePath('/onboarding');
   return { ok: true };
 }

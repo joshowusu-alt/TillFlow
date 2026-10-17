@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { defaultBaseUnitId } from '@/lib/units/selectable-units';
 
 type UnitOption = {
   id: string;
@@ -22,6 +23,7 @@ type ProductUnitPricingEditorProps = {
   baseCostPence?: number;
   currencySymbol: string;
   fieldName?: string;
+  defaultBaseUnitId?: string;
   initialConfigs?: EditableProductUnitConfig[];
   onConfigsChange?: (configs: EditableProductUnitConfig[]) => void;
 };
@@ -50,7 +52,11 @@ function parseCurrencyToPence(value: string) {
   return Number.isNaN(parsed) ? null : Math.round(parsed * 100);
 }
 
-function buildInitialRows(units: UnitOption[], initialConfigs?: EditableProductUnitConfig[]): EditorRow[] {
+function buildInitialRows(
+  units: UnitOption[],
+  initialConfigs?: EditableProductUnitConfig[],
+  preferredBaseUnitId?: string,
+): EditorRow[] {
   if (initialConfigs?.length) {
     return [...initialConfigs]
       .sort((a, b) => Number(b.isBaseUnit) - Number(a.isBaseUnit))
@@ -64,10 +70,15 @@ function buildInitialRows(units: UnitOption[], initialConfigs?: EditableProductU
       }));
   }
 
+  const baseId =
+    preferredBaseUnitId && units.some((unit) => unit.id === preferredBaseUnitId)
+      ? preferredBaseUnitId
+      : defaultBaseUnitId(units);
+
   return [
     {
       key: 'base-unit',
-      unitId: units[0]?.id ?? '',
+      unitId: baseId,
       conversionToBase: '1',
       sellingPrice: '',
       defaultCost: '',
@@ -82,10 +93,11 @@ export default function ProductUnitPricingEditor({
   baseCostPence = 0,
   currencySymbol,
   fieldName = 'unitConfigsJson',
+  defaultBaseUnitId: preferredBaseUnitId,
   initialConfigs,
   onConfigsChange,
 }: ProductUnitPricingEditorProps) {
-  const [rows, setRows] = useState<EditorRow[]>(() => buildInitialRows(units, initialConfigs));
+  const [rows, setRows] = useState<EditorRow[]>(() => buildInitialRows(units, initialConfigs, preferredBaseUnitId));
 
   const parsedConfigs = useMemo<EditableProductUnitConfig[]>(() => {
     return rows
@@ -153,8 +165,11 @@ export default function ProductUnitPricingEditor({
             <div key={row.key} className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_160px_repeat(2,minmax(0,1fr))_auto] lg:items-start">
                 <div className="min-w-0">
-                  <label className="label">{row.isBaseUnit ? 'Base unit' : 'Sellable unit'}</label>
+                  <label className="label" htmlFor={`${fieldName}-${row.key}-unit`}>
+                    {row.isBaseUnit ? 'Base unit' : 'Sellable unit'}
+                  </label>
                   <select
+                    id={`${fieldName}-${row.key}-unit`}
                     className="input"
                     value={row.unitId}
                     onChange={(event) => updateRow(row.key, { unitId: event.target.value })}

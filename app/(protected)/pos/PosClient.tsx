@@ -2427,12 +2427,15 @@ export default function PosClient({
             ) : null}
 
             <div className="flex flex-col gap-2 md:flex-row">
+              {/* Once the cart has items, the sidebar or sticky bar is the accessible complete control. */}
               <button
                 className={`btn-primary hidden flex-1 py-3 text-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent md:inline-flex md:items-center md:justify-center ${
                   paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
                 }`}
                 type="button"
                 data-testid="pos-complete-checkout"
+                aria-hidden={cart.length > 0 ? true : undefined}
+                tabIndex={cart.length > 0 ? -1 : undefined}
                 disabled={!canSubmit || isCompletingSale}
                 onClick={handleCompleteSale}
               >

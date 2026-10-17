@@ -27,9 +27,14 @@ describe('registration controls', () => {
     const { container } = render(<RegisterForm />); fillBusiness(); fillAccount();
     fireEvent.click(screen.getByRole('button', { name: /^Growth/ }));
     fireEvent.click(screen.getByLabelText('Add online storefront to my Growth plan'));
-    fireEvent.click(screen.getByRole('button', { name: /Annual Pay/ }));
+    expect(screen.getByRole('group', { name: 'Billing interval' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Monthly' })).toHaveAccessibleName('Monthly');
+    fireEvent.click(screen.getByRole('button', { name: 'Annual' }));
     expect(screen.getByText(/Subscription after your trial: GHS 5,490/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next — Currency' }));
+    expect(
+      screen.getByRole('combobox', { name: 'How did you hear about TillFlow? (optional)' }),
+    ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Currency'), { target: { value: 'GBP' } });
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next — Currency' }));

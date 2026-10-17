@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidateTag } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { writeHomeLoadingKindCookie } from '@/lib/owner-home/home-loading-kind';
@@ -458,5 +458,6 @@ export async function updateOnboardingBusinessProfile(input: {
   });
   revalidateTag(`readiness-${business.id}`);
   revalidateTag('control-portfolio');
+  revalidatePath('/onboarding');
   return { ok: true };
 }
