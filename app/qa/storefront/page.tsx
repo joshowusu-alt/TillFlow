@@ -1,7 +1,9 @@
+import { runStorefrontAcceptance } from './actions';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { storefrontPreviewOwner, QA_BUSINESS } from '@/lib/services/storefront-preview-guard';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 export default async function StorefrontAcceptancePage() {
   if (!await storefrontPreviewOwner()) notFound();
   const results = await prisma.storefrontEvent.findMany({ where: { businessId: QA_BUSINESS, eventType: 'qa_acceptance' }, orderBy: { timestamp: 'desc' }, take: 12 });
@@ -13,7 +15,7 @@ export default async function StorefrontAcceptancePage() {
       ['posting_retry', 'Concurrent sale posting'],
       ['cancel_posting', 'Cancellation versus posting'],
       ['expiry_race', 'Concurrent expiry passes'],
-    ].map(([scenario, label]) => <form key={scenario} action="/api/qa/storefront-reliability" method="post">
+    ].map(([scenario, label]) => <form key={scenario} action={runStorefrontAcceptance}>
       <input type="hidden" name="scenario" value={scenario} />
       <button className="rounded-lg bg-blue-700 px-4 py-3 text-white" type="submit">{label}</button>
     </form>)}

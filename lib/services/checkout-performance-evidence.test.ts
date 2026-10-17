@@ -89,10 +89,12 @@ describe('Phase C5: checkout performance evidence instrumentation', () => {
 
   it('keeps checkout instrumentation out of item mapping callbacks and avoids raw line metadata', () => {
     const impl = createSaleImplSource();
-    const lineCreateMap = impl.slice(
-      impl.indexOf('lines: {'),
-      impl.indexOf('payments: {'),
+    const invoiceCreate = impl.slice(impl.indexOf('const invoiceCreateData ='));
+    const lineCreateMap = invoiceCreate.slice(
+      invoiceCreate.indexOf('lines: {'),
+      invoiceCreate.indexOf('payments: {'),
     );
+    expect(lineCreateMap).toContain('create: lineDetails.map');
     const stockMovementMap = impl.slice(
       impl.indexOf("action.checkout.stock-movements"),
       impl.indexOf('// Fire-and-forget: risk detection'),

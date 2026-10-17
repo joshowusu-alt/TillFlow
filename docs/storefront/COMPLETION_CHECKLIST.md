@@ -21,7 +21,7 @@ Updated 17 October 2026. Scope: storefront only. Draft PR #134 targets master. P
 - Fictional storefront `storefront-preview-134`, two branches and 65 fictional products. SMS disabled. No real payment/provider calls made.
 - Additive checkout-key and reservation/payment-snapshot migrations applied successfully to isolated Preview. Both Prisma schemas aligned.
 - 167 targeted tests passed across 14 suites: sales, returns, order actions/services, payment sync/commit, refunds, financials, attention permissions, customer access, taxonomy, SMS enqueue and cron authentication. Typecheck and targeted lint pass.
-- Real PostgreSQL hosted harness is owner-only and additionally bound to this exact branch, database host, fictional business and SMS-disabled setting. Test records retained.
+- Real PostgreSQL hosted harness is owner-only and additionally bound to this exact branch, database host, fictional business and SMS-disabled setting. Test records retained. Checks run as an authenticated server action; no additional `/api/qa` HTTP route is shipped.
 
 | Hosted test | Evidence |
 | --- | --- |
@@ -48,3 +48,5 @@ Updated 17 October 2026. Scope: storefront only. Draft PR #134 targets master. P
 ## Approvals already supplied
 
 GitHub upload/commit, branch publication and draft PR creation; isolated database connection to this exact storefront Preview and its deployment. These approvals do not need to be requested again. Vercel browser access and Preview owner sign-in work; no additional login is currently required.
+
+CI follow-up: full unit run identified two repository contracts (QA-route inventory and invoice-mapping source scope). Removed the temporary QA API route, retained the existing security contract, and narrowed the performance source test to the invoice create block. All 32 contract tests and nine Preview guard tests pass; final broad CI is pending.

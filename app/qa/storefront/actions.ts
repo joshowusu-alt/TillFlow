@@ -1,5 +1,6 @@
+'use server';
 import { randomUUID } from 'crypto';
-import { NextRequest, NextResponse } from 'next/server';
+import { redirect, notFound } from 'next/navigation';
 import { isRedirectError } from 'next/dist/client/components/redirect';
 import { prisma } from '@/lib/prisma';
 import { storefrontPreviewOwner, QA_BUSINESS, QA_STORE } from '@/lib/services/storefront-preview-guard';
@@ -7,21 +8,16 @@ import { createOnlineCheckout } from '@/lib/services/online-orders';
 import { commitOnlineOrderSale } from '@/lib/services/online-order-commit';
 import { expireOnlineOrders } from '@/lib/services/online-order-expiry-runner';
 import { updateOnlineOrderStatusAction } from '@/app/actions/online-storefront';
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-export const maxDuration = 60;
 function verify(value: unknown, message: string): asserts value { if (!value) throw new Error(message); }
 async function cancel(id: string) {
   const form = new FormData(); form.set('orderId', id); form.set('nextStatus', 'CANCELLED');
   try { await updateOnlineOrderStatusAction(form); }
   catch (error) { if (!isRedirectError(error)) throw error; }
 }
-export async function POST(request: NextRequest) {
-  if (request.headers.get('origin') !== new URL(request.url).origin || !await storefrontPreviewOwner()) {
-    return NextResponse.json({ error: 'not_available' }, { status: 404 });
-  }
-  const scenario = String((await request.formData()).get('scenario'));
-  if (!['checkout_retry', 'posting_retry', 'cancel_posting', 'expiry_race'].includes(scenario)) return NextResponse.json({ error: 'unknown_test' }, { status: 400 });
+export async function runStorefrontAcceptance(formData: FormData): Promise<void> {
+  if (!await storefrontPreviewOwner()) notFound();
+  const scenario = String(formData.get('scenario'));
+  if (!['checkout_retry', 'posting_retry', 'cancel_posting', 'expiry_race'].includes(scenario)) throw new Error('Unknown acceptance test.');
   const runId = randomUUID();
   try {
     const before = await prisma.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId: QA_STORE, productId: 'sf134-product-3' } } });
@@ -77,11 +73,10 @@ export async function POST(request: NextRequest) {
       status: current.status, invoiceCount: invoices, stockBefore: before.qtyOnHandBase, stockAfter: stock.qtyOnHandBase, valueBefore: before.knownValuePence, valueAfter: stock.knownValuePence, capturedCost, reservationMovements };
     await prisma.storefrontEvent.create({ data: { businessId: QA_BUSINESS, storeSlug: 'storefront-preview-134',
       eventType: 'qa_acceptance', sessionId: runId, metadata: JSON.stringify(result) } });
-    return NextResponse.redirect(new URL('/qa/storefront', request.url), 303);
   } catch (error) {
     console.error('[storefront-acceptance]', scenario, runId, error);
     await prisma.storefrontEvent.create({ data: { businessId: QA_BUSINESS, storeSlug: 'storefront-preview-134',
       eventType: 'qa_acceptance', sessionId: runId, metadata: JSON.stringify({ passed: false, scenario, runId, error: error instanceof Error ? error.message : 'Acceptance check failed' }) } });
-    return NextResponse.redirect(new URL('/qa/storefront', request.url), 303);
   }
+  redirect('/qa/storefront');
 }
