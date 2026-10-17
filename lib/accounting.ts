@@ -15,6 +15,7 @@ export const ACCOUNT_CODES = {
   vatReceivable: '1300',
   ap: '2000',
   vatPayable: '2100',
+  customerRefundsPayable: '2200',
   equity: '3000',
   /** Cut-over / opening-stock equity offset — not day-to-day retained earnings. */
   openingBalanceEquity: '3200',
@@ -36,6 +37,7 @@ export const CHART_OF_ACCOUNTS = [
   { code: '1300', name: 'VAT Receivable',         type: 'ASSET' as const },
   { code: '2000', name: 'Accounts Payable',       type: 'LIABILITY' as const },
   { code: '2100', name: 'VAT Payable',            type: 'LIABILITY' as const },
+  { code: '2200', name: 'Customer Refunds Payable', type: 'LIABILITY' as const },
   { code: '3000', name: 'Retained Earnings',      type: 'EQUITY' as const },
   { code: '3200', name: 'Opening Balance Equity', type: 'EQUITY' as const },
   { code: '4000', name: 'Sales Revenue',              type: 'INCOME' as const },

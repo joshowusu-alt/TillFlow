@@ -5,7 +5,9 @@
       "ci/p0b-prisma-migration-lock": false
     }
   },
-  "regions": ["iad1"],
+  "regions": [
+    "iad1"
+  ],
   "crons": [
     {
       "path": "/api/cron/eod-summary",
@@ -13,25 +15,41 @@
     },
     {
       "path": "/api/cron/expire-online-orders",
-      "schedule": "0 2 * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/dispatch-storefront-notifications",
-      "schedule": "0 7 * * *"
+      "schedule": "*/5 * * * *"
     },
     {
-      "path": "/api/cron/dispatch-storefront-notifications",
-      "schedule": "40 21 * * *"
+      "path": "/api/cron/retry-online-order-sales",
+      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {
-    "app/api/cron/**": { "maxDuration": 60 },
-    "app/api/storefront/orders/[id]/stream/route.ts": { "maxDuration": 60 },
-    "app/api/seed-once/**": { "maxDuration": 60 },
-    "app/api/import-stock/**": { "maxDuration": 300 },
-    "app/api/reset-purchase-data/**": { "maxDuration": 30 },
-    "app/api/offline/batch-sync/**": { "maxDuration": 30 },
-    "app/api/qa/reliability-snapshot/route.ts": { "maxDuration": 30 },
-    "app/api/**": { "maxDuration": 15 }
+    "app/api/cron/**": {
+      "maxDuration": 60
+    },
+    "app/api/storefront/orders/[id]/stream/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/seed-once/**": {
+      "maxDuration": 60
+    },
+    "app/api/import-stock/**": {
+      "maxDuration": 300
+    },
+    "app/api/reset-purchase-data/**": {
+      "maxDuration": 30
+    },
+    "app/api/offline/batch-sync/**": {
+      "maxDuration": 30
+    },
+    "app/api/qa/reliability-snapshot/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/**": {
+      "maxDuration": 15
+    }
   }
 }

@@ -64,6 +64,29 @@ const DEFAULT_RULES: DefaultRule[] = [
 ];
 
 const VARIANT_FIXES: Record<string, string> = {
+  // Specific categories must win over broad substring rules (oil, roll, paste).
+  'baby oil': 'Baby & infant',
+  'baby cream': 'Baby & infant',
+  'roll-on': 'Toiletries',
+  'tooth paste': 'Oral care',
+  'tooth brush': 'Oral care',
+  'toilet roll': 'Paper & disposables',
+  't-roll': 'Paper & disposables',
+  tissue: 'Paper & disposables',
+  'corn flakes': 'Breakfast & cereal',
+  milk: 'Dairy & eggs',
+  'milk powder': 'Dairy & eggs',
+  'powdered milk': 'Dairy & eggs',
+  'condense milk': 'Dairy & eggs',
+  'body cream': 'Skin & body care',
+  'body lotion': 'Skin & body care',
+  toffee: 'Sweets & confectionery',
+  gum: 'Sweets & confectionery',
+  indomie: 'Pasta & noodles',
+  insecticide: 'Cleaning',
+  camphor: 'Cleaning',
+  coil: 'Cleaning',
+
   'air freshner': 'Air freshener',
   'air freshener': 'Air freshener',
   biscuit: 'Biscuits & snacks',

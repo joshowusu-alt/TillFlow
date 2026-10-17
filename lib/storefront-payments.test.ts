@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getPaymentInstructionDetails,
   normalizePaymentMode,
+  parseStoredStorefrontPaymentConfig,
   paymentConfigIsReady,
   type StorefrontPaymentConfig,
 } from './storefront-payments';
@@ -77,5 +78,18 @@ describe('getPaymentInstructionDetails', () => {
         }),
       ).ready,
     ).toBe(true);
+  });
+});
+
+describe('stored payment instructions', () => {
+  it('retains the checkout destination and supports absent legacy snapshots', () => {
+    const captured = makeConfig({ mode: 'BANK_TRANSFER', bankName: 'TEST BANK', bankAccountNumber: 'TEST-134' });
+    expect(parseStoredStorefrontPaymentConfig(JSON.stringify(captured))).toEqual(captured);
+    expect(parseStoredStorefrontPaymentConfig(null)).toBeNull();
+  });
+  it('fails closed on malformed snapshots rather than silently changing a payment destination', () => {
+    for (const value of ['{}', 'null', '{"mode":"INVALID"}', '{"mode":"BANK_TRANSFER","bankAccountNumber":123}', 'invalid']) {
+      expect(() => parseStoredStorefrontPaymentConfig(value)).toThrow();
+    }
   });
 });

@@ -1,0 +1,1958 @@
+{
+  "reviewedAt": "2026-10-17",
+  "businessId": "cmmttryrq00015gcwrix832dg",
+  "source": "Read-only production published catalogue; no production changes applied",
+  "publishedProducts": 530,
+  "existingImages": 28,
+  "missingImages": 502,
+  "categoryCorrections": [
+    {
+      "productId": "cmmtv1deo00leo5nipz6oedp1",
+      "currentName": "GINSENG TOFFEE",
+      "currentCategory": "AIR FRESHENER",
+      "proposedCategory": "TOFFEE",
+      "reason": "Explicit product type in name; no price, size, brand or unit change"
+    },
+    {
+      "productId": "cmmtv1deh00jdo5nitheot6h3",
+      "currentName": "FORTIN WHITE OATS",
+      "currentCategory": "MARGARINE",
+      "proposedCategory": "CEREAL",
+      "reason": "Explicit product type in name; no price, size, brand or unit change"
+    },
+    {
+      "productId": "cmmtv1dep00n7o5nif17x8p6l",
+      "currentName": "IDEAL MILK TIN S/S (160G) UNIT",
+      "currentCategory": "SOAP",
+      "proposedCategory": "MILK",
+      "reason": "Explicit product type in name; no price, size, brand or unit change"
+    },
+    {
+      "productId": "cmmwix9hd000114g97fxdma6x",
+      "currentName": "KIVO GOOD TIME GARI MIX B/S",
+      "currentCategory": "DRINK",
+      "proposedCategory": "GARI",
+      "reason": "Explicit product type in name; no price, size, brand or unit change"
+    },
+    {
+      "productId": "cmmtv1deo00lgo5ni0gkqd6wp",
+      "currentName": "GLADE SPRAY (300ML) SPRAY",
+      "currentCategory": null,
+      "proposedCategory": "AIR FRESHENER",
+      "reason": "Explicit product type in name; no price, size, brand or unit change"
+    },
+    {
+      "productId": "cmmtv1dfc012xo5niz3dou74v",
+      "currentName": "SURE SPRAY /RIGHT GUARD",
+      "currentCategory": "AIR FRESHENER",
+      "proposedCategory": "PERSONAL CARE",
+      "reason": "Explicit product type in name; no price, size, brand or unit change"
+    }
+  ],
+  "merchantConfirmationRequired": [
+    {
+      "productId": "cmmtv1de6008ao5ni6ikn2w3s",
+      "name": "5 STAR / RUSH / BOSS",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1de70099o5nirhzzzy64",
+      "name": "ALAA /MOM'S/OBA SARDINES",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1de7009ao5niln9ogpqt",
+      "name": "ALFA / LELE TOMATO KETCHUP (340G)",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1de8009qo5nio7oor0km",
+      "name": "AMA/MAAME ESI/YEBOAH RICE 5X5 / MOLLY 5X5KG",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1de800a2o5niqlu19ojf",
+      "name": "AQUA SOFT /VIDA/ DE LORDS",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1de800aao5niuq5xmxo4",
+      "name": "ARO/ MOK STRIP",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1de900aqo5niyddoh436",
+      "name": "BALONA YOGHURT TOFFEE /ZOOM ZOOM TOFFEE",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1de900bjo5nic7pnw43u",
+      "name": "BIGG / RIO POP TOFFEE",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1dea00c2o5nikqvtvrgj",
+      "name": "BLUE DIAMOND / SWISS SPRAY",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1deb00cuo5niqeuo1ivd",
+      "name": "BUTTER FINGERS /CHEESE BALLS/DOUGHATTI",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1dec00dyo5ni3xu7u18p",
+      "name": "CHOCO RINGS /RING COOKIES/ CHOCO MALT BIST",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmwjn3y50001yovmmmkbbdge",
+      "name": "COKE /FANTA /SPRITE CAN",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1dec00eso5nix2olqos6",
+      "name": "COLGATE KIDS TOOTHBRUSH/ EXTRA SOFT 2+",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1def00h8o5ni68563yfo",
+      "name": "ENAPA / RAMBO  BAKED BEANS 425G",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1def00hvo5ni1ttvtdpt",
+      "name": "EVA /PURE HEAVEN/CRUSH/KISS  WINE (1L)",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1deg00i4o5nizig0alhd",
+      "name": "EVERYDAY RICE/ OLIVIA",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1deg00iyo5ni2mytcjgk",
+      "name": "FLUFFY / FLORA  T. ROLL",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1dem00jso5nizmp8j1ew",
+      "name": "FRIDGE GUINESS CAN MALT/BB COCKTAIL / SOUR SOP",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1den00l1o5ni62borpxc",
+      "name": "GINNY/ A55  RICE 5X5",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1deo00lfo5nivl63eego",
+      "name": "GLADE PAPER/ COOL BREEZ  AIR FRESHENER",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1deo00lso5niq5r5i9ij",
+      "name": "H&H / CHANNEL/ BAMIA SUNFLOWER 5LT",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1deb00d2o5niahvnsg5x",
+      "name": "HEAVEN/ AIRPRO CAMPHOR S/S",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1dep00n3o5niic8ck1i5",
+      "name": "IDEAL FRUITY / HI MILK SACHET",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1deq00nxo5nias40xmoc",
+      "name": "JASMINE RICE 25 POUNDS / 11 KGS",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1des00qgo5nil0fzf7tk",
+      "name": "LEAP / ROSA TOMATO 2.2KG",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1det00rbo5ni1xjz9trv",
+      "name": "LOVAN / DUBAI WAFER B/S",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1dev00tlo5nipidqqj4c",
+      "name": "MILKY MAGIC M/S /GINGER MAGIC",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1df600woo5nipppf1occ",
+      "name": "OTHELO/SULTANA / BELLA  SARDINE",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1df700wro5nipcnxp037",
+      "name": "OUT/OSCAR / TIGERHEAD/HOLY MATCHES/VOLCANO",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1deg00i7o5nifvy5ecqg",
+      "name": "OYE /OLE /KLEO SARDINES",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1df900z9o5niwd7nqbdj",
+      "name": "RAMBO BEEF PATE (400G) /OBA BEEF",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1df900zto5nidkfcyjdk",
+      "name": "ROCH /GLENDY SARDINE/NUREEN SARDINE",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1dfc012xo5niz3dou74v",
+      "name": "SURE SPRAY /RIGHT GUARD",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    },
+    {
+      "productId": "cmmtv1dfe014do5ni7iegftz3",
+      "name": "U- FRESH BOX CHOCO / SOYAMILK",
+      "reason": "Confirm exact brand/variant supplied or split into separately stocked products"
+    }
+  ],
+  "focusedRangeCandidates": [
+    {
+      "productId": "cmmtv1de7008uo5niopjo59k8",
+      "name": "ABIANS LOCAL RICE (5KG)",
+      "unitNames": [
+        "piece",
+        "bag"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1de7009bo5nin5ti57c0",
+      "name": "ALIFE SOAP 100GM S/S",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1de8009zo5nidxdjzng9",
+      "name": "ANNAPUNA SALT (900G) B/S",
+      "unitNames": [
+        "piece",
+        "bag"
+      ],
+      "hasImage": true
+    },
+    {
+      "productId": "cmmtv1de800a0o5ni9lpqclfa",
+      "name": "ANNAPUNA SALT(450G) M/S",
+      "unitNames": [
+        "piece",
+        "bag"
+      ],
+      "hasImage": true
+    },
+    {
+      "productId": "cmmtv1de800a4o5ni2opj10c2",
+      "name": "ARIEL WASHING POWDER 2KG",
+      "unitNames": [
+        "piece"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1de800a5o5ni9191isqy",
+      "name": "ARIEL WASHING POWDER 2KG MACHINE WASH",
+      "unitNames": [
+        "piece"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1de900azo5nij80owsyz",
+      "name": "BEL AQUA B/S 1000ML",
+      "unitNames": [
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1de900b0o5ni3oi6bodq",
+      "name": "BEL AQUA M/S (750ML)",
+      "unitNames": [
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dea00bno5niwierr9ow",
+      "name": "BINE 20 DISINFECTANT M/S  (2.5L)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dea00boo5nia6mlucz4",
+      "name": "BINE 20 DISINFECTANT S/S (0.5L)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dea00bso5ni85xeiuoi",
+      "name": "BINGO AFTERWASH 1L",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dea00bvo5niopvuvh8q",
+      "name": "BLUE BAND (250G) S/S",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dea00bwo5nif4ijrrvy",
+      "name": "BLUE BAND (450G) M/S",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dea00bxo5niv8hzrm34",
+      "name": "BLUE BAND (900G) B/S",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dea00c1o5nigp3sfgmm",
+      "name": "BLUE BAND STRIP 12G",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deb00cyo5niur9yxc97",
+      "name": "CAMEL ANTISEPTIC B/S (500ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deb00czo5ni2il1g9hg",
+      "name": "CAMEL ANTISEPTIC M/S (250ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deb00d0o5nitd1spad1",
+      "name": "CAMEL ANTISEPTIC S/S (125ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deb00d8o5niwc9vkjg1",
+      "name": "CARNATION MILK TIN S/S (160G)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deb00d9o5nizw9ysnqp",
+      "name": "CARNATION MILK TIN S/S (160G) PACK",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deb00dfo5nibbi002t0",
+      "name": "CERELAC TIN (400G)",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deb00djo5niy7hanch1",
+      "name": "CHANNL RICE 45KG",
+      "unitNames": [
+        "bag"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dec00e0o5ni4c23lgwc",
+      "name": "CHOCOLIM B/S (1KG)",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dec00e1o5nir9tm14aw",
+      "name": "CHOCOLIM SACHET S/S (500G)",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dec00eoo5nielqccyp3",
+      "name": "COLGATE CHARCOAL PASTE B/S (230G)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dec00epo5nimv6nd1x8",
+      "name": "COLGATE HERBAL PASTE (140G) M/S",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dec00eqo5ni3n2398a8",
+      "name": "COLGATE HERBAL PASTE B/S (230G)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1ded00f0o5nipnyijoxi",
+      "name": "COMMUNION WINE PLASTIC DILUTE 1L",
+      "unitNames": [
+        "carton",
+        "bottle"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1ded00fbo5nim8upwxw3",
+      "name": "COWBELL COFFEE SACHET (40G)",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": true
+    },
+    {
+      "productId": "cmmtv1ded00fdo5nied8ym7ol",
+      "name": "COWBELL PILLOW 400G",
+      "unitNames": [
+        "carton",
+        "pillow"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1ded00ffo5nixyj7zv75",
+      "name": "COWBELL STRIP MILK B/S (23G)",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1ded00fgo5ninog2i0mz",
+      "name": "COWBELL STRIP MILK M/S (14G)",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1ded00fko5nic8hkjzo7",
+      "name": "CREED 50KG",
+      "unitNames": [
+        "bag"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1ded00flo5niplh4wp6n",
+      "name": "CREED PLUS RICE 5KG",
+      "unitNames": [
+        "piece",
+        "bag"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dee00fyo5nit0p7kzso",
+      "name": "DANO EVAPORATED MILK 160G",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dee00fzo5nij5or6528",
+      "name": "DANO FRESH MILK 1L",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dee00g1o5ni6qxwo3y4",
+      "name": "DANO PILLOW (360G)",
+      "unitNames": [
+        "carton",
+        "pillow"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dee00g4o5ni278tptym",
+      "name": "DANO TIN 400G",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dee00gao5niscerohtz",
+      "name": "DETTOL (165ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dee00gbo5nipffyy6dh",
+      "name": "DETTOL (250ML)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dee00gco5ni3n9ughaj",
+      "name": "DETTOL (500ML)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dee00gho5nintd437zg",
+      "name": "DIGESTIVE CHOCOLATE (200G)",
+      "unitNames": [
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dee00gio5ni3n5ov9xc",
+      "name": "DIGESTIVE ORIGINAL B/S (500G)",
+      "unitNames": [
+        "piece"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dee00gjo5nie59qumls",
+      "name": "DIGESTIVE ORIGINAL S/S (250G)",
+      "unitNames": [
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dee00gno5nil1lcsib2",
+      "name": "DON SIMON (0.5L)",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1def00h4o5niu48kb2e6",
+      "name": "EASY/ALAA NON - DIARY CREAMER 250G",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1def00hfo5ninqo1bg5w",
+      "name": "ENAPA NON DAIRY 225G",
+      "unitNames": [
+        "carton",
+        "pillow"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1def00hzo5nivel1pzfu",
+      "name": "EVER SHEEN COCOA BUTTER B/S (250ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1def00i0o5nikpczuph8",
+      "name": "EVER SHEEN COCOA BUTTER S/S (120ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deg00i3o5nitgpk7y02",
+      "name": "EVERYDAT RICE  22.5KG",
+      "unitNames": [
+        "bag"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deg00iao5nik2s23z3o",
+      "name": "FATALA INSECTICIDE SPRAY 750ML",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dem00k8o5nije5oz5sj",
+      "name": "FRYTOL OIL (4.5 L)",
+      "unitNames": [
+        "box",
+        "galon"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1den00kco5nirv5gzwn0",
+      "name": "FRYTOL OIL 850ML BOTTLE",
+      "unitNames": [
+        "carton",
+        "bottle"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1den00kdo5nix3mc15x0",
+      "name": "FRYTOL OIL SACHET B/S (900ML)",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1den00kpo5nilx3zp6qj",
+      "name": "GFJ W.P  4.5KG",
+      "unitNames": [
+        "bag",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1den00kqo5ni3r1chkze",
+      "name": "GFJ W.P 2.5KG",
+      "unitNames": [
+        "carton",
+        "satchet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1den00l6o5nisoh15761",
+      "name": "GINO RICE (5KG)",
+      "unitNames": [
+        "piece",
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1den00l9o5ni37v2r6jw",
+      "name": "GINO TOMATO MIX SACHET (1.1KG)",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1den00lbo5nixe7xdr6h",
+      "name": "GINO TOMATO MIX SACHET (210G)",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1den00lco5nicm4d8qqv",
+      "name": "GINO TOMATO MIX SACHET (400G)",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deo00ldo5nim1rsf4va",
+      "name": "GINO TOMATO MIX SACHET (65G)",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deo00lgo5ni0gkqd6wp",
+      "name": "GLADE SPRAY (300ML) SPRAY",
+      "unitNames": [
+        "carton",
+        "can"
+      ],
+      "hasImage": true
+    },
+    {
+      "productId": "cmmtv1deo00loo5ni1s37yope",
+      "name": "GOOD MORNING OAT (500G)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deo00lvo5nixhiq24ez",
+      "name": "H.G HONEY 250ML",
+      "unitNames": [
+        "bottle"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmy23s1f000412qnabk6hd7r",
+      "name": "HAPPY DELIGHT 200ML",
+      "unitNames": [
+        "piece",
+        "carton",
+        "box"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dep00mdo5ni9q5olahj",
+      "name": "HEAVEN SPRAY 400ML",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dep00meo5ni91jzu4qx",
+      "name": "HEAVEN SPRAY 600ML",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dep00myo5ni4sr7sd6z",
+      "name": "HONDI TOMATO 2.2KG",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dep00n4o5nie43ivfhn",
+      "name": "IDEAL LIQUID SCAHET (29G)",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": true
+    },
+    {
+      "productId": "cmmtv1dep00n5o5nisn0fk3dr",
+      "name": "IDEAL MILK TIN B/S (370G)",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": true
+    },
+    {
+      "productId": "cmmtv1dep00n6o5ni4giqtpol",
+      "name": "IDEAL MILK TIN S/S (160G) PACK",
+      "unitNames": [
+        "carton"
+      ],
+      "hasImage": true
+    },
+    {
+      "productId": "cmmtv1dep00n7o5nif17x8p6l",
+      "name": "IDEAL MILK TIN S/S (160G) UNIT",
+      "unitNames": [
+        "tin"
+      ],
+      "hasImage": true
+    },
+    {
+      "productId": "cmmtv1dep00ndo5niumirtlyn",
+      "name": "INDOMIE S/S BOX (70G)",
+      "unitNames": [
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dep00neo5nikg8x4wub",
+      "name": "INDOMIE S/S SINGLE (70G)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deq00noo5nisz0xtoip",
+      "name": "JACOBS CREAM CRACKERS B/S (300G)",
+      "unitNames": [
+        "piece"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deq00npo5niexa0i82z",
+      "name": "JACOBS CREAM CRACKERS S/S (200G)",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deq00nto5nikd9gp4u7",
+      "name": "JAMAA SOAP 200G M/S",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deq00o1o5ni29avdpe7",
+      "name": "JULIET SOAP 100G",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deq00o2o5niwow43oel",
+      "name": "JULIET SOAP 225G",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deq00o7o5niu6nbylcu",
+      "name": "K75 RICE 50KG",
+      "unitNames": [
+        "bag"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deq00oko5nipduom9h2",
+      "name": "KEYSOAP ADEPA 250G",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1der00pao5ni7ifja2sv",
+      "name": "KIVO PEPPER 180G",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1der00pbo5nic8t2hm2y",
+      "name": "KIVO PEPPER 400G",
+      "unitNames": [
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmobl7egq000412s5y1dgtq89",
+      "name": "KIVO SHITO 20G STRIP",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1der00pho5nilao741vm",
+      "name": "KLEESOFT WASHING POWDER (150G)",
+      "unitNames": [
+        "piece"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1der00pio5niinjsuael",
+      "name": "KLEESOFT WASHING POWDER (150G) BAG",
+      "unitNames": [
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1der00pjo5niv87idtry",
+      "name": "KLEESOFT WASHING POWDER (1KG)",
+      "unitNames": [
+        "piece",
+        "bag"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1der00pko5ni5uzetbkb",
+      "name": "KLEESOFT WASHING POWDER (2KG)",
+      "unitNames": [
+        "piece",
+        "bag"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1der00plo5nil1rwqgq3",
+      "name": "KLEESOFT WASHING POWDER (5KG)",
+      "unitNames": [
+        "piece",
+        "bag"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1der00pmo5ni7o5bwqki",
+      "name": "KLEESOFT WASHING POWDER (80G)",
+      "unitNames": [
+        "piece",
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1der00pno5nid8jq6dk2",
+      "name": "KLEESOFT WASHING POWDER BUCKET (3KG)",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1des00poo5niv22pu0cq",
+      "name": "KLEO CONDENSED TIN 390G",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1des00q9o5ni57gtst9t",
+      "name": "LACOSTE RICE 5X5KG",
+      "unitNames": [
+        "piece",
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1des00qao5ni453fb7ov",
+      "name": "LACTOGEN 1 TIN (400G)",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1des00qbo5nisky640qt",
+      "name": "LACTOGEN 2 TIN (400G)",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1des00qpo5niw2cb2bfn",
+      "name": "LELE RICE (1KG)",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1des00qqo5nifp5fvcta",
+      "name": "LELE RICE (5X5KG)",
+      "unitNames": [
+        "bag",
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1det00rjo5ni7frk94l4",
+      "name": "LUX SOAP (175G)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1det00rlo5niczuzwn1j",
+      "name": "LYZY TOMATO 210G",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1det00rqo5nizfgesn6j",
+      "name": "MADAR GET ALL B/S 500ML",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00rvo5niyfnhyrd7",
+      "name": "MADAR LIQUID SOAP M/S (400ML)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00rwo5nil0w7oe1d",
+      "name": "MADAR LIQUID SOAP S/S 200ML",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00s1o5ni4b8d3kys",
+      "name": "MADAR WASHING POWDER (150G)",
+      "unitNames": [
+        "piece",
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00s2o5niuzj62g6q",
+      "name": "MADAR WASHING POWDER (150G) BAG",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00s3o5ni1y94sa3z",
+      "name": "MADAR WASHING POWDER (425G)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00s4o5ni6ka6ezo3",
+      "name": "MADAR WASHING POWDER 2.7KG SACHET",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00s5o5ni0h8l5yla",
+      "name": "MADAR WASHING POWDER 80G",
+      "unitNames": [
+        "piece",
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00s7o5nibqs3l4db",
+      "name": "MADAR WASHING POWDER B/S (850G)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00s9o5nixbpeofqv",
+      "name": "MADAR WASHING POWDER BUCKET (3KG)",
+      "unitNames": [
+        "bucket"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00sao5nizf3yxbni",
+      "name": "MADAR ZONE 500ML",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00sbo5nixy1g4l6x",
+      "name": "MADAR ZONE B/S (1L)",
+      "unitNames": [
+        "carton",
+        "bottle"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00sho5niko1jbyhu",
+      "name": "MAGIC RICE/CELEBRATION (5X5KG)",
+      "unitNames": [
+        "bag",
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00soo5nivhtbkkc0",
+      "name": "MAGIC/CELEBRATION/BLUES 50KG",
+      "unitNames": [
+        "bag"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00spo5nid5cfoux0",
+      "name": "MAGIC/SALMA SUNFLOWER OIL 5L",
+      "unitNames": [
+        "carton",
+        "galon"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deu00sro5nijz88mh49",
+      "name": "MAGICO POWER 150G",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dev00t8o5nijfzsmbfp",
+      "name": "MCVITIES SHORT BREAD M/S (200G)",
+      "unitNames": [
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dev00t9o5nid98mh248",
+      "name": "MCVITIES SHORTBREAD S/S (100G)",
+      "unitNames": [
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dev00tdo5nisvis6mul",
+      "name": "MENTOS GUM SACHET (147G)",
+      "unitNames": [
+        "carton",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dev00tqo5niuj4fmmpr",
+      "name": "MILO ALL IN ONE (40G)",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dev00tro5nilysbfwc6",
+      "name": "MILO PILLOW (400G) BOX",
+      "unitNames": [
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dev00tso5ni11oapb56",
+      "name": "MILO PILLOW (400G) UNIT",
+      "unitNames": [
+        "carton",
+        "pilow"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dev00tto5niwhxrgn3b",
+      "name": "MILO PILLOW (800G)",
+      "unitNames": [
+        "carton",
+        "pillow"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dev00tuo5nixk7inqfo",
+      "name": "MILO STRIP 20G",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dew00uao5ni6dy7lkdm",
+      "name": "MORNING FRESH LIQUID SOAP B/S (1000ML)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dew00ubo5ni5e5g92bc",
+      "name": "MORNING FRESH LIQUID SOAP S/S (450ML)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dew00ueo5nidgdo0883",
+      "name": "MR. MUSCLE B/S (750ML)",
+      "unitNames": [
+        "carton",
+        "bottle"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dew00uio5nimd6w73av",
+      "name": "MY DEER 5X5 KG",
+      "unitNames": [
+        "piece",
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dew00umo5nicmfug9y1",
+      "name": "NAN 1 TIN (400G)",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dew00uno5nisdj6aqvm",
+      "name": "NAN 2 TIN (400G)",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dew00uro5niu9e06mz1",
+      "name": "NERO PRIME 750ML",
+      "unitNames": [
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dew00uto5ni4qjfgtbh",
+      "name": "NESCAFE 3 IN 1 (36G)",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dew00uuo5niofwi7qdv",
+      "name": "NESCAFE STRIP SACHET (1.5G)",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dew00v0o5ni4rfgwquy",
+      "name": "NIDO 1  PLUS TIN (400G)",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dew00v1o5niztclkvr7",
+      "name": "NIDO PILLOW S (365G)",
+      "unitNames": [
+        "carton",
+        "pillow"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dex00v2o5nige87kcn4",
+      "name": "NIDO SACHET B/S (23G)",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dex00v3o5niijgpsar4",
+      "name": "NIDO SACHET S/S (14G)",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dex00v9o5ni8w7teb3w",
+      "name": "NIVEA ROLL-ON (50ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df600vro5nildv4l97j",
+      "name": "OBA SPAGHETTI B/S (450G)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df600weo5ni83w95mea",
+      "name": "OMO WASHING POWDER (400G)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df700x3o5nireke9ia5",
+      "name": "PEACOCK RICE (5X5KG)",
+      "unitNames": [
+        "bag",
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df700x5o5niucpjpfmp",
+      "name": "PEACOCK RICE 1KG",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df700x9o5ni9el6swav",
+      "name": "PEAK GREEN B/S (390G)",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df700xfo5nibzd6nzzr",
+      "name": "PEEVA WATER 750ML",
+      "unitNames": [
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df700xgo5nickqrzb31",
+      "name": "PEEVA WATER/NERO PRIME 500ML",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df800xyo5nicgebtnwg",
+      "name": "PERLA WATER X/S 330ML",
+      "unitNames": [
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df800y9o5niq0npwua9",
+      "name": "PMF (400G)",
+      "unitNames": [
+        "container"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df800yco5nislsv3say",
+      "name": "POPULAR MILK S/S (160G)",
+      "unitNames": [
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df800yio5nibu0lcvpc",
+      "name": "POWER HOUSE ROLL-ON (50ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df800yjo5niq1n288iq",
+      "name": "POWER ZONE (950ML)",
+      "unitNames": [
+        "carton",
+        "bottle"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df900z0o5nizkyn2ync",
+      "name": "QUEEN ELIZABETH COCOA BUTTER B/S (500ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df900z1o5nixa6wa54a",
+      "name": "QUEEN ELIZABETH COCOA BUTTER BODY LOTION B/S (800ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df900z2o5nid8keq8x2",
+      "name": "QUEEN ELIZABETH COCOA BUTTER BODY LOTION M/S (400ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df900z3o5nit9t89txa",
+      "name": "QUEEN ELIZABETH COCOA BUTTER BODY LOTION S/S (250ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df900z4o5nigg09wsmv",
+      "name": "QUEEN ELIZABETH COCOA BUTTER M/S (250ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df900z5o5ni0547dqe1",
+      "name": "QUEEN ELIZABETH COCOA BUTTER S/S (125ML)",
+      "unitNames": [
+        "piece",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df900zko5nif20992b1",
+      "name": "RICH TEA BISCUIT B/S (300G)",
+      "unitNames": [
+        "piece"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df900zlo5niz8zr4slz",
+      "name": "RICH TEA BISCUITS S/S (200G)",
+      "unitNames": [
+        "piece"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1df900zpo5nixjqnkj4w",
+      "name": "RICHOCO S/S (400G)",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfa0106o5nig8oidng1",
+      "name": "ROYAL AROMA RICE 1KG",
+      "unitNames": [
+        "bag",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfa010ao5nimzocoxke",
+      "name": "ROYAL UMBRELLA MAUVE (5X5KG)",
+      "unitNames": [
+        "piece",
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfa010bo5ni2s247hcc",
+      "name": "ROYAL UMBRELLA RED (5X5KG)",
+      "unitNames": [
+        "piece",
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1deb00d3o5niv8ggjr34",
+      "name": "SABA WASHING SOAP 250G",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfa010ko5ni6t7vy4v4",
+      "name": "SASSO SPRAY (300ML) S/S",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfa010lo5ni6d7doto0",
+      "name": "SAVLON ANTICEPTIC B/S (500ML)",
+      "unitNames": [
+        "bottle",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfb0112o5niwcpmc60l",
+      "name": "SLEMFIT S/S 500ML",
+      "unitNames": [
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfb011oo5ni97hgsern",
+      "name": "SOKLIN W.P 170G",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfb011qo5nis5zze5o5",
+      "name": "SOKLIN W.P 800G",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfb011po5ni98j2294p",
+      "name": "SOKLIN W.P 80G",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfc012eo5ni6v419tra",
+      "name": "SUNLIGHT DISH WASH (750ML)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfc012fo5nin0c2nf95",
+      "name": "SUNLIGHT DISH WASH S/S (400ML)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfc012so5nis8awb5ii",
+      "name": "SUPER CREAM CRACKER B/S (125G)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfc0136o5nizz1op6o0",
+      "name": "TASTY TOM  SACHET (1.1KG)",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfc0137o5nila6e49c5",
+      "name": "TASTY TOM  SACHET (210G)",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfd0139o5niormqberr",
+      "name": "TASTY TOM (2.2KG)",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfd013ao5ni8lbkhgfh",
+      "name": "TASTY TOM (400G) TIN",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfd013bo5niw6szhjyb",
+      "name": "TASTY TOM 400G SACHET",
+      "unitNames": [
+        "carton",
+        "sachet"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfd013fo5ni5cgl307m",
+      "name": "TASTY TOM SACHET STRIP(60G)",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfd013io5ni1n80b5yl",
+      "name": "THE LAUGHING COW CHEESE (112G)",
+      "unitNames": [
+        "piece"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfd013so5nitjwlccnr",
+      "name": "TILEMSI BASMATI RICE 5X5KG",
+      "unitNames": [
+        "bag",
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfd0140o5nixxjdiohc",
+      "name": "TOP CHOCO SPREAD CONTAINER (250G)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfd0141o5ni4aiy3w53",
+      "name": "TOP CHOCO SPREAD CONTAINER M/S (370G)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfd0142o5nicty831mn",
+      "name": "TOP CHOCO STRIP SPREAD (18G)",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfd0143o5nikby6aqz8",
+      "name": "TOP CHOCO TEA 40G",
+      "unitNames": [
+        "carton",
+        "strip"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfe0154o5niml11a24o",
+      "name": "VENIL BROWN SUGAR 2KG B/S",
+      "unitNames": [
+        "bottle",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfe0155o5ni17ejjhs0",
+      "name": "VENIL BROWN SUGAR 3KG XB",
+      "unitNames": [
+        "bottle",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfe0156o5nintwen3th",
+      "name": "VENIL BROWN SUGAR M/S (1KG)",
+      "unitNames": [
+        "bottle",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dfe0158o5nimwskhi32",
+      "name": "VENIL FLOOR CLEANER (4L)",
+      "unitNames": [
+        "pack",
+        "galon"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dff015ko5ni45ath6fu",
+      "name": "VITAMILK 250ML",
+      "unitNames": [
+        "carton",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dff015mo5ni4q5r1db3",
+      "name": "VITAMILK CHAMP (125ML)",
+      "unitNames": [
+        "carton",
+        "pack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dff015no5ni0odgqu9y",
+      "name": "VIVA WASHING POWD. 800G",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dff015uo5nipx5emj9u",
+      "name": "XL 95 RICE 25KG",
+      "unitNames": [
+        "bag"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dff015wo5niu2w48lsk",
+      "name": "XL 95 RICE 5X5 KG",
+      "unitNames": [
+        "piece",
+        "sack"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dff0162o5ni1ver7u4y",
+      "name": "YAZZ WASHING POWDER (1KG)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dff0163o5nilintkb9q",
+      "name": "YAZZ WASHING POWDER (2KG)",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dff0164o5ni9lx3967d",
+      "name": "YAZZ WASHING POWDER (5KG)",
+      "unitNames": [
+        "carton",
+        "tin"
+      ],
+      "hasImage": false
+    },
+    {
+      "productId": "cmmtv1dff0169o5ni45ao5n77",
+      "name": "ZOOM SOAP 250G",
+      "unitNames": [
+        "piece",
+        "carton"
+      ],
+      "hasImage": false
+    }
+  ],
+  "candidateCaveat": "Explicit-size candidates only. Merchant must verify units/pack contents and available variants before changing published range."
+}

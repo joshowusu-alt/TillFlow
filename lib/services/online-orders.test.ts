@@ -3,15 +3,22 @@ import {
   createOnlineCheckout,
   createOnlineOrderNumber,
   getStorefrontCatalogPage,
+  getPublicOnlineOrder,
   getOnlineOrderStateForCollectionStatus,
   normalizeStorefrontSlug,
   recordStorefrontEvent,
+  restoreOnlineOrderInventoryReservation,
 } from './online-orders';
 
 const prismaMock = vi.hoisted(() => ({
   business: {
     findFirst: vi.fn(),
   },
+  onlineOrder: { findUnique: vi.fn(), create: vi.fn(), findFirst: vi.fn() },
+  inventoryBalance: { updateMany: vi.fn(), findMany: vi.fn() },
+  stockMovement: { createMany: vi.fn() },
+  storefrontCustomer: { findUnique: vi.fn() },
+  $transaction: vi.fn(),
   storefrontCategoryMapping: {
     findMany: vi.fn(),
   },
@@ -26,6 +33,7 @@ const prismaMock = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('@/lib/services/storefront-notifications', () => ({ enqueueOrderNotificationSafe: vi.fn().mockResolvedValue(undefined) }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -216,4 +224,85 @@ describe('getStorefrontCatalogPage', () => {
       },
     });
   });
+});
+
+
+describe('durable checkout retry', () => {
+  const input = { slug: 'retry-shop', storeId: 'store-1', customerName: 'Ama', customerPhone: '0241234567',
+    checkoutKey: '11111111-1111-4111-8111-111111111111', items: [{ productId: 'p1', unitId: 'u1', qtyInUnit: 1 }] };
+  beforeEach(() => {
+    prismaMock.business.findFirst.mockResolvedValue({ id: 'biz-1', name: 'Shop', storefrontSlug: 'retry-shop',
+      storefrontEnabled: true, plan: 'PRO', storeMode: 'SINGLE_STORE', currency: 'GHS', vatEnabled: false,
+      storefrontPaymentMode: 'MOMO_NUMBER', storefrontMomoNumber: '0241234567', storefrontMomoNetwork: 'MTN',
+      stores: [{ id: 'store-1' }] });
+    prismaMock.product.findMany.mockResolvedValue([{ id: 'p1', name: 'Rice', sellingPriceBasePence: 1000, vatRateBps: 0,
+      productUnits: [{ unitId: 'u1', conversionToBase: 1, sellingPricePence: 1000, unit: { id: 'u1', name: 'Piece' } }] }]);
+    prismaMock.onlineOrder.findUnique.mockResolvedValue(null);
+    prismaMock.onlineOrder.findFirst.mockResolvedValue(null);
+    prismaMock.inventoryBalance.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.inventoryBalance.findMany.mockResolvedValue([{ productId: "p1", qtyOnHandBase: 3, avgCostBasePence: 33, knownValuePence: 100, unvaluedQtyBase: 0 }]);
+    prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
+    prismaMock.storefrontCustomer.findUnique.mockResolvedValue(null);
+    prismaMock.onlineOrder.create.mockImplementation(async ({ data }: any) => ({ ...data, id: 'order-1' }));
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+  });
+  it('returns the original order after a lost checkout response without reserving stock again', async () => {
+    const first = await createOnlineCheckout(input);
+    const saved = prismaMock.onlineOrder.create.mock.calls[0][0].data;
+    prismaMock.onlineOrder.findUnique.mockResolvedValue({ ...saved, id: 'order-1' });
+    expect(await createOnlineCheckout(input)).toEqual(first);
+    expect(prismaMock.inventoryBalance.updateMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.onlineOrder.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.storefrontEvent.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.storefrontEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      eventType: 'order_placed', metadata: JSON.stringify({ orderId: 'order-1' }) }) });
+    expect(saved.lines.create[0]).toMatchObject({ lineCostPence: 33, costBasis: 'INVENTORY_VALUE_V1' });
+    expect(JSON.parse(saved.paymentConfigJson)).toMatchObject({ mode: 'MOMO_NUMBER', momoNumber: '0241234567' });
+    expect(prismaMock.inventoryBalance.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: {
+      qtyOnHandBase: 2, avgCostBasePence: 34, knownValuePence: 67, unvaluedQtyBase: 0 } }));
+    expect(prismaMock.stockMovement.createMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.stockMovement.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({
+      qtyBase: -1, valuePence: -33, type: 'ONLINE_ORDER_RESERVATION', referenceId: 'order-1' })] });
+    await expect(createOnlineCheckout({ ...input, items: [{ ...input.items[0], qtyInUnit: 2 }] })).rejects.toThrow('different basket');
+  });
+});
+
+describe('reserved stock valuation', () => {
+  it('restores a captured rounded cost exactly and records the release', async () => {
+    prismaMock.inventoryBalance.findMany.mockResolvedValue([{ productId: 'p1', qtyOnHandBase: 2, avgCostBasePence: 34, knownValuePence: 67, unvaluedQtyBase: 0 }]);
+    await restoreOnlineOrderInventoryReservation({ tx: prismaMock as any, storeId: 'store-1', orderId: 'order-1',
+      lines: [{ productId: 'p1', qtyBase: 1, lineCostPence: 33, costBasis: 'INVENTORY_VALUE_V1' }] });
+    expect(prismaMock.inventoryBalance.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: {
+      qtyOnHandBase: 3, avgCostBasePence: 33, knownValuePence: 100, unvaluedQtyBase: 0 } }));
+    expect(prismaMock.stockMovement.createMany).toHaveBeenLastCalledWith({ data: [expect.objectContaining({
+      qtyBase: 1, valuePence: 33, type: 'ONLINE_ORDER_RELEASE', referenceId: 'order-1' })] });
+  });
+  it('does not invent an exact value for legacy or unverified reservations', async () => {
+    prismaMock.inventoryBalance.findMany.mockResolvedValue([{ productId: 'p1', qtyOnHandBase: 2, avgCostBasePence: 0, knownValuePence: 0, unvaluedQtyBase: 2 }]);
+    await restoreOnlineOrderInventoryReservation({ tx: prismaMock as any, storeId: 'store-1', orderId: 'order-1',
+      lines: [{ productId: 'p1', qtyBase: 1, lineCostPence: 0, costBasis: 'UNVERIFIED_STOCK_V1' }] });
+    expect(prismaMock.inventoryBalance.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      qtyOnHandBase: 3, knownValuePence: 0, unvaluedQtyBase: 3 }) }));
+    expect(prismaMock.stockMovement.createMany).toHaveBeenLastCalledWith({ data: [expect.objectContaining({ valuePence: null })] });
+  });
+});
+
+it('shows captured payment instructions after the shop changes its payout account', async () => {
+  prismaMock.onlineOrder.findFirst.mockResolvedValue({ id: 'o1', createdAt: new Date(),
+    paymentConfigJson: JSON.stringify({ mode: 'BANK_TRANSFER', momoNumber: null, momoNetwork: null,
+      merchantShortcode: null, bankName: 'ORIGINAL BANK', bankAccountName: 'Original shop', bankAccountNumber: 'ORIGINAL-134',
+      bankBranch: 'Original branch', paymentNote: 'Original note' }),
+    business: { storefrontSlug: 'shop', storefrontPaymentMode: 'MOMO_NUMBER', storefrontBankAccountNumber: 'CHANGED' }, store: null,
+  });
+  expect(await getPublicOnlineOrder({ slug: 'shop', orderId: 'o1', token: 'token' })).toMatchObject({ paymentMode: 'BANK_TRANSFER', bankName: 'ORIGINAL BANK',
+    bankAccountName: 'Original shop', bankAccountNumber: 'ORIGINAL-134', bankBranch: 'Original branch', storeMessage: 'Original note',
+    momoPayoutNumber: null });
+});
+
+it('retains the single-branch business pickup address on the public order page', async () => {
+  prismaMock.onlineOrder.findFirst.mockResolvedValue({ id: 'o1', createdAt: new Date(), paymentConfigJson: null,
+    business: { storefrontSlug: 'shop', address: 'Fictional Station', _count: { stores: 1 } },
+    store: { id: 's1', name: 'Main', address: null },
+  });
+  expect(await getPublicOnlineOrder({ slug: 'shop', orderId: 'o1', token: 'token' })).toMatchObject({ pickupStoreAddress: 'Fictional Station' });
 });

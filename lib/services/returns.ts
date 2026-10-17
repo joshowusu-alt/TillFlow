@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { receiveStockValue, removeRecordedStockValue, INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
 import { lockInventoryValues } from './shared/inventory-utils';
@@ -58,6 +59,9 @@ export async function createSalesReturn(input: {
   managerApprovedByUserId?: string | null;
   managerApprovalMode?: string | null;
   type: 'RETURN' | 'VOID';
+  tx?: Prisma.TransactionClient;
+  /** Record an authorised refund liability; no money has left the business yet. */
+  deferRefund?: boolean;
 }) {
   return measureServerOperation(
     'action.sales-return.create',
@@ -82,8 +86,12 @@ async function createSalesReturnImpl(input: {
   managerApprovedByUserId?: string | null;
   managerApprovalMode?: string | null;
   type: 'RETURN' | 'VOID';
+  tx?: Prisma.TransactionClient;
+  /** Record an authorised refund liability; no money has left the business yet. */
+  deferRefund?: boolean;
 }) {
-  const invoice = await prisma.salesInvoice.findFirst({
+  const db = input.tx ?? prisma;
+  const invoice = await db.salesInvoice.findFirst({
     where: { id: input.salesInvoiceId, businessId: input.businessId },
     include: {
       business: true,
@@ -100,7 +108,7 @@ async function createSalesReturnImpl(input: {
     throw new UserError('Reason code is required for returns and voids.');
   }
 
-  const approvedBy = await prisma.user.findFirst({
+  const approvedBy = await db.user.findFirst({
     where: {
       id: input.managerApprovedByUserId,
       businessId: input.businessId,
@@ -113,13 +121,13 @@ async function createSalesReturnImpl(input: {
     throw new Error('Manager approval user is invalid.');
   }
 
-  const existingReturn = await prisma.salesReturn.findUnique({
+  const existingReturn = await db.salesReturn.findUnique({
     where: { salesInvoiceId: invoice.id }
   });
   if (existingReturn) throw new Error('Sale already returned');
 
   const invoiceId = invoice.id;
-  const result = await prisma.$transaction(async (tx) => {
+  const execute = async (tx: Prisma.TransactionClient) => {
     await lockSalesInvoiceForUpdate(tx as any, input.businessId, invoiceId);
     const invoice = await tx.salesInvoice.findFirst({
       where: { id: invoiceId, businessId: input.businessId },
@@ -189,7 +197,7 @@ async function createSalesReturnImpl(input: {
       data: { paymentStatus: input.type === 'VOID' ? 'VOID' : 'RETURNED' }
     });
 
-    if (refundAmount > 0 && refundMethod === 'CASH') {
+    if (refundAmount > 0 && refundMethod === 'CASH' && !input.deferRefund) {
       if (!invoice.tillId) {
         throw new UserError('Open till is required before recording a cash refund.');
       }
@@ -257,13 +265,15 @@ async function createSalesReturnImpl(input: {
 
     const journalLines: JournalLine[] = [
       { accountCode: ACCOUNT_CODES.sales, debitPence: invoice.subtotalPence },
-      invoice.business.vatEnabled && invoice.vatPence > 0
+      invoice.vatPence > 0
         ? { accountCode: ACCOUNT_CODES.vatPayable, debitPence: invoice.vatPence }
         : null,
       cogsTotal > 0 ? { accountCode: ACCOUNT_CODES.inventory, debitPence: cogsTotal } : null,
       cogsTotal > 0 ? { accountCode: ACCOUNT_CODES.cogs, creditPence: cogsTotal } : null,
       refundAmount > 0
-        ? refundMethod === 'CASH'
+        ? input.deferRefund
+          ? { accountCode: ACCOUNT_CODES.customerRefundsPayable, creditPence: refundAmount }
+          : refundMethod === 'CASH'
           ? { accountCode: ACCOUNT_CODES.cash, creditPence: refundAmount }
           : { accountCode: ACCOUNT_CODES.bank, creditPence: refundAmount }
         : null,
@@ -283,7 +293,8 @@ async function createSalesReturnImpl(input: {
     // The closed parent blocks confirmation. Preserve the recorded receipt claim
     // so returned/void pending rows remain visible for investigation.
     return created;
-  });
+  };
+  const result = input.tx ? await execute(input.tx) : await prisma.$transaction(execute);
 
   if (input.type === 'VOID') {
     await detectVoidFrequencyRisk({

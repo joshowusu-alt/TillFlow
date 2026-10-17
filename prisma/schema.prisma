@@ -958,6 +958,9 @@ model Unit {
 
 model OnlineOrder {
   id                  String   @id @default(cuid())
+  checkoutKey         String?
+  checkoutFingerprint String?
+  paymentConfigJson   String?
   businessId          String
   storeId             String
   customerId          String?
@@ -999,6 +1002,7 @@ model OnlineOrder {
   lines             OnlineOrderLine[]
 
   @@unique([businessId, orderNumber])
+  @@unique([businessId, checkoutKey])
   @@index([businessId, createdAt])
   @@index([storeId, createdAt])
   @@index([businessId, status, createdAt])
@@ -1136,6 +1140,8 @@ model OnlineOrderLine {
   unitPricePence    Int
   lineSubtotalPence Int
   lineVatPence      Int      @default(0)
+  lineCostPence     Int?
+  costBasis         String?
   lineTotalPence    Int
   createdAt         DateTime @default(now())
 

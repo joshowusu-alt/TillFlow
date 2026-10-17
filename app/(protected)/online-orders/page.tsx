@@ -1,7 +1,7 @@
-import PageHeader from '@/components/PageHeader';
+import type { Prisma } from '@prisma/client';
 import StorefrontUpgradeNotice from '@/components/StorefrontUpgradeNotice';
-import { recheckOnlineOrderPaymentAction, updateOnlineOrderStatusAction, batchMarkPreparingAction, markOrderRefundedAction } from '@/app/actions/online-storefront';
-import { requireBusiness } from '@/lib/auth';
+import { retryOnlineOrderSaleAction, recheckOnlineOrderPaymentAction, updateOnlineOrderStatusAction, batchMarkPreparingAction, markOrderRefundedAction } from '@/app/actions/online-storefront';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatDateTime, formatMoney, formatGhanaPhoneForDisplay, toTitleCase } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
@@ -9,7 +9,9 @@ import { prisma } from '@/lib/prisma';
 export const dynamic = 'force-dynamic';
 
 const STATUS_TABS = [
-  { key: 'all',              label: 'All' },
+  { key: 'all',              label: 'Outstanding' },
+  { key: 'ALL_ORDERS',       label: 'All orders' },
+  { key: 'REFUNDS',          label: 'Refunds needed' },
   { key: 'AWAITING_PAYMENT', label: 'Awaiting payment' },
   { key: 'PAID',             label: 'Payment confirmed' },
   { key: 'PROCESSING',       label: 'Preparing' },
@@ -60,10 +62,10 @@ function slaBand(ageMin: number, status: string): 'ok' | 'warn' | 'urgent' {
 function AgeBadge({ createdAt, status }: { createdAt: Date | string; status: string }) {
   const ageMin = orderAgeMinutes(createdAt);
   const band = slaBand(ageMin, status);
-  const label = ageMin < 1 ? 'just now' : `${ageMin} min ago`;
+  const label = ageMin < 1 ? 'just now' : ageMin < 60 ? `${ageMin} min ago` : ageMin < 1440 ? `${Math.floor(ageMin / 60)} hr ${ageMin % 60} min ago` : `${Math.floor(ageMin / 1440)} days ago`;
   if (band === 'urgent') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800">
+      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" aria-hidden="true" />
         {label}
       </span>
@@ -71,15 +73,16 @@ function AgeBadge({ createdAt, status }: { createdAt: Date | string; status: str
   }
   if (band === 'warn') {
     return (
-      <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+      <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
         {label}
       </span>
     );
   }
-  return <span className="text-[10px] text-black/40">{label}</span>;
+  return <span className="text-xs text-slate-600">{label}</span>;
 }
 
-function NextStepCTA({ order }: {
+function NextStepCTA({ order, canManage = true }: {
+  canManage?: boolean;
   order: {
     id: string;
     status: string;
@@ -89,6 +92,7 @@ function NextStepCTA({ order }: {
 }) {
   const done = order.status === 'COMPLETED' || order.status === 'CANCELLED';
   if (done) return null;
+  if (!canManage && order.paymentStatus !== 'PAID') return <p className="text-xs text-amber-800">A manager must verify payment before preparation.</p>;
   const recheckPaymentAction = recheckOnlineOrderPaymentAction.bind(null, order.id);
 
   const canCancel = order.status !== 'COMPLETED' && order.status !== 'CANCELLED';
@@ -123,7 +127,7 @@ function NextStepCTA({ order }: {
           {nextLabel}
         </button>
       </form>
-      {canCancel ? (
+      {canCancel && canManage ? (
         <form action={updateOnlineOrderStatusAction} className="w-full sm:w-auto">
           <input type="hidden" name="orderId" value={order.id} />
           <input type="hidden" name="nextStatus" value="CANCELLED" />
@@ -132,7 +136,7 @@ function NextStepCTA({ order }: {
           </button>
         </form>
       ) : null}
-      {order.status === 'AWAITING_PAYMENT' && order.paymentCollectionId ? (
+      {canManage && order.status === 'AWAITING_PAYMENT' && order.paymentCollectionId ? (
         <form action={recheckPaymentAction} className="w-full sm:w-auto">
           <button type="submit" className="btn-ghost w-full justify-center sm:w-auto">
             Re-check payment
@@ -146,9 +150,12 @@ function NextStepCTA({ order }: {
 export default async function OnlineOrdersPage({
   searchParams,
 }: {
-  searchParams?: { status?: string };
+  searchParams?: { status?: string; order?: string; q?: string; page?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { user, business, store } = await requireBusinessAndOptionalStore(['CASHIER', 'MANAGER', 'OWNER']);
+  const canManage = user.role !== 'CASHIER';
+  if (!canManage && !store) return <p>Select a branch in the header to view online orders.</p>;
+  const branchFilter = store ? { storeId: store.id } : {};
   const features = getFeatures(
     (business as any).plan ?? (business.mode as any),
     (business as any).storeMode as any,
@@ -160,13 +167,46 @@ export default async function OnlineOrdersPage({
   }
 
   const activeTab: StatusKey = isValidStatus(searchParams?.status) ? searchParams!.status! : 'all';
-  const statusFilter = activeTab !== 'all' ? { status: activeTab as string } : {};
+  const attentionFilter: Prisma.OnlineOrderWhereInput = { OR: [
+    { status: { in: ['AWAITING_PAYMENT', 'PAYMENT_FAILED', 'PAID', 'PROCESSING', 'READY_FOR_PICKUP'] } },
+    { status: 'CANCELLED', refundStatus: 'MANUAL_REFUND_NEEDED' },
+  ] };
+  const query = (searchParams?.q ?? '').trim().slice(0, 100);
+  const pageSize = 20;
+  const requestedPage = /^\d{1,7}$/.test(searchParams?.page ?? '') ? Math.max(1, Number(searchParams?.page)) : 1;
+  const statusFilter: Prisma.OnlineOrderWhereInput = activeTab === 'all' ? attentionFilter
+    : activeTab === 'ALL_ORDERS' ? {}
+    : activeTab === 'REFUNDS'
+    ? { status: 'CANCELLED', refundStatus: 'MANUAL_REFUND_NEEDED' }
+    : activeTab === 'AWAITING_PAYMENT'
+    ? { status: { in: ['AWAITING_PAYMENT', 'PAYMENT_FAILED'] } }
+    : { status: activeTab };
 
-  const [orders, summary] = await Promise.all([
-    prisma.onlineOrder.findMany({
-      where: { businessId: business.id, ...statusFilter },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
+  const phoneDigits = query.replace(/[^\d]/g, '');
+  const phoneSearch = phoneDigits.startsWith('0') ? `233${phoneDigits.slice(1)}` : phoneDigits;
+  // The live storefront uses PostgreSQL; cast preserves the SQLite CI client contract.
+  const textMatch = (value: string) => ({ contains: value, mode: 'insensitive' } as any);
+  const where: Prisma.OnlineOrderWhereInput = {
+    businessId: business.id, ...branchFilter, ...statusFilter,
+    ...(searchParams?.order ? { id: searchParams.order } : {}),
+    ...(query ? { AND: [{ OR: [
+      { orderNumber: textMatch(query) }, { customerName: textMatch(query) },
+      { customerPhone: { contains: phoneDigits.length >= 3 ? phoneSearch : query } },
+    ] }] } : {}),
+  };
+  const [matchingCount, summary, refundNeeded] = await Promise.all([
+    prisma.onlineOrder.count({ where }),
+    prisma.onlineOrder.groupBy({ by: ['status'], where: { businessId: business.id, ...branchFilter }, _count: { _all: true } }),
+    prisma.onlineOrder.count({ where: { businessId: business.id, ...branchFilter, status: 'CANCELLED', refundStatus: 'MANUAL_REFUND_NEEDED' } }),
+  ]);
+  const pageCount = Math.max(1, Math.ceil(matchingCount / pageSize));
+  const page = Math.min(requestedPage, pageCount);
+  const direction = ['ALL_ORDERS', 'COMPLETED', 'CANCELLED'].includes(activeTab) ? 'desc' : 'asc';
+  const orders = await prisma.onlineOrder.findMany({
+      where,
+      orderBy: [{ createdAt: direction }, { id: direction }],
+      take: pageSize,
+      skip: (page - 1) * pageSize,
         select: {
           id: true,
           orderNumber: true,
@@ -203,100 +243,45 @@ export default async function OnlineOrdersPage({
           },
         },
       },
-    }),
-    prisma.onlineOrder.groupBy({
-      by: ['status'],
-      where: { businessId: business.id },
-      _count: { _all: true },
-    }),
-  ]);
+    });
 
   const countFor = (s: string) => summary.find((r) => r.status === s)?._count._all ?? 0;
-  const awaiting = countFor('AWAITING_PAYMENT');
+  const awaiting = countFor('AWAITING_PAYMENT') + countFor('PAYMENT_FAILED');
   const paid = countFor('PAID');
   const processing = countFor('PROCESSING');
   const ready = countFor('READY_FOR_PICKUP');
-  const totalActive = awaiting + paid + processing + ready;
-  const archived = countFor('COMPLETED') + countFor('CANCELLED');
-  const statusSummaries = [
-    {
-      label: 'Awaiting payment',
-      value: awaiting,
-      helper: awaiting > 0 ? 'Confirm MoMo or cash' : 'Clear',
-      activeClass: 'ring-1 ring-amber-200 bg-amber-50/70 text-amber-700',
-      valueClass: awaiting > 0 ? 'text-amber-600' : 'text-slate-300',
-    },
-    {
-      label: 'Payment confirmed',
-      value: paid,
-      helper: paid > 0 ? 'Start preparing' : 'Clear',
-      activeClass: 'ring-1 ring-blue-200 bg-blue-50/70 text-blue-700',
-      valueClass: paid > 0 ? 'text-blue-600' : 'text-slate-300',
-    },
-    {
-      label: 'Preparing',
-      value: processing,
-      helper: processing > 0 ? 'In progress' : 'Clear',
-      activeClass: 'ring-1 ring-indigo-200 bg-indigo-50/70 text-indigo-700',
-      valueClass: processing > 0 ? 'text-indigo-600' : 'text-slate-300',
-    },
-    {
-      label: 'Ready for pickup',
-      value: ready,
-      helper: ready > 0 ? 'Call customer' : 'Clear',
-      activeClass: 'ring-1 ring-emerald-200 bg-emerald-50/70 text-emerald-700',
-      valueClass: ready > 0 ? 'text-emerald-600' : 'text-slate-300',
-    },
-  ];
-
+  const totalActive = awaiting + paid + processing + ready + refundNeeded;
+  const archived = countFor('COMPLETED') + countFor('CANCELLED') - refundNeeded;
+  const listUrl = (status: StatusKey, targetPage = 1) => {
+    const params = new URLSearchParams();
+    if (status !== 'all') params.set('status', status);
+    if (query) params.set('q', query);
+    if (targetPage > 1) params.set('page', String(targetPage));
+    return `/online-orders${params.size ? `?${params}` : ''}`;
+  };
   return (
-    <div className="space-y-5 lg:space-y-6">
-      <PageHeader
-        eyebrow="Storefront"
-        title="Online Orders"
-        subtitle="Confirm payments, prepare orders, and track pickup progress."
-        actions={
-          <div className="grid w-full grid-cols-2 gap-2 text-left md:w-auto">
-            <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-3 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-700/70">Active</div>
-              <div className="mt-0.5 text-lg font-display font-bold tabular-nums text-accent">{totalActive}</div>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Archived</div>
-              <div className="mt-0.5 text-lg font-display font-bold tabular-nums text-ink">{archived}</div>
-            </div>
-          </div>
-        }
-      />
-
-      {/* Status summary cards */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        {statusSummaries.map((item) => (
-          <div
-            key={item.label}
-            className={`rounded-2xl border border-black/5 bg-white px-3 py-3 shadow-sm transition sm:px-4 ${
-              item.value > 0 ? item.activeClass : ''
-            }`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/40">{item.label}</div>
-              {item.value > 0 ? <span className="mt-1 h-2 w-2 rounded-full bg-current" aria-hidden="true" /> : null}
-            </div>
-            <div className={`mt-1 text-2xl font-display font-bold tabular-nums ${item.valueClass}`}>{item.value}</div>
-            <div className={`mt-1 text-[10px] font-semibold ${item.value > 0 ? '' : 'text-slate-400'}`}>{item.helper}</div>
-          </div>
-        ))}
-      </div>
+    <div className="space-y-4">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-display font-bold text-ink">Online orders</h1>
+          <p className="mt-1 text-sm text-slate-600">{canManage
+            ? 'Verify payments, manage refunds and keep pickup orders moving.'
+            : 'Prepare paid orders, mark them ready and confirm collection. Payment and refund issues go to a manager.'}</p>
+        </div>
+        <p className="text-sm text-slate-600"><strong className="text-ink">{totalActive}</strong> outstanding · {refundNeeded} refunds needed · {archived} archived</p>
+      </header>
 
       {/* Filter tabs */}
       <nav aria-label="Filter orders by status" className="space-y-2">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/45">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
           Filter by status
         </div>
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap">
           {STATUS_TABS.map((tab) => {
             const tabCount =
               tab.key === 'all' ? totalActive :
+              tab.key === 'ALL_ORDERS' ? totalActive + archived :
+              tab.key === 'REFUNDS' ? refundNeeded :
               tab.key === 'AWAITING_PAYMENT' ? awaiting :
               tab.key === 'PAID' ? paid :
               tab.key === 'PROCESSING' ? processing :
@@ -307,7 +292,7 @@ export default async function OnlineOrdersPage({
             return (
               <a
                 key={tab.key}
-                href={tab.key === 'all' ? '/online-orders' : `/online-orders?status=${tab.key}`}
+                href={listUrl(tab.key)}
                 aria-current={isActive ? 'page' : undefined}
                 className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-semibold transition ${
                   isActive
@@ -316,8 +301,8 @@ export default async function OnlineOrdersPage({
                 }`}
               >
                 {tab.label}
-                {tabCount > 0 && !isActive ? (
-                  <span className="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                {tabCount > 0 ? (
+                  <span className="rounded-full bg-black/10 px-1.5 py-0.5 text-xs font-bold leading-none">
                     {tabCount}
                   </span>
                 ) : null}
@@ -327,10 +312,21 @@ export default async function OnlineOrdersPage({
         </div>
       </nav>
 
+      <form action="/online-orders" method="get" role="search" className="flex flex-wrap items-end gap-2">
+        <input type="hidden" name="status" value={activeTab === 'all' ? 'ALL_ORDERS' : activeTab} />
+        <div className="min-w-0 flex-1 basis-64">
+          <label htmlFor="online-order-search" className="mb-1 block text-sm font-semibold text-slate-700">Find an order</label>
+          <input id="online-order-search" name="q" type="search" defaultValue={query} maxLength={100} placeholder="Order reference, customer name or phone" className="input w-full" />
+        </div>
+        <button type="submit" className="btn-primary min-h-11">Search</button>
+        {query || searchParams?.order ? <a href={activeTab === 'all' ? '/online-orders' : `/online-orders?status=${activeTab}`} className="btn-secondary min-h-11">Clear search</a> : null}
+        {activeTab === 'all' ? <p className="w-full text-xs text-slate-600">Search includes the full order history. Select a status to narrow results.</p> : null}
+      </form>
+
       {/* Batch preparing banner — shown when any PAID orders need processing */}
-      {(() => {
+      {canManage && (() => {
         const paidOrders = orders.filter((o) => o.status === 'PAID');
-        if (paidOrders.length === 0) return null;
+        if (paidOrders.length === 0 || paidOrders.length !== paid || query || searchParams?.order) return null;
         // Group by store
         const byStore = new Map<string, { storeId: string; storeName: string; count: number }>();
         for (const o of paidOrders) {
@@ -364,69 +360,19 @@ export default async function OnlineOrdersPage({
         );
       })()}
 
-      {/* Orders list */}
-      {(() => {
-        if (activeTab !== 'all') {
-          // Filtered tab: flat list
-          return (
-            <div className="space-y-4">
-              {orders.length === 0 ? (
-                <div className="card p-6 text-sm text-black/55">
-                  {`No orders with status "${STATUS_TABS.find(t => t.key === activeTab)?.label}".`}
-                </div>
-              ) : (
-                orders.map((order) => <OrderCard key={order.id} order={order} />)
-              )}
-            </div>
-          );
-        }
-
-        // All tab: split action-needed vs history
-        const actionOrders = orders.filter((o) =>
-          ['AWAITING_PAYMENT', 'PAID', 'PROCESSING', 'READY_FOR_PICKUP'].includes(o.status),
-        );
-        const historyOrders = orders.filter((o) =>
-          !['AWAITING_PAYMENT', 'PAID', 'PROCESSING', 'READY_FOR_PICKUP'].includes(o.status),
-        );
-
-        if (orders.length === 0) {
-          return <div className="card p-6 text-sm text-black/55">No online orders yet.</div>;
-        }
-
-        return (
-          <div className="space-y-6">
-            {actionOrders.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
-                    <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">
-                    {actionOrders.length} {actionOrders.length === 1 ? 'order' : 'orders'} need attention
-                    </div>
-                  </div>
-                  <span className="text-xs text-black/40">Newest first</span>
-                </div>
-                <div className="space-y-3">
-                  {actionOrders.map((order) => <OrderCard key={order.id} order={order} />)}
-                </div>
-              </div>
-            )}
-            {historyOrders.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3 border-t border-black/5 pt-5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/35">
-                    Recent history
-                  </div>
-                  <div className="text-xs text-black/35">{historyOrders.length} archived</div>
-                </div>
-                <div className="space-y-2.5">
-                  {historyOrders.map((order) => <OrderCard key={order.id} order={order} compact />)}
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })()}
+      <section aria-label="Order results" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
+          <p role="status">{matchingCount === 0 ? 'No matching orders' : `Showing ${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, matchingCount)} of ${matchingCount} orders`}</p>
+          <span>{direction === 'asc' ? 'Oldest outstanding first' : 'Newest first'}</span>
+        </div>
+        {orders.length === 0 ? <div className="card p-6 text-sm text-slate-600">{query ? 'No orders match this search. Check the reference, name or phone, or try All orders.' : 'No orders in this view. Select All orders to browse the full history.'}</div>
+          : orders.map((order) => <OrderCard key={order.id} order={order} canManage={canManage} />)}
+        <nav aria-label="Order pages" className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+          {page > 1 ? <a className="btn-secondary min-h-11" rel="prev" href={listUrl(activeTab, page - 1)}>Previous</a> : <span className="px-3 py-2 text-sm text-slate-400" aria-disabled="true">Previous</span>}
+          <span className="text-sm font-medium text-slate-700">Page {page} of {pageCount}</span>
+          {page < pageCount ? <a className="btn-secondary min-h-11" rel="next" href={listUrl(activeTab, page + 1)}>Next</a> : <span className="px-3 py-2 text-sm text-slate-400" aria-disabled="true">Next</span>}
+        </nav>
+      </section>
     </div>
   );
 }
@@ -457,7 +403,7 @@ type OrderRow = {
   lines: Array<{ id: string; productName: string; qtyInUnit: number; unitName: string }>;
 };
 
-function OrderCard({ order, compact = false }: { order: OrderRow; compact?: boolean }) {
+function OrderCard({ order, compact = false, canManage = true }: { order: OrderRow; compact?: boolean; canManage?: boolean }) {
   const statusDone = order.status === 'COMPLETED' || order.status === 'CANCELLED';
   const statusBorderClass = ({
     AWAITING_PAYMENT: 'border-l-4 border-l-amber-400',
@@ -471,7 +417,7 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
   } as Record<string, string>)[order.status] ?? 'border-l-2 border-l-slate-200';
 
   return (
-    <div className={`overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm transition hover:shadow-md ${statusDone ? 'opacity-80' : ''}`}>
+    <div id={`order-${order.id}`} className={`scroll-mt-48 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm transition hover:shadow-md ${statusDone && order.refundStatus !== 'MANUAL_REFUND_NEEDED' ? 'bg-slate-50/50' : ''}`}>
       <div className={`flex flex-col gap-3 ${compact ? 'p-3.5 lg:py-3' : 'p-4 sm:p-5'} lg:flex-row lg:items-start ${statusBorderClass}`}>
         <div className="min-w-0 space-y-2 lg:flex-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -480,17 +426,17 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
               <StatusBadge status={order.status} />
               <AgeBadge createdAt={order.createdAt} status={order.status} />
               {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
-                <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-700">
+                <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.18em] text-rose-700">
                   ⚠ Refund needed
                 </span>
               ) : null}
               {order.refundStatus === 'REFUNDED' ? (
-                <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
                   Refunded
                 </span>
               ) : null}
               {order.store ? (
-                <span className="rounded-full bg-black/[0.04] px-2.5 py-0.5 text-[10px] font-medium text-black/55">
+                <span className="rounded-full bg-black/[0.04] px-2.5 py-0.5 text-xs font-medium text-black/55">
                   {order.store.name}
                 </span>
               ) : null}
@@ -502,7 +448,7 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <div className="truncate font-semibold text-sm text-ink">{order.customerName}</div>
-                <div className="text-xs text-black/45">{formatDateTime(order.createdAt)}</div>
+                <div className="text-xs text-slate-600">{formatDateTime(order.createdAt)}</div>
               </div>
 
               {order.customerPhone ? (
@@ -527,12 +473,12 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
             </div>
 
             <div className="min-w-0 space-y-1">
-              <div className={`text-xs text-black/50 leading-relaxed ${compact ? 'line-clamp-1' : 'line-clamp-2'}`}>
+              <div className={`text-xs text-slate-600 leading-relaxed ${compact ? 'line-clamp-1' : 'line-clamp-2'}`}>
                 {order.lines.map((line) => `${line.qtyInUnit} × ${toTitleCase(line.productName)} (${toTitleCase(line.unitName)})`).join(' · ')}
               </div>
 
               {order.paymentCollection?.providerStatus ? (
-                <div className="text-xs text-black/40">
+                <div className="text-xs text-slate-600">
                   Provider: {order.paymentCollection.providerStatus}
                   {order.paymentCollection.providerReference ? ` · Ref ${order.paymentCollection.providerReference}` : ''}
                 </div>
@@ -543,7 +489,16 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
             </div>
           </div>
 
-          {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
+          {order.paymentStatus === 'PAID' && !order.salesInvoiceId && order.status !== 'CANCELLED' ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
+              <p>Payment confirmed. Sale posting needs attention before preparation.</p>
+              {canManage ? <form action={retryOnlineOrderSaleAction} className="mt-2">
+                <input type="hidden" name="orderId" value={order.id} />
+                <button className="btn-secondary" type="submit">Retry sale posting</button>
+              </form> : <p>Ask your manager to retry sale posting.</p>}
+            </div>
+          ) : null}
+          {canManage && order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
             <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 space-y-2">
               <p className="text-xs text-rose-800 font-medium">
                 Payment was received but this order was cancelled. The customer needs a manual refund.
@@ -551,7 +506,7 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
               <form action={markOrderRefundedAction} className="flex flex-wrap items-end gap-2">
                 <input type="hidden" name="orderId" value={order.id} />
                 <div className="flex-1 min-w-[140px]">
-                  <label htmlFor={`refundNote-${order.id}`} className="text-[10px] font-semibold text-rose-700 uppercase tracking-wide block mb-1">
+                  <label htmlFor={`refundNote-${order.id}`} className="text-xs font-semibold text-rose-700 uppercase tracking-wide block mb-1">
                     Refund note (optional)
                   </label>
                   <input
@@ -565,7 +520,7 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
                 <button
                   type="submit"
                   aria-label={`Mark order ${order.orderNumber} as refunded`}
-                  className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 transition"
+                  className="min-h-11 rounded-md bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-700 transition"
                 >
                   Mark as refunded
                 </button>
@@ -573,6 +528,7 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
             </div>
           ) : null}
 
+          {!canManage && order.refundStatus === 'MANUAL_REFUND_NEEDED' ? <p className="text-sm font-medium text-rose-800">Manager action needed: refund this customer.</p> : null}
           {order.refundStatus === 'REFUNDED' && order.refundNote ? (
             <div className="text-xs text-emerald-700">
               Refund note: {order.refundNote}
@@ -582,6 +538,7 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
 
         <div className="flex-shrink-0 lg:w-[13rem]">
           <NextStepCTA
+            canManage={canManage}
             order={{
               id: order.id,
               status: order.status,
@@ -607,7 +564,7 @@ function StatusBadge({ status }: { status: string }) {
     PAYMENT_FAILED:   'bg-rose-100 text-rose-700',
   }[status] ?? 'bg-black/5 text-black/55';
   return (
-    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] ${cls}`}>
+    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.15em] ${cls}`}>
       {label}
     </span>
   );

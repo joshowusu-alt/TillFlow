@@ -9,7 +9,10 @@ export async function countOnlineOrdersNeedingAttention(businessId: string): Pro
   return prisma.onlineOrder.count({
     where: {
       businessId,
-      status: { in: ['AWAITING_PAYMENT', 'PAID', 'PROCESSING'] },
+      OR: [
+        { status: { in: ['AWAITING_PAYMENT', 'PAYMENT_FAILED', 'PAID', 'PROCESSING', 'READY_FOR_PICKUP'] } },
+        { refundStatus: 'MANUAL_REFUND_NEEDED' },
+      ],
     },
   });
 }

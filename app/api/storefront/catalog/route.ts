@@ -5,6 +5,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const slug = searchParams.get('slug') ?? '';
   const page = await getStorefrontCatalogPage(slug, {
+    productIds: searchParams.has('ids') ? (searchParams.get('ids') ?? '').split(',').filter(Boolean).slice(0, 50) : undefined,
     search: searchParams.get('q'),
     categoryId: searchParams.get('category'),
     offset: Number(searchParams.get('offset') ?? 0),
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(page, {
     headers: {
-      'Cache-Control': 'private, max-age=20, stale-while-revalidate=60',
+      'Cache-Control': searchParams.has('ids') ? 'no-store' : 'private, max-age=20, stale-while-revalidate=60',
     },
   });
 }
