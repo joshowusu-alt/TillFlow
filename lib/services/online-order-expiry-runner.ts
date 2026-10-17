@@ -24,6 +24,8 @@ export async function expireOnlineOrders(businessId?: string) {
         select: {
           productId: true,
           qtyBase: true,
+          lineCostPence: true,
+          costBasis: true,
         },
       },
     },
@@ -54,6 +56,7 @@ export async function expireOnlineOrders(businessId?: string) {
         }
 
         await restoreOnlineOrderInventoryReservation({
+          orderId: order.id,
           storeId: order.storeId,
           lines: order.lines,
           tx,

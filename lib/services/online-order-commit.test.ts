@@ -31,3 +31,16 @@ it('surfaces failed posting so the order stays visible for retry', async () => {
   await expect(commitOnlineOrderSale('o1')).rejects.toThrow('Posting failed');
   expect(mocks.update).not.toHaveBeenCalled();
 });
+
+it('keeps bank tender after the shop changes to mobile money', async () => {
+  mocks.order.mockResolvedValue({ ...order, business: { storefrontPaymentMode: 'MOMO_NUMBER' }, paymentConfigJson: JSON.stringify({
+    mode: 'BANK_TRANSFER', momoNumber: null, momoNetwork: null, merchantShortcode: null, bankName: 'TEST',
+    bankAccountName: null, bankAccountNumber: 'TEST-134', bankBranch: null, paymentNote: null }) });
+  await commitOnlineOrderSale('o1');
+  expect(mocks.createSale).toHaveBeenCalledWith(expect.objectContaining({ payments: [{ method: 'TRANSFER', amountPence: 1500 }] }));
+});
+it('uses mobile money for a provider collection even if the shop currently advertises bank transfer', async () => {
+  mocks.order.mockResolvedValue({ ...order, paymentCollectionId: 'collection-1' });
+  await commitOnlineOrderSale('o1');
+  expect(mocks.createSale).toHaveBeenCalledWith(expect.objectContaining({ payments: [{ method: 'MOBILE_MONEY', amountPence: 1500 }] }));
+});

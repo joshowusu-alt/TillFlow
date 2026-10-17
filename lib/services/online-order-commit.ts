@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { parseStoredStorefrontPaymentConfig } from '@/lib/storefront-payments';
 import { createSale } from './sales';
 
 const ONLINE_USER_NAME = 'TillFlow Online';
@@ -65,7 +66,7 @@ export async function commitOnlineOrderSale(orderId: string): Promise<string | n
       saleSource: 'ONLINE_ORDER',
       paymentStatus: 'PAID',
       // Manual receipts have already been verified by a manager on this order.
-      payments: [{ method: order.business.storefrontPaymentMode === 'BANK_TRANSFER' ? 'TRANSFER' : 'MOBILE_MONEY', amountPence: order.totalPence }],
+      payments: [{ method: !order.paymentCollectionId && (parseStoredStorefrontPaymentConfig(order.paymentConfigJson)?.mode ?? order.business.storefrontPaymentMode) === 'BANK_TRANSFER' ? 'TRANSFER' : 'MOBILE_MONEY', amountPence: order.totalPence }],
       momoCollectionId: order.paymentCollectionId ?? null,
       bypassOpenTillRequirement: true,
       externalRef: `WEB-${order.orderNumber}`,

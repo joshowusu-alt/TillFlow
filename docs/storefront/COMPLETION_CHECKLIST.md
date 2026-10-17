@@ -94,3 +94,20 @@ Neon access is working. Read-only inspection has verified the separate project `
 - Found/fixed: bank-transfer return incorrectly labelled mobile money; refund journal credited Bank before actual refund payment. New storefront cancellations now credit Customer Refunds Payable; claimed manager settlement clears payable and credits Bank once. Historical refunds without that liability are not charged again. Payments arriving after cancellation without an invoice are booked to Bank/refund liability, not sales.
 - Captured VAT is reversed even when merchant disables VAT after sale. Cancelled order pages no longer instruct customers to collect. Staff payment hint is tender-neutral; singular attention count corrected.
 - Follow-up validation: 42 tests passed across return/action/provider/refund/financial suites; typecheck and lint passed. Hosted verification of these follow-up fixes remains pending.
+
+### PostgreSQL races, refunds and permission evidence
+
+- Hosted owner-only acceptance harness (`/qa/storefront`) is restricted to this exact Preview branch, isolated database host, fictional business and SMS-disabled fixture. No production path is enabled.
+- Concurrent checkout retry, sale-posting retry, cancellation/posting race and two competing failed-payment expiry passes all passed against real Postgres. One reservation/invoice at most; cancelled orders restored stock once.
+- New paid cancellation `ORD-PD8U`: TRANSFER return credits account 2200 (Customer Refunds Payable), not Bank. Manager settlement debits 2200 and credits Bank once. Legacy `ORD-HG49` settlement produces no second Bank debit/credit.
+- Cashier server check rejected payment confirmation from a stale owner screen; fresh cashier screen hides financial actions and successfully marks a paid order as preparing. Fixture role restored to OWNER. Branch isolation and refresh persistence verified. Independent authenticated sessions and audible sound remain unverified.
+- Customer refund progress and unresolved failed-payment/refund attention lists corrected.
+
+### Reservation valuation and payment destination follow-up
+
+- Found checkout discarded exact inventory value and omitted reservation stock movements. New checkout captures line cost/basis, preserves tracked balance value, records a reservation movement and links that same movement to the canonical invoice on payment without deducting stock twice.
+- Unpaid cancellation/expiry restore the captured cost and record a release. Legacy/unknown costs remain explicitly unverified rather than inventing value.
+- Orders snapshot their payment destination at checkout; later merchant payment-mode/account edits cannot change the public order instructions or canonical tender. Provider collections remain mobile money.
+- Additive migration `20261017003000_storefront_reservation_snapshot`: nullable payment snapshot and line cost/basis columns; existing orders retain legacy fallback.
+- Local validation: 139 tests passed across nine financial/order/payment suites; typecheck and targeted lint passed. Hosted exact-value regression is pending this commit's deployment.
+- Catalogue release manifest prepared: six clear category corrections, 34 mixed-brand decisions and 196 explicit-size range candidates. Production catalogue edits, merchant product facts/images and final selection remain pending.

@@ -29,7 +29,7 @@ const {
     mobileMoneyStatusLog: { create: vi.fn() },
     salesInvoice: { create: vi.fn(), aggregate: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() },
     businessSequence: { create: vi.fn(), update: vi.fn(), upsert: vi.fn() },
-    stockMovement: { createMany: vi.fn() },
+    stockMovement: { createMany: vi.fn(), updateMany: vi.fn() },
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
   },
@@ -1824,6 +1824,21 @@ describe('online order posting', () => {
     expect(prismaMock.onlineOrder.update).toHaveBeenCalledWith({ where: { id: 'web-1' }, data: { salesInvoiceId: 'inv-1' } });
     expect(prismaMock.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ active: false, email: 'online-system+biz-1@tillflow.system' }) }));
     expect(postJournalEntryMock.mock.calls[0][0].lines).toEqual(expect.arrayContaining([expect.objectContaining({ creditPence: 225 })]));
+  });
+
+  it('posts the exact reserved cost and links its stock audit without a second deduction', async () => {
+    const captured = order(); Object.assign(captured.lines[0], { lineCostPence: 33, costBasis: 'INVENTORY_VALUE_V1' });
+    prismaMock.onlineOrder.findFirst.mockResolvedValue(captured);
+    prismaMock.onlineOrder.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.stockMovement.updateMany.mockResolvedValue({ count: 1 });
+    getOpenShiftForTillMock.mockResolvedValue(null);
+    await createSale(input());
+    expect(prismaMock.salesInvoice.create.mock.calls[0][0].data.lines.create[0]).toMatchObject({ lineCostPence: 33, costBasis: 'INVENTORY_VALUE_V1' });
+    expect(prismaMock.stockMovement.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ referenceId: 'web-1', type: 'ONLINE_ORDER_RESERVATION' }),
+      data: expect.objectContaining({ type: 'SALE', referenceId: 'inv-1' }) }));
+    expect(prismaMock.stockMovement.createMany).not.toHaveBeenCalled();
+    expect(batchDecrementInventoryBalanceMock).not.toHaveBeenCalled();
   });
 
   it('does not create a sale if cancellation wins the transaction lock', async () => {

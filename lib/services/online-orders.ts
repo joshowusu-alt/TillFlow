@@ -9,7 +9,9 @@ import { initiateMobileMoneyCollection, normalizeAfricanMsisdn, currencyToDialCo
 import { normalizeGhanaPhone } from '@/lib/storefront-phone';
 import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
 import { getOpenStatus, parseWeeklyHours, type OpenStatus } from '@/lib/business-hours';
-import { normalizePaymentMode, paymentConfigIsReady, type StorefrontPaymentConfig } from '@/lib/storefront-payments';
+import { lockInventoryValues, fetchInventoryMap } from '@/lib/services/shared/inventory-utils';
+import { issueStockValue, receiveStockValue, allocateLineValues, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
+import { parseStoredStorefrontPaymentConfig, normalizePaymentMode, paymentConfigIsReady, type StorefrontPaymentConfig } from '@/lib/storefront-payments';
 import {
   buildCategoryMappingLookup,
   resolvePublicCategory,
@@ -175,6 +177,8 @@ type CheckoutLine = {
 type OnlineOrderInventoryLine = {
   productId: string;
   qtyBase: number;
+  lineCostPence?: number | null;
+  costBasis?: string | null;
 };
 
 type BusinessStorefrontSnapshot = {
@@ -237,23 +241,29 @@ async function generateUniqueOnlineOrderRef(businessId: string): Promise<string>
 
 export async function restoreOnlineOrderInventoryReservation(input: {
   storeId: string;
+  orderId?: string;
   lines: OnlineOrderInventoryLine[];
   tx?: Prisma.TransactionClient;
-}) {
-  const client = input.tx ?? prisma;
-  await Promise.all(
-    input.lines.map((line) =>
-      client.inventoryBalance.updateMany({
-        where: {
-          productId: line.productId,
-          storeId: input.storeId,
-        },
-        data: {
-          qtyOnHandBase: { increment: line.qtyBase }, knownValuePence: null, unvaluedQtyBase: null,
-        },
-      }),
-    ),
-  );
+}): Promise<void> {
+  // Every caller owns the order transition lock; inventory and release audit stay atomic.
+  if (!input.tx) return prisma.$transaction(tx => restoreOnlineOrderInventoryReservation({ ...input, tx }));
+  const client = input.tx;
+  await lockInventoryValues(client, input.storeId, input.lines.map(line => line.productId));
+  const balances = await fetchInventoryMap(input.storeId, input.lines.map(line => line.productId), client);
+  for (const line of input.lines) {
+    const before = balances.get(line.productId);
+    if (!before) throw new Error('Reserved inventory balance is missing.');
+    const value = line.lineCostPence != null && line.costBasis !== UNVERIFIED_STOCK_V1 ? line.lineCostPence : null;
+    const after = receiveStockValue(before, line.qtyBase, value);
+    await client.inventoryBalance.updateMany({ where: { productId: line.productId, storeId: input.storeId }, data: after });
+    balances.set(line.productId, after);
+    if (input.orderId && line.lineCostPence != null) {
+      await client.stockMovement.createMany({ data: [{ storeId: input.storeId, productId: line.productId,
+        qtyBase: line.qtyBase, beforeQtyBase: before.qtyOnHandBase, afterQtyBase: after.qtyOnHandBase,
+        valuePence: value, costBasis: line.costBasis, type: 'ONLINE_ORDER_RELEASE',
+        referenceType: 'ONLINE_ORDER', referenceId: input.orderId }] });
+    }
+  }
 }
 
 export function getOnlineOrderStateForCollectionStatus(status: string) {
@@ -1051,22 +1061,27 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
   const orderNumber = await generateUniqueOnlineOrderRef(business.id);
 
   const order = await prisma.$transaction(async (tx) => {
+    await lockInventoryValues(tx, store.id, [...qtyByProduct.keys()]);
+    const balances = await fetchInventoryMap(store.id, [...qtyByProduct.keys()], tx);
+    const capturedCosts = new Map<number, { lineCostPence: number; costBasis: string | null }>();
+    const movements: Array<{ productId: string; qtyBase: number; beforeQtyBase: number; afterQtyBase: number; valuePence: number | null; costBasis: string | null }> = [];
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
-      const result = await tx.inventoryBalance.updateMany({
-        where: {
-          productId,
-          storeId: store.id,
-          qtyOnHandBase: { gte: qtyBase },
-        },
-        data: {
-          qtyOnHandBase: { decrement: qtyBase }, knownValuePence: null, unvaluedQtyBase: null,
-        },
-      });
-
-      if (result.count === 0) {
-        const product = products.find((candidate) => candidate.id === productId);
+      const before = balances.get(productId);
+      if (!before || before.qtyOnHandBase < qtyBase) {
+        const product = products.find(candidate => candidate.id === productId);
         throw new UserError(`${product?.name ?? 'An item'} is out of stock right now.`);
       }
+      const issued = issueStockValue(before, qtyBase, before.avgCostBasePence);
+      const result = await tx.inventoryBalance.updateMany({
+        where: { productId, storeId: store.id, qtyOnHandBase: { gte: qtyBase } }, data: issued.after,
+      });
+      if (result.count !== 1) throw new UserError('Stock changed. Please retry checkout.');
+      const indexes = lineDetails.map((line, index) => line.productId === productId ? index : -1).filter(index => index >= 0);
+      const costs = allocateLineValues(issued.costPence, indexes.map(index => lineDetails[index].qtyBase));
+      indexes.forEach((index, offset) => capturedCosts.set(index, { lineCostPence: costs[offset], costBasis: issued.costBasis }));
+      movements.push({ productId, qtyBase: -qtyBase, beforeQtyBase: before.qtyOnHandBase,
+        afterQtyBase: issued.after.qtyOnHandBase, valuePence: issued.costBasis === UNVERIFIED_STOCK_V1 ? null : -issued.costPence,
+        costBasis: issued.costBasis });
     }
 
     // Resolve the customer link: prefer the explicit session customerId
@@ -1088,11 +1103,12 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
       resolvedCustomerId = matchByPhone?.id ?? null;
     }
 
-    return tx.onlineOrder.create({
+    const created = await tx.onlineOrder.create({
       data: {
         businessId: business.id,
         checkoutKey,
         checkoutFingerprint,
+        paymentConfigJson: JSON.stringify(buildStorefrontPaymentConfig(business)),
         storeId: store.id,
         customerId: resolvedCustomerId,
         publicToken,
@@ -1106,7 +1122,8 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
         totalPence,
         currency: business.currency,
         lines: {
-          create: lineDetails.map((line) => ({
+          create: lineDetails.map((line, index) => ({
+            ...capturedCosts.get(index)!,
             productId: line.productId,
             unitId: line.unitId,
             productName: line.productName,
@@ -1128,6 +1145,9 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
         orderNumber: true,
       },
     });
+    await tx.stockMovement.createMany({ data: movements.map(movement => ({ ...movement, storeId: store.id,
+      type: 'ONLINE_ORDER_RESERVATION', referenceType: 'ONLINE_ORDER', referenceId: created.id })) });
+    return created;
   }).catch(async (error) => {
     // The losing concurrent transaction rolls back its stock reservation.
     if (checkoutKey && error?.code === 'P2002') {
@@ -1200,6 +1220,7 @@ export async function getPublicOnlineOrder(input: {
       paidAt: true,
       fulfilledAt: true,
       paymentCollectionId: true,
+      paymentConfigJson: true,
       business: {
         select: {
           id: true,
@@ -1274,6 +1295,13 @@ export async function getPublicOnlineOrder(input: {
     return null;
   }
 
+  const config = parseStoredStorefrontPaymentConfig(order.paymentConfigJson) ?? {
+    mode: normalizePaymentMode(order.business.storefrontPaymentMode),
+    momoNumber: order.business.storefrontMomoNumber, momoNetwork: order.business.storefrontMomoNetwork,
+    merchantShortcode: order.business.storefrontMerchantShortcode, bankName: order.business.storefrontBankName,
+    bankAccountName: order.business.storefrontBankAccountName, bankAccountNumber: order.business.storefrontBankAccountNumber,
+    bankBranch: order.business.storefrontBankBranch, paymentNote: order.business.storefrontPaymentNote,
+  };
   return {
     ...order,
     paymentDeadlineAt: onlineOrderPaymentDeadline(order.createdAt).toISOString(),
@@ -1300,15 +1328,15 @@ export async function getPublicOnlineOrder(input: {
       accentColor: null,
       tagline: order.business.storefrontTagline ?? null,
     },
-    momoPayoutNumber: order.business.storefrontMomoNumber,
-    momoPayoutNetwork: order.business.storefrontMomoNetwork,
-    paymentMode: order.business.storefrontPaymentMode ?? 'MOMO_NUMBER',
-    merchantShortcode: order.business.storefrontMerchantShortcode,
-    bankName: order.business.storefrontBankName,
-    bankAccountName: order.business.storefrontBankAccountName,
-    bankAccountNumber: order.business.storefrontBankAccountNumber,
-    bankBranch: order.business.storefrontBankBranch,
-    storeMessage: order.business.storefrontPaymentNote,
+    momoPayoutNumber: config.momoNumber,
+    momoPayoutNetwork: config.momoNetwork,
+    paymentMode: config.mode,
+    merchantShortcode: config.merchantShortcode,
+    bankName: config.bankName,
+    bankAccountName: config.bankAccountName,
+    bankAccountNumber: config.bankAccountNumber,
+    bankBranch: config.bankBranch,
+    storeMessage: config.paymentNote,
     pickupStoreName: order.store?.name ?? null,
     pickupStoreAddress: order.store?.address ?? null,
   };

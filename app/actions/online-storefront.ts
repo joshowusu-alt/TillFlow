@@ -515,6 +515,8 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
           select: {
             productId: true,
             qtyBase: true,
+            lineCostPence: true,
+            costBasis: true,
           },
         },
       },
@@ -630,6 +632,7 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
           const shouldRestoreReservedInventory = order.paymentStatus !== 'PAID' || !order.salesInvoiceId;
           if (shouldRestoreReservedInventory) {
             await restoreOnlineOrderInventoryReservation({
+              orderId: order.id,
               storeId: order.storeId,
               lines: order.lines,
               tx,

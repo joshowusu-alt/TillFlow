@@ -963,6 +963,7 @@ model OnlineOrder {
   id                  String   @id @default(cuid())
   checkoutKey         String?
   checkoutFingerprint String?
+  paymentConfigJson   String?
   businessId          String
   storeId             String
   customerId          String?
@@ -1106,6 +1107,8 @@ model OnlineOrderLine {
   unitPricePence    Int
   lineSubtotalPence Int
   lineVatPence      Int      @default(0)
+  lineCostPence     Int?
+  costBasis         String?
   lineTotalPence    Int
   createdAt         DateTime @default(now())
 

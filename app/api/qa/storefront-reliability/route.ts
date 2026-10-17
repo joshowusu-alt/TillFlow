@@ -24,15 +24,15 @@ export async function POST(request: NextRequest) {
   if (!['checkout_retry', 'posting_retry', 'cancel_posting', 'expiry_race'].includes(scenario)) return NextResponse.json({ error: 'unknown_test' }, { status: 400 });
   const runId = randomUUID();
   try {
-    const before = await prisma.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId: QA_STORE, productId: 'sf134-product-2' } } });
+    const before = await prisma.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId: QA_STORE, productId: 'sf134-product-3' } } });
     const input = { slug: 'storefront-preview-134', storeId: QA_STORE, checkoutKey: runId,
       customerName: `Fictional QA ${scenario}`, customerPhone: '0240000134',
-      items: [{ productId: 'sf134-product-2', unitId: 'cmthpyqwt000cl7z5zdjgfpvs', qtyInUnit: 1 }] };
+      items: [{ productId: 'sf134-product-3', unitId: 'cmthpyqwt000cl7z5zdjgfpvs', qtyInUnit: 1 }] };
     const order = scenario === 'checkout_retry' ? await Promise.all([createOnlineCheckout(input), createOnlineCheckout(input)]).then(results => {
       verify(results[0].orderId === results[1].orderId, 'Retry created different orders'); return results[0];
     }) : await createOnlineCheckout(input);
     const orderId = order.orderId;
-    const afterCheckout = await prisma.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId: QA_STORE, productId: 'sf134-product-2' } } });
+    const afterCheckout = await prisma.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId: QA_STORE, productId: 'sf134-product-3' } } });
     verify(afterCheckout.qtyOnHandBase === before.qtyOnHandBase - 1, 'Checkout did not reserve exactly one unit');
     if (scenario === 'posting_retry' || scenario === 'cancel_posting') {
       await prisma.onlineOrder.update({ where: { id: orderId }, data: { status: 'PAID', paymentStatus: 'PAID', paidAt: new Date(), paymentConfirmedAt: new Date() } });
@@ -56,13 +56,25 @@ export async function POST(request: NextRequest) {
       const expired = await prisma.onlineOrder.findUniqueOrThrow({ where: { id: orderId } });
       verify(expired.status === 'CANCELLED' && expired.paymentStatus === 'EXPIRED', 'Failed-payment reservation did not expire');
     }
-    const current = await prisma.onlineOrder.findUniqueOrThrow({ where: { id: orderId } });
-    const stock = await prisma.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId: QA_STORE, productId: 'sf134-product-2' } } });
+    const current = await prisma.onlineOrder.findUniqueOrThrow({ where: { id: orderId }, include: { lines: true } });
+    const stock = await prisma.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId: QA_STORE, productId: 'sf134-product-3' } } });
     const invoices = await prisma.salesInvoice.count({ where: { businessId: QA_BUSINESS, externalRef: `WEB-${current.orderNumber}` } });
     verify(invoices <= 1, 'Duplicate invoice');
     verify(stock.qtyOnHandBase === before.qtyOnHandBase - (current.status === 'CANCELLED' ? 0 : 1), 'Stock was reserved or restored more than once');
+    verify(before.knownValuePence != null && before.unvaluedQtyBase === 0, 'Fixture must have exact stock values');
+    const capturedCost = current.lines.reduce((sum, line) => sum + (line.lineCostPence ?? 0), 0);
+    verify(current.lines.every(line => line.lineCostPence != null && line.costBasis === 'INVENTORY_VALUE_V1'), 'Reservation cost was not captured');
+    verify(stock.knownValuePence === before.knownValuePence - (current.status === 'CANCELLED' ? 0 : capturedCost) && stock.unvaluedQtyBase === 0, 'Exact inventory value was lost');
+    const reservationMovements = await prisma.stockMovement.count({ where: { storeId: QA_STORE,
+      referenceType: current.salesInvoiceId ? 'SALES_INVOICE' : 'ONLINE_ORDER', referenceId: current.salesInvoiceId ?? orderId,
+      type: current.salesInvoiceId ? 'SALE' : 'ONLINE_ORDER_RESERVATION' } });
+    verify(reservationMovements === 1, 'Reservation movement missing or duplicated');
+    if (current.salesInvoiceId) {
+      const invoice = await prisma.salesInvoice.findUniqueOrThrow({ where: { id: current.salesInvoiceId }, include: { lines: true } });
+      verify(invoice.lines.reduce((sum, line) => sum + line.lineCostPence, 0) === capturedCost, 'Sale replaced the captured inventory cost');
+    }
     const result = { passed: true, scenario, runId, orderId, reference: current.orderNumber,
-      status: current.status, invoiceCount: invoices, stockBefore: before.qtyOnHandBase, stockAfter: stock.qtyOnHandBase };
+      status: current.status, invoiceCount: invoices, stockBefore: before.qtyOnHandBase, stockAfter: stock.qtyOnHandBase, valueBefore: before.knownValuePence, valueAfter: stock.knownValuePence, capturedCost, reservationMovements };
     await prisma.storefrontEvent.create({ data: { businessId: QA_BUSINESS, storeSlug: 'storefront-preview-134',
       eventType: 'qa_acceptance', sessionId: runId, metadata: JSON.stringify(result) } });
     return NextResponse.redirect(new URL('/qa/storefront', request.url), 303);

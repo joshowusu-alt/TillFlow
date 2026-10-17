@@ -1017,7 +1017,9 @@ async function createSaleImpl(input: CreateSaleInput) {
       attachedShiftId = openShift?.id ?? null;
     }
 
-    const transactionCosts = lineDetails.map(line => ({
+    const transactionCosts = lineDetails.map((line, index) => onlineOrder?.lines[index].lineCostPence != null ? {
+      costPence: onlineOrder.lines[index].lineCostPence!, costBasis: onlineOrder.lines[index].costBasis,
+    } : ({
       costPence: (costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence) * line.qtyBase,
       costBasis: line.qtyBase <= 0 ? UNVERIFIED_STOCK_V1 : null as string | null,
     }));
@@ -1431,6 +1433,15 @@ async function createSaleImpl(input: CreateSaleInput) {
           CHECKOUT_STAGE_THRESHOLDS_MS.stockMovements,
         ),
       );
+    }
+
+    if (onlineOrder && !shouldApplyInventoryMovements && onlineOrder.lines.every(line => line.lineCostPence != null)) {
+      // Checkout already deducted the stock. Attach its audit rows to the canonical sale without issuing twice.
+      const linked = await tx.stockMovement.updateMany({
+        where: { storeId: input.storeId, type: 'ONLINE_ORDER_RESERVATION', referenceType: 'ONLINE_ORDER', referenceId: onlineOrder.id },
+        data: { type: 'SALE', referenceType: 'SALES_INVOICE', referenceId: created.id, userId: input.cashierUserId },
+      });
+      if (linked.count !== qtyByProduct.size) throw new UserError('Online order reservation audit is incomplete.');
     }
 
     // Journal entry inside tx — accounting must be atomic with the sale
