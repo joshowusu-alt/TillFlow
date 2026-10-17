@@ -45,6 +45,8 @@ type PublicOrder = {
   orderNumber: string;
   status: string;
   paymentStatus: string;
+  refundStatus?: string | null;
+  refundedAt?: string | Date | null;
   fulfillmentStatus: string;
   fulfillmentMethod: string;
   customerName: string;
@@ -56,6 +58,7 @@ type PublicOrder = {
   totalPence: number;
   currency: string;
   createdAt: string | Date;
+  paymentDeadlineAt?: string;
   paidAt: string | Date | null;
   fulfilledAt: string | Date | null;
   paymentConfirmedAt?: string | Date | null;
@@ -68,6 +71,7 @@ type PublicOrder = {
   storefrontName: string;
   storefrontPhone: string | null;
   pickupInstructions: string | null;
+  pickupPrepMinutes?: number;
   momoPayoutNumber: string | null;
   momoPayoutNetwork: string | null;
   paymentMode: string | null;
@@ -349,6 +353,12 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
   }, [order.id, order.storefrontSlug]);
 
   useEffect(() => {
+    if (order.status !== 'CANCELLED' || order.paymentStatus !== 'PAID' || order.refundStatus === 'REFUNDED') return;
+    const timer = window.setInterval(() => void refreshStatus(), 15_000);
+    return () => window.clearInterval(timer);
+  }, [order.status, order.paymentStatus, order.refundStatus, refreshStatus]);
+
+  useEffect(() => {
     if (terminal) {
       return;
     }
@@ -476,7 +486,11 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
   } as const;
   const statusConfig = getStatusConfig(order.status);
   const activeStep = isCancelled ? -1 : getActiveStep(order.status);
-  const heroMessage: string | null = statusConfig.message ?? (
+  const heroMessage: string | null = isCancelled && order.paymentStatus === 'PAID'
+    ? order.refundStatus === 'REFUNDED'
+      ? 'The store has marked your refund as paid. Contact the store with your order reference if it has not arrived.'
+      : 'Your payment was received and a refund is outstanding. Contact the store with your order reference. Do not send another payment.'
+    : statusConfig.message ?? (
     awaitingPayment && !paymentDetails.manual
       ? `Send exactly ${formatMoney(order.totalPence, order.currency)} using reference ${order.orderNumber} to confirm your order.`
       : awaitingPayment && paymentDetails.manual
@@ -570,20 +584,26 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
             <svg className="h-4 w-4 shrink-0 text-black/30" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-xs text-black/50">Orders are usually ready for pickup within <span className="font-semibold text-black/65">30–60 minutes</span> of payment being confirmed.</p>
+            <p className="text-xs text-black/50">{order.pickupPrepMinutes && order.pickupPrepMinutes > 0 ? `Estimated preparation: ${order.pickupPrepMinutes} minutes after payment is confirmed. ` : 'Preparation time has not been provided. '}Wait until your order is marked ready before travelling.</p>
           </div>
         )}
+
+        <section aria-label="Pickup location" className="mt-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-black/5">
+          <h2 className="text-sm font-semibold text-ink">{isCancelled ? 'Pickup branch: ' : 'Collect from '}{order.pickupStoreName || 'your selected branch'}</h2>
+          <p className="mt-1 text-xs text-black/60">{order.pickupStoreAddress || 'Pickup address has not been provided. Contact the store before travelling.'}</p>
+          {!isCancelled && order.pickupInstructions ? <p className="mt-1 text-xs text-black/60">{order.pickupInstructions}</p> : null}
+        </section>
 
         {/* Reference + amount — always visible */}
         <div className="mt-3 grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-white px-4 py-3.5 shadow-sm ring-1 ring-black/5">
             <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-black/40">Reference</div>
             <div className="mt-1.5 font-mono text-xl font-bold tracking-wide text-ink">{order.orderNumber}</div>
-            <div className="mt-1 text-[10px] text-black/40">Quote when collecting</div>
+            <div className="mt-1 text-[10px] text-black/40">{isCancelled ? 'Quote when contacting the store' : 'Quote when collecting'}</div>
           </div>
           <div className="rounded-2xl bg-white px-4 py-3.5 shadow-sm ring-1 ring-black/5">
             <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-black/40">
-              {paid ? 'Total paid' : 'Amount due'}
+              {isCancelled ? order.paymentStatus === 'PAID' ? order.refundStatus === 'REFUNDED' ? 'Refunded amount' : 'Refund outstanding' : 'Order total' : paid ? 'Total paid' : 'Amount due'}
             </div>
             <div className="mt-1.5 text-xl font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</div>
             <div className="mt-1 text-[10px] text-black/40">
@@ -600,6 +620,10 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
               <div className="mt-0.5 font-semibold text-amber-950">Pay exactly {formatMoney(order.totalPence, order.currency)}</div>
             </div>
             <div className="px-5 py-4 text-sm text-black/65">
+              {order.paymentDeadlineAt ? <p className="mb-3 rounded-xl bg-amber-50 p-3 text-amber-950">
+                Payment must be confirmed by {formatDateTime(new Date(order.paymentDeadlineAt))}. Unconfirmed orders expire and reserved stock is released.
+                If you have sent payment, contact the store now using your order reference.
+              </p> : null}
               {paymentConfig.mode === 'MERCHANT_SHORTCODE' ? (
                 <ol className="list-decimal space-y-2 pl-4">
                   <li>Open your MoMo app or dial the USSD code.</li>
@@ -614,7 +638,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
                   <li>Open your banking app or visit your branch.</li>
                   <li>Transfer <span className="font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</span>{order.bankAccountNumber ? <> to account <span className="font-mono font-bold text-ink">{order.bankAccountNumber}</span></> : null}{order.bankName ? ` (${order.bankName})` : ''}.</li>
                   <li>Use <span className="font-mono font-bold text-ink">{order.orderNumber}</span> as the narration / reference.</li>
-                  <li>Come back here to confirm when done.</li>
+                  <li>Contact the store with your reference after paying. Your order updates after the store verifies receipt.</li>
                 </ol>
               ) : order.momoPayoutNumber ? (
                 <ol className="list-decimal space-y-2 pl-4">
@@ -755,7 +779,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
         <div className="mt-5 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-black/5">
           <div className="border-b border-black/5 px-5 py-4">
             <h2 className="font-semibold text-ink">Order summary</h2>
-            <div className="mt-0.5 text-xs text-black/45">{order.lines.length} item{order.lines.length !== 1 ? 's' : ''} for pickup</div>
+            <div className="mt-0.5 text-xs text-black/45">{order.lines.length} item{order.lines.length !== 1 ? 's' : ''}{isCancelled ? ' in cancelled order' : ' for pickup'}</div>
           </div>
           <div className="divide-y divide-black/5">
             {order.lines.map((line) => (

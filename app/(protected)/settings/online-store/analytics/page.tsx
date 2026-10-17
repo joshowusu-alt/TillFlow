@@ -93,7 +93,7 @@ export default async function StorefrontAnalyticsPage({
         businessId: business.id,
         productId: { not: null },
         timestamp: { gte: since30 },
-        eventType: { in: ['product_view', 'add_to_cart', 'order_placed'] },
+        eventType: { in: ['product_view', 'add_to_cart'] },
       },
       _count: { _all: true },
     }),
@@ -135,7 +135,6 @@ export default async function StorefrontAnalyticsPage({
     if (!row.productId) continue;
     if (row.eventType === 'product_view') productViews.set(row.productId, row._count._all);
     if (row.eventType === 'add_to_cart') productCarts.set(row.productId, row._count._all);
-    if (row.eventType === 'order_placed') productOrders.set(row.productId, row._count._all);
   }
   const topProductIds = [...productViews.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -144,10 +143,15 @@ export default async function StorefrontAnalyticsPage({
 
   let productNames: Map<string, string> = new Map();
   if (topProductIds.length > 0) {
-    const products = await prisma.product.findMany({
-      where: { id: { in: topProductIds } },
-      select: { id: true, name: true },
-    });
+    const [products, orderedProducts] = await Promise.all([
+      prisma.product.findMany({ where: { id: { in: topProductIds }, businessId: business.id }, select: { id: true, name: true } }),
+      // Order conversion events are per order, not per product. Count actual order
+      // lines once per product/order, including baskets with multiple selling units.
+      prisma.onlineOrderLine.groupBy({ by: ['productId', 'onlineOrderId'],
+        where: { productId: { in: topProductIds }, onlineOrder: { businessId: business.id, createdAt: { gte: since30 } } },
+        _count: { _all: true } }),
+    ]);
+    for (const line of orderedProducts) productOrders.set(line.productId, (productOrders.get(line.productId) ?? 0) + 1);
     productNames = new Map(products.map((p) => [p.id, p.name]));
   }
 

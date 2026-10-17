@@ -105,6 +105,7 @@ vi.mock('@/lib/accounting', () => ({
     vatReceivable: '1300',
     ap: '2000',
     vatPayable: '2100',
+    customerRefundsPayable: '2200',
     equity: '3000',
     sales: '4000',
     cogs: '5000',
@@ -456,4 +457,24 @@ describe('createPurchaseReturn cash drawer', () => {
     expect(mockGetOpenCashShiftForPayment).not.toHaveBeenCalled();
     expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
   });
+});
+
+
+describe('deferred online-order refunds', () => {
+  it('restores the sale against a refund payable without claiming cash left the business', async () => {
+    vi.clearAllMocks();
+    setupSuccessfulMocks(makeInvoice());
+    await createSalesReturn({ ...makeInput(), refundMethod: 'TRANSFER', deferRefund: true });
+    const call = mockPostJournalEntry.mock.calls[0][0];
+    expect(call.lines).toContainEqual({ accountCode: '2200', creditPence: 5000 });
+    expect(call.lines.some((line: {accountCode: string; creditPence?: number}) => ['1000','1010'].includes(line.accountCode) && line.creditPence)).toBe(false);
+    expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
+  });
+});
+
+it('reverses captured VAT even when VAT was disabled after the sale', async () => {
+  vi.clearAllMocks();
+  setupSuccessfulMocks(makeInvoice({ totalPence: 5000, subtotalPence: 4500, vatPence: 500, business: { vatEnabled: false } }));
+  await createSalesReturn({ ...makeInput(), refundMethod: 'TRANSFER', deferRefund: true });
+  expect(mockPostJournalEntry.mock.calls[0][0].lines).toContainEqual({ accountCode: '2100', debitPence: 500 });
 });

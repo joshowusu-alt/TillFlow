@@ -160,7 +160,7 @@ describe('P2 mobile navigation parity', () => {
   });
 
   it('keeps route guards as the authority for Online Orders and Product Labels', () => {
-    expect(read('app/(protected)/online-orders/page.tsx')).toContain("requireBusiness(['MANAGER', 'OWNER'])");
+    expect(read('app/(protected)/online-orders/page.tsx')).toContain("requireBusinessAndOptionalStore(['CASHIER', 'MANAGER', 'OWNER'])");
     expect(read('app/(protected)/products/labels/page.tsx')).toContain("requireBusiness(['CASHIER', 'MANAGER', 'OWNER'])");
   });
 

@@ -342,6 +342,8 @@ export type CreateSaleInput = {
    * persist `shiftId = null` from POS or offline sync.
    */
   bypassOpenTillRequirement?: boolean;
+  /** Server-loaded immutable prices and verified receipt for this online order. */
+  onlineOrderId?: string;
   /** Auditable origin. Default POS for new operational sales. */
   saleSource?: SaleSource;
   /**
@@ -499,6 +501,17 @@ export async function createSale(input: CreateSaleInput) {
 }
 
 async function createSaleImpl(input: CreateSaleInput) {
+  const onlineOrder = input.onlineOrderId ? await prisma.onlineOrder.findFirst({
+    where: { id: input.onlineOrderId, businessId: input.businessId, storeId: input.storeId,
+      paymentStatus: 'PAID', status: { not: 'CANCELLED' } },
+    include: { lines: { orderBy: { id: 'asc' } } },
+  }) : null;
+  if (input.onlineOrderId && (!onlineOrder || !input.bypassOpenTillRequirement || input.saleSource !== 'ONLINE_ORDER'
+    || input.externalRef !== `WEB-${onlineOrder.orderNumber}`
+    || input.cashierUserId === '' || input.orderDiscountValue || input.loyaltyPointsToRedeem)) {
+    throw new UserError('Invalid online order sale context.');
+  }
+
   await measureCheckoutStage(
     'action.checkout.validate',
     input,
@@ -616,7 +629,8 @@ async function createSaleImpl(input: CreateSaleInput) {
         where: {
           id: input.cashierUserId,
           businessId: input.businessId,
-          ...(capturedShiftId || input.saleSource === 'LATE_OFFLINE' ? {} : { active: true }),
+          ...(onlineOrder ? { email: `online-system+${input.businessId}@tillflow.system`, active: false }
+            : capturedShiftId || input.saleSource === 'LATE_OFFLINE' ? {} : { active: true }),
         },
         select: { id: true },
       }),
@@ -675,6 +689,20 @@ async function createSaleImpl(input: CreateSaleInput) {
     CHECKOUT_STAGE_THRESHOLDS_MS.cartPricing,
   );
 
+  if (onlineOrder) {
+    if (onlineOrder.lines.length !== lineDetails.length) throw new UserError('Online order lines do not match.');
+    for (let index = 0; index < lineDetails.length; index++) {
+      const line = lineDetails[index];
+      const captured = onlineOrder.lines[index];
+      if (captured.productId !== line.productId || captured.unitId !== line.unitId || captured.qtyInUnit !== line.qtyInUnit) {
+        throw new UserError('Online order lines do not match.');
+      }
+      Object.assign(line, { qtyBase: captured.qtyBase, unitPricePence: captured.unitPricePence,
+        lineSubtotal: captured.lineSubtotalPence, lineNetSubtotal: captured.lineSubtotalPence,
+        lineDiscount: 0, promoDiscount: 0, lineVat: captured.lineVatPence, lineTotal: captured.lineTotalPence });
+      line.productUnit = { ...line.productUnit, conversionToBase: captured.conversionToBase };
+    }
+  }
   const qtyByProduct = buildQtyByProductMap(lineDetails);
   const enforceInventory = (input.inventoryPolicy ?? 'enforce') === 'enforce';
   const shouldApplyInventoryMovements = !input.skipInventoryMovements;
@@ -739,9 +767,10 @@ async function createSaleImpl(input: CreateSaleInput) {
     business.vatEnabled && lineNetSubtotalTotal > 0
       ? netAfterOrderDiscount / lineNetSubtotalTotal
       : 1;
-  const vatTotal = business.vatEnabled ? Math.round(lineVatTotal * vatRatio) : 0;
+  const vatTotal = onlineOrder ? onlineOrder.vatPence : business.vatEnabled ? Math.round(lineVatTotal * vatRatio) : 0;
   const subtotal = netAfterOrderDiscount;
   const total = subtotal + vatTotal;
+  if (onlineOrder && total !== onlineOrder.totalPence) throw new UserError('Online order totals do not match the captured lines.');
   const loyaltyPointsEarned =
     input.customerId && businessLoyalty.loyaltyEnabled
       ? computePointsEarned(total, businessLoyalty.loyaltyPointsPerGhsPence ?? 1)
@@ -906,7 +935,7 @@ async function createSaleImpl(input: CreateSaleInput) {
     // catches any discrepancies.
     for (const payment of payments) {
       if (payment.method !== 'MOBILE_MONEY') continue;
-      payment.status = 'PENDING_MANUAL';
+      payment.status = onlineOrder ? 'CONFIRMED' : 'PENDING_MANUAL';
     }
   }
 
@@ -918,6 +947,11 @@ async function createSaleImpl(input: CreateSaleInput) {
     input,
     async () => prisma.$transaction(
       async (tx) => {
+    if (onlineOrder) {
+      const claimed = await tx.onlineOrder.updateMany({ where: { id: onlineOrder.id, businessId: input.businessId,
+        paymentStatus: 'PAID', status: { not: 'CANCELLED' }, salesInvoiceId: null }, data: { updatedAt: new Date() } });
+      if (claimed.count !== 1) throw new UserError('Online order changed or has already posted. Retry from online orders.');
+    }
     // Credit limit enforcement: reject credit/part-paid sales that would exceed the customer's limit
     if (input.customerId && customerResult && customerResult.creditLimitPence > 0) {
       await measureCheckoutStage(
@@ -983,7 +1017,9 @@ async function createSaleImpl(input: CreateSaleInput) {
       attachedShiftId = openShift?.id ?? null;
     }
 
-    const transactionCosts = lineDetails.map(line => ({
+    const transactionCosts = lineDetails.map((line, index) => onlineOrder?.lines[index].lineCostPence != null ? {
+      costPence: onlineOrder.lines[index].lineCostPence!, costBasis: onlineOrder.lines[index].costBasis,
+    } : ({
       costPence: (costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence) * line.qtyBase,
       costBasis: line.qtyBase <= 0 ? UNVERIFIED_STOCK_V1 : null as string | null,
     }));
@@ -1399,6 +1435,15 @@ async function createSaleImpl(input: CreateSaleInput) {
       );
     }
 
+    if (onlineOrder && !shouldApplyInventoryMovements && onlineOrder.lines.every(line => line.lineCostPence != null)) {
+      // Checkout already deducted the stock. Attach its audit rows to the canonical sale without issuing twice.
+      const linked = await tx.stockMovement.updateMany({
+        where: { storeId: input.storeId, type: 'ONLINE_ORDER_RESERVATION', referenceType: 'ONLINE_ORDER', referenceId: onlineOrder.id },
+        data: { type: 'SALE', referenceType: 'SALES_INVOICE', referenceId: created.id, userId: input.cashierUserId },
+      });
+      if (linked.count !== qtyByProduct.size) throw new UserError('Online order reservation audit is incomplete.');
+    }
+
     // Journal entry inside tx — accounting must be atomic with the sale
     const paymentSplit = settledReceiptSplit(payments);
     const arAmount = total - paymentSplit.totalPence;
@@ -1406,7 +1451,7 @@ async function createSaleImpl(input: CreateSaleInput) {
       ...debitCashBankLines(paymentSplit),
       arAmount > 0 ? { accountCode: ACCOUNT_CODES.ar, debitPence: arAmount } : null,
       { accountCode: ACCOUNT_CODES.sales, creditPence: subtotal },
-      business.vatEnabled && vatTotal > 0
+      (business.vatEnabled || onlineOrder) && vatTotal > 0
         ? { accountCode: ACCOUNT_CODES.vatPayable, creditPence: vatTotal }
         : null
     ].filter(Boolean) as JournalLine[];
@@ -1433,6 +1478,7 @@ async function createSaleImpl(input: CreateSaleInput) {
 
     // Run inventory batch + journal entry in parallel
     await Promise.all(txPromises);
+    if (onlineOrder) await tx.onlineOrder.update({ where: { id: onlineOrder.id }, data: { salesInvoiceId: created.id } });
 
     return created;
       },

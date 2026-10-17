@@ -42,6 +42,20 @@ export type StorefrontPaymentConfig = {
   paymentNote: string | null;
 };
 
+/** Orders retain the exact payment destination shown at checkout. Legacy orders have no snapshot. */
+export function parseStoredStorefrontPaymentConfig(raw: string | null | undefined): StorefrontPaymentConfig | null {
+  if (raw == null) return null;
+  const value: unknown = JSON.parse(raw);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid order payment instructions.');
+  const record = value as Record<string, unknown>;
+  if (!(VALID_MODES as readonly unknown[]).includes(record.mode)) throw new Error('Invalid order payment instructions.');
+  const fields = ['momoNumber', 'momoNetwork', 'merchantShortcode', 'bankName', 'bankAccountName', 'bankAccountNumber', 'bankBranch', 'paymentNote'] as const;
+  for (const field of fields) {
+    if (record[field] !== null && typeof record[field] !== 'string') throw new Error('Invalid order payment instructions.');
+  }
+  return record as StorefrontPaymentConfig;
+}
+
 function hasConfiguredValue(value: string | null | undefined) {
   return Boolean(value?.trim());
 }

@@ -1,7 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { normalizeGhanaPhone } from '@/lib/storefront-phone';
-import { normalizePaymentMode, type StorefrontPaymentMode } from '@/lib/storefront-payments';
+import { parseStoredStorefrontPaymentConfig, normalizePaymentMode, type StorefrontPaymentMode } from '@/lib/storefront-payments';
 import {
   renderOrderNotification,
   type StorefrontNotificationEvent,
@@ -59,6 +59,7 @@ function buildRenderContext(args: {
     totalPence: number;
     currency: string;
     paymentStatus: string;
+    paymentConfigJson?: string | null;
   };
   business: {
     name: string;
@@ -74,8 +75,11 @@ function buildRenderContext(args: {
     phone: string | null;
   } | null;
 }): SmsRenderContext {
-  const paymentMode = normalizePaymentMode(args.business.storefrontPaymentMode);
-  const recipientForMode = paymentRecipientFor(args.business);
+  const captured = parseStoredStorefrontPaymentConfig(args.order.paymentConfigJson);
+  const paymentMode = captured?.mode ?? normalizePaymentMode(args.business.storefrontPaymentMode);
+  const recipientForMode = captured
+    ? paymentMode === 'MOMO_NUMBER' ? captured.momoNumber : paymentMode === 'MERCHANT_SHORTCODE' ? captured.merchantShortcode : null
+    : paymentRecipientFor(args.business);
 
   return {
     customerName: args.order.customerName,
@@ -86,7 +90,7 @@ function buildRenderContext(args: {
     paymentMode: paymentMode as StorefrontPaymentMode,
     paymentStatus: args.order.paymentStatus,
     paymentRecipient: recipientForMode,
-    paymentNetwork: args.business.storefrontMomoNetwork,
+    paymentNetwork: captured ? captured.momoNetwork : args.business.storefrontMomoNetwork,
     storeName: args.store?.name ?? null,
     storeAddress: args.store?.address ?? null,
     storePhone: args.store?.phone ?? args.business.phone ?? null,
@@ -130,6 +134,7 @@ export async function enqueueOrderNotification(
       totalPence: true,
       currency: true,
       paymentStatus: true,
+      paymentConfigJson: true,
     },
   });
   if (!order) {
@@ -186,7 +191,7 @@ export async function enqueueOrderNotification(
     customerName: order.customerName,
     totalPence: order.totalPence,
     currency: order.currency,
-    paymentMode: business.storefrontPaymentMode,
+    paymentMode: ctx.paymentMode,
     paymentStatus: order.paymentStatus,
     eventType: input.eventType,
   };
@@ -242,6 +247,11 @@ async function tryImmediateDispatch(outboxId: string): Promise<void> {
       },
     });
     if (!row || row.status !== 'PENDING') return;
+    const claimed = await prisma.messageOutbox.updateMany({
+      where: { id: outboxId, status: 'PENDING', lockedAt: null },
+      data: { lockedAt: new Date(), lastError: 'LOCKED:immediate' },
+    });
+    if (claimed.count !== 1) return;
 
     const sendResult = await sendStorefrontSms({
       to: row.recipient,
@@ -252,13 +262,14 @@ async function tryImmediateDispatch(outboxId: string): Promise<void> {
     if (sendResult.ok) {
       await prisma.messageOutbox.update({
         where: { id: outboxId },
-        data: { status: 'SENT', sentAt: new Date(), attempts: { increment: 1 } },
+        data: { status: 'SENT', sentAt: new Date(), attempts: { increment: 1 }, lockedAt: null, lastError: null },
       });
     } else {
       await prisma.messageOutbox.update({
         where: { id: outboxId },
         data: {
           attempts: { increment: 1 },
+          lockedAt: null,
           lastError: sendResult.error.slice(0, 500),
           nextAttemptAt: new Date(Date.now() + 60_000),
         },
