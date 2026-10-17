@@ -9,7 +9,8 @@ import { prisma } from '@/lib/prisma';
 export const dynamic = 'force-dynamic';
 
 const STATUS_TABS = [
-  { key: 'all',              label: 'Overview' },
+  { key: 'all',              label: 'Outstanding' },
+  { key: 'ALL_ORDERS',       label: 'All orders' },
   { key: 'REFUNDS',          label: 'Refunds needed' },
   { key: 'AWAITING_PAYMENT', label: 'Awaiting payment' },
   { key: 'PAID',             label: 'Payment confirmed' },
@@ -149,7 +150,7 @@ function NextStepCTA({ order, canManage = true }: {
 export default async function OnlineOrdersPage({
   searchParams,
 }: {
-  searchParams?: { status?: string; order?: string };
+  searchParams?: { status?: string; order?: string; q?: string; page?: string };
 }) {
   const { user, business, store } = await requireBusinessAndOptionalStore(['CASHIER', 'MANAGER', 'OWNER']);
   const canManage = user.role !== 'CASHIER';
@@ -170,17 +171,42 @@ export default async function OnlineOrdersPage({
     { status: { in: ['AWAITING_PAYMENT', 'PAYMENT_FAILED', 'PAID', 'PROCESSING', 'READY_FOR_PICKUP'] } },
     { status: 'CANCELLED', refundStatus: 'MANUAL_REFUND_NEEDED' },
   ] };
-  const statusFilter = activeTab === 'REFUNDS'
+  const query = (searchParams?.q ?? '').trim().slice(0, 100);
+  const pageSize = 20;
+  const requestedPage = /^\d{1,7}$/.test(searchParams?.page ?? '') ? Math.max(1, Number(searchParams?.page)) : 1;
+  const statusFilter: Prisma.OnlineOrderWhereInput = activeTab === 'all' ? attentionFilter
+    : activeTab === 'ALL_ORDERS' ? {}
+    : activeTab === 'REFUNDS'
     ? { status: 'CANCELLED', refundStatus: 'MANUAL_REFUND_NEEDED' }
     : activeTab === 'AWAITING_PAYMENT'
     ? { status: { in: ['AWAITING_PAYMENT', 'PAYMENT_FAILED'] } }
     : activeTab !== 'all' ? { status: activeTab as string } : {};
 
-  const loadOrders = (filter: Prisma.OnlineOrderWhereInput, direction: 'asc' | 'desc', limit = 100) =>
-    prisma.onlineOrder.findMany({
-      where: { businessId: business.id, ...branchFilter, ...filter, ...(searchParams?.order ? { id: searchParams.order } : {}) },
+  const phoneDigits = query.replace(/[^\d]/g, '');
+  const phoneSearch = phoneDigits.startsWith('0') ? `233${phoneDigits.slice(1)}` : phoneDigits;
+  // The live storefront uses PostgreSQL; cast preserves the SQLite CI client contract.
+  const textMatch = (value: string) => ({ contains: value, mode: 'insensitive' } as any);
+  const where: Prisma.OnlineOrderWhereInput = {
+    businessId: business.id, ...branchFilter, ...statusFilter,
+    ...(searchParams?.order ? { id: searchParams.order } : {}),
+    ...(query ? { AND: [{ OR: [
+      { orderNumber: textMatch(query) }, { customerName: textMatch(query) },
+      { customerPhone: { contains: phoneDigits.length >= 3 ? phoneSearch : query } },
+    ] }] } : {}),
+  };
+  const [matchingCount, summary, refundNeeded] = await Promise.all([
+    prisma.onlineOrder.count({ where }),
+    prisma.onlineOrder.groupBy({ by: ['status'], where: { businessId: business.id, ...branchFilter }, _count: { _all: true } }),
+    prisma.onlineOrder.count({ where: { businessId: business.id, ...branchFilter, status: 'CANCELLED', refundStatus: 'MANUAL_REFUND_NEEDED' } }),
+  ]);
+  const pageCount = Math.max(1, Math.ceil(matchingCount / pageSize));
+  const page = Math.min(requestedPage, pageCount);
+  const direction = ['ALL_ORDERS', 'COMPLETED', 'CANCELLED'].includes(activeTab) ? 'desc' : 'asc';
+  const orders = await prisma.onlineOrder.findMany({
+      where,
       orderBy: [{ createdAt: direction }, { id: direction }],
-      take: limit,
+      take: pageSize,
+      skip: (page - 1) * pageSize,
         select: {
           id: true,
           orderNumber: true,
@@ -218,17 +244,6 @@ export default async function OnlineOrdersPage({
         },
       },
     });
-  const [orders, summary, refundNeeded] = await Promise.all([
-    activeTab === 'all' && !searchParams?.order
-      ? Promise.all([loadOrders(attentionFilter, 'asc'), loadOrders({ OR: [{ status: 'COMPLETED' }, { status: 'CANCELLED', OR: [{ refundStatus: null }, { refundStatus: { not: 'MANUAL_REFUND_NEEDED' } }] }] }, 'desc', 10)]).then(([attention, history]) => [...attention, ...history])
-      : loadOrders(statusFilter, ['COMPLETED', 'CANCELLED'].includes(activeTab) ? 'desc' : 'asc'),
-    prisma.onlineOrder.groupBy({
-      by: ['status'],
-      where: { businessId: business.id, ...branchFilter },
-      _count: { _all: true },
-    }),
-    prisma.onlineOrder.count({ where: { businessId: business.id, ...branchFilter, status: 'CANCELLED', refundStatus: 'MANUAL_REFUND_NEEDED' } }),
-  ]);
 
   const countFor = (s: string) => summary.find((r) => r.status === s)?._count._all ?? 0;
   const awaiting = countFor('AWAITING_PAYMENT') + countFor('PAYMENT_FAILED');
@@ -237,6 +252,13 @@ export default async function OnlineOrdersPage({
   const ready = countFor('READY_FOR_PICKUP');
   const totalActive = awaiting + paid + processing + ready + refundNeeded;
   const archived = countFor('COMPLETED') + countFor('CANCELLED') - refundNeeded;
+  const listUrl = (status: StatusKey, targetPage = 1) => {
+    const params = new URLSearchParams();
+    if (status !== 'all') params.set('status', status);
+    if (query) params.set('q', query);
+    if (targetPage > 1) params.set('page', String(targetPage));
+    return `/online-orders${params.size ? `?${params}` : ''}`;
+  };
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -258,6 +280,7 @@ export default async function OnlineOrdersPage({
           {STATUS_TABS.map((tab) => {
             const tabCount =
               tab.key === 'all' ? totalActive :
+              tab.key === 'ALL_ORDERS' ? totalActive + archived :
               tab.key === 'REFUNDS' ? refundNeeded :
               tab.key === 'AWAITING_PAYMENT' ? awaiting :
               tab.key === 'PAID' ? paid :
@@ -269,7 +292,7 @@ export default async function OnlineOrdersPage({
             return (
               <a
                 key={tab.key}
-                href={tab.key === 'all' ? '/online-orders' : `/online-orders?status=${tab.key}`}
+                href={listUrl(tab.key)}
                 aria-current={isActive ? 'page' : undefined}
                 className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-semibold transition ${
                   isActive
@@ -289,10 +312,21 @@ export default async function OnlineOrdersPage({
         </div>
       </nav>
 
+      <form action="/online-orders" method="get" role="search" className="flex flex-wrap items-end gap-2">
+        <input type="hidden" name="status" value={activeTab === 'all' ? 'ALL_ORDERS' : activeTab} />
+        <div className="min-w-0 flex-1 basis-64">
+          <label htmlFor="online-order-search" className="mb-1 block text-sm font-semibold text-slate-700">Find an order</label>
+          <input id="online-order-search" name="q" type="search" defaultValue={query} maxLength={100} placeholder="Order reference, customer name or phone" className="input w-full" />
+        </div>
+        <button type="submit" className="btn-primary min-h-11">Search</button>
+        {query || searchParams?.order ? <a href={activeTab === 'all' ? '/online-orders' : `/online-orders?status=${activeTab}`} className="btn-secondary min-h-11">Clear search</a> : null}
+        {activeTab === 'all' ? <p className="w-full text-xs text-slate-600">Search includes the full order history. Select a status to narrow results.</p> : null}
+      </form>
+
       {/* Batch preparing banner — shown when any PAID orders need processing */}
       {canManage && (() => {
         const paidOrders = orders.filter((o) => o.status === 'PAID');
-        if (paidOrders.length === 0) return null;
+        if (paidOrders.length === 0 || paidOrders.length !== paid || query || searchParams?.order) return null;
         // Group by store
         const byStore = new Map<string, { storeId: string; storeName: string; count: number }>();
         for (const o of paidOrders) {
@@ -326,68 +360,19 @@ export default async function OnlineOrdersPage({
         );
       })()}
 
-      {/* Orders list */}
-      {(() => {
-        if (activeTab !== 'all') {
-          // Filtered tab: flat list
-          return (
-            <div className="space-y-4">
-              {orders.length === 0 ? (
-                <div className="card p-6 text-sm text-black/55">
-                  {`No orders with status "${STATUS_TABS.find(t => t.key === activeTab)?.label}".`}
-                </div>
-              ) : (
-                orders.map((order) => <OrderCard key={order.id} order={order} canManage={canManage} />)
-              )}
-            </div>
-          );
-        }
-
-        // All tab: split action-needed vs history
-        const needsAttention = (o: typeof orders[number]) =>
-          ['AWAITING_PAYMENT', 'PAYMENT_FAILED', 'PAID', 'PROCESSING', 'READY_FOR_PICKUP'].includes(o.status) ||
-          (o.status === 'CANCELLED' && o.refundStatus === 'MANUAL_REFUND_NEEDED');
-        const actionOrders = orders.filter(needsAttention);
-        const historyOrders = orders.filter(o => !needsAttention(o));
-
-        if (orders.length === 0) {
-          return <div className="card p-6 text-sm text-black/55">No online orders yet.</div>;
-        }
-
-        return (
-          <div className="space-y-6">
-            {actionOrders.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
-                    <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">
-                    {totalActive > actionOrders.length ? `${actionOrders.length} of ${totalActive}` : actionOrders.length} {actionOrders.length === 1 ? 'order needs' : 'orders need'} attention
-                    </div>
-                  </div>
-                  <span className="text-xs text-slate-600">Oldest outstanding first</span>
-                </div>
-                <div className="space-y-3">
-                  {actionOrders.map((order) => <OrderCard key={order.id} order={order} canManage={canManage} />)}
-                </div>
-              </div>
-            )}
-            {historyOrders.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3 border-t border-black/5 pt-5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600">
-                    Recent history (latest 10)
-                  </div>
-                  <div className="text-xs text-slate-600">{historyOrders.length} shown</div>
-                </div>
-                <div className="space-y-2.5">
-                  {historyOrders.map((order) => <OrderCard key={order.id} order={order} compact canManage={canManage} />)}
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })()}
+      <section aria-label="Order results" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
+          <p role="status">{matchingCount === 0 ? 'No matching orders' : `Showing ${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, matchingCount)} of ${matchingCount} orders`}</p>
+          <span>{direction === 'asc' ? 'Oldest outstanding first' : 'Newest first'}</span>
+        </div>
+        {orders.length === 0 ? <div className="card p-6 text-sm text-slate-600">{query ? 'No orders match this search. Check the reference, name or phone, or try All orders.' : 'No orders in this view. Select All orders to browse the full history.'}</div>
+          : orders.map((order) => <OrderCard key={order.id} order={order} canManage={canManage} />)}
+        <nav aria-label="Order pages" className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+          {page > 1 ? <a className="btn-secondary min-h-11" rel="prev" href={listUrl(activeTab, page - 1)}>Previous</a> : <span className="px-3 py-2 text-sm text-slate-400" aria-disabled="true">Previous</span>}
+          <span className="text-sm font-medium text-slate-700">Page {page} of {pageCount}</span>
+          {page < pageCount ? <a className="btn-secondary min-h-11" rel="next" href={listUrl(activeTab, page + 1)}>Next</a> : <span className="px-3 py-2 text-sm text-slate-400" aria-disabled="true">Next</span>}
+        </nav>
+      </section>
     </div>
   );
 }
