@@ -599,11 +599,11 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
           <div className="rounded-2xl bg-white px-4 py-3.5 shadow-sm ring-1 ring-black/5">
             <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-black/40">Reference</div>
             <div className="mt-1.5 font-mono text-xl font-bold tracking-wide text-ink">{order.orderNumber}</div>
-            <div className="mt-1 text-[10px] text-black/40">Quote when collecting</div>
+            <div className="mt-1 text-[10px] text-black/40">{isCancelled ? 'Quote when contacting the store' : 'Quote when collecting'}</div>
           </div>
           <div className="rounded-2xl bg-white px-4 py-3.5 shadow-sm ring-1 ring-black/5">
             <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-black/40">
-              {paid ? 'Total paid' : 'Amount due'}
+              {isCancelled ? order.paymentStatus === 'PAID' ? order.refundStatus === 'REFUNDED' ? 'Refunded amount' : 'Refund outstanding' : 'Order total' : paid ? 'Total paid' : 'Amount due'}
             </div>
             <div className="mt-1.5 text-xl font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</div>
             <div className="mt-1 text-[10px] text-black/40">
@@ -779,7 +779,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
         <div className="mt-5 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-black/5">
           <div className="border-b border-black/5 px-5 py-4">
             <h2 className="font-semibold text-ink">Order summary</h2>
-            <div className="mt-0.5 text-xs text-black/45">{order.lines.length} item{order.lines.length !== 1 ? 's' : ''} for pickup</div>
+            <div className="mt-0.5 text-xs text-black/45">{order.lines.length} item{order.lines.length !== 1 ? 's' : ''}{isCancelled ? ' in cancelled order' : ' for pickup'}</div>
           </div>
           <div className="divide-y divide-black/5">
             {order.lines.map((line) => (

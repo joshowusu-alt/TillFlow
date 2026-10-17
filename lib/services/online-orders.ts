@@ -1149,7 +1149,7 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
       type: 'ONLINE_ORDER_RESERVATION', referenceType: 'ONLINE_ORDER', referenceId: created.id })) });
     // Conversion is part of the order transaction: neither a lost response nor a
     // serverless process ending can omit it or count a retry as a second order.
-    await tx.storefrontEvent.create({ data: { businessId: business.id, storeSlug: business.storefrontSlug,
+    await tx.storefrontEvent.create({ data: { businessId: business.id, storeSlug: business.storefrontSlug!,
       eventType: 'order_placed', sessionId: input.sessionId?.trim().slice(0, 120) || checkoutKey || publicToken,
       metadata: JSON.stringify({ orderId: created.id }) } });
     return created;
