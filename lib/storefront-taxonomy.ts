@@ -74,6 +74,7 @@ const VARIANT_FIXES: Record<string, string> = {
   't-roll': 'Paper & disposables',
   tissue: 'Paper & disposables',
   'corn flakes': 'Breakfast & cereal',
+  milk: 'Dairy & eggs',
   'milk powder': 'Dairy & eggs',
   'powdered milk': 'Dairy & eggs',
   'condense milk': 'Dairy & eggs',

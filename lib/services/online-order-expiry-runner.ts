@@ -4,8 +4,8 @@ import { restoreOnlineOrderInventoryReservation } from '@/lib/services/online-or
 import { buildOnlineOrderStatusSnapshot, notifyOrderStatusChange } from '@/lib/services/online-order-status-stream';
 import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
 
-/** Bounded expiry pass; optional tenant scope is used by isolated Preview acceptance tests. */
-export async function expireOnlineOrders(businessId?: string) {
+/** Bounded expiry pass; optional tenant/order scope is used by isolated Preview acceptance tests. */
+export async function expireOnlineOrders(businessId?: string, orderId?: string) {
   const expiryHours = onlineOrderExpiryHours();
   const cutoff = new Date(Date.now() - expiryHours * 60 * 60 * 1000);
   const orders = await prisma.onlineOrder.findMany({
@@ -13,6 +13,7 @@ export async function expireOnlineOrders(businessId?: string) {
     orderBy: { createdAt: 'asc' },
     where: {
       ...(businessId ? { businessId } : {}),
+      ...(orderId ? { id: orderId } : {}),
       status: { in: ['AWAITING_PAYMENT', 'PAYMENT_FAILED'] },
       paymentStatus: { not: 'PAID' },
       createdAt: { lt: cutoff },

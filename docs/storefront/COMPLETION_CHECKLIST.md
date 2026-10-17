@@ -17,7 +17,7 @@ Updated 17 October 2026. Scope: storefront only. Draft PR #134 targets master. P
 
 ## Acceptance evidence
 
-- Dedicated Neon project `tillflow-preview`, branch `storefront-reliability-134`; parent untouched. Runtime/migration secrets are restricted to `fix/storefront-reliability-alerts` in Vercel project `supermarket-pos`.
+- Dedicated isolated Preview database; parent untouched. Runtime/migration secrets are restricted to the approved storefront review branch.
 - Fictional storefront `storefront-preview-134`, two branches and 65 fictional products. SMS disabled. No real payment/provider calls made.
 - Additive checkout-key and reservation/payment-snapshot migrations applied successfully to isolated Preview. Both Prisma schemas aligned.
 - 167 targeted tests passed across 14 suites: sales, returns, order actions/services, payment sync/commit, refunds, financials, attention permissions, customer access, taxonomy, SMS enqueue and cron authentication. Typecheck and targeted lint pass.
@@ -38,7 +38,7 @@ Updated 17 October 2026. Scope: storefront only. Draft PR #134 targets master. P
 
 ## Required before live release
 
-- [ ] **SMS permission/access:** supply one authorised Ghana test number and approve at most five messages. Approve making the existing Arkesel key available only to this Preview branch through Vercel; do not paste credentials in chat. Then verify received/payment/ready messages, provider delivery and retry behaviour. Preview currently has no SMS sending key; production key remains production-only.
+- [ ] **Deferred production SMS acceptance (agreed):** leave Preview SMS unset. After the approved release, use the existing production SMS setup with one explicitly authorised number and at most five messages. Do not mark delivery verified before that test.
 - [ ] **Merchant product facts:** review `CATALOGUE_RELEASE_REVIEW.md` and `catalogue-release-manifest.json`. Six category corrections are prepared; 34 mixed-brand listings need the supplied brand/variant confirmed; 196 explicit-size range candidates need selling-unit/availability confirmation. Only 28 of 530 published products have images; retain consistent fallbacks unless exact matching images are supplied.
 - [ ] **Merchant pickup/payment facts:** confirm actual recipient, pickup address, contact, opening hours and prep estimate. Hosted acceptance used clearly fictional details.
 - [ ] **Physical-phone and independent staff check:** small width, landscape, soft keyboard, touch targets, arrival sound, slow/offline recovery and a second independent authenticated staff session. Current browser supports desktop testing but exposes no phone viewport controls or independent session creation. Do not claim these passed.
@@ -49,6 +49,14 @@ Updated 17 October 2026. Scope: storefront only. Draft PR #134 targets master. P
 
 GitHub upload/commit, branch publication and draft PR creation; isolated database connection to this exact storefront Preview and its deployment. These approvals do not need to be requested again. Vercel browser access and Preview owner sign-in work; no additional login is currently required.
 
-CI follow-up: full unit run identified two repository contracts (QA-route inventory and invoice-mapping source scope). Removed the temporary QA API route, retained the existing security contract, and narrowed the performance source test to the invoice create block. All 32 repository contract tests pass; final broad CI is pending.
+CI follow-up: full unit run identified two repository contracts (QA-route inventory and invoice-mapping source scope). Removed the temporary QA API route, retained the existing security contract, and narrowed the performance source test to the invoice create block. All 32 repository contract tests pass. GitHub run 38988199496 on c33844b completed successfully: unit, build, lint, typecheck and POS safety; Postgres Smoke also passed.
 
 Database-target guard tests run without modifying any Prisma URL environment variable. All 136 database/security/performance contract tests pass together. The existing runtime Preview guard remains unchanged. Authenticated hosted retry `ORD-WSQJ` passed with exactly one conversion event. Customer refunded labels and product-level order counts are verified in the hosted UI. Internal infrastructure identifiers have been omitted from this checklist.
+
+### Final desktop and catalogue follow-up
+
+- Live POS banner updated 7→4 without reload after old unpaid reservations expired, while preparation and refund obligations remained visible. Sound button enables successfully; actual audibility/phone behaviour still need a real device.
+- A repeated expiry acceptance run also expired older fixture orders, invalidating the harness's isolated stock-delta assertion. The expiry runner now accepts an optional order filter for this test; production cron's unfiltered bounded pass is unchanged. Added tests for scope, losing claims and captured-cost restoration.
+- Six category corrections have a prepared, idempotent PostgreSQL release statement. Temporary-table tests proved all six updates, unrelated-row preservation, repeat application and stale-review rejection. Production unchanged.
+- Read-only live setup check: merchant shortcode and business contact configured; Main Branch address/phone, hours and pickup instructions absent; prep estimate zero. Need the actual pickup address; other missing fields retain honest fallback guidance.
+- See MERCHANT_SIGNOFF.md for the exact product decisions and phone acceptance steps. No Preview SMS credential is requested.

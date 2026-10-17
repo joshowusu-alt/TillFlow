@@ -1,6 +1,8 @@
 import { expect, it } from 'vitest';
 import { normalizePublicCategoryName, resolvePublicCategory, buildCategoryMappingLookup } from './storefront-taxonomy';
 it.each([
+  ['MILK','Dairy & eggs'], ['GARI','Rice & staples'], ['CEREAL','Breakfast & cereal'],
+  ['PERSONAL CARE','Toiletries'], ['AIR FRESHENER','Air freshener'],
   ['BABY OIL','Baby & infant'], ['BABY CREAM','Baby & infant'], ['ROLL-ON','Toiletries'],
   ['TOOTH PASTE','Oral care'], ['TOOTH BRUSH','Oral care'], ['TOILET ROLL','Paper & disposables'],
   ['CORN FLAKES','Breakfast & cereal'], ['MILK POWDER','Dairy & eggs'], ['TOFFEE','Sweets & confectionery'],
