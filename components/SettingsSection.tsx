@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 interface SettingsSectionProps {
   title: string;
   description?: string;
   badge?: string;
   defaultOpen?: boolean;
+  /** Keep form controls mounted when collapsed so their values remain in saves. */
+  keepMounted?: boolean;
   eyebrow?: string;
   children: React.ReactNode;
 }
@@ -16,15 +18,19 @@ export default function SettingsSection({
   description,
   badge,
   defaultOpen = false,
+  keepMounted = false,
   eyebrow,
   children,
 }: SettingsSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const contentId = useId();
 
   return (
     <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
       <button
         type="button"
+        aria-expanded={open}
+        aria-controls={contentId}
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left transition hover:bg-black/[0.015] sm:px-5 sm:py-4"
       >
@@ -55,8 +61,8 @@ export default function SettingsSection({
         </svg>
       </button>
 
-      {open && (
-        <div className="border-t border-black/5 px-4 pb-5 pt-4 sm:px-5 sm:pb-6 sm:pt-5">
+      {(open || keepMounted) && (
+        <div id={contentId} hidden={!open} className="border-t border-black/5 px-4 pb-5 pt-4 sm:px-5 sm:pb-6 sm:pt-5">
           {children}
         </div>
       )}

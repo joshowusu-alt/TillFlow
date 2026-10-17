@@ -958,8 +958,8 @@ export default function StorefrontClient({
 
     return {
       products: fallbackCandidates.slice(0, maxFallbackSuggestions),
-      label: 'Popular in this store',
-      description: 'Premium picks to round out your order.',
+      label: 'More to explore',
+      description: 'Other available products from this shop.',
     };
   }, [cart, cartProductIds, productMap, productsForStore]);
   const suggestedProducts = recommendationState.products;
