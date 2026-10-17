@@ -1148,6 +1148,9 @@ export default function PosClient({
         }
         showSaleSuccess({ receiptId, totalPence, transactionNumber }, 3000);
         dispatchNavKpiRefresh();
+        // The setup banner lives in the protected layout. Refresh it once the
+        // sale has marked onboarding complete, without leaving POS.
+        router.refresh();
       } else {
         setSaleError(result.error);
       }
@@ -2427,15 +2430,13 @@ export default function PosClient({
             ) : null}
 
             <div className="flex flex-col gap-2 md:flex-row">
-              {/* Once the cart has items, the sidebar or sticky bar is the accessible complete control. */}
+              {/* Desktop complete control, next to Park Sale. Hidden below lg, where the tablet bar or phone sheet is the only complete button. */}
               <button
-                className={`btn-primary hidden flex-1 py-3 text-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent md:inline-flex md:items-center md:justify-center ${
+                className={`btn-primary hidden flex-1 py-3 text-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent lg:inline-flex lg:items-center lg:justify-center ${
                   paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
                 }`}
                 type="button"
                 data-testid="pos-complete-checkout"
-                aria-hidden={cart.length > 0 ? true : undefined}
-                tabIndex={cart.length > 0 ? -1 : undefined}
                 disabled={!canSubmit || isCompletingSale}
                 onClick={handleCompleteSale}
               >
@@ -2575,10 +2576,6 @@ export default function PosClient({
           onToggleParkedPanel={() => setShowParkedPanel(!showParkedPanel)}
           onRecallParked={(id) => { handleRecallParkedCart(id); setShowParkedPanel(false); }}
           onDeleteParked={deleteParkedCart}
-          completeLabel={completeLabel}
-          canSubmit={canSubmit}
-          isCompletingSale={isCompletingSale}
-          onCompleteSale={handleCompleteSale}
         />
       </div>
 

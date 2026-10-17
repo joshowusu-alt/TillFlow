@@ -13,6 +13,14 @@ describe('Owner Home post-mutation freshness contracts', () => {
     );
     expect(complete).toContain("revalidateTag('reports')");
     expect(complete).toContain("revalidatePath('/onboarding')");
+    expect(complete).toContain('await markOnboardingCompleteAfterFirstSale(businessId)');
+    expect(complete.indexOf('await markOnboardingCompleteAfterFirstSale(businessId)')).toBeLessThan(
+      complete.indexOf('return { success: true'),
+    );
+    expect(complete).toContain("revalidatePath('/pos', 'layout')");
+    const pos = read('app/(protected)/pos/PosClient.tsx');
+    expect(pos).toContain('router.refresh()');
+    expect(pos.indexOf('router.refresh()')).toBeGreaterThan(pos.indexOf('if (result.success)'));
   });
 
   it('TopNav listens for POS sale KPI refresh events (mutation path, not resume stale)', () => {

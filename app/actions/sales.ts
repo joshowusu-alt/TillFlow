@@ -444,12 +444,21 @@ export async function completeSaleAction(data: {
       void error;
     });
 
+    // The POS layout banner keys off onboardingCompletedAt. Record the first sale
+    // before responding so a refresh of this page can drop the banner.
+    try {
+      const { markOnboardingCompleteAfterFirstSale } = await import('@/app/actions/onboarding');
+      await markOnboardingCompleteAfterFirstSale(businessId);
+    } catch (error) {
+      appLog('error', 'checkout_onboarding_complete_failed', { businessId, storeId: data.storeId });
+      void error;
+    }
+    revalidatePath('/pos', 'layout');
+
     // Do not block the success response on cache revalidation — sale is already committed.
     void measureServerOperation(
       'action.checkout.revalidate',
       async () => {
-        const { markOnboardingCompleteAfterFirstSale } = await import('@/app/actions/onboarding');
-        await markOnboardingCompleteAfterFirstSale(businessId);
         revalidateTag(`today-sales-${businessId}`);
         revalidateTag(`readiness-${businessId}`);
         revalidateTag('reports');
