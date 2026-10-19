@@ -59,6 +59,7 @@ export default async function PurchaseInvoicePage({
         },
         orderBy: { createdAt: 'asc' },
       },
+      linkedCostExpense: { include: { payments: true } },
       payments: {
         include: { recordedBy: { select: { name: true } } },
         orderBy: { paidAt: 'asc' },
@@ -289,6 +290,7 @@ export default async function PurchaseInvoicePage({
                   </span>
                 }
               />
+              {line.allocatedCostPence > 0 ? <p className="mt-2 text-xs text-black/60">Allocated stock cost: {formatMoney(line.allocatedCostPence,business.currency)}</p> : null}
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <DataCardField
                   label="Unit cost"
@@ -303,6 +305,7 @@ export default async function PurchaseInvoicePage({
               </div>
             </DataCard>
           ))}
+          {invoice.additionalCostTreatment === 'INVENTORY' && invoice.additionalCostPence > 0 ? <p className="flex justify-between text-sm"><span>Additional costs included in stock</span><span>{formatMoney(invoice.additionalCostPence,business.currency)}</span></p> : null}
           <div className="flex items-center justify-between gap-3 rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3">
             <span className="text-xs uppercase tracking-wider text-black/40">Total (incl. VAT)</span>
             <span className="text-sm font-bold tabular-nums">{formatMoney(invoice.totalPence, business.currency)}</span>
@@ -321,12 +324,13 @@ export default async function PurchaseInvoicePage({
             <tbody>
               {invoice.lines.map((line) => (
                 <tr key={line.id} className="rounded-xl bg-white">
-                  <td className="px-3 py-2">{line.product.name}</td>
+                  <td className="px-3 py-2">{line.product.name}{line.allocatedCostPence > 0 ? <p className="mt-1 text-xs text-black/60">Allocated stock cost: {formatMoney(line.allocatedCostPence, business.currency)}</p> : null}</td>
                   <td className="px-3 py-2">{line.qtyInUnit} {line.unit.name}</td>
                   <td className="px-3 py-2 text-right">{formatMoney(line.unitCostPence, business.currency)}</td>
                   <td className="px-3 py-2 text-right font-semibold">{formatMoney(line.lineTotalPence, business.currency)}</td>
                 </tr>
               ))}
+              {invoice.additionalCostTreatment === 'INVENTORY' && invoice.additionalCostPence > 0 ? <tr><td colSpan={3} className="px-3 py-2 text-right text-sm">Additional costs included in stock</td><td className="px-3 py-2 text-right">{formatMoney(invoice.additionalCostPence,business.currency)}</td></tr> : null}
               <tr className="bg-black/[0.02]">
                 <td colSpan={3} className="px-3 py-2 text-right text-xs uppercase tracking-wider text-black/40">Total (incl. VAT)</td>
                 <td className="px-3 py-2 text-right text-sm font-bold">{formatMoney(invoice.totalPence, business.currency)}</td>
@@ -335,6 +339,12 @@ export default async function PurchaseInvoicePage({
           </table>
         </div>
       </div>
+
+      <section className="card space-y-3 p-5" aria-label="Supplier invoice and additional costs">
+        <h2 className="font-semibold">Supplier invoice and other costs</h2>
+        <p className="text-sm">Supplier’s original invoice number: <strong>{invoice.supplierInvoiceNumber || 'Not recorded'}</strong></p>
+        {invoice.additionalCostPence > 0 ? <><p className="text-sm">{invoice.additionalCostNote || 'Delivery / other cost'}: <strong>{formatMoney(invoice.additionalCostPence, business.currency)}</strong></p><p className="text-sm text-black/60">{invoice.additionalCostTreatment === 'INVENTORY' ? 'Included in stock value, allocated by individual-item quantity. It is not an additional expense.' : 'Recorded as a separate linked expense. Its payments are separate from the goods payments below.'}</p>{invoice.linkedCostExpense ? <p className="text-sm"><Link className="text-accent underline" href={`/expenses/${invoice.linkedCostExpense.id}`}>View linked expense</Link> · Paid {formatMoney(invoice.linkedCostExpense.payments.reduce((sum, payment) => sum + payment.amountPence, 0), business.currency)} · Total {formatMoney(invoice.linkedCostExpense.amountPence, business.currency)}</p> : null}</> : <p className="text-sm text-black/60">No additional costs recorded.</p>}
+      </section>
 
       {/* Payment history */}
       <div className="card p-6 pb-28 lg:pb-6" data-purchase-detail-payments>

@@ -119,9 +119,9 @@ export default async function SupplierAgingPage({
         columnsClassName="sm:grid-cols-3"
         submitLabel="Apply filter"
         actions={
-          <a href="/payments/supplier-aging" className="btn-secondary w-full justify-center sm:w-auto text-sm">
+          <Link href="/payments/supplier-aging" className="btn-secondary w-full justify-center sm:w-auto text-sm">
             Reset
-          </a>
+          </Link>
         }
       >
         <div>

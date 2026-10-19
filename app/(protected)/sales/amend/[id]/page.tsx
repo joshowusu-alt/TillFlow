@@ -42,7 +42,7 @@ export default async function AmendSalePage({ params }: { params: { id: string }
       <div className="card p-6 text-center">
         <div className="text-lg font-semibold">Setup Required</div>
         <div className="mt-2 text-sm text-black/60">Complete your business setup in Settings to get started.</div>
-        <a href="/settings" className="btn-primary mt-4 inline-block">Go to Settings</a>
+        <Link href="/settings" className="btn-primary mt-4 inline-block">Go to Settings</Link>
       </div>
     );
   }

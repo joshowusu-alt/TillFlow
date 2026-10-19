@@ -23,7 +23,7 @@ export default async function SalesPage({
       <div className="card p-6 text-center">
         <div className="text-lg font-semibold">Setup Required</div>
         <div className="mt-2 text-sm text-black/60">Complete your business setup in Settings to get started.</div>
-        <a href="/settings" className="btn-primary mt-4 inline-block">Go to Settings</a>
+        <Link href="/settings" className="btn-primary mt-4 inline-block">Go to Settings</Link>
       </div>
     );
   }
@@ -133,9 +133,9 @@ export default async function SalesPage({
               Apply
             </button>
             {(!!searchParams?.from || !!searchParams?.to) && (
-              <a href="/sales?from=&to=" className="self-center text-xs text-muted underline underline-offset-2 hover:text-primary">
+              <Link href="/sales?from=&to=" className="self-center text-xs text-muted underline underline-offset-2 hover:text-primary">
                 Clear filter
-              </a>
+              </Link>
             )}
           </form>
         </div>
@@ -158,11 +158,11 @@ export default async function SalesPage({
                   {q ? 'Try a different search term.' : (fromParam || toParam) ? 'Adjust the date range or view all sales.' : 'Open the POS to make your first sale, or run Demo Day to preview.'}
                 </div>
                 {!q && (fromParam || toParam) ? (
-                  <a href="/sales?from=&to=" className="btn-secondary text-xs px-3 py-1.5 mt-3">View all sales</a>
+                  <Link href="/sales?from=&to=" className="btn-secondary text-xs px-3 py-1.5 mt-3">View all sales</Link>
                 ) : !q ? (
                   <div className="mt-3 flex gap-2">
-                    <a href="/pos" className="btn-primary text-xs px-3 py-1.5">Open POS</a>
-                    <a href="/onboarding#demo" className="btn-ghost text-xs px-3 py-1.5 border border-black/10 rounded-lg">Run Demo Day</a>
+                    <Link href="/pos" className="btn-primary text-xs px-3 py-1.5">Open POS</Link>
+                    <Link href="/onboarding#demo" className="btn-ghost text-xs px-3 py-1.5 border border-black/10 rounded-lg">Run Demo Day</Link>
                   </div>
                 ) : null}
               </div>
@@ -257,11 +257,11 @@ export default async function SalesPage({
                         {q ? 'Try a different search term.' : (fromParam || toParam) ? 'Adjust the date range or view all sales.' : 'Open the POS to make your first sale, or run Demo Day to preview.'}
                       </div>
                       {!q && (fromParam || toParam) ? (
-                        <a href="/sales?from=&to=" className="btn-secondary text-xs px-3 py-1.5 mt-3">View all sales</a>
+                        <Link href="/sales?from=&to=" className="btn-secondary text-xs px-3 py-1.5 mt-3">View all sales</Link>
                       ) : !q ? (
                         <div className="mt-3 flex gap-2">
-                          <a href="/pos" className="btn-primary text-xs px-3 py-1.5">Open POS</a>
-                          <a href="/onboarding#demo" className="btn-ghost text-xs px-3 py-1.5 border border-black/10 rounded-lg">Run Demo Day</a>
+                          <Link href="/pos" className="btn-primary text-xs px-3 py-1.5">Open POS</Link>
+                          <Link href="/onboarding#demo" className="btn-ghost text-xs px-3 py-1.5 border border-black/10 rounded-lg">Run Demo Day</Link>
                         </div>
                       ) : null}
                     </div>

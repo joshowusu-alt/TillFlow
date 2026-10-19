@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import DownloadLink from '@/components/DownloadLink';
 import { CONSOLIDATED_LABEL } from '@/lib/entitlements/types';
 import Pagination from '@/components/Pagination';
@@ -179,9 +180,9 @@ export default async function CashDrawerReportPage({
         scopeLabel={reportScopeLabel(selectedStoreId, stores)}
         periodLabel={`${fromIso} to ${toIso} · ${fallback.timeZone} · Shifts opened in this period`}
         actions={
-          <a href={`/shifts/drawer?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`} className="btn-secondary justify-center text-sm">
+          <Link href={`/shifts/drawer?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`} className="btn-secondary justify-center text-sm">
             Open till cash ledger
-          </a>
+          </Link>
         }
       />
 
@@ -241,7 +242,7 @@ export default async function CashDrawerReportPage({
           <p>This report selects shifts by when they were opened. A shift can span calendar days, so its cash activity can differ from cash receipts received within the selected dates.</p>
           <p>The summary uses valid cash counts from closed shifts on the displayed page. Open shifts and invalid legacy cash counts are excluded from expected cash, counted cash and the difference.</p>
           <p>The till cash ledger is a separate operational view for your working branch. It lists cash entries by entry date, so it may have a different scope from this shift report.</p>
-          <a href={`/reports/money-received?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}&storeId=${encodeURIComponent(selectedStoreId)}`} className="inline-flex min-h-11 items-center font-semibold text-accent underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">Open Money received</a>
+          <Link href={`/reports/money-received?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}&storeId=${encodeURIComponent(selectedStoreId)}`} className="inline-flex min-h-11 items-center font-semibold text-accent underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">Open Money received</Link>
         </div>
       </details>
 

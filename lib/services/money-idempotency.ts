@@ -128,6 +128,10 @@ export function buildPurchaseCreatePayloadHash(parts: {
   businessId: string;
   storeId: string;
   supplierId: string;
+  supplierInvoiceNumber?: string | null;
+  additionalCostPence?: number;
+  additionalCostTreatment?: string;
+  additionalCostNote?: string | null;
   payments: Array<{ method: string; amountPence: number; reference?: string | null }>;
   lines: Array<{ productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null }>;
   userId: string;
@@ -143,6 +147,7 @@ export function buildPurchaseCreatePayloadHash(parts: {
     paymentCanon(parts.payments),
     lineCanon,
     parts.userId,
+    ...(parts.supplierInvoiceNumber || parts.additionalCostPence ? [JSON.stringify([parts.supplierInvoiceNumber ?? null, parts.additionalCostPence ?? 0, parts.additionalCostTreatment ?? 'EXPENSE', parts.additionalCostNote?.trim() ?? ''])] : []),
   ]);
 }
 

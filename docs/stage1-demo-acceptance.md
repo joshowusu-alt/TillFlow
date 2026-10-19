@@ -70,4 +70,25 @@ This is a Preview-only review. Physical USB/Bluetooth hardware acceptance remain
 - Full unit regression completed. Two obsolete source/query assertions were corrected and passed their focused reruns. After generating the correct SQLite client for local unit tests, all affected environment-error files reran cleanly: 455 passed, eight integration cases skipped.
 - Typecheck, targeted lint and PostgreSQL schema validation passed. Identical descriptive fields with distinct barcodes were exercised successfully on the separate migration-rehearsal database; fixture rows rolled back.
 - Hosted acceptance, real PostgreSQL cash-workflow/concurrency acceptance and physical scanner acceptance remain pending. Existing Preview and production deployments have not been changed by this update.
-- Publication to the existing public TillFlow repository was blocked by automatic approval review and requires explicit user approval before the Preview branch can be updated.
+- Publication to the existing public TillFlow repository and the demo Preview branch was explicitly approved by the user. Keep the pull request in draft and do not merge or release to production.
+
+
+## Purchase and balance-sheet follow-up (19 October)
+
+- Supplier’s original invoice number is separate from the PUR number, retained in purchase drafts and displayed on the saved purchase and purchase list. A tenant/supplier-scoped duplicate hint links the earlier record.
+- Delivery and other purchase costs can be capitalised or expensed. Capitalised costs are allocated by physical base-item quantity using exact largest-remainder rounding. Stock movement values, weighted-average inventory values and purchase-return inventory credits include the allocated amounts.
+- An expensed cost creates a linked Expense and its own payment history. Actual tender is split between goods and cost; it is never copied. Unpaid cost is posted to AP. Goods and linked expense can subsequently be settled separately. The cost note can record the delivery provider/reference; the goods supplier is not automatically asserted to be the cost payee.
+- Add product now starts with name, barcode, selling price and cost. Details, purchasing/pack settings and advanced settings are collapsed. Opening stock is clearly reserved for stock carried into TillFlow, with normal deliveries directed to Purchases.
+- Repeatable labelled product details support brand, author, edition, colour, size and arbitrary classifications. Existing brand/edition information is preserved. Up to 50 details and repeated labels are supported.
+- Add category works inline in product creation/editing and preserves unsaved fields on success/failure. Internal operational links use Next navigation, preserving the application shell rather than reloading the whole document.
+- Balance-sheet accounts and amounts open supporting journals with the same exclusive cutoff instant. AP groups purchase/expense obligations and their payments as at that date, preserving opening/unallocated entries explicitly. Inventory shows product movement values and discloses any difference against the ledger. Entries paginate without changing the all-page closing balance. Owner account names identify the funding owner.
+- Preview PUR-000103 was checked directly: inventory debit GH₵2,400 and Akosua Asante owner-contribution equity credit GH₵2,400, with no business-cash credit.
+
+### Follow-up acceptance
+
+- [ ] Enter a supplier reference and delivery cost; verify saved reference, allocation, combined tender and linked expense as appropriate.
+- [ ] Open product creation on a phone; add repeated details and an inline category while retaining the product name.
+- [ ] Drill cash, AP, owner contribution/advance and inventory from the balance sheet; compare source totals and historical payments.
+- [ ] Check hosted navigation for white-screen flashes and test real scanner hardware.
+
+Migration `20261019173500_purchase_references_costs_attributes` was applied successfully on the separate rehearsal branch. 147 focused accounting/UI tests passed. Typecheck, targeted lint and PostgreSQL schema validation passed before Preview publication. Browser acceptance remains distinct from automated checks; cloud-browser credential protection currently prevents inspecting the signed-in Preview UI. The Vercel connector also returned 403 for the existing deployment; deployment status is checked through GitHub’s Vercel integration.

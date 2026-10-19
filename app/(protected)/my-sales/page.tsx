@@ -143,9 +143,9 @@ export default async function MySalesPage({
                 <div className="mt-1 text-xs text-black/40">
                   Your sales will appear here after you complete a sale on POS.
                 </div>
-                <a href="/pos" className="btn-primary mt-3 px-3 py-1.5 text-xs">
+                <Link href="/pos" className="btn-primary mt-3 px-3 py-1.5 text-xs">
                   Open POS
-                </a>
+                </Link>
               </div>
             </div>
           ) : (

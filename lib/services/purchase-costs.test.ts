@@ -1,0 +1,14 @@
+import {beforeEach,describe,expect,it,vi} from 'vitest';
+const {post,drawer,shift}=vi.hoisted(()=>({post:vi.fn(),drawer:vi.fn(),shift:vi.fn()}));
+vi.mock('@/lib/accounting',()=>({postJournalEntry:post}));
+vi.mock('./cash-drawer',()=>({getOpenCashShiftForPayment:shift,recordCashDrawerEntryTx:drawer}));
+vi.mock('./document-numbers',()=>({reserveNextDocumentNumber:vi.fn().mockResolvedValue('EXP-1')}));
+import {recordPurchaseCostExpenseTx} from './purchase-costs';
+describe('linked purchase cost expense',()=>{
+ const db={account:{findFirst:vi.fn()},expense:{create:vi.fn()},expensePayment:{create:vi.fn()},purchaseInvoice:{update:vi.fn()}};
+ const input={businessId:'business',storeId:'store',userId:'owner',purchaseId:'purchase',purchaseNumber:'PUR-1',amountPence:100,payments:[{method:'CASH' as const,amountPence:100,reference:'funding:3100.OWNER.owner'}],cashAccountCode:'3100.OWNER.owner',useTill:false};
+ beforeEach(()=>{vi.clearAllMocks();db.account.findFirst.mockResolvedValue({id:'operating'});db.expense.create.mockResolvedValue({id:'expense'});db.expensePayment.create.mockResolvedValue({id:'payment'});shift.mockResolvedValue({id:'shift',tillId:'till'});});
+ it('posts an owner-funded expense to equity and links it without touching till cash or inventory',async()=>{await recordPurchaseCostExpenseTx(db,input);expect(post).toHaveBeenCalledWith(expect.objectContaining({referenceType:'EXPENSE',referenceId:'expense',lines:[{accountCode:'6000',debitPence:100},{accountCode:'3100.OWNER.owner',creditPence:100}]}));expect(drawer).not.toHaveBeenCalled();expect(db.expensePayment.create).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({amountPence:100,reference:'funding:3100.OWNER.owner'})}));expect(db.purchaseInvoice.update).toHaveBeenCalledWith({where:{id:'purchase'},data:{linkedCostExpenseId:'expense'}});});
+ it('posts only the unpaid remainder to AP',async()=>{await recordPurchaseCostExpenseTx(db,{...input,payments:[{method:'CASH',amountPence:25}],cashAccountCode:'1000',useTill:true,tillId:'till'});expect(db.expense.create).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({paymentStatus:'PART_PAID'})}));expect(post).toHaveBeenCalledWith(expect.objectContaining({lines:[{accountCode:'6000',debitPence:100},{accountCode:'1000',creditPence:25},{accountCode:'2000',creditPence:75}]}));expect(drawer).toHaveBeenCalledWith(db,expect.objectContaining({amountPence:-25,referenceId:'payment'}));});
+ it('fails the surrounding transaction if the till cost entry fails',async()=>{drawer.mockRejectedValueOnce(new Error('drawer unavailable'));await expect(recordPurchaseCostExpenseTx(db,{...input,cashAccountCode:'1000',useTill:true,tillId:'till'})).rejects.toThrow('drawer unavailable');expect(post).not.toHaveBeenCalled();expect(db.purchaseInvoice.update).not.toHaveBeenCalled();});
+});

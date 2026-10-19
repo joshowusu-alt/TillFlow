@@ -1,3 +1,5 @@
+import { parseProductAttributes } from '@/lib/products/attributes';
+import ProductCategoryField from '@/components/products/ProductCategoryField';
 import PageHeader from '@/components/PageHeader';
 import ProductIdentityFields from '@/components/products/ProductIdentityFields';
 import ProductMarginPreview from '@/components/products/ProductMarginPreview';
@@ -116,14 +118,15 @@ export default async function ProductDetailPage({
           ) : (
             <span className="text-xs text-black/40 mt-1 inline-block">Uncategorised</span>
           )}
+          {product.attributesJson ? <dl className="mt-3 space-y-1 text-sm">{parseProductAttributes(product.attributesJson).map((detail,index)=><div key={index} className="flex gap-2"><dt className="text-black/55">{detail.label}:</dt><dd>{detail.value}</dd></div>)}</dl> : null}
           {product.sku && <div className="text-xs text-black/50 mt-1">SKU: {product.sku}</div>}
           {product.barcode && <div className="text-xs text-black/50">Barcode: {product.barcode}</div>}
           <div className="text-xs text-black/50">
             Preferred supplier:{' '}
             {product.preferredSupplier ? (
-              <a href={`/suppliers/${product.preferredSupplier.id}`} className="text-accent hover:underline">
+              <Link href={`/suppliers/${product.preferredSupplier.id}`} className="text-accent hover:underline">
                 {product.preferredSupplier.name}
-              </a>
+              </Link>
             ) : (
               'None'
             )}
@@ -198,17 +201,8 @@ export default async function ProductDetailPage({
               <ProductImageInput defaultUrl={product.imageUrl} fileUploadEnabled={fileUploadEnabled} />
             </div>
             <div>
-              <ProductIdentityFields publisher={product.publisher} edition={product.edition} barcodes={product.barcodes.filter(b => b.code !== product.barcode).map(b => b.code)} />
-              <label className="label">Category</label>
-              <select className="input" name="categoryId" defaultValue={product.categoryId ?? ''}>
-                <option value="">Uncategorised</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-              <div className="mt-1 text-xs text-black/50">
-                Don&apos;t see your category? <a href="/products?tab=categories" className="text-accent underline">Add one here</a>.
-              </div>
+              <ProductIdentityFields attributesJson={product.attributesJson} publisher={product.publisher} edition={product.edition} barcodes={product.barcodes.filter(b => b.code !== product.barcode).map(b => b.code)} />
+              <ProductCategoryField categories={categories} defaultValue={product.categoryId ?? ''} />
             </div>
             <div>
               <label className="label">Preferred supplier</label>

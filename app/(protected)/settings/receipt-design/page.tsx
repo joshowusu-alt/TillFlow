@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
 import { requireBusiness } from '@/lib/auth';
@@ -126,9 +127,9 @@ export default async function ReceiptDesignPage() {
                             />
                             <div className="mt-1 text-xs text-black/50">
                                 Optional. Leave blank to use the business logo from{' '}
-                                <a href="/settings/organization" className="font-medium text-accent underline-offset-4 hover:underline">
+                                <Link href="/settings/organization" className="font-medium text-accent underline-offset-4 hover:underline">
                                     Organization settings
-                                </a>
+                                </Link>
                                 . Use this only if you want a different logo on printed receipts (e.g. a black-and-white version).
                             </div>
                         </div>

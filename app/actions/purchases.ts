@@ -32,6 +32,12 @@ export async function createPurchaseAction(formData: FormData): Promise<ActionRe
       requestedStoreId,
     );
     const supplierId = formString(formData, 'supplierId') || null;
+    const supplierInvoiceNumber = formString(formData, 'supplierInvoiceNumber');
+    const additionalCostRaw = formString(formData, 'additionalCost');
+    if (additionalCostRaw && (!Number.isFinite(Number(additionalCostRaw.replace(/,/g,''))) || Number(additionalCostRaw.replace(/,/g,'')) < 0)) return err('Enter a valid additional cost.');
+    const additionalCostPence = toPence(additionalCostRaw);
+    const additionalCostTreatment = formString(formData, 'additionalCostTreatment') === 'INVENTORY' ? 'INVENTORY' as const : 'EXPENSE' as const;
+    const additionalCostNote = formString(formData, 'additionalCostNote');
     const paymentStatus = (formString(formData, 'paymentStatus') || 'UNPAID') as PaymentStatus;
     const psValidation = PaymentStatusEnum.safeParse(paymentStatus);
     if (!psValidation.success) {
@@ -87,7 +93,7 @@ export async function createPurchaseAction(formData: FormData): Promise<ActionRe
     const invoice = await createPurchase({
       businessId,
       storeId,
-      supplierId,
+      supplierId, supplierInvoiceNumber, additionalCostPence, additionalCostTreatment, additionalCostNote,
       cashSource, cashHolderId, fundingOwnerId,
       paymentStatus,
       dueDate,
@@ -102,7 +108,7 @@ export async function createPurchaseAction(formData: FormData): Promise<ActionRe
       idempotencyKey: idempotencyKey || undefined,
     });
 
-    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId, cashSource, cashHolderId, fundingOwnerId } }).catch((e) => console.error('[audit]', e));
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId, supplierInvoiceNumber, additionalCostPence, additionalCostTreatment, cashSource, cashHolderId, fundingOwnerId } }).catch((e) => console.error('[audit]', e));
 
     revalidatePosCatalog(businessId, storeId);
     revalidateTag('reports');
@@ -354,6 +360,7 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
       return err('Purchase not found.');
     }
 
+    if (invoice.additionalCostPence > 0) return err('This purchase has linked costs. Use a return to preserve its cost and payment history.');
     if (invoice.payments.some(payment => payment.reference?.startsWith('funding:'))) return err('This purchase has tracked funding. Use a purchase return to keep its payment history intact.');
 
     if (invoice.purchaseReturn) {
@@ -472,5 +479,15 @@ export async function setPurchaseDueDateAction(
     }
 
     return ok();
+  });
+}
+
+export async function checkSupplierInvoiceReferenceAction(supplierId: string, reference: string) {
+  return safeAction(async () => {
+    const { businessId } = await withBusinessContext(['OWNER', 'MANAGER']);
+    const number = reference.trim();
+    if (!supplierId || !number || number.length > 100) return ok(null);
+    const existing = await prisma.purchaseInvoice.findFirst({ where: { businessId, supplierId, supplierInvoiceNumber: { equals: number, mode: 'insensitive' } }, select: { id: true, transactionNumber: true } });
+    return ok(existing);
   });
 }

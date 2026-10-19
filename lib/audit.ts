@@ -63,6 +63,7 @@ export type AuditAction =
   | 'JOURNAL_REPAIR'
   | 'CUSTOMER_DELETE'
   | 'SUPPLIER_DELETE'
+  | 'CATEGORY_CREATE'
   | 'CATEGORY_DELETE'
   | 'CATEGORY_UPDATE';
 

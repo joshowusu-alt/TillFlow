@@ -151,6 +151,9 @@ export async function deleteExpenseAction(formData: FormData): Promise<void> {
     });
     if (!expense) return err('Expense not found. It may have already been removed.');
 
+    const linkedPurchase = await prisma.purchaseInvoice.findFirst({ where: {businessId,linkedCostExpenseId:expense.id}, select:{id:true} });
+    if (linkedPurchase) return err('This expense is linked to a purchase. Keep it to preserve the purchase’s cost and payment history.');
+
     // Delete associated journal entries before removing the expense
     // (JournalLine cascades via schema, so only JournalEntry needs explicit deletion)
     await prisma.journalEntry.deleteMany({

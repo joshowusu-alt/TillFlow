@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import DownloadLink from '@/components/DownloadLink';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -66,7 +67,7 @@ export default async function ExportsPage({
           </p>
         </div>
 
-        <ReportFilterCard actions={<a className="btn-secondary" href="/reports/exports">Reset</a>} columnsClassName="sm:grid-cols-5" submitLabel="Apply period">
+        <ReportFilterCard actions={<Link className="btn-secondary" href="/reports/exports">Reset</Link>} columnsClassName="sm:grid-cols-5" submitLabel="Apply period">
           <label className="text-xs font-semibold uppercase tracking-[0.14em] text-black/55">
             Quick period
             <select className="input mt-1.5" name="period" defaultValue={periodInputValue}>

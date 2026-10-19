@@ -1,9 +1,10 @@
 'use server';
 
+import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { formString, formOptionalString, formInt } from '@/lib/form-helpers';
-import { withBusinessContext, formAction } from '@/lib/action-utils';
+import { withBusinessContext, formAction, safeAction, ok } from '@/lib/action-utils';
 import { createCategory, updateCategory, deleteCategory } from '@/lib/services/categories';
 import { audit } from '@/lib/audit';
 import { posCategoriesTag } from '@/lib/cache/pos-tags';
@@ -60,4 +61,19 @@ export async function deleteCategoryAction(formData: FormData): Promise<void> {
     revalidateTag(posCategoriesTag(businessId));
     redirect('/products?tab=categories');
   }, '/products?tab=categories');
+}
+
+/** Inline creation keeps the unsaved product form mounted. */
+export async function quickCreateCategoryAction(rawName: string) {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const name = rawName.trim();
+    if (!name || name.length > 100 || /[\x00-\x1f]/.test(name)) throw new Error('Enter a category name of up to 100 characters.');
+    const existing = await prisma.category.findFirst({where:{businessId,name:{equals:name,mode:'insensitive'}},select:{id:true,name:true}});
+    if (existing) return ok(existing);
+    const category = await createCategory(businessId, {name,colour:'#059669',imageUrl:null,sortOrder:0});
+    await audit({businessId,userId:user.id,userName:user.name,userRole:user.role,action:'CATEGORY_CREATE',entity:'Category',entityId:category.id,details:{name}});
+    revalidateTag(posCategoriesTag(businessId));
+    return ok({id:category.id,name});
+  });
 }

@@ -1,3 +1,4 @@
+import { normalizeProductAttributes } from '@/lib/products/attributes';
 import { prisma } from '@/lib/prisma';
 import { aliasCodes, assertAvailableBarcodes, productDisplayName } from '@/lib/products/barcode-identity';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
@@ -10,6 +11,7 @@ export type ProductCoreInput = {
   name: string;
   sku: string | null;
   barcode: string | null;
+  attributesJson?: string | null;
   publisher?: string;
   edition?: string;
   additionalBarcodes?: string[];
@@ -40,6 +42,7 @@ export type QuickCreateProductInput = {
   name: string;
   sku?: string | null;
   barcode?: string | null;
+  attributesJson?: string | null;
   publisher?: string;
   edition?: string;
   additionalBarcodes?: string[];
@@ -166,6 +169,7 @@ function normalizeCoreProductInput(data: ProductCoreInput): ProductCoreInput {
   return {
     ...data,
     name: data.name.trim(),
+    attributesJson: normalizeProductAttributes(data.attributesJson),
     publisher: data.publisher?.trim() ?? "",
     edition: data.edition?.trim() ?? "",
     sku: data.sku?.trim() ? data.sku.trim() : null,
@@ -189,6 +193,7 @@ function normalizeQuickCreateInput(input: QuickCreateProductInput): QuickCreateP
   return {
     ...input,
     name: input.name.trim(),
+    attributesJson: normalizeProductAttributes(input.attributesJson),
     publisher: input.publisher?.trim() ?? "",
     edition: input.edition?.trim() ?? "",
     sku: input.sku?.trim() ? input.sku.trim() : null,
@@ -411,6 +416,7 @@ async function createProductImpl(
     data: {
       businessId,
       name: normalized.name,
+      attributesJson: normalized.attributesJson,
       publisher: normalized.publisher,
       edition: normalized.edition,
       sku: normalized.sku,
@@ -490,6 +496,7 @@ async function updateProductImpl(
       where: { id: existing.id },
       data: {
         name: normalized.name,
+      attributesJson: normalized.attributesJson,
       publisher: normalized.publisher,
       edition: normalized.edition,
         sku: normalized.sku,
@@ -671,6 +678,7 @@ async function quickCreateProductImpl(
     data: {
       businessId,
       name: normalized.name,
+      attributesJson: normalized.attributesJson,
       publisher: normalized.publisher,
       edition: normalized.edition,
       sku: normalized.sku ?? null,

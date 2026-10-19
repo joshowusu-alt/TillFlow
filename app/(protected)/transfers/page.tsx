@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
@@ -43,7 +44,7 @@ export default async function TransfersPage({
             Stock transfers are only available when running in multi-branch mode.
             Switch to multi-branch mode in Settings &rarr; Branch Mode to enable branch transfers.
           </p>
-          <a href="/settings" className="btn-secondary mt-4 inline-block text-sm">Go to Settings</a>
+          <Link href="/settings" className="btn-secondary mt-4 inline-block text-sm">Go to Settings</Link>
         </div>
       </div>
     );

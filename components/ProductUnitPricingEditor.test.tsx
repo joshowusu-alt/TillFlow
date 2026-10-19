@@ -9,11 +9,11 @@ const units = [
 ];
 
 describe('ProductUnitPricingEditor base unit', () => {
-  it('exposes a labelled Base unit combobox that defaults to piece', () => {
+  it('exposes a labelled Smallest stock unit combobox that defaults to piece', () => {
     render(<ProductUnitPricingEditor units={units} currencySymbol="GH₵" />);
 
-    const baseUnit = screen.getByRole('combobox', { name: 'Base unit' });
+    const baseUnit = screen.getByRole('combobox', { name: 'Smallest stock unit' });
     expect(baseUnit).toHaveValue('piece');
-    expect(baseUnit).toHaveAccessibleName('Base unit');
+    expect(baseUnit).toHaveAccessibleName('Smallest stock unit');
   });
 });

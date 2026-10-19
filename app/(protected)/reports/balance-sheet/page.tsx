@@ -8,7 +8,7 @@ import { formatMoney } from '@/lib/format';
 import DownloadLink from '@/components/DownloadLink';
 
 export default async function BalanceSheetPage({ searchParams }: {
-  searchParams?: { asOf?: string; storeId?: string; businessId?: string };
+  searchParams?: { asOf?: string; storeId?: string; businessId?: string; cutoff?: string };
 }) {
   const now = new Date();
   const opened = await openLiveReport({ surfaceId: 'balance_sheet', search: searchParams,
@@ -23,7 +23,10 @@ export default async function BalanceSheetPage({ searchParams }: {
   const key = opened.decision.appliedRange?.toLocalDate || searchParams?.asOf?.trim() || formatBusinessLocalDateKey(now, zone);
   const end = localDateInstant(key, 'endExclusive', zone);
   if (!end || key > formatBusinessLocalDateKey(now, zone)) return <div className="card p-5">Choose a valid statement date that is not in the future.</div>;
-  const sheet = await getBalanceSheet(business.id, new Date(Math.min(end.getTime(), now.getTime())));
+  const requestedCutoff = searchParams?.cutoff ? new Date(searchParams.cutoff) : null;
+  const cutoff = requestedCutoff && Number.isFinite(requestedCutoff.getTime()) && formatBusinessLocalDateKey(new Date(requestedCutoff.getTime()-1),zone) === key ? new Date(Math.min(requestedCutoff.getTime(),end.getTime(),now.getTime())) : new Date(Math.min(end.getTime(),now.getTime()));
+  const sheet = await getBalanceSheet(business.id, cutoff);
+  const entriesHref = (code: string) => '/reports/balance-sheet/entries?' + new URLSearchParams({account:code,asOf:key,cutoff:cutoff.toISOString()});
   const money = (amount: number) => formatMoney(amount === 0 ? 0 : amount, business.currency);
   const diagnostic = sheet.reconciliation;
   const today = formatBusinessLocalDateKey(now, zone);
@@ -40,7 +43,7 @@ export default async function BalanceSheetPage({ searchParams }: {
     <ReportsDestinationHead title="Balance sheet" scopeLabel="Whole business"
       periodLabel={'As at ' + dateLabel + (key === today ? ' · Today so far' : '')}
       actions={<DownloadLink className="btn-secondary" href={'/api/reports/financials?type=balance-sheet&from=' + key + '&to=' + key}>Export CSV</DownloadLink>} />
-    <p className="text-sm text-ink/70">Your financial position from recorded opening balances and transactions.</p>
+    <p className="text-sm text-ink/70">Tap any account below to see what makes up its balance. Owner contributions appear in equity; repayable owner advances appear in liabilities. Cash held by staff remains a business asset.</p>
     <form className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 print:hidden" method="GET">
       <label className="label w-full sm:w-auto">Statement date<input className="input mt-1 w-full sm:w-48" type="date" name="asOf" defaultValue={key} max={today} required /></label>
       <button className="btn-secondary" type="submit">Update report</button>
@@ -57,7 +60,7 @@ export default async function BalanceSheetPage({ searchParams }: {
         <h3 className="mb-4 text-xs font-semibold uppercase tracking-widest text-accent">{group.name}</h3>
         {group.rows.length === 0 ? <p className="mb-3 text-sm text-ink/50">No entries for this date.</p> : <dl className="space-y-3.5">
           {[...group.rows].sort((a, b) => a.accountCode.localeCompare(b.accountCode)).map(row => <div className="flex items-baseline justify-between gap-4 text-sm" key={row.accountCode}>
-            <dt className="min-w-0 break-words">{accountName(row)}</dt><dd className="shrink-0 text-right font-medium tabular-nums text-ink">{money(row.balancePence)}</dd>
+            <dt className="min-w-0 break-words"><Link className="font-medium text-accent underline underline-offset-4" href={entriesHref(row.accountCode)}>{accountName(row)} →</Link></dt><dd className="shrink-0 text-right font-medium tabular-nums text-ink"><Link href={entriesHref(row.accountCode)} aria-label={`View entries for ${accountName(row)}`}>{money(row.balancePence)}</Link></dd>
           </div>)}
         </dl>}
         <p className="mt-4 flex items-baseline justify-between gap-4 border-t border-slate-200 pt-3 text-sm font-semibold"><span>Total {group.name.toLowerCase()}</span><span className="shrink-0 tabular-nums">{money(group.total)}</span></p>

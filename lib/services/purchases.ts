@@ -1,3 +1,5 @@
+import { allocateCostByQuantity, splitPurchaseTender } from '@/lib/purchases/additional-costs';
+import { recordPurchaseCostExpenseTx } from './purchase-costs';
 import { ensureFundingAccount, lockFundingBalance, type PurchaseCashSource } from './purchase-funding';
 import { Prisma } from '@prisma/client';
 import { receiveStockValue, INVENTORY_VALUE_V1 } from '@/lib/inventory-value';
@@ -49,6 +51,10 @@ export type PurchaseLineInput = {
 export type CreatePurchaseInput = {
   businessId: string;
   storeId: string;
+  supplierInvoiceNumber?: string | null;
+  additionalCostPence?: number;
+  additionalCostTreatment?: 'INVENTORY' | 'EXPENSE';
+  additionalCostNote?: string | null;
   supplierId?: string | null;
   cashSource?: PurchaseCashSource;
   cashHolderId?: string | null;
@@ -409,15 +415,29 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     };
   });
 
+  const supplierInvoiceNumber = input.supplierInvoiceNumber?.trim() || null;
+  if (supplierInvoiceNumber && (supplierInvoiceNumber.length > 100 || /[\u0000-\u001f]/.test(supplierInvoiceNumber))) throw new UserError('Supplier invoice number must be up to 100 characters.');
+  const additionalCost = input.additionalCostPence ?? 0;
+  if (!Number.isSafeInteger(additionalCost) || additionalCost < 0 || additionalCost > 2147483647) throw new UserError('Enter a valid additional cost.');
+  const costTreatment = input.additionalCostTreatment ?? 'EXPENSE';
+  if (!['EXPENSE', 'INVENTORY'].includes(costTreatment)) throw new UserError('Choose how to record the additional cost.');
+  if ((input.additionalCostNote?.length ?? 0) > 300) throw new UserError('Additional-cost note must be up to 300 characters.');
+  if (additionalCost && !input.userId) throw new UserError('A recorded user is required for additional costs.');
+  const allocatedCosts = additionalCost && costTreatment === 'INVENTORY' ? allocateCostByQuantity(additionalCost, lineDetails.map(line => line.qtyBase)) : lineDetails.map(() => 0);
   const positivePayments = filterPositivePayments(input.payments).map(payment => ({ ...payment }));
   const subtotal = lineDetails.reduce((sum, line) => sum + line.lineSubtotal, 0);
   const vatTotal = lineDetails.reduce((sum, line) => sum + line.lineVat, 0);
-  const total = subtotal + vatTotal;
+  const goodsTotal = subtotal + vatTotal;
+  const combinedTotal = goodsTotal + additionalCost;
+  const total = goodsTotal + (costTreatment === 'INVENTORY' ? additionalCost : 0);
 
-  const payments: PaymentInput[] =
+  const allPayments: PaymentInput[] =
     positivePayments.length === 0 && input.paymentStatus === 'PAID'
-      ? [{ method: 'CASH' as const, amountPence: total }]
+      ? [{ method: 'CASH' as const, amountPence: combinedTotal }]
       : positivePayments;
+  const tender = additionalCost && costTreatment === 'EXPENSE' ? splitPurchaseTender(allPayments, goodsTotal, additionalCost) : { goods: allPayments, expenses: [] as PaymentInput[], costPaid: 0 };
+  const payments = tender.goods;
+  const combinedPaid = allPayments.reduce((sum, p) => sum + p.amountPence, 0);
   const totalPaid = payments.reduce((sum, p) => sum + p.amountPence, 0);
   /**
    * Paid money (any positive tender, including PAID with synthesized CASH)
@@ -425,13 +445,13 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
    * (totalPaid === 0) may omit a key and creates a new AP invoice each call.
    * A key supplied on unpaid still participates in exact-replay.
    */
-  if (totalPaid > 0 && !input.idempotencyKey?.trim()) {
+  if (combinedPaid > 0 && !input.idempotencyKey?.trim()) {
     throw new MoneyIdempotencyError(
       MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_REQUIRED,
       'This paid purchase needs a durable idempotency key before money can be recorded.',
     );
   }
-  if (totalPaid > total) {
+  if (combinedPaid > combinedTotal) {
     throw new Error('Payment exceeds total due');
   }
   const finalStatus = derivePaymentStatus(total, totalPaid);
@@ -443,7 +463,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     string,
     { qtyBase: number; costPence: number; unknownQty: number; defaultCostBasePence: number }
   >();
-  for (const line of lineDetails) {
+  for (const [lineIndex, line] of lineDetails.entries()) {
     const existing =
       productTotals.get(line.productId) ?? {
         qtyBase: 0,
@@ -452,7 +472,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         defaultCostBasePence: line.productUnit.product.defaultCostBasePence
       };
     existing.qtyBase += line.qtyBase;
-    existing.costPence += line.lineSubtotal;
+    existing.costPence += line.lineSubtotal + allocatedCosts[lineIndex];
     if (line.lineSubtotal <= 0) existing.unknownQty += line.qtyBase;
     productTotals.set(line.productId, existing);
   }
@@ -460,10 +480,11 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   const split = splitPayments(payments);
   const cashSource = input.cashSource ?? 'TILL';
   let cashAccountCode = ACCOUNT_CODES.cash;
-  if (split.cashPence > 0 && cashSource !== 'TILL') {
+  const allSplit = splitPayments(allPayments);
+  if (allSplit.cashPence > 0 && cashSource !== 'TILL') {
     // Validate identities before a write; enforce again through the transactional account and balance lock.
     cashAccountCode = await ensureFundingAccount(dbClient, input.businessId, input.storeId, cashSource, input.cashHolderId, input.fundingOwnerId);
-    for (const payment of payments) if (payment.method === 'CASH') payment.reference = `funding:${cashAccountCode}`;
+    for (const payment of [...allPayments, ...payments, ...tender.expenses]) if (payment.method === 'CASH') payment.reference = `funding:${cashAccountCode}`;
   }
   const apAmount = total - split.totalPence;
 
@@ -475,7 +496,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         businessId: input.businessId,
         storeId: input.storeId,
         supplierId: input.supplierId ?? '',
-        payments,
+        payments: allPayments,
+        supplierInvoiceNumber, additionalCostPence: additionalCost, additionalCostTreatment: costTreatment, additionalCostNote: input.additionalCostNote,
         lines: input.lines,
         userId: input.userId ?? '',
       })
@@ -495,7 +517,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   }
 
   const journalLines: JournalLine[] = [
-    { accountCode: ACCOUNT_CODES.inventory, debitPence: subtotal },
+    { accountCode: ACCOUNT_CODES.inventory, debitPence: subtotal + (costTreatment === 'INVENTORY' ? additionalCost : 0) },
     business.vatEnabled && vatTotal > 0
       ? { accountCode: ACCOUNT_CODES.vatReceivable, debitPence: vatTotal }
       : null,
@@ -507,7 +529,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   // ensureChartOfAccounts must never run inside $transaction on libSQL/Turso
   // because it issues multiple writes and only one write is allowed at a time —
   // running it inside the tx causes SQLITE_BUSY which becomes the generic error.
-  const glAccountCodes = journalLines.map((l) => l.accountCode);
+  const glAccountCodes = [...journalLines.map((l) => l.accountCode), ...(additionalCost && costTreatment === 'EXPENSE' ? ['6000', '2000'] : [])];
   let glAccountRows = await prisma.account.findMany({
     where: { businessId: input.businessId, code: { in: glAccountCodes } },
     select: { id: true, code: true },
@@ -536,6 +558,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         businessId: input.businessId,
         storeId: store.id,
         supplierId: input.supplierId || null,
+        supplierInvoiceNumber, additionalCostPence: additionalCost, additionalCostTreatment: costTreatment, additionalCostNote: input.additionalCostNote?.trim() || null,
         paymentStatus: finalStatus,
         dueDate: input.dueDate || null,
         subtotalPence: subtotal,
@@ -547,7 +570,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
 
     // 2. All lines in one SQL INSERT — 1 RTT regardless of line count
     await client.purchaseInvoiceLine.createMany({
-      data: lineDetails.map((line) => ({
+      data: lineDetails.map((line, index) => ({
+        allocatedCostPence: allocatedCosts[index],
         purchaseInvoiceId: created.id,
         productId: line.productId,
         unitId: line.unitId,
@@ -561,7 +585,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       }))
     });
 
-    if (split.cashPence > 0 && cashSource === 'BUSINESS_CASH') await lockFundingBalance(client, input.businessId, cashAccountCode, split.cashPence);
+    if (allSplit.cashPence > 0 && cashSource === 'BUSINESS_CASH') await lockFundingBalance(client, input.businessId, cashAccountCode, allSplit.cashPence);
 
     // 3. Payments — individual creates so CASH rows can link to drawer entries
     if (payments.length > 0) {
@@ -577,6 +601,10 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         tillId: input.tillId,
         shiftId: input.shiftId,
       });
+    }
+
+    if (additionalCost && costTreatment === 'EXPENSE') {
+      await recordPurchaseCostExpenseTx(client, { businessId: input.businessId, storeId: input.storeId, userId: input.userId!, purchaseId: created.id, purchaseNumber: transactionNumber, amountPence: additionalCost, payments: tender.expenses, cashAccountCode, useTill: cashSource === 'TILL' && !input.skipCashDrawerRequirement, tillId: input.tillId, shiftId: input.shiftId, dueDate: input.dueDate, note: input.additionalCostNote });
     }
 
     // 4. GL entry — 2 RTTs (entry header + lines createMany in postJournalEntry)
@@ -647,12 +675,12 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       movementType === 'OPENING' ? 'OPENING_STOCK' : 'PURCHASE_INVOICE';
 
     await (client as typeof prisma).stockMovement.createMany({
-      data: lineDetails.map((line) => ({
+      data: lineDetails.map((line, index) => ({
         storeId: store.id,
         productId: line.productId,
         qtyBase: line.qtyBase,
         unitCostBasePence: line.unitCostBasePence,
-        valuePence: line.lineSubtotal,
+        valuePence: line.lineSubtotal + allocatedCosts[index],
         costBasis: line.lineSubtotal > 0 ? INVENTORY_VALUE_V1 : null,
         type: movementType,
         referenceType,

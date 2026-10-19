@@ -109,6 +109,15 @@ describe('purchase unit conversion', () => {
     ensureChartOfAccountsMock.mockResolvedValue(undefined);
   });
 
+  it('capitalises quantity-allocated delivery in stock and journals while preserving the supplier reference', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([{productId:'p1',unitId:'piece',conversionToBase:1,product:{defaultCostBasePence:100,vatRateBps:0},unit:{name:'Piece'}},{productId:'p2',unitId:'pack',conversionToBase:3,product:{defaultCostBasePence:200,vatRateBps:0},unit:{name:'Pack'}}]);
+    await createPurchase({businessId:bizId,storeId,supplierId:'supplier-a',userId,paymentStatus:'UNPAID',payments:[],supplierInvoiceNumber:' INV-123 ',additionalCostPence:101,additionalCostTreatment:'INVENTORY',lines:[{productId:'p1',unitId:'piece',qtyInUnit:1,unitCostPence:100},{productId:'p2',unitId:'pack',qtyInUnit:1,unitCostPence:600}]});
+    expect(prismaMock.purchaseInvoice.create).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({supplierInvoiceNumber:'INV-123',totalPence:801})}));
+    expect(prismaMock.purchaseInvoiceLine.createMany.mock.calls[0][0].data.map((line:any)=>line.allocatedCostPence)).toEqual([25,76]);
+    expect(postJournalEntryMock).toHaveBeenCalledWith(expect.objectContaining({lines:expect.arrayContaining([{accountCode:'1200',debitPence:801},{accountCode:'2000',creditPence:801}])}));
+    expect(prismaMock.stockMovement.createMany.mock.calls[0][0].data.map((line:any)=>line.valuePence)).toEqual([125,676]);
+  });
+
   it('converts pack qty to base units: 2 packs of 40 = 80 base units', async () => {
     const productId = 'prod-1';
     const packUnitId = 'unit-pack';

@@ -1,13 +1,16 @@
 'use client';
+import Link from 'next/link';
+
+import ProductIdentityFields from '@/components/products/ProductIdentityFields';
 import { ProductMarginResult } from '@/components/products/ProductMarginPreview';
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
-import { createPurchaseAction } from '@/app/actions/purchases';
+import { checkSupplierInvoiceReferenceAction, createPurchaseAction } from '@/app/actions/purchases';
 import { quickCreateProductAction } from '@/app/actions/products';
 import ProductUnitPricingEditor, { type EditableProductUnitConfig } from '@/components/ProductUnitPricingEditor';
-import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
+import { formatMoney, getCurrencySymbol } from '@/lib/format';
 import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared/product-unit-pricing';
 import type { PurchaseCashSource } from '@/lib/services/purchase-funding';
 import type { PaymentStatus } from '@/lib/services/shared';
@@ -76,6 +79,10 @@ type PurchaseDraft = {
   version: 1;
   updatedAt: number;
   supplierId: string;
+  supplierInvoiceNumber?: string;
+  additionalCost?: string;
+  additionalCostTreatment?: 'INVENTORY' | 'EXPENSE';
+  additionalCostNote?: string;
   cart: CartLine[];
   paymentMethods: PaymentMethod[];
   cashPaid: string;
@@ -115,6 +122,11 @@ export default function PurchaseFormClient({
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const [productOptions, setProductOptions] = useState<ProductDto[]>(products);
   const [supplierId, setSupplierId] = useState('');
+  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('');
+  const [duplicateInvoice, setDuplicateInvoice] = useState<{ id: string; transactionNumber: string | null } | null>(null);
+  const [additionalCost, setAdditionalCost] = useState('');
+  const [additionalCostTreatment, setAdditionalCostTreatment] = useState<'INVENTORY' | 'EXPENSE'>('EXPENSE');
+  const [additionalCostNote, setAdditionalCostNote] = useState('');
   const [productId, setProductId] = useState(products[0]?.id ?? '');
   const [unitId, setUnitId] = useState(products[0]?.units[0]?.id ?? '');
   const [qtyInput, setQtyInput] = useState('1');
@@ -144,8 +156,8 @@ export default function PurchaseFormClient({
   const [quickName, setQuickName] = useState('');
   const [quickSku, setQuickSku] = useState('');
   const [quickBarcode, setQuickBarcode] = useState('');
-  const [quickPublisher, setQuickPublisher] = useState('');
-  const [quickEdition, setQuickEdition] = useState('');
+  const quickIdentityRef = useRef<HTMLDivElement>(null);
+  const [quickIdentityKey, setQuickIdentityKey] = useState(0);
   const [quickUnitConfigs, setQuickUnitConfigs] = useState<EditableProductUnitConfig[]>(() => buildDefaultUnitConfigs(units));
   const [quickSellPrice, setQuickSellPrice] = useState('');
   const [quickCost, setQuickCost] = useState('');
@@ -184,11 +196,12 @@ export default function PurchaseFormClient({
     setQtyDrafts({});
     setCostDrafts({});
     setPaymentMethods(['CASH']);
-    setPaymentStatus('PAID');
+    setPaymentStatus('UNPAID');
     setDueDate('');
     setCashPaid('');
     setCardPaid('');
     setTransferPaid('');
+    setSupplierInvoiceNumber(''); setAdditionalCost(''); setAdditionalCostNote(''); setAdditionalCostTreatment('EXPENSE'); setDuplicateInvoice(null);
     setBarcodeLookup('');
     setProductSearch('');
     setProductDropdownOpen(false);
@@ -233,6 +246,7 @@ export default function PurchaseFormClient({
         ? parsed.paymentMethods.filter((method): method is PaymentMethod => ['CASH', 'CARD', 'TRANSFER'].includes(method))
         : [];
 
+      setSupplierInvoiceNumber(parsed.supplierInvoiceNumber ?? ''); setAdditionalCost(parsed.additionalCost ?? ''); setAdditionalCostTreatment(parsed.additionalCostTreatment === 'INVENTORY' ? 'INVENTORY' : 'EXPENSE'); setAdditionalCostNote(parsed.additionalCostNote ?? '');
       setSupplierId(validRequestedSupplierId || (typeof parsed.supplierId === 'string' ? parsed.supplierId : ''));
       setCart(restoredCart);
       setPaymentMethods(restoredMethods.length > 0 ? restoredMethods : ['CASH']);
@@ -262,7 +276,7 @@ export default function PurchaseFormClient({
     if (!draftReadyRef.current) return;
 
     const hasDraft =
-      supplierId ||
+      supplierId || supplierInvoiceNumber || additionalCost || additionalCostNote ||
       cart.length > 0 ||
       cashPaid ||
       cardPaid ||
@@ -278,7 +292,7 @@ export default function PurchaseFormClient({
       const draft: PurchaseDraft = {
         version: PURCHASE_DRAFT_VERSION,
         updatedAt: Date.now(),
-        supplierId,
+        supplierId, supplierInvoiceNumber, additionalCost, additionalCostTreatment, additionalCostNote,
         cart,
         paymentMethods,
         cashPaid,
@@ -289,12 +303,13 @@ export default function PurchaseFormClient({
       };
       window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
     } catch {}
-  }, [cardPaid, cart, cashPaid, dueDate, paymentMethods, paymentStatus, storeId, supplierId, transferPaid, cashSource, cashHolderId, fundingOwnerId, draftStorageKey]);
+  }, [cardPaid, cart, cashPaid, dueDate, paymentMethods, paymentStatus, storeId, supplierId, transferPaid, cashSource, cashHolderId, fundingOwnerId, draftStorageKey, supplierInvoiceNumber, additionalCost, additionalCostTreatment, additionalCostNote]);
 
   useEffect(() => {
     if (!draftReadyRef.current) return;
     const hasUnsavedPurchase =
       cart.length > 0 ||
+      supplierInvoiceNumber || additionalCost || additionalCostNote ||
       supplierId ||
       cashPaid ||
       cardPaid ||
@@ -310,7 +325,7 @@ export default function PurchaseFormClient({
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [cardPaid, cart.length, cashPaid, dueDate, paymentStatus, supplierId, transferPaid]);
+  }, [cardPaid, cart.length, cashPaid, dueDate, paymentStatus, supplierId, transferPaid, supplierInvoiceNumber, additionalCost, additionalCostNote]);
 
   // Keep productSearch display in sync when productId changes programmatically
   useEffect(() => {
@@ -360,8 +375,7 @@ export default function PurchaseFormClient({
     setQuickName('');
     setQuickSku('');
     setQuickBarcode('');
-    setQuickPublisher('');
-    setQuickEdition('');
+    setQuickIdentityKey(current => current + 1);
     setQuickUnitConfigs(buildDefaultUnitConfigs(units));
     setQuickSellPrice('');
     setQuickCost('');
@@ -418,8 +432,10 @@ export default function PurchaseFormClient({
     try {
       const result = await quickCreateProductAction({
         name: quickName.trim(),
-        publisher: quickPublisher.trim(),
-        edition: quickEdition.trim(),
+        publisher: quickIdentityRef.current?.querySelector<HTMLInputElement>('[name=publisher]')?.value,
+        edition: quickIdentityRef.current?.querySelector<HTMLInputElement>('[name=edition]')?.value,
+        attributesJson: quickIdentityRef.current?.querySelector<HTMLInputElement>('[name=attributesJson]')?.value,
+        additionalBarcodes: quickIdentityRef.current?.querySelector<HTMLInputElement>('[name=additionalBarcodes]')?.value.split('\n').filter(Boolean),
         sku: quickSku.trim() || null,
         barcode: quickBarcode.trim() || null,
         sellingPriceBasePence: selling,
@@ -564,6 +580,11 @@ export default function PurchaseFormClient({
     { subtotal: 0, vat: 0, total: 0 }
   );
 
+  const goodsTotal = totals.total;
+  const extraCostPence = parseCurrencyToPence(additionalCost);
+  totals.total += extraCostPence;
+  const baseCount = cartDetails.reduce((sum, line) => sum + line.qtyInUnit * line.unit.conversionToBase, 0);
+
   const hasMethod = (method: PaymentMethod) => paymentMethods.includes(method);
   const cashPaidPence = paymentStatus !== 'UNPAID' && hasMethod('CASH') ? parseCurrencyToPence(cashPaid) : 0;
   const cardPaidPence = paymentStatus !== 'UNPAID' && hasMethod('CARD') ? parseCurrencyToPence(cardPaid) : 0;
@@ -596,7 +617,7 @@ export default function PurchaseFormClient({
     setQtyDrafts({});
     setCostDrafts({});
     setPaymentMethods(['CASH']);
-    setPaymentStatus('PAID');
+    setPaymentStatus('UNPAID');
     setDueDate('');
     setCashPaid('');
     setCardPaid('');
@@ -647,12 +668,6 @@ export default function PurchaseFormClient({
               <input className="input" value={quickName} onChange={(e) => setQuickName(e.target.value)} />
             </div>
             <div>
-              <label className="label">Internal product code (optional)</label>
-              <input className="input" value={quickSku} onChange={(e) => setQuickSku(e.target.value)} />
-            </div>
-            <div>
-              <div><label className="label" htmlFor="quick-publisher">Publisher / brand</label><input id="quick-publisher" className="input" value={quickPublisher} onChange={e => setQuickPublisher(e.target.value)} /></div>
-              <div><label className="label" htmlFor="quick-edition">Edition / format</label><input id="quick-edition" className="input" value={quickEdition} onChange={e => setQuickEdition(e.target.value)} /></div>
               <label className="label">Barcode — USB/Bluetooth reader or typing</label>
               <div className="relative">
                 <input aria-label="New product barcode — scan with USB/Bluetooth reader" onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }} placeholder="Click here, then scan with your reader" className="input pr-11" value={quickBarcode} onChange={(e) => setQuickBarcode(e.target.value)} />
@@ -671,7 +686,7 @@ export default function PurchaseFormClient({
               </div>
             </div>
             <div>
-              <label className="label">Selling Price ({getMinorUnitLabel(currency)})</label>
+              <label className="label">Selling Price ({getCurrencySymbol(currency)})</label>
               <input
                 className="input"
                 type="number"
@@ -682,7 +697,7 @@ export default function PurchaseFormClient({
                 onChange={(e) => setQuickSellPrice(e.target.value)}
               />
             </div>
-            <div className="sm:col-span-2 xl:col-span-3">
+            <details className="sm:col-span-2 xl:col-span-3 rounded-xl border p-4"><summary className="cursor-pointer text-sm font-semibold">Stock unit and packs</summary>
               <ProductUnitPricingEditor
                 units={units}
                 currencySymbol={getCurrencySymbol(currency)}
@@ -692,9 +707,9 @@ export default function PurchaseFormClient({
                 initialConfigs={quickUnitConfigs}
                 onConfigsChange={setQuickUnitConfigs}
               />
-            </div>
+            </details>
             <div>
-              <label className="label">Default Cost ({getMinorUnitLabel(currency)})</label>
+              <label className="label">Cost per item ({getCurrencySymbol(currency)})</label>
               <input
                 className="input"
                 type="number"
@@ -715,6 +730,11 @@ export default function PurchaseFormClient({
                 onChange={(e) => setQuickVatRate(e.target.value)}
               />
             </div>
+            <details className="sm:col-span-2 xl:col-span-3 rounded-xl border p-4"><summary className="cursor-pointer text-sm font-semibold">More product details (optional)</summary><div className="mt-4 grid gap-4 sm:grid-cols-2">            <div>
+              <label className="label">Internal product code (optional)</label>
+              <input className="input" value={quickSku} onChange={(e) => setQuickSku(e.target.value)} />
+            </div>
+<div ref={quickIdentityRef} key={quickIdentityKey}><ProductIdentityFields /></div></div></details>
             {quickAddError ? (
               <div className="rounded-xl border border-rose/30 bg-rose/10 px-3 py-2 text-sm text-rose sm:col-span-2 xl:col-span-3">
                 {quickAddError}
@@ -755,6 +775,12 @@ export default function PurchaseFormClient({
         <input type="hidden" name="transferPaid" value={Math.max(0, transferPaidPence)} />
         {paymentStatus !== 'UNPAID' && cashSource === 'TILL' && openTills.length === 1 ? <input type="hidden" name="tillId" value={openTills[0]!.tillId} /> : null}
 
+        <div className="rounded-xl border border-slate-200 p-4">
+          <label className="label" htmlFor="supplier-invoice-number">Supplier’s original invoice number (optional)</label>
+          <input id="supplier-invoice-number" name="supplierInvoiceNumber" className="input" maxLength={100} value={supplierInvoiceNumber} onChange={event => { setSupplierInvoiceNumber(event.target.value); setDuplicateInvoice(null); }} onBlur={async () => { try { const result = await checkSupplierInvoiceReferenceAction(supplierId, supplierInvoiceNumber); if (result.success) setDuplicateInvoice(result.data); } catch { /* Optional duplicate hint must not interrupt entry. */ } }} placeholder="e.g. INV-2026-1042" />
+          <p className="mt-1 text-xs text-black/55">Copy the number printed on the supplier’s invoice. TillFlow also creates its own PUR number.</p>
+          {duplicateInvoice ? <p role="status" className="mt-2 text-sm text-amber-800">This supplier’s invoice number is already recorded on <Link className="underline" href={`/purchases/${duplicateInvoice.id}`}>{duplicateInvoice.transactionNumber || 'an earlier purchase'}</Link>. Check before recording it again.</p> : null}
+        </div>
         <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-4 sm:p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -1146,6 +1172,17 @@ export default function PurchaseFormClient({
           )}
         </div>
 
+        <details className="rounded-xl border border-slate-200 p-4" open={extraCostPence > 0 || undefined}>
+          <summary className="cursor-pointer font-semibold text-sm">Add delivery or other purchase costs</summary>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div><label className="label" htmlFor="purchase-additional-cost">Additional cost</label><input id="purchase-additional-cost" name="additionalCost" className="input" type="number" min="0" step="0.01" inputMode="decimal" value={additionalCost} onChange={event => setAdditionalCost(event.target.value)} /></div>
+            <div><label className="label" htmlFor="purchase-cost-note">Description / reference</label><input id="purchase-cost-note" name="additionalCostNote" className="input" maxLength={300} placeholder="e.g. delivery from wholesaler" value={additionalCostNote} onChange={event => setAdditionalCostNote(event.target.value)} /></div>
+            <div className="sm:col-span-2"><label className="label" htmlFor="purchase-cost-treatment">Include this cost in the products’ stock value?</label><select id="purchase-cost-treatment" name="additionalCostTreatment" className="input" value={additionalCostTreatment} onChange={event => setAdditionalCostTreatment(event.target.value as 'INVENTORY' | 'EXPENSE')}><option value="EXPENSE">No — record a linked expense</option><option value="INVENTORY">Yes — share equally per individual item</option></select>
+              <p className="mt-2 text-xs text-black/60">{additionalCostTreatment === 'INVENTORY' ? `Shared by quantity across ${baseCount} individual items, with exact rounding. Stock cost changes; no extra expense is posted.` : 'A separate linked expense is recorded. Any payment below is split between goods and this cost, so cash is taken only once.'} Choose the treatment that follows your business’s accounting policy.</p>
+              <p className="mt-1 text-xs text-black/60">Goods: {formatMoney(goodsTotal, currency)} · Additional cost: {formatMoney(extraCostPence, currency)} · Combined total: {formatMoney(totals.total, currency)}. Additional costs use the entered final amount; no extra VAT is calculated on them.</p>
+            </div>
+          </div>
+        </details>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div>
             <label className="label" htmlFor="purchase-payment-status">Payment Status</label>
@@ -1176,7 +1213,7 @@ export default function PurchaseFormClient({
             <select id="purchase-cash-source" name="cashSource" className="input" value={cashSource} onChange={event => setCashSource(event.target.value as PurchaseCashSource)}>
               <option value="TILL">Till drawer</option><option value="BUSINESS_CASH">Business cash held outside the till</option><option value="OWNER_LOAN">Owner’s money — repay the owner</option><option value="OWNER_CAPITAL">Owner’s money — contribution</option>
             </select>
-            {cashSource === 'BUSINESS_CASH' ? <><label className="label mt-2">Who holds the business cash?</label><select name="cashHolderId" className="input" required value={cashHolderId} onChange={event => setCashHolderId(event.target.value)}><option value="">Select person…</option>{cashPeople.map(person => <option key={person.id} value={person.id}>{person.name} — {formatMoney(person.balancePence, currency)}</option>)}</select><a className="mt-2 block text-sm underline" href={`/purchases/cash?storeId=${storeId}`}>Record a cash handover or return</a></> : null}
+            {cashSource === 'BUSINESS_CASH' ? <><label className="label mt-2">Who holds the business cash?</label><select name="cashHolderId" className="input" required value={cashHolderId} onChange={event => setCashHolderId(event.target.value)}><option value="">Select person…</option>{cashPeople.map(person => <option key={person.id} value={person.id}>{person.name} — {formatMoney(person.balancePence, currency)}</option>)}</select><Link className="mt-2 block text-sm underline" href={`/purchases/cash?storeId=${storeId}`}>Record a cash handover or return</Link></> : null}
             {cashSource.startsWith('OWNER_') ? <><label className="label mt-2">Owner providing the money</label><select name="fundingOwnerId" className="input" required value={fundingOwnerId} onChange={event => setFundingOwnerId(event.target.value)}><option value="">Select owner…</option>{cashPeople.filter(person => person.role === 'OWNER').map(person => <option key={person.id} value={person.id}>{person.name}</option>)}</select><p className="mt-1 text-xs text-black/50">Paid directly by the owner. No money is taken from the till.</p></> : null}
           </div> : null}
           {paymentStatus !== 'UNPAID' && hasMethod('CASH') && cashSource === 'TILL' && openTills.length !== 1 ? (

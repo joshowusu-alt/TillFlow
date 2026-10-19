@@ -103,6 +103,7 @@ async function parseProductFields(formData: FormData): Promise<ProductCoreInput>
 
   return {
     name: formString(formData, 'name'),
+    attributesJson: formString(formData, 'attributesJson'),
     publisher: formString(formData, 'publisher'),
     edition: formString(formData, 'edition'),
     additionalBarcodes: formString(formData, 'additionalBarcodes').split(/[\n,]+/).map(code => code.trim()).filter(Boolean),

@@ -113,9 +113,9 @@ export default async function MomoReconciliationPage({
               <strong>MoMo is not fully connected.</strong>
               <p className="mt-1 text-xs text-rose/80">Your MoMo credentials haven&apos;t been set up yet. Payments can&apos;t be processed until this is fixed.</p>
               <div className="mt-2 flex items-center gap-3">
-                <a href="/settings" className="rounded-lg bg-rose px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 transition">
+                <Link href="/settings" className="rounded-lg bg-rose px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 transition">
                   Connect MoMo →
-                </a>
+                </Link>
                 <details className="text-xs">
                   <summary className="cursor-pointer text-rose/70 hover:text-rose">Show technical details</summary>
                   <pre className="mt-1 whitespace-pre-wrap font-mono text-[10px] opacity-70">{searchParams.error}</pre>

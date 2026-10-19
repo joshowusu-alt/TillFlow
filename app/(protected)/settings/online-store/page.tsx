@@ -736,9 +736,9 @@ export default async function OnlineStoreSettingsPage({
               Only products marked as published appear in the public storefront.
             </p>
           </div>
-          <a href="/products" className="btn-secondary justify-center text-sm">
+          <Link href="/products" className="btn-secondary justify-center text-sm">
             Open products
-          </a>
+          </Link>
         </div>
 
         <div className="mt-5">

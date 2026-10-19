@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { openLiveReport } from '@/lib/entitlements/live-report';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
@@ -139,9 +140,9 @@ export default async function AuditLogPage({
           Filter
         </button>
         {(searchParams.action || searchParams.user) && (
-          <a href="/reports/audit-log" className="inline-flex items-center text-sm text-gray-500 underline xl:ml-2 xl:self-center">
+          <Link href="/reports/audit-log" className="inline-flex items-center text-sm text-gray-500 underline xl:ml-2 xl:self-center">
             Clear
-          </a>
+          </Link>
         )}
       </form>
 

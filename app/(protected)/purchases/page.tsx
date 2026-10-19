@@ -45,7 +45,7 @@ export default async function PurchasesPage({
       <div className="card p-6 text-center">
         <div className="text-lg font-semibold">Setup Required</div>
         <div className="mt-2 text-sm text-black/60">Complete your business setup in Settings to get started.</div>
-        <a href="/settings" className="btn-primary mt-4 inline-block">Go to Settings</a>
+        <Link href="/settings" className="btn-primary mt-4 inline-block">Go to Settings</Link>
       </div>
     );
   }
@@ -115,6 +115,7 @@ export default async function PurchasesPage({
         id: true,
         storeId: true,
         transactionNumber: true,
+        supplierInvoiceNumber: true,
         createdAt: true,
         paymentStatus: true,
         totalPence: true,
@@ -220,7 +221,7 @@ export default async function PurchasesPage({
           : qtyLabel;
     const paidPence = purchase.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
     const outstandingPence = purchase.totalPence - paidPence;
-    const purchaseReference = displayDocumentNumber('purchase', purchase.transactionNumber, purchase.id);
+    const purchaseReference = [displayDocumentNumber('purchase', purchase.transactionNumber, purchase.id), purchase.supplierInvoiceNumber ? `Supplier: ${purchase.supplierInvoiceNumber}` : ''].filter(Boolean).join(' · ');
 
     return {
       purchase,

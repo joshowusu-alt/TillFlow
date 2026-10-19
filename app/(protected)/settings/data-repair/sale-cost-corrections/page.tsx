@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
@@ -207,7 +208,7 @@ export default async function SaleCostCorrectionsPage({
         columnsClassName="xl:grid-cols-7"
         submitLabel="Find affected lines"
         submitTone="primary"
-        actions={<a className="btn-secondary" href="/settings/data-repair/sale-cost-corrections">Reset</a>}
+        actions={<Link className="btn-secondary" href="/settings/data-repair/sale-cost-corrections">Reset</Link>}
       >
         <label className="text-xs font-semibold uppercase tracking-[0.14em] text-black/55">
           Search

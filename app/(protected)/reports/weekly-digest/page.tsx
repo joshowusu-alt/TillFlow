@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
@@ -83,9 +84,9 @@ export default async function WeeklyDigestPage({
         subtitle={dateLabel}
         actions={
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-            <a href={`?week=${weekOffset - 1}`} className="btn-secondary min-w-[calc(50%-0.25rem)] flex-1 justify-center text-sm sm:min-w-0 sm:flex-none">Prev Week</a>
+            <Link href={`?week=${weekOffset - 1}`} className="btn-secondary min-w-[calc(50%-0.25rem)] flex-1 justify-center text-sm sm:min-w-0 sm:flex-none">Prev Week</Link>
             {weekOffset < 0 && (
-              <a href={`?week=${weekOffset + 1}`} className="btn-secondary min-w-[calc(50%-0.25rem)] flex-1 justify-center text-sm sm:min-w-0 sm:flex-none">Next Week</a>
+              <Link href={`?week=${weekOffset + 1}`} className="btn-secondary min-w-[calc(50%-0.25rem)] flex-1 justify-center text-sm sm:min-w-0 sm:flex-none">Next Week</Link>
             )}
             <DownloadLink
               href={`/api/reports/weekly-digest?week=${weekOffset}`}
@@ -105,7 +106,7 @@ export default async function WeeklyDigestPage({
           {opened.branch.selected === 'ALL' ? 'all branches' : 'the selected branch'}.
           Generated from recorded sales, receipts, returns, voids, stock adjustments, and shift activity.
         </p>
-        <p className="mt-1">Receipts may include payments for older customer credit. <a href="/reports/dashboard" className="font-medium underline-offset-2 hover:underline">Use the Trading Report</a> for date and branch filtering.</p>
+        <p className="mt-1">Receipts may include payments for older customer credit. <Link href="/reports/dashboard" className="font-medium underline-offset-2 hover:underline">Use the Trading Report</Link> for date and branch filtering.</p>
       </div>
 
       {/* Week at a glance — KPIs */}
@@ -138,7 +139,7 @@ export default async function WeeklyDigestPage({
           <p className="font-semibold">⚠ Gross margin looks unusual ({data.gpPercent}%)</p>
           <p className="mt-0.5 text-amber-700">
             A margin this negative usually means product cost prices are set much higher than selling prices.
-            Go to <a href="/products" className="underline font-medium">Products</a> and review the{' '}
+            Go to <Link href="/products" className="underline font-medium">Products</Link> and review the{' '}
             <strong>cost price</strong> for your top-selling items to correct this.
           </p>
         </div>

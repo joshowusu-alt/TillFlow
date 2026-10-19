@@ -1,3 +1,4 @@
+import ProductCategoryField from '@/components/products/ProductCategoryField';
 import PageHeader from '@/components/PageHeader';
 import ProductIdentityFields from '@/components/products/ProductIdentityFields';
 import ProductMarginPreview from '@/components/products/ProductMarginPreview';
@@ -403,44 +404,26 @@ export default async function ProductsPage({
                     <input className="input" id="create-product-name" name="name" required />
                   </div>
                   <div>
-                    <label className="label" htmlFor="create-product-sku">Internal product code (optional)</label>
-                    <input className="input" id="create-product-sku" name="sku" />
-                  </div>
-                  <div>
                     <label className="label">Barcode</label>
                     <BarcodeScanInput name="barcode" />
                   </div>
                   <div>
-                    <div className="label">Product image</div>
-                    <ProductImageInput fileUploadEnabled={fileUploadEnabled} />
-                  </div>
-                  <div>
-                    <ProductIdentityFields />
-                    <label className="label" htmlFor="create-product-categoryId">Category</label>
-                    <select className="input" id="create-product-categoryId" name="categoryId">
-                      <option value="">Uncategorised</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="mt-1 text-xs text-black/50">
-                      Don&apos;t see your category? <a href="/products?tab=categories" className="text-accent underline">Add one here</a>.
-                    </div>
-                  </div>
-                  <div>
-                    <label className="label" htmlFor="create-product-sellingPriceBasePence">Base Price ({getCurrencySymbol(business.currency)})</label>
+                    <label className="label" htmlFor="create-product-sellingPriceBasePence">Selling price ({getCurrencySymbol(business.currency)})</label>
                     <input className="input" id="create-product-sellingPriceBasePence" name="sellingPriceBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
                     <div className="mt-1 text-xs text-black/50">Price per base unit, e.g. 5.00 for {getCurrencySymbol(business.currency)}5.00.</div>
                   </div>
                   <div>
-                    <label className="label" htmlFor="create-product-defaultCostBasePence">Base Cost ({getCurrencySymbol(business.currency)})</label>
+                    <label className="label" htmlFor="create-product-defaultCostBasePence">Cost per item ({getCurrencySymbol(business.currency)})</label>
                     <input className="input" id="create-product-defaultCostBasePence" name="defaultCostBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
                     <div className="mt-1 text-xs text-black/50">Cost per base unit, e.g. 3.50 for {getCurrencySymbol(business.currency)}3.50.</div>
                   </div>
                 </ProductFormSection>
-                <ProductFormSection title="Stock and purchasing" description="Supplier, units, and optional opening quantity.">
+                <ProductFormSection title="Product details" description="Add a photo, category or any details that help identify this item.">                  <div>
+                    <label className="label" htmlFor="create-product-sku">Internal product code (optional)</label>
+                    <input className="input" id="create-product-sku" name="sku" />
+                  </div>
+<div><div className="label">Product image</div><ProductImageInput fileUploadEnabled={fileUploadEnabled} /></div><div><ProductCategoryField categories={categories} /></div><div className="md:col-span-3"><ProductIdentityFields /></div></ProductFormSection>
+                <ProductFormSection title="Stock and purchasing" description="Supplier, pack sizes and stock carried into TillFlow.">
                   <div>
                     <label className="label" htmlFor="create-product-preferredSupplierId">Preferred supplier</label>
                     <select className="input" id="create-product-preferredSupplierId" name="preferredSupplierId">

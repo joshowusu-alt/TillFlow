@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
@@ -89,9 +90,9 @@ export default async function OrganizationSettingsPage({
               Set whether customers are shared across the business and whether multi-branch workflows are active.
             </p>
           </div>
-          <a href="/settings/billing" className="btn-secondary text-xs">
+          <Link href="/settings/billing" className="btn-secondary text-xs">
             Billing & plans
-          </a>
+          </Link>
         </div>
 
         <div className="rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-4">

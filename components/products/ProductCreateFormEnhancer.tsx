@@ -16,11 +16,11 @@ export function OpeningStockFields({
   defaultBaseUnitId,
 }: OpeningStockFieldsProps) {
   return (
-    <div className="md:col-span-3 rounded-xl border border-black/10 bg-black/[0.02] p-4 space-y-3">
+    <details className="md:col-span-3 rounded-xl border border-black/10 bg-black/[0.02] p-4 space-y-3"><summary className="cursor-pointer text-sm font-semibold">Already held this stock before using TillFlow?</summary>
       <div>
         <h3 className="text-sm font-semibold text-ink">Opening stock (optional)</h3>
         <p className="text-xs text-black/55 mt-0.5">
-          Shelf quantity is saved separately from the price. Add it here so POS can sell this product immediately.
+          Use this only to bring existing stock into TillFlow. For stock bought during normal trading, record a purchase so its supplier, payment and costs are tracked.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -76,13 +76,9 @@ export function OpeningStockFields({
         Enter the cost for the selected stock unit. Blank cost keeps stock value and affected profit incomplete; sales can continue. Valued opening stock is recorded against opening balance equity.
       </p>
       <p className="text-xs text-black/50">
-        Skip for now? You must{' '}
-        <a href="/setup/opening-stock" className="font-semibold text-accent underline">
-          add opening stock
-        </a>{' '}
-        before the till can sell this product.
+        New delivery? Receive it through Purchases after saving this product.
       </p>
-    </div>
+    </details>
   );
 }
 

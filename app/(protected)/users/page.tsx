@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
 import ResetPasswordModal from '@/components/ResetPasswordModal';
@@ -150,7 +151,7 @@ export default async function UsersPage({
               {editUser ? 'Update User' : 'Create User'}
             </SubmitButton>
             {editUser && (
-              <a href="/users" className="btn-ghost">Cancel</a>
+              <Link href="/users" className="btn-ghost">Cancel</Link>
             )}
           </div>
         </form>
