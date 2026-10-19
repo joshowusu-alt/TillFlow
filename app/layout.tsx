@@ -1,7 +1,6 @@
 ﻿import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans, DM_Sans } from 'next/font/google';
-import { Suspense } from 'react';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import NetworkStatus from '@/components/NetworkStatus';
 import ToastProvider from '@/components/ToastProvider';
@@ -86,11 +85,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="relative z-10">
           <ServiceWorkerRegistration />
           <KeyboardViewportBridge />
-          <Suspense>
-            <ToastProvider>
-              {children}
-            </ToastProvider>
-          </Suspense>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
           <NetworkStatus />
         </div>
       </body>

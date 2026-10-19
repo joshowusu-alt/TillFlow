@@ -29,7 +29,8 @@ describe('Loading Phase 2B: gated RootLaunchLoading', () => {
     window.localStorage.setItem(LAUNCH_BUSINESS_NAME_KEY, 'EL-SHADDAI');
     const { container } = render(React.createElement(RootLaunchLoading));
 
-    expect(container).toBeEmptyDOMElement();
+    expect(container).not.toBeEmptyDOMElement();
+    expect(screen.getByRole('status', { name: 'Loading page' })).toBeInTheDocument();
     expect(screen.queryByText(LAUNCH_GENERIC_MESSAGE)).not.toBeInTheDocument();
     expect(screen.queryByText(/Opening your business/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Opening EL-SHADDAI...')).not.toBeInTheDocument();
@@ -63,7 +64,8 @@ describe('Loading Phase 2B: gated RootLaunchLoading', () => {
 
     expect(isIntentionalLaunchSession()).toBe(false);
     const { container } = render(React.createElement(RootLaunchLoading));
-    expect(container).toBeEmptyDOMElement();
+    expect(container).not.toBeEmptyDOMElement();
+    expect(screen.getByRole('status', { name: 'Loading page' })).toBeInTheDocument();
     expect(screen.queryByText(/Opening/i)).not.toBeInTheDocument();
   });
 
