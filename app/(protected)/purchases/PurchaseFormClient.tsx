@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 
+import PurchaseDocumentInput from '@/components/purchases/PurchaseDocumentInput';
 import ProductIdentityFields from '@/components/products/ProductIdentityFields';
 import { ProductMarginResult } from '@/components/products/ProductMarginPreview';
 
@@ -775,6 +776,7 @@ export default function PurchaseFormClient({
         <input type="hidden" name="transferPaid" value={Math.max(0, transferPaidPence)} />
         {paymentStatus !== 'UNPAID' && cashSource === 'TILL' && openTills.length === 1 ? <input type="hidden" name="tillId" value={openTills[0]!.tillId} /> : null}
 
+        <PurchaseDocumentInput /><p className="text-xs text-black/50">If you restore a draft or reopen this page, select the invoice files again before recording.</p>
         <div className="rounded-xl border border-slate-200 p-4">
           <label className="label" htmlFor="supplier-invoice-number">Supplier’s original invoice number (optional)</label>
           <input id="supplier-invoice-number" name="supplierInvoiceNumber" className="input" maxLength={100} value={supplierInvoiceNumber} onChange={event => { setSupplierInvoiceNumber(event.target.value); setDuplicateInvoice(null); }} onBlur={async () => { try { const result = await checkSupplierInvoiceReferenceAction(supplierId, supplierInvoiceNumber); if (result.success) setDuplicateInvoice(result.data); } catch { /* Optional duplicate hint must not interrupt entry. */ } }} placeholder="e.g. INV-2026-1042" />

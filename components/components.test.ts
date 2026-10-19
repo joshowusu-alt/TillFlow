@@ -103,10 +103,11 @@ describe('RootLaunchLoading', () => {
         window.sessionStorage.clear();
     });
 
-    it('renders nothing on first paint when no intentional launch session exists', () => {
+    it('renders a neutral skeleton when no intentional launch session exists', () => {
         const { container } = render(React.createElement(RootLaunchLoading));
 
-        expect(container).toBeEmptyDOMElement();
+        expect(container).not.toBeEmptyDOMElement();
+        expect(screen.getByRole('status', {name:'Loading page'})).toBeInTheDocument();
         expect(screen.queryByText(ROOT_COLD_START_MESSAGE)).not.toBeInTheDocument();
         expect(screen.queryByText(ROOT_COLD_START_DETAIL)).not.toBeInTheDocument();
         expect(screen.queryByText('Loading section...')).not.toBeInTheDocument();

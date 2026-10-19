@@ -1,4 +1,5 @@
 'use client';
+import PurchaseDocumentInput from '@/components/purchases/PurchaseDocumentInput';
 
 import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
@@ -267,6 +268,7 @@ export default function ImportStockClient({
   initialMode?: ImportMode | null;
 }) {
   const [stage, setStage] = useState<'upload' | 'preview' | 'result'>('upload');
+  const [purchaseDocumentsJson,setPurchaseDocumentsJson]=useState('[]');
   const [importMode, setImportMode] = useState<ImportMode | null>(initialMode);
   const [legacyPaymentStatusColumn, setLegacyPaymentStatusColumn] = useState(false);
   const [clientImportKey, setClientImportKey] = useState('');
@@ -294,6 +296,7 @@ export default function ImportStockClient({
       }
       setParseError(null);
       setFileName(file.name);
+      setPurchaseDocumentsJson('[]');
       const safeName = file.name.replace(/[^\w.-]/g, '_').slice(0, 40);
       setClientImportKey(`imp:${importMode}:${file.size}:${file.lastModified}:${safeName}`);
       try {
@@ -364,7 +367,7 @@ export default function ImportStockClient({
   const hasErrors = previewRows.some((r) => rowStatus(r) === 'error');
   const hasUnresolvedWarnings = previewRows.some((r) => rowStatus(r) === 'warning');
   const readyCount = previewRows.filter((r) => rowStatus(r) === 'ready').length;
-  const canConfirm = !hasErrors && previewRows.length > 0 && readyCount > 0;
+  const canConfirm = !hasErrors && previewRows.length > 0 && readyCount > 0 && (importMode !== 'PURCHASES' || purchaseDocumentsJson !== '[]');
 
   // ── Confirm ──────────────────────────────────────────────────────────────
 
@@ -419,6 +422,7 @@ export default function ImportStockClient({
           rows: confirmedRows,
           meta: {
             importMode,
+            purchaseDocumentsJson,
             legacyPaymentStatusColumn,
             clientImportKey,
             fileName: fileName ?? undefined,
@@ -935,7 +939,7 @@ export default function ImportStockClient({
           </>
         ) : null}
         {importMode === 'PURCHASES' ? (
-          <p className="text-xs text-black/60">Genuine purchases only. Paid reduces the selected payment account; unpaid requires a supplier and creates AP.</p>
+          <div className="space-y-3"><PurchaseDocumentInput onDocumentsChange={documents=>setPurchaseDocumentsJson(JSON.stringify(documents))}/><p className="text-xs text-black/60">Genuine purchases only. Paid reduces the selected payment account; unpaid requires a supplier and creates AP. Attach the invoice documents covering the rows in this import.</p></div>
         ) : null}
         <p className="text-xs text-black/55">
           <span data-testid="import-stock-ready-count">Ready {readyCount}</span>
@@ -1493,7 +1497,7 @@ export default function ImportStockClient({
                 <div className="absolute bottom-full mb-1.5 right-0 hidden group-hover:block w-56 rounded-lg bg-black/80 px-3 py-2 text-xs text-white shadow-lg">
                   {hasErrors
                     ? 'Fix all red errors first (re-upload the corrected file).'
-                    : 'No ready rows to import.'}
+                    : importMode === 'PURCHASES' && purchaseDocumentsJson === '[]' ? 'Attach the supplier invoice before importing purchases.' : 'No ready rows to import.'}
                 </div>
               )}
               {canConfirm && hasUnresolvedWarnings && (

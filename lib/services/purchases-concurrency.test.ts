@@ -1,3 +1,4 @@
+import {purchaseDocumentFixture} from '@/lib/test/purchase-document-fixture';
 /**
  * Overlapping-transaction concurrency evidence for paid createPurchase.
  * Listed in .github/workflows/postgres-smoke.yml.
@@ -108,6 +109,7 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
       () => prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } }),
       () => prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }),
       () => prisma.journalEntry.deleteMany({ where: { businessId } }),
+      () => prisma.purchaseDocument.deleteMany({where:{businessId}}),
       () => prisma.purchaseInvoice.deleteMany({ where: { businessId } }),
       () => prisma.inventoryBalance.deleteMany({ where: { storeId } }),
       () => prisma.productUnit.deleteMany({ where: { productId } }),
@@ -125,7 +127,7 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
 
   it('rejects paid createPurchase without a key before writing', async () => {
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId,
         storeId,
         supplierId,
@@ -141,7 +143,7 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
   });
 
   it('creates credit-only unpaid purchases without a key and without a money row', async () => {
-    const invoice = await createPurchase({
+    const invoice = await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId,
       storeId,
       supplierId,
@@ -172,7 +174,7 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
       tillId,
       idempotencyKey: key,
     };
-    const [a, b] = await Promise.allSettled([createPurchase(opts), createPurchase(opts)]);
+    const [a, b] = await Promise.allSettled([createPurchase({sourceDocuments:[purchaseDocumentFixture()],...opts}), createPurchase({sourceDocuments:[purchaseDocumentFixture()],...opts})]);
     const fulfilled = [a, b].filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<
       Awaited<ReturnType<typeof createPurchase>>
     >[];
@@ -192,7 +194,7 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
 
   it('replays the same paid key and rejects a changed payload', async () => {
     const key = `po-replay-${suffix}`;
-    const first = await createPurchase({
+    const first = await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId,
       storeId,
       supplierId,
@@ -202,7 +204,7 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
       userId,
       idempotencyKey: key,
     });
-    const replay = await createPurchase({
+    const replay = await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId,
       storeId,
       supplierId,
@@ -216,7 +218,7 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
     expect(await prisma.purchasePayment.count({ where: { purchaseInvoiceId: first.id } })).toBe(1);
 
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId,
         storeId,
         supplierId,
@@ -233,7 +235,7 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
     const key = `po-fail-${suffix}`;
     const beforeInvoices = await prisma.purchaseInvoice.count({ where: { businessId } });
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId,
         storeId,
         supplierId,
@@ -261,7 +263,7 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
       userId,
       idempotencyKey: key,
     };
-    const [a, b] = await Promise.allSettled([createPurchase(opts), createPurchase(opts)]);
+    const [a, b] = await Promise.allSettled([createPurchase({sourceDocuments:[purchaseDocumentFixture()],...opts}), createPurchase({sourceDocuments:[purchaseDocumentFixture()],...opts})]);
     const fulfilled = [a, b].filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<
       Awaited<ReturnType<typeof createPurchase>>
     >[];

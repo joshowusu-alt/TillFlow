@@ -1,0 +1,10 @@
+'use client';
+import {useState} from 'react';
+import {useRouter} from 'next/navigation';
+import PurchaseDocumentInput from './PurchaseDocumentInput';
+import {addPurchaseDocumentsAction} from '@/app/actions/purchases';
+export default function PurchaseDocuments({invoiceId,documents}:{invoiceId:string;documents:{id:string;originalFilename:string;createdAt:string}[]}){
+ const router=useRouter(),[busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(false);
+ return <section className="card space-y-3 p-5"><h2 className="font-semibold">Supplier invoice documents</h2>{documents.length?<ul className="space-y-2">{documents.map(d=><li key={d.id}><a className="text-sm font-semibold text-accent underline" href={`/api/purchases/${invoiceId}/documents/${d.id}`} target="_blank" rel="noreferrer">{d.originalFilename}</a><span className="ml-2 text-xs text-black/50">Added {new Date(d.createdAt).toLocaleDateString('en-GB',{timeZone:'UTC'})}</span></li>)}</ul>:<p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">No supplier invoice is attached to this record. Add it here to complete the supporting documents.</p>}
+ <details><summary className="cursor-pointer text-sm font-semibold text-accent">{documents.length?'Add another supporting document':'Attach invoice'}</summary><form className="mt-3 space-y-3" action={async data=>{if(busy)return;setBusy(true);setError('');setSaved(false);try{const result=await addPurchaseDocumentsAction(data);if(!result.success){setError(result.error);return;}setSaved(true);router.refresh();}catch{setError('Could not save the invoice. Please try again.');}finally{setBusy(false);}}}><input name="invoiceId" type="hidden" value={invoiceId}/><PurchaseDocumentInput/>{error?<p role="alert" className="text-sm text-red-700">{error}</p>:null}{saved?<p role="status" className="text-sm text-emerald-700">Invoice document saved.</p>:null}<button className="btn-primary" type="submit" disabled={busy}>{busy?'Saving…':'Save invoice document'}</button></form></details></section>;
+}

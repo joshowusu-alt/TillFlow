@@ -69,7 +69,8 @@ export async function quickCreateCategoryAction(rawName: string) {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
     const name = rawName.trim();
     if (!name || name.length > 100 || /[\x00-\x1f]/.test(name)) throw new Error('Enter a category name of up to 100 characters.');
-    const existing = await prisma.category.findFirst({where:{businessId,name:{equals:name,mode:'insensitive'}},select:{id:true,name:true}});
+    const matches = await prisma.category.findMany({where:{businessId},select:{id:true,name:true}});
+    const existing = matches.find(item=>item.name.trim().toLowerCase()===name.toLowerCase());
     if (existing) return ok(existing);
     const category = await createCategory(businessId, {name,colour:'#059669',imageUrl:null,sortOrder:0});
     await audit({businessId,userId:user.id,userName:user.name,userRole:user.role,action:'CATEGORY_CREATE',entity:'Category',entityId:category.id,details:{name}});

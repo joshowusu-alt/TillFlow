@@ -1,3 +1,4 @@
+import { validatePurchaseDocuments, type PurchaseDocumentInput } from '@/lib/purchases/source-documents';
 import { allocateCostByQuantity, splitPurchaseTender } from '@/lib/purchases/additional-costs';
 import { recordPurchaseCostExpenseTx } from './purchase-costs';
 import { ensureFundingAccount, lockFundingBalance, type PurchaseCashSource } from './purchase-funding';
@@ -51,6 +52,7 @@ export type PurchaseLineInput = {
 export type CreatePurchaseInput = {
   businessId: string;
   storeId: string;
+  sourceDocuments?: PurchaseDocumentInput[];
   supplierInvoiceNumber?: string | null;
   additionalCostPence?: number;
   additionalCostTreatment?: 'INVENTORY' | 'EXPENSE';
@@ -324,6 +326,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     throw new Error('No items in purchase');
   }
 
+  const sourceDocuments = input.stockMovementType === 'OPENING' && !input.sourceDocuments?.length ? [] : validatePurchaseDocuments(input.sourceDocuments ?? []);
+
   // ── SINGLE BATCH: fire all validation lookups in parallel ──
   // Business and store checks are stable reads; productUnits MUST use the
   // active transaction (if any) so newly-created products/units are visible
@@ -497,6 +501,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         storeId: input.storeId,
         supplierId: input.supplierId ?? '',
         payments: allPayments,
+        documentHashes: sourceDocuments.map(document=>document.sha256),
         supplierInvoiceNumber, additionalCostPence: additionalCost, additionalCostTreatment: costTreatment, additionalCostNote: input.additionalCostNote,
         lines: input.lines,
         userId: input.userId ?? '',
@@ -565,6 +570,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         vatPence: vatTotal,
         totalPence: total,
         transactionNumber,
+        ...(sourceDocuments.length ? {documents:{create:sourceDocuments.map(document=>({...document,businessId:input.businessId,uploadedByUserId:input.userId??null}))}} : {}),
       }
     });
 

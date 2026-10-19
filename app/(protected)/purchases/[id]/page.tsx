@@ -1,3 +1,5 @@
+import PurchaseDocuments from '@/components/purchases/PurchaseDocuments';
+import PurchaseDetailsEditor from '@/components/purchases/PurchaseDetailsEditor';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
@@ -29,6 +31,7 @@ export default async function PurchaseInvoicePage({
   params: { id: string };
   searchParams?: {
     error?: string;
+    edit?: string;
     created?: string;
     linked?: string;
     already?: string;
@@ -59,6 +62,7 @@ export default async function PurchaseInvoicePage({
         },
         orderBy: { createdAt: 'asc' },
       },
+      documents:{select:{id:true,originalFilename:true,contentType:true,byteLength:true,createdAt:true},orderBy:{createdAt:'asc'}},
       linkedCostExpense: { include: { payments: true } },
       payments: {
         include: { recordedBy: { select: { name: true } } },
@@ -92,6 +96,7 @@ export default async function PurchaseInvoicePage({
   const totalPaid = purchaseDocument.paidPence;
   const outstanding = purchaseDocument.balancePence;
   const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
+  const editSuppliers = !isClosed ? await prisma.supplier.findMany({where:{businessId:business.id},select:{id:true,name:true},orderBy:{name:'asc'}}) : [];
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const supplierLinkedCount = Number.parseInt(searchParams?.linked ?? '0', 10) || 0;
@@ -170,6 +175,10 @@ export default async function PurchaseInvoicePage({
           </p>
         </div>
       )}
+
+      {!isClosed ? <PurchaseDetailsEditor invoice={{id:invoice.id,supplierId:invoice.supplierId,supplierInvoiceNumber:invoice.supplierInvoiceNumber,dueDate:invoice.dueDate?.toISOString().slice(0,10)??'',additionalCostNote:invoice.additionalCostNote,additionalCostPence:invoice.additionalCostPence}} suppliers={editSuppliers} expectedDetails={JSON.stringify({supplierId:invoice.supplierId,supplierInvoiceNumber:invoice.supplierInvoiceNumber,dueDate:invoice.dueDate?.toISOString()??null,additionalCostNote:invoice.additionalCostNote})} initiallyOpen={searchParams?.edit==='1'} /> : null}
+
+      <PurchaseDocuments invoiceId={invoice.id} documents={invoice.documents.map(d=>({...d,createdAt:d.createdAt.toISOString()}))} />
 
       {/* Summary card */}
       <div className="card grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">

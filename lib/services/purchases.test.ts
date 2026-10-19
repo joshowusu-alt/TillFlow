@@ -1,3 +1,4 @@
+import {purchaseDocumentFixture} from '@/lib/test/purchase-document-fixture';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { prismaMock, postJournalEntryMock, ensureChartOfAccountsMock, recordCashDrawerEntryTxMock } = vi.hoisted(() => ({
@@ -109,9 +110,14 @@ describe('purchase unit conversion', () => {
     ensureChartOfAccountsMock.mockResolvedValue(undefined);
   });
 
+  it('requires a source invoice before posting purchase stock or payments',async()=>{
+    await expect(createPurchase({businessId:bizId,storeId,userId,paymentStatus:'UNPAID',payments:[],lines:[{productId:'p',unitId:'unit',qtyInUnit:1,unitCostPence:100}]})).rejects.toThrow('Attach the supplier');
+    expect(prismaMock.purchaseInvoice.create).not.toHaveBeenCalled();expect(prismaMock.stockMovement.createMany).not.toHaveBeenCalled();expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+  });
+
   it('capitalises quantity-allocated delivery in stock and journals while preserving the supplier reference', async () => {
     prismaMock.productUnit.findMany.mockResolvedValue([{productId:'p1',unitId:'piece',conversionToBase:1,product:{defaultCostBasePence:100,vatRateBps:0},unit:{name:'Piece'}},{productId:'p2',unitId:'pack',conversionToBase:3,product:{defaultCostBasePence:200,vatRateBps:0},unit:{name:'Pack'}}]);
-    await createPurchase({businessId:bizId,storeId,supplierId:'supplier-a',userId,paymentStatus:'UNPAID',payments:[],supplierInvoiceNumber:' INV-123 ',additionalCostPence:101,additionalCostTreatment:'INVENTORY',lines:[{productId:'p1',unitId:'piece',qtyInUnit:1,unitCostPence:100},{productId:'p2',unitId:'pack',qtyInUnit:1,unitCostPence:600}]});
+    await createPurchase({sourceDocuments:[purchaseDocumentFixture()],businessId:bizId,storeId,supplierId:'supplier-a',userId,paymentStatus:'UNPAID',payments:[],supplierInvoiceNumber:' INV-123 ',additionalCostPence:101,additionalCostTreatment:'INVENTORY',lines:[{productId:'p1',unitId:'piece',qtyInUnit:1,unitCostPence:100},{productId:'p2',unitId:'pack',qtyInUnit:1,unitCostPence:600}]});
     expect(prismaMock.purchaseInvoice.create).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({supplierInvoiceNumber:'INV-123',totalPence:801})}));
     expect(prismaMock.purchaseInvoiceLine.createMany.mock.calls[0][0].data.map((line:any)=>line.allocatedCostPence)).toEqual([25,76]);
     expect(postJournalEntryMock).toHaveBeenCalledWith(expect.objectContaining({lines:expect.arrayContaining([{accountCode:'1200',debitPence:801},{accountCode:'2000',creditPence:801}])}));
@@ -136,7 +142,7 @@ describe('purchase unit conversion', () => {
       { productId, unitId: packUnitId, qtyInUnit: 2, unitCostPence: 4000 },
     ];
 
-    await createPurchase({
+    await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       paymentStatus: 'PAID',
@@ -172,7 +178,7 @@ describe('purchase unit conversion', () => {
       { productId, unitId: pieceUnitId, qtyInUnit: 50, unitCostPence: 50 },
     ];
 
-    await createPurchase({
+    await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       paymentStatus: 'PAID',
@@ -200,7 +206,7 @@ describe('purchase unit conversion', () => {
     ]);
 
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId: bizId,
         storeId,
         paymentStatus: 'PAID',
@@ -214,7 +220,7 @@ describe('purchase unit conversion', () => {
     prismaMock.productUnit.findMany.mockResolvedValue([]);
 
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId: bizId,
         storeId,
         paymentStatus: 'PAID',
@@ -236,7 +242,7 @@ describe('purchase unit conversion', () => {
     ]);
 
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId: bizId,
         storeId,
         paymentStatus: 'PAID',
@@ -264,7 +270,7 @@ describe('purchase unit conversion', () => {
       },
     ]);
 
-    await createPurchase({
+    await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       paymentStatus: 'PAID',
@@ -293,7 +299,7 @@ describe('purchase unit conversion', () => {
     prismaMock.product.findMany.mockResolvedValue([{ id: 'prod-1', preferredSupplierId: null }]);
     prismaMock.product.updateMany.mockResolvedValue({ count: 1 });
 
-    const invoice = await createPurchase({
+    const invoice = await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       supplierId: 'supplier-a',
@@ -333,7 +339,7 @@ describe('purchase unit conversion', () => {
     ]);
     prismaMock.product.findMany.mockResolvedValue([{ id: 'prod-1', preferredSupplierId: 'supplier-a' }]);
 
-    const invoice = await createPurchase({
+    const invoice = await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       supplierId: 'supplier-a',
@@ -374,7 +380,7 @@ describe('purchase unit conversion', () => {
       },
     ]);
 
-    const invoice = await createPurchase({
+    const invoice = await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       supplierId: 'supplier-a',
@@ -442,7 +448,7 @@ describe('purchase unit conversion', () => {
     ]);
     prismaMock.product.updateMany.mockResolvedValue({ count: 1 });
 
-    const invoice = await createPurchase({
+    const invoice = await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       supplierId: 'supplier-a',
@@ -495,7 +501,7 @@ describe('purchase unit conversion', () => {
       },
     ]);
 
-    const invoice = await createPurchase({
+    const invoice = await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       supplierId: null,
@@ -529,7 +535,7 @@ describe('purchase unit conversion', () => {
     ]);
 
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId: bizId,
         storeId,
         paymentStatus: 'PAID',
@@ -557,7 +563,7 @@ describe('purchase unit conversion', () => {
       },
     ]);
 
-    await createPurchase({
+    await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       supplierId: 'supplier-a',
@@ -586,7 +592,7 @@ describe('purchase unit conversion', () => {
     ]);
 
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId: bizId,
         storeId,
         supplierId: null,
@@ -611,7 +617,7 @@ describe('purchase unit conversion', () => {
     ]);
 
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId: bizId,
         storeId,
         paymentStatus: 'PART_PAID',
@@ -636,7 +642,7 @@ describe('purchase unit conversion', () => {
       },
     ]);
 
-    await createPurchase({
+    await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       supplierId: 'supplier-a',
@@ -673,7 +679,7 @@ describe('purchase unit conversion', () => {
     });
 
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId: bizId,
         storeId,
         paymentStatus: 'PAID',

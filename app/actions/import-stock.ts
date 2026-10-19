@@ -1,4 +1,5 @@
 ﻿'use server';
+import {decodePurchaseDocuments,validatePurchaseDocuments} from '@/lib/purchases/source-documents';
 
 import { prisma } from '@/lib/prisma';
 import { revalidateTag } from 'next/cache';
@@ -62,6 +63,7 @@ export type ConfirmedImportRow = {
 };
 
 export type ImportStockMeta = {
+  purchaseDocumentsJson?: string;
   fileName?: string;
   rowsParsed?: number;
   rowsErrors?: number;
@@ -291,6 +293,8 @@ async function _runImport(
       return err('Choose an import purpose first: Product catalogue, Opening stock, or Purchases.');
     }
     const importMode = meta.importMode;
+    const sourceDocuments = importMode==='PURCHASES' ? decodePurchaseDocuments(meta.purchaseDocumentsJson??'') : [];
+    if(importMode==='PURCHASES')validatePurchaseDocuments(sourceDocuments);
 
     // Legacy spreadsheets with payment_status must still pick a mode explicitly
     // (UI enforces this). Opening stock ignores PAID/UNPAID entirely.
@@ -901,6 +905,7 @@ async function _runImport(
               payments: chunkTotal > 0 ? [{ method, amountPence: chunkTotal }] : [],
               lines: chunk,
               userId: user.id,
+              sourceDocuments,
               stockMovementType: 'PURCHASE',
               acknowledgeHighCost: true,
               skipCashDrawerRequirement: true,
@@ -941,6 +946,7 @@ async function _runImport(
               payments: [],
               lines: chunk,
               userId: user.id,
+              sourceDocuments,
               stockMovementType: 'PURCHASE',
               acknowledgeHighCost: true,
               idempotencyKey: buildImportChunkKey({

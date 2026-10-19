@@ -1,3 +1,4 @@
+import {purchaseDocumentFixture} from '@/lib/test/purchase-document-fixture';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -173,6 +174,7 @@ describeLive('cross-business and selected-store isolation (Postgres)', () => {
         () => prisma.shift.deleteMany({ where: { till: { store: { businessId: { in: [bizA, bizB] } } } } }),
         () => prisma.purchasePayment.deleteMany({ where: { businessId: bizA } }),
         () => prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId: bizA } } }),
+        () => prisma.purchaseDocument.deleteMany({where:{businessId:bizA}}),
         () => prisma.purchaseInvoice.deleteMany({ where: { businessId: bizA } }),
         () => prisma.expensePayment.deleteMany({ where: { expense: { businessId: bizA } } }),
         () => prisma.expense.deleteMany({ where: { businessId: bizA } }),
@@ -198,7 +200,7 @@ describeLive('cross-business and selected-store isolation (Postgres)', () => {
   it('rejects foreign business store, stocktake, adjustment and shift', async () => {
     bindPrismaPostgresUrls(databaseUrl);
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId: bizA,
         storeId: foreignStore,
         supplierId,
@@ -288,7 +290,7 @@ describeLive('cross-business and selected-store isolation (Postgres)', () => {
 
   it('posts purchase, expense, stock and shift to selected store B while A is first', async () => {
     bindPrismaPostgresUrls(databaseUrl);
-    const purchase = await createPurchase({
+    const purchase = await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizA,
       storeId: storeSelected,
       supplierId,

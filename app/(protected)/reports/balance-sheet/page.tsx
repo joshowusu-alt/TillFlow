@@ -43,7 +43,7 @@ export default async function BalanceSheetPage({ searchParams }: {
     <ReportsDestinationHead title="Balance sheet" scopeLabel="Whole business"
       periodLabel={'As at ' + dateLabel + (key === today ? ' · Today so far' : '')}
       actions={<DownloadLink className="btn-secondary" href={'/api/reports/financials?type=balance-sheet&from=' + key + '&to=' + key}>Export CSV</DownloadLink>} />
-    <p className="text-sm text-ink/70">Tap any account below to see what makes up its balance. Owner contributions appear in equity; repayable owner advances appear in liabilities. Cash held by staff remains a business asset.</p>
+    <p className="text-sm text-ink/70">Your financial position from recorded opening balances and transactions. Tap any account below to see what makes up its balance. Owner contributions appear in equity; repayable owner advances appear in liabilities. Cash held by staff remains a business asset.</p>
     <form className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 print:hidden" method="GET">
       <label className="label w-full sm:w-auto">Statement date<input className="input mt-1 w-full sm:w-48" type="date" name="asOf" defaultValue={key} max={today} required /></label>
       <button className="btn-secondary" type="submit">Update report</button>

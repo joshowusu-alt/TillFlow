@@ -1,0 +1,4 @@
+import {render,screen,fireEvent,waitFor} from '@testing-library/react';
+import {it,expect} from 'vitest';
+import PurchaseDocumentInput from './PurchaseDocumentInput';
+it('requires an invoice and prepares a PDF without losing its filename',async()=>{const view=render(<form><PurchaseDocumentInput/></form>);const field=screen.getByLabelText('Supplier invoice (required)');expect(field).toBeRequired();fireEvent.change(field,{target:{files:[new File(['%PDF-1.4\n%%EOF'],'supplier.pdf',{type:'application/pdf'})]}});await waitFor(()=>expect(screen.getByText(/1 file ready/)).toHaveTextContent('supplier.pdf'));const hidden=view.container.querySelector<HTMLInputElement>('[name=purchaseDocumentsJson]')!;expect(JSON.parse(hidden.value)[0]).toMatchObject({name:'supplier.pdf',contentType:'application/pdf'});});

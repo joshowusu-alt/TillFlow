@@ -1,5 +1,6 @@
 'use server';
 
+import {decodePurchaseDocuments,validatePurchaseDocuments} from '@/lib/purchases/source-documents';
 import type { PurchaseCashSource } from '@/lib/services/purchase-funding';
 import { createPurchase } from '@/lib/services/purchases';
 import { EXPLICIT_CASH_TILL_REQUIRED_MSG } from '@/lib/services/cash-drawer';
@@ -90,9 +91,12 @@ export async function createPurchaseAction(formData: FormData): Promise<ActionRe
       await resolveStoreFromTill(businessId, tillId, storeId);
     }
 
+    const sourceDocuments=decodePurchaseDocuments(formString(formData,'purchaseDocumentsJson'));
+    validatePurchaseDocuments(sourceDocuments);
     const invoice = await createPurchase({
       businessId,
       storeId,
+      sourceDocuments,
       supplierId, supplierInvoiceNumber, additionalCostPence, additionalCostTreatment, additionalCostNote,
       cashSource, cashHolderId, fundingOwnerId,
       paymentStatus,
@@ -353,13 +357,14 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
 
     const invoice = await prisma.purchaseInvoice.findFirst({
       where: { id: purchaseId, businessId },
-      include: { lines: true, payments: true, purchaseReturn: true },
+      include: { lines: true, payments: true, purchaseReturn: true, documents:{select:{id:true}} },
     });
 
     if (!invoice) {
       return err('Purchase not found.');
     }
 
+    if (invoice.documents?.length) return err('This purchase has supporting invoice documents. Use a return to preserve its records.');
     if (invoice.additionalCostPence > 0) return err('This purchase has linked costs. Use a return to preserve its cost and payment history.');
     if (invoice.payments.some(payment => payment.reference?.startsWith('funding:'))) return err('This purchase has tracked funding. Use a purchase return to keep its payment history intact.');
 
@@ -487,7 +492,41 @@ export async function checkSupplierInvoiceReferenceAction(supplierId: string, re
     const { businessId } = await withBusinessContext(['OWNER', 'MANAGER']);
     const number = reference.trim();
     if (!supplierId || !number || number.length > 100) return ok(null);
-    const existing = await prisma.purchaseInvoice.findFirst({ where: { businessId, supplierId, supplierInvoiceNumber: { equals: number, mode: 'insensitive' } }, select: { id: true, transactionNumber: true } });
+    const matches = await prisma.purchaseInvoice.findMany({ where: { businessId, supplierId, supplierInvoiceNumber: {not:null} }, select: { id: true, transactionNumber: true, supplierInvoiceNumber:true } });
+    const existing = matches.find(item=>item.supplierInvoiceNumber?.toLowerCase()===number.toLowerCase()) ?? null;
     return ok(existing);
+  });
+}
+
+export async function updatePurchaseDetailsAction(formData: FormData) {
+  return safeAction(async () => {
+    const {user,businessId}=await withBusinessContext(['MANAGER','OWNER']);
+    const {updatePurchaseDetails}=await import('@/lib/services/purchase-details');
+    const supplierId=formOptionalString(formData,'supplierId')||null;
+    const expectedDetails=formString(formData,'expectedDetails');
+    if (!expectedDetails) return err('Refresh this purchase before editing it.');
+    const result=await updatePurchaseDetails({businessId,expectedDetails,invoiceId:formString(formData,'invoiceId'),actor:{id:user.id,name:user.name,role:user.role},supplierId,supplierInvoiceNumber:formString(formData,'supplierInvoiceNumber'),dueDate:formString(formData,'dueDate'),additionalCostNote:formString(formData,'additionalCostNote'),reason:formString(formData,'reason')});
+    revalidateTag('reports'); revalidateOwnerDashboardCache(); revalidateImproveRecordsHome();
+    for (const path of ['/purchases',`/purchases/${result.invoiceId}`,'/payments/supplier-aging','/payments/supplier-payments',...(supplierId?[`/suppliers/${supplierId}`]:[]),...(result.previousSupplierId?[`/suppliers/${result.previousSupplierId}`]:[])]) revalidatePath(path);
+    return ok({invoiceId:result.invoiceId});
+  });
+}
+
+
+export async function addPurchaseDocumentsAction(formData:FormData){
+  return safeAction(async()=>{
+    const {user,businessId}=await withBusinessContext(['OWNER','MANAGER']);
+    const invoiceId=formString(formData,'invoiceId');
+    const documents=validatePurchaseDocuments(decodePurchaseDocuments(formString(formData,'purchaseDocumentsJson')));
+    await prisma.$transaction(async tx=>{
+      const invoice=await tx.purchaseInvoice.findFirst({where:{id:invoiceId,businessId},select:{id:true,documents:{select:{sha256:true}}}});
+      if(!invoice)throw new Error('Purchase not found.');
+      const existing=new Set(invoice.documents.map(d=>d.sha256));
+      const added=documents.filter(d=>{if(existing.has(d.sha256))return false;existing.add(d.sha256);return true;});
+      if(!added.length)return;
+      await tx.purchaseDocument.createMany({data:added.map(document=>({...document,businessId,purchaseInvoiceId:invoiceId,uploadedByUserId:user.id}))});
+      await tx.auditLog.create({data:{businessId,userId:user.id,userName:user.name??'Unknown',userRole:user.role,action:'PURCHASE_DOCUMENT_ADD',entity:'PurchaseInvoice',entityId:invoiceId,details:JSON.stringify({files:added.map(d=>({name:d.originalFilename,sha256:d.sha256}))})}});
+    },{isolationLevel:'Serializable',maxWait:5000,timeout:15000});
+    revalidatePath(`/purchases/${invoiceId}`);return ok({invoiceId});
   });
 }

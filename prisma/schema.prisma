@@ -1417,6 +1417,7 @@ model SalesPayment {
 }
 
 model PurchaseInvoice {
+  documents PurchaseDocument[]
   id            String    @id @default(cuid())
   businessId    String
   storeId       String
@@ -2124,4 +2125,19 @@ model ProductBarcode {
   product Product @relation(fields: [productId, businessId], references: [id, businessId], onDelete: Cascade)
   @@id([businessId, code])
   @@index([productId])
+}
+
+model PurchaseDocument {
+  id String @id @default(cuid())
+  businessId String
+  purchaseInvoiceId String
+  originalFilename String
+  contentType String
+  byteLength Int
+  sha256 String
+  body Bytes
+  uploadedByUserId String?
+  createdAt DateTime @default(now())
+  purchaseInvoice PurchaseInvoice @relation(fields:[purchaseInvoiceId],references:[id],onDelete:Restrict)
+  @@index([businessId,purchaseInvoiceId])
 }

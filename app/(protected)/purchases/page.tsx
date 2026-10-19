@@ -449,6 +449,7 @@ export default async function PurchasesPage({
                       <Link className="btn-ghost text-xs" href={`/purchases/${purchase.id}`}>
                         View
                       </Link>
+                      {!(purchase.purchaseReturn || ['RETURNED','VOID'].includes(purchase.paymentStatus)) ? <Link className="btn-ghost text-xs" href={`/purchases/${purchase.id}?edit=1#edit-purchase`}>Edit</Link> : null}
                       {!missingSupplierIssue && !(purchase.purchaseReturn || ['RETURNED', 'VOID'].includes(purchase.paymentStatus)) ? (
                         <>
                           {['UNPAID', 'PART_PAID', 'PARTIAL'].includes(purchase.paymentStatus) && (
@@ -542,6 +543,7 @@ export default async function PurchasesPage({
                             <Link className="btn-ghost text-xs" href={`/purchases/${purchase.id}`}>
                               View
                             </Link>
+                            {!(purchase.purchaseReturn || ['RETURNED','VOID'].includes(purchase.paymentStatus)) ? <Link className="btn-ghost text-xs" href={`/purchases/${purchase.id}?edit=1#edit-purchase`}>Edit</Link> : null}
                             {!missingSupplierIssue && !(purchase.purchaseReturn || ['RETURNED', 'VOID'].includes(purchase.paymentStatus)) ? (
                               <>
                                 {['UNPAID', 'PART_PAID', 'PARTIAL'].includes(purchase.paymentStatus) && (

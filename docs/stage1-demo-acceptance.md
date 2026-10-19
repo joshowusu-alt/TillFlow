@@ -93,3 +93,23 @@ This is a Preview-only review. Physical USB/Bluetooth hardware acceptance remain
 - [ ] Check hosted navigation for white-screen flashes and test real scanner hardware.
 
 Migration `20261019173500_purchase_references_costs_attributes` was applied successfully on the separate rehearsal branch. 147 focused accounting/UI tests, 49 loading/toast regression tests and 27 branding/label/launch contract checks passed (223 total). Typecheck, targeted lint and PostgreSQL schema validation passed before Preview publication. Browser acceptance remains distinct from automated checks; cloud-browser credential protection currently prevents inspecting the signed-in Preview UI. The Vercel connector also returned 403 for the existing deployment; deployment status is checked through GitHub’s Vercel integration.
+
+
+## Purchase attribution corrections
+
+- Purchase lists, including Missing supplier, expose Edit on active purchases on desktop and mobile. The invoice detail page has an editable supplier, original invoice reference, due date and cost description.
+- Management permission and tenant ownership are enforced on the server. Credit purchases cannot lose their supplier. Returned/voided purchases remain closed.
+- A reason and atomic before/after audit record accompany each correction. Stale forms must refresh before overwriting another correction. Metadata corrections do not replay inventory receipts, payments or funding entries. Linked expense descriptions stay aligned.
+- Quantity, cost and payment corrections use the existing return-and-receive workflow. This update does not silently rewrite posted financial amounts.
+
+
+## Mandatory purchase invoice documents
+
+- Every new trading purchase requires a supplier invoice photo, scan or PDF before stock, payments or journals can be written. This applies at the shared purchase service and to Purchases-mode CSV imports; supporting files must cover the import’s rows. Genuine opening-stock migration entries retain their separate opening-stock purpose.
+- Up to five PDF/JPEG/PNG/WebP files can be attached, totalling 2 MB. Large phone photos are reduced automatically. Drafts preserve purchase fields; files must be selected again after reopening a page.
+- Invoice bytes, checksum, filename, uploader and timestamp are durably retained with the purchase in the same transaction. Private owner/manager download routes require both the business and purchase to match. Public asset URLs are not used.
+- Older records can add invoice documents from the detail page. Additional uploads are audited and duplicate file hashes are ignored. Original documents cannot be removed/replaced from the UI. Purchases with source documents use Returns rather than hard deletion.
+- Expense attachments remain optional.
+- Follow-up also addresses the earlier CI findings: SQLite-compatible duplicate lookup, neutral-root-loader expectations, the balance-sheet basis disclosure, report-drilldown entitlement coverage, unpaid reset and Next Link source assertions.
+
+Follow-up validation: 148 focused correction/document/access/import/CI regression checks passed. SQLite typecheck and targeted lint passed. The invoice-document migration and binary save/read round trip passed on the separate rehearsal branch; the synthetic document was removed in that same test transaction.

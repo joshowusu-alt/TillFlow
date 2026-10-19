@@ -35,7 +35,7 @@ describe('Purchase form reset after completion', () => {
     expect(form).toContain('resetPurchaseForm();');
     expect(form).toContain('setCart([])');
     expect(form).toContain("setSupplierId('')");
-    expect(form).toContain("setPaymentStatus('PAID')");
+    expect(form).toContain("setPaymentStatus('UNPAID')");
     expect(form).toContain('readOrCreatePurchaseOperationKey');
     expect(form).toContain('clearPurchaseOperationKey');
     expect(form).toContain("searchParams?.get('error')");
