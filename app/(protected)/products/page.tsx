@@ -403,7 +403,7 @@ export default async function ProductsPage({
                     <input className="input" id="create-product-name" name="name" required />
                   </div>
                   <div>
-                    <label className="label" htmlFor="create-product-sku">SKU</label>
+                    <label className="label" htmlFor="create-product-sku">Internal product code (optional)</label>
                     <input className="input" id="create-product-sku" name="sku" />
                   </div>
                   <div>

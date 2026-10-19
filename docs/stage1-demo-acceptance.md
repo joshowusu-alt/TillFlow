@@ -5,7 +5,7 @@ Scope: isolated demo Preview only. Do not merge or deploy to production until th
 ## Implemented for review
 
 - Business-scoped primary and alternate barcode identity, including a database registry protecting primary/alias collisions.
-- Publisher/brand and edition/format distinguish products sharing a displayed title.
+- Publisher/brand and edition/format describe versions. Identical names, publishers and editions are permitted; distinct barcodes identify independently tracked products.
 - Additional barcodes refer only to the same interchangeable product; publisher variants have separate stock identities.
 - Scanner entry is explicitly labelled in product setup and purchase receiving; camera is a separate option. Scanner Enter does not submit an unfinished setup form.
 - POS online/offline catalogue, purchase lookup and stocktake scan paths carry alternate barcodes.
@@ -39,3 +39,35 @@ Stage 4: printed and digital blind stocktake, counter/reviewer handoff, variance
 Stage 5: supplier/category margins, complete discount reports and reconciled filters. Estimated purchase profitability must be labelled; exact invoice-level attribution remains a separately planned later capability.
 
 The persistent online-order attention banner already exists; include it in regression acceptance rather than duplicating it.
+
+## Demo feedback corrections — 19 October
+
+- Same descriptive fields no longer force invented editions. Barcode uniqueness remains business-scoped and applies across primary and alternate codes.
+- Purchase search includes barcode and selling price. POS already displays the barcode alongside price.
+- Additional barcodes have visible rows and an Add another barcode button (maximum 50 total codes).
+- Purchases start Unpaid; due dates apply only to Unpaid/Part paid. Payment controls appear when paying. Enter an explicit payment amount.
+- Purchase validation returns inline errors without clearing the cart or redirecting away; drafts retain funding selection.
+- Cash source is explicit: till drawer; recorded business cash held outside the till; owner-funded advance repayable to owner; owner contribution. Managers cannot be personal funders.
+- Both initial purchase payments and later supplier payments use the selected source. Only till cash requires an open till and posts a drawer outflow.
+- Cash handovers and returns are ledger transfers. Balances are tracked per person and branch; cash spending cannot exceed that recorded balance. Owner advances and contributions have separate accounts. Owner repayments cannot exceed recorded liability.
+- Cash held outside tills remains part of reported business cash; internal transfers do not create revenue/expenses or inflate total cash flow. Owner direct-to-supplier funding does not invent business cash receipts/payments.
+- Funding references are persisted on purchase payments and shown as plain-language source labels in purchase history. Funded purchases cannot be hard-deleted; use returns to preserve their payment trail.
+
+### Cash walkthrough
+
+1. Purchases → cash source → Cash handovers and owner balances.
+2. Give GH₵1,000 business cash to the manager (from a funded bank/open till, or an identified owner).
+3. Record GH₵800 supplier payment from Business cash held outside the till; select that manager. Drawer unchanged.
+4. Confirm GH₵200 remains held. Return GH₵200 to the bank/open till and confirm zero remains.
+5. Try exceeding held cash; reject without purchase/payment/stock writes.
+6. Pay directly from Owner’s money; verify owner liability or contribution and no drawer outflow. Repay a recorded advance, verifying liability reduction and no extra expense.
+
+This is a Preview-only review. Physical USB/Bluetooth hardware acceptance remains outstanding.
+
+### Verification and release status
+
+- 82 targeted tests passed for funding, initial/later supplier payments, money reports, cross-store isolation and purchase UI.
+- Full unit regression completed. Two obsolete source/query assertions were corrected and passed their focused reruns. After generating the correct SQLite client for local unit tests, all affected environment-error files reran cleanly: 455 passed, eight integration cases skipped.
+- Typecheck, targeted lint and PostgreSQL schema validation passed. Identical descriptive fields with distinct barcodes were exercised successfully on the separate migration-rehearsal database; fixture rows rolled back.
+- Hosted acceptance, real PostgreSQL cash-workflow/concurrency acceptance and physical scanner acceptance remain pending. Existing Preview and production deployments have not been changed by this update.
+- Publication to the existing public TillFlow repository was blocked by automatic approval review and requires explicit user approval before the Preview branch can be updated.

@@ -1,3 +1,4 @@
+import { ensureFundingAccount, lockFundingBalance, type PurchaseCashSource } from './purchase-funding';
 import { createHash } from 'crypto';
 import { receiptLedgerFields, settledReceiptSplit } from '@/lib/payments/receipt-ledger';
 import { prisma } from '@/lib/prisma';
@@ -55,6 +56,9 @@ export class SupplierPaymentError extends UserError {
 }
 
 export type RecordSupplierPaymentOptions = {
+  cashSource?: PurchaseCashSource;
+  cashHolderId?: string | null;
+  fundingOwnerId?: string | null;
   paidAt?: Date;
   recordedByUserId: string;
   actorRole: string;
@@ -207,7 +211,7 @@ async function recordCustomerPaymentImpl(
   options?: RecordCustomerPaymentOptions,
 ) {
   const idempotencyKey = normalizeMoneyIdempotencyKey(options?.idempotencyKey);
-  const newPayments = filterPositivePayments(payments);
+  const newPayments = filterPositivePayments(payments).map(payment => ({ ...payment }));
   if (newPayments.length === 0) {
     return loadSalesInvoiceWithPayments(businessId, invoiceId);
   }
@@ -435,7 +439,7 @@ async function recordSupplierPaymentImpl(
     throw new SupplierPaymentError(SUPPLIER_PAYMENT_ERROR.FORBIDDEN, 'You do not have permission to record supplier payments.');
   }
 
-  const newPayments = filterPositivePayments(payments);
+  const newPayments = filterPositivePayments(payments).map(payment => ({ ...payment }));
   if (newPayments.length === 0) {
     const invoice = await loadPurchaseInvoiceWithPayments(businessId, invoiceId);
     if (!invoice) {
@@ -444,6 +448,8 @@ async function recordSupplierPaymentImpl(
     return { invoice, replayed: false };
   }
 
+  const cashSource = options.cashSource ?? 'TILL';
+  if (cashSource !== 'TILL') for (const payment of newPayments) if (payment.method === 'CASH') payment.reference = `funding-selection:${cashSource}:${options.cashHolderId ?? ''}:${options.fundingOwnerId ?? ''}`;
   const paidAt = options.paidAt;
   const notes = options.notes?.trim() || '';
   const paidAtIso = paidAt ? paidAt.toISOString().slice(0, 10) : '';
@@ -522,8 +528,13 @@ async function recordSupplierPaymentImpl(
         throw new Error('Payment exceeds outstanding balance');
       }
 
+      let cashAccountCode = ACCOUNT_CODES.cash;
+      if (split.cashPence > 0 && cashSource !== 'TILL') {
+        cashAccountCode = await ensureFundingAccount(tx, businessId, invoice.storeId, cashSource, options.cashHolderId, options.fundingOwnerId);
+        if (cashSource === 'BUSINESS_CASH') await lockFundingBalance(tx, businessId, cashAccountCode, split.cashPence);
+      }
       let openShift: { id: string; tillId: string } | null = null;
-      if (split.cashPence > 0) {
+      if (split.cashPence > 0 && cashSource === 'TILL') {
         if (!options.tillId) {
           throw new Error(EXPLICIT_CASH_TILL_REQUIRED_MSG);
         }
@@ -556,7 +567,7 @@ async function recordSupplierPaymentImpl(
             purchaseInvoiceId: invoice.id,
             method: p.method,
             amountPence: p.amountPence,
-            reference: p.reference ?? null,
+            reference: p.method === 'CASH' && cashSource !== 'TILL' ? `funding:${cashAccountCode}` : p.reference ?? null,
             transactionNumber,
             ...(paidAt ? { paidAt } : {}),
             recordedByUserId,
@@ -619,7 +630,7 @@ async function recordSupplierPaymentImpl(
         referenceId: invoice.id,
         lines: [
           { accountCode: ACCOUNT_CODES.ap, debitPence: split.totalPence },
-          ...(split.cashPence > 0 ? [{ accountCode: ACCOUNT_CODES.cash, creditPence: split.cashPence }] : []),
+          ...(split.cashPence > 0 ? [{ accountCode: cashAccountCode, creditPence: split.cashPence }] : []),
           ...(split.bankPence > 0 ? [{ accountCode: ACCOUNT_CODES.bank, creditPence: split.bankPence }] : [])
         ],
         prismaClient: tx as any
@@ -643,6 +654,7 @@ async function recordSupplierPaymentImpl(
             idempotencyKey,
             payloadHash,
             cashDrawer: Boolean(openShift && split.cashPence > 0),
+            cashSource, cashAccountCode,
           }),
           reason: notes || null,
           details: JSON.stringify({

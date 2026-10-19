@@ -1,5 +1,6 @@
 'use server';
 
+import type { PurchaseCashSource } from '@/lib/services/purchase-funding';
 import { createPurchase } from '@/lib/services/purchases';
 import { EXPLICIT_CASH_TILL_REQUIRED_MSG } from '@/lib/services/cash-drawer';
 import { createSupplier } from '@/lib/services/suppliers';
@@ -23,20 +24,20 @@ import {
 } from '@/lib/improve-records-constants';
 import { revalidateImproveRecordsHome } from '@/lib/improve-records-revalidate';
 
-export async function createPurchaseAction(formData: FormData): Promise<void> {
-  return formAction(async () => {
+export async function createPurchaseAction(formData: FormData): Promise<ActionResult> {
+  return safeAction(async () => {
     const requestedStoreId = formString(formData, 'storeId');
     const { user, businessId, storeId } = await requireSelectedStoreContext(
       ['MANAGER', 'OWNER'],
       requestedStoreId,
     );
     const supplierId = formString(formData, 'supplierId') || null;
-    const paymentStatus = (formString(formData, 'paymentStatus') || 'PAID') as PaymentStatus;
+    const paymentStatus = (formString(formData, 'paymentStatus') || 'UNPAID') as PaymentStatus;
     const psValidation = PaymentStatusEnum.safeParse(paymentStatus);
     if (!psValidation.success) {
-      redirect('/purchases?error=invalid-payment-status');
+      return err('Choose a valid payment status.');
     }
-    const dueDate = formDate(formData, 'dueDate');
+    const dueDate = paymentStatus === 'PAID' ? null : formDate(formData, 'dueDate');
 
     let lines: { productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null }[] = [];
     const cartRaw = formData.get('cart');
@@ -63,13 +64,18 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
     const transferPaid = formInt(formData, 'transferPaid');
     const tillId = formString(formData, 'tillId');
     const idempotencyKey = formString(formData, 'idempotencyKey');
+    if (paymentStatus === 'PAID' && cashPaid + cardPaid + transferPaid === 0 && lines.some(line => (line.unitCostPence ?? 0) > 0)) return err('Enter the amount paid using the selected payment method.');
+    if (paymentStatus === 'UNPAID' && cashPaid + cardPaid + transferPaid > 0) return err('Choose Part paid or Paid when recording a payment.');
     const paidTender = cashPaid + cardPaid + transferPaid > 0 || paymentStatus === 'PAID';
     if (paidTender && !idempotencyKey) {
-      redirect('/purchases?error=stale-purchase-form');
+      return err('This purchase form is out of date. Refresh the page and try again.');
     }
+    const cashSource = (formString(formData, 'cashSource') || 'TILL') as PurchaseCashSource;
+    const cashHolderId = formString(formData, 'cashHolderId');
+    const fundingOwnerId = formString(formData, 'fundingOwnerId');
     const willUseCash =
       cashPaid > 0 || (paymentStatus === 'PAID' && cashPaid + cardPaid + transferPaid === 0);
-    if (willUseCash && !tillId) {
+    if (willUseCash && cashSource === 'TILL' && !tillId) {
       return err(EXPLICIT_CASH_TILL_REQUIRED_MSG);
     }
     // A till from another branch is refused by name before any write; the service
@@ -82,6 +88,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       businessId,
       storeId,
       supplierId,
+      cashSource, cashHolderId, fundingOwnerId,
       paymentStatus,
       dueDate,
       payments: [
@@ -95,7 +102,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       idempotencyKey: idempotencyKey || undefined,
     });
 
-    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } }).catch((e) => console.error('[audit]', e));
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId, cashSource, cashHolderId, fundingOwnerId } }).catch((e) => console.error('[audit]', e));
 
     revalidatePosCatalog(businessId, storeId);
     revalidateTag('reports');
@@ -118,7 +125,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
     }
 
     redirect(`/purchases/${invoice.id}?${params.toString()}`);
-  }, '/purchases');
+  });
 }
 
 /**
@@ -346,6 +353,8 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
     if (!invoice) {
       return err('Purchase not found.');
     }
+
+    if (invoice.payments.some(payment => payment.reference?.startsWith('funding:'))) return err('This purchase has tracked funding. Use a purchase return to keep its payment history intact.');
 
     if (invoice.purchaseReturn) {
       return err('Cannot delete a purchase that has been returned.');

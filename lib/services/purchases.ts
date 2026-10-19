@@ -1,3 +1,4 @@
+import { ensureFundingAccount, lockFundingBalance, type PurchaseCashSource } from './purchase-funding';
 import { Prisma } from '@prisma/client';
 import { receiveStockValue, INVENTORY_VALUE_V1 } from '@/lib/inventory-value';
 import { lockInventoryValues, upsertInventoryBalance as writeInventoryValue } from './shared/inventory-utils';
@@ -49,6 +50,9 @@ export type CreatePurchaseInput = {
   businessId: string;
   storeId: string;
   supplierId?: string | null;
+  cashSource?: PurchaseCashSource;
+  cashHolderId?: string | null;
+  fundingOwnerId?: string | null;
   paymentStatus: 'PAID' | 'PART_PAID' | 'UNPAID';
   dueDate?: Date | null;
   payments: PurchasePaymentInput[];
@@ -224,6 +228,7 @@ async function createPurchaseInvoicePayments(
     payments: PaymentInput[];
     recordedByUserId?: string | null;
     supplierName?: string | null;
+    cashSource?: PurchaseCashSource;
     skipCashDrawerRequirement?: boolean;
     tillId?: string | null;
     shiftId?: string | null;
@@ -233,7 +238,7 @@ async function createPurchaseInvoicePayments(
 
   const cashSplit = splitPayments(input.payments);
   let openShift: { id: string; tillId: string } | null = null;
-  if (cashSplit.cashPence > 0) {
+  if (cashSplit.cashPence > 0 && (!input.cashSource || input.cashSource === 'TILL')) {
     if (input.skipCashDrawerRequirement) {
       // Imports post Cash to GL without a till. Do not guess a user shift.
       openShift = input.tillId
@@ -404,12 +409,12 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     };
   });
 
-  const positivePayments = filterPositivePayments(input.payments);
+  const positivePayments = filterPositivePayments(input.payments).map(payment => ({ ...payment }));
   const subtotal = lineDetails.reduce((sum, line) => sum + line.lineSubtotal, 0);
   const vatTotal = lineDetails.reduce((sum, line) => sum + line.lineVat, 0);
   const total = subtotal + vatTotal;
 
-  const payments =
+  const payments: PaymentInput[] =
     positivePayments.length === 0 && input.paymentStatus === 'PAID'
       ? [{ method: 'CASH' as const, amountPence: total }]
       : positivePayments;
@@ -453,6 +458,13 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   }
 
   const split = splitPayments(payments);
+  const cashSource = input.cashSource ?? 'TILL';
+  let cashAccountCode = ACCOUNT_CODES.cash;
+  if (split.cashPence > 0 && cashSource !== 'TILL') {
+    // Validate identities before a write; enforce again through the transactional account and balance lock.
+    cashAccountCode = await ensureFundingAccount(dbClient, input.businessId, input.storeId, cashSource, input.cashHolderId, input.fundingOwnerId);
+    for (const payment of payments) if (payment.method === 'CASH') payment.reference = `funding:${cashAccountCode}`;
+  }
   const apAmount = total - split.totalPence;
 
   const idempotencyKey = input.idempotencyKey
@@ -487,7 +499,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     business.vatEnabled && vatTotal > 0
       ? { accountCode: ACCOUNT_CODES.vatReceivable, debitPence: vatTotal }
       : null,
-    ...creditCashBankLines(split),
+    ...creditCashBankLines(split).map(line => line?.accountCode === ACCOUNT_CODES.cash ? { ...line, accountCode: cashAccountCode } : line),
     apAmount > 0 ? { accountCode: ACCOUNT_CODES.ap, creditPence: apAmount } : null
   ].filter(Boolean) as JournalLine[];
 
@@ -549,6 +561,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       }))
     });
 
+    if (split.cashPence > 0 && cashSource === 'BUSINESS_CASH') await lockFundingBalance(client, input.businessId, cashAccountCode, split.cashPence);
+
     // 3. Payments — individual creates so CASH rows can link to drawer entries
     if (payments.length > 0) {
       await createPurchaseInvoicePayments(client, {
@@ -558,6 +572,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         payments,
         recordedByUserId: input.userId ?? null,
         supplierName: supplier?.name ?? null,
+        cashSource,
         skipCashDrawerRequirement: input.skipCashDrawerRequirement,
         tillId: input.tillId,
         shiftId: input.shiftId,

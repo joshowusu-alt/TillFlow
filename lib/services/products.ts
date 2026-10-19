@@ -109,40 +109,6 @@ export type CatalogSanitySnapshot = {
 // Private helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Throws if a product with the same name (case-insensitive) already exists in
- * the business. Pass `excludeId` when updating so the product itself is ignored.
- * Pass `db` to run inside an existing transaction.
- */
-async function assertNoDuplicateProductName(
-  businessId: string,
-  name: string,
-  excludeId?: string,
-  db: any = prisma,
-  publisher = "",
-  edition = ""
-): Promise<void> {
-  const rows = excludeId
-    ? await db.$queryRaw<{ id: string }[]>`
-        SELECT id FROM "Product"
-        WHERE "businessId" = ${businessId}
-          AND lower("name") = lower(${name})
-          AND lower("publisher") = lower(${publisher})
-          AND lower("edition") = lower(${edition})
-          AND id <> ${excludeId}
-        LIMIT 1`
-    : await db.$queryRaw<{ id: string }[]>`
-        SELECT id FROM "Product"
-        WHERE "businessId" = ${businessId}
-          AND lower("name") = lower(${name})
-          AND lower("publisher") = lower(${publisher})
-          AND lower("edition") = lower(${edition})
-        LIMIT 1`;
-  if (rows.length > 0) {
-    throw new Error('This title and publisher/edition already exist. Select that product or specify its distinct publisher/edition.');
-  }
-}
-
 async function assertSupplierBelongsToBusiness(businessId: string, supplierId: string | null | undefined): Promise<void> {
   if (!supplierId) return;
 
@@ -439,7 +405,6 @@ async function createProductImpl(
   if ((normalized.publisher?.length ?? 0) > 120 || (normalized.edition?.length ?? 0) > 120) throw new Error("Publisher and edition must be 120 characters or fewer.");
 
   await assertSupplierBelongsToBusiness(businessId, normalized.preferredSupplierId);
-  await assertNoDuplicateProductName(businessId, normalized.name, undefined, db ?? prisma, normalized.publisher, normalized.edition);
   await assertAvailableBarcodes(db ?? prisma, businessId, normalized);
 
   const product = await (db ?? prisma).product.create({
@@ -479,7 +444,7 @@ async function createProductImpl(
 /**
  * Update an existing product's fields and reconcile its unit records inside a
  * single transaction.
- * Throws if the product is not found or the new name collides with another product.
+ * Throws if the product is not found or a barcode belongs to another product.
  * Returns the product id (for use in audit logs / redirects).
  */
 export async function updateProduct(
@@ -517,7 +482,6 @@ async function updateProductImpl(
     throw new Error('Product not found. It may have been removed.');
   }
 
-  await assertNoDuplicateProductName(businessId, normalized.name, existing.id, prisma, normalized.publisher, normalized.edition);
   await assertAvailableBarcodes(prisma, businessId, normalized, existing.id);
   await assertSupplierBelongsToBusiness(businessId, normalized.preferredSupplierId);
 
@@ -693,7 +657,6 @@ async function quickCreateProductImpl(
     unitConfigs: normalized.unitConfigs,
   });
 
-  await assertNoDuplicateProductName(businessId, normalized.name, undefined, db, normalized.publisher, normalized.edition);
   await assertAvailableBarcodes(db, businessId, normalized);
 
   if (normalized.barcode) {

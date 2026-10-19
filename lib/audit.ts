@@ -33,6 +33,7 @@ export type AuditAction =
   | 'DISCOUNT_APPLIED'
   | 'SHIFT_OPEN'
   | 'SHIFT_CLOSE'
+  | 'CASH_TRANSFER'
   | 'CASH_DRAWER_ENTRY'
   | 'CASH_DRAWER_OPEN'
   | 'CASH_DRAWER_CLOSE'

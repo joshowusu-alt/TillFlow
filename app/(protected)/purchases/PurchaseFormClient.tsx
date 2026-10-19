@@ -9,6 +9,7 @@ import { quickCreateProductAction } from '@/app/actions/products';
 import ProductUnitPricingEditor, { type EditableProductUnitConfig } from '@/components/ProductUnitPricingEditor';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
 import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared/product-unit-pricing';
+import type { PurchaseCashSource } from '@/lib/services/purchase-funding';
 import type { PaymentStatus } from '@/lib/services/shared';
 import { creditPurchaseRequiresSupplier } from '@/lib/reliability/walkthrough-contracts';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
@@ -82,6 +83,9 @@ type PurchaseDraft = {
   transferPaid: string;
   paymentStatus: PaymentStatus;
   dueDate: string;
+  cashSource?: PurchaseCashSource;
+  cashHolderId?: string;
+  fundingOwnerId?: string;
 };
 
 type OpenTillOption = { tillId: string; tillName: string; shiftId: string };
@@ -94,6 +98,7 @@ export default function PurchaseFormClient({
   units,
   vatEnabled,
   openTills = [],
+  cashPeople = [],
 }: {
   storeId: string;
   products: ProductDto[];
@@ -102,6 +107,7 @@ export default function PurchaseFormClient({
   units: UnitOption[];
   vatEnabled: boolean;
   openTills?: OpenTillOption[];
+  cashPeople?: { id: string; name: string; role: string; balancePence: number }[];
 }) {
   const searchParams = useSearchParams();
   const draftStorageKey = getPurchaseDraftStorageKey(storeId);
@@ -118,7 +124,12 @@ export default function PurchaseFormClient({
   const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({});
   const [costDrafts, setCostDrafts] = useState<Record<string, string>>({});
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(['CASH']);
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('PAID');
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('UNPAID');
+  const submittingRef = useRef(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [cashSource, setCashSource] = useState<PurchaseCashSource>('TILL');
+  const [cashHolderId, setCashHolderId] = useState('');
+  const [fundingOwnerId, setFundingOwnerId] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [cashPaid, setCashPaid] = useState('');
   const [cardPaid, setCardPaid] = useState('');
@@ -228,8 +239,10 @@ export default function PurchaseFormClient({
       setPaymentStatus(
         parsed.paymentStatus && ['PAID', 'PART_PAID', 'UNPAID'].includes(parsed.paymentStatus)
           ? parsed.paymentStatus
-          : 'PAID',
+          : 'UNPAID',
       );
+      if (parsed.cashSource && ['TILL', 'BUSINESS_CASH', 'OWNER_LOAN', 'OWNER_CAPITAL'].includes(parsed.cashSource)) setCashSource(parsed.cashSource);
+      setCashHolderId(parsed.cashHolderId ?? ''); setFundingOwnerId(parsed.fundingOwnerId ?? '');
       setDueDate(typeof parsed.dueDate === 'string' ? parsed.dueDate : '');
       setCashPaid(typeof parsed.cashPaid === 'string' ? parsed.cashPaid : '');
       setCardPaid(typeof parsed.cardPaid === 'string' ? parsed.cardPaid : '');
@@ -254,7 +267,7 @@ export default function PurchaseFormClient({
       cashPaid ||
       cardPaid ||
       transferPaid ||
-      paymentStatus !== 'PAID' ||
+      paymentStatus !== 'UNPAID' ||
       dueDate;
 
     try {
@@ -272,11 +285,11 @@ export default function PurchaseFormClient({
         cardPaid,
         transferPaid,
         paymentStatus,
-        dueDate,
+        dueDate, cashSource, cashHolderId, fundingOwnerId,
       };
       window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
     } catch {}
-  }, [cardPaid, cart, cashPaid, dueDate, paymentMethods, paymentStatus, storeId, supplierId, transferPaid]);
+  }, [cardPaid, cart, cashPaid, dueDate, paymentMethods, paymentStatus, storeId, supplierId, transferPaid, cashSource, cashHolderId, fundingOwnerId, draftStorageKey]);
 
   useEffect(() => {
     if (!draftReadyRef.current) return;
@@ -286,11 +299,12 @@ export default function PurchaseFormClient({
       cashPaid ||
       cardPaid ||
       transferPaid ||
-      paymentStatus !== 'PAID' ||
+      paymentStatus !== 'UNPAID' ||
       dueDate;
     if (!hasUnsavedPurchase) return;
 
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (submittingRef.current) return;
       event.preventDefault();
       event.returnValue = '';
     };
@@ -417,7 +431,7 @@ export default function PurchaseFormClient({
         unitConfigs: quickUnitConfigs,
       });
       if (!result || !result.success) throw new Error(result?.error ?? 'Unable to create product.');
-      const created = result.data;
+      const created = { ...result.data, name: `${result.data.name} · ${result.data.barcode || 'No barcode'} · ${formatMoney(result.data.sellingPriceBasePence, currency)}` };
       setProductOptions((prev) => [...prev, created]);
       setProductId(created.id);
       setProductSearch(created.name);
@@ -551,9 +565,9 @@ export default function PurchaseFormClient({
   );
 
   const hasMethod = (method: PaymentMethod) => paymentMethods.includes(method);
-  const cashPaidPence = hasMethod('CASH') ? parseCurrencyToPence(cashPaid) : 0;
-  const cardPaidPence = hasMethod('CARD') ? parseCurrencyToPence(cardPaid) : 0;
-  const transferPaidPence = hasMethod('TRANSFER') ? parseCurrencyToPence(transferPaid) : 0;
+  const cashPaidPence = paymentStatus !== 'UNPAID' && hasMethod('CASH') ? parseCurrencyToPence(cashPaid) : 0;
+  const cardPaidPence = paymentStatus !== 'UNPAID' && hasMethod('CARD') ? parseCurrencyToPence(cardPaid) : 0;
+  const transferPaidPence = paymentStatus !== 'UNPAID' && hasMethod('TRANSFER') ? parseCurrencyToPence(transferPaid) : 0;
   const totalPaid = cashPaidPence + cardPaidPence + transferPaidPence;
   const overpay = totals.total > 0 && totalPaid > totals.total;
   const effectivePaid = paymentStatus === 'PAID' && totalPaid === 0 ? totals.total : totalPaid;
@@ -633,7 +647,7 @@ export default function PurchaseFormClient({
               <input className="input" value={quickName} onChange={(e) => setQuickName(e.target.value)} />
             </div>
             <div>
-              <label className="label">SKU</label>
+              <label className="label">Internal product code (optional)</label>
               <input className="input" value={quickSku} onChange={(e) => setQuickSku(e.target.value)} />
             </div>
             <div>
@@ -726,14 +740,20 @@ export default function PurchaseFormClient({
         ) : null}
       </div>
 
-      <form action={createPurchaseAction} className="space-y-6">
+      <form action={async data => {
+        submittingRef.current = true;
+        setSubmitError(null);
+        try { const result = await createPurchaseAction(data); if (result && !result.success) { setSubmitError(result.error); submittingRef.current = false; } }
+        catch (error) { if (!(error && typeof error === 'object' && 'digest' in error && String(error.digest).startsWith('NEXT_REDIRECT'))) submittingRef.current = false; throw error; }
+      }} className="space-y-6">
+        {submitError ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{submitError}</div> : null}
         <input type="hidden" name="storeId" value={storeId} />
         <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
         <input type="hidden" name="cart" value={JSON.stringify(cart)} />
         <input type="hidden" name="cashPaid" value={Math.max(0, cashPaidPence)} />
         <input type="hidden" name="cardPaid" value={Math.max(0, cardPaidPence)} />
         <input type="hidden" name="transferPaid" value={Math.max(0, transferPaidPence)} />
-        {openTills.length === 1 ? <input type="hidden" name="tillId" value={openTills[0]!.tillId} /> : null}
+        {paymentStatus !== 'UNPAID' && cashSource === 'TILL' && openTills.length === 1 ? <input type="hidden" name="tillId" value={openTills[0]!.tillId} /> : null}
 
         <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-4 sm:p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -1128,14 +1148,14 @@ export default function PurchaseFormClient({
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div>
-            <label className="label">Payment Status</label>
-            <select className="input" name="paymentStatus" value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value as PaymentStatus)}>
+            <label className="label" htmlFor="purchase-payment-status">Payment Status</label>
+            <select id="purchase-payment-status" className="input" name="paymentStatus" value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value as PaymentStatus)}>
               <option value="PAID">Paid</option>
               <option value="PART_PAID">Part Paid</option>
               <option value="UNPAID">Unpaid</option>
             </select>
           </div>
-          <div>
+          {paymentStatus !== 'UNPAID' ? <div>
             <label className="label">Payment Method</label>
             <div className="mt-2 flex flex-wrap gap-3 text-sm text-black/70">
               {(['CASH', 'CARD', 'TRANSFER'] as PaymentMethod[]).map((method) => (
@@ -1150,8 +1170,16 @@ export default function PurchaseFormClient({
               ))}
             </div>
             <div className="mt-1 text-xs text-black/50">Select one or more methods.</div>
-          </div>
-          {openTills.length !== 1 ? (
+          </div> : null}
+          {paymentStatus !== 'UNPAID' && hasMethod('CASH') ? <div>
+            <label className="label" htmlFor="purchase-cash-source">Where is the cash coming from?</label>
+            <select id="purchase-cash-source" name="cashSource" className="input" value={cashSource} onChange={event => setCashSource(event.target.value as PurchaseCashSource)}>
+              <option value="TILL">Till drawer</option><option value="BUSINESS_CASH">Business cash held outside the till</option><option value="OWNER_LOAN">Owner’s money — repay the owner</option><option value="OWNER_CAPITAL">Owner’s money — contribution</option>
+            </select>
+            {cashSource === 'BUSINESS_CASH' ? <><label className="label mt-2">Who holds the business cash?</label><select name="cashHolderId" className="input" required value={cashHolderId} onChange={event => setCashHolderId(event.target.value)}><option value="">Select person…</option>{cashPeople.map(person => <option key={person.id} value={person.id}>{person.name} — {formatMoney(person.balancePence, currency)}</option>)}</select><a className="mt-2 block text-sm underline" href={`/purchases/cash?storeId=${storeId}`}>Record a cash handover or return</a></> : null}
+            {cashSource.startsWith('OWNER_') ? <><label className="label mt-2">Owner providing the money</label><select name="fundingOwnerId" className="input" required value={fundingOwnerId} onChange={event => setFundingOwnerId(event.target.value)}><option value="">Select owner…</option>{cashPeople.filter(person => person.role === 'OWNER').map(person => <option key={person.id} value={person.id}>{person.name}</option>)}</select><p className="mt-1 text-xs text-black/50">Paid directly by the owner. No money is taken from the till.</p></> : null}
+          </div> : null}
+          {paymentStatus !== 'UNPAID' && hasMethod('CASH') && cashSource === 'TILL' && openTills.length !== 1 ? (
             <div>
               <label className="label">Till (cash from this drawer)</label>
               <select
@@ -1175,10 +1203,10 @@ export default function PurchaseFormClient({
               </select>
             </div>
           ) : null}
-          <div>
-            <label className="label">Due Date</label>
-            <input className="input" name="dueDate" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
-          </div>
+          {paymentStatus !== 'PAID' ? <div>
+            <label className="label" htmlFor="purchase-due-date">Due Date</label>
+            <input id="purchase-due-date" className="input" name="dueDate" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+          </div> : null}
           <div>
             <label className="label">Cart Total</label>
             <div className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold">
@@ -1188,7 +1216,7 @@ export default function PurchaseFormClient({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {hasMethod('CASH') ? (
+          {paymentStatus !== 'UNPAID' && hasMethod('CASH') ? (
             <div>
               <label className="label">Cash Paid</label>
               <input
@@ -1202,7 +1230,7 @@ export default function PurchaseFormClient({
               />
             </div>
           ) : null}
-          {hasMethod('CARD') ? (
+          {paymentStatus !== 'UNPAID' && hasMethod('CARD') ? (
             <div>
               <label className="label">Card Paid</label>
               <input
@@ -1216,7 +1244,7 @@ export default function PurchaseFormClient({
               />
             </div>
           ) : null}
-          {hasMethod('TRANSFER') ? (
+          {paymentStatus !== 'UNPAID' && hasMethod('TRANSFER') ? (
             <div>
               <label className="label">Transfer Paid</label>
               <input

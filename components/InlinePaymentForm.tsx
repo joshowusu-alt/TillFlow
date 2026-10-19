@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useRef } from 'react';
 import { recordCustomerPaymentAction } from '@/app/actions/payments';
 import { recordSupplierPaymentAction } from '@/app/actions/payments';
@@ -21,6 +22,8 @@ export default function InlinePaymentForm({ invoiceId, outstandingPence, currenc
 
   const action = type === 'customer' ? recordCustomerPaymentAction : recordSupplierPaymentAction;
   const outstanding = (outstandingPence / 100).toFixed(2);
+
+  if (type === 'supplier') return <Link className="btn-ghost text-xs text-primary font-semibold" href={`/purchases/${invoiceId}#record-payment`}>Record payment</Link>;
 
   if (!open) {
     return (

@@ -26,3 +26,16 @@ it('unknown scans open explicit creation and preserve the scanned identifier', (
   expect(screen.getByText(/No product found for that barcode/)).toBeInTheDocument();
   expect(screen.getByRole('textbox', { name: 'New product barcode — scan with USB/Bluetooth reader' })).toHaveValue('009999');
 });
+
+it('starts unpaid, shows due dates only while money is owed and reveals payment controls when paying', () => {
+  mount();
+  const status = screen.getByLabelText('Payment Status');
+  expect(status).toHaveValue('UNPAID');
+  expect(screen.getByLabelText('Due Date')).toBeInTheDocument();
+  expect(screen.queryByLabelText('Where is the cash coming from?')).not.toBeInTheDocument();
+  fireEvent.change(status, { target: { value: 'PAID' } });
+  expect(screen.queryByLabelText('Due Date')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Where is the cash coming from?')).toBeInTheDocument();
+  fireEvent.change(status, { target: { value: 'PART_PAID' } });
+  expect(screen.getByLabelText('Due Date')).toBeInTheDocument();
+});

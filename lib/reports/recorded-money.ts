@@ -14,7 +14,7 @@ export async function readRecordedMoneyMovement(db: Prisma.TransactionClient, bu
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(endExclusive.getTime()) || start >= endExclusive) {
     throw new Error('Choose a valid cash movement period');
   }
-  const account = { businessId, code: { in: MONEY_CODES }, type: 'ASSET' };
+  const account = { businessId, OR: [{ code: { in: MONEY_CODES } }, { code: { startsWith: '1000.HOLD.' } }], type: 'ASSET' };
   const [accounts, opening, movement] = await Promise.all([
     db.account.findMany({ where: account, select: { id: true, code: true, name: true }, orderBy: { code: 'asc' } }),
     db.journalLine.groupBy({ by: ['accountId'], where: { account, journalEntry: { businessId, entryDate: { lt: start } } }, _sum: { debitPence: true, creditPence: true } }),

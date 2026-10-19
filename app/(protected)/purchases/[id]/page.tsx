@@ -15,6 +15,13 @@ import SupplierPaymentForm from '@/components/SupplierPaymentForm';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
+function paymentMethodLabel(payment: { method: string; reference?: string | null }) {
+  if (payment.reference?.startsWith('funding:1000.HOLD.')) return 'Cash — business cash held outside the till';
+  if (payment.reference?.startsWith('funding:2300.OWNER.')) return 'Owner’s money — repay owner';
+  if (payment.reference?.startsWith('funding:3100.OWNER.')) return 'Owner’s money — contribution';
+  return payment.method;
+}
+
 export default async function PurchaseInvoicePage({
   params,
   searchParams,
@@ -341,7 +348,7 @@ export default async function PurchaseInvoicePage({
                 <DataCard key={payment.id}>
                   <DataCardHeader
                     title={formatDate(payment.paidAt)}
-                    subtitle={payment.method}
+                    subtitle={paymentMethodLabel(payment)}
                     aside={
                       <span className="text-sm font-semibold tabular-nums">
                         {formatMoney(payment.amountPence, business.currency)}
@@ -380,7 +387,7 @@ export default async function PurchaseInvoicePage({
                   {invoice.payments.map((payment) => (
                     <tr key={payment.id} className="rounded-xl bg-white">
                       <td className="px-3 py-2">{formatDate(payment.paidAt)}</td>
-                      <td className="px-3 py-2">{payment.method}</td>
+                      <td className="px-3 py-2">{paymentMethodLabel(payment)}</td>
                       <td className="px-3 py-2 text-right font-semibold">{formatMoney(payment.amountPence, business.currency)}</td>
                       <td className="px-3 py-2 text-black/50">{payment.notes ?? '—'}</td>
                       <td className="px-3 py-2 text-black/50">{payment.recordedBy?.name ?? '—'}</td>
@@ -402,7 +409,7 @@ export default async function PurchaseInvoicePage({
         )}
         {/* Record payment form — unchanged SupplierPaymentForm (PR #78 controls). */}
         {!isClosed && outstanding > 0 && canPayHere && (
-          <div className="mt-6 scroll-mb-28" data-purchase-payment-form>
+          <div className="mt-6 scroll-mb-28" data-purchase-payment-form id="record-payment">
             <h3 className="text-sm font-semibold">Record a payment</h3>
             <div className="mt-3">
               <SupplierPaymentForm

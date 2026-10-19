@@ -1,5 +1,6 @@
 'use server';
 
+import type { PurchaseCashSource } from '@/lib/services/purchase-funding';
 import { recordCustomerPayment, recordSupplierPayment } from '@/lib/services/payments';
 import { EXPLICIT_CASH_TILL_REQUIRED_MSG } from '@/lib/services/cash-drawer';
 import { redirect } from 'next/navigation';
@@ -91,6 +92,7 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
     const storeId = assertRequestedStoreMatchesSource(requestedStoreId, invoice.storeId);
     await requireSelectedStoreContext(['MANAGER', 'OWNER'], storeId);
     const payments = parsePayments(formData);
+    const cashSource = (formString(formData, 'cashSource') || 'TILL') as PurchaseCashSource;
     const tillId = formString(formData, 'tillId');
     const paidAtStr = formString(formData, 'paidAt');
     const paidAt = paidAtStr ? new Date(paidAtStr) : undefined;
@@ -99,7 +101,7 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
     if (!idempotencyKey) {
       throw new Error('This payment form is out of date. Refresh the page or reopen the payment form, then try again.');
     }
-    if (payments.some((p) => p.method === 'CASH' && p.amountPence > 0) && !tillId) {
+    if (payments.some((p) => p.method === 'CASH' && p.amountPence > 0) && cashSource === 'TILL' && !tillId) {
       throw new Error(EXPLICIT_CASH_TILL_REQUIRED_MSG);
     }
     if (tillId) {
@@ -107,6 +109,7 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
     }
 
     const result = await recordSupplierPayment(businessId, invoiceId, payments, {
+      cashSource, cashHolderId: formString(formData, 'cashHolderId'), fundingOwnerId: formString(formData, 'fundingOwnerId'),
       paidAt,
       recordedByUserId: user.id,
       actorRole: user.role,

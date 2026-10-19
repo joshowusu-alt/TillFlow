@@ -715,7 +715,7 @@ model Product {
   storefrontEvents   StorefrontEvent[]
 
   @@unique([businessId, barcode])
-  @@unique([businessId, name, publisher, edition])
+  @@index([businessId, name, publisher, edition])
   @@unique([id, businessId])
   @@index([businessId, active, createdAt])
   @@index([businessId, active, storefrontPublished])

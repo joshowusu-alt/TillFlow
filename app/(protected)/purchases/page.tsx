@@ -1,3 +1,4 @@
+import { accountBalance, holdingCode } from '@/lib/services/purchase-funding';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import { productDisplayName } from '@/lib/products/barcode-identity';
@@ -162,6 +163,8 @@ export default async function PurchasesPage({
     shiftId: shift.id,
   }));
 
+  const cashUsers = await prisma.user.findMany({ where: { businessId: business.id, role: { in: ['OWNER', 'MANAGER'] } }, select: { id: true, name: true, role: true } });
+  const cashPeople = await Promise.all(cashUsers.map(async person => ({ ...person, balancePence: selectedStoreId ? await accountBalance(prisma, business.id, holdingCode(selectedStoreId, person.id)) : 0 })));
   const totalPages = Math.max(1, Math.ceil(purchaseCount / DEFAULT_PAGE_SIZE));
   const purchaseRows = purchases.map((purchase) => {
     const lineCount = purchase._count.lines;
@@ -341,11 +344,12 @@ export default async function PurchasesPage({
               currency={business.currency}
               vatEnabled={business.vatEnabled}
               openTills={openTills}
+              cashPeople={cashPeople}
               units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
               suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name }))}
               products={products.map((product) => ({
                 id: product.id,
-                name: productDisplayName(product),
+                name: `${productDisplayName(product)} · ${product.barcode || 'No barcode'} · ${formatMoney(product.sellingPriceBasePence, business.currency)}`,
                 barcode: product.barcode,
                 additionalBarcodes: product.barcodes.map(b => b.code),
                 defaultCostBasePence: product.defaultCostBasePence,

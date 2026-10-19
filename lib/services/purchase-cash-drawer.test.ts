@@ -12,7 +12,8 @@ const {
     supplier: { findFirst: vi.fn() },
     product: { findMany: vi.fn(), updateMany: vi.fn() },
     productUnit: { findMany: vi.fn() },
-    account: { findMany: vi.fn() },
+    account: { findMany: vi.fn(), upsert: vi.fn() },
+    journalLine: { aggregate: vi.fn() },
     purchaseInvoice: { create: vi.fn() },
     purchaseInvoiceLine: { createMany: vi.fn() },
     purchasePayment: { create: vi.fn() },
@@ -131,6 +132,17 @@ describe('purchase invoice cash drawer linkage', () => {
       afterExpectedCashPence: 770200,
     });
     ensureChartOfAccountsMock.mockResolvedValue(undefined);
+  });
+
+  it.each(['BUSINESS_CASH', 'OWNER_LOAN', 'OWNER_CAPITAL'] as const)('posts %s payments without an open drawer and stores their funding reference', async cashSource => {
+    prismaMock.account.upsert.mockResolvedValue({});
+    prismaMock.journalLine.aggregate.mockResolvedValue({ _sum: { debitPence: 300000, creditPence: 0 } });
+    const code = cashSource === 'BUSINESS_CASH' ? `1000.HOLD.${storeId}.${userId}` : `${cashSource === 'OWNER_CAPITAL' ? '3100' : '2300'}.OWNER.${userId}`;
+    prismaMock.account.findMany.mockResolvedValue([{ code, id: 'acc-source' }, { code: '1200', id: 'acc-inventory' }]);
+    await createPurchase({ businessId: bizId, storeId, paymentStatus: 'PAID', payments: [{ method: 'CASH', amountPence: 229800 }], lines: [productLine], userId, cashSource, cashHolderId: userId, fundingOwnerId: userId, idempotencyKey: `funded-${cashSource}` });
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({ data: expect.objectContaining({ reference: `funding:${code}` }) });
+    expect(postJournalEntryMock).toHaveBeenCalledWith(expect.objectContaining({ lines: expect.arrayContaining([{ accountCode: code, creditPence: 229800 }]) }));
   });
 
   it('creates PAID/CASH purchase payment with recordedBy and supplier drawer entry', async () => {

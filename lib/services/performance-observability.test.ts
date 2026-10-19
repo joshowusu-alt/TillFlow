@@ -244,7 +244,7 @@ describe('Phase C3: performance observability baseline', () => {
     expect(read('app/actions/sales.ts')).toContain('export async function completeSaleAction(data: {');
     expect(read('app/actions/payments.ts')).toContain('export async function recordCustomerPaymentAction(formData: FormData): Promise<void>');
     expect(read('app/actions/payments.ts')).toContain('export async function recordSupplierPaymentAction(formData: FormData): Promise<void>');
-    expect(read('app/actions/purchases.ts')).toContain('export async function createPurchaseAction(formData: FormData): Promise<void>');
+    expect(read('app/actions/purchases.ts')).toContain('export async function createPurchaseAction(formData: FormData): Promise<ActionResult>');
     expect(read('app/actions/inventory.ts')).toContain('export async function createStockAdjustmentAction(formData: FormData): Promise<void>');
     expect(read('app/actions/shifts.ts')).toContain('export async function openShiftAction(');
     expect(read('app/actions/shifts.ts')).toContain('export async function closeShiftAction(');

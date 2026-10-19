@@ -172,7 +172,7 @@ export default async function ProductDetailPage({
               <input className="input" name="name" defaultValue={product.name} required />
             </div>
             <div>
-              <label className="label">SKU</label>
+              <label className="label">Internal product code (optional)</label>
               <input className="input" name="sku" defaultValue={product.sku ?? ''} />
             </div>
             <div>
