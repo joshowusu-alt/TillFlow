@@ -1,4 +1,5 @@
 'use client';
+import { ProductMarginResult } from '@/components/products/ProductMarginPreview';
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useFormStatus } from 'react-dom';
@@ -7,7 +8,7 @@ import { createPurchaseAction } from '@/app/actions/purchases';
 import { quickCreateProductAction } from '@/app/actions/products';
 import ProductUnitPricingEditor, { type EditableProductUnitConfig } from '@/components/ProductUnitPricingEditor';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
-import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared';
+import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared/product-unit-pricing';
 import type { PaymentStatus } from '@/lib/services/shared';
 import { creditPurchaseRequiresSupplier } from '@/lib/reliability/walkthrough-contracts';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
@@ -34,6 +35,7 @@ type ProductDto = {
   id: string;
   name: string;
   barcode: string | null;
+  additionalBarcodes?: string[];
   defaultCostBasePence: number;
   sellingPriceBasePence: number;
   vatRateBps: number;
@@ -131,6 +133,8 @@ export default function PurchaseFormClient({
   const [quickName, setQuickName] = useState('');
   const [quickSku, setQuickSku] = useState('');
   const [quickBarcode, setQuickBarcode] = useState('');
+  const [quickPublisher, setQuickPublisher] = useState('');
+  const [quickEdition, setQuickEdition] = useState('');
   const [quickUnitConfigs, setQuickUnitConfigs] = useState<EditableProductUnitConfig[]>(() => buildDefaultUnitConfigs(units));
   const [quickSellPrice, setQuickSellPrice] = useState('');
   const [quickCost, setQuickCost] = useState('');
@@ -342,6 +346,8 @@ export default function PurchaseFormClient({
     setQuickName('');
     setQuickSku('');
     setQuickBarcode('');
+    setQuickPublisher('');
+    setQuickEdition('');
     setQuickUnitConfigs(buildDefaultUnitConfigs(units));
     setQuickSellPrice('');
     setQuickCost('');
@@ -359,7 +365,7 @@ export default function PurchaseFormClient({
   const handleBarcodeLookup = (codeOverride?: string) => {
     const code = (codeOverride ?? barcodeLookup).trim();
     if (!code) return;
-    const match = productOptions.find((product) => product.barcode === code);
+    const match = productOptions.find((product) => product.barcode === code || product.additionalBarcodes?.includes(code));
     if (match) {
       setProductId(match.id);
       setProductSearch(match.name);
@@ -398,6 +404,8 @@ export default function PurchaseFormClient({
     try {
       const result = await quickCreateProductAction({
         name: quickName.trim(),
+        publisher: quickPublisher.trim(),
+        edition: quickEdition.trim(),
         sku: quickSku.trim() || null,
         barcode: quickBarcode.trim() || null,
         sellingPriceBasePence: selling,
@@ -629,14 +637,16 @@ export default function PurchaseFormClient({
               <input className="input" value={quickSku} onChange={(e) => setQuickSku(e.target.value)} />
             </div>
             <div>
-              <label className="label">Barcode</label>
+              <div><label className="label" htmlFor="quick-publisher">Publisher / brand</label><input id="quick-publisher" className="input" value={quickPublisher} onChange={e => setQuickPublisher(e.target.value)} /></div>
+              <div><label className="label" htmlFor="quick-edition">Edition / format</label><input id="quick-edition" className="input" value={quickEdition} onChange={e => setQuickEdition(e.target.value)} /></div>
+              <label className="label">Barcode — USB/Bluetooth reader or typing</label>
               <div className="relative">
-                <input className="input pr-11" value={quickBarcode} onChange={(e) => setQuickBarcode(e.target.value)} />
+                <input aria-label="New product barcode — scan with USB/Bluetooth reader" onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }} placeholder="Click here, then scan with your reader" className="input pr-11" value={quickBarcode} onChange={(e) => setQuickBarcode(e.target.value)} />
                 <button
                   type="button"
                   onClick={() => setQuickCameraOpen(true)}
                   className="absolute inset-y-0 right-2 flex items-center px-1 text-black/40 hover:text-accent transition"
-                  aria-label="Open barcode scanner"
+                  aria-label="Scan barcode with camera"
                   title="Scan with camera"
                 >
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -697,6 +707,7 @@ export default function PurchaseFormClient({
               </div>
             ) : null}
             <div className="flex flex-col gap-3 sm:col-span-2 sm:flex-row xl:col-span-3">
+              <ProductMarginResult currency={currency} cost={parseCurrencyToPence(quickCost) / 100} sell={parseCurrencyToPence(quickSellPrice) / 100} />
               <button type="button" className="btn-primary w-full sm:w-auto" onClick={handleQuickCreate} disabled={isCreating}>
                 {isCreating ? 'Creating...' : 'Create product'}
               </button>
@@ -735,10 +746,12 @@ export default function PurchaseFormClient({
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <div className="sm:col-span-2 xl:col-span-2">
-            <label className="label">Barcode Lookup</label>
+            <label className="label" htmlFor="purchase-barcode-lookup">Scan with USB/Bluetooth reader</label>
             <div className="relative">
               <input
                 className="input pr-11"
+                id="purchase-barcode-lookup"
+                autoComplete="off"
                 value={barcodeLookup}
                 onChange={(event) => setBarcodeLookup(event.target.value)}
                 onKeyDown={(event) => {
@@ -747,13 +760,13 @@ export default function PurchaseFormClient({
                     handleBarcodeLookup();
                   }
                 }}
-                placeholder="Scan barcode to select product"
+                placeholder="Click here, scan a barcode, then Enter"
               />
               <button
                 type="button"
                 onClick={() => setLookupCameraOpen(true)}
                 className="absolute inset-y-0 right-2 flex items-center px-1 text-black/40 hover:text-accent transition"
-                aria-label="Open barcode scanner"
+                aria-label="Scan barcode with camera"
                 title="Scan with camera"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

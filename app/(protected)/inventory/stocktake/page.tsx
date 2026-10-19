@@ -59,6 +59,9 @@ export default async function StocktakePage({
                 id: true,
                 name: true,
                 barcode: true,
+                publisher: true,
+                edition: true,
+                barcodes: { select: { code: true } },
                 productUnits: {
                   where: { isBaseUnit: true },
                   select: { unit: { select: { name: true, pluralName: true } } },
@@ -138,8 +141,9 @@ export default async function StocktakePage({
             return {
               id: l.id,
               productId: l.productId,
-              productName: l.product.name,
+              productName: [l.product.name, l.product.publisher, l.product.edition].filter(Boolean).join(" · "),
               barcode: l.product.barcode,
+              additionalBarcodes: l.product.barcodes.map(b => b.code),
               baseUnit: l.product.productUnits[0]?.unit.name ?? 'unit',
               baseUnitPlural: l.product.productUnits[0]?.unit.pluralName ?? 'units',
               expectedBase: l.expectedBase,

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
+import { productDisplayName } from '@/lib/products/barcode-identity';
 import FormError from '@/components/FormError';
 import Pagination from '@/components/Pagination';
 import InlinePaymentForm from '@/components/InlinePaymentForm';
@@ -84,6 +85,9 @@ export default async function PurchasesPage({
         id: true,
         name: true,
         barcode: true,
+        publisher: true,
+        edition: true,
+        barcodes: { select: { code: true } },
         defaultCostBasePence: true,
         sellingPriceBasePence: true,
         vatRateBps: true,
@@ -341,8 +345,9 @@ export default async function PurchasesPage({
               suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name }))}
               products={products.map((product) => ({
                 id: product.id,
-                name: product.name,
+                name: productDisplayName(product),
                 barcode: product.barcode,
+                additionalBarcodes: product.barcodes.map(b => b.code),
                 defaultCostBasePence: product.defaultCostBasePence,
                 sellingPriceBasePence: product.sellingPriceBasePence,
                 vatRateBps: product.vatRateBps,

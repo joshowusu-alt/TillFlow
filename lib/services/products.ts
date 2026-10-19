@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { aliasCodes, assertAvailableBarcodes, productDisplayName } from '@/lib/products/barcode-identity';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 // ---------------------------------------------------------------------------
@@ -9,6 +10,9 @@ export type ProductCoreInput = {
   name: string;
   sku: string | null;
   barcode: string | null;
+  publisher?: string;
+  edition?: string;
+  additionalBarcodes?: string[];
   categoryId: string | null;
   preferredSupplierId?: string | null;
   imageUrl: string | null;
@@ -36,6 +40,9 @@ export type QuickCreateProductInput = {
   name: string;
   sku?: string | null;
   barcode?: string | null;
+  publisher?: string;
+  edition?: string;
+  additionalBarcodes?: string[];
   sellingPriceBasePence: number;
   defaultCostBasePence: number;
   vatRateBps: number;
@@ -46,6 +53,7 @@ export type QuickCreateProductInput = {
 };
 
 export type QuickCreateProductResult = {
+  additionalBarcodes?: string[];
   id: string;
   name: string;
   barcode: string | null;
@@ -110,22 +118,28 @@ async function assertNoDuplicateProductName(
   businessId: string,
   name: string,
   excludeId?: string,
-  db: any = prisma
+  db: any = prisma,
+  publisher = "",
+  edition = ""
 ): Promise<void> {
   const rows = excludeId
     ? await db.$queryRaw<{ id: string }[]>`
         SELECT id FROM "Product"
         WHERE "businessId" = ${businessId}
           AND lower("name") = lower(${name})
+          AND lower("publisher") = lower(${publisher})
+          AND lower("edition") = lower(${edition})
           AND id <> ${excludeId}
         LIMIT 1`
     : await db.$queryRaw<{ id: string }[]>`
         SELECT id FROM "Product"
         WHERE "businessId" = ${businessId}
           AND lower("name") = lower(${name})
+          AND lower("publisher") = lower(${publisher})
+          AND lower("edition") = lower(${edition})
         LIMIT 1`;
   if (rows.length > 0) {
-    throw new Error('A product with that name already exists. Please choose a different name.');
+    throw new Error('This title and publisher/edition already exist. Select that product or specify its distinct publisher/edition.');
   }
 }
 
@@ -186,6 +200,8 @@ function normalizeCoreProductInput(data: ProductCoreInput): ProductCoreInput {
   return {
     ...data,
     name: data.name.trim(),
+    publisher: data.publisher?.trim() ?? "",
+    edition: data.edition?.trim() ?? "",
     sku: data.sku?.trim() ? data.sku.trim() : null,
     barcode: data.barcode?.trim() ? data.barcode.trim() : null,
     categoryId: data.categoryId?.trim() ? data.categoryId.trim() : null,
@@ -207,6 +223,8 @@ function normalizeQuickCreateInput(input: QuickCreateProductInput): QuickCreateP
   return {
     ...input,
     name: input.name.trim(),
+    publisher: input.publisher?.trim() ?? "",
+    edition: input.edition?.trim() ?? "",
     sku: input.sku?.trim() ? input.sku.trim() : null,
     barcode: input.barcode?.trim() ? input.barcode.trim() : null,
     baseUnitId: input.baseUnitId.trim(),
@@ -418,16 +436,21 @@ async function createProductImpl(
   const normalized = normalizeCoreProductInput(data);
   validateProductValues(normalized);
   validateMarginThresholdBps(normalized.minimumMarginThresholdBps);
+  if ((normalized.publisher?.length ?? 0) > 120 || (normalized.edition?.length ?? 0) > 120) throw new Error("Publisher and edition must be 120 characters or fewer.");
 
   await assertSupplierBelongsToBusiness(businessId, normalized.preferredSupplierId);
-  await assertNoDuplicateProductName(businessId, normalized.name);
+  await assertNoDuplicateProductName(businessId, normalized.name, undefined, db ?? prisma, normalized.publisher, normalized.edition);
+  await assertAvailableBarcodes(db ?? prisma, businessId, normalized);
 
   const product = await (db ?? prisma).product.create({
     data: {
       businessId,
       name: normalized.name,
+      publisher: normalized.publisher,
+      edition: normalized.edition,
       sku: normalized.sku,
       barcode: normalized.barcode,
+      barcodes: { create: aliasCodes(normalized).map(code => ({ businessId, code })) },
       categoryId: normalized.categoryId,
       preferredSupplierId: normalized.preferredSupplierId,
       imageUrl: normalized.imageUrl,
@@ -484,6 +507,7 @@ async function updateProductImpl(
   const normalized = normalizeCoreProductInput(data);
   validateProductValues(normalized);
   validateMarginThresholdBps(normalized.minimumMarginThresholdBps);
+  if ((normalized.publisher?.length ?? 0) > 120 || (normalized.edition?.length ?? 0) > 120) throw new Error("Publisher and edition must be 120 characters or fewer.");
 
   const existing = await prisma.product.findFirst({
     where: { id, businessId },
@@ -493,7 +517,8 @@ async function updateProductImpl(
     throw new Error('Product not found. It may have been removed.');
   }
 
-  await assertNoDuplicateProductName(businessId, normalized.name, existing.id);
+  await assertNoDuplicateProductName(businessId, normalized.name, existing.id, prisma, normalized.publisher, normalized.edition);
+  await assertAvailableBarcodes(prisma, businessId, normalized, existing.id);
   await assertSupplierBelongsToBusiness(businessId, normalized.preferredSupplierId);
 
   await prisma.$transaction(async (tx) => {
@@ -501,6 +526,8 @@ async function updateProductImpl(
       where: { id: existing.id },
       data: {
         name: normalized.name,
+      publisher: normalized.publisher,
+      edition: normalized.edition,
         sku: normalized.sku,
         barcode: normalized.barcode,
         categoryId: normalized.categoryId,
@@ -514,6 +541,13 @@ async function updateProductImpl(
         promoGetQty: normalized.promoGetQty,
       } as any,
     });
+
+    if (normalized.additionalBarcodes !== undefined) {
+      await tx.productBarcode.deleteMany({ where: { productId: existing.id, code: { not: normalized.barcode ?? '' } } });
+      for (const code of aliasCodes(normalized)) {
+        await tx.productBarcode.create({ data: { businessId, productId: existing.id, code } });
+      }
+    }
 
     if (existing.defaultCostBasePence !== normalized.defaultCostBasePence) {
       await syncDefaultCostManagedInventoryBalances(tx, {
@@ -659,7 +693,8 @@ async function quickCreateProductImpl(
     unitConfigs: normalized.unitConfigs,
   });
 
-  await assertNoDuplicateProductName(businessId, normalized.name, undefined, db);
+  await assertNoDuplicateProductName(businessId, normalized.name, undefined, db, normalized.publisher, normalized.edition);
+  await assertAvailableBarcodes(db, businessId, normalized);
 
   if (normalized.barcode) {
     const dup = await db.product.findFirst({
@@ -673,8 +708,11 @@ async function quickCreateProductImpl(
     data: {
       businessId,
       name: normalized.name,
+      publisher: normalized.publisher,
+      edition: normalized.edition,
       sku: normalized.sku ?? null,
       barcode: normalized.barcode ?? null,
+      barcodes: { create: aliasCodes(normalized).map(code => ({ businessId, code })) },
       sellingPriceBasePence: normalized.sellingPriceBasePence,
       defaultCostBasePence: normalized.defaultCostBasePence,
       vatRateBps: normalized.vatRateBps,
@@ -693,8 +731,9 @@ async function quickCreateProductImpl(
 
   return {
     id: created.id,
-    name: created.name,
+    name: productDisplayName(created),
     barcode: created.barcode,
+    additionalBarcodes: aliasCodes(normalized),
     defaultCostBasePence: created.defaultCostBasePence,
     sellingPriceBasePence: created.sellingPriceBasePence,
     vatRateBps: created.vatRateBps,

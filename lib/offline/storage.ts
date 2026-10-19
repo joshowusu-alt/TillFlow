@@ -13,6 +13,7 @@ export interface OfflineProduct {
     id: string;
     name: string;
     barcode: string | null;
+    additionalBarcodes?: string[];
     sellingPriceBasePence: number;
     vatRateBps: number;
     promoBuyQty: number;

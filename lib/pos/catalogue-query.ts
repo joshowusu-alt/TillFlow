@@ -7,11 +7,14 @@ export function posSearchWhere(businessId: string, q: string): Prisma.ProductWhe
   const where: Prisma.ProductWhereInput = { businessId, active: true };
   if (!trimmed) return where;
 
-  const digits = normalizeBarcodeDigits(trimmed);
+  const digits = /^[\d\s-]+$/.test(trimmed) ? normalizeBarcodeDigits(trimmed) : trimmed;
   const or: Prisma.ProductWhereInput[] = [
     { name: { contains: trimmed, mode: 'insensitive' } as any },
     { sku: { contains: trimmed, mode: 'insensitive' } as any },
     { barcode: { contains: trimmed } },
+    { barcodes: { some: { code: { contains: trimmed } } } },
+    { publisher: { contains: trimmed, mode: "insensitive" } as any },
+    { edition: { contains: trimmed, mode: "insensitive" } as any },
     { category: { name: { contains: trimmed, mode: 'insensitive' } as any } },
   ];
   if (digits && digits !== trimmed) {
@@ -23,12 +26,12 @@ export function posSearchWhere(businessId: string, q: string): Prisma.ProductWhe
 
 export function posBarcodeWhere(businessId: string, code: string): Prisma.ProductWhereInput {
   const trimmed = code.trim();
-  const digits = normalizeBarcodeDigits(trimmed);
+  const digits = /^[\d\s-]+$/.test(trimmed) ? normalizeBarcodeDigits(trimmed) : trimmed;
   const barcodes = Array.from(new Set([trimmed, digits].filter(Boolean)));
   return {
     businessId,
     active: true,
-    barcode: barcodes.length === 1 ? barcodes[0] : { in: barcodes },
+    OR: [{ barcode: { in: barcodes } }, { barcodes: { some: { code: { in: barcodes } } } }],
   };
 }
 

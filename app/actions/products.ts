@@ -103,6 +103,9 @@ async function parseProductFields(formData: FormData): Promise<ProductCoreInput>
 
   return {
     name: formString(formData, 'name'),
+    publisher: formString(formData, 'publisher'),
+    edition: formString(formData, 'edition'),
+    additionalBarcodes: formString(formData, 'additionalBarcodes').split(/[\n,]+/).map(code => code.trim()).filter(Boolean),
     sku: formString(formData, 'sku') || null,
     barcode: formString(formData, 'barcode') || null,
     categoryId: formOptionalString(formData, 'categoryId') || null,
@@ -437,8 +440,8 @@ async function allocateUniqueInternalBarcode(businessId: string): Promise<string
   for (let attempts = 0; attempts < 20; attempts++) {
     const sequence = await reserveInternalBarcodeSequence(businessId);
     const candidate = formatInternalBarcode(businessId, sequence);
-    const conflict = await prisma.product.findUnique({
-      where: { barcode: candidate },
+    const conflict = await prisma.product.findFirst({
+      where: { businessId, OR: [{ barcode: candidate }, { barcodes: { some: { code: candidate } } }] },
       select: { id: true },
     });
     if (!conflict) return candidate;

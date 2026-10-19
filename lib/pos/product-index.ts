@@ -16,7 +16,7 @@ export type PosProductIndex<TProduct extends PosBarcodeProduct> = {
 };
 
 function searchHayFor(product: PosBarcodeProduct & IndexedSearchFields): string {
-  return `${product.name ?? ''} ${product.sku ?? ''} ${product.barcode ?? ''} ${product.categoryName ?? ''}`.toLowerCase();
+  return `${product.name ?? ''} ${product.sku ?? ''} ${product.barcode ?? ''} ${(product.additionalBarcodes ?? []).join(' ')} ${product.categoryName ?? ''}`.toLowerCase();
 }
 
 export function buildPosProductIndex<TProduct extends PosBarcodeProduct>(
@@ -33,16 +33,17 @@ export function buildPosProductIndex<TProduct extends PosBarcodeProduct>(
     if (sku) bySku.set(sku.toLowerCase(), product);
     searchHaystack.push({ hay: searchHayFor(searchable), product });
 
-    const raw = product.barcode?.trim();
-    if (!raw) continue;
+    for (const raw of [product.barcode, ...(product.additionalBarcodes ?? [])].map(code => code?.trim()).filter(Boolean) as string[]) {
+    byExactBarcode.set(raw, product);
     const digits = normalizeBarcodeDigits(raw);
-    if (!digits) continue;
+    if (!/^\d+$/.test(raw)) continue;
 
     byExactBarcode.set(digits, product);
     byExactBarcode.set(raw, product);
 
     if (digits.startsWith('2') && digits.length >= 4 && digits.length <= 12) {
       prefixCandidates.push({ prefix: digits, product });
+    }
     }
   }
 
@@ -108,5 +109,5 @@ export function findProductByExactBarcode<TProduct extends PosBarcodeProduct>(
 ): TProduct | null {
   const trimmed = code.trim();
   if (!trimmed) return null;
-  return index.byExactBarcode.get(trimmed) ?? index.byExactBarcode.get(normalizeBarcodeDigits(trimmed)) ?? null;
+  return index.byExactBarcode.get(trimmed) ?? (/^[\d\s-]+$/.test(trimmed) ? index.byExactBarcode.get(normalizeBarcodeDigits(trimmed)) : null) ?? null;
 }

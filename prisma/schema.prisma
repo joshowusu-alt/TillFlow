@@ -667,8 +667,11 @@ model Product {
   id                    String   @id @default(cuid())
   businessId            String
   categoryId            String?
+  publisher             String   @default("")
+  edition               String   @default("")
+  barcodes              ProductBarcode[]
   sku                   String?
-  barcode               String?  @unique
+  barcode               String?
   name                  String
   active                Boolean  @default(true)
   imageUrl              String?
@@ -708,7 +711,9 @@ model Product {
   onlineOrderLines   OnlineOrderLine[]
   storefrontEvents   StorefrontEvent[]
 
-  @@unique([businessId, name])
+  @@unique([businessId, barcode])
+  @@unique([businessId, name, publisher, edition])
+  @@unique([id, businessId])
   @@index([businessId, active, createdAt])
   @@index([businessId, active, storefrontPublished])
   @@index([categoryId])
@@ -2100,4 +2105,13 @@ model BusinessSequence {
   business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@id([businessId, sequenceName])
+}
+
+model ProductBarcode {
+  businessId String
+  code       String
+  productId  String
+  product Product @relation(fields: [productId, businessId], references: [id, businessId], onDelete: Cascade)
+  @@id([businessId, code])
+  @@index([productId])
 }

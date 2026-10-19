@@ -353,8 +353,10 @@ async function _runImport(
     // (mode:'insensitive' is not supported on all Prisma adapters).
     const existingProductNames = await prisma.product.findMany({
       where: { businessId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, barcode: true },
     });
+    const ambiguousNames = new Set(existingProductNames.filter((p, i, all) => all.some((other, j) => i !== j && other.name.toLowerCase() === p.name.toLowerCase())).map(p => p.name.toLowerCase()));
+    if (resolvedRows.some(row => ambiguousNames.has(row.name.toLowerCase()))) throw new Error("This import includes a title with multiple publisher versions. Receive or edit the exact product by barcode/SKU instead of matching by title.");
     const existingNameSet = new Set(existingProductNames.map((p) => p.name.toLowerCase()));
     // Build id map keyed by lowercase — reused in Step 3 so no second round-trip needed.
     const existingNameToIdMap = new Map(
@@ -395,29 +397,14 @@ async function _runImport(
 
     const rowsAfterNameFilter = rowsForCreate;
 
-    // ── Pre-check for duplicate barcodes — strip conflicts rather than abort ──
-    // A single duplicate barcode would otherwise throw inside the transaction
-    // and roll back all 1000+ products. Instead we null out the offending
-    // barcode so the product still gets created (can be set manually later).
-    // IMPORTANT: barcode has a GLOBAL @unique constraint (not scoped to businessId).
-    // Must query ALL businesses — not just { businessId } — or a cross-business
-    // collision still causes a P2002 that kills the entire createMany batch.
-    const existingBarcodesRaw = await prisma.product.findMany({
-      where: { barcode: { not: null } },
-      select: { barcode: true },
-    });
-    const existingBarcodeSet = new Set(existingBarcodesRaw.map((p) => p.barcode as string));
-
-    // Also deduplicate within the batch itself (two rows with the same barcode).
+    const existingBarcodesRaw = await prisma.productBarcode.findMany({ where: { businessId }, select: { code: true } });
+    const primaryCodes = await prisma.product.findMany({ where: { businessId, barcode: { not: null } }, select: { barcode: true } });
+    const existingBarcodeSet = new Set([...existingBarcodesRaw.map(p => p.code), ...primaryCodes.map(p => p.barcode!)]);
     const seenBarcodesInBatch = new Set<string>();
-    let barcodesCleared = 0;
-    const rowsToCreate = rowsAfterNameFilter.map((r) => {
-      if (!r.barcode) return r;
-      if (existingBarcodeSet.has(r.barcode) || seenBarcodesInBatch.has(r.barcode)) {
-        barcodesCleared++;
-        return { ...r, barcode: '' }; // strip duplicate; product still created
-      }
-      seenBarcodesInBatch.add(r.barcode);
+    const barcodesCleared = 0;
+    const rowsToCreate = rowsAfterNameFilter.map(r => {
+      if (r.barcode && (existingBarcodeSet.has(r.barcode) || seenBarcodesInBatch.has(r.barcode))) throw new Error(`Barcode ${r.barcode} is duplicated in this business/import. Correct it before importing; no barcode was removed.`);
+      if (r.barcode) seenBarcodesInBatch.add(r.barcode);
       return r;
     });
 
@@ -479,10 +466,10 @@ async function _runImport(
       let barcode = row.barcode || null;
       if (barcode) {
         const conflict = await prisma.product.findFirst({
-          where: { barcode, id: { not: productId } },
+          where: { businessId, OR: [{ barcode }, { barcodes: { some: { code: barcode } } }], id: { not: productId } },
           select: { id: true },
         });
-        if (conflict) barcode = null;
+        if (conflict) throw new Error(`Barcode ${barcode} belongs to another product. No barcode was removed.`);
       }
 
       await prisma.product.update({

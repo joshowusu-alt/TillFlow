@@ -1,4 +1,6 @@
 import PageHeader from '@/components/PageHeader';
+import ProductIdentityFields from '@/components/products/ProductIdentityFields';
+import ProductMarginPreview from '@/components/products/ProductMarginPreview';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import HashScroll from '@/components/HashScroll';
@@ -30,6 +32,10 @@ export default async function ProductDetailPage({
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
   const canGenerateBarcode = user.role !== 'CASHIER' && features.advancedOps;
 
+  if (user.role === 'CASHIER') {
+    const safe = await prisma.product.findFirst({ where: { id: params.id, businessId: business.id }, select: { name: true, publisher: true, edition: true, barcode: true, sellingPriceBasePence: true } });
+    return <div className="card p-6">{safe ? <><h1 className="text-xl font-semibold">{[safe.name, safe.publisher, safe.edition].filter(Boolean).join(' · ')}</h1><p>Barcode: {safe.barcode ?? 'None'}</p><p>Selling price: {formatMoney(safe.sellingPriceBasePence, business.currency)}</p><Link href="/products">Back to products</Link></> : 'Product not found.'}</div>;
+  }
   const [product, units, categories, suppliers] = await Promise.all([
     prisma.product.findFirst({
       where: { id: params.id, businessId: business.id },
@@ -40,6 +46,7 @@ export default async function ProductDetailPage({
             select: { storeId: true, qtyOnHandBase: true, avgCostBasePence: true }
           },
           category: true,
+          barcodes: true,
           preferredSupplier: { select: { id: true, name: true } }
         }
     }),
@@ -191,6 +198,7 @@ export default async function ProductDetailPage({
               <ProductImageInput defaultUrl={product.imageUrl} fileUploadEnabled={fileUploadEnabled} />
             </div>
             <div>
+              <ProductIdentityFields publisher={product.publisher} edition={product.edition} barcodes={product.barcodes.filter(b => b.code !== product.barcode).map(b => b.code)} />
               <label className="label">Category</label>
               <select className="input" name="categoryId" defaultValue={product.categoryId ?? ''}>
                 <option value="">Uncategorised</option>
@@ -243,6 +251,7 @@ export default async function ProductDetailPage({
               </div>
             </div>
             <div>
+              <ProductMarginPreview currency={business.currency} />
               <label className="label">Target Margin Override (%)</label>
               <input
                 className="input"

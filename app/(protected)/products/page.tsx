@@ -1,4 +1,6 @@
 import PageHeader from '@/components/PageHeader';
+import ProductIdentityFields from '@/components/products/ProductIdentityFields';
+import ProductMarginPreview from '@/components/products/ProductMarginPreview';
 import FormError from '@/components/FormError';
 import { AdminProductImage } from '@/components/AdminProductImage';
 import SubmitButton from '@/components/SubmitButton';
@@ -121,7 +123,7 @@ export default async function ProductsPage({
   const productWhere = {
     businessId: business.id,
     active: issueKey === 'MISSING_COST' ? undefined : true,
-    ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
+    ...(q ? { OR: [{ name: { contains: q, mode: 'insensitive' as const } }, { publisher: { contains: q, mode: 'insensitive' as const } }, { edition: { contains: q, mode: 'insensitive' as const } }, { barcode: q }, { barcodes: { some: { code: q } } }] } : {}),
     ...(issueProductWhere ?? {}),
   } as Prisma.ProductWhereInput;
 
@@ -138,7 +140,9 @@ export default async function ProductsPage({
           name: true,
           imageUrl: true,
           sellingPriceBasePence: true,
-          defaultCostBasePence: true,
+          defaultCostBasePence: isManager,
+          publisher: true,
+          edition: true,
           productUnits: {
             select: {
               isBaseUnit: true,
@@ -411,6 +415,7 @@ export default async function ProductsPage({
                     <ProductImageInput fileUploadEnabled={fileUploadEnabled} />
                   </div>
                   <div>
+                    <ProductIdentityFields />
                     <label className="label" htmlFor="create-product-categoryId">Category</label>
                     <select className="input" id="create-product-categoryId" name="categoryId">
                       <option value="">Uncategorised</option>
@@ -463,6 +468,7 @@ export default async function ProductsPage({
                     defaultBaseUnitId={preferredBaseUnitId}
                   />
                 </ProductFormSection>
+                <ProductMarginPreview currency={business.currency} />
                 <ProductFormSection title="Advanced" description="Margin target, tax, and promotions. Leave blank to use business defaults.">
                   <div>
                     <label className="label" htmlFor="create-product-minimumMarginThresholdPercent">Target Margin Override (%)</label>
@@ -544,7 +550,7 @@ export default async function ProductsPage({
                           {product.imageUrl ? (
                             <AdminProductImage
                               src={product.imageUrl}
-                              alt={product.name}
+                              alt={[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                               fallbackChar={product.name.charAt(0)}
                               className="h-10 w-10 rounded-xl object-cover"
                               fallbackClassName="flex h-10 w-10 items-center justify-center rounded-xl bg-accentSoft text-sm font-bold text-accent"
@@ -555,7 +561,7 @@ export default async function ProductsPage({
                             </div>
                           )}
                           <Link href={`/products/${product.id}`} className="min-h-[44px] truncate py-2 hover:underline">
-                            {product.name}
+                            {[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                           </Link>
                         </div>
                       }
@@ -573,7 +579,7 @@ export default async function ProductsPage({
                     />
                     <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                       <DataCardField label="Base price" value={<span className="font-semibold text-ink">{formatMoney(product.sellingPriceBasePence, business.currency)}</span>} />
-                      <DataCardField label="Default cost" value={<span className="font-semibold text-ink">{formatMoney(product.defaultCostBasePence, business.currency)}</span>} />
+                      {isManager ? <DataCardField label="Default cost" value={<span className="font-semibold text-ink">{formatMoney(product.defaultCostBasePence, business.currency)}</span>} /> : null}
                       <DataCardField label="Preferred supplier" value={<span className="text-black/65">{product.preferredSupplier?.name ?? 'None'}</span>} className="col-span-2" />
                       <DataCardField label="Unit display" value={<span className="text-black/65">{unitLabel}</span>} className="col-span-2" />
                     </div>
@@ -608,7 +614,7 @@ export default async function ProductsPage({
                               {issueKey === 'UNUSED_CATALOGUE' ? (
                                 <DeactivateProductIssueButton
                                   productId={product.id}
-                                  productName={product.name}
+                                  productName={[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                                   returnTo={issueReturnHref}
                                 />
                               ) : null}
@@ -635,7 +641,7 @@ export default async function ProductsPage({
                     <th>Product</th>
                     <th className="hidden sm:table-cell">Category</th>
                     <th>Base Price</th>
-                    <th className="hidden lg:table-cell">Default Cost</th>
+                    {isManager ? <th className="hidden lg:table-cell">Default Cost</th> : null}
                     <th className="hidden xl:table-cell">Preferred Supplier</th>
                     <th className="hidden lg:table-cell">{issueKey ? 'Status' : 'Unit Display'}</th>
                     {issueKey ? <th>Actions</th> : null}
@@ -672,7 +678,7 @@ export default async function ProductsPage({
                           {product.imageUrl ? (
                             <AdminProductImage
                               src={product.imageUrl}
-                              alt={product.name}
+                              alt={[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                               fallbackChar={product.name.charAt(0)}
                               className="w-8 h-8 rounded-md object-cover"
                               fallbackClassName="w-8 h-8 rounded-md bg-accentSoft flex items-center justify-center text-xs font-bold text-accent"
@@ -685,7 +691,7 @@ export default async function ProductsPage({
                         </td>
                         <td className="px-3 py-3 font-semibold">
                           <Link href={`/products/${product.id}`} className="hover:underline">
-                            {product.name}
+                            {[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                           </Link>
                         </td>
                         <td className="hidden sm:table-cell px-3 py-3">
@@ -701,7 +707,7 @@ export default async function ProductsPage({
                           )}
                         </td>
                         <td className="px-3 py-3">{formatMoney(product.sellingPriceBasePence, business.currency)}</td>
-                        <td className="hidden lg:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td>
+                        {isManager ? <td className="hidden lg:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td> : null}
                         <td className="hidden xl:table-cell px-3 py-3 text-sm text-black/60">
                           {product.preferredSupplier ? (
                             <Link href={`/suppliers/${product.preferredSupplier.id}`} className="hover:underline">
@@ -748,7 +754,7 @@ export default async function ProductsPage({
                                   {issueKey === 'UNUSED_CATALOGUE' ? (
                                     <DeactivateProductIssueButton
                                       productId={product.id}
-                                      productName={product.name}
+                                      productName={[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                                       returnTo={issueReturnHref}
                                     />
                                   ) : null}

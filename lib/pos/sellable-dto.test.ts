@@ -45,6 +45,7 @@ describe('sellable DTO', () => {
       name: 'Rice 5kg',
       sku: 'RICE-5',
       barcode: '111',
+      additionalBarcodes: [],
       sellingPriceBasePence: 4500,
       vatRateBps: 0,
       isTaxable: true,

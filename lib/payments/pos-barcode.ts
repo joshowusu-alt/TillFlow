@@ -13,6 +13,7 @@ export type PosBarcodeUnit = {
 export type PosBarcodeProduct = {
   id: string;
   barcode: string | null;
+  additionalBarcodes?: string[];
   sellingPriceBasePence?: number;
   units: PosBarcodeUnit[];
 };
@@ -50,7 +51,7 @@ export function resolveBarcodeScan<TProduct extends PosBarcodeProduct>(
   if (!trimmed) return null;
 
   const lookupIndex = index ?? null;
-  const digits = normalizeBarcodeDigits(trimmed);
+  const digits = /^[\d\s-]+$/.test(trimmed) ? normalizeBarcodeDigits(trimmed) : trimmed;
 
   if (lookupIndex) {
     const exact = findProductByExactBarcode(lookupIndex, trimmed);
@@ -79,7 +80,7 @@ export function resolveBarcodeScan<TProduct extends PosBarcodeProduct>(
   } else {
     const product = products.find(
       (candidate) =>
-        candidate.barcode === trimmed ||
+        candidate.barcode === trimmed || candidate.additionalBarcodes?.includes(trimmed) ||
         (candidate.barcode && normalizeBarcodeDigits(candidate.barcode) === digits)
     );
     if (product) {
