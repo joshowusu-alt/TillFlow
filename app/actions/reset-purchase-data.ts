@@ -49,6 +49,7 @@ export async function resetPurchaseData() {
     await prisma.purchasePayment.deleteMany({ where: { purchaseInvoice: { businessId } } });
     await prisma.purchaseReturn.deleteMany({ where: { purchaseInvoice: { businessId } } });
     await prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } });
+    await prisma.purchaseDocument.deleteMany({where:{businessId}});
     await prisma.purchaseInvoice.deleteMany({ where: { businessId } });
 
     const storeIds = await prisma.store.findMany({

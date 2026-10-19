@@ -1,5 +1,6 @@
 'use server';
 
+import {serializePurchaseDocument,restorePurchaseDocument} from '@/lib/purchases/document-backup';
 import { prisma } from '@/lib/prisma';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -30,6 +31,7 @@ export interface BackupData {
     salesPayments: any[];
     salesReturns: any[];
     purchaseInvoices: any[];
+    purchaseDocuments?: any[];
     purchaseInvoiceLines: any[];
     purchasePayments: any[];
     purchaseReturns: any[];
@@ -67,6 +69,7 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             salesPayments,
             salesReturns,
             purchaseInvoices,
+            purchaseDocuments,
             purchaseInvoiceLines,
             purchasePayments,
             purchaseReturns,
@@ -94,6 +97,7 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             prisma.salesPayment.findMany({ where: { salesInvoice: { businessId } } }),
             prisma.salesReturn.findMany({ where: { salesInvoice: { businessId } } }),
             prisma.purchaseInvoice.findMany({ where: { businessId } }),
+            prisma.purchaseDocument.findMany({where:{businessId,purchaseInvoice:{businessId}}}),
             prisma.purchaseInvoiceLine.findMany({ where: { purchaseInvoice: { businessId } } }),
             prisma.purchasePayment.findMany({ where: { purchaseInvoice: { businessId } } }),
             prisma.purchaseReturn.findMany({ where: { purchaseInvoice: { businessId } } }),
@@ -106,7 +110,7 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
         ]);
 
         const backupData: BackupData = {
-            version: '1.1',
+            version: '1.2',
             exportedAt: new Date().toISOString(),
             business,
             stores,
@@ -126,6 +130,7 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             salesPayments,
             salesReturns,
             purchaseInvoices,
+            purchaseDocuments:purchaseDocuments.map(serializePurchaseDocument),
             purchaseInvoiceLines,
             purchasePayments,
             purchaseReturns,
@@ -176,6 +181,9 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
 
     const list = <T = any>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
 
+    const invoiceIds=new Set(list(backup.purchaseInvoices).map(invoice=>invoice.id));
+    const restoredDocuments=list(backup.purchaseDocuments).map(document=>restorePurchaseDocument(document,businessId,invoiceIds));
+
     // Pre-compute bcrypt hashes for users before opening the transaction (CPU-only, no DB).
     const userHashes = new Map<string, string>();
     for (const user of users) {
@@ -196,6 +204,7 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       await tx.journalLine.deleteMany({ where: { journalEntry: { businessId } } });
       await tx.journalEntry.deleteMany({ where: { businessId } });
       await tx.expensePayment.deleteMany({ where: { businessId } });
+      await tx.purchaseInvoice.updateMany({where:{businessId},data:{linkedCostExpenseId:null}});
       await tx.expense.deleteMany({ where: { businessId } });
       await tx.stockAdjustment.deleteMany({ where: { store: { businessId } } });
       await tx.stockMovement.deleteMany({ where: { store: { businessId } } });
@@ -205,6 +214,7 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       await tx.purchasePayment.deleteMany({ where: { purchaseInvoice: { businessId } } });
       await tx.purchaseReturn.deleteMany({ where: { purchaseInvoice: { businessId } } });
       await tx.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } });
+      await tx.purchaseDocument.deleteMany({where:{businessId}});
       await tx.purchaseInvoice.deleteMany({ where: { businessId } });
       await tx.inventoryBalance.deleteMany({ where: { store: { businessId } } });
       await tx.stocktakeLine.deleteMany({ where: { stocktake: { store: { businessId } } } });
@@ -382,8 +392,10 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       }
 
       for (const invoice of list(backup.purchaseInvoices)) {
-        await tx.purchaseInvoice.create({ data: { ...invoice, businessId } });
+        await tx.purchaseInvoice.create({ data: { ...invoice, businessId,linkedCostExpenseId:null } });
       }
+
+      for(const document of restoredDocuments)await tx.purchaseDocument.create({data:document});
 
       for (const line of list(backup.purchaseInvoiceLines)) {
         await tx.purchaseInvoiceLine.create({ data: line });
@@ -399,6 +411,13 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
 
       for (const expense of list(backup.expenses)) {
         await tx.expense.create({ data: { ...expense, businessId } });
+      }
+
+      const expenseIds=new Set(list(backup.expenses).map(expense=>expense.id));
+      for(const invoice of list(backup.purchaseInvoices)){
+        if(!invoice.linkedCostExpenseId)continue;
+        if(!expenseIds.has(invoice.linkedCostExpenseId))throw new Error('A linked purchase expense is missing from this backup.');
+        await tx.purchaseInvoice.update({where:{id:invoice.id},data:{linkedCostExpenseId:invoice.linkedCostExpenseId}});
       }
 
       for (const payment of list(backup.expensePayments)) {
@@ -466,6 +485,7 @@ export async function resetAllDataAction(): Promise<ActionResult<{ message: stri
       // Audit logs
       prisma.auditLog.deleteMany({ where: { businessId } }),
       // Expense payments & expenses
+      prisma.purchaseInvoice.updateMany({where:{businessId},data:{linkedCostExpenseId:null}}),
       prisma.expensePayment.deleteMany({ where: { businessId } }),
       prisma.expense.deleteMany({ where: { businessId } }),
       // Stock
@@ -480,6 +500,7 @@ export async function resetAllDataAction(): Promise<ActionResult<{ message: stri
       prisma.purchasePayment.deleteMany({ where: { purchaseInvoice: { businessId } } }),
       prisma.purchaseReturn.deleteMany({ where: { purchaseInvoice: { businessId } } }),
       prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } }),
+      prisma.purchaseDocument.deleteMany({where:{businessId}}),
       prisma.purchaseInvoice.deleteMany({ where: { businessId } }),
       // Inventory & products
       prisma.inventoryBalance.deleteMany({ where: { store: { businessId } } }),
