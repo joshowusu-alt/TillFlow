@@ -128,10 +128,10 @@ describe('purchases page polish', () => {
   });
 
   it('barcode camera buttons have explicit accessible labels', () => {
-    const purchaseScannerLabels = formSrc.match(/aria-label="Open barcode scanner"/g) ?? [];
+    const purchaseScannerLabels = formSrc.match(/aria-label="Scan barcode with camera"/g) ?? [];
 
     expect(purchaseScannerLabels).toHaveLength(2);
-    expect(barcodeScanSrc).toContain('aria-label="Open barcode scanner"');
+    expect(barcodeScanSrc).toContain('aria-label="Scan barcode with camera"');
     expect(formSrc).toContain('title="Scan with camera"');
     expect(barcodeScanSrc).toContain('title="Scan with camera"');
   });
