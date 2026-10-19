@@ -96,7 +96,7 @@ export default async function ProductDetailPage({
   return (
     <div className="space-y-6">
       <HashScroll />
-      <PageHeader title={product.name} subtitle="Product detail and unit breakdown." secondaryCta={{ label: '← Back to products', href: '/products' }} />
+      <PageHeader title={[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")} subtitle="Product detail and unit breakdown." secondaryCta={{ label: '← Back to products', href: '/products' }} />
 
       {/* Hero row with image + summary */}
       <div className="card flex flex-col gap-6 p-6 sm:flex-row">
@@ -108,7 +108,7 @@ export default async function ProductDetailPage({
           </div>
         )}
         <div>
-          <h2 className="text-xl font-semibold">{product.name}</h2>
+          <h2 className="text-xl font-semibold">{[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}</h2>
           {product.category ? (
             <span className="inline-block mt-1 rounded-full px-2.5 py-0.5 text-xs font-medium text-white" style={{ backgroundColor: product.category.colour }}>
               {product.category.name}
