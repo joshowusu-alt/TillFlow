@@ -4,7 +4,7 @@ const {create}=vi.hoisted(()=>({create:vi.fn()}));
 vi.mock('@/app/actions/categories',()=>({quickCreateCategoryAction:create}));
 import ProductCategoryField from './ProductCategoryField';
 it('selects a group with its full path and automatically derives the umbrella category',()=>{
-  const view=render(<ProductCategoryField categories={[{id:'books',name:'Literature'},{id:'other',name:'Other'}]} defaultValue="other" divisions={[{id:'bibles',name:'Bibles',categoryId:'books',groups:[{id:'study',name:'Study Bibles'}]}]}/>);
+  const view=render(<ProductCategoryField categories={[{id:'books',name:'Literature'},{id:'other',name:'Other'}]} divisions={[{id:'bibles',name:'Bibles',categoryId:'books',groups:[{id:'study',name:'Study Bibles'}]}]}/>);
   fireEvent.click(screen.getByText('Division and group (optional)'));
   fireEvent.change(screen.getByLabelText('Group'),{target:{value:'study'}});
   expect(screen.getByLabelText('Category')).toHaveValue('books');

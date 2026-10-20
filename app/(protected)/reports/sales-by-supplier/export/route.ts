@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { formatMoney } from '@/lib/format';
 import { resolveSelectableReportDateRange } from '@/lib/reports/date-parsing';
 import { getSupplierSalesReport } from '@/lib/reports/supplier-sales';
 import { guardLiveReport } from '@/lib/entitlements/live-report';
@@ -30,7 +29,7 @@ export async function GET(request: Request) {
 
   // Build flat rows: one row per (supplier, product) combination.
   const rows: string[][] = [
-    ['Sales by Linked Supplier', `${fromInputValue} to ${toInputValue}`],
+    ['Sales by Linked Supplier', `${fromInputValue} to ${toInputValue}`, `Currency: ${currency}`],
     [
       'Note: This report shows sales for products linked to each supplier via their preferred supplier setting. ' +
         'It does not track the exact supplier source of each inventory unit sold. Net sales exclude tax and include discounts. Cost comes from the historical sale. Calculated gross profit is not retained shop earnings or a supplier settlement amount.',
@@ -47,7 +46,7 @@ export async function GET(request: Request) {
         '—',
         '—',
         '0',
-        formatMoney(0, currency),
+        '0.00',
         '0',
         '0.00', '0.00', '0.00', '',
       ]);
@@ -58,7 +57,7 @@ export async function GET(request: Request) {
           product.productName,
           product.sku ?? '',
           product.qtyBase.toString(),
-          formatMoney(product.revenuePence, currency),
+          (product.revenuePence / 100).toFixed(2),
           product.salesCount.toString(),
           (product.netRevenuePence/100).toFixed(2),
           product.costPence===null?'Incomplete costs':(product.costPence/100).toFixed(2),
@@ -75,7 +74,7 @@ export async function GET(request: Request) {
       '',
       '',
       '',
-      formatMoney(report.unallocatedSalesDifferencePence, currency),
+      (report.unallocatedSalesDifferencePence / 100).toFixed(2),
       '',
       '', '', '', '',
     ]);
@@ -88,20 +87,22 @@ export async function GET(request: Request) {
     '',
     '',
     report.totalQtyBase.toString(),
-    formatMoney(report.totalRevenuePence, currency),
+    (report.totalRevenuePence / 100).toFixed(2),
     '',
     '', '', '', '',
   ]);
 
   const csv = rows
     .map((row) => row.map((cell) => `"${(cell ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n');
+    .join('\r\n');
 
   const filename = `supplier-sales-${fromInputValue}-to-${toInputValue}.csv`;
 
-  return new NextResponse(csv, {
+  // UTF-8 BOM lets Excel recognise names and symbols without corrupting them.
+  // Monetary columns remain numeric; the currency is recorded in the header.
+  return new NextResponse('\uFEFF' + csv, {
     headers: {
-      'Content-Type': 'text/csv',
+      'Content-Type': 'text/csv; charset=utf-8',
       'Cache-Control': 'private, no-store',
       'Content-Disposition': `attachment; filename="${filename}"`,
     },

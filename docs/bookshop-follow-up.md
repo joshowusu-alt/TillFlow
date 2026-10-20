@@ -47,7 +47,7 @@ entries. Unknown costs remain incomplete. Source links open the sale or expense
 where available. Profit details show each sale's revenue and cost, and the signed
 effect of expenses and other income.
 
-1. Products → Categories: add a division beneath an existing category, then add
+1. Stock → Products → Categories & groups: add a division beneath an existing category, then add
    a group beneath that division. In product create/edit, choose the group and
    confirm its category fills automatically. A category-only product still works.
 2. Products: filter by category, division or group. Export products and confirm
@@ -61,10 +61,19 @@ effect of expenses and other income.
 4. Purchases: receive against a delivery note, then open Awaiting invoice. Attach
    the later invoice and its original reference in purchase details. This closes
    the follow-up flag without receiving stock or paying the supplier again.
-5. Reports → Sales by supplier: choose dates and optional classification filters,
+5. Reports → Activity → Sales by linked supplier: choose dates and optional classification filters,
    drill into a supplier, then export. Check quantity, sales, net sales excluding
    tax, historical cost, calculated gross profit and margin. Missing historical
    costs show as incomplete; current product cost is not substituted.
+
+The classification setup now explains all three steps and offers Add group beside
+each division. Saving a division selects it as the parent for the next group.
+Product forms offer division/group selection within the chosen category, plus a
+setup link that preserves the product form in its existing tab. Simple categories
+remain sufficient. The supplier table keeps View products visible at the right
+edge while scrolling. Its CSV uses numeric monetary columns, a currency header and
+UTF-8 encoding for Excel. Reports use the available app width consistently with
+Stock and Sell; wide tables scroll within the page on smaller screens.
 
 The first implementation creates hierarchy nodes with fixed parents. Renaming,
 reparenting and deletion screens, bulk pricing, product history, cashier shortcuts

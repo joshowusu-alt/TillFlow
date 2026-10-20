@@ -320,7 +320,7 @@ export default async function ProductsPage({
           <ProductStatCard
             label="Categories"
             value={categories.length.toLocaleString('en-GH')}
-            helper="Available product groups"
+            helper="Categories for your catalogue"
           />
           <ProductStatCard
             label="Suppliers available"
@@ -343,7 +343,7 @@ export default async function ProductsPage({
             href="/products?tab=categories"
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'categories' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
           >
-            Categories ({categories.length})
+            Categories & groups ({categories.length})
           </Link>
         </div>
       ) : null}
@@ -351,6 +351,7 @@ export default async function ProductsPage({
       {/* ───── Products Tab ───── */}
       {(activeTab === 'products' || issueActive) && !issueResolved && (
         <>
+          {!issueActive ? <p className="text-sm text-ink/60">Use categories on their own, or <Link href="/products?tab=categories" className="font-semibold text-accent underline">set up categories, divisions and groups</Link> for more detail.</p> : null}
           {searchParams?.created === '1' && !issueActive && (
             <div role="status" data-testid="product-created-banner" className="flex items-center gap-3 rounded-2xl border border-success/20 bg-success/5 px-5 py-3.5">
               <svg className="h-5 w-5 flex-shrink-0 text-success" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">

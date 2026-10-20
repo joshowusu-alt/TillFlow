@@ -190,6 +190,7 @@ describe('surface catalogue contract', () => {
       'app/(protected)/reports/sales/page.tsx',
       'app/(protected)/reports/sales-by-supplier/page.tsx',
       'app/(protected)/reports/sales-by-supplier/export/route.ts',
+      'app/(protected)/reports/sales-by-supplier/export/route.test.ts',
       'app/(protected)/reports/stock-movements/page.tsx',
       'app/(protected)/reports/weekly-digest/page.tsx',
       'app/(protected)/reports/layout.tsx',

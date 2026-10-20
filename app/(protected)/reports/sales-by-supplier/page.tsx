@@ -379,7 +379,7 @@ export default async function SalesBySupplierPage({
                 <th className="hidden lg:table-cell">Sales count</th>
                 <th className="hidden xl:table-cell">Average sale value</th>
                 <th>Net sales</th><th>Recorded cost</th><th>Calculated gross profit</th><th>Margin</th>
-                <th></th>
+                <th className="sticky right-0 bg-slate-50" scope="col">Details</th>
               </tr>
             </thead>
             <tbody>
@@ -423,7 +423,7 @@ export default async function SalesBySupplierPage({
                       {row.avgSaleValuePence > 0 ? formatMoney(row.avgSaleValuePence, business.currency) : <span className="text-black/30">—</span>}
                     </td>
                     <ProfitCells row={row} currency={business.currency}/>
-                    <td className="px-3 py-3 text-sm">
+                    <td className="sticky right-0 bg-white px-3 py-3 text-sm shadow-[-4px_0_6px_-5px_rgba(15,23,42,0.3)]">
                       <Link
                         href={reportHref({
                           period: periodInputValue,
@@ -432,6 +432,7 @@ export default async function SalesBySupplierPage({
                           supplierId: row.supplierId,
                         })}
                         className="btn-ghost text-xs whitespace-nowrap"
+                        aria-label={`View products for ${row.supplierName}`}
                       >
                         View products
                       </Link>

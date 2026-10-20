@@ -596,6 +596,16 @@ async function run() {
     step('12/12 Expense payment OK');
 
     step('BONUS Income Statement supporting records');
+    const reportOwner = await prisma.user.findUnique({ where: { email: OWNER_EMAIL }, select: { businessId: true } });
+    const originalPlan = await prisma.business.findUniqueOrThrow({ where: { id: reportOwner.businessId }, select: { plan: true, selectedPlan: true } });
+    // CI seeds Starter. This Growth report needs an entitled synthetic fixture;
+    // never change a hosted business or relax the application's report policy.
+    const needsReportFixture = originalPlan.plan === 'STARTER';
+    if (needsReportFixture && (!['localhost', '127.0.0.1'].includes(new URL(BASE_URL).hostname) || !String(process.env.DATABASE_URL).startsWith('file:'))) {
+      throw new Error('Income Statement fixture requires a local SQLite test business.');
+    }
+    if (needsReportFixture) await prisma.business.update({ where: { id: reportOwner.businessId }, data: { plan: 'GROWTH', selectedPlan: 'GROWTH' } });
+    try {
     await page.goto(`${BASE_URL}/reports/income-statement`, { waitUntil: 'networkidle' });
     const revenueRecords = page.getByRole('link', { name: /^View Revenue supporting records:/ }).first();
     await revenueRecords.waitFor({ state: 'visible' });
@@ -607,6 +617,28 @@ async function run() {
     await page.getByRole('link', { name: '← Income Statement', exact: true }).click();
     await page.waitForURL(url => url.pathname === '/reports/income-statement' && ['from', 'to'].every(key => url.searchParams.get(key) === detailUrl.searchParams.get(key)));
     step('BONUS Income Statement supporting records OK');
+    for (const width of [390, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${BASE_URL}/reports/sales-by-supplier`, { waitUntil: 'networkidle' });
+      const viewProducts = page.getByRole('link', { name: /^View products for / }).first();
+      await viewProducts.waitFor({ state: 'visible' });
+      const geometry = await viewProducts.evaluate(el => {
+        const box = el.getBoundingClientRect(), shell = el.closest('.responsive-table-shell').getBoundingClientRect();
+        const canvas = el.closest('[data-reports-canvas]').getBoundingClientRect();
+        const main = document.querySelector('.app-main-shell'), style = getComputedStyle(main);
+        return { left: box.left, right: box.right, shellLeft: shell.left, shellRight: shell.right,
+          canvasWidth: canvas.width, available: main.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+          pageWidth: document.documentElement.scrollWidth, viewport: window.innerWidth };
+      });
+      if (geometry.left < geometry.shellLeft - 1 || geometry.right > geometry.shellRight + 1 || geometry.pageWidth > geometry.viewport || Math.abs(geometry.canvasWidth - geometry.available) > 2) {
+        throw new Error(`Supplier responsive layout: ${JSON.stringify(geometry)}`);
+      }
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
+    step('BONUS Supplier action and fluid report widths OK');
+    } finally {
+      if (needsReportFixture) await prisma.business.update({ where: { id: reportOwner.businessId }, data: originalPlan });
+    }
 
     // Backup export + restore (run at end because restore invalidates sessions/passwords)
     step('BONUS Backup export + restore');
