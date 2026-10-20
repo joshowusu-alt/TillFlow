@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { isSqliteRuntimeEnv } from '@/lib/database-runtime';
 import { getFeatures, type BusinessPlan, type BusinessMode, type StoreMode } from '@/lib/features';
 import { getProductPriceWarnings } from '@/lib/product-price-guards';
 import { BULK_PRICING_LIMIT, MAX_PRICE_PENCE, BulkPricingError, calculateBulkPrice, parseBulkPricingInput,
@@ -29,15 +30,14 @@ async function loadProducts(db: Db, businessId: string, input: BulkPricingInput)
     ...(input.divisionId ? { divisionId: input.divisionId } : {}),
     division: { businessId, ...(input.categoryId ? { categoryId: input.categoryId } : {}) },
   }, select: { id: true } })) throw new BulkPricingError('Choose a group within the selected division and category.');
+  const textSearch = { contains: input.search, ...(!isSqliteRuntimeEnv() ? { mode: 'insensitive' as const } : {}) };
   const products = await db.product.findMany({ where: {
     businessId, active: true,
     ...(input.categoryId ? { categoryId: input.categoryId } : {}),
     ...(input.divisionId ? { group: { divisionId: input.divisionId } } : {}),
     ...(input.groupId ? { groupId: input.groupId } : {}),
     ...(input.search ? { OR: [
-      { name: { contains: input.search, mode: 'insensitive' } },
-      { publisher: { contains: input.search, mode: 'insensitive' } },
-      { edition: { contains: input.search, mode: 'insensitive' } },
+      { name: textSearch }, { publisher: textSearch }, { edition: textSearch },
       { barcode: input.search }, { barcodes: { some: { code: input.search } } },
     ] } : {}),
   } as Prisma.ProductWhereInput, select, orderBy: { id: 'asc' }, take: BULK_PRICING_LIMIT + 1 });
@@ -137,7 +137,8 @@ export async function applyBulkPricing(actor: { businessId: string; id: string; 
         entity: 'Product', entityType: 'Product', entityId: row.id, reason,
         beforeState: JSON.stringify({ sellingPriceBasePence: row.baseBefore, units: row.prices.map(p => ({ id: p.id, sellingPricePence: p.beforeOverride, effectivePricePence: p.before })) }),
         afterState: JSON.stringify({ sellingPriceBasePence: row.baseAfter, units: row.prices.map(p => ({ id: p.id, sellingPricePence: p.afterOverride, effectivePricePence: p.after })) }),
-        details: JSON.stringify({ batchId, source: 'BULK_PRICING', input, warnings: row.warnings }),
+        details: JSON.stringify({ batchId, source: 'BULK_PRICING', input, warnings: row.warnings,
+          catalogueBaseCostPence: row.baseCost, unitCosts: row.prices.map(p => ({ id: p.id, costPence: p.cost })) }),
       })) });
       return { updated: rows.length, batchId };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20_000 });

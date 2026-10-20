@@ -30,6 +30,13 @@ it('preserves explicit pack prices and previews inherited pack changes in base-o
   expect(p.rows[0].prices.map(p => [p.id, p.before, p.after, p.afterOverride])).toEqual([['copy', 1000, 1200, 1200], ['pack', 2700, 2700, 2700], ['inherited', 2000, 2400, null]]);
   expect(db.product.findMany.mock.calls[0][0]).toMatchObject({ where: { businessId: 'business', active: true }, take: 201 });
 });
+it('uses a SQLite-compatible text search without widening the product or barcode scope', async () => {
+  await previewBulkPricing('business', { ...input, search: 'Book' });
+  expect(db.product.findMany.mock.calls[0][0].where).toMatchObject({ businessId: 'business', active: true, OR: [
+    { name: { contains: 'Book' } }, { publisher: { contains: 'Book' } }, { edition: { contains: 'Book' } }, { barcode: 'Book' }, { barcodes: { some: { code: 'Book' } } },
+  ] });
+  expect(db.product.findMany.mock.calls[0][0].where.OR[0].name).not.toHaveProperty('mode');
+});
 it('uses each unit cost for cost-plus pricing and exposes markup rather than margin', async () => {
   db.product.findMany.mockResolvedValue([product({ productUnits: [unit('copy', 1), unit('pack', 3, 2700, 1500)] })]);
   const p = await previewBulkPricing(actor.businessId, { ...input, basis: 'CATALOGUE_COST', units: 'ALL_UNITS' });
@@ -91,6 +98,7 @@ it('updates only selected prices and commits before/after audit records in the s
   expect(audit).toMatchObject({ businessId: 'business', entityId: 'p1', userId: 'owner', action: 'PRICE_CHANGE', reason: 'Supplier price increase' });
   expect(JSON.parse(audit.beforeState).sellingPriceBasePence).toBe(1000);
   expect(JSON.parse(audit.afterState).sellingPriceBasePence).toBe(1200);
+  expect(JSON.parse(audit.details).catalogueBaseCostPence).toBe(600);
 });
 it('aborts when optimistic product or unit guards fail; audit failures propagate for transaction rollback', async () => {
   const r = await request();
