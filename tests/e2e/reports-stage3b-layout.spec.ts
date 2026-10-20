@@ -202,7 +202,7 @@ for (const width of [390, 1440, 1920]) {
     fs.mkdirSync(evidence, { recursive: true });
     await page.screenshot({ path: path.join(evidence, `analytics-${width}.png`), fullPage: true });
     await open(page, 'movement');
-    const sections = page.locator('[data-movement-charts] > section');
+    const sections = page.locator('[data-movement-charts]').getByRole('heading', { level: 2 }).filter({ hasText: /^(Current and earlier period|Largest product changes)$/ });
     const first = await sections.nth(0).boundingBox(), second = await sections.nth(1).boundingBox();
     if (width >= 1280) expect(Math.abs(first!.y - second!.y)).toBeLessThan(2);
     else expect(second!.y).toBeGreaterThan(first!.y);

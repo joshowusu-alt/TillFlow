@@ -123,7 +123,7 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
 
       <p className="text-sm leading-6 text-slate-600">Refunds are shown separately here. Confirmed receipts are different from Today’s net money received.</p>
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-2" data-movement-charts>
+      <div className="grid min-w-0 items-start gap-4 xl:grid-cols-2" data-movement-charts>
       <ReportSection title="Current and earlier period" description="The same dates and branch selection as the figures above.">
         <PeriodComparisonChart columns currency={currency} currentLabel={chrome.currentFull} previousLabel={chrome.comparisonFull} rows={[
           { name: 'Sales', current: result.headline.salesValuePence.current, previous: result.headline.salesValuePence.comparison },
@@ -133,9 +133,18 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
           ] : []),
         ]} />
       </ReportSection>
+      <div className="min-w-0 space-y-4">
       <ReportSection title="Largest product changes" description="Recorded sales changes in the ranked product list. An increase or decrease does not establish its cause.">
         <ReportValueBars compact diverging currency={currency} rows={productMovers.slice(0, 6).map(row => ({ label: row.productName, pence: row.changePence, helper: row.side === 'New product' ? 'No sales in the earlier period' : row.side, href: `/products/${encodeURIComponent(row.productId)}` }))} empty="No material product changes for these periods." />
       </ReportSection>
+        <ReportSection title="Money movement" description="Separate payment measures for the selected dates. These are not profit.">
+          {queryFailed ? <p className="text-sm text-slate-600">Payment figures could not be loaded.</p> : <ReportValueBars compact currency={currency} rows={[
+            { label: 'Confirmed receipts', pence: result.money.moneyReceived.current },
+            { label: 'Refund outflows', pence: result.money.refundOutflows.current },
+            { label: 'MoMo awaiting confirmation', pence: result.money.needsMomoConfirmation.current },
+          ]} />}
+        </ReportSection>
+      </div>
       </div>
       <details className="rounded-xl border border-slate-200 bg-white px-3 py-1">
         <summary className="flex min-h-11 w-fit max-w-full cursor-pointer items-center rounded-lg px-1 text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">Change period or branch</summary>
@@ -181,27 +190,20 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
 
 
       <div className="grid min-w-0 items-start gap-4 xl:grid-cols-3">
-        <ReportSection title="Money movement" description="Separate payment measures for the selected dates. These are not profit.">
-          {queryFailed ? <p className="text-sm text-slate-600">Payment figures could not be loaded.</p> : <ReportValueBars compact currency={currency} rows={[
-            { label: 'Confirmed receipts', pence: result.money.moneyReceived.current },
-            { label: 'Refund outflows', pence: result.money.refundOutflows.current },
-            { label: 'MoMo awaiting confirmation', pence: result.money.needsMomoConfirmation.current },
-          ]} />}
-        </ReportSection>
-      <section className="space-y-3">
+      <section className="space-y-3 xl:col-span-2">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">What to look at</h2>
           <p className="text-sm text-slate-600">
             Recorded changes to review in {chrome.currentFull}.
           </p>
         </div>
-        <div className="grid gap-3 lg:grid-cols-1">
+        <div className="grid gap-3 lg:grid-cols-2">
           {insights.slice(0, 2).map((insight) => (
             <BusinessMovementInsight key={insight.id} insight={insight} labels={chrome} currency={currency} />
           ))}
         </div>
         {insights.length === 0 ? <p className="text-sm text-slate-600">No material recorded changes for these periods.</p> : null}
-        {insights.length > 2 ? <ReportDisclosure title={`More recorded changes (${insights.length - 2})`}><div className="grid gap-3 lg:grid-cols-1">{insights.slice(2).map(insight => <BusinessMovementInsight key={insight.id} insight={insight} labels={chrome} currency={currency} />)}</div></ReportDisclosure> : null}
+        {insights.length > 2 ? <ReportDisclosure title={`More recorded changes (${insights.length - 2})`}><div className="grid gap-3 lg:grid-cols-2">{insights.slice(2).map(insight => <BusinessMovementInsight key={insight.id} insight={insight} labels={chrome} currency={currency} />)}</div></ReportDisclosure> : null}
       </section>
         <ReportSection title="Cashier sales" description={`Recorded sales attributed to each cashier in ${chrome.currentFull}. This is not a measure of individual productivity.`}>
           <ReportValueBars compact currency={currency} rows={result.cashiers.slice(0, 5).map(row => ({ label: row.cashierName, pence: row.salesValuePence.current }))} empty="No cashier-attributed sales in this period." />

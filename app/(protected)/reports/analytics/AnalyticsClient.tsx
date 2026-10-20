@@ -64,7 +64,7 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData; kpis?: 
         {data.netCategoryData ? <SalesMixChart compact title="Net sales by category" rows={data.netCategoryData} currency={c} /> : <p className="text-sm text-slate-600">Net category figures are available in Classification performance.</p>}
       </ReportSection>
     </div>
-    <div className="grid min-w-0 gap-4 xl:grid-cols-3">
+    <div className="grid min-w-0 items-start gap-4 xl:grid-cols-3">
       <ReportSection title="Top products by sales" description="Top five shown here. Open the figures for all ranked products and any unallocated difference.">
         <ReportChartData title="Top products" columns={['Product', 'Revenue']} rows={data.productData.map(row => [row.name, money(row.revenue)])}>
           <ReportValueBars compact currency={c} rows={data.productData.slice(0, 5).map(row => ({ label: row.name, pence: row.revenue }))} empty="No product sales in this period." />
