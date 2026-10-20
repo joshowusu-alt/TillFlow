@@ -413,6 +413,16 @@ async function run() {
     // one - only the /purchases list page does).
     await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
     const createdInvoiceId = new URL(page.url()).pathname.split('/').pop();
+    const amountHeaders = page.getByRole('columnheader', { name: /^(Unit Cost|Line Total)$/i });
+    if (await amountHeaders.count() !== 2) throw new Error('Purchase amount headings are missing');
+    const alignment = await amountHeaders.evaluateAll(headers => headers.map(header => {
+      const index = Array.from(header.parentElement.children).indexOf(header);
+      const cell = header.closest('table').querySelector('tbody tr').children[index];
+      const headingText = document.createRange(), amountText = document.createRange();
+      headingText.selectNodeContents(header); amountText.selectNodeContents(cell);
+      return { label: header.textContent, difference: Math.abs(headingText.getBoundingClientRect().right - amountText.getBoundingClientRect().right) };
+    }));
+    if (alignment.some(column => column.difference > 2)) throw new Error(`Purchase column alignment: ${JSON.stringify(alignment)}`);
     if (!createdInvoiceId) {
       await screenshotStep(page, '05-purchase-no-return-link');
       throw new Error('Could not determine invoice id after creating purchase');
@@ -583,6 +593,19 @@ async function run() {
     await page.waitForTimeout(3000);
     report.payments.expensePayment = true;
     step('12/12 Expense payment OK');
+
+    step('BONUS Income Statement supporting records');
+    await page.goto(`${BASE_URL}/reports/income-statement`, { waitUntil: 'networkidle' });
+    const revenueRecords = page.getByRole('link', { name: 'View Revenue supporting records', exact: true }).first();
+    await revenueRecords.waitFor({ state: 'visible' });
+    const detailUrl = new URL(await revenueRecords.getAttribute('href'), BASE_URL);
+    await revenueRecords.click();
+    await page.waitForURL(url => url.pathname === '/reports/income-statement/entries' && url.searchParams.get('metric') === 'revenue');
+    await page.getByRole('heading', { name: 'Revenue — supporting records', exact: true }).waitFor();
+    await page.locator('a[href^="/sales/"]').first().waitFor({ state: 'visible' });
+    await page.getByRole('link', { name: '← Income Statement', exact: true }).click();
+    await page.waitForURL(url => url.pathname === '/reports/income-statement' && ['from', 'to'].every(key => url.searchParams.get(key) === detailUrl.searchParams.get(key)));
+    step('BONUS Income Statement supporting records OK');
 
     // Backup export + restore (run at end because restore invalidates sessions/passwords)
     step('BONUS Backup export + restore');

@@ -9,6 +9,7 @@ import {
   incompleteStockDisclosureMessage,
 } from '@/lib/reports/incomplete-stock';
 import { evaluateMarginSet, type MarginReturnKind } from '@/lib/reports/margin-line';
+import { saleIncomeContribution, type IncomeStatementContribution } from './income-statement-breakdown';
 
 type AccountType = 'ASSET' | 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'EQUITY';
 
@@ -26,17 +27,18 @@ function applyBalance(type: AccountType, debit: number, credit: number) {
   return credit - debit;
 }
 
-async function _getIncomeStatement(businessId: string, startIso: string, endIso: string, db: Prisma.TransactionClient = prisma) {
+async function _getIncomeStatement(businessId: string, startIso: string, endIso: string, db: Prisma.TransactionClient = prisma, withEntries = false) {
   const start = new Date(startIso);
   const end = new Date(endIso);
 
-  const [saleInvoices, grouped, accounts] = await Promise.all([
+  const [saleInvoices, grouped, accounts, journalLines] = await Promise.all([
     db.salesInvoice.findMany({
       where: {
         businessId,
         createdAt: { gte: start, lt: end },
       },
       select: {
+        id: true, createdAt: true, transactionNumber: true,
         paymentStatus: true,
         discountPence: true,
         salesReturn: { select: { type: true } },
@@ -62,13 +64,22 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
     }),
     db.account.findMany({
       where: { businessId },
-      select: { id: true, code: true, type: true },
+      select: { id: true, code: true, name: true, type: true },
     }),
+    withEntries ? db.journalLine.findMany({
+      where: { account: { businessId, OR: [
+        { type: 'EXPENSE', code: { not: ACCOUNT_CODES.cogs } },
+        { type: 'INCOME', code: { not: ACCOUNT_CODES.sales } },
+      ] }, journalEntry: { businessId, entryDate: { gte: start, lt: end } } },
+      select: { id: true, accountId: true, debitPence: true, creditPence: true, journalEntry: {
+        select: { id: true, entryDate: true, description: true, referenceType: true, referenceId: true },
+      } },
+    }) : Promise.resolve([]),
   ]);
 
   const accountMap = new Map(accounts.map(a => [a.id, a]));
 
-  const margin = evaluateMarginSet(saleInvoices.map((invoice) => {
+  const marginInvoices = saleInvoices.map((invoice) => {
     let returnKind: MarginReturnKind = 'NONE';
     if (invoice.salesReturn?.type === 'VOID' && invoice.paymentStatus === 'VOID') returnKind = 'FULL_VOID';
     else if (invoice.salesReturn?.type === 'RETURN' && invoice.paymentStatus === 'RETURNED') returnKind = 'FULL_RETURN';
@@ -86,7 +97,8 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
         defaultCostBasePence: line.product.defaultCostBasePence,
       })),
     };
-  }));
+  });
+  const margin = evaluateMarginSet(marginInvoices);
   const revenue = margin.recognisedSalesPence;
   const grossProfit = margin.grossProfitPence;
   const cogs = grossProfit == null ? null : revenue - grossProfit;
@@ -112,6 +124,30 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
 
   const incomplete = await getIncompleteStockSnapshot(businessId, db);
 
+  const entries: IncomeStatementContribution[] = [];
+  if (withEntries) {
+    saleInvoices.forEach((invoice, index) => {
+      const entry = saleIncomeContribution({ id: invoice.id, date: invoice.createdAt.toISOString(),
+        label: invoice.transactionNumber || 'Sale', margin: marginInvoices[index] });
+      if (entry) entries.push(entry);
+    });
+    for (const line of journalLines) {
+      const account = accountMap.get(line.accountId);
+      if (!account) continue;
+      const expense = account.type === 'EXPENSE' && account.code !== ACCOUNT_CODES.cogs;
+      const income = account.type === 'INCOME' && account.code !== ACCOUNT_CODES.sales;
+      if (!expense && !income) continue;
+      const journal = line.journalEntry;
+      const href = journal.referenceId && journal.referenceType === 'EXPENSE' ? `/expenses/${encodeURIComponent(journal.referenceId)}`
+        : journal.referenceId && journal.referenceType === 'PURCHASE_INVOICE' ? `/purchases/${encodeURIComponent(journal.referenceId)}` : null;
+      entries.push({ id: `journal:${line.id}`, date: journal.entryDate.toISOString(), label: account.name,
+        description: journal.description, href, kind: expense ? 'expense' : 'other-income',
+        revenuePence: 0, costPence: 0, profitPence: 0,
+        amountPence: applyBalance(account.type as AccountType, line.debitPence, line.creditPence),
+      });
+    }
+  }
+
   return {
     revenue,
     cogs,
@@ -124,6 +160,7 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
     stockValueIncomplete: incomplete.stockValueIncomplete,
     profitMayBeIncomplete: incomplete.profitMayBeIncomplete,
     incompleteStockMessage: incompleteStockDisclosureMessage(incomplete),
+    entries,
   };
 }
 
@@ -132,6 +169,20 @@ const cachedIncomeStatement = unstable_cache(
   ['report-income-statement'],
   { revalidate: 300, tags: ['reports'] }
 );
+
+const cachedIncomeStatementBreakdown = unstable_cache(
+  (businessId: string, startIso: string, endIso: string) => prisma.$transaction(
+    tx => _getIncomeStatement(businessId, startIso, endIso, tx, true),
+    { isolationLevel: 'Serializable', maxWait: 5000, timeout: 15000 },
+  ),
+  ['report-income-statement-breakdown'],
+  { revalidate: 300, tags: ['reports'] },
+);
+
+/** Summary and drilldown share one cached, consistent read and calculation basis. */
+export function getIncomeStatementBreakdown(businessId: string, start: Date, end: Date) {
+  return cachedIncomeStatementBreakdown(businessId, start.toISOString(), end.toISOString());
+}
 
 export function getIncomeStatement(businessId: string, start: Date, end: Date) {
   return measureServerOperation(

@@ -38,6 +38,15 @@ an extension of that work, not a replacement architecture.
 
 ## Preview review checklist
 
+Follow-up review: purchase Unit Cost and Line Total headings align with their
+amounts. In Reports → More reports → Income Statement, tap a monetary figure in
+the cards or statement rows to open its supporting records. The date range is
+preserved on detail, pagination and return links. Sales and historical costs use
+the same calculation as the statement; posted operating costs use the same ledger
+entries. Unknown costs remain incomplete. Source links open the sale or expense
+where available. Profit details show each sale's revenue and cost, and the signed
+effect of expenses and other income.
+
 1. Products → Categories: add a division beneath an existing category, then add
    a group beneath that division. In product create/edit, choose the group and
    confirm its category fills automatically. A category-only product still works.

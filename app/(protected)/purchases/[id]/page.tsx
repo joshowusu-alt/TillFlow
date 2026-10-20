@@ -327,8 +327,8 @@ export default async function PurchaseInvoicePage({
               <tr>
                 <th>Product</th>
                 <th>Qty</th>
-                <th className="text-right">Unit Cost</th>
-                <th className="text-right">Line Total</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Unit Cost</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Line Total</th>
               </tr>
             </thead>
             <tbody>
