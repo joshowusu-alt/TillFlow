@@ -626,7 +626,7 @@ async function run() {
     const divisionName = `CI division ${stamp}`, groupName = `CI group ${stamp}`;
     await page.getByLabel('Division name').fill(divisionName);
     await page.getByRole('button', { name: 'Add division', exact: true }).click();
-    await page.getByRole('status').filter({ hasText: `Division “${divisionName}” saved.` }).waitFor();
+    await page.getByText(divisionName, { exact: true }).waitFor();
     const savedDivision = await prisma.productDivision.findFirstOrThrow({ where: { businessId: reportOwner.businessId, categoryId: classificationCategoryId, name: divisionName } });
     const classificationDivisionId = savedDivision.id;
     // Reload persisted setup before the next submit; don't type into an in-flight RSC refresh.
@@ -634,7 +634,7 @@ async function run() {
     await page.getByRole('button', { name: `Add group under ${divisionName}`, exact: true }).click();
     await page.getByLabel('Group name').fill(groupName);
     await page.getByRole('button', { name: 'Add group', exact: true }).click();
-    await page.getByRole('status').filter({ hasText: `Group “${groupName}” saved.` }).waitFor();
+    await page.getByText(`Groups: ${groupName}`, { exact: true }).waitFor();
     const classificationGroup = await prisma.productGroup.findFirstOrThrow({ where: { businessId: reportOwner.businessId, divisionId: classificationDivisionId, name: groupName } });
     const classifiedSale = await prisma.salesInvoice.findFirstOrThrow({ where: { businessId: reportOwner.businessId, paymentStatus: 'PAID', lines: { some: {} } }, select: { lines: { take: 1, select: { productId: true } } } });
     const classifiedProduct = await prisma.product.findUniqueOrThrow({ where: { id: classifiedSale.lines[0].productId }, select: { id: true, name: true } });
@@ -642,6 +642,8 @@ async function run() {
     await prisma.product.update({ where: { id: classifiedProduct.id }, data: { barcode: null } });
     await page.goto(`${BASE_URL}/products/${classifiedProduct.id}`, { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: 'Generate', exact: true }).click();
+    await page.getByRole('link', { name: 'Barcode saved — print this product’s label' }).waitFor();
+    await page.goto(`${BASE_URL}/products/${classifiedProduct.id}`, { waitUntil: 'networkidle' });
     await page.getByRole('link', { name: 'Barcode saved — print this product’s label' }).waitFor();
     await page.getByLabel('Category', { exact: true }).selectOption(classificationCategoryId);
     const productClassification = page.locator('details').filter({ has: page.getByText('Division and group (optional)', { exact: true }) });

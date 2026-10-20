@@ -23,7 +23,7 @@ export default function BarcodeFieldWithGenerate({
 }: BarcodeFieldWithGenerateProps) {
   const [value, setValue] = useState(defaultValue ?? '');
   const [error, setError] = useState<string | null>(null);
-  const [generated, setGenerated] = useState(false);
+  const [generated, setGenerated] = useState(() => isInternalBarcode(defaultValue ?? ''));
   const [isPending, startTransition] = useTransition();
   const hasExisting = Boolean(value.trim());
   const showInternalBadge = isInternalBarcode(value);
