@@ -67,7 +67,7 @@ describe('Sales by Linked Supplier trust clarity pass', () => {
     expect(page).not.toContain('onTouchEnd');
   });
 
-  it('leaves supplier sales service and export calculations unchanged', () => {
+  it('preserves supplier attribution while exposing historical profit in the export', () => {
     const service = readSource('lib/reports/supplier-sales.ts');
     const exportRoute = readSource('app/(protected)/reports/sales-by-supplier/export/route.ts');
 
@@ -79,16 +79,18 @@ describe('Sales by Linked Supplier trust clarity pass', () => {
     expect(service).toContain('lineTotalPence');
     expect(service).toContain('b.totalRevenuePence - a.totalRevenuePence');
     expect(exportRoute).toContain('preferred supplier setting');
-    expect(exportRoute).toContain("['Supplier', 'Product', 'SKU', 'Qty Sold (base units)', 'Revenue', 'Sales Count']");
+    for (const label of ['Supplier', 'Product', 'SKU', 'Qty Sold (base units)', 'Revenue', 'Sales Count', 'Net sales (ex tax)', 'Recorded cost', 'Calculated gross profit', 'Margin %']) expect(exportRoute).toContain(`'${label}'`);
+    expect(service).toContain('evaluateMarginLines');
+    expect(exportRoute).toContain('guardLiveReport');
   });
 
-  it('does not import new services or change supplier/payment logic files for this page pass', () => {
+  it('loads optional hierarchy filters while preserving supplier/payment attribution', () => {
     const sales = readSource('lib/services/sales.ts');
     const purchases = readSource('lib/services/purchases.ts');
     const products = readSource('lib/services/products.ts');
 
     expect(page).toContain("import { getSupplierSalesReport } from '@/lib/reports/supplier-sales';");
-    expect(page).not.toContain("from '@/lib/services");
+    expect(page).toContain("import { listProductDivisions } from '@/lib/services/product-classification';");
     expect(sales).toContain("type: 'SALE' as const");
     expect(purchases).toContain('linkPurchasedProductsToSupplier');
     expect(products).toContain('preferredSupplierId?: string | null');
