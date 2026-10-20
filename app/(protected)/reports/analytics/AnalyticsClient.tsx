@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { TrendLine } from '@/components/reports/charts/ReportVisuals';
 import ReportChartData from '@/components/reports/ReportChartData';
 import FinancialAmount from '@/components/reports/FinancialAmount';
 import { formatMoney } from '@/lib/format';
@@ -23,6 +25,7 @@ export interface AnalyticsData {
 }
 
 export default function AnalyticsClient({ data }: { data: AnalyticsData; kpis?: AnalyticsData['kpis'] }) {
+  const [trendView, setTrendView] = useState<'line' | 'bars'>('line');
   const k = data.kpis;
   const c = data.currency;
   const money = (pence: number) => formatMoney(pence, c);
@@ -49,7 +52,8 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData; kpis?: 
     </div>
     <div className="grid min-w-0 gap-4 lg:grid-cols-2">
       <ReportSection title="Daily sales" description={`${data.salesTrend.labels.length} dates shown from the selected ${data.periodDays}-day period.`}>
-        <DailySalesChart labels={data.salesTrend.labels} values={data.salesTrend.values} currency={c} />
+        <div className="mb-3 flex gap-2" role="group" aria-label="Daily sales chart style">{(['line', 'bars'] as const).map(view => <button type="button" key={view} className={trendView === view ? 'btn-primary' : 'btn-secondary'} aria-pressed={trendView === view} onClick={() => setTrendView(view)}>{view === 'line' ? 'Trend line' : 'Bars'}</button>)}</div>
+        {trendView === 'line' ? <TrendLine title="Daily sales trend" labels={data.salesTrend.labels} values={data.salesTrend.values} currency={c} /> : <DailySalesChart labels={data.salesTrend.labels} values={data.salesTrend.values} currency={c} />}
         <ReportChartData title="Revenue trend" columns={['Date', 'Revenue']} rows={data.salesTrend.labels.map((label, i) => [label, money(data.salesTrend.values[i] ?? 0)])}><span className="sr-only">Exact daily sales values are in the figures below.</span></ReportChartData>
       </ReportSection>
       <ReportSection title="Period comparison" description="Total recorded sales in each period. Compare total values, with today still in progress.">
@@ -69,6 +73,7 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData; kpis?: 
         </ReportChartData>
       </ReportSection>
     </div>
+    {k.totalProfit !== null && data.profitTrend.labels.length > 0 ? <ReportSection title="Daily gross profit" description="Historical product costs and discounts, excluding tax; before operating expenses."><TrendLine title="Gross profit trend" labels={data.profitTrend.labels} values={data.profitTrend.values} currency={c} /></ReportSection> : null}
     <ReportSection title="Busy trading times">
       <BusyTradingTimes rows={data.hourlyData} />
       <ReportChartData title="Sales by hour and day" columns={['Day', 'Hour', 'Sales count']} rows={data.hourlyData.map(row => [row.day, `${String(row.hour).padStart(2, '0')}:00`, row.sales.toLocaleString()])}><span className="sr-only">Counts are available in the day and hour controls and figures.</span></ReportChartData>
@@ -76,7 +81,7 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData; kpis?: 
     <ReportDisclosure title="How to read Sales analytics">
       <p>Revenue is sales for this period, not money received. Gross profit is shown only when the required product costs are complete.</p>
       <p>When the earlier period has no sales, no percentage growth is shown. The comparison chart shows total sales for each period.</p>
-      <p>Daily charts show up to fourteen recent dates. Category figures are line subtotals; product figures show ranked sales. Their different labels matter when comparing them with headline revenue.</p>
+      <p>Daily charts show up to thirty recent dates from the selected period. Category figures are line subtotals; product figures show ranked sales. Their different labels matter when comparing them with headline revenue.</p>
     </ReportDisclosure>
   </div>;
 }

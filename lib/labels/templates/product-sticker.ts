@@ -36,16 +36,16 @@ async function getBarcodeMarkup(data: LabelData): Promise<string> {
   const barcodeDataUrl = await generateBarcodeDataUrl({
     value: data.barcode,
     format,
-    width: isQrCode ? 22 : 46,
-    height: isQrCode ? 22 : 14,
+    width: isQrCode ? 17 : 46,
+    height: isQrCode ? 17 : 12,
     includeText: false,
   });
 
   const imageStyle = isQrCode
-    ? 'display:block;width:22mm;height:22mm;object-fit:contain;'
-    : 'display:block;width:46mm;height:14mm;object-fit:contain;';
+    ? 'display:block;width:17mm;height:17mm;object-fit:contain;'
+    : 'display:block;width:46mm;height:12mm;object-fit:contain;';
 
-  return `<img src="${barcodeDataUrl}" alt="Barcode for ${escapeHtml(data.productName)}" style="${imageStyle}" />`;
+  return `<div style="display:flex;flex-direction:column;align-items:center;gap:0.3mm;max-width:100%;"><img src="${barcodeDataUrl}" alt="Barcode for ${escapeHtml(data.productName)}" style="${imageStyle}" /><span data-barcode-value style="font-family:monospace;font-size:6.5pt;line-height:1.1;overflow-wrap:anywhere;text-align:center;">${escapeHtml(data.barcode)}</span></div>`;
 }
 
 export async function renderProductStickerFragment(data: LabelData): Promise<string> {
@@ -59,14 +59,14 @@ export async function renderProductStickerFragment(data: LabelData): Promise<str
     : '';
 
   return `<article data-template="product-sticker" style="box-sizing:border-box;width:60mm;height:40mm;padding:2.5mm;border:0.3mm dashed #9ca3af;border-radius:1mm;background:#ffffff;color:#111827;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;break-inside:avoid;page-break-inside:avoid;">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1mm;min-height:5mm;">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1mm;min-height:3mm;">
     ${category ? `<span style="display:inline-flex;align-items:center;max-width:100%;padding:0.6mm 1.8mm;border-radius:999px;background:#e0f2fe;color:#075985;font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(category)}</span>` : '<span></span>'}
     ${internalMark}
   </div>
-  <div style="font-size:11pt;font-weight:700;line-height:1.2;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-overflow:ellipsis;min-height:calc(11pt * 1.2 * 2);max-height:calc(11pt * 1.2 * 2);word-break:break-word;">
+  <div style="font-size:11pt;font-weight:700;line-height:1.2;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-overflow:ellipsis;min-height:calc(11pt * 1.2);max-height:calc(11pt * 1.2 * 2);word-break:break-word;">
     ${escapeHtml(data.productName)}
   </div>
-  <div style="display:flex;align-items:center;justify-content:center;min-height:14mm;margin:1mm 0 0.5mm;">
+  <div style="display:flex;align-items:center;justify-content:center;flex-shrink:0;margin:0.3mm 0;">
     ${barcodeMarkup}
   </div>
   <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:2mm;">

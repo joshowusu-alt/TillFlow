@@ -25,7 +25,7 @@ it('Analytics accessible chart figures preserve money units and hourly counts', 
   expect(hourly.querySelector('tbody')!.textContent).toBe('Mon10:004');
   expect(root.querySelector('[aria-label="Revenue trend figures"]')!.textContent).toContain('1,500.00');
   expect(root.querySelector('[aria-label="Period comparison figures"]')!.textContent).toContain('1,000.00');
-  expect(root.querySelectorAll('[role="img"]')).toHaveLength(5);
+  expect(root.querySelectorAll('[role="img"]')).toHaveLength(6);
   expect(markup).toContain('Costs incomplete');
 });
 

@@ -1,3 +1,4 @@
+import { PeriodComparisonChart } from '@/components/reports/charts/ReportVisuals';
 import Link from 'next/link';
 import DownloadLink from '@/components/DownloadLink';
 import ReportHeader from './ReportHeader';
@@ -122,6 +123,15 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
 
       <p className="text-sm leading-6 text-slate-600">Refunds are shown separately here. Confirmed receipts are different from Today’s net money received.</p>
 
+      <ReportSection title="Current and earlier period" description="The same dates and branch selection as the figures above.">
+        <PeriodComparisonChart currency={currency} currentLabel={chrome.currentFull} previousLabel={chrome.comparisonFull} rows={[
+          { name: 'Sales', current: result.headline.salesValuePence.current, previous: result.headline.salesValuePence.comparison },
+          ...(!queryFailed ? [
+            { name: 'Confirmed receipts', current: result.money.moneyReceived.current, previous: result.money.moneyReceived.comparison },
+            { name: 'Refunds', current: result.money.refundOutflows.current, previous: result.money.refundOutflows.comparison },
+          ] : []),
+        ]} />
+      </ReportSection>
       <details className="rounded-xl border border-slate-200 bg-white px-3 py-1">
         <summary className="flex min-h-11 w-fit max-w-full cursor-pointer items-center rounded-lg px-1 text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">Change period or branch</summary>
       <ReportFilterCard columnsClassName="md:grid-cols-2 xl:grid-cols-4">

@@ -130,3 +130,12 @@ describe('renderLabelsHtml', () => {
     expect(html).toContain('Item B');
   });
 });
+
+ describe('human-readable barcode values', () => {
+  it.each([renderShelfTag, renderProductSticker])('prints the saved value beneath the bars and escapes it', async render => {
+    const html = await render({ ...baseLabel, barcode: 'TF<TEST>&000002' });
+    expect(html).toContain('data-barcode-value');
+    expect(html).toContain('TF&lt;TEST&gt;&amp;000002</span>');
+    expect(html).not.toContain('TF<TEST>');
+  });
+});

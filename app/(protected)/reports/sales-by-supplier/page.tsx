@@ -1,3 +1,4 @@
+import { SalesMixChart } from '@/components/reports/charts/ReportVisuals';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
@@ -237,6 +238,7 @@ export default async function SalesBySupplierPage({
       ) : null}
 
       {/* Drill-down: product breakdown for a specific supplier */}
+      {!isDrillDown ? <SalesMixChart title="Supplier-linked sales mix" currency={business.currency} rows={report.rows.map(row => ({ name: row.supplierName, value: row.totalRevenuePence }))} /> : null}
       {isDrillDown ? (
         <div className="space-y-4">
           {/* Supplier summary */}

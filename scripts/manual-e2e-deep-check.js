@@ -6,7 +6,7 @@ const { PrismaClient } = require('@prisma/client');
 const BASE_URL = process.env.BASE_URL || 'http://localhost:6200';
 const OWNER_EMAIL = process.env.E2E_OWNER_EMAIL || 'owner@store.com';
 const OWNER_PASSWORD = process.env.E2E_OWNER_PASSWORD || 'Pass1234!';
-const ARTIFACT_DIR = path.join(process.cwd(), '.playwright-mcp');
+const ARTIFACT_DIR = path.join(process.cwd(), 'playwright', 'test-results', 'deep-owner-flow');
 const prisma = new PrismaClient();
 
 /** Current POS CTAs: Complete Cash/Part-Paid/Credit Sale — /Complete Sale/i does not match these. */
@@ -678,6 +678,10 @@ async function run() {
     const [printPage] = await Promise.all([context.waitForEvent('page'), page.getByRole('button', { name: 'Print Labels', exact: true }).first().click()]);
     await printPage.waitForFunction(name => document.body.textContent.includes(name), classifiedProduct.name);
     await printPage.waitForFunction(() => window.__labelPrintRequested === true);
+    const readableValue = printPage.locator('[data-barcode-value]').first();
+    await readableValue.waitFor({ state: 'visible' });
+    if ((await readableValue.textContent()).trim() !== storedClassification.barcode) throw new Error('Printed readable barcode does not match saved value');
+    await printPage.screenshot({ path: path.join(process.cwd(), 'playwright', 'test-results', 'generated-barcode-label.png'), fullPage: true });
     await printPage.close();
     step('BONUS Generated barcode to selected label and print request OK');
     for (const width of [390, 1920]) {
@@ -742,6 +746,7 @@ async function run() {
     console.log(JSON.stringify({ success: true, report }, null, 2));
   } catch (error) {
     step(`FAILED: ${error instanceof Error ? error.message : String(error)}`);
+    if (['localhost', '127.0.0.1'].includes(new URL(BASE_URL).hostname)) step(`Failure surface: ${(await page.locator('body').innerText().catch(() => 'unavailable')).slice(-6000)}`);
     // Take screenshot on failure for CI debugging
     try {
       fs.mkdirSync(ARTIFACT_DIR, { recursive: true });

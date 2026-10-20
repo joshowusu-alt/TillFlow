@@ -35,16 +35,16 @@ async function getBarcodeMarkup(data: LabelData): Promise<string> {
   const barcodeDataUrl = await generateBarcodeDataUrl({
     value: data.barcode,
     format,
-    width: isQrCode ? 20 : 40,
-    height: isQrCode ? 20 : 12,
+    width: isQrCode ? 14 : 40,
+    height: isQrCode ? 14 : 10,
     includeText: false,
   });
 
   const imageStyle = isQrCode
-    ? 'display:block;width:20mm;height:20mm;object-fit:contain;'
-    : 'display:block;width:40mm;height:12mm;object-fit:contain;';
+    ? 'display:block;width:14mm;height:14mm;object-fit:contain;'
+    : 'display:block;width:40mm;height:10mm;object-fit:contain;';
 
-  return `<img src="${barcodeDataUrl}" alt="Barcode for ${escapeHtml(data.productName)}" style="${imageStyle}" />`;
+  return `<div style="display:flex;flex-direction:column;align-items:center;gap:0.3mm;max-width:100%;"><img src="${barcodeDataUrl}" alt="Barcode for ${escapeHtml(data.productName)}" style="${imageStyle}" /><span data-barcode-value style="font-family:monospace;font-size:6.5pt;line-height:1.1;overflow-wrap:anywhere;text-align:center;">${escapeHtml(data.barcode)}</span></div>`;
 }
 
 export async function renderShelfTagFragment(
@@ -59,10 +59,10 @@ export async function renderShelfTagFragment(
   const unit = formatUnit(data.unit);
 
   return `<article data-template="shelf-tag" style="box-sizing:border-box;width:${widthMm}mm;height:${heightMm}mm;padding:${paddingMm}mm;border:${borderStyle};border-radius:1mm;background:#ffffff;color:#111827;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;break-inside:avoid;page-break-inside:avoid;">
-  <div style="font-size:10pt;font-weight:700;line-height:1.2;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-overflow:ellipsis;min-height:calc(10pt * 1.2 * 2);max-height:calc(10pt * 1.2 * 2);word-break:break-word;">
+  <div style="font-size:9pt;font-weight:700;line-height:1.1;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-overflow:ellipsis;min-height:calc(9pt * 1.1);max-height:calc(9pt * 1.1 * 2);word-break:break-word;">
     ${escapeHtml(data.productName)}
   </div>
-  <div style="display:flex;align-items:center;justify-content:center;min-height:12mm;margin:1mm 0 0.5mm;">
+  <div style="display:flex;align-items:center;justify-content:center;flex-shrink:0;margin:0.3mm 0;">
     ${barcodeMarkup}
   </div>
   <div style="display:flex;align-items:flex-end;justify-content:flex-start;gap:1.5mm;">

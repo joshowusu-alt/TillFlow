@@ -237,3 +237,12 @@ describe('A7 analytics report period covers exactly periodDays tenant-local date
     },
   );
 });
+
+it('charts the selected historical dates instead of padding with today', async () => {
+  salesInvoiceFindManyMock.mockClear();
+  const report = await loadAnalyticsReport({ businessId: 'biz-1', currency: 'GHS', periodDays: 7, timeZone: ACCRA,
+    now: new Date('2026-10-20T12:00:00Z'), periodStart: new Date('2026-08-01T00:00:00Z'), periodEndExclusive: new Date('2026-08-08T00:00:00Z') });
+  expect(report.salesTrend.labels).toEqual(['Sat 1', 'Sun 2', 'Mon 3', 'Tue 4', 'Wed 5', 'Thu 6', 'Fri 7']);
+  expect(report.profitTrend.labels).toEqual(report.salesTrend.labels);
+  expect(report.salesTrend.values).toEqual(Array(7).fill(0));
+});

@@ -103,3 +103,18 @@ manual, including full selling proceeds for Bishop and Women of Faith.
 Versioned additive database migrations were rehearsed on the isolated test branch;
 legacy products remain category-only and historical purchases receive neutral
 defaults. Automated checks and Preview deployment are required before handover.
+
+Report visual follow-up: Sales analytics offers trend lines and selectable bars,
+plus a separate gross-profit trend when required costs are complete. Historical
+custom ranges label their own calendar dates, with at most the latest thirty days
+shown. Classification performance adds a net-sales doughnut for the selected
+level and filters. Sales by linked supplier adds its own sales-mix doughnut.
+Long tails are combined into Other without dropping their value; negative mixes
+use the exact signed table instead of a misleading share chart. Business movement
+compares current and earlier sales, receipts and refunds on a common bar scale;
+these separate measures are never stacked or added. Payment query failures keep
+payment series withheld. All charts retain exact figures for keyboard and touch.
+
+Shelf tags, product stickers and A4 labels include the saved readable barcode
+value beneath the bars. Print sizes remain unchanged. Review barcode legibility
+and scanning with the actual printer after choosing the desired label template.

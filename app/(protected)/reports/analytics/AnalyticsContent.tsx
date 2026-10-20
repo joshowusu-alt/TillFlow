@@ -109,8 +109,10 @@ export async function loadAnalyticsReport({
 
       // Limit chart labels based on period
       const maxLabels = periodDays <= 14 ? periodDays : Math.min(periodDays, 30);
+      const chartEndParts = zonedDateTimeParts(new Date(endExclusive.getTime() - 1), reportTimeZone);
       for (let i = maxLabels - 1; i >= 0; i--) {
-        const date = new Date(today.startInclusive.getTime() - i * 24 * 60 * 60 * 1000);
+        const day = addLocalDays(chartEndParts, -i);
+        const date = windowForLocalDates(day, day, reportTimeZone).startInclusive;
         const key =
           periodDays <= 14
             ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: reportTimeZone })
@@ -125,6 +127,7 @@ export async function loadAnalyticsReport({
           periodDays <= 14
             ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: reportTimeZone })
             : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: reportTimeZone });
+        if (!dailySales.has(key)) return;
         dailySales.set(key, (dailySales.get(key) || 0) + sale.totalPence);
         const saleMargin = evaluateMarginSet([{
           paymentStatus: sale.paymentStatus,
@@ -246,12 +249,14 @@ export async function loadAnalyticsReport({
       const currentPeriodDaily = Array.from(dailySales.values());
       const previousPeriodDaily: number[] = [];
 
+      const previousChartEnd = addLocalDays(startParts, -1);
       for (let i = maxLabels - 1; i >= 0; i--) {
-        const date = new Date(periodAgo.getTime() - i * 24 * 60 * 60 * 1000);
+        const day = addLocalDays(previousChartEnd, -i);
+        const dayWindow = windowForLocalDates(day, day, reportTimeZone);
         const daySales = previousSales
           .filter((s) => {
             const saleDate = new Date(s.createdAt);
-            return saleDate.toDateString() === date.toDateString();
+            return saleDate >= dayWindow.startInclusive && saleDate < dayWindow.endExclusive;
           })
           .reduce((sum, s) => sum + s.totalPence, 0);
         previousPeriodDaily.push(daySales);
