@@ -158,6 +158,8 @@ for (const width of [390,1440]) {
 
   test(`Analytics exact bars and sale-count selectors work at ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 }); await open(page,'analytics');
+    await expect(page.getByRole('img', { name: /^Daily sales trend/ })).toBeVisible();
+    await page.getByRole('button', { name: 'Bars', exact: true }).click();
     const bar = page.getByRole('button', { name: 'Mon 28: GH₵1,200.00', exact: true });
     await bar.focus(); await page.keyboard.press('Enter'); await expect(bar).toHaveAttribute('aria-pressed','true');
     await page.getByLabel('Day', { exact: true }).selectOption('Sat'); await page.getByLabel('Hour', { exact: true }).selectOption('10');
