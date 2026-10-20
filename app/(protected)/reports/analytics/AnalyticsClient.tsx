@@ -52,7 +52,7 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData; kpis?: 
     </div>
     <div className="grid min-w-0 gap-4 lg:grid-cols-2">
       <ReportSection title="Daily sales" description={`${data.salesTrend.labels.length} dates shown from the selected ${data.periodDays}-day period.`}>
-        <div className="mb-3 flex gap-2" role="group" aria-label="Daily sales chart style">{(['line', 'bars'] as const).map(view => <button type="button" key={view} className={trendView === view ? 'btn-primary' : 'btn-secondary'} aria-pressed={trendView === view} onClick={() => setTrendView(view)}>{view === 'line' ? 'Trend line' : 'Bars'}</button>)}</div>
+        <div className="mb-3 flex gap-2" role="group" aria-label="Daily sales chart style">{(['line', 'bars'] as const).map(view => <button type="button" key={view} className={`${trendView === view ? 'btn-primary' : 'btn-secondary'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`} aria-pressed={trendView === view} onClick={() => setTrendView(view)}>{view === 'line' ? 'Trend line' : 'Bars'}</button>)}</div>
         {trendView === 'line' ? <TrendLine title="Daily sales trend" labels={data.salesTrend.labels} values={data.salesTrend.values} currency={c} /> : <DailySalesChart labels={data.salesTrend.labels} values={data.salesTrend.values} currency={c} />}
         <ReportChartData title="Revenue trend" columns={['Date', 'Revenue']} rows={data.salesTrend.labels.map((label, i) => [label, money(data.salesTrend.values[i] ?? 0)])}><span className="sr-only">Exact daily sales values are in the figures below.</span></ReportChartData>
       </ReportSection>

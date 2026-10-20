@@ -46,7 +46,7 @@ export function TrendLine({ title, labels, values, currency }: { title: string; 
       {actual.map((value, i) => <circle key={i} cx={x(i)} cy={y(value)} r="4" fill="#2454d9"><title>{`${labels[i]}: ${formatMoney(value, currency)}`}</title></circle>)}
       <text x="35" y="200" fontSize="12" fill="#475569">{labels[0]}</text><text x="505" y="200" textAnchor="end" fontSize="12" fill="#475569">{labels.at(-1)}</text>
     </svg>
-    <details className="text-sm"><summary className="cursor-pointer py-2 font-semibold text-accent">{title} — exact daily figures</summary><dl className="space-y-2">{actual.map((value, i) => <div key={i} className="flex flex-wrap justify-between gap-2"><dt>{labels[i]}</dt><dd className="tabular-nums">{formatMoney(value, currency)}</dd></div>)}</dl></details>
+    <details className="text-sm"><summary className="min-h-11 cursor-pointer rounded-lg py-2 font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">{title} — exact daily figures</summary><dl className="space-y-2">{actual.map((value, i) => <div key={i} className="flex flex-wrap justify-between gap-2"><dt>{labels[i]}</dt><dd className="tabular-nums">{formatMoney(value, currency)}</dd></div>)}</dl></details>
   </figure>;
 }
 
