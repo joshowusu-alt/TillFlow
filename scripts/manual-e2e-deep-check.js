@@ -414,6 +414,7 @@ async function run() {
     await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
     const createdInvoiceId = new URL(page.url()).pathname.split('/').pop();
     const amountHeaders = page.getByRole('columnheader', { name: /^(Unit Cost|Line Total)$/i });
+    await amountHeaders.first().waitFor({ state: 'visible', timeout: 10000 });
     if (await amountHeaders.count() !== 2) throw new Error('Purchase amount headings are missing');
     const alignment = await amountHeaders.evaluateAll(headers => headers.map(header => {
       const index = Array.from(header.parentElement.children).indexOf(header);
