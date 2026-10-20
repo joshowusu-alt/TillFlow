@@ -34,7 +34,7 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData; kpis?: 
     <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
       <div data-analytics-amount="revenue"><ReportSalesHero title="Sales revenue" pence={k.totalSales} currency={c} subtitle={`${k.totalTransactions.toLocaleString()} sales · Selected ${data.periodDays}-day period`}>
         <p>{k.previousPeriodSales > 0 ? `${growth} vs the previous ${data.periodDays} days` : 'The earlier period has no positive sales total. Percentage growth is not meaningful.'}</p>
-        <p className="mt-1">The selected period includes today so far; the earlier period contains complete calendar days.</p>
+        <p className="mt-1">If the selected period includes today, today is still in progress. Earlier dates contain complete calendar days.</p>
       </ReportSalesHero></div>
       <ReportSection title="Sales pattern" description="Revenue shows recorded sales, not cash collected.">
         <dl className="space-y-3 text-sm text-ink">
@@ -48,7 +48,7 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData; kpis?: 
       <ReportMetric label="Gross profit" pence={k.totalProfit} value={k.totalTransactions === 0 ? "No sales" : "Costs incomplete"} currency={c} warning={k.totalProfit == null || k.totalProfit < 0} helper="Profit before expenses. Hidden when required costs are incomplete." />
       <ReportMetric label="Gross margin" value={k.marginPercent == null ? (k.totalTransactions === 0 ? 'No sales' : 'Costs incomplete') : `${k.marginPercent.toFixed(1)}%`} currency={c} warning={k.marginPercent == null || k.marginPercent < 0} helper="Gross profit as a share of recorded sales." />
       <ReportMetric label="Average sale" pence={k.totalTransactions > 0 ? k.avgTransaction : null} value="No sales" currency={c} helper="Selected-period sales divided by its sale count." />
-      <ReportMetric label="Sales change" value={growth} currency={c} helper={`Vs the previous ${data.periodDays} days. Totals include the incomplete current day.`} />
+      <ReportMetric label="Sales change" value={growth} currency={c} helper={`Vs the previous ${data.periodDays} days. Today, if included, is still in progress.`} />
     </div>
     <div className="grid min-w-0 gap-4 lg:grid-cols-2">
       <ReportSection title="Daily sales" description={`${data.salesTrend.labels.length} dates shown from the selected ${data.periodDays}-day period.`}>

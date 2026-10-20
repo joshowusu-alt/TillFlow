@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useId, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { createClassificationNodeAction } from '@/app/actions/product-classification';
 import type { ClassificationDivision } from './ProductCategoryField';
 
@@ -10,7 +9,6 @@ export default function ClassificationSetup({ categories, divisions }: {
   categories: { id: string; name: string }[]; divisions: ClassificationDivision[];
 }) {
   const id = useId();
-  const router = useRouter();
   const nameInput = useRef<HTMLInputElement>(null);
   const [kind, setKind] = useState<'division' | 'group'>('division');
   const [parentId, setParentId] = useState('');
@@ -45,7 +43,8 @@ export default function ClassificationSetup({ categories, divisions }: {
         } else {
           setMessage(`Group “${result.data.name}” saved. Open a product and choose this group under “Division and group (optional)”.`);
         }
-        setName(''); router.refresh(); nameInput.current?.focus();
+        // The action revalidates /products; a second refresh can interrupt the next group entry.
+        setName(''); nameInput.current?.focus();
       } catch { setError('Could not save. Please try again.'); }
       finally { setBusy(false); }
     }}>

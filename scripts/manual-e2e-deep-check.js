@@ -626,8 +626,12 @@ async function run() {
     const divisionName = `CI division ${stamp}`, groupName = `CI group ${stamp}`;
     await page.getByLabel('Division name').fill(divisionName);
     await page.getByRole('button', { name: 'Add division', exact: true }).click();
-    await page.getByLabel('Group name').waitFor();
-    const classificationDivisionId = await page.getByLabel('Under division').inputValue();
+    await page.getByRole('status').filter({ hasText: `Division “${divisionName}” saved.` }).waitFor();
+    const savedDivision = await prisma.productDivision.findFirstOrThrow({ where: { businessId: reportOwner.businessId, categoryId: classificationCategoryId, name: divisionName } });
+    const classificationDivisionId = savedDivision.id;
+    // Reload persisted setup before the next submit; don't type into an in-flight RSC refresh.
+    await page.goto(`${BASE_URL}/products?tab=categories`, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: `Add group under ${divisionName}`, exact: true }).click();
     await page.getByLabel('Group name').fill(groupName);
     await page.getByRole('button', { name: 'Add group', exact: true }).click();
     await page.getByRole('status').filter({ hasText: `Group “${groupName}” saved.` }).waitFor();
