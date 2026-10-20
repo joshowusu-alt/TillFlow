@@ -46,7 +46,7 @@ export default async function IncomeStatementPage({
   const statement = await getIncomeStatement(business.id, start, end);
   const breakdownLink = (metric: IncomeStatementMetric, value: ReactNode) => (
     <Link href={incomeStatementEntriesHref(metric, fromStr, toStr)}
-      aria-label={`View ${INCOME_STATEMENT_METRICS[metric].label} supporting records`}
+      aria-label={`View ${INCOME_STATEMENT_METRICS[metric].label} supporting records: ${statement[metric] === null ? 'Costs incomplete' : formatMoney(statement[metric], business.currency)}`}
       className="rounded underline decoration-current/30 underline-offset-4 hover:decoration-current focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
       {value}
     </Link>

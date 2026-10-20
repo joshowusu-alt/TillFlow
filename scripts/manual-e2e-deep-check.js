@@ -596,7 +596,7 @@ async function run() {
 
     step('BONUS Income Statement supporting records');
     await page.goto(`${BASE_URL}/reports/income-statement`, { waitUntil: 'networkidle' });
-    const revenueRecords = page.getByRole('link', { name: 'View Revenue supporting records', exact: true }).first();
+    const revenueRecords = page.getByRole('link', { name: /^View Revenue supporting records:/ }).first();
     await revenueRecords.waitFor({ state: 'visible' });
     const detailUrl = new URL(await revenueRecords.getAttribute('href'), BASE_URL);
     await revenueRecords.click();
