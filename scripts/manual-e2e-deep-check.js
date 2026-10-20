@@ -283,6 +283,18 @@ async function openPurchaseForm(page) {
   await addLineButton.waitFor({ state: 'visible', timeout: 10000 });
 }
 
+async function attachPurchaseEvidence(page) {
+  await page.locator('#record-purchase-form input[type="file"]').setInputFiles({
+    name: 'synthetic-supplier-invoice.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.4\nSynthetic CI supplier invoice\n%%EOF'),
+  });
+  await page.waitForFunction(() => {
+    const input = document.querySelector('#record-purchase-form input[name="purchaseDocumentsJson"]');
+    return input && JSON.parse(input.value || '[]').length === 1;
+  });
+}
+
 async function seedUnpaidExpense() {
   const owner = await prisma.user.findUnique({
     where: { email: OWNER_EMAIL },
@@ -392,6 +404,7 @@ async function run() {
     // cash-drawer dependency.
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
+    await attachPurchaseEvidence(page);
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     // On success, createPurchaseAction redirects to the invoice detail page
     // (/purchases/{id}?created=1), not back to the list page, so wait for
@@ -428,6 +441,7 @@ async function run() {
     await page.waitForTimeout(500);
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
+    await attachPurchaseEvidence(page);
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
     step('6b/12 Create unpaid purchase OK');
