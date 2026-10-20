@@ -10,7 +10,7 @@ import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { formatMoney, formatDateTime, formatDate, formatRelativeDate } from '@/lib/format';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
-import { summarizeOpenPayables } from '@/lib/reports/surface-balances';
+import { getSupplierAccountSummary } from '@/lib/services/supplier-account-summary';
 import { parseTags } from '@/lib/contact-tags';
 import { updateSupplierAction } from '@/app/actions/suppliers';
 import DueDateBadge from '@/components/DueDateBadge';
@@ -35,7 +35,8 @@ const STATUS_LABEL: Record<string, string> = {
   RETURNED: 'Returned',
 };
 
-function SupplierStatusBadge({ status }: { status: 'up-to-date' | 'amount-owed' | 'over-limit' }) {
+function SupplierStatusBadge({ status }: { status: 'up-to-date' | 'amount-owed' | 'over-limit' | 'credit-balance' }) {
+  if (status === 'credit-balance') return <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Supplier credit</span>;
   if (status === 'over-limit') {
     return <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">Over limit</span>;
   }
@@ -77,7 +78,7 @@ export default async function SupplierDetailPage({
   const mtdStart = month.startInclusive;
   const mtdEndExclusive = month.endExclusive;
 
-  const [supplier, linkedProducts, supplierSales] = await Promise.all([
+  const [supplier, linkedProducts, supplierSales, balances] = await Promise.all([
     prisma.supplier.findFirst({
       where: { id: params.id, businessId: business.id },
       include: {
@@ -125,6 +126,7 @@ export default async function SupplierDetailPage({
     features.advancedReports
       ? getSupplierSalesReport(business.id, { start: mtdStart, end: mtdEndExclusive, supplierId: params.id })
       : Promise.resolve(null),
+    getSupplierAccountSummary(business.id, params.id, { start, endExclusive }),
   ]);
 
   if (!supplier) {
@@ -143,26 +145,17 @@ export default async function SupplierDetailPage({
     return { ...invoice, paid, effectivePaid, balance, isClosed };
   });
 
-  const activeInvoices = invoices.filter((invoice) => !invoice.isClosed);
-  const outstanding = summarizeOpenPayables(supplier.purchaseInvoices).outstandingPence;
-  const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
-  const totalPaid = activeInvoices.reduce((sum, invoice) => sum + invoice.effectivePaid, 0);
-  const activePurchaseInvoiceCount = activeInvoices.filter((invoice) => invoice.balance > 0).length;
-
-  // Last payment across all invoices in range
-  const allPaymentsInRange = invoices.flatMap((inv) => inv.payments);
-  const lastPaymentAt = allPaymentsInRange.length > 0
-    ? allPaymentsInRange.reduce<Date | null>((latest, p) => {
-        if (!latest) return p.paidAt;
-        return p.paidAt > latest ? p.paidAt : latest;
-      }, null)
-    : null;
+  const outstanding = balances.account.outstandingPence;
+  const totalBilled = balances.selection.totalBilledPence;
+  const totalPaid = balances.selection.totalPaidPence;
+  const activePurchaseInvoiceCount = balances.account.unpaidInvoiceCount;
+  const lastPaymentAt = balances.account.lastPaymentAt;
 
   // Credit / status
   const creditLimit = supplier.creditLimitPence;
   const availableCredit = creditLimit > 0 ? creditLimit - outstanding : null;
-  const supplierStatus: 'up-to-date' | 'amount-owed' | 'over-limit' =
-    outstanding === 0 ? 'up-to-date'
+  const supplierStatus: 'up-to-date' | 'amount-owed' | 'over-limit' | 'credit-balance' =
+    outstanding < 0 ? 'credit-balance' : outstanding === 0 ? 'up-to-date'
     : creditLimit > 0 && outstanding > creditLimit ? 'over-limit'
     : 'amount-owed';
 
@@ -176,6 +169,7 @@ export default async function SupplierDetailPage({
         description: 'Purchase',
         debitPence: invoice.isClosed ? 0 : invoice.totalPence,
         creditPence: 0,
+        balanceEffectPence: invoice.isClosed ? 0 : invoice.totalPence,
       },
       ...invoice.payments.map((payment) => ({
         key: payment.id,
@@ -185,6 +179,7 @@ export default async function SupplierDetailPage({
         description: `Payment${payment.notes ? ` - ${payment.notes}` : ''} (${PAYMENT_LABEL[payment.method] ?? payment.method})`,
         debitPence: 0,
         creditPence: payment.amountPence,
+        balanceEffectPence: invoice.isClosed ? 0 : -payment.amountPence,
       })),
       ];
     })
@@ -199,8 +194,8 @@ export default async function SupplierDetailPage({
       balancePence: number;
     }>>((rows, row) => {
       const previousBalance = rows.at(-1)?.balancePence ?? 0;
-      const { sortKey: _sortKey, ...rest } = row;
-      rows.push({ ...rest, balancePence: previousBalance + row.debitPence - row.creditPence });
+      const { sortKey: _sortKey, balanceEffectPence, ...rest } = row;
+      rows.push({ ...rest, balancePence: previousBalance + balanceEffectPence });
       return rows;
     }, []);
 
@@ -228,12 +223,13 @@ export default async function SupplierDetailPage({
             </div>
           </div>
           <div className="rounded-2xl border border-amber-100 bg-amber-50/70 px-5 py-4 lg:min-w-72">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">What you owe</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">{outstanding < 0 ? 'Supplier credit balance' : 'What you owe'}</div>
             <div className={`mt-2 text-3xl font-bold tabular-nums ${outstanding > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
               {formatMoney(outstanding, business.currency)}
             </div>
             <div className="mt-1 text-xs text-black/55">
-              {outstanding > 0 ? `${activePurchaseInvoiceCount} unpaid purchase invoice${activePurchaseInvoiceCount === 1 ? '' : 's'} need attention.` : 'This supplier account is up to date.'}
+              {outstanding > 0 ? `${activePurchaseInvoiceCount} unpaid purchase invoice${activePurchaseInvoiceCount === 1 ? '' : 's'} need attention.` : outstanding < 0 ? 'Supplier credit balance — review excess payments.' : 'This supplier account is up to date.'}
+              <p className="mt-1">All purchase dates · all recorded payments. History filters do not change this balance.</p>
             </div>
           </div>
         </div>
@@ -270,9 +266,9 @@ export default async function SupplierDetailPage({
       {/* Key stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <AccountStatCard
-          label="What you owe"
+          label={outstanding < 0 ? 'Supplier credit balance' : 'What you owe'}
           value={<span className={outstanding > 0 ? 'text-amber-700' : 'text-emerald-700'}>{formatMoney(outstanding, business.currency)}</span>}
-          helper={`${activePurchaseInvoiceCount} unpaid purchase invoice${activePurchaseInvoiceCount === 1 ? '' : 's'}`}
+          helper={`All purchase dates · ${activePurchaseInvoiceCount} unpaid purchase invoice${activePurchaseInvoiceCount === 1 ? '' : 's'}`}
         />
         <AccountStatCard
           label="Credit limit"
@@ -292,8 +288,8 @@ export default async function SupplierDetailPage({
         />
         <AccountStatCard
           label="Total purchases"
-          value={formatMoney(totalBilled, business.currency)}
-          helper={`${invoices.length} invoice${invoices.length === 1 ? '' : 's'} in range`}
+          value={formatMoney(balances.account.totalBilledPence, business.currency)}
+          helper={`All purchase dates · ${balances.account.invoiceCount} invoices`}
         />
         <AccountStatCard
           label="Linked products"
@@ -365,7 +361,7 @@ export default async function SupplierDetailPage({
       {/* Purchase history */}
       <div className="card p-6">
         <h2 className="text-lg font-display font-semibold">Purchases and payment history</h2>
-        <p className="mt-1 text-sm text-black/50">Purchases increase what you owe; payments reduce the supplier balance.</p>
+        <p className="mt-1 text-sm text-black/50">Filter by purchase date. Amounts include all payments recorded against those purchases, including payments outside the selected dates. This is not a historical balance as of the end date.</p>
         <form className="mt-4 grid gap-4 md:grid-cols-4">
           <div>
             <label className="label">From</label>
@@ -392,16 +388,17 @@ export default async function SupplierDetailPage({
         </form>
         <div className="mt-4 grid gap-2 text-sm md:grid-cols-3">
           <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
-            Total purchases: {formatMoney(totalBilled, business.currency)}
+            Purchases in selection: {formatMoney(totalBilled, business.currency)}
           </div>
           <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
-            Total paid: {formatMoney(totalPaid, business.currency)}
+            Paid against selected purchases: {formatMoney(totalPaid, business.currency)}
           </div>
           <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
-            What you owe: {formatMoney(outstanding, business.currency)}
+            Balance on selected purchases: {formatMoney(balances.selection.outstandingPence, business.currency)}
           </div>
         </div>
 
+        <p className="mt-3 text-sm text-slate-600">Showing {invoices.length} of {balances.selection.invoiceCount} matching purchases, newest first. Totals include every matching purchase. Download CSV for the full selection.</p>
         <div className="mt-4 space-y-3 lg:hidden">
           {invoices.length === 0 ? (
             <div className="rounded-xl border border-black/10 bg-white px-4 py-6 text-center text-sm text-black/50">
@@ -553,7 +550,8 @@ export default async function SupplierDetailPage({
       {/* Statement */}
       <div className="card p-6">
         <h2 className="text-lg font-display font-semibold">Statement</h2>
-        <p className="mt-1 text-sm text-black/50">Purchases increase the amount owed; payments reduce it.</p>
+        <p className="mt-1 text-sm text-black/50">This running subtotal covers only the purchases loaded in the history above and their recorded payments. It starts at zero for that set; it is not the full supplier account balance. Returned and voided purchases contribute zero to the subtotal; their original payments remain listed.</p>
+        <p className="mt-1 text-sm text-black/50">Showing the latest {Math.min(ledgerRows.length, 80)} of {ledgerRows.length} history entries. Use the account balance above for the complete amount owed.</p>
         <div className="responsive-table-shell mt-4">
           <table className="table w-full min-w-[48rem] border-separate border-spacing-y-2">
             <thead>
@@ -562,7 +560,7 @@ export default async function SupplierDetailPage({
                 <th>Description</th>
                 <th>Purchase</th>
                 <th>Payment</th>
-                <th>Balance</th>
+                <th>History subtotal</th>
               </tr>
             </thead>
             <tbody>

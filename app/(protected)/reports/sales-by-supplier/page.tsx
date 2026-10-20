@@ -151,7 +151,7 @@ export default async function SalesBySupplierPage({
             <p className="font-semibold">Based on preferred supplier links on products.</p>
             <p className="mt-1">
               This is a sales performance view, not supplier debt. It does not prove which supplier supplied the exact
-              item sold, and it does not track exact stock batch origin.
+              item sold, and it does not track exact stock batch origin. Changing a product’s preferred supplier also changes which supplier its earlier sales appear under.
             </p>
             <p className="mt-1">
               Returned and void sales are excluded. Supplier sales performance is separate from supplier purchases,

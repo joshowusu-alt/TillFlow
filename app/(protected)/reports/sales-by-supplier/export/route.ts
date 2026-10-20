@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     ['Sales by Linked Supplier', `${fromInputValue} to ${toInputValue}`, `Currency: ${currency}`],
     [
       'Note: This report shows sales for products linked to each supplier via their preferred supplier setting. ' +
-        'It does not track the exact supplier source of each inventory unit sold. Net sales exclude tax and include discounts. Cost comes from the historical sale. Calculated gross profit is not retained shop earnings or a supplier settlement amount.',
+        'It does not track the exact supplier source of each inventory unit sold. Changing the preferred supplier reassigns earlier sales in this report. Net sales exclude tax and include discounts. Cost comes from the historical sale. Calculated gross profit is not retained shop earnings or a supplier settlement amount.',
     ],
     [],
     ['Supplier', 'Product', 'SKU', 'Qty Sold (base units)', 'Revenue', 'Sales Count','Net sales (ex tax)','Recorded cost','Calculated gross profit','Margin %'],
