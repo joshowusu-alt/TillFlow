@@ -361,7 +361,7 @@ export default async function SupplierDetailPage({
       {/* Purchase history */}
       <div className="card p-6">
         <h2 className="text-lg font-display font-semibold">Purchases and payment history</h2>
-        <p className="mt-1 text-sm text-black/50">Filter by purchase date. Amounts include all payments recorded against those purchases, including payments outside the selected dates. This is not a historical balance as of the end date.</p>
+        <p className="mt-1 text-sm text-black/50">Purchases increase what you owe; payments reduce the supplier balance. Filter by purchase date. Amounts include all payments recorded against those purchases, including payments outside the selected dates. This is not a historical balance as of the end date.</p>
         <form className="mt-4 grid gap-4 md:grid-cols-4">
           <div>
             <label className="label">From</label>
