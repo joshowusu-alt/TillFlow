@@ -62,7 +62,7 @@ export default async function PurchaseInvoicePage({
         },
         orderBy: { createdAt: 'asc' },
       },
-      documents:{select:{id:true,originalFilename:true,contentType:true,byteLength:true,createdAt:true},orderBy:{createdAt:'asc'}},
+      documents:{select:{id:true,originalFilename:true,documentKind:true,contentType:true,byteLength:true,createdAt:true},orderBy:{createdAt:'asc'}},
       linkedCostExpense: { include: { payments: true } },
       payments: {
         include: { recordedBy: { select: { name: true } } },
@@ -178,7 +178,8 @@ export default async function PurchaseInvoicePage({
 
       {!isClosed ? <PurchaseDetailsEditor invoice={{id:invoice.id,supplierId:invoice.supplierId,supplierInvoiceNumber:invoice.supplierInvoiceNumber,dueDate:invoice.dueDate?.toISOString().slice(0,10)??'',additionalCostNote:invoice.additionalCostNote,additionalCostPence:invoice.additionalCostPence}} suppliers={editSuppliers} expectedDetails={JSON.stringify({supplierId:invoice.supplierId,supplierInvoiceNumber:invoice.supplierInvoiceNumber,dueDate:invoice.dueDate?.toISOString()??null,additionalCostNote:invoice.additionalCostNote})} initiallyOpen={searchParams?.edit==='1'} /> : null}
 
-      <PurchaseDocuments invoiceId={invoice.id} documents={invoice.documents.map(d=>({...d,createdAt:d.createdAt.toISOString()}))} />
+      <PurchaseDocuments invoiceId={invoice.id} awaitingInvoice={invoice.receiptDocumentType==='DELIVERY_NOTE'&&!invoice.invoiceReceivedAt} documents={invoice.documents.map(d=>({...d,createdAt:d.createdAt.toISOString()}))} />
+      {invoice.discountPence>0?<p className="card p-4 text-sm">Purchase discount: {formatMoney(invoice.discountPence,business.currency)}. Line totals, stock values and amounts payable include this discount.</p>:null}
 
       {/* Summary card */}
       <div className="card grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">

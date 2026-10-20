@@ -3,7 +3,7 @@ export const MAX_PURCHASE_DOCUMENT_BYTES=2*1024*1024;
 export type PurchaseDocumentInput={name:string;contentType:string;body:Uint8Array};
 export type EncodedPurchaseDocument={name:string;contentType:string;base64:string};
 export function validatePurchaseDocuments(documents:PurchaseDocumentInput[]){
-  if(!documents.length)throw new Error('Attach the supplier’s invoice before recording this purchase.');
+  if(!documents.length)throw new Error('Attach the supplier’s invoice or delivery note before recording this purchase.');
   if(documents.length>5)throw new Error('Attach up to five invoice files.');
   let size=0;
   return documents.map(document=>{

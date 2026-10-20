@@ -110,6 +110,7 @@ async function parseProductFields(formData: FormData): Promise<ProductCoreInput>
     sku: formString(formData, 'sku') || null,
     barcode: formString(formData, 'barcode') || null,
     categoryId: formOptionalString(formData, 'categoryId') || null,
+    groupId: formData.has('groupId') ? formOptionalString(formData, 'groupId') || null : undefined,
     preferredSupplierId: formOptionalString(formData, 'preferredSupplierId') || null,
     imageUrl: await resolveProductImageUrl(formData),
     sellingPriceBasePence: formPence(formData, 'sellingPriceBasePence'),

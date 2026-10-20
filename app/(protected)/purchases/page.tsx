@@ -37,6 +37,7 @@ export default async function PurchasesPage({
     created?: string;
     supplierId?: string;
     issue?: string;
+    awaitingInvoice?: string;
   };
 }) {
   const { business, store: operationalStore, stores: authorisedStores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
@@ -76,6 +77,7 @@ export default async function PurchasesPage({
           }
         : {
             businessId: business.id,
+            ...(searchParams?.awaitingInvoice==='1'?{receiptDocumentType:'DELIVERY_NOTE',invoiceReceivedAt:null}:{}),
             ...(selectedStoreId ? { storeId: selectedStoreId } : {}),
           };
 
@@ -116,6 +118,8 @@ export default async function PurchasesPage({
         storeId: true,
         transactionNumber: true,
         supplierInvoiceNumber: true,
+        receiptDocumentType: true,
+        invoiceReceivedAt: true,
         createdAt: true,
         paymentStatus: true,
         totalPence: true,
@@ -221,7 +225,7 @@ export default async function PurchasesPage({
           : qtyLabel;
     const paidPence = purchase.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
     const outstandingPence = purchase.totalPence - paidPence;
-    const purchaseReference = [displayDocumentNumber('purchase', purchase.transactionNumber, purchase.id), purchase.supplierInvoiceNumber ? `Supplier: ${purchase.supplierInvoiceNumber}` : ''].filter(Boolean).join(' · ');
+    const purchaseReference = [displayDocumentNumber('purchase', purchase.transactionNumber, purchase.id), purchase.supplierInvoiceNumber ? `Supplier: ${purchase.supplierInvoiceNumber}` : '',purchase.receiptDocumentType==='DELIVERY_NOTE'&&!purchase.invoiceReceivedAt?'Awaiting invoice':''].filter(Boolean).join(' · ');
 
     return {
       purchase,
@@ -375,7 +379,7 @@ export default async function PurchasesPage({
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-lg font-display font-semibold">
-                {missingSupplierIssue ? 'Affected purchases' : 'Recent purchases'}
+                {missingSupplierIssue ? 'Affected purchases' : searchParams?.awaitingInvoice==='1'?'Awaiting supplier invoice':'Recent purchases'}
               </h2>
               <p className="text-sm text-black/55">
                 {missingSupplierIssue
@@ -384,6 +388,7 @@ export default async function PurchasesPage({
               </p>
             </div>
             <div className="text-xs text-black/45">
+              <Link href={searchParams?.awaitingInvoice==='1'?`/purchases?storeId=${selectedStoreId}`:`/purchases?storeId=${selectedStoreId}&awaitingInvoice=1`} className="mr-3 font-semibold text-accent underline">{searchParams?.awaitingInvoice==='1'?'All purchases':'Awaiting invoice'}</Link>
               {purchaseCount} {missingSupplierIssue ? 'matching' : 'total'} invoice{purchaseCount === 1 ? '' : 's'}
             </div>
           </div>
@@ -578,6 +583,7 @@ export default async function PurchasesPage({
             searchParams={{
               storeId: !issueActive ? selectedStoreId || undefined : undefined,
               issue: missingSupplierIssue ? 'MISSING_SUPPLIER' : undefined,
+              awaitingInvoice: searchParams?.awaitingInvoice,
             }}
           />
         </div>

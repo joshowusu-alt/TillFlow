@@ -1,4 +1,6 @@
 import ProductCategoryField from '@/components/products/ProductCategoryField';
+import ClassificationSetup from '@/components/products/ClassificationSetup';
+import { listProductDivisions } from '@/lib/services/product-classification';
 import PageHeader from '@/components/PageHeader';
 import ProductIdentityFields from '@/components/products/ProductIdentityFields';
 import ProductMarginPreview from '@/components/products/ProductMarginPreview';
@@ -82,6 +84,9 @@ export default async function ProductsPage({
     barcodesFailed?: string;
     missingCost?: string;
     issue?: string;
+    category?: string;
+    division?: string;
+    group?: string;
   };
 }) {
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
@@ -91,6 +96,7 @@ export default async function ProductsPage({
   const isManager = user.role !== 'CASHIER';
 
   const q = searchParams?.q?.trim() ?? '';
+  const divisionsPromise = listProductDivisions(business.id);
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
   const requestedIssue = resolveProductsIssueParam({
     issue: searchParams?.issue,
@@ -124,6 +130,9 @@ export default async function ProductsPage({
   const productWhere = {
     businessId: business.id,
     active: issueKey === 'MISSING_COST' ? undefined : true,
+    ...(searchParams?.category ? { categoryId: searchParams.category } : {}),
+    ...(searchParams?.division ? { group: { divisionId: searchParams.division } } : {}),
+    ...(searchParams?.group ? { groupId: searchParams.group } : {}),
     ...(q ? { OR: [{ name: { contains: q, mode: 'insensitive' as const } }, { publisher: { contains: q, mode: 'insensitive' as const } }, { edition: { contains: q, mode: 'insensitive' as const } }, { barcode: q }, { barcodes: { some: { code: q } } }] } : {}),
     ...(issueProductWhere ?? {}),
   } as Prisma.ProductWhereInput;
@@ -152,6 +161,7 @@ export default async function ProductsPage({
             }
           },
           category: { select: { name: true, colour: true } },
+          group: { select: { name: true, division: { select: { name: true } } } },
           preferredSupplier: { select: { id: true, name: true } }
         },
         orderBy: { name: 'asc' },
@@ -356,6 +366,14 @@ export default async function ProductsPage({
             </div>
           )}
           {/* Product search and actions */}
+          {(await divisionsPromise).length ? <form method="get" action="/products" className="grid gap-3 sm:grid-cols-4">
+            <input type="hidden" name="q" value={q} />
+            {issueQueryValue ? <input type="hidden" name="issue" value={issueQueryValue} /> : null}
+            <div><label className="label" htmlFor="filter-category">Category</label><select id="filter-category" className="input" name="category" defaultValue={searchParams?.category ?? ''}><option value="">All categories</option>{categories.map(category=><option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
+            <div><label className="label" htmlFor="filter-division">Division</label><select id="filter-division" className="input" name="division" defaultValue={searchParams?.division ?? ''}><option value="">All divisions</option>{(await divisionsPromise).map(division=><option key={division.id} value={division.id}>{categories.find(category=>category.id===division.categoryId)?.name} / {division.name}</option>)}</select></div>
+            <div><label className="label" htmlFor="filter-group">Group</label><select id="filter-group" className="input" name="group" defaultValue={searchParams?.group ?? ''}><option value="">All groups</option>{(await divisionsPromise).flatMap(division=>division.groups.map(group=><option key={group.id} value={group.id}>{categories.find(category=>category.id===division.categoryId)?.name} / {division.name} / {group.name}</option>))}</select></div>
+            <button className="btn-secondary self-end">Filter catalogue</button>
+          </form> : null}
           <div className="operational-filter-row">
             <div className="operational-search-shell">
               <Suspense><SearchFilter placeholder={issueActive ? 'Search within affected products…' : 'Search products…'} /></Suspense>
@@ -422,7 +440,7 @@ export default async function ProductsPage({
                     <label className="label" htmlFor="create-product-sku">Internal product code (optional)</label>
                     <input className="input" id="create-product-sku" name="sku" />
                   </div>
-<div><div className="label">Product image</div><ProductImageInput fileUploadEnabled={fileUploadEnabled} /></div><div><ProductCategoryField categories={categories} /></div><div className="md:col-span-3"><ProductIdentityFields /></div></ProductFormSection>
+<div><div className="label">Product image</div><ProductImageInput fileUploadEnabled={fileUploadEnabled} /></div><div><ProductCategoryField categories={categories} divisions={await divisionsPromise} /></div><div className="md:col-span-3"><ProductIdentityFields /></div></ProductFormSection>
                 <ProductFormSection title="Stock and purchasing" description="Supplier, pack sizes and stock carried into TillFlow.">
                   <div>
                     <label className="label" htmlFor="create-product-preferredSupplierId">Preferred supplier</label>
@@ -554,7 +572,7 @@ export default async function ProductsPage({
                           className="inline-block rounded-full px-2.5 py-1 text-xs font-medium text-white"
                           style={{ backgroundColor: product.category.colour }}
                         >
-                          {product.category.name}
+                          {product.category.name}{product.group ? ` / ${product.group.division.name} / ${product.group.name}` : ''}
                         </span>
                       ) : (
                         <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs font-semibold text-black/45">No category</span>
@@ -683,7 +701,7 @@ export default async function ProductsPage({
                               className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
                               style={{ backgroundColor: product.category.colour }}
                             >
-                              {product.category.name}
+                              {product.category.name}{product.group ? ` / ${product.group.division.name} / ${product.group.name}` : ''}
                             </span>
                           ) : (
                             <span className="text-black/30 text-xs">—</span>
@@ -758,6 +776,9 @@ export default async function ProductsPage({
               basePath="/products"
               searchParams={{
                 q: q || undefined,
+                category: searchParams?.category,
+                division: searchParams?.division,
+                group: searchParams?.group,
                 tab: issueActive ? undefined : 'products',
                 issue: issueQueryValue,
                 missingCost:
@@ -771,6 +792,7 @@ export default async function ProductsPage({
       {/* ───── Categories Tab ───── */}
       {activeTab === 'categories' && !issueActive && (
         <>
+          {isManager ? <ClassificationSetup categories={categories} divisions={await divisionsPromise} /> : null}
           {isManager ? (
             <div className="card p-4 sm:p-5">
               <h2 className="text-lg font-display font-semibold">Add category</h2>

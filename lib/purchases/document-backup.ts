@@ -9,5 +9,6 @@ export function restorePurchaseDocument(raw:any,businessId:string,invoiceIds:Set
   if(document.sha256!==raw.sha256||document.byteLength!==raw.byteLength)throw new Error('A backup invoice document failed its integrity check.');
   const createdAt=new Date(raw.createdAt);
   if(!Number.isFinite(createdAt.getTime()))throw new Error('A backup invoice document has an invalid upload date.');
-  return {id:raw.id,businessId,purchaseInvoiceId:raw.purchaseInvoiceId,...document,createdAt,uploadedByUserId:typeof raw.uploadedByUserId==='string'?raw.uploadedByUserId:null};
+  if(raw.documentKind && !['INVOICE','DELIVERY_NOTE'].includes(raw.documentKind))throw new Error('A backup document has an invalid kind.');
+  return {id:raw.id,businessId,purchaseInvoiceId:raw.purchaseInvoiceId,...document,documentKind:raw.documentKind??'INVOICE',createdAt,uploadedByUserId:typeof raw.uploadedByUserId==='string'?raw.uploadedByUserId:null};
 }

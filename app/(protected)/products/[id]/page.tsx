@@ -1,5 +1,6 @@
 import { parseProductAttributes } from '@/lib/products/attributes';
 import ProductCategoryField from '@/components/products/ProductCategoryField';
+import { listProductDivisions } from '@/lib/services/product-classification';
 import PageHeader from '@/components/PageHeader';
 import ProductIdentityFields from '@/components/products/ProductIdentityFields';
 import ProductMarginPreview from '@/components/products/ProductMarginPreview';
@@ -38,7 +39,7 @@ export default async function ProductDetailPage({
     const safe = await prisma.product.findFirst({ where: { id: params.id, businessId: business.id }, select: { name: true, publisher: true, edition: true, barcode: true, sellingPriceBasePence: true } });
     return <div className="card p-6">{safe ? <><h1 className="text-xl font-semibold">{[safe.name, safe.publisher, safe.edition].filter(Boolean).join(' · ')}</h1><p>Barcode: {safe.barcode ?? 'None'}</p><p>Selling price: {formatMoney(safe.sellingPriceBasePence, business.currency)}</p><Link href="/products">Back to products</Link></> : 'Product not found.'}</div>;
   }
-  const [product, units, categories, suppliers] = await Promise.all([
+  const [product, units, categories, suppliers, divisions] = await Promise.all([
     prisma.product.findFirst({
       where: { id: params.id, businessId: business.id },
         include: {
@@ -61,7 +62,8 @@ export default async function ProductDetailPage({
       where: { businessId: business.id },
       select: { id: true, name: true },
       orderBy: { name: 'asc' }
-    })
+    }),
+    listProductDivisions(business.id),
   ]);
 
   if (!product) return <div className="card p-6">Product not found.</div>;
@@ -202,7 +204,7 @@ export default async function ProductDetailPage({
             </div>
             <div>
               <ProductIdentityFields attributesJson={product.attributesJson} publisher={product.publisher} edition={product.edition} barcodes={product.barcodes.filter(b => b.code !== product.barcode).map(b => b.code)} />
-              <ProductCategoryField categories={categories} defaultValue={product.categoryId ?? ''} />
+              <ProductCategoryField categories={categories} divisions={divisions} defaultValue={product.categoryId ?? ''} defaultGroupId={product.groupId ?? ''} />
             </div>
             <div>
               <label className="label">Preferred supplier</label>

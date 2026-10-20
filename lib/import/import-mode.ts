@@ -51,6 +51,8 @@ export const CATALOGUE_TEMPLATE_HEADERS = [
   'storefront_published',
   'image_url',
   'notes',
+  'division',
+  'group',
 ] as const;
 
 export const OPENING_STOCK_TEMPLATE_HEADERS = [
@@ -68,6 +70,8 @@ export const OPENING_STOCK_TEMPLATE_HEADERS = [
   'supplier_name',
   'reorder_point',
   'notes',
+  'division',
+  'group',
 ] as const;
 
 export const PURCHASE_TEMPLATE_HEADERS = [
@@ -86,6 +90,8 @@ export const PURCHASE_TEMPLATE_HEADERS = [
   'reorder_point',
   'notes',
   'payment_status',
+  'division',
+  'group',
 ] as const;
 
 export function templateHeadersForMode(mode: ImportMode): readonly string[] {

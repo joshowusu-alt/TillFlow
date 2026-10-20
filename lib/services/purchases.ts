@@ -1,4 +1,5 @@
 import { validatePurchaseDocuments, type PurchaseDocumentInput } from '@/lib/purchases/source-documents';
+import { pricePurchaseLines } from '@/lib/purchases/discounts';
 import { allocateCostByQuantity, splitPurchaseTender } from '@/lib/purchases/additional-costs';
 import { recordPurchaseCostExpenseTx } from './purchase-costs';
 import { ensureFundingAccount, lockFundingBalance, type PurchaseCashSource } from './purchase-funding';
@@ -43,6 +44,7 @@ import {
 export type PurchasePaymentInput = PaymentInput;
 
 export type PurchaseLineInput = {
+  discountBps?: number;
   productId: string;
   unitId: string;
   qtyInUnit: number;
@@ -50,6 +52,8 @@ export type PurchaseLineInput = {
 };
 
 export type CreatePurchaseInput = {
+  discountBps?: number;
+  receiptDocumentType?: 'INVOICE' | 'DELIVERY_NOTE';
   businessId: string;
   storeId: string;
   sourceDocuments?: PurchaseDocumentInput[];
@@ -327,6 +331,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   }
 
   const sourceDocuments = input.stockMovementType === 'OPENING' && !input.sourceDocuments?.length ? [] : validatePurchaseDocuments(input.sourceDocuments ?? []);
+  const receiptDocumentType = input.receiptDocumentType ?? 'INVOICE';
+  if (!['INVOICE', 'DELIVERY_NOTE'].includes(receiptDocumentType)) throw new UserError('Choose an invoice or delivery note.');
 
   // ── SINGLE BATCH: fire all validation lookups in parallel ──
   // Business and store checks are stable reads; productUnits MUST use the
@@ -369,7 +375,12 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     }
   }
 
-  const lineDetails = input.lines.map((line) => {
+  const pricedLines = pricePurchaseLines(input.lines.map(line => {
+    const unit = unitMap.get(`${line.productId}:${line.unitId}`) ?? baseUnitFallbackMap.get(line.productId);
+    if (!unit) throw new Error('Unit not configured for product');
+    return { ...line, unitCostPence: line.unitCostPence ?? resolveEffectiveDefaultCostPence(unit.product, unit) };
+  }), input.discountBps ?? 0);
+  const lineDetails = input.lines.map((line, index) => {
     if (line.qtyInUnit <= 0) {
       throw new Error('Quantity must be at least 1');
     }
@@ -380,7 +391,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     const qtyBase = line.qtyInUnit * productUnit.conversionToBase;
     const unitCostPence =
       line.unitCostPence ?? resolveEffectiveDefaultCostPence(productUnit.product, productUnit);
-    const unitCostBasePence = Math.round(unitCostPence / productUnit.conversionToBase);
+    const unitCostBasePence = Math.round(pricedLines[index].netPence / qtyBase);
 
     // Sanity guard: a per-base-unit cost more than 5× the selling price almost
     // always means the merchant typed a per-package cost into a per-base field
@@ -403,7 +414,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       });
     }
 
-    const lineSubtotal = unitCostPence * line.qtyInUnit;
+    const lineSubtotal = pricedLines[index].netPence;
     const vatRate = business.vatEnabled ? productUnit.product.vatRateBps : 0;
     const lineVat = business.vatEnabled ? Math.round((lineSubtotal * vatRate) / 10000) : 0;
     const lineTotal = lineSubtotal + lineVat;
@@ -414,6 +425,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       unitCostPence,
       unitCostBasePence,
       lineSubtotal,
+      discountPence: pricedLines[index].discountPence,
       lineVat,
       lineTotal
     };
@@ -502,6 +514,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         supplierId: input.supplierId ?? '',
         payments: allPayments,
         documentHashes: sourceDocuments.map(document=>document.sha256),
+        discountBps: input.discountBps, receiptDocumentType,
         supplierInvoiceNumber, additionalCostPence: additionalCost, additionalCostTreatment: costTreatment, additionalCostNote: input.additionalCostNote,
         lines: input.lines,
         userId: input.userId ?? '',
@@ -562,6 +575,9 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       data: {
         businessId: input.businessId,
         storeId: store.id,
+        receiptDocumentType,
+        discountBps: input.discountBps ?? 0,
+        discountPence: pricedLines.reduce((sum, line) => sum + line.discountPence, 0),
         supplierId: input.supplierId || null,
         supplierInvoiceNumber, additionalCostPence: additionalCost, additionalCostTreatment: costTreatment, additionalCostNote: input.additionalCostNote?.trim() || null,
         paymentStatus: finalStatus,
@@ -570,7 +586,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         vatPence: vatTotal,
         totalPence: total,
         transactionNumber,
-        ...(sourceDocuments.length ? {documents:{create:sourceDocuments.map(document=>({...document,businessId:input.businessId,uploadedByUserId:input.userId??null}))}} : {}),
+        ...(sourceDocuments.length ? {documents:{create:sourceDocuments.map(document=>({...document,documentKind:receiptDocumentType,businessId:input.businessId,uploadedByUserId:input.userId??null}))}} : {}),
       }
     });
 
@@ -585,6 +601,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         conversionToBase: line.productUnit.conversionToBase,
         qtyBase: line.qtyBase,
         unitCostPence: line.unitCostPence,
+        discountBps: line.discountBps ?? 0,
+        discountPence: line.discountPence,
         lineSubtotalPence: line.lineSubtotal,
         lineVatPence: line.lineVat,
         lineTotalPence: line.lineTotal,

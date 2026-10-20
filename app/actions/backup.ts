@@ -19,6 +19,8 @@ export interface BackupData {
     customers: any[];
     suppliers: any[];
     categories: any[];
+    productDivisions?: any[];
+    productGroups?: any[];
     products: any[];
     units: any[];
     productUnits: any[];
@@ -57,6 +59,8 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             customers,
             suppliers,
             categories,
+            productDivisions,
+            productGroups,
             products,
             units,
             productUnits,
@@ -85,6 +89,8 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             prisma.customer.findMany({ where: { businessId } }),
             prisma.supplier.findMany({ where: { businessId } }),
             prisma.category.findMany({ where: { businessId } }),
+            prisma.productDivision.findMany({ where: { businessId, category: { businessId } } }),
+            prisma.productGroup.findMany({ where: { businessId, division: { businessId, category: { businessId } } } }),
             prisma.product.findMany({ where: { businessId } }),
             prisma.unit.findMany({ where: { productUnits: { some: { product: { businessId } } } } }),
             prisma.productUnit.findMany({ where: { product: { businessId } } }),
@@ -110,7 +116,7 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
         ]);
 
         const backupData: BackupData = {
-            version: '1.2',
+            version: '1.3',
             exportedAt: new Date().toISOString(),
             business,
             stores,
@@ -118,6 +124,8 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             customers,
             suppliers,
             categories,
+            productDivisions,
+            productGroups,
             products,
             units,
             productUnits,
@@ -221,6 +229,8 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       await tx.stocktake.deleteMany({ where: { store: { businessId } } });
       await tx.productUnit.deleteMany({ where: { product: { businessId } } });
       await tx.product.deleteMany({ where: { businessId } });
+      await tx.productGroup.deleteMany({ where: { businessId } });
+      await tx.productDivision.deleteMany({ where: { businessId } });
       await tx.category.deleteMany({ where: { businessId } });
       await tx.shift.deleteMany({ where: { till: { store: { businessId } } } });
       await tx.till.deleteMany({ where: { store: { businessId } } });
@@ -336,7 +346,21 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
         await tx.category.create({ data: { ...category, businessId } });
       }
 
+      const categoryIds = new Set(list(backup.categories).map(category => category.id));
+      const divisionIds = new Set(list(backup.productDivisions).map(division => division.id));
+      const groupIds = new Set(list(backup.productGroups).map(group => group.id));
+      for (const division of list(backup.productDivisions)) {
+        if (!categoryIds.has(division.categoryId)) throw new Error('A division references a category missing from this backup.');
+        await tx.productDivision.create({ data: { ...division, businessId } });
+      }
+      for (const group of list(backup.productGroups)) {
+        if (!divisionIds.has(group.divisionId)) throw new Error('A group references a division missing from this backup.');
+        await tx.productGroup.create({ data: { ...group, businessId } });
+      }
+
       for (const product of list(backup.products)) {
+        if (product.groupId && !groupIds.has(product.groupId)) throw new Error('A product group is missing from this backup.');
+        // Classification parents are restored before their product links.
         await tx.product.create({ data: { ...product, businessId } });
       }
 
@@ -507,6 +531,8 @@ export async function resetAllDataAction(): Promise<ActionResult<{ message: stri
       prisma.productUnit.deleteMany({ where: { product: { businessId } } }),
       prisma.product.deleteMany({ where: { businessId } }),
       // Categories
+      prisma.productGroup.deleteMany({ where: { businessId } }),
+      prisma.productDivision.deleteMany({ where: { businessId } }),
       prisma.category.deleteMany({ where: { businessId } }),
       // Customers & suppliers
       prisma.customer.deleteMany({ where: { businessId } }),

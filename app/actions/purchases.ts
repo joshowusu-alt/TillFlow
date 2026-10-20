@@ -18,6 +18,7 @@ import { audit } from '@/lib/audit';
 import type { PaymentStatus } from '@/lib/services/shared';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
+import { purchaseDiscountBps } from '@/lib/purchases/discounts';
 import { purchaseNeedsSupplierLink, isOpeningStockMovement } from '@/lib/improve-records-classify';
 import {
   OPENING_STOCK_MOVEMENT_TYPES,
@@ -34,6 +35,9 @@ export async function createPurchaseAction(formData: FormData): Promise<ActionRe
     );
     const supplierId = formString(formData, 'supplierId') || null;
     const supplierInvoiceNumber = formString(formData, 'supplierInvoiceNumber');
+    const discountBps = purchaseDiscountBps(formString(formData, 'purchaseDiscountPercent'));
+    const receiptDocumentType = formString(formData, 'receiptDocumentType') || 'INVOICE';
+    if (receiptDocumentType !== 'INVOICE' && receiptDocumentType !== 'DELIVERY_NOTE') return err('Choose an invoice or delivery note.');
     const additionalCostRaw = formString(formData, 'additionalCost');
     if (additionalCostRaw && (!Number.isFinite(Number(additionalCostRaw.replace(/,/g,''))) || Number(additionalCostRaw.replace(/,/g,'')) < 0)) return err('Enter a valid additional cost.');
     const additionalCostPence = toPence(additionalCostRaw);
@@ -46,7 +50,7 @@ export async function createPurchaseAction(formData: FormData): Promise<ActionRe
     }
     const dueDate = paymentStatus === 'PAID' ? null : formDate(formData, 'dueDate');
 
-    let lines: { productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null }[] = [];
+    let lines: { productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null; discountBps?: number }[] = [];
     const cartRaw = formData.get('cart');
     if (cartRaw) {
       try {
@@ -57,6 +61,7 @@ export async function createPurchaseAction(formData: FormData): Promise<ActionRe
               productId: String(item.productId || ''),
               unitId: String(item.unitId || ''),
               qtyInUnit: Number(item.qtyInUnit || 0),
+              discountBps: purchaseDiscountBps(item.discountPercent),
               unitCostPence: toPence(item.unitCostInput ?? item.unitCostPence ?? '')
             }))
             .filter((item) => item.productId && item.unitId && item.qtyInUnit > 0);
@@ -97,6 +102,7 @@ export async function createPurchaseAction(formData: FormData): Promise<ActionRe
       businessId,
       storeId,
       sourceDocuments,
+      discountBps, receiptDocumentType,
       supplierId, supplierInvoiceNumber, additionalCostPence, additionalCostTreatment, additionalCostNote,
       cashSource, cashHolderId, fundingOwnerId,
       paymentStatus,
@@ -517,16 +523,21 @@ export async function addPurchaseDocumentsAction(formData:FormData){
   return safeAction(async()=>{
     const {user,businessId}=await withBusinessContext(['OWNER','MANAGER']);
     const invoiceId=formString(formData,'invoiceId');
+    const documentKind=formString(formData,'documentKind')||'INVOICE';
+    if(!['INVOICE','DELIVERY_NOTE'].includes(documentKind))return err('Choose an invoice or delivery note.');
+    const supplierInvoiceNumber=formString(formData,'supplierInvoiceNumber').trim();
+    if(supplierInvoiceNumber.length>100||/[\x00-\x1f]/.test(supplierInvoiceNumber))return err('Supplier invoice number must be up to 100 characters.');
     const documents=validatePurchaseDocuments(decodePurchaseDocuments(formString(formData,'purchaseDocumentsJson')));
     await prisma.$transaction(async tx=>{
-      const invoice=await tx.purchaseInvoice.findFirst({where:{id:invoiceId,businessId},select:{id:true,documents:{select:{sha256:true}}}});
+      const invoice=await tx.purchaseInvoice.findFirst({where:{id:invoiceId,businessId},select:{id:true,receiptDocumentType:true,invoiceReceivedAt:true,supplierInvoiceNumber:true,documents:{select:{sha256:true,documentKind:true}}}});
       if(!invoice)throw new Error('Purchase not found.');
       const existing=new Set(invoice.documents.map(d=>d.sha256));
       const added=documents.filter(d=>{if(existing.has(d.sha256))return false;existing.add(d.sha256);return true;});
-      if(!added.length)return;
-      await tx.purchaseDocument.createMany({data:added.map(document=>({...document,businessId,purchaseInvoiceId:invoiceId,uploadedByUserId:user.id}))});
-      await tx.auditLog.create({data:{businessId,userId:user.id,userName:user.name??'Unknown',userRole:user.role,action:'PURCHASE_DOCUMENT_ADD',entity:'PurchaseInvoice',entityId:invoiceId,details:JSON.stringify({files:added.map(d=>({name:d.originalFilename,sha256:d.sha256}))})}});
+      if(!added.length){if(documentKind==='INVOICE'&&invoice.receiptDocumentType==='DELIVERY_NOTE'&&!invoice.invoiceReceivedAt)throw new Error('Attach the supplier invoice as a new document. The delivery note is already saved.');return;}
+      await tx.purchaseDocument.createMany({data:added.map(document=>({...document,documentKind,businessId,purchaseInvoiceId:invoiceId,uploadedByUserId:user.id}))});
+      if(documentKind==='INVOICE')await tx.purchaseInvoice.update({where:{id:invoiceId},data:{invoiceReceivedAt:invoice.invoiceReceivedAt??new Date(),...(supplierInvoiceNumber?{supplierInvoiceNumber}:{})}});
+      await tx.auditLog.create({data:{businessId,userId:user.id,userName:user.name??'Unknown',userRole:user.role,action:'PURCHASE_DOCUMENT_ADD',entity:'PurchaseInvoice',entityId:invoiceId,details:JSON.stringify({documentKind,supplierInvoiceNumberBefore:invoice.supplierInvoiceNumber,supplierInvoiceNumberAfter:documentKind==='INVOICE'&&supplierInvoiceNumber?supplierInvoiceNumber:invoice.supplierInvoiceNumber,files:added.map(d=>({name:d.originalFilename,sha256:d.sha256}))})}});
     },{isolationLevel:'Serializable',maxWait:5000,timeout:15000});
-    revalidatePath(`/purchases/${invoiceId}`);return ok({invoiceId});
+    revalidatePath(`/purchases/${invoiceId}`);revalidatePath('/purchases');return ok({invoiceId});
   });
 }

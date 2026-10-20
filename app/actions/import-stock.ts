@@ -21,6 +21,7 @@ import { buildProductUnitCreates } from '@/lib/services/products';
 import { ensureChartOfAccounts } from '@/lib/accounting';
 import { audit } from '@/lib/audit';
 import { suggestImportCategoryName } from '@/lib/import/category-import';
+import { classificationName, createClassificationNode } from '@/lib/services/product-classification';
 import type { DuplicateAction } from '@/lib/import/import-validation';
 import {
   isImportMode,
@@ -36,6 +37,8 @@ import type { PaymentMethod } from '@/lib/services/shared/payment-utils';
 // ---------------------------------------------------------------------------
 
 export type ConfirmedImportRow = {
+  division?: string;
+  group?: string;
   name: string;
   sku: string;
   barcode: string;
@@ -308,6 +311,16 @@ async function _runImport(
         ? rows.map((r) => ({ ...r, quantity: 0, paymentStatus: undefined, openingFunding: undefined }))
         : rows;
 
+    for (const row of incomingRows) {
+      if (row.division?.trim() || row.group?.trim()) {
+        if (!row.category?.trim() || !row.division?.trim() || !row.group?.trim()) throw new Error(`Provide category, division and group together for ${row.name}.`);
+        [row.category, row.division, row.group].forEach(name => classificationName(name!));
+      }
+    }
+    const categoryForRow = (row: ConfirmedImportRow) => row.division?.trim() || row.group?.trim()
+      ? row.category.trim() : suggestImportCategoryName(row.category) || row.category;
+    const pathKey = (row: ConfirmedImportRow) => JSON.stringify([categoryForRow(row), row.division?.trim(), row.group?.trim()]).toLowerCase();
+
     // ── Resolve "new:UnitName" sentinels → create Unit records ──────────
     // The preview UI sets baseUnitId / packUnitId / qtyInUnitId to "new:Name"
     // when the owner chooses to create a previously unknown unit.
@@ -444,7 +457,7 @@ async function _runImport(
       ...new Set(
         [...rowsToCreate, ...rowsForUpdate.map((u) => u.row)]
           .filter((r) => r.category)
-          .map((r) => suggestImportCategoryName(r.category) || r.category)
+          .map(categoryForRow)
       ),
     ];
     for (const catName of allCategoryNames) {
@@ -459,10 +472,17 @@ async function _runImport(
       }
     }
 
+    const groupIds = new Map<string, string>();
+    for (const row of [...rowsToCreate, ...rowsForUpdate.map(item => item.row)]) {
+      if (!row.group?.trim() || groupIds.has(pathKey(row))) continue;
+      const division = await createClassificationNode(businessId, 'division', categoryMap.get(categoryForRow(row).toLowerCase())!, row.division!);
+      const group = await createClassificationNode(businessId, 'group', division.id, row.group);
+      groupIds.set(pathKey(row), group.id);
+    }
     let updatedCount = 0;
     for (const { row, productId } of rowsForUpdate) {
       const categoryName = row.category
-        ? suggestImportCategoryName(row.category) || row.category
+        ? categoryForRow(row)
         : '';
       const categoryId = categoryName
         ? categoryMap.get(categoryName.toLowerCase()) ?? null
@@ -479,9 +499,9 @@ async function _runImport(
       await prisma.product.update({
         where: { id: productId },
         data: {
+          ...(row.group?.trim() ? { categoryId, groupId: groupIds.get(pathKey(row))! } : {}),
           sellingPriceBasePence: row.sellingPricePence,
           defaultCostBasePence: row.costPricePence,
-          ...(categoryId ? { categoryId } : {}),
           ...(row.sku ? { sku: row.sku } : {}),
           ...(barcode ? { barcode } : {}),
           ...(row.reorderPointBase && row.reorderPointBase > 0
@@ -492,6 +512,11 @@ async function _runImport(
             : {}),
           ...(row.imageUrl ? { imageUrl: row.imageUrl } : {}),
         },
+      });
+      // A category-only CSV must not detach an existing group's umbrella.
+      // Group assignments are managed explicitly in the product editor.
+      if (categoryId && !row.group?.trim()) await prisma.product.updateMany({
+        where: { id: productId, businessId, groupId: null }, data: { categoryId },
       });
       updatedCount++;
     }
@@ -522,7 +547,7 @@ async function _runImport(
       const productData = await Promise.all(
         rowsToCreate.map(async (row) => {
           const categoryName = row.category
-            ? suggestImportCategoryName(row.category) || row.category
+            ? categoryForRow(row)
             : '';
           const supplierId = await resolveSupplierIdForRow(row);
           return {
@@ -530,6 +555,7 @@ async function _runImport(
             name: row.name,
             sku: row.sku || null,
             barcode: row.barcode || null,
+            groupId: row.group?.trim() ? groupIds.get(pathKey(row))! : null,
             categoryId: categoryName
               ? categoryMap.get(categoryName.toLowerCase()) ?? null
               : null,

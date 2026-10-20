@@ -385,7 +385,9 @@ export default function ImportStockClient({
         name: r.name,
         sku: r.sku,
         barcode: r.barcode,
-        category: r.suggestedCategory || r.category,
+        category: r.division || r.group ? r.category : r.suggestedCategory || r.category,
+        division: r.division,
+        group: r.group,
         sellingPricePence: r.sellingPricePence,
         costPricePence: r.costPricePence,
         quantity: importMode === 'CATALOGUE' ? 0 : r.quantity,
@@ -1132,7 +1134,7 @@ export default function ImportStockClient({
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <div className="text-xs uppercase tracking-[0.16em] text-black/40">Category</div>
-                  <div className="mt-1 text-black/65">{row.category || '—'}</div>
+                  <div className="mt-1 text-black/65">{[row.category,row.division,row.group].filter(Boolean).join(' → ') || '—'}</div>
                 </div>
                 {importMode === 'PURCHASES' ? (
                   <div>
@@ -1283,7 +1285,7 @@ export default function ImportStockClient({
                       {row.sku && <div className="text-xs text-black/40">{row.sku}</div>}
                     </td>
                     <td className="px-3 py-2 text-black/60 hidden sm:table-cell">
-                      {row.category || <span className="text-black/30">—</span>}
+                      {[row.category,row.division,row.group].filter(Boolean).join(' → ') || <span className="text-black/30">—</span>}
                     </td>
                     <td className="px-3 py-2 text-right">
                       {row.sellingPricePence > 0

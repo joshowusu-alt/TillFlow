@@ -125,6 +125,8 @@ export function buildExpenseCreatePayloadHash(parts: {
 }
 
 export function buildPurchaseCreatePayloadHash(parts: {
+  discountBps?: number;
+  receiptDocumentType?: string;
   businessId: string;
   storeId: string;
   supplierId: string;
@@ -134,7 +136,7 @@ export function buildPurchaseCreatePayloadHash(parts: {
   additionalCostTreatment?: string;
   additionalCostNote?: string | null;
   payments: Array<{ method: string; amountPence: number; reference?: string | null }>;
-  lines: Array<{ productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null }>;
+  lines: Array<{ productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null; discountBps?: number }>;
   userId: string;
 }): string {
   const lineCanon = parts.lines
@@ -149,6 +151,7 @@ export function buildPurchaseCreatePayloadHash(parts: {
     lineCanon,
     parts.userId,
     ...(parts.documentHashes?.length ? [JSON.stringify(parts.documentHashes)] : []),
+    ...(parts.discountBps || parts.lines.some(line => line.discountBps) || parts.receiptDocumentType === 'DELIVERY_NOTE' ? [JSON.stringify([parts.discountBps ?? 0, parts.lines.map(line => line.discountBps ?? 0), parts.receiptDocumentType ?? 'INVOICE'])] : []),
     ...(parts.supplierInvoiceNumber || parts.additionalCostPence ? [JSON.stringify([parts.supplierInvoiceNumber ?? null, parts.additionalCostPence ?? 0, parts.additionalCostTreatment ?? 'EXPENSE', parts.additionalCostNote?.trim() ?? ''])] : []),
   ]);
 }

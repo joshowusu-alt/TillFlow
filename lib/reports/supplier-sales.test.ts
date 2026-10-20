@@ -322,7 +322,9 @@ describe('sales-by-supplier export route', () => {
   });
 
   it('gates on advancedReports and returns 403 for unauthenticated plans', () => {
-    expect(src).toContain('advancedReports');
+    expect(src).toContain('guardLiveReport');
+    expect(src).toContain("surfaceId:'export_sales_by_supplier'");
+    expect(src).toContain("action:'EXPORT'");
     expect(src).toContain('403');
   });
 

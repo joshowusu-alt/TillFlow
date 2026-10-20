@@ -56,16 +56,20 @@ export async function updateCategory(
  * Throws if the category is not found or does not belong to the business.
  */
 export async function deleteCategory(id: string, businessId: string): Promise<void> {
-  const category = await prisma.category.findFirst({
+  await prisma.$transaction(async tx => {
+  const divisions = await tx.productDivision.count({ where: { categoryId: id, businessId } });
+  if (divisions) throw new Error('This category has divisions. Keep it to preserve the product hierarchy.');
+  const category = await tx.category.findFirst({
     where: { id, businessId },
     select: { id: true },
   });
   if (!category) throw new Error('Category not found. It may have been removed.');
 
-  await prisma.product.updateMany({
+  await tx.product.updateMany({
     where: { categoryId: category.id, businessId },
     data: { categoryId: null },
   });
 
-  await prisma.category.delete({ where: { id: category.id } });
+  await tx.category.delete({ where: { id: category.id } });
+  });
 }

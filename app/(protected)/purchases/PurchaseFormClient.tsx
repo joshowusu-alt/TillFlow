@@ -2,6 +2,7 @@
 import Link from 'next/link';
 
 import PurchaseDocumentInput from '@/components/purchases/PurchaseDocumentInput';
+import { pricePurchaseLines, purchaseDiscountBps } from '@/lib/purchases/discounts';
 import ProductIdentityFields from '@/components/products/ProductIdentityFields';
 import { ProductMarginResult } from '@/components/products/ProductMarginPreview';
 
@@ -69,6 +70,7 @@ function buildDefaultUnitConfigs(units: UnitOption[]): EditableProductUnitConfig
 }
 
 type CartLine = {
+  discountPercent?: string;
   id: string;
   productId: string;
   unitId: string;
@@ -77,6 +79,8 @@ type CartLine = {
 };
 
 type PurchaseDraft = {
+  purchaseDiscountPercent?: string;
+  receiptDocumentType?: 'INVOICE' | 'DELIVERY_NOTE';
   version: 1;
   updatedAt: number;
   supplierId: string;
@@ -124,6 +128,8 @@ export default function PurchaseFormClient({
   const [productOptions, setProductOptions] = useState<ProductDto[]>(products);
   const [supplierId, setSupplierId] = useState('');
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('');
+  const [purchaseDiscountPercent, setPurchaseDiscountPercent] = useState('');
+  const [receiptDocumentType, setReceiptDocumentType] = useState<'INVOICE' | 'DELIVERY_NOTE'>('INVOICE');
   const [duplicateInvoice, setDuplicateInvoice] = useState<{ id: string; transactionNumber: string | null } | null>(null);
   const [additionalCost, setAdditionalCost] = useState('');
   const [additionalCostTreatment, setAdditionalCostTreatment] = useState<'INVENTORY' | 'EXPENSE'>('EXPENSE');
@@ -203,6 +209,7 @@ export default function PurchaseFormClient({
     setCardPaid('');
     setTransferPaid('');
     setSupplierInvoiceNumber(''); setAdditionalCost(''); setAdditionalCostNote(''); setAdditionalCostTreatment('EXPENSE'); setDuplicateInvoice(null);
+    setPurchaseDiscountPercent(''); setReceiptDocumentType('INVOICE');
     setBarcodeLookup('');
     setProductSearch('');
     setProductDropdownOpen(false);
@@ -248,6 +255,7 @@ export default function PurchaseFormClient({
         : [];
 
       setSupplierInvoiceNumber(parsed.supplierInvoiceNumber ?? ''); setAdditionalCost(parsed.additionalCost ?? ''); setAdditionalCostTreatment(parsed.additionalCostTreatment === 'INVENTORY' ? 'INVENTORY' : 'EXPENSE'); setAdditionalCostNote(parsed.additionalCostNote ?? '');
+      setPurchaseDiscountPercent(parsed.purchaseDiscountPercent ?? ''); setReceiptDocumentType(parsed.receiptDocumentType === 'DELIVERY_NOTE' ? 'DELIVERY_NOTE' : 'INVOICE');
       setSupplierId(validRequestedSupplierId || (typeof parsed.supplierId === 'string' ? parsed.supplierId : ''));
       setCart(restoredCart);
       setPaymentMethods(restoredMethods.length > 0 ? restoredMethods : ['CASH']);
@@ -293,7 +301,7 @@ export default function PurchaseFormClient({
       const draft: PurchaseDraft = {
         version: PURCHASE_DRAFT_VERSION,
         updatedAt: Date.now(),
-        supplierId, supplierInvoiceNumber, additionalCost, additionalCostTreatment, additionalCostNote,
+        supplierId, supplierInvoiceNumber, additionalCost, additionalCostTreatment, additionalCostNote, purchaseDiscountPercent, receiptDocumentType,
         cart,
         paymentMethods,
         cashPaid,
@@ -304,7 +312,7 @@ export default function PurchaseFormClient({
       };
       window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
     } catch {}
-  }, [cardPaid, cart, cashPaid, dueDate, paymentMethods, paymentStatus, storeId, supplierId, transferPaid, cashSource, cashHolderId, fundingOwnerId, draftStorageKey, supplierInvoiceNumber, additionalCost, additionalCostTreatment, additionalCostNote]);
+  }, [cardPaid, cart, cashPaid, dueDate, paymentMethods, paymentStatus, storeId, supplierId, transferPaid, cashSource, cashHolderId, fundingOwnerId, draftStorageKey, supplierInvoiceNumber, additionalCost, additionalCostTreatment, additionalCostNote, purchaseDiscountPercent, receiptDocumentType]);
 
   useEffect(() => {
     if (!draftReadyRef.current) return;
@@ -524,15 +532,19 @@ export default function PurchaseFormClient({
     });
   };
 
+  const discountPricing = useMemo(() => {
+    try { return { lines: pricePurchaseLines(cart.map(line => ({ qtyInUnit: line.qtyInUnit, unitCostPence: parseCurrencyToPence(line.unitCostInput), discountBps: purchaseDiscountBps(line.discountPercent) })), purchaseDiscountBps(purchaseDiscountPercent)), error: '' }; }
+    catch (error) { return { lines: [], error: error instanceof Error ? error.message : 'Review purchase discounts.' }; }
+  }, [cart, purchaseDiscountPercent]);
   const cartDetails = useMemo(() => {
     return cart
-      .map((line) => {
+      .map((line, index) => {
         const product = productOptions.find((item) => item.id === line.productId);
         const unit = product?.units.find((item) => item.id === line.unitId);
         if (!product || !unit) return null;
         const qtyBase = line.qtyInUnit * unit.conversionToBase;
         const unitCostPence = parseCurrencyToPence(line.unitCostInput);
-        const lineSubtotal = unitCostPence * line.qtyInUnit;
+        const lineSubtotal = discountPricing.lines[index]?.netPence ?? unitCostPence * line.qtyInUnit;
         const lineVat = vatEnabled ? Math.round((lineSubtotal * product.vatRateBps) / 10000) : 0;
         const lineTotal = lineSubtotal + lineVat;
         const baseUnit = product.units.find((item) => item.isBaseUnit);
@@ -569,7 +581,7 @@ export default function PurchaseFormClient({
         lineTotal: number;
       }
     >;
-  }, [cart, productOptions, vatEnabled]);
+  }, [cart, productOptions, vatEnabled, discountPricing]);
 
   const totals = cartDetails.reduce(
     (acc, line) => {
@@ -613,6 +625,8 @@ export default function PurchaseFormClient({
   };
 
   const discardDraft = () => {
+    setPurchaseDiscountPercent('');
+    setReceiptDocumentType('INVOICE');
     setSupplierId('');
     setCart([]);
     setQtyDrafts({});
@@ -776,7 +790,9 @@ export default function PurchaseFormClient({
         <input type="hidden" name="transferPaid" value={Math.max(0, transferPaidPence)} />
         {paymentStatus !== 'UNPAID' && cashSource === 'TILL' && openTills.length === 1 ? <input type="hidden" name="tillId" value={openTills[0]!.tillId} /> : null}
 
-        <PurchaseDocumentInput /><p className="text-xs text-black/50">If you restore a draft or reopen this page, select the invoice files again before recording.</p>
+        <label className="label">Receiving document<select name="receiptDocumentType" className="input mt-1" value={receiptDocumentType} onChange={event=>setReceiptDocumentType(event.target.value as 'INVOICE' | 'DELIVERY_NOTE')}><option value="INVOICE">Supplier invoice</option><option value="DELIVERY_NOTE">Delivery note — invoice to follow</option></select></label>
+        {receiptDocumentType === 'DELIVERY_NOTE' ? <p className="text-sm text-amber-800">Confirm quantities and supplier costs before recording. This purchase will stay in Awaiting invoice until the supplier invoice is attached.</p> : null}
+        <PurchaseDocumentInput /><p className="text-xs text-black/50">If you restore a draft or reopen this page, select the document files again before recording.</p>
         <div className="rounded-xl border border-slate-200 p-4">
           <label className="label" htmlFor="supplier-invoice-number">Supplier’s original invoice number (optional)</label>
           <input id="supplier-invoice-number" name="supplierInvoiceNumber" className="input" maxLength={100} value={supplierInvoiceNumber} onChange={event => { setSupplierInvoiceNumber(event.target.value); setDuplicateInvoice(null); }} onBlur={async () => { try { const result = await checkSupplierInvoiceReferenceAction(supplierId, supplierInvoiceNumber); if (result.success) setDuplicateInvoice(result.data); } catch { /* Optional duplicate hint must not interrupt entry. */ } }} placeholder="e.g. INV-2026-1042" />
@@ -1083,6 +1099,7 @@ export default function PurchaseFormClient({
                     </div>
 
                     <div className="mt-4 rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2 text-sm">
+                      <label className="label">Item discount (%)<input className="input mb-2" type="number" min="0" max="100" step="0.01" value={line.discountPercent ?? ''} onChange={event=>updateLine(line.id,{discountPercent:event.target.value})} /></label>
                       <span className="text-black/50">Line total</span>
                       <span className="ml-2 font-semibold text-ink">{formatMoney(line.lineTotal, currency)}</span>
                     </div>
@@ -1158,6 +1175,7 @@ export default function PurchaseFormClient({
                       </div>
                     </td>
                     <td className="px-3 py-3 text-sm font-semibold">
+                      <label className="label">Item discount (%)<input className="input mb-2" type="number" min="0" max="100" step="0.01" value={line.discountPercent ?? ''} onChange={event=>updateLine(line.id,{discountPercent:event.target.value})} /></label>
                       {formatMoney(line.lineTotal, currency)}
                     </td>
                     <td className="px-3 py-3 text-right">
@@ -1174,6 +1192,7 @@ export default function PurchaseFormClient({
           )}
         </div>
 
+        <div className="rounded-xl border border-slate-200 p-4"><label className="label" htmlFor="purchase-discount">Extra invoice discount (%)</label><input id="purchase-discount" name="purchaseDiscountPercent" className="input mt-1 max-w-xs" type="number" min="0" max="100" step="0.01" value={purchaseDiscountPercent} onChange={event=>setPurchaseDiscountPercent(event.target.value)} /><p className="mt-2 text-sm text-black/60">Applied after item discounts, before VAT. Total discount: {formatMoney(discountPricing.lines.reduce((sum,line)=>sum+line.discountPence,0),currency)}.</p>{discountPricing.error ? <p role="alert" className="text-sm text-red-700">{discountPricing.error}</p> : null}</div>
         <details className="rounded-xl border border-slate-200 p-4" open={extraCostPence > 0 || undefined}>
           <summary className="cursor-pointer font-semibold text-sm">Add delivery or other purchase costs</summary>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -1310,7 +1329,7 @@ export default function PurchaseFormClient({
             Ready to receive <span className="font-semibold text-ink">{cart.length}</span> line{cart.length === 1 ? '' : 's'} totaling{' '}
             <span className="font-semibold text-ink">{formatMoney(totals.total, currency)}</span>.
           </div>
-          <ReceivePurchaseButton disabled={cart.length === 0 || overpay || missingRequiredSupplier} />
+          <ReceivePurchaseButton disabled={cart.length === 0 || overpay || missingRequiredSupplier || Boolean(discountPricing.error)} />
         </div>
       </form>
 
