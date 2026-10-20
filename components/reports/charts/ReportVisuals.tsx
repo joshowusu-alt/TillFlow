@@ -49,7 +49,7 @@ export function TrendLine({ title, labels, values, currency, tone = 'sales' }: {
   return <figure ref={container} className="min-w-0">
     <figcaption className="mb-2 text-sm font-semibold">{title}</figcaption>
     <p className="mb-1 flex flex-wrap justify-between gap-x-3 text-xs text-slate-600"><span>Scale low: {formatMoney(min, currency)}</span><span>Scale high: {formatMoney(max, currency)}</span></p>
-    <svg viewBox={`0 0 ${width} 210`} className="h-[210px] w-full" preserveAspectRatio="none" role="img" aria-labelledby={id}>
+    <svg viewBox={`0 0 ${width} 210`} className="block h-[210px] max-h-[210px] w-full" style={{ height: 210, maxHeight: 210 }} height={210} preserveAspectRatio="none" role="img" aria-labelledby={id}>
       <title id={id}>{`${title}. From ${labels[0]} to ${labels.at(-1)}. Exact daily figures follow.`}</title>
       {[0, 0.5, 1].map(t => <line key={t} x1="12" x2={width - 12} y1={30 + t * 145} y2={30 + t * 145} stroke="#dce3ef" strokeDasharray="4 4" />)}
       <line x1="12" x2={width - 12} y1={y(0)} y2={y(0)} stroke="#94a3b8" />

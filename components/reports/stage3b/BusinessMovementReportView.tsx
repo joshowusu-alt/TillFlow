@@ -83,6 +83,47 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
           </div>
         }
       />
+      <details className="rounded-xl border border-slate-200 bg-white px-3 py-1">
+        <summary className="flex min-h-11 w-fit max-w-full cursor-pointer items-center rounded-lg px-1 text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">Change period or branch</summary>
+      <ReportFilterCard columnsClassName="md:grid-cols-2 xl:grid-cols-4">
+        <div className="text-sm">
+          <label htmlFor="movement-preset" className="mb-1 block text-slate-600">Period</label>
+          <select className="input w-full" id="movement-preset" name="preset" defaultValue={selectedPreset}>
+            <option value="last_full_calendar_month">Last full calendar month</option>
+            <option value="equal_length_custom">Custom dates (same-length comparison)</option>
+          </select>
+        </div>
+        <div className="text-sm">
+          <label htmlFor="movement-currentFrom" className="mb-1 block text-slate-600">From</label>
+          <input
+            className="input w-full"
+            type="date"
+            id="movement-currentFrom" name="currentFrom"
+            defaultValue={currentFromValue || p.currentFromKey}
+          />
+        </div>
+        <div className="text-sm">
+          <label htmlFor="movement-currentTo" className="mb-1 block text-slate-600">To</label>
+          <input
+            className="input w-full"
+            type="date"
+            id="movement-currentTo" name="currentTo"
+            defaultValue={currentToValue || p.currentToKey}
+          />
+        </div>
+        <div className="text-sm">
+          <label htmlFor="movement-storeId" className="mb-1 block text-slate-600">Branch</label>
+          <select className="input w-full" id="movement-storeId" name="storeId" defaultValue={selectedStoreId}>
+            {offerAll ? <option value="ALL">{CONSOLIDATED_LABEL}</option> : null}
+            {choices.map((store) => (
+              <option key={store.id} value={store.id}>
+                {store.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </ReportFilterCard>
+      </details>
       {queryFailed ? <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Payment figures could not be loaded. Receipts, refunds, pending MoMo and the gap are unavailable. Sales figures remain separate.</p> : null}
       <BusinessMovementSummary result={result} labels={chrome} strip={strip} />
 
@@ -146,47 +187,7 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
         </ReportSection>
       </div>
       </div>
-      <details className="rounded-xl border border-slate-200 bg-white px-3 py-1">
-        <summary className="flex min-h-11 w-fit max-w-full cursor-pointer items-center rounded-lg px-1 text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">Change period or branch</summary>
-      <ReportFilterCard columnsClassName="md:grid-cols-2 xl:grid-cols-4">
-        <div className="text-sm">
-          <label htmlFor="movement-preset" className="mb-1 block text-slate-600">Period</label>
-          <select className="input w-full" id="movement-preset" name="preset" defaultValue={selectedPreset}>
-            <option value="last_full_calendar_month">Last full calendar month</option>
-            <option value="equal_length_custom">Custom dates (same-length comparison)</option>
-          </select>
-        </div>
-        <div className="text-sm">
-          <label htmlFor="movement-currentFrom" className="mb-1 block text-slate-600">From</label>
-          <input
-            className="input w-full"
-            type="date"
-            id="movement-currentFrom" name="currentFrom"
-            defaultValue={currentFromValue || p.currentFromKey}
-          />
-        </div>
-        <div className="text-sm">
-          <label htmlFor="movement-currentTo" className="mb-1 block text-slate-600">To</label>
-          <input
-            className="input w-full"
-            type="date"
-            id="movement-currentTo" name="currentTo"
-            defaultValue={currentToValue || p.currentToKey}
-          />
-        </div>
-        <div className="text-sm">
-          <label htmlFor="movement-storeId" className="mb-1 block text-slate-600">Branch</label>
-          <select className="input w-full" id="movement-storeId" name="storeId" defaultValue={selectedStoreId}>
-            {offerAll ? <option value="ALL">{CONSOLIDATED_LABEL}</option> : null}
-            {choices.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </ReportFilterCard>
-      </details>
+
 
 
       <div className="grid min-w-0 items-start gap-4 xl:grid-cols-3">
@@ -221,10 +222,10 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
           <tr>
             <th className="text-left">Product</th>
             <th className="text-left">What happened</th>
-            <th className="text-right">{chrome.currentFull}</th>
-            <th className="text-right">{chrome.comparisonFull}</th>
-            <th className="text-right">Change</th>
-            <th className="text-right">Quantity</th>
+            <th className="!text-right">{chrome.currentFull}</th>
+            <th className="!text-right">{chrome.comparisonFull}</th>
+            <th className="!text-right">Change</th>
+            <th className="!text-right">Quantity</th>
           </tr>
         </thead>
         <tbody>
@@ -238,10 +239,10 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
               <tr key={`${row.side}-${row.productId}`}>
                 <td><Link href={`/products/${encodeURIComponent(row.productId)}`} className={REPORT_LINK}>{row.productName}</Link></td>
                 <td>{row.side === 'New product' ? 'No sales in the earlier period' : row.side}</td>
-                <td className="text-right">{formatMoney(row.currentPence, currency)}</td>
-                <td className="text-right">{formatMoney(row.comparisonPence, currency)}</td>
-                <td className="text-right">{row.changePence > 0 ? '+' : null}<FinancialAmount pence={row.changePence} currency={currency} variant="compact" /></td>
-                <td className="text-right">{row.qtyWording}</td>
+                <td className="!text-right">{formatMoney(row.currentPence, currency)}</td>
+                <td className="!text-right">{formatMoney(row.comparisonPence, currency)}</td>
+                <td className="!text-right">{row.changePence > 0 ? '+' : null}<FinancialAmount pence={row.changePence} currency={currency} variant="compact" /></td>
+                <td className="!text-right">{row.qtyWording}</td>
               </tr>
             ))
           )}
@@ -266,22 +267,22 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
           <thead>
             <tr>
               <th className="text-left">Branch</th>
-              <th className="text-right">{chrome.currentFull}</th>
-              <th className="text-right">{chrome.comparisonFull}</th>
-              <th className="text-right">Change</th>
-              <th className="text-right">Transactions</th>
+              <th className="!text-right">{chrome.currentFull}</th>
+              <th className="!text-right">{chrome.comparisonFull}</th>
+              <th className="!text-right">Change</th>
+              <th className="!text-right">Transactions</th>
             </tr>
           </thead>
           <tbody>
             {result.branches.map((row) => (
               <tr key={row.storeId}>
                 <td>{row.storeName}</td>
-                <td className="text-right">{formatMoney(row.salesValuePence.current, currency)}</td>
-                <td className="text-right">
+                <td className="!text-right">{formatMoney(row.salesValuePence.current, currency)}</td>
+                <td className="!text-right">
                   {formatMoney(row.salesValuePence.comparison, currency)}
                 </td>
-                <td className="text-right">{row.salesValuePence.absoluteChange > 0 ? '+' : null}<FinancialAmount pence={row.salesValuePence.absoluteChange} currency={currency} variant="compact" /></td>
-                <td className="text-right">
+                <td className="!text-right">{row.salesValuePence.absoluteChange > 0 ? '+' : null}<FinancialAmount pence={row.salesValuePence.absoluteChange} currency={currency} variant="compact" /></td>
+                <td className="!text-right">
                   {row.transactionCount.current} / {row.transactionCount.comparison}
                 </td>
               </tr>
@@ -308,22 +309,22 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
           <thead>
             <tr>
               <th className="text-left">Cashier</th>
-              <th className="text-right">{chrome.currentFull}</th>
-              <th className="text-right">{chrome.comparisonFull}</th>
-              <th className="text-right">Change</th>
-              <th className="text-right">Transactions</th>
+              <th className="!text-right">{chrome.currentFull}</th>
+              <th className="!text-right">{chrome.comparisonFull}</th>
+              <th className="!text-right">Change</th>
+              <th className="!text-right">Transactions</th>
             </tr>
           </thead>
           <tbody>
             {result.cashiers.map((row) => (
               <tr key={row.cashierUserId}>
                 <td>{row.cashierName}</td>
-                <td className="text-right">{formatMoney(row.salesValuePence.current, currency)}</td>
-                <td className="text-right">
+                <td className="!text-right">{formatMoney(row.salesValuePence.current, currency)}</td>
+                <td className="!text-right">
                   {formatMoney(row.salesValuePence.comparison, currency)}
                 </td>
-                <td className="text-right">{row.salesValuePence.absoluteChange > 0 ? '+' : null}<FinancialAmount pence={row.salesValuePence.absoluteChange} currency={currency} variant="compact" /></td>
-                <td className="text-right">
+                <td className="!text-right">{row.salesValuePence.absoluteChange > 0 ? '+' : null}<FinancialAmount pence={row.salesValuePence.absoluteChange} currency={currency} variant="compact" /></td>
+                <td className="!text-right">
                   {row.transactionCount.current} / {row.transactionCount.comparison}
                 </td>
               </tr>
