@@ -742,6 +742,73 @@ async function run() {
     await page.waitForFunction(() => document.querySelector('#products-supplied').open);
     await screenshotStep(page, 'supplier-account-expanded');
     step('BONUS Product history and compact supplier account OK');
+    step('BONUS Bulk pricing preview, stale guard and audited apply');
+    // Isolated local fixtures only; this block shares the localhost/SQLite guard above.
+    const bulkBaseUnit = await prisma.unit.create({ data: { name: `CI copy ${stamp}`, pluralName: 'copies' } });
+    const bulkPackUnit = await prisma.unit.create({ data: { name: `CI pack ${stamp}`, pluralName: 'packs' } });
+    const bulkInheritedUnit = await prisma.unit.create({ data: { name: `CI pair ${stamp}`, pluralName: 'pairs' } });
+    const bulkName = `CI pricing ${stamp}`;
+    const bulkProducts = [];
+    for (const suffix of ['A', 'B']) bulkProducts.push(await prisma.product.create({ data: {
+      businessId: reportOwner.businessId, name: `${bulkName} ${suffix}`, categoryId: classificationCategoryId, groupId: classificationGroup.id,
+      sellingPriceBasePence: 1000, defaultCostBasePence: 600,
+      productUnits: { create: [
+        { unitId: bulkBaseUnit.id, conversionToBase: 1, isBaseUnit: true, sellingPricePence: 1000 },
+        { unitId: bulkPackUnit.id, conversionToBase: 3, sellingPricePence: 2700 },
+        { unitId: bulkInheritedUnit.id, conversionToBase: 2 },
+      ] },
+    } }));
+    await page.goto(`${BASE_URL}/products/bulk-pricing`, { waitUntil: 'networkidle' });
+    await page.getByLabel('Category', { exact: true }).selectOption(classificationCategoryId);
+    await page.getByLabel('Division', { exact: true }).selectOption(classificationDivisionId);
+    await page.getByLabel('Group', { exact: true }).selectOption(classificationGroup.id);
+    await page.getByLabel('Search', { exact: true }).fill(bulkName);
+    await page.getByLabel('Percentage (%)', { exact: true }).fill('20');
+    await page.getByRole('button', { name: 'Preview prices', exact: true }).click();
+    await page.getByText(`${bulkName} A`, { exact: true }).waitFor();
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error(`Bulk pricing overflows at ${width}px`);
+      await screenshotStep(page, `bulk-pricing-preview-${width}`);
+    }
+    // An edit after review must reject the whole selected batch, including the unchanged first product.
+    await prisma.product.update({ where: { id: bulkProducts[1].id }, data: { defaultCostBasePence: 650 } });
+    await page.getByLabel('Reason for change', { exact: true }).fill('CI stale preview check');
+    await page.getByRole('button', { name: 'Review update for 2 products', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm price update', exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: 'Products changed since this preview' }).waitFor();
+    const untouched = await prisma.product.findMany({ where: { id: { in: bulkProducts.map(p => p.id) } } });
+    if (untouched.some(p => p.sellingPriceBasePence !== 1000)) throw new Error('Stale pricing batch partially applied');
+    // Force the second write to fail in the isolated CI database: first write and audit must roll back.
+    const blockedProductId = bulkProducts[1].id;
+    if (!/^[a-z0-9]+$/.test(blockedProductId)) throw new Error('Unexpected CI product ID');
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER "ci_bulk_price_rollback" BEFORE UPDATE OF "sellingPriceBasePence" ON "Product" WHEN NEW."id" = '${blockedProductId}' AND NEW."sellingPriceBasePence" <> OLD."sellingPriceBasePence" BEGIN SELECT RAISE(ABORT, 'CI forced bulk failure'); END`);
+    try {
+      await page.getByRole('button', { name: 'Preview prices', exact: true }).click();
+      await page.getByText(`${bulkName} A`, { exact: true }).waitFor();
+      await page.getByLabel('Reason for change', { exact: true }).fill('CI rollback check');
+      await page.getByRole('button', { name: 'Review update for 2 products', exact: true }).click();
+      await page.getByRole('button', { name: 'Confirm price update', exact: true }).click();
+      await page.getByRole('alert').waitFor();
+      const rolledBack = await prisma.product.findMany({ where: { id: { in: bulkProducts.map(p => p.id) } }, include: { productUnits: true } });
+      if (rolledBack.some(p => p.sellingPriceBasePence !== 1000 || p.productUnits.find(u => u.unitId === bulkBaseUnit.id).sellingPricePence !== 1000)) throw new Error('Failed bulk batch did not roll back all prices');
+      if (await prisma.auditLog.count({ where: { businessId: reportOwner.businessId, action: 'PRICE_CHANGE', entityId: { in: bulkProducts.map(p => p.id) } } })) throw new Error('Failed bulk batch left successful audit entries');
+    } finally {
+      await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS "ci_bulk_price_rollback"');
+    }
+    await page.getByRole('button', { name: 'Preview prices', exact: true }).click();
+    await page.getByText(`${bulkName} A`, { exact: true }).waitFor();
+    await page.getByLabel('Reason for change', { exact: true }).fill('CI reviewed supplier increase');
+    await page.getByRole('button', { name: 'Review update for 2 products', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm price update', exact: true }).click();
+    await page.getByRole('status').filter({ hasText: 'Updated 2 products' }).waitFor();
+    const bulkUpdated = await prisma.product.findMany({ where: { id: { in: bulkProducts.map(p => p.id) } }, include: { productUnits: true } });
+    for (const p of bulkUpdated) {
+      if (p.sellingPriceBasePence !== 1200 || p.productUnits.find(u => u.unitId === bulkBaseUnit.id).sellingPricePence !== 1200 || p.productUnits.find(u => u.unitId === bulkPackUnit.id).sellingPricePence !== 2700 || p.productUnits.find(u => u.unitId === bulkInheritedUnit.id).sellingPricePence !== null) throw new Error('Bulk base/pack pricing is inconsistent');
+    }
+    const priceAudits = await prisma.auditLog.findMany({ where: { businessId: reportOwner.businessId, action: 'PRICE_CHANGE', entityId: { in: bulkProducts.map(p => p.id) } } });
+    if (priceAudits.length !== 2 || priceAudits.some(a => a.reason !== 'CI reviewed supplier increase' || JSON.parse(a.beforeState).sellingPriceBasePence !== 1000 || JSON.parse(a.afterState).sellingPriceBasePence !== 1200)) throw new Error('Bulk price audit is missing before/after evidence');
+    step('BONUS Bulk pricing preview, stale guard and audited apply OK');
     } finally {
       if (needsReportFixture) await prisma.business.update({ where: { id: reportOwner.businessId }, data: originalPlan });
     }

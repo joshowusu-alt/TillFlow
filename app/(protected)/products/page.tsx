@@ -247,9 +247,12 @@ export default async function ProductsPage({
         subtitle={pageSubtitle}
         actions={
           issueActive ? undefined : (
+            <div className="flex flex-wrap gap-2">
+            {isManager && features.advancedOps && <Link href="/products/bulk-pricing" className="btn-secondary justify-center text-sm">Bulk pricing</Link>}
             <Link href="/products/labels" className="btn-secondary justify-center text-sm">
               Print Labels
             </Link>
+            </div>
           )
         }
       />
