@@ -27,6 +27,7 @@ export default function ClassificationSetup({ categories, divisions }: {
   return <section className="card space-y-4 p-4 sm:p-5">
     <h2 className="text-lg font-semibold">Divisions and groups (optional)</h2>
     <p className="text-sm text-black/60">Categories work on their own. Add divisions under a category and groups under each division when you need more detail.</p>
+    <Link href="/reports/analytics#classification-performance" className="inline-block text-sm font-semibold text-accent underline">View category, division and group performance in Sales analytics</Link>
     <ol className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3">
       <li><strong>1. Add a division</strong><p className="mt-1 text-black/60">Choose an existing category, then name the division beneath it.</p></li>
       <li><strong>2. Add a group</strong><p className="mt-1 text-black/60">Choose a division, then name the group that products will use.</p></li>

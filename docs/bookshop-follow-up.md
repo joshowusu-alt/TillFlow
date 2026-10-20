@@ -75,6 +75,26 @@ edge while scrolling. Its CSV uses numeric monetary columns, a currency header a
 UTF-8 encoding for Excel. Reports use the available app width consistently with
 Stock and Sell; wide tables scroll within the page on smaller screens.
 
+Label follow-up: an empty queue now says Select products to print, with a direct
+button to select the example. A product's Print label link preselects that product;
+a newly generated barcode offers the same direct path. Preview alone is not a
+print selection. The browser test requests printing in a stubbed print window;
+physical printer output remains a user check.
+
+Product assignment shows the full selected classification, and expands the group
+controls for categories that have divisions. Choosing a division requires choosing
+a group, or explicitly returning to Use category only. Product details show the
+saved full path. Existing category-only products retain their assignments.
+
+Reports → Activity → Sales analytics now includes Classification performance.
+Compare category, division, group or product; tap a name to drill down. Configured
+groups with no sales remain visible, and category-only/unclassified products have
+explicit buckets so totals reconcile. Net sales exclude tax and include allocated
+invoice discounts; cost uses historical sale evidence. Missing costs and unresolved
+return records leave margin incomplete. The table uses the current catalogue
+classification, so reclassifying a product moves earlier sales into its new group.
+It honours the report's authorised branch and business-local period.
+
 The first implementation creates hierarchy nodes with fixed parents. Renaming,
 reparenting and deletion screens, bulk pricing, product history, cashier shortcuts
 and additional management insights remain later work. Supplier settlements remain

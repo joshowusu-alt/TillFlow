@@ -16,6 +16,7 @@ export default async function ProductLabelsPage({
     barcode?: string;
     category?: string;
     page?: string;
+    select?: string;
   };
 }) {
   const { business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
@@ -131,6 +132,7 @@ export default async function ProductLabelsPage({
         initialBarcode={searchParams?.barcode ?? ''}
         initialCategoryId={searchParams?.category ?? 'ALL'}
         initialPage={initialPage}
+        initialSelectedProductId={searchParams?.select}
       />
     </div>
   );

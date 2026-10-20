@@ -601,8 +601,8 @@ async function run() {
     // CI seeds Starter. This Growth report needs an entitled synthetic fixture;
     // never change a hosted business or relax the application's report policy.
     const needsReportFixture = originalPlan.plan === 'STARTER';
-    if (needsReportFixture && (!['localhost', '127.0.0.1'].includes(new URL(BASE_URL).hostname) || !String(process.env.DATABASE_URL).startsWith('file:'))) {
-      throw new Error('Income Statement fixture requires a local SQLite test business.');
+    if (!['localhost', '127.0.0.1'].includes(new URL(BASE_URL).hostname) || !String(process.env.DATABASE_URL).startsWith('file:')) {
+      throw new Error('Report and label fixtures require a local SQLite test business.');
     }
     if (needsReportFixture) await prisma.business.update({ where: { id: reportOwner.businessId }, data: { plan: 'GROWTH', selectedPlan: 'GROWTH' } });
     try {
@@ -617,6 +617,69 @@ async function run() {
     await page.getByRole('link', { name: '← Income Statement', exact: true }).click();
     await page.waitForURL(url => url.pathname === '/reports/income-statement' && ['from', 'to'].every(key => url.searchParams.get(key) === detailUrl.searchParams.get(key)));
     step('BONUS Income Statement supporting records OK');
+    step('BONUS Classification assignment and analytics');
+    await page.goto(`${BASE_URL}/products?tab=categories`, { waitUntil: 'networkidle' });
+    const parentCategory = page.getByLabel('Under category');
+    await parentCategory.selectOption({ index: 1 });
+    const classificationCategoryId = await parentCategory.inputValue();
+    const classificationCategoryName = await parentCategory.locator('option:checked').textContent();
+    const divisionName = `CI division ${stamp}`, groupName = `CI group ${stamp}`;
+    await page.getByLabel('Division name').fill(divisionName);
+    await page.getByRole('button', { name: 'Add division', exact: true }).click();
+    await page.getByLabel('Group name').waitFor();
+    const classificationDivisionId = await page.getByLabel('Under division').inputValue();
+    await page.getByLabel('Group name').fill(groupName);
+    await page.getByRole('button', { name: 'Add group', exact: true }).click();
+    await page.getByRole('status').filter({ hasText: `Group “${groupName}” saved.` }).waitFor();
+    const classificationGroup = await prisma.productGroup.findFirstOrThrow({ where: { businessId: reportOwner.businessId, divisionId: classificationDivisionId, name: groupName } });
+    const classifiedSale = await prisma.salesInvoice.findFirstOrThrow({ where: { businessId: reportOwner.businessId, paymentStatus: 'PAID', lines: { some: {} } }, select: { lines: { take: 1, select: { productId: true } } } });
+    const classifiedProduct = await prisma.product.findUniqueOrThrow({ where: { id: classifiedSale.lines[0].productId }, select: { id: true, name: true } });
+    // Fictional CI product: exercise generating a missing barcode through the UI.
+    await prisma.product.update({ where: { id: classifiedProduct.id }, data: { barcode: null } });
+    await page.goto(`${BASE_URL}/products/${classifiedProduct.id}`, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: 'Generate', exact: true }).click();
+    await page.getByRole('link', { name: 'Barcode saved — print this product’s label' }).waitFor();
+    await page.getByLabel('Category', { exact: true }).selectOption(classificationCategoryId);
+    const productClassification = page.locator('details').filter({ has: page.getByText('Division and group (optional)', { exact: true }) });
+    if (!await productClassification.evaluate(element => element.open)) await productClassification.locator('summary').click();
+    await page.getByLabel('Division', { exact: true }).selectOption(classificationDivisionId);
+    await page.getByLabel('Group', { exact: true }).selectOption(classificationGroup.id);
+    await Promise.all([
+      page.waitForResponse(response => response.request().method() === 'POST' && response.url().includes(`/products/${classifiedProduct.id}`) && response.status() < 400),
+      page.getByRole('button', { name: 'Save changes', exact: true }).click(),
+    ]);
+    const storedClassification = await prisma.product.findUniqueOrThrow({ where: { id: classifiedProduct.id }, select: { categoryId: true, groupId: true, barcode: true } });
+    if (storedClassification.groupId !== classificationGroup.id || storedClassification.categoryId !== classificationCategoryId || !storedClassification.barcode) throw new Error('Product classification/barcode was not saved');
+    await page.goto(`${BASE_URL}/reports/analytics`, { waitUntil: 'networkidle' });
+    const classification = page.locator('#classification-performance');
+    await classification.getByRole('button', { name: `${classificationCategoryName} →`, exact: true }).click();
+    await classification.getByRole('button', { name: `${divisionName} →`, exact: true }).click();
+    await classification.getByRole('button', { name: `${groupName} →`, exact: true }).click();
+    await classification.getByRole('link', { name: classifiedProduct.name, exact: true }).waitFor();
+    fs.mkdirSync(path.join(process.cwd(), 'playwright', 'test-results'), { recursive: true });
+    await page.screenshot({ path: path.join(process.cwd(), 'playwright', 'test-results', 'classification-performance-desktop.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error('Classification report overflows the phone viewport');
+    await page.screenshot({ path: path.join(process.cwd(), 'playwright', 'test-results', 'classification-performance-mobile.png'), fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    step('BONUS Classification assignment and analytics OK');
+    await context.addInitScript(() => {
+      window.__labelPrintRequested = false;
+      window.print = () => { window.__labelPrintRequested = true; };
+      const nativeOpen = window.open;
+      window.open = function (...args) {
+        const popup = nativeOpen.apply(window, args);
+        if (popup) popup.print = () => { popup.__labelPrintRequested = true; };
+        return popup;
+      };
+    });
+    await page.goto(`${BASE_URL}/products/labels?select=${classifiedProduct.id}`, { waitUntil: 'networkidle' });
+    await page.getByText('Ready to print', { exact: true }).waitFor();
+    const [printPage] = await Promise.all([context.waitForEvent('page'), page.getByRole('button', { name: 'Print Labels', exact: true }).first().click()]);
+    await printPage.waitForFunction(name => document.body.textContent.includes(name), classifiedProduct.name);
+    await printPage.waitForFunction(() => window.__labelPrintRequested === true);
+    await printPage.close();
+    step('BONUS Generated barcode to selected label and print request OK');
     for (const width of [390, 1920]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${BASE_URL}/reports/sales-by-supplier`, { waitUntil: 'networkidle' });

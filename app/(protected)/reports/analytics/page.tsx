@@ -10,6 +10,9 @@ import { getBusinessStores } from '@/lib/services/stores';
 import ReportSectionSkeleton from '@/components/reports/ReportSectionSkeleton';
 import AnalyticsContent from './AnalyticsContent';
 import AnalyticsPeriodSelector from './AnalyticsPeriodSelector';
+import ClassificationPerformance from './ClassificationPerformance';
+import { defaultTenantLocalRange } from '@/lib/reports/reporting-clock';
+import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +44,9 @@ export default async function AnalyticsPage({
   const { stores } = await getBusinessStores(business.id, undefined);
   const scopeLabel = reportScopeLabel(opened.branch.selected, stores);
   const appliedRange = opened.decision.appliedRange;
+  const fallbackPeriod = defaultTenantLocalRange(new Date(), business.timezone, periodDays);
+  const classificationRange = resolveReportDateRange(appliedRange ? { from: appliedRange.fromLocalDate, to: appliedRange.toLocalDate } : undefined,
+    fallbackPeriod.startInclusive, new Date(), business.timezone);
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -52,12 +58,18 @@ export default async function AnalyticsPage({
       />
       <AnalyticsPeriodSelector />
       <Suspense fallback={<ReportSectionSkeleton />}>
+        <ClassificationPerformance businessId={business.id} currency={business.currency} storeIds={opened.branch.storeIds}
+          start={classificationRange.start} end={classificationRange.end} />
+      </Suspense>
+      <Suspense fallback={<ReportSectionSkeleton />}>
         <AnalyticsContent
           businessId={business.id}
           currency={business.currency}
           periodDays={periodDays}
           timeZone={business.timezone}
           storeIds={opened.branch.storeIds}
+          periodStart={classificationRange.start}
+          periodEndExclusive={classificationRange.end}
         />
       </Suspense>
     </div>

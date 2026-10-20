@@ -68,6 +68,7 @@ type LabelPrintClientProps = {
   initialBarcode?: string;
   initialCategoryId?: string;
   initialPage?: number;
+  initialSelectedProductId?: string;
 };
 
 function clampQuantity(value: number | undefined) {
@@ -121,6 +122,7 @@ export default function LabelPrintClient({
   initialBarcode = '',
   initialCategoryId = 'ALL',
   initialPage = 1,
+  initialSelectedProductId,
 }: LabelPrintClientProps) {
   const pathname = usePathname();
   const [search, setSearch] = useState(initialSearch);
@@ -128,7 +130,7 @@ export default function LabelPrintClient({
   const [categoryId, setCategoryId] = useState(initialCategoryId);
   const [shortcut, setShortcut] = useState<LabelShortcut>('all');
   const [template, setTemplate] = useState<LabelSize>(defaultTemplate);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => products.some(product => product.id === initialSelectedProductId) ? [initialSelectedProductId!] : []);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [currentPage, setCurrentPage] = useState(Math.max(1, initialPage));
   const [previewError, setPreviewError] = useState<string | undefined>();
@@ -143,7 +145,7 @@ export default function LabelPrintClient({
     page: currentPage,
     filters: { barcode: barcodeSearch, category: categoryId === 'ALL' ? undefined : categoryId, shortcut },
     extra: { selectedIds, quantities },
-    restoreOnBareRoute: !initialSearch && !initialBarcode && initialCategoryId === 'ALL' && initialPage === 1,
+    restoreOnBareRoute: !initialSelectedProductId && !initialSearch && !initialBarcode && initialCategoryId === 'ALL' && initialPage === 1,
     bareDefaults: { q: '', page: 1 },
   });
 
@@ -153,16 +155,16 @@ export default function LabelPrintClient({
     const stored = readListState('/products/labels');
     const storedIds = stored?.extra?.selectedIds;
     const storedQty = stored?.extra?.quantities;
-    if (Array.isArray(storedIds) && storedIds.length > 0) {
+    if (!initialSelectedProductId && Array.isArray(storedIds) && storedIds.length > 0) {
       setSelectedIds(storedIds.filter((id): id is string => typeof id === 'string'));
     }
     if (storedQty && typeof storedQty === 'object' && !Array.isArray(storedQty)) {
       setQuantities(storedQty as Record<string, number>);
     }
-    if (!initialSearch && stored?.q) setSearch(stored.q);
-    if (!initialBarcode && stored?.filters?.barcode) setBarcodeSearch(stored.filters.barcode);
-    if (initialCategoryId === 'ALL' && stored?.filters?.category) setCategoryId(stored.filters.category);
-  }, [initialBarcode, initialCategoryId, initialSearch]);
+    if (!initialSelectedProductId && !initialSearch && stored?.q) setSearch(stored.q);
+    if (!initialSelectedProductId && !initialBarcode && stored?.filters?.barcode) setBarcodeSearch(stored.filters.barcode);
+    if (!initialSelectedProductId && initialCategoryId === 'ALL' && stored?.filters?.category) setCategoryId(stored.filters.category);
+  }, [initialBarcode, initialCategoryId, initialSearch, initialSelectedProductId]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -803,17 +805,18 @@ export default function LabelPrintClient({
               <div className="mt-2 space-y-1">
                 <div>Saved print mode: {labelPrintMode === 'ZPL_DIRECT' ? 'ZPL Direct' : 'Browser / PDF'}</div>
                 <div>Saved printer: {labelPrinterName || 'System default printer'}</div>
-                <div>Preview source: {selectedProducts[0]?.product.name ?? previewProduct?.name ?? 'No product selected yet'}</div>
+                <div>{selectedProducts.length ? 'Selected product' : 'Example preview only'}: {selectedProducts[0]?.product.name ?? previewProduct?.name ?? 'No product selected yet'}</div>
               </div>
             </div>
 
             <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/80 p-4 text-sm text-blue-900">
-              <div className="font-semibold">Ready to print</div>
+              <div className="font-semibold">{selectedProducts.length ? 'Ready to print' : 'Select products to print'}</div>
               <div className="mt-2">
                 {selectedProducts.length > 0
                   ? `${selectedProducts.length} product${selectedProducts.length === 1 ? '' : 's'} selected across ${totalLabels} label${totalLabels === 1 ? '' : 's'}.`
-                  : 'Select products in the table to enable preview and print.'}
+                  : 'No products selected. Tick a product in the table or select the example below to enable preview and print.'}
               </div>
+              {selectedProducts.length === 0 && previewProduct ? <button type="button" className="btn-secondary mt-3 whitespace-normal text-left" onClick={() => toggleProduct(previewProduct.id, true)}>Select {previewProduct.name} for printing</button> : null}
             </div>
 
             <div className="mt-5">

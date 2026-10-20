@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import BarcodeScanInput from './BarcodeScanInput';
 import { generateBarcodeAction } from '@/app/actions/products';
 import { INTERNAL_BARCODE_HELP, INTERNAL_BARCODE_LABEL, isInternalBarcode } from '@/lib/products/internal-barcode';
@@ -22,6 +23,7 @@ export default function BarcodeFieldWithGenerate({
 }: BarcodeFieldWithGenerateProps) {
   const [value, setValue] = useState(defaultValue ?? '');
   const [error, setError] = useState<string | null>(null);
+  const [generated, setGenerated] = useState(false);
   const [isPending, startTransition] = useTransition();
   const hasExisting = Boolean(value.trim());
   const showInternalBadge = isInternalBarcode(value);
@@ -36,6 +38,7 @@ export default function BarcodeFieldWithGenerate({
       const result = await generateBarcodeAction(productId);
       if (result.success) {
         setValue(result.data.barcode);
+        setGenerated(true);
       } else {
         setError(result.error ?? 'Could not generate barcode.');
       }
@@ -44,11 +47,13 @@ export default function BarcodeFieldWithGenerate({
 
   function handleChange(next: string) {
     setValue(next);
+    setGenerated(false);
     if (error) setError(null);
   }
 
   return (
     <div className="space-y-1.5">
+      {generated ? <Link href={`/products/labels?select=${encodeURIComponent(productId)}`} className="inline-block text-xs font-semibold text-accent underline">Barcode saved — print this product’s label</Link> : null}
       <div className="flex gap-2">
         <div className="flex-1">
           <BarcodeScanInput name="barcode" value={value} onChange={handleChange} />

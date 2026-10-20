@@ -67,6 +67,8 @@ export default async function ProductDetailPage({
   ]);
 
   if (!product) return <div className="card p-6">Product not found.</div>;
+  const assignedDivision = divisions.find(division => division.groups.some(group => group.id === product.groupId));
+  const assignedGroup = assignedDivision?.groups.find(group => group.id === product.groupId);
   const isManager = user.role !== 'CASHIER';
   const businessMarginThresholdBps = business.minimumMarginThresholdBps ?? 1500;
   const productMarginThresholdBps = product.minimumMarginThresholdBps ?? null;
@@ -115,7 +117,7 @@ export default async function ProductDetailPage({
           <h2 className="text-xl font-semibold">{[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}</h2>
           {product.category ? (
             <span className="inline-block mt-1 rounded-full px-2.5 py-0.5 text-xs font-medium text-white" style={{ backgroundColor: product.category.colour }}>
-              {product.category.name}
+              {[product.category.name, assignedDivision?.name, assignedGroup?.name].filter(Boolean).join(' / ')}
             </span>
           ) : (
             <span className="text-xs text-black/40 mt-1 inline-block">Uncategorised</span>
@@ -190,7 +192,7 @@ export default async function ProductDetailPage({
               {product.barcode?.trim() ? (
                 <div className="mt-2">
                   <Link
-                    href={`/products/labels?q=${encodeURIComponent(product.name)}`}
+                    href={`/products/labels?q=${encodeURIComponent(product.name)}&select=${encodeURIComponent(product.id)}`}
                     className="text-xs font-semibold text-accent hover:underline"
                   >
                     Print label
