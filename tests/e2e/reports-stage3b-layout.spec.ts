@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import axe from 'axe-core';
 import path from 'node:path';
+import fs from 'node:fs';
 
 async function open(page: Page, screen: string, fixture = 'normal') {
   await page.bringToFront();
@@ -180,5 +181,32 @@ for (const width of [390,1440]) {
     await page.setViewportSize({ width, height: 900 }); await open(page,'movement','failed');
     await expect(page.locator('[data-stage3b-review]').getByRole('alert')).toContainText('Payment figures could not be loaded');
     await expect(page.locator('[data-stage3b-metric] [data-financial-amount]')).toHaveCount(0);
+  });
+}
+
+
+for (const width of [390, 1440, 1920]) {
+  test(`Approved report chart geometry at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await open(page, 'analytics');
+    const sales = page.getByRole('heading', { name: 'Daily sales', exact: true });
+    const profit = page.getByRole('heading', { name: 'Daily gross profit', exact: true });
+    const mix = page.getByRole('heading', { name: 'Category net sales mix', exact: true });
+    const boxes = await Promise.all([sales, profit, mix].map(el => el.boundingBox()));
+    if (width >= 1280) {
+      expect(Math.abs(boxes[0]!.y - boxes[1]!.y)).toBeLessThan(2);
+      expect(Math.abs(boxes[0]!.y - boxes[2]!.y)).toBeLessThan(2);
+    } else expect(boxes[1]!.y).toBeGreaterThan(boxes[0]!.y);
+    for (const chart of await page.locator('svg[aria-labelledby]').all()) expect((await chart.boundingBox())!.height).toBeLessThanOrEqual(220);
+    const evidence = path.join(process.cwd(), 'tmp', 'ui-programme-evidence', 'report-upgrade');
+    fs.mkdirSync(evidence, { recursive: true });
+    await page.screenshot({ path: path.join(evidence, `analytics-${width}.png`), fullPage: true });
+    await open(page, 'movement');
+    const sections = page.locator('[data-movement-charts] > section');
+    const first = await sections.nth(0).boundingBox(), second = await sections.nth(1).boundingBox();
+    if (width >= 1280) expect(Math.abs(first!.y - second!.y)).toBeLessThan(2);
+    else expect(second!.y).toBeGreaterThan(first!.y);
+    await page.screenshot({ path: path.join(evidence, `movement-${width}.png`), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   });
 }

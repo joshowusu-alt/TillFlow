@@ -657,16 +657,17 @@ async function run() {
     const storedClassification = await prisma.product.findUniqueOrThrow({ where: { id: classifiedProduct.id }, select: { categoryId: true, groupId: true, barcode: true } });
     if (storedClassification.groupId !== classificationGroup.id || storedClassification.categoryId !== classificationCategoryId || !storedClassification.barcode) throw new Error('Product classification/barcode was not saved');
     await page.goto(`${BASE_URL}/reports/analytics`, { waitUntil: 'networkidle' });
+    await page.locator('[data-classification-disclosure] > summary').click();
     const classification = page.locator('#classification-performance');
     await classification.getByRole('button', { name: `${classificationCategoryName} →`, exact: true }).click();
     await classification.getByRole('button', { name: `${divisionName} →`, exact: true }).click();
     await classification.getByRole('button', { name: `${groupName} →`, exact: true }).click();
     await classification.getByRole('link', { name: classifiedProduct.name, exact: true }).waitFor();
-    fs.mkdirSync(path.join(process.cwd(), 'playwright', 'test-results'), { recursive: true });
-    await page.screenshot({ path: path.join(process.cwd(), 'playwright', 'test-results', 'classification-performance-desktop.png'), fullPage: true });
+    fs.mkdirSync(path.join(process.cwd(), 'tmp', 'ui-programme-evidence'), { recursive: true });
+    await page.screenshot({ path: path.join(process.cwd(), 'tmp', 'ui-programme-evidence', 'classification-performance-desktop.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error('Classification report overflows the phone viewport');
-    await page.screenshot({ path: path.join(process.cwd(), 'playwright', 'test-results', 'classification-performance-mobile.png'), fullPage: true });
+    await page.screenshot({ path: path.join(process.cwd(), 'tmp', 'ui-programme-evidence', 'classification-performance-mobile.png'), fullPage: true });
     await page.setViewportSize({ width: 1280, height: 720 });
     step('BONUS Classification assignment and analytics OK');
     await context.addInitScript(() => {

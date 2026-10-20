@@ -34,9 +34,13 @@ export function stage3bAnalyticsFixture(state: Stage3bFixture): AnalyticsData {
   const previous = state === 'empty' ? 0 : Math.round(sales * .8);
   const values = state === 'empty' ? [0,0,0,0,0,0,0] : [120_000, 80_000, 150_000, 200_000, 90_000, 200_000, sales - 840_000];
   const labels = ['Mon 28', 'Tue 29', 'Wed 30', 'Thu 1', 'Fri 2', 'Sat 3', 'Sun 4'];
+  const profit = state === 'negative' ? -1_234_567_890 : Math.round(sales * .25);
+  const profitValues = values.map(value => sales ? Math.round(value / sales * profit) : 0);
+  profitValues[profitValues.length - 1] += profit - profitValues.reduce((sum, value) => sum + value, 0);
   return {
-    currency: 'GHS', periodDays: 7, salesTrend: { labels, values }, profitTrend: { labels: [], values: [] },
+    currency: 'GHS', periodDays: 7, salesTrend: { labels, values }, profitTrend: { labels, values: profitValues },
     hourlyData: state === 'empty' ? [] : [{ day: 'Mon', hour: 12, sales: 9 }, { day: 'Mon', hour: 14, sales: 6 }, { day: 'Sat', hour: 10, sales: 20 }],
+    netCategoryData: state === 'empty' ? [] : [{ name: 'Groceries', value: sales > 700_000 ? 700_000 : sales }, ...(sales > 700_000 ? [{ name: 'Household', value: sales - 700_000 }] : [])],
     categoryData: state === 'empty' ? [] : [{ name: 'Groceries', value: 700_000 }, { name: 'Household', value: sales - 700_000 }],
     productData: state === 'empty' ? [] : [{ name: 'Sample rice 5kg', revenue: Math.round(sales * .5), profit: 10_000, margin: 20 }, { name: 'Sample milk 1L', revenue: Math.round(sales * .2), profit: 5000, margin: 10 }],
     comparison: { labels, current: values, previous: values.map(value => value * .8) },

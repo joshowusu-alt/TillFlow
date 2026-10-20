@@ -8,7 +8,7 @@ import {
   zonedDateTimeParts,
 } from '@/lib/reports/reporting-clock';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
-import { evaluateMarginSet } from '@/lib/reports/margin-line';
+import { evaluateMarginLines, evaluateMarginSet } from '@/lib/reports/margin-line';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import AnalyticsClient from './AnalyticsClient';
 
@@ -245,6 +245,22 @@ export async function loadAnalyticsReport({
         .sort((a, b) => b.value - a.value)
         .slice(0, 7);
 
+      // Full invoice allocation matches classification reporting; never use pre-discount
+      // line subtotals as a net-sales composition.
+      const netCategories = new Map<string, number>();
+      for (const sale of recentSales) {
+        const categories = new Map(sale.lines.map(line => [line.productId, line.product.category?.name || 'Uncategorised']));
+        const evaluated = evaluateMarginLines([{
+          paymentStatus: sale.paymentStatus, discountPence: sale.discountPence,
+          lines: sale.lines.map(line => ({ ...line, defaultCostBasePence: line.product.defaultCostBasePence })),
+        }]);
+        for (const line of evaluated.lines) {
+          const name = (line.productId && categories.get(line.productId)) || 'Uncategorised';
+          netCategories.set(name, (netCategories.get(name) ?? 0) + line.revenuePence);
+        }
+      }
+      const netCategoryData = Array.from(netCategories, ([name, value]) => ({ name, value }));
+
       // Week/period comparison
       const currentPeriodDaily = Array.from(dailySales.values());
       const previousPeriodDaily: number[] = [];
@@ -299,6 +315,7 @@ export async function loadAnalyticsReport({
         },
         hourlyData,
         categoryData,
+        netCategoryData,
         productData,
         comparison: {
           labels: Array.from(dailySales.keys()),

@@ -57,10 +57,7 @@ export default async function AnalyticsPage({
         periodLabel={appliedRange ? `${appliedRange.fromLocalDate} to ${appliedRange.toLocalDate} · ${business.timezone}` : `${periodDays} days, including today · ${business.timezone}`}
       />
       <AnalyticsPeriodSelector />
-      <Suspense fallback={<ReportSectionSkeleton />}>
-        <ClassificationPerformance businessId={business.id} currency={business.currency} storeIds={opened.branch.storeIds}
-          start={classificationRange.start} end={classificationRange.end} />
-      </Suspense>
+
       <Suspense fallback={<ReportSectionSkeleton />}>
         <AnalyticsContent
           businessId={business.id}
@@ -71,6 +68,10 @@ export default async function AnalyticsPage({
           periodStart={classificationRange.start}
           periodEndExclusive={classificationRange.end}
         />
+      </Suspense>
+      <Suspense fallback={<ReportSectionSkeleton />}>
+        <ClassificationPerformance businessId={business.id} currency={business.currency} storeIds={opened.branch.storeIds}
+          start={classificationRange.start} end={classificationRange.end} />
       </Suspense>
     </div>
   );

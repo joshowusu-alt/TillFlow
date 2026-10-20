@@ -118,3 +118,21 @@ payment series withheld. All charts retain exact figures for keyboard and touch.
 Shelf tags, product stickers and A4 labels include the saved readable barcode
 value beneath the bars. Print sizes remain unchanged. Review barcode legibility
 and scanning with the actual printer after choosing the desired label template.
+
+Approved report layout upgrade: Sales analytics starts with sales revenue, sales
+pattern and key figures. Desktop places daily sales, daily gross profit and category
+net sales mix alongside one another; mobile stacks the same content. Chart height
+is bounded and exact values remain available without hover. A compact top-five
+product ranking, weekday/hour heatmap with exact selectors, and period comparison
+follow. Classification performance is expandable below the overview, retaining
+Category → Division → Group → Product filters and drilldown. Direct classification
+links open that panel. Pre-discount category subtotals remain a separate disclosure.
+The overview mix uses full-invoice discount allocation and excludes VAT.
+
+Business movement places grouped current/earlier comparisons beside signed product
+changes on desktop and stacks them on phones. Money movement, recorded review
+items and cashier-attributed sales use a compact desktop grid. All ranked products,
+branch/cashier figures, authorised scope and payment-failure withholding remain.
+Sales, receipts and refunds are separate measures; the gap is not labelled debt,
+loss or profit. Reports → Today is explicitly deferred until these two upgrades
+have been reviewed in Preview.
