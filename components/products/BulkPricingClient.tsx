@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { previewBulkPricingAction, applyBulkPricingAction } from '@/app/actions/bulk-pricing';
 import { formatMoney, getCurrencySymbol } from '@/lib/format';
 import { BULK_PRICING_LIMIT, type BulkPricingInput, type BulkPricingPreview } from '@/lib/products/bulk-pricing';
@@ -21,6 +21,13 @@ export default function BulkPricingClient({ currency, categories, divisions }: P
   const [success, setSuccess] = useState('');
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (preview) {
+      reviewHeading.current?.focus({ preventScroll: true });
+      reviewHeading.current?.scrollIntoView?.({ block: 'start' });
+    }
+  }, [preview]);
   const visibleDivisions = divisions.filter(d => !input.categoryId || d.categoryId === input.categoryId);
   const visibleGroups = visibleDivisions.filter(d => !input.divisionId || d.id === input.divisionId).flatMap(d => d.groups.map(g => ({ ...g, division: d.name })));
   const selectedRows = preview?.rows.filter(r => selected.includes(r.id)) ?? [];
@@ -61,31 +68,36 @@ export default function BulkPricingClient({ currency, categories, divisions }: P
   return <div className="space-y-5">
     {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
     {success && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{success}</p>}
-    <form onSubmit={loadPreview} className="card space-y-4 p-4 sm:p-5" aria-label="Bulk pricing settings">
+    <details open={!preview} className="card p-4 sm:p-5">
+      <summary className="cursor-pointer text-sm font-semibold">1. Choose products and adjustment
+        <span className="mt-1 block text-xs font-normal text-muted">{input.basis === 'CATALOGUE_COST' ? 'Catalogue cost' : 'Current selling price'} {input.operation === 'INCREASE' ? '+' : '−'} {input.method === 'PERCENT' ? `${input.value}%` : `${getCurrencySymbol(currency)}${input.value}`} · {input.units === 'BASE_ONLY' ? 'Base price only' : 'All selling units'} · {input.decimals} decimal places</span>
+      </summary>
+    <form onSubmit={loadPreview} className="mt-4 space-y-4" aria-label="Bulk pricing settings">
       <fieldset disabled={pending} className="space-y-4">
-        <legend className="mb-3 font-semibold">1. Choose products and adjustment</legend>
+        <legend className="sr-only">Price settings</legend>
         <p className="text-sm text-muted">Active products only. Preview up to {BULK_PRICING_LIMIT} products per batch; narrow the filters for larger catalogues.</p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="label">Category<select className="input mt-1" value={input.categoryId} onChange={e => change({ categoryId: e.target.value, divisionId: '', groupId: '' })}><option value="">All categories</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-          <label className="label">Division<select className="input mt-1" value={input.divisionId} onChange={e => change({ divisionId: e.target.value, groupId: '' })}><option value="">All divisions</option>{visibleDivisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
-          <label className="label">Group<select className="input mt-1" value={input.groupId} onChange={e => change({ groupId: e.target.value })}><option value="">All groups</option>{visibleGroups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.division}</option>)}</select></label>
-          <label className="label">Search<input className="input mt-1" value={input.search} onChange={e => change({ search: e.target.value })} placeholder="Name, edition or exact barcode" maxLength={150} /></label>
+          <label className="block text-sm font-medium">Category<select className="input mt-1" value={input.categoryId} onChange={e => change({ categoryId: e.target.value, divisionId: '', groupId: '' })}><option value="">All categories</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+          <label className="block text-sm font-medium">Division<select className="input mt-1" value={input.divisionId} onChange={e => change({ divisionId: e.target.value, groupId: '' })}><option value="">All divisions</option>{visibleDivisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+          <label className="block text-sm font-medium">Group<select className="input mt-1" value={input.groupId} onChange={e => change({ groupId: e.target.value })}><option value="">All groups</option>{visibleGroups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.division}</option>)}</select></label>
+          <label className="block text-sm font-medium">Search<input className="input mt-1" value={input.search} onChange={e => change({ search: e.target.value })} placeholder="Name, edition or exact barcode" maxLength={150} /></label>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="label">Starting value<select className="input mt-1" value={input.basis} onChange={e => change({ basis: e.target.value as BulkPricingInput['basis'] })}><option value="SELLING_PRICE">Current selling price</option><option value="CATALOGUE_COST">Catalogue cost</option></select></label>
-          <label className="label">Adjustment<select className="input mt-1" value={input.operation} onChange={e => change({ operation: e.target.value as BulkPricingInput['operation'] })}><option value="INCREASE">Increase / add</option><option value="DECREASE">Decrease / subtract</option></select></label>
-          <label className="label">Adjustment type<select className="input mt-1" value={input.method} onChange={e => change({ method: e.target.value as BulkPricingInput['method'] })}><option value="PERCENT">Percentage (%)</option><option value="AMOUNT">Fixed amount ({getCurrencySymbol(currency)})</option></select></label>
-          <label className="label">{input.method === 'PERCENT' ? 'Percentage (%)' : `Amount (${getCurrencySymbol(currency)})`}<input className="input mt-1" type="number" inputMode="decimal" min="0.01" step="0.01" value={input.value} onChange={e => change({ value: e.target.value })} required /></label>
-          <label className="label">Round to<select className="input mt-1" value={input.decimals} onChange={e => change({ decimals: Number(e.target.value) as 0 | 1 | 2 })}><option value={2}>2 decimal places</option><option value={1}>1 decimal place</option><option value={0}>Whole currency units</option></select></label>
-          <label className="label">Selling units<select className="input mt-1" value={input.units} onChange={e => change({ units: e.target.value as BulkPricingInput['units'] })}><option value="BASE_ONLY">Base price only</option><option value="ALL_UNITS">All selling units</option></select></label>
+          <label className="block text-sm font-medium">Starting value<select className="input mt-1" value={input.basis} onChange={e => change({ basis: e.target.value as BulkPricingInput['basis'] })}><option value="SELLING_PRICE">Current selling price</option><option value="CATALOGUE_COST">Catalogue cost</option></select></label>
+          <label className="block text-sm font-medium">Adjustment<select className="input mt-1" value={input.operation} onChange={e => change({ operation: e.target.value as BulkPricingInput['operation'] })}><option value="INCREASE">Increase / add</option><option value="DECREASE">Decrease / subtract</option></select></label>
+          <label className="block text-sm font-medium">Adjustment type<select className="input mt-1" value={input.method} onChange={e => change({ method: e.target.value as BulkPricingInput['method'] })}><option value="PERCENT">Percentage (%)</option><option value="AMOUNT">Fixed amount ({getCurrencySymbol(currency)})</option></select></label>
+          <label className="block text-sm font-medium">{input.method === 'PERCENT' ? 'Percentage (%)' : `Amount (${getCurrencySymbol(currency)})`}<input className="input mt-1" type="number" inputMode="decimal" min="0.01" step="0.01" value={input.value} onChange={e => change({ value: e.target.value })} required /></label>
+          <label className="block text-sm font-medium">Round to<select className="input mt-1" value={input.decimals} onChange={e => change({ decimals: Number(e.target.value) as 0 | 1 | 2 })}><option value={2}>2 decimal places</option><option value={1}>1 decimal place</option><option value={0}>Whole currency units</option></select></label>
+          <label className="block text-sm font-medium">Selling units<select className="input mt-1" value={input.units} onChange={e => change({ units: e.target.value as BulkPricingInput['units'] })}><option value="BASE_ONLY">Base price only</option><option value="ALL_UNITS">All selling units</option></select></label>
         </div>
         <p className="text-sm text-muted">{input.basis === 'CATALOGUE_COST' ? 'Cost plus a percentage is markup, not profit margin. This uses catalogue cost, not branch average stock cost. Products without the required cost cannot be selected.' : 'The adjustment starts from each current selling price.'}</p>
         <p className="text-sm text-muted">{input.units === 'BASE_ONLY' ? 'Separately set pack prices stay the same. Packs that inherit the base price follow the new base price; review all resulting prices below.' : 'Each selling unit is calculated and rounded separately. A pack may receive its own price when its rounded result differs from the base price multiplied by the pack quantity.'} Half values round up.</p>
         <button className="btn-primary" type="submit">{pending ? 'Working…' : 'Preview prices'}</button>
       </fieldset>
     </form>
+    </details>
     {preview && <section className="card space-y-4 p-4 sm:p-5" aria-labelledby="bulk-review-title">
-      <h2 id="bulk-review-title" className="font-semibold">2. Review prices</h2>
+      <h2 id="bulk-review-title" ref={reviewHeading} tabIndex={-1} className="scroll-mt-24 font-semibold">2. Review prices</h2>
       <p className="text-sm text-muted">{preview.rows.length} matched · {eligible.length} can change · {selected.length} selected. Expand a product to check its selling units and warnings.</p>
       {preview.rows.length === 0 && <p>No active products match these filters.</p>}
       {eligible.length > 0 && <button type="button" className="btn-secondary text-sm" disabled={pending} onClick={() => { setSelected(selected.length === eligible.length ? [] : eligible.map(r => r.id)); setConfirmed(false); setAcknowledge(false); }}>{selected.length === eligible.length ? 'Deselect all' : 'Select all eligible'}</button>}
@@ -108,10 +120,10 @@ export default function BulkPricingClient({ currency, categories, divisions }: P
         </article>)}
       </div>
       {eligible.length > 0 && <div className="space-y-3 border-t border-black/10 pt-4">
-        <label className="label">Reason for change<textarea className="input mt-1" rows={2} maxLength={300} value={reason} disabled={pending} onChange={e => { setReason(e.target.value); setConfirmed(false); }} placeholder="For example, supplier price increase" /></label>
+        <label className="block text-sm font-medium">Reason for change<textarea className="input mt-1" rows={2} maxLength={300} value={reason} disabled={pending} onChange={e => { setReason(e.target.value); setConfirmed(false); }} placeholder="For example, supplier price increase" /></label>
         {hasWarnings && <label className="flex items-start gap-2 text-sm"><input className="mt-1 shrink-0" type="checkbox" checked={acknowledge} disabled={pending} onChange={e => { setAcknowledge(e.target.checked); setConfirmed(false); }} /><span>I have reviewed the warnings for the selected products and accept these prices.</span></label>}
         {confirmed ? <div className="space-y-3 rounded-xl border border-accent/20 bg-accentSoft/40 p-3"><p className="text-sm">Apply these prices to <strong>{selected.length} products across all branches</strong>? Refresh printed price labels after updating.</p><div className="flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={pending} onClick={apply}>{pending ? 'Applying…' : 'Confirm price update'}</button><button type="button" className="btn-secondary" disabled={pending} onClick={() => setConfirmed(false)}>Keep reviewing</button></div></div>
-          : <button type="button" className="btn-primary" disabled={pending || !selected.length || !reason.trim() || (hasWarnings && !acknowledge)} onClick={() => setConfirmed(true)}>Review update for {selected.length} products</button>}
+          : <button type="button" className="btn-primary" disabled={pending || !selected.length || !reason.trim() || (hasWarnings && !acknowledge)} onClick={() => setConfirmed(true)}>Review update for {selected.length} {selected.length === 1 ? 'product' : 'products'}</button>}
       </div>}
     </section>}
   </div>;

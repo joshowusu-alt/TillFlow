@@ -759,11 +759,11 @@ async function run() {
       ] },
     } }));
     await page.goto(`${BASE_URL}/products/bulk-pricing`, { waitUntil: 'networkidle' });
-    await page.getByLabel('Category', { exact: true }).selectOption(classificationCategoryId);
-    await page.getByLabel('Division', { exact: true }).selectOption(classificationDivisionId);
-    await page.getByLabel('Group', { exact: true }).selectOption(classificationGroup.id);
-    await page.getByLabel('Search', { exact: true }).fill(bulkName);
-    await page.getByLabel('Percentage (%)', { exact: true }).fill('20');
+    await page.getByRole('combobox', { name: 'Category', exact: true }).selectOption(classificationCategoryId);
+    await page.getByRole('combobox', { name: 'Division', exact: true }).selectOption(classificationDivisionId);
+    await page.getByRole('combobox', { name: 'Group', exact: true }).selectOption(classificationGroup.id);
+    await page.getByRole('textbox', { name: 'Search', exact: true }).fill(bulkName);
+    await page.getByRole('spinbutton', { name: 'Percentage (%)', exact: true }).fill('20');
     await page.getByRole('button', { name: 'Preview prices', exact: true }).click();
     await page.getByText(`${bulkName} A`, { exact: true }).waitFor();
     for (const width of [320, 390, 1280]) {

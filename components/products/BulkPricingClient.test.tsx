@@ -10,8 +10,9 @@ beforeEach(() => { vi.resetAllMocks(); actions.preview.mockResolvedValue({ succe
 it('requires a reason, selected warnings acknowledgement and explicit confirmation before applying', async () => {
   show(); fireEvent.click(screen.getByRole('button', { name: 'Preview prices' }));
   await screen.findByText('Example book');
+  expect(screen.getByText('1. Choose products and adjustment').closest('details')).not.toHaveAttribute('open');
   expect(actions.apply).not.toHaveBeenCalled();
-  const review = screen.getByRole('button', { name: 'Review update for 1 products' });
+  const review = screen.getByRole('button', { name: 'Review update for 1 product' });
   expect(review).toBeDisabled();
   fireEvent.change(screen.getByLabelText('Reason for change'), { target: { value: 'Supplier increase' } });
   expect(review).toBeDisabled();
@@ -24,6 +25,7 @@ it('requires a reason, selected warnings acknowledgement and explicit confirmati
 });
 it('invalidates the preview when settings change and cascades classification filters', async () => {
   show(); fireEvent.click(screen.getByRole('button', { name: 'Preview prices' })); await screen.findByText('Example book');
+  fireEvent.click(screen.getByText('1. Choose products and adjustment'));
   fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'cat' } });
   expect(screen.queryByText('Example book')).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Division'), { target: { value: 'div' } });
@@ -40,7 +42,7 @@ it('blocks duplicate submits while awaiting preview or apply and discards an unc
   resolvePreview({ success: true, data: { input, fingerprint: 'fingerprint', rows: [row] } });
   await screen.findByText('Example book');
   fireEvent.change(screen.getByLabelText('Reason for change'), { target: { value: 'Review' } }); fireEvent.click(screen.getByLabelText(/I have reviewed/));
-  fireEvent.click(screen.getByRole('button', { name: 'Review update for 1 products' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review update for 1 product' }));
   let rejectApply!: () => void;
   actions.apply.mockReturnValue(new Promise((_resolve, reject) => { rejectApply = () => reject(new Error('network lost')); }));
   const confirm = screen.getByRole('button', { name: 'Confirm price update' }); fireEvent.click(confirm); fireEvent.click(confirm);
@@ -54,6 +56,6 @@ it('does not select invalid or unchanged rows and removes stale previews after s
   show(); fireEvent.click(screen.getByRole('button', { name: 'Preview prices' })); await screen.findByText('Example book');
   const boxes = screen.getAllByRole('checkbox'); expect(boxes[0]).toBeChecked(); expect(boxes[1]).toBeDisabled(); expect(boxes[2]).toBeDisabled();
   actions.apply.mockResolvedValue({ success: false, error: 'Products changed since this preview.' });
-  fireEvent.change(screen.getByLabelText('Reason for change'), { target: { value: 'Review' } }); fireEvent.click(screen.getByLabelText(/I have reviewed/)); fireEvent.click(screen.getByRole('button', { name: 'Review update for 1 products' })); fireEvent.click(screen.getByRole('button', { name: 'Confirm price update' }));
+  fireEvent.change(screen.getByLabelText('Reason for change'), { target: { value: 'Review' } }); fireEvent.click(screen.getByLabelText(/I have reviewed/)); fireEvent.click(screen.getByRole('button', { name: 'Review update for 1 product' })); fireEvent.click(screen.getByRole('button', { name: 'Confirm price update' }));
   await screen.findByRole('alert'); expect(screen.queryByText('Example book')).not.toBeInTheDocument();
 });
