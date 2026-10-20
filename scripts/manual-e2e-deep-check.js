@@ -710,6 +710,38 @@ async function run() {
     }
     await page.setViewportSize({ width: 1280, height: 720 });
     step('BONUS Supplier action and fluid report widths OK');
+    step('BONUS Product history and compact supplier account');
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${BASE_URL}/products/${classifiedProduct.id}`, { waitUntil: 'networkidle' });
+      await page.getByRole('link', { name: 'View history', exact: true }).click();
+      await page.getByRole('heading', { name: 'Product history', exact: true }).waitFor();
+      const history = page.locator('[data-product-history-store]');
+      const historyStoreId = await history.getAttribute('data-product-history-store');
+      const [balance, recorded] = await Promise.all([
+        prisma.inventoryBalance.findUnique({ where: { storeId_productId: { storeId: historyStoreId, productId: classifiedProduct.id } } }),
+        prisma.stockMovement.aggregate({ where: { productId: classifiedProduct.id, storeId: historyStoreId }, _sum: { qtyBase: true } }),
+      ]);
+      if (Number(await history.getAttribute('data-history-current-quantity')) !== (balance?.qtyOnHandBase ?? 0)) throw new Error('Product history current quantity differs from stored balance');
+      if (Number(await history.getAttribute('data-history-recorded-quantity')) !== (recorded._sum.qtyBase ?? 0)) throw new Error('Product history movement quantity differs from stored movements');
+      await page.locator('#supplier-costs summary').click();
+      if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Product history overflows viewport');
+      await screenshotStep(page, `product-history-${width}`);
+    }
+    const historySupplier = await prisma.supplier.findFirstOrThrow({ where: { businessId: reportOwner.businessId }, select: { id: true } });
+    await page.goto(`${BASE_URL}/suppliers/${historySupplier.id}`, { waitUntil: 'networkidle' });
+    for (const id of ['purchase-history', 'supplier-statement', 'products-supplied']) {
+      if (await page.locator(`#${id}`).evaluate(el => el.open)) throw new Error(`Supplier ${id} starts expanded`);
+    }
+    await screenshotStep(page, 'supplier-account-collapsed');
+    await page.locator('#purchase-history summary').click();
+    await page.locator('#purchase-history form button').filter({ hasText: 'Filter' }).click();
+    await page.waitForURL(url => url.searchParams.get('historyPage') === '1');
+    if (!await page.locator('#purchase-history').evaluate(el => el.open)) throw new Error('Supplier history closes after filtering');
+    await page.getByRole('link', { name: /View linked products|Link products/, exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('#products-supplied').open);
+    await screenshotStep(page, 'supplier-account-expanded');
+    step('BONUS Product history and compact supplier account OK');
     } finally {
       if (needsReportFixture) await prisma.business.update({ where: { id: reportOwner.businessId }, data: originalPlan });
     }

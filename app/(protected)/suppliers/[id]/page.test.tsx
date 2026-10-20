@@ -27,11 +27,24 @@ it('keeps the full balance and credit availability visible when filtered history
   expect(hero.textContent).toContain('History filters do not change this balance');
   expect(root.textContent).toContain('GH₵30.00 remaining');
   expect(root.textContent).toContain('Balance on selected purchases: GH₵0.00');
-  expect(root.textContent).toContain('Showing 0 of 0 matching purchases');
+  expect(root.textContent).toContain('Showing 0–0 of 0 matching purchases');
 });
 it('labels an excess payment as supplier credit rather than an amount owed', async () => {
   mocks.db.purchaseInvoice.findMany.mockResolvedValue([{ createdAt: new Date('2025-01-01'), paymentStatus: 'PAID', totalPence: 1000, payments: [{ amountPence: 1500, paidAt: new Date('2026-01-01') }] }]);
   const html = renderToStaticMarkup(await SupplierDetailPage({ params: { id: 'supplier' } }));
   expect(html).toContain('Supplier credit balance');
   expect(html).toContain('review excess payments');
+});
+it('starts the long sections collapsed and limits purchases to a paged history', async () => {
+  const html = renderToStaticMarkup(await SupplierDetailPage({ params: { id: 'supplier' } }));
+  const root = document.createElement('div'); root.innerHTML = html;
+  for (const id of ['purchase-history', 'supplier-statement', 'products-supplied']) expect(root.querySelector(`details#${id}`)?.hasAttribute('open')).toBe(false);
+  expect(mocks.db.supplier.findFirst.mock.calls[0][0].include.purchaseInvoices).toMatchObject({ skip: 0, take: 25 });
+});
+it('keeps filtered and paged history open without changing the account query', async () => {
+  const html = renderToStaticMarkup(await SupplierDetailPage({ params: { id: 'supplier' }, searchParams: { historyPage: '2' } }));
+  const root = document.createElement('div'); root.innerHTML = html;
+  expect(root.querySelector('details#purchase-history')?.hasAttribute('open')).toBe(true);
+  expect(mocks.db.supplier.findFirst.mock.calls[0][0].include.purchaseInvoices).toMatchObject({ skip: 25, take: 25 });
+  expect(root.querySelector('section')?.textContent).toContain('GH₵70.00');
 });

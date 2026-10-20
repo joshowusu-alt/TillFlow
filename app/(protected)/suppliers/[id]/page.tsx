@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import AccountSection from '@/components/people/AccountSection';
 import DownloadLink from '@/components/DownloadLink';
 import SubmitButton from '@/components/SubmitButton';
 import TagChips from '@/components/TagChips';
@@ -61,7 +62,7 @@ export default async function SupplierDetailPage({
   searchParams
 }: {
   params: { id: string };
-  searchParams?: { from?: string; to?: string };
+  searchParams?: { from?: string; to?: string; historyPage?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
@@ -73,6 +74,11 @@ export default async function SupplierDetailPage({
 
   const start = localDateInstant(searchParams?.from, 'start', business.timezone);
   const endExclusive = localDateInstant(searchParams?.to, 'endExclusive', business.timezone);
+
+  const parsedHistoryPage = Number(searchParams?.historyPage ?? 1);
+  const historyPage = Number.isSafeInteger(parsedHistoryPage) && parsedHistoryPage > 0 ? Math.min(parsedHistoryPage, 100000) : 1;
+  const historyPageSize = 25;
+  const historyOffset = (historyPage - 1) * historyPageSize;
 
   const month = businessMonthWindow(new Date(), business.timezone);
   const mtdStart = month.startInclusive;
@@ -100,8 +106,9 @@ export default async function SupplierDetailPage({
               orderBy: { paidAt: 'asc' },
             }
           },
-          orderBy: { createdAt: 'desc' },
-          take: 200
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          skip: historyOffset,
+          take: historyPageSize
         }
       }
     }),
@@ -359,10 +366,10 @@ export default async function SupplierDetailPage({
       </details>
 
       {/* Purchase history */}
-      <div className="card p-6">
-        <h2 className="text-lg font-display font-semibold">Purchases and payment history</h2>
+      <AccountSection id="purchase-history" title="Purchases and payment history" description={`${balances.selection.invoiceCount} matching purchases · 25 per page`} defaultOpen={Boolean(searchParams?.from || searchParams?.to || searchParams?.historyPage)}>
         <p className="mt-1 text-sm text-black/50">Purchases increase what you owe; payments reduce the supplier balance. Filter by purchase date. Amounts include all payments recorded against those purchases, including payments outside the selected dates. This is not a historical balance as of the end date.</p>
         <form className="mt-4 grid gap-4 md:grid-cols-4">
+          <input type="hidden" name="historyPage" value="1" />
           <div>
             <label className="label">From</label>
             <input className="input" name="from" type="date" defaultValue={searchParams?.from ?? ''} />
@@ -398,7 +405,7 @@ export default async function SupplierDetailPage({
           </div>
         </div>
 
-        <p className="mt-3 text-sm text-slate-600">Showing {invoices.length} of {balances.selection.invoiceCount} matching purchases, newest first. Totals include every matching purchase. Download CSV for the full selection.</p>
+        <p className="mt-3 text-sm text-slate-600">Showing {invoices.length ? historyOffset + 1 : 0}–{historyOffset + invoices.length} of {balances.selection.invoiceCount} matching purchases, newest first. Totals include every matching purchase. Download CSV for the full selection.</p>
         <div className="mt-4 space-y-3 lg:hidden">
           {invoices.length === 0 ? (
             <div className="rounded-xl border border-black/10 bg-white px-4 py-6 text-center text-sm text-black/50">
@@ -545,11 +552,15 @@ export default async function SupplierDetailPage({
             </tbody>
           </table>
         </div>
-      </div>
+        <nav aria-label="Supplier purchase history pages" className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+          {historyPage > 1 ? <Link className="btn-secondary" href={`?${new URLSearchParams({ from: searchParams?.from ?? '', to: searchParams?.to ?? '', historyPage: String(historyPage - 1) })}#purchase-history`}>Previous purchases</Link> : <span />}
+          <span>Page {historyPage} of {Math.max(1, Math.ceil(balances.selection.invoiceCount / historyPageSize))}</span>
+          {historyOffset + invoices.length < balances.selection.invoiceCount ? <Link className="btn-secondary" href={`?${new URLSearchParams({ from: searchParams?.from ?? '', to: searchParams?.to ?? '', historyPage: String(historyPage + 1) })}#purchase-history`}>Next purchases</Link> : null}
+        </nav>
+      </AccountSection>
 
       {/* Statement */}
-      <div className="card p-6">
-        <h2 className="text-lg font-display font-semibold">Statement</h2>
+      <AccountSection id="supplier-statement" title="Statement" description="Running subtotal for the displayed purchase history">
         <p className="mt-1 text-sm text-black/50">This running subtotal covers only the purchases loaded in the history above and their recorded payments. It starts at zero for that set; it is not the full supplier account balance. Returned and voided purchases contribute zero to the subtotal; their original payments remain listed.</p>
         <p className="mt-1 text-sm text-black/50">Showing the latest {Math.min(ledgerRows.length, 80)} of {ledgerRows.length} history entries. Use the account balance above for the complete amount owed.</p>
         <div className="responsive-table-shell mt-4">
@@ -588,14 +599,14 @@ export default async function SupplierDetailPage({
             </tbody>
           </table>
         </div>
-      </div>
+      </AccountSection>
 
       {/* Sales Performance (Growth+ only) */}
       {supplierSales && supplierSales.rows.length > 0 ? (() => {
         const row = supplierSales.rows[0];
         const topProduct = row?.products[0] ?? null;
         return (
-          <div className="card p-6">
+          <AccountSection id="supplier-sales" title="Sales Performance" description="Month-to-date sales of linked products">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-display font-semibold">Sales Performance</h2>
@@ -641,13 +652,12 @@ export default async function SupplierDetailPage({
                 ) : null}
               </div>
             </div>
-          </div>
+          </AccountSection>
         );
       })() : null}
 
       {/* Products supplied */}
-      <div className="card p-6" id="products-supplied">
-        <h2 className="text-lg font-display font-semibold">Products supplied</h2>
+      <AccountSection id="products-supplied" title="Products supplied" description={`${linkedProducts.length} displayed preferred-supplier products`}>
         <p className="mt-1 text-sm text-black/50">Products where {supplier.name} is the preferred supplier.</p>
         {linkedProducts.length > 0 ? (
           <div className="responsive-table-shell mt-4">
@@ -699,7 +709,7 @@ export default async function SupplierDetailPage({
             </div>
           </div>
         )}
-      </div>
+      </AccountSection>
     </div>
   );
 }

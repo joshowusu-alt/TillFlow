@@ -42,6 +42,7 @@ export default async function StockAdjustmentsPage({
 }: {
   searchParams?: {
     page?: string;
+    adjustmentId?: string;
     reversed?: string;
     error?: string;
     posted?: string;
@@ -100,10 +101,10 @@ export default async function StockAdjustmentsPage({
       },
     }),
     prisma.stockAdjustment.count({
-      where: { storeId: store.id },
+      where: { storeId: store.id, ...(searchParams?.adjustmentId ? { id: searchParams.adjustmentId } : {}) },
     }),
     prisma.stockAdjustment.findMany({
-      where: { storeId: store.id },
+      where: { storeId: store.id, ...(searchParams?.adjustmentId ? { id: searchParams.adjustmentId } : {}) },
       select: {
         id: true,
         createdAt: true,
@@ -187,6 +188,7 @@ export default async function StockAdjustmentsPage({
         title="Stock Adjustments"
         subtitle="Correct stock safely and keep a clear audit trail."
       />
+      {searchParams?.adjustmentId ? <p className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Showing the linked adjustment. <a className="font-semibold text-accent underline" href="/inventory/adjustments">View all adjustments</a></p> : null}
       <EffectiveStoreBanner
         storeName={store.name}
         actionLabel="Stock adjustments on this page are recorded in this branch."

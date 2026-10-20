@@ -15,7 +15,7 @@ import { redirect } from 'next/navigation';
 export default async function TransfersPage({
   searchParams,
 }: {
-  searchParams?: { error?: string };
+  searchParams?: { error?: string; transferId?: string };
 }) {
   const { business, store, stores: authorisedStores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
 
@@ -63,7 +63,7 @@ export default async function TransfersPage({
       take: 500,
     }),
     prisma.stockTransfer.findMany({
-      where: { businessId: business.id },
+      where: { businessId: business.id, ...(searchParams?.transferId ? { id: searchParams.transferId } : {}) },
       include: {
         fromStore: { select: { name: true } },
         toStore: { select: { name: true } },
@@ -90,6 +90,7 @@ export default async function TransfersPage({
         subtitle="Request branch transfers and complete them with manager approval."
       />
 
+      {searchParams?.transferId ? <p className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Showing the linked transfer. <Link className="font-semibold text-accent underline" href="/transfers">View all transfers</Link></p> : null}
       <FormError error={searchParams?.error} />
       <EffectiveStoreBanner
         storeName={store.name}
