@@ -1182,23 +1182,23 @@ main#main-content { animation: fade-in-up .25s ease-out; }
   .today-sales-hero .today-sales-value { margin-top: 0.5rem; }
 }
 .today-support-card .financial-amount--prominent { font-size: clamp(1rem, 7.2cqi, 2rem); }
-.today-week-chart { position: relative; height: 11rem; margin-inline: 0.5rem; }
-.today-week-chart__baseline { position: absolute; inset-inline: 0; border-top: 1px solid #cbd5e1; }
-.today-week-chart__columns { display: grid; position: absolute; inset: 0; gap: 0.6rem; }
-.today-week-chart__column { position: relative; min-width: 0; }
-.today-week-chart__bar { position: absolute; inset-inline: 12%; background: #1e40af; border-radius: 5px 5px 0 0; }
+.today-sales-hero[data-no-sales="true"] { padding: 1rem; }
+.today-sales-hero[data-no-sales="true"] > p { margin-top: 0.375rem; }
+.today-sales-hero[data-no-sales="true"] > div:last-child { margin-top: 0.5rem; padding-top: 0.5rem; }
+.today-week-chart__track { position: relative; height: 0.375rem; overflow: hidden; border-radius: 999px; background: #f1f5f9; }
+.today-week-chart__zero { position: absolute; inset-block: 0; border-left: 1px solid #94a3b8; }
+.today-week-chart__bar { position: absolute; inset-block: 0; background: #1e40af; border-radius: 999px; }
 .today-week-chart__bar--today { background: #0369a1; }
-.today-week-chart__label { position: absolute; top: calc(100% + 0.5rem); inset-inline: 0; text-align: center; font-size: 0.75rem; color: #475569; }
+.today-week-chart__bar--negative { background: #be123c; }
 @media (min-width: 1024px) {
   .today-dashboard {
     grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
-    grid-template-areas: "main side" "week side" "context context";
+    grid-template-areas: "main side" "week week" "context context";
     gap: 1.25rem;
     align-items: start;
   }
   .today-dashboard__side { display: block; grid-area: side; }
   .today-sales-hero { padding: 1.75rem; }
-  .today-week-chart { height: 13rem; }
 }
 
 /* POS: one selling workspace on laptops/desktops; checkout owns the second column. */

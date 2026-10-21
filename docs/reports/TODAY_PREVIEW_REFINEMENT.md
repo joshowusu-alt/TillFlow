@@ -21,3 +21,8 @@ scope and date-scoped drilldowns retain their existing behaviour.
 Verification: Today unit, presentation, accessibility and entitlement tests; type
 checking; local browser review on laptop and phone with healthy, attention,
 partial, missing-cost and empty fixtures, plus the real local report route.
+
+Final layout pass: the seven-day chart spans both desktop columns below the
+overview and checks. Horizontal bars show each exact daily amount and date
+without expansion, including signed negative values on a shared zero point.
+The exact daily table remains expandable. No-sales cards use reduced spacing.

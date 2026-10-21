@@ -260,7 +260,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
     <div className="today-dashboard mt-4 min-w-0" data-today-state={partial.length > 0 ? 'partial' : 'ready'} data-partial={partial.join(' ')}>
       <div className="today-dashboard__main min-w-0 space-y-4">
         <div className="min-w-0 space-y-4" data-reconciliation-grid="" data-primary-card="true">
-          <section className="today-sales-hero min-w-0 rounded-2xl p-4 sm:p-6" data-today-sales-card data-metric-block="sales">
+          <section className="today-sales-hero min-w-0 rounded-2xl p-4 sm:p-6" data-today-sales-card data-no-sales={salesKnownZero ? "true" : undefined} data-metric-block="sales">
             <h2 className="text-base font-semibold text-white">Sales today</h2>
             {salesKnownZero ? (
               <p className="mt-3 text-xl font-semibold text-white">No sales recorded yet today</p>
