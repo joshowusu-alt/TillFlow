@@ -656,6 +656,32 @@ async function run() {
     ]);
     const storedClassification = await prisma.product.findUniqueOrThrow({ where: { id: classifiedProduct.id }, select: { categoryId: true, groupId: true, barcode: true } });
     if (storedClassification.groupId !== classificationGroup.id || storedClassification.categoryId !== classificationCategoryId || !storedClassification.barcode) throw new Error('Product classification/barcode was not saved');
+    step('BONUS Cascading catalogue navigation');
+    await page.setViewportSize({ width: 390, height: 900 });
+    const cascadeSearch = encodeURIComponent(classifiedProduct.name);
+    await page.goto(`${BASE_URL}/products?q=${cascadeSearch}&page=4`, { waitUntil: 'networkidle' });
+    const catalogueNav = page.getByRole('navigation', { name: 'Browse catalogue classification', exact: true });
+    await catalogueNav.getByRole('link').filter({ hasText: classificationCategoryName.trim() }).click();
+    await page.waitForURL(url => url.searchParams.get('category') === classificationCategoryId && !url.searchParams.has('page'));
+    await catalogueNav.getByRole('link').filter({ hasText: divisionName }).click();
+    await page.waitForURL(url => url.searchParams.get('division') === classificationDivisionId);
+    await catalogueNav.getByRole('link').filter({ hasText: groupName }).click();
+    await page.waitForURL(url => url.searchParams.get('group') === classificationGroup.id);
+    if (new URL(page.url()).searchParams.get('q') !== classifiedProduct.name) throw new Error('Catalogue hierarchy lost search');
+    const catalogueGroupLink = catalogueNav.getByRole('link').filter({ hasText: groupName });
+    const expectedCatalogueCount = await prisma.product.count({ where: { businessId: reportOwner.businessId, active: true, categoryId: classificationCategoryId, groupId: classificationGroup.id } });
+    const displayedCatalogueCount = Number(await catalogueGroupLink.locator('[aria-label$=" products"]').textContent());
+    if (displayedCatalogueCount !== expectedCatalogueCount) throw new Error('Catalogue group count differs from stored products');
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error(`Catalogue hierarchy overflows at ${width}px`);
+      await screenshotStep(page, `catalogue-hierarchy-${width}`);
+    }
+    await catalogueNav.getByRole('link', { name: /^All categories/ }).click();
+    await page.waitForURL(url => !url.searchParams.has('category') && !url.searchParams.has('division') && !url.searchParams.has('group'));
+    await page.goBack();
+    await page.waitForURL(url => url.searchParams.get('group') === classificationGroup.id);
+    step('BONUS Cascading catalogue navigation OK');
     await page.goto(`${BASE_URL}/reports/analytics`, { waitUntil: 'networkidle' });
     await page.locator('[data-classification-disclosure] > summary').click();
     const classification = page.locator('#classification-performance');
@@ -743,6 +769,12 @@ async function run() {
     await screenshotStep(page, 'supplier-account-expanded');
     step('BONUS Product history and compact supplier account OK');
     step('BONUS Bulk pricing preview, stale guard and audited apply');
+    async function confirmBulkPriceUpdate() {
+      await page.getByRole('button', { name: 'Confirm price update', exact: true }).click();
+      // An earlier alert may remain briefly during a server-action response.
+      // Finish this mutation before inspecting the DB or removing a failure trigger.
+      await page.locator('[data-bulk-pricing][aria-busy="false"]').waitFor();
+    }
     // Isolated local fixtures only; this block shares the localhost/SQLite guard above.
     const bulkBaseUnit = await prisma.unit.create({ data: { name: `CI copy ${stamp}`, pluralName: 'copies' } });
     const bulkPackUnit = await prisma.unit.create({ data: { name: `CI pack ${stamp}`, pluralName: 'packs' } });
@@ -775,7 +807,7 @@ async function run() {
     await prisma.product.update({ where: { id: bulkProducts[1].id }, data: { defaultCostBasePence: 650 } });
     await page.getByRole('textbox', { name: 'Reason for change', exact: true }).fill('CI stale preview check');
     await page.getByRole('button', { name: 'Review update for 2 products', exact: true }).click();
-    await page.getByRole('button', { name: 'Confirm price update', exact: true }).click();
+    await confirmBulkPriceUpdate();
     await page.getByRole('alert').filter({ hasText: 'Products changed since this preview' }).waitFor();
     const untouched = await prisma.product.findMany({ where: { id: { in: bulkProducts.map(p => p.id) } } });
     if (untouched.some(p => p.sellingPriceBasePence !== 1000)) throw new Error('Stale pricing batch partially applied');
@@ -788,8 +820,8 @@ async function run() {
       await page.getByText(`${bulkName} A`, { exact: true }).waitFor();
       await page.getByRole('textbox', { name: 'Reason for change', exact: true }).fill('CI rollback check');
       await page.getByRole('button', { name: 'Review update for 2 products', exact: true }).click();
-      await page.getByRole('button', { name: 'Confirm price update', exact: true }).click();
-      await page.getByRole('alert').waitFor();
+      await confirmBulkPriceUpdate();
+      await page.locator('[data-bulk-pricing-error]').waitFor();
       const rolledBack = await prisma.product.findMany({ where: { id: { in: bulkProducts.map(p => p.id) } }, include: { productUnits: true } });
       if (rolledBack.some(p => p.sellingPriceBasePence !== 1000 || p.productUnits.find(u => u.unitId === bulkBaseUnit.id).sellingPricePence !== 1000)) throw new Error('Failed bulk batch did not roll back all prices');
       if (await prisma.auditLog.count({ where: { businessId: reportOwner.businessId, action: 'PRICE_CHANGE', entityId: { in: bulkProducts.map(p => p.id) } } })) throw new Error('Failed bulk batch left successful audit entries');
@@ -800,7 +832,7 @@ async function run() {
     await page.getByText(`${bulkName} A`, { exact: true }).waitFor();
     await page.getByRole('textbox', { name: 'Reason for change', exact: true }).fill('CI reviewed supplier increase');
     await page.getByRole('button', { name: 'Review update for 2 products', exact: true }).click();
-    await page.getByRole('button', { name: 'Confirm price update', exact: true }).click();
+    await confirmBulkPriceUpdate();
     await page.getByRole('status').filter({ hasText: 'Updated 2 products' }).waitFor();
     const bulkUpdated = await prisma.product.findMany({ where: { id: { in: bulkProducts.map(p => p.id) } }, include: { productUnits: true } });
     for (const p of bulkUpdated) {

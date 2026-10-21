@@ -7,14 +7,17 @@ type ProductListStateSyncProps = {
   page: number;
   tab: string;
   issue?: string;
+  category?: string;
+  division?: string;
+  group?: string;
 };
 
-export default function ProductListStateSync({ q, page, tab, issue }: ProductListStateSyncProps) {
+export default function ProductListStateSync({ q, page, tab, issue, category, division, group }: ProductListStateSyncProps) {
   useListState('/products', {
     q,
     page,
     tab,
-    filters: { issue },
+    filters: { issue, category, division, group },
     restoreOnBareRoute: !issue,
     bareDefaults: { q: '', page: 1, tab: 'products' },
   });

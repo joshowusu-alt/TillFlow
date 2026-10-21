@@ -1,4 +1,7 @@
 import ProductCategoryField from '@/components/products/ProductCategoryField';
+import CatalogueClassificationNav from '@/components/products/CatalogueClassificationNav';
+import ProductClassificationLabel from '@/components/products/ProductClassificationLabel';
+import { isSqliteRuntimeEnv } from '@/lib/database-runtime';
 import ClassificationSetup from '@/components/products/ClassificationSetup';
 import { listProductDivisions } from '@/lib/services/product-classification';
 import PageHeader from '@/components/PageHeader';
@@ -127,18 +130,22 @@ export default async function ProductsPage({
     issueProductWhere = { id: { in: ['__none__'] } };
   }
 
-  const productWhere = {
+  const textSearch = { contains: q, ...(!isSqliteRuntimeEnv() ? { mode: 'insensitive' as const } : {}) };
+  const productScopeWhere = {
     businessId: business.id,
     active: issueKey === 'MISSING_COST' ? undefined : true,
+    ...(q ? { OR: [{ name: textSearch }, { publisher: textSearch }, { edition: textSearch }, { barcode: q }, { barcodes: { some: { code: q } } }] } : {}),
+    ...(issueProductWhere ?? {}),
+  } as Prisma.ProductWhereInput;
+  const productWhere: Prisma.ProductWhereInput = {
+    ...productScopeWhere,
     ...(searchParams?.category ? { categoryId: searchParams.category } : {}),
     ...(searchParams?.division ? { group: { divisionId: searchParams.division } } : {}),
     ...(searchParams?.group ? { groupId: searchParams.group } : {}),
-    ...(q ? { OR: [{ name: { contains: q, mode: 'insensitive' as const } }, { publisher: { contains: q, mode: 'insensitive' as const } }, { edition: { contains: q, mode: 'insensitive' as const } }, { barcode: q }, { barcodes: { some: { code: q } } }] } : {}),
-    ...(issueProductWhere ?? {}),
-  } as Prisma.ProductWhereInput;
+  };
 
   // Run all data queries in parallel
-  const [totalProductCount, products, categories, units, suppliers, missingBarcodeCount] = await measureServerOperation(
+  const [totalProductCount, products, categories, units, suppliers, missingBarcodeCount, classificationCounts] = await measureServerOperation(
     'page.products.load',
     () => Promise.all([
       prisma.product.count({ where: productWhere }),
@@ -192,6 +199,11 @@ export default async function ProductsPage({
           OR: [{ barcode: null }, { barcode: '' }],
         },
       }),
+      prisma.product.groupBy({
+        by: ['categoryId', 'groupId'],
+        where: productScopeWhere,
+        _count: { _all: true },
+      }),
     ]),
     {
       businessId: business.id,
@@ -241,6 +253,9 @@ export default async function ProductsPage({
         page={page}
         tab={activeTab}
         issue={issueQueryValue}
+        category={searchParams?.category}
+        division={searchParams?.division}
+        group={searchParams?.group}
       />
       <PageHeader
         title={pageTitle}
@@ -370,14 +385,10 @@ export default async function ProductsPage({
             </div>
           )}
           {/* Product search and actions */}
-          {(await divisionsPromise).length ? <form method="get" action="/products" className="grid gap-3 sm:grid-cols-4">
-            <input type="hidden" name="q" value={q} />
-            {issueQueryValue ? <input type="hidden" name="issue" value={issueQueryValue} /> : null}
-            <div><label className="label" htmlFor="filter-category">Category</label><select id="filter-category" className="input" name="category" defaultValue={searchParams?.category ?? ''}><option value="">All categories</option>{categories.map(category=><option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
-            <div><label className="label" htmlFor="filter-division">Division</label><select id="filter-division" className="input" name="division" defaultValue={searchParams?.division ?? ''}><option value="">All divisions</option>{(await divisionsPromise).map(division=><option key={division.id} value={division.id}>{categories.find(category=>category.id===division.categoryId)?.name} / {division.name}</option>)}</select></div>
-            <div><label className="label" htmlFor="filter-group">Group</label><select id="filter-group" className="input" name="group" defaultValue={searchParams?.group ?? ''}><option value="">All groups</option>{(await divisionsPromise).flatMap(division=>division.groups.map(group=><option key={group.id} value={group.id}>{categories.find(category=>category.id===division.categoryId)?.name} / {division.name} / {group.name}</option>))}</select></div>
-            <button className="btn-secondary self-end">Filter catalogue</button>
-          </form> : null}
+          <CatalogueClassificationNav categories={categories} divisions={await divisionsPromise}
+            counts={classificationCounts.map(row => ({ categoryId: row.categoryId, groupId: row.groupId, count: row._count._all }))}
+            selection={{ category: searchParams?.category, division: searchParams?.division, group: searchParams?.group }}
+            context={{ q, tab: 'products', issue: issueQueryValue, missingCost: searchParams?.missingCost, stock: searchParams?.stock }} />
           <div className="operational-filter-row">
             <div className="operational-search-shell">
               <Suspense><SearchFilter placeholder={issueActive ? 'Search within affected products…' : 'Search products…'} /></Suspense>
@@ -557,7 +568,7 @@ export default async function ProductsPage({
                               src={product.imageUrl}
                               alt={[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                               fallbackChar={product.name.charAt(0)}
-                              className="h-10 w-10 rounded-xl object-cover"
+                              className="h-10 w-10 shrink-0 rounded-xl object-cover"
                               fallbackClassName="flex h-10 w-10 items-center justify-center rounded-xl bg-accentSoft text-sm font-bold text-accent"
                             />
                           ) : (
@@ -565,22 +576,12 @@ export default async function ProductsPage({
                               {product.name.charAt(0)}
                             </div>
                           )}
-                          <Link href={`/products/${product.id}`} className="min-h-[44px] truncate py-2 hover:underline">
+                          <Link href={`/products/${product.id}`} className="min-h-[44px] min-w-0 break-words py-2 [overflow-wrap:anywhere] hover:underline">
                             {[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                           </Link>
                         </div>
                       }
-                      subtitle={product.category ? 'Catalog item' : 'Uncategorised product'}
-                      aside={product.category ? (
-                        <span
-                          className="inline-block rounded-full px-2.5 py-1 text-xs font-medium text-white"
-                          style={{ backgroundColor: product.category.colour }}
-                        >
-                          {product.category.name}{product.group ? ` / ${product.group.division.name} / ${product.group.name}` : ''}
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs font-semibold text-black/45">No category</span>
-                      )}
+                      subtitle={<ProductClassificationLabel category={product.category} group={product.group} />}
                     />
                     <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                       <DataCardField label="Base price" value={<span className="font-semibold text-ink">{formatMoney(product.sellingPriceBasePence, business.currency)}</span>} />
@@ -644,7 +645,7 @@ export default async function ProductsPage({
                   <tr>
                     <th className="hidden sm:table-cell"></th>
                     <th>Product</th>
-                    <th className="hidden sm:table-cell">Category</th>
+                    <th className="hidden sm:table-cell">Classification</th>
                     <th>Base Price</th>
                     {isManager ? <th className="hidden lg:table-cell">Default Cost</th> : null}
                     <th className="hidden xl:table-cell">Preferred Supplier</th>
@@ -700,16 +701,7 @@ export default async function ProductsPage({
                           </Link>
                         </td>
                         <td className="hidden sm:table-cell px-3 py-3">
-                          {product.category ? (
-                            <span
-                              className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
-                              style={{ backgroundColor: product.category.colour }}
-                            >
-                              {product.category.name}{product.group ? ` / ${product.group.division.name} / ${product.group.name}` : ''}
-                            </span>
-                          ) : (
-                            <span className="text-black/30 text-xs">—</span>
-                          )}
+                          <ProductClassificationLabel category={product.category} group={product.group} />
                         </td>
                         <td className="px-3 py-3">{formatMoney(product.sellingPriceBasePence, business.currency)}</td>
                         {isManager ? <td className="hidden lg:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td> : null}

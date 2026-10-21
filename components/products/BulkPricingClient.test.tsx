@@ -39,8 +39,10 @@ it('blocks duplicate submits while awaiting preview or apply and discards an unc
   show(); const form = screen.getByRole('form', { name: 'Bulk pricing settings' });
   fireEvent.submit(form); fireEvent.submit(form);
   expect(actions.preview).toHaveBeenCalledOnce();
+  expect(form.closest('[data-bulk-pricing]')).toHaveAttribute('aria-busy', 'true');
   resolvePreview({ success: true, data: { input, fingerprint: 'fingerprint', rows: [row] } });
   await screen.findByText('Example book');
+  expect(form.closest('[data-bulk-pricing]')).toHaveAttribute('aria-busy', 'false');
   fireEvent.change(screen.getByLabelText('Reason for change'), { target: { value: 'Review' } }); fireEvent.click(screen.getByLabelText(/I have reviewed/));
   fireEvent.click(screen.getByRole('button', { name: 'Review update for 1 product' }));
   let rejectApply!: () => void;

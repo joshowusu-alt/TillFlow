@@ -65,8 +65,8 @@ export default function BulkPricingClient({ currency, categories, divisions }: P
         setPreview(null); setConfirmed(false); setError('Could not confirm the result. Check the product prices before making another update.');
       } finally { busy.current = false; setPending(false); }
   }
-  return <div className="space-y-5">
-    {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
+  return <div className="space-y-5" data-bulk-pricing aria-busy={pending}>
+    {error && <p role="alert" data-bulk-pricing-error className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
     {success && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{success}</p>}
     <details open={!preview} className="card p-4 sm:p-5">
       <summary className="cursor-pointer text-sm font-semibold">1. Choose products and adjustment
