@@ -773,7 +773,7 @@ async function run() {
     }
     // An edit after review must reject the whole selected batch, including the unchanged first product.
     await prisma.product.update({ where: { id: bulkProducts[1].id }, data: { defaultCostBasePence: 650 } });
-    await page.getByLabel('Reason for change', { exact: true }).fill('CI stale preview check');
+    await page.getByRole('textbox', { name: 'Reason for change', exact: true }).fill('CI stale preview check');
     await page.getByRole('button', { name: 'Review update for 2 products', exact: true }).click();
     await page.getByRole('button', { name: 'Confirm price update', exact: true }).click();
     await page.getByRole('alert').filter({ hasText: 'Products changed since this preview' }).waitFor();
@@ -786,7 +786,7 @@ async function run() {
     try {
       await page.getByRole('button', { name: 'Preview prices', exact: true }).click();
       await page.getByText(`${bulkName} A`, { exact: true }).waitFor();
-      await page.getByLabel('Reason for change', { exact: true }).fill('CI rollback check');
+      await page.getByRole('textbox', { name: 'Reason for change', exact: true }).fill('CI rollback check');
       await page.getByRole('button', { name: 'Review update for 2 products', exact: true }).click();
       await page.getByRole('button', { name: 'Confirm price update', exact: true }).click();
       await page.getByRole('alert').waitFor();
@@ -798,7 +798,7 @@ async function run() {
     }
     await page.getByRole('button', { name: 'Preview prices', exact: true }).click();
     await page.getByText(`${bulkName} A`, { exact: true }).waitFor();
-    await page.getByLabel('Reason for change', { exact: true }).fill('CI reviewed supplier increase');
+    await page.getByRole('textbox', { name: 'Reason for change', exact: true }).fill('CI reviewed supplier increase');
     await page.getByRole('button', { name: 'Review update for 2 products', exact: true }).click();
     await page.getByRole('button', { name: 'Confirm price update', exact: true }).click();
     await page.getByRole('status').filter({ hasText: 'Updated 2 products' }).waitFor();
