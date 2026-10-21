@@ -1,0 +1,9 @@
+# POS workspace layout
+
+Preview layout follows the approved shared laptop/desktop design. At 1024px and above, the left workspace retains scan and full-catalogue search, Products/Cart navigation, and a bounded quick-access row. The Cart view shows the first four products from the selected saved screen. More products opens the complete screen; Hide/Show shortcuts changes only its presentation. The cart keeps all quantities, pricing, unit and discount handlers when switching views. Search is independent of shortcuts and does not change the current workspace tab.
+
+The right column contains the actual till/customer/payment controls and completion action. Its fields scroll independently. Total, unpaid balance where applicable, and a high-contrast Change to give amount sit in the non-scrolling footer. The available checkout height is measured against its actual viewport position, including setup and branch banners, and updated on resize/scroll. Change is shown at zero as well as positive amounts for cash payments. Credit/noncash payments do not imply cash change.
+
+Below the desktop breakpoint, the phone cart sheet has Cart/Payment steps and the tablet action bar remains. Both steps share the existing sale state. The phone footer shows the same large change summary; the tablet bar gives cash change a large, explicit label. Shortcut management opens in the shared accessible modal with billing/role/branch/stale-write rules unchanged. No schema or checkout-service changes are required.
+
+Validation includes payment/cart regression tests, dedicated zero/positive/large-change/noncash balance cases, and browser checks for compact/full shortcuts, collapse, full-catalogue selection with tab retained, management modal, and visible change across laptop/desktop/phone widths. Production release is a separate owner decision.

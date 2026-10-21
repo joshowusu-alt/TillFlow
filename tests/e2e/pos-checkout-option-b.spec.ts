@@ -365,9 +365,9 @@ test.describe('POS Option B checkout', () => {
 
     // Return to Paid exact cash and hammer complete.
     await page.getByLabel(/payment status/i).selectOption('PAID');
-    // Prefer the desktop sidebar CTA — the inline md: button can be obscured mid-layout.
+    // The completion action stays with the consolidated checkout footer.
     const complete = page
-      .locator('.app-desktop-sidebar-sticky button.btn-primary')
+      .locator('[data-pos-checkout-card] [data-testid="pos-complete-checkout"]')
       .filter({ hasText: /Complete Cash Sale/i });
     await expect(complete).toBeEnabled();
 

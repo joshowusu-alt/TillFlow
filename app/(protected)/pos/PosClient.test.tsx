@@ -104,17 +104,14 @@ describe('PosClient desktop layout', () => {
     window.localStorage.clear();
   });
 
-  it('renders the desktop summary inside a sticky desktop wrapper', () => {
+  it('keeps readable change and completion with the actual checkout controls', () => {
     render(<PosClient {...baseProps} />);
-
-    const summarySidebar = screen.getByTestId('summary-sidebar');
-    const wrapper = summarySidebar.parentElement;
-
-    expect(wrapper).not.toBeNull();
-    expect(wrapper?.className).toContain('app-desktop-sidebar-sticky');
-    expect(wrapper?.className).toContain('lg:block');
-    expect(wrapper?.className).toContain('lg:h-fit');
-    expect(wrapper?.className).toContain('lg:self-start');
+    const checkout = document.querySelector('[data-pos-checkout-card]');
+    expect(checkout?.querySelector('#pos-cash-tendered')).not.toBeNull();
+    expect(checkout?.querySelector('[data-pos-change-due]')?.textContent).toContain('Change to give');
+    expect(checkout?.querySelector('[data-pos-change-due]')?.textContent).toContain('0.00');
+    expect(checkout?.querySelector('[data-testid="pos-complete-checkout"]')).not.toBeNull();
+    expect(screen.queryByTestId('summary-sidebar')).not.toBeInTheDocument();
   });
 
   it('keeps the MoMo payment option visible even when MoMo settings are off', () => {
@@ -306,8 +303,7 @@ describe('PosClient desktop layout', () => {
 
   it('keeps a sticky desktop complete action and mobile sticky checkout chrome', async () => {
     render(<PosClient {...baseProps} />);
-    const summarySidebar = screen.getByTestId('summary-sidebar');
-    expect(summarySidebar.parentElement?.className).toContain('app-desktop-sidebar-sticky');
+    expect(document.querySelector('.pos-checkout-footer [data-pos-payment-summary]')).not.toBeNull();
     expect(document.querySelector('#pos-payment-panel')).not.toBeNull();
     expect(document.querySelector('.keyboard-safe-fixed-bottom')).toBeNull();
 
@@ -578,6 +574,7 @@ describe('PosClient mobile phase 1 layout', () => {
     expectClassName(tabletBar, 'md:block');
 
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: /Cart & checkout/i })).toBeInTheDocument();
       expect(document.querySelector('#pos-payment-panel')).not.toBeNull();
@@ -656,6 +653,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
 
     const barBefore = screen.getByRole('button', { name: /View cart, 1 item/i }).textContent ?? '';
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: /Cart & checkout/i })).toBeInTheDocument();
     });
@@ -682,6 +680,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     await addCocaColaOnPhone();
 
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
     const dialog = await screen.findByRole('dialog', { name: /Cart & checkout/i });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(screen.getByRole('button', { name: /Close cart and checkout/i })).toBeInTheDocument();
@@ -697,6 +696,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     expect(screen.getByRole('button', { name: /View cart, 1 item/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'true');
       expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'false');
@@ -708,6 +708,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
     await addCocaColaOnPhone();
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
     await screen.findByRole('dialog', { name: /Cart & checkout/i });
 
     fireEvent.keyDown(window, { key: 'Escape' });
@@ -726,6 +727,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
     await addCocaColaOnPhone();
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
     await screen.findByRole('dialog', { name: /Cart & checkout/i });
 
     const complete = document.querySelector(
@@ -758,6 +760,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
     await addCocaColaOnPhone();
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
     await screen.findByRole('dialog', { name: /Cart & checkout/i });
 
     const complete = document.querySelector(
@@ -827,6 +830,7 @@ describe('PosClient P0 transaction safety', () => {
     await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
     await addCocaColaOnPhone();
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
     await screen.findByRole('dialog', { name: /Cart & checkout/i });
     fireEvent.click(screen.getByRole('button', { name: 'Card' }));
     fireEvent.change(screen.getByPlaceholderText(/card ref/i), { target: { value: 'CARD-SAFE' } });
@@ -864,6 +868,7 @@ describe('PosClient P0 transaction safety', () => {
     await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
     await addCocaColaOnPhone();
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
     await screen.findByRole('dialog', { name: /Cart & checkout/i });
 
     const complete = document.querySelector(
@@ -895,6 +900,7 @@ describe('PosClient P0 transaction safety', () => {
     await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
     await addCocaColaOnPhone();
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
     await screen.findByRole('dialog', { name: /Cart & checkout/i });
 
     const complete = document.querySelector(
@@ -942,6 +948,7 @@ describe('PosClient P0 transaction safety', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
     await screen.findByRole('dialog', { name: /Cart & checkout/i });
     await waitFor(() => {
       expect(screen.getByText(/Previous submission was unclear/i)).toBeInTheDocument();
@@ -1082,4 +1089,40 @@ describe('PosClient till selection', () => {
       expect(document.querySelector('[data-pos-till-block="true"]')).not.toBeNull();
     });
   });
+});
+
+it('preserves cash received and readable change when moving between mobile cart and payment', async () => {
+  window.localStorage.clear();
+  searchParamsGet.mockReturnValue(null);
+  mockPhoneViewport(true);
+  render(<PosClient {...baseProps} />);
+  const search = screen.getByLabelText('Search products');
+  fireEvent.focus(search);
+  fireEvent.change(search, { target: { value: 'Coca' } });
+  fireEvent.click(await screen.findByRole('button', { name: /Coca Cola/i }));
+  fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Continue to payment/ }));
+  fireEvent.change(screen.getByLabelText(/Cash tendered/), { target: { value: '20' } });
+  const footer = document.querySelector('[data-pos-mobile-sheet-footer]');
+  expect(footer?.querySelector('[data-pos-change-due]')?.textContent).toContain('GH₵17.50');
+  fireEvent.click(screen.getByRole('button', { name: 'Cart' }));
+  expect(screen.getByRole('button', { name: /Continue to payment/ })).toBeInTheDocument();
+  expect(footer?.querySelector('[data-pos-change-due]')?.textContent).toContain('GH₵17.50');
+  fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
+  expect(screen.getByLabelText(/Cash tendered/)).toHaveValue(20);
+});
+
+it('does not let an earlier search blur close a newly reopened catalogue dropdown', async () => {
+  window.localStorage.clear();
+  searchParamsGet.mockReturnValue(null);
+  render(<PosClient {...baseProps} />);
+  const search = screen.getByLabelText('Search products');
+  fireEvent.focus(search);
+  fireEvent.change(search, { target: { value: 'Coca' } });
+  fireEvent.click(await screen.findByRole('button', { name: /Coca Cola/i }));
+  fireEvent.blur(search);
+  fireEvent.focus(search);
+  fireEvent.change(search, { target: { value: 'Coca' } });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 250)); });
+  expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
 });

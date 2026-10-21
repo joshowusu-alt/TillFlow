@@ -4,12 +4,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { savePosShortcutsAction } from '@/app/actions/pos-shortcuts';
 import { EMPTY_SHORTCUT_LAYOUT, parseShortcutLayout, type ShortcutLayout } from '@/lib/pos/shortcuts';
 import type { SellableProductDto } from '@/lib/pos/sellable-dto';
+import ResponsiveModal from '@/components/ResponsiveModal';
 import { formatMoney } from '@/lib/format';
 
 type Props = {
   businessId: string; storeId: string; currency: string;
   products: SellableProductDto[];
   serverCatalogue?: boolean;
+  workspaceTab?: 'cart' | 'products';
+  onWorkspaceTabChange?: (tab: 'cart' | 'products') => void;
+  cartCount?: number;
   onProductLoaded: (product: SellableProductDto) => void;
   onSelect: (product: SellableProductDto) => void;
   getAvailable: (id: string) => number;
@@ -17,7 +21,7 @@ type Props = {
 
 export default function ProductShortcuts(props: Props) {
   // Parent keys this component by business and store: drafts and fetches cannot cross branches.
-  const { businessId, storeId, currency, products, onProductLoaded, onSelect, getAvailable, serverCatalogue = false } = props;
+  const { businessId, storeId, currency, products, onProductLoaded, onSelect, getAvailable, serverCatalogue = false, workspaceTab = 'cart', onWorkspaceTabChange, cartCount = 0 } = props;
   const cacheKey = `pos.shortcuts.v1.${businessId}.${storeId}`;
   const [layout, setLayout] = useState<ShortcutLayout>(EMPTY_SHORTCUT_LAYOUT);
   const [revision, setRevision] = useState<string | null>(null);
@@ -31,6 +35,7 @@ export default function ProductShortcuts(props: Props) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [validIds, setValidIds] = useState<Set<string> | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
@@ -108,17 +113,20 @@ export default function ProductShortcuts(props: Props) {
     finally { setBusy(false); }
   }
 
-  return (
-    <section aria-label="Product shortcuts" className="card min-w-0 p-3 sm:p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+  const content = (
+    <section aria-label="Product shortcuts" className="card pos-shortcuts min-w-0 p-3 sm:p-4" data-shortcut-view={draft ? 'editing' : workspaceTab} data-shortcut-collapsed={collapsed ? 'true' : 'false'}>
+      {onWorkspaceTabChange && !draft ? <div className="mb-3 hidden gap-2 border-b border-slate-100 pb-3 lg:flex" aria-label="Selling workspace"><button type="button" className={workspaceTab === 'products' ? 'btn-primary' : 'btn-secondary'} aria-pressed={workspaceTab === 'products'} onClick={() => onWorkspaceTabChange('products')}>Products</button><button type="button" className={workspaceTab === 'cart' ? 'btn-primary' : 'btn-secondary'} aria-pressed={workspaceTab === 'cart'} onClick={() => onWorkspaceTabChange('cart')}>Cart · {cartCount}</button></div> : null}
+      <div className="pos-shortcut-header flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Product shortcuts</h2>
+        {!draft && onWorkspaceTabChange ? <div className="hidden items-center gap-3 lg:flex"><button type="button" className="text-xs font-semibold text-accent" onClick={() => onWorkspaceTabChange(workspaceTab === 'cart' ? 'products' : 'cart')}>{workspaceTab === 'cart' ? 'More products →' : 'Back to cart'}</button>{workspaceTab === 'cart' ? <button type="button" className="text-xs font-semibold text-slate-700" aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)}>{collapsed ? 'Show shortcuts' : 'Hide shortcuts'}</button> : null}</div> : null}
         {canManage && !draft ? <button type="button" className="btn-secondary text-xs" onClick={() => { setDraft(structuredClone(layout)); setMessage(''); }}>Manage shortcuts</button> : null}
       </div>
-      <p className="mt-1 text-xs text-black/50">Tap a product to add one. Choose a selling unit when prompted.</p>
+      <p className="pos-shortcut-instruction mt-1 text-xs text-black/50">Tap a product to add one. Choose a selling unit when prompted.</p>
       {!ready ? <p role="status" className="mt-2 text-xs">Loading shortcuts…</p> : null}
       {message ? <p role="status" className="mt-2 text-xs text-black/60">{message}</p> : null}
-      <div className="mt-3 flex max-h-28 flex-wrap gap-2 overflow-y-auto" aria-label="Shortcut screens">
-        {shown.screens.map(s => <button type="button" key={s.id} disabled={busy} aria-pressed={s.id === screen?.id} className={`min-h-11 max-w-full break-words rounded-lg border px-3 text-sm ${s.id === screen?.id ? 'border-accent bg-accentSoft font-semibold' : 'border-black/10'}`} onClick={() => { setSelected(s.id); setQuery(''); }}>{s.name || 'Unnamed screen'}</button>)}
+      <div className="pos-shortcut-screens mt-3 flex max-h-28 flex-wrap gap-2 overflow-y-auto" aria-label="Shortcut screens">
+        {!draft && onWorkspaceTabChange ? <label className="pos-shortcut-picker hidden text-xs font-semibold">Quick access <select className="input ml-2 w-auto max-w-full" aria-label="Quick access screen" value={screen?.id ?? ''} onChange={event => setSelected(event.target.value)}>{shown.screens.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label> : null}
+        {shown.screens.map(s => <button type="button" key={s.id} disabled={busy} aria-pressed={s.id === screen?.id} className={`pos-shortcut-screen-button min-h-11 max-w-full break-words rounded-lg border px-3 text-sm ${s.id === screen?.id ? 'border-accent bg-accentSoft font-semibold' : 'border-black/10'}`} onClick={() => { setSelected(s.id); setQuery(''); }}>{s.name || 'Unnamed screen'}</button>)}
         {draft && shown.screens.length < 12 ? <button type="button" disabled={busy || offline} className="btn-secondary text-xs" onClick={() => { const id = crypto.randomUUID(); setDraft({ screens: [...shown.screens, { id, name: `Screen ${shown.screens.length + 1}`, productIds: [] }] }); setSelected(id); setQuery(''); }}>Add screen</button> : null}
       </div>
       {ready && !shown.screens.length && !draft ? <p className="mt-2 text-xs text-black/50">No shortcuts set up. An owner or manager can add screens for this branch.</p> : null}
@@ -136,16 +144,17 @@ export default function ProductShortcuts(props: Props) {
             {screen.productIds.map((id, index) => <li key={id} className="flex flex-wrap items-center gap-2 rounded-lg border border-black/10 p-2 text-sm"><span className="min-w-0 flex-1 break-words">{byId.get(id)?.name ?? 'Unavailable product — remove before saving'}</span><button type="button" className="min-h-11 px-2 disabled:opacity-30" disabled={index === 0} aria-label={`Move ${byId.get(id)?.name ?? 'product'} up`} onClick={() => move(index, -1)}>↑</button><button type="button" className="min-h-11 px-2 disabled:opacity-30" disabled={index === screen.productIds.length - 1} aria-label={`Move ${byId.get(id)?.name ?? 'product'} down`} onClick={() => move(index, 1)}>↓</button><button type="button" className="min-h-11 px-2 text-red-700" aria-label={`Remove ${byId.get(id)?.name ?? 'product'}`} onClick={() => updateScreen({ productIds: screen.productIds.filter(p => p !== id) })}>Remove</button></li>)}
           </ol>
         </> : <p className="text-xs">Add a screen, then search for its products.</p>}
-      </fieldset> : <div className="mt-3 grid max-h-80 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 lg:grid-cols-4">
+      </fieldset> : <div className="pos-shortcut-tiles mt-3 grid max-h-80 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 lg:grid-cols-4">
         {screen?.productIds.map(id => {
           const product = byId.get(id);
           const unavailable = !product || (validIds !== null && !validIds.has(id));
           const available = unavailable ? 0 : getAvailable(id);
-          return <button key={id} type="button" disabled={!ready || unavailable || available <= 0} className="min-h-20 min-w-0 rounded-xl border border-black/10 p-3 text-left transition hover:bg-accentSoft disabled:opacity-45" onClick={() => { if (product) onSelect(product); }}><span className="block break-words text-sm font-semibold">{product?.name ?? 'Unavailable product'}</span><span className="mt-1 block text-xs text-black/50">{unavailable ? 'Unavailable' : available <= 0 ? 'Out of stock' : formatMoney(product!.sellingPriceBasePence, currency)}</span></button>;
+          return <button key={id} type="button" disabled={!ready || unavailable || available <= 0} className="pos-shortcut-tile min-h-20 min-w-0 rounded-xl border border-black/10 p-3 text-left transition hover:bg-accentSoft disabled:opacity-45" onClick={() => { if (product) onSelect(product); }}><span className="block break-words text-sm font-semibold">{product?.name ?? 'Unavailable product'}</span><span className="mt-1 block text-xs text-black/50">{unavailable ? 'Unavailable' : available <= 0 ? 'Out of stock' : formatMoney(product!.sellingPriceBasePence, currency)}</span></button>;
         })}
         {screen && !screen.productIds.length ? <p className="col-span-full text-xs text-black/50">No products on this screen yet.</p> : null}
       </div>}
       {draft ? <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={busy || offline} onClick={() => void save()}>{busy ? 'Saving…' : 'Save shortcuts'}</button><button type="button" className="btn-secondary" disabled={busy} onClick={() => { setDraft(null); setQuery(''); setMessage(''); }}>Cancel</button></div> : null}
     </section>
   );
+  return draft ? <ResponsiveModal open onClose={() => { if (!busy) { setDraft(null); setQuery(''); } }} ariaLabel="Manage product shortcuts" closeOnBackdrop={!busy} closeOnEscape={!busy} maxWidthClassName="max-w-3xl">{content}</ResponsiveModal> : content;
 }

@@ -901,12 +901,19 @@ async function run() {
       const savedShortcutScreen = JSON.parse(savedShortcutStore.posShortcutsJson).screens.find(screen => screen.name === shortcutScreenName);
       if (!savedShortcutScreen || !bulkProducts.some(product => savedShortcutScreen.productIds.includes(product.id))) throw new Error('Shortcut did not save actual product IDs');
       await page.reload({ waitUntil: 'networkidle' });
-      await shortcutPanel.getByRole('button', { name: shortcutScreenName, exact: true }).click();
+      await shortcutPanel.getByRole('combobox', { name: 'Quick access screen', exact: true }).selectOption(savedShortcutScreen.id);
       const shortcutTile = shortcutPanel.locator('div.grid button').first();
       await shortcutTile.waitFor();
       if (!(await shortcutTile.isEnabled())) throw new Error('In-stock shortcut should be enabled');
       await shortcutTile.click();
       await page.getByText('Select how you want to sell', { exact: true }).waitFor();
+      await shortcutPanel.getByRole('button', { name: 'Products', exact: true }).click();
+      if (await page.locator('[data-pos-cart-card]').isVisible()) throw new Error('Cart remained visible in Products view');
+      await shortcutPanel.getByRole('button', { name: /^Cart ·/ }).click();
+      await shortcutPanel.getByRole('button', { name: 'Hide shortcuts', exact: true }).click();
+      if (await shortcutPanel.locator('.pos-shortcut-tile:visible').count()) throw new Error('Shortcut collapse failed');
+      await shortcutPanel.getByRole('button', { name: 'Show shortcuts', exact: true }).click();
+      await page.locator('[data-pos-checkout-card] [data-pos-change-due]').waitFor();
       for (const width of [320, 390, 1280]) {
         await page.setViewportSize({ width, height: 900 });
         if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error(`Shortcut screen overflows at ${width}px`);
