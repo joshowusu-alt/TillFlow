@@ -833,13 +833,14 @@ async function run() {
     await page.getByRole('textbox', { name: 'Reason for change', exact: true }).fill('CI reviewed supplier increase');
     await page.getByRole('button', { name: 'Review update for 2 products', exact: true }).click();
     await confirmBulkPriceUpdate();
-    await page.getByRole('status').filter({ hasText: 'Updated 2 products' }).waitFor();
     const bulkUpdated = await prisma.product.findMany({ where: { id: { in: bulkProducts.map(p => p.id) } }, include: { productUnits: true } });
     for (const p of bulkUpdated) {
       if (p.sellingPriceBasePence !== 1200 || p.productUnits.find(u => u.unitId === bulkBaseUnit.id).sellingPricePence !== 1200 || p.productUnits.find(u => u.unitId === bulkPackUnit.id).sellingPricePence !== 2700 || p.productUnits.find(u => u.unitId === bulkInheritedUnit.id).sellingPricePence !== null) throw new Error('Bulk base/pack pricing is inconsistent');
     }
     const priceAudits = await prisma.auditLog.findMany({ where: { businessId: reportOwner.businessId, action: 'PRICE_CHANGE', entityId: { in: bulkProducts.map(p => p.id) } } });
     if (priceAudits.length !== 2 || priceAudits.some(a => a.reason !== 'CI reviewed supplier increase' || JSON.parse(a.beforeState).sellingPriceBasePence !== 1000 || JSON.parse(a.afterState).sellingPriceBasePence !== 1200)) throw new Error('Bulk price audit is missing before/after evidence');
+    step('BONUS Bulk pricing database prices and audit OK');
+    await page.getByRole('status').filter({ hasText: 'Updated 2 products' }).waitFor();
     step('BONUS Bulk pricing preview, stale guard and audited apply OK');
     } finally {
       if (needsReportFixture) await prisma.business.update({ where: { id: reportOwner.businessId }, data: originalPlan });

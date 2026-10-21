@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { previewBulkPricingAction, applyBulkPricingAction } from '@/app/actions/bulk-pricing';
 import { formatMoney, getCurrencySymbol } from '@/lib/format';
 import { BULK_PRICING_LIMIT, type BulkPricingInput, type BulkPricingPreview } from '@/lib/products/bulk-pricing';
@@ -21,6 +21,8 @@ export default function BulkPricingClient({ currency, categories, divisions }: P
   const [success, setSuccess] = useState('');
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
+  // Coordinate event-driven server actions with the router's revalidation render.
+  const [, startTransition] = useTransition();
   const reviewHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (preview) {
@@ -72,7 +74,7 @@ export default function BulkPricingClient({ currency, categories, divisions }: P
       <summary className="cursor-pointer text-sm font-semibold">1. Choose products and adjustment
         <span className="mt-1 block text-xs font-normal text-muted">{input.basis === 'CATALOGUE_COST' ? 'Catalogue cost' : 'Current selling price'} {input.operation === 'INCREASE' ? '+' : '−'} {input.method === 'PERCENT' ? `${input.value}%` : `${getCurrencySymbol(currency)}${input.value}`} · {input.units === 'BASE_ONLY' ? 'Base price only' : 'All selling units'} · {input.decimals} decimal places</span>
       </summary>
-    <form onSubmit={loadPreview} className="mt-4 space-y-4" aria-label="Bulk pricing settings">
+    <form onSubmit={event => startTransition(() => { void loadPreview(event); })} className="mt-4 space-y-4" aria-label="Bulk pricing settings">
       <fieldset disabled={pending} className="space-y-4">
         <legend className="sr-only">Price settings</legend>
         <p className="text-sm text-muted">Active products only. Preview up to {BULK_PRICING_LIMIT} products per batch; narrow the filters for larger catalogues.</p>
@@ -122,7 +124,7 @@ export default function BulkPricingClient({ currency, categories, divisions }: P
       {eligible.length > 0 && <div className="space-y-3 border-t border-black/10 pt-4">
         <label className="block text-sm font-medium">Reason for change<textarea className="input mt-1" rows={2} maxLength={300} value={reason} disabled={pending} onChange={e => { setReason(e.target.value); setConfirmed(false); }} placeholder="For example, supplier price increase" /></label>
         {hasWarnings && <label className="flex items-start gap-2 text-sm"><input className="mt-1 shrink-0" type="checkbox" checked={acknowledge} disabled={pending} onChange={e => { setAcknowledge(e.target.checked); setConfirmed(false); }} /><span>I have reviewed the warnings for the selected products and accept these prices.</span></label>}
-        {confirmed ? <div className="space-y-3 rounded-xl border border-accent/20 bg-accentSoft/40 p-3"><p className="text-sm">Apply these prices to <strong>{selected.length} products across all branches</strong>? Refresh printed price labels after updating.</p><div className="flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={pending} onClick={apply}>{pending ? 'Applying…' : 'Confirm price update'}</button><button type="button" className="btn-secondary" disabled={pending} onClick={() => setConfirmed(false)}>Keep reviewing</button></div></div>
+        {confirmed ? <div className="space-y-3 rounded-xl border border-accent/20 bg-accentSoft/40 p-3"><p className="text-sm">Apply these prices to <strong>{selected.length} products across all branches</strong>? Refresh printed price labels after updating.</p><div className="flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={pending} onClick={() => startTransition(() => { void apply(); })}>{pending ? 'Applying…' : 'Confirm price update'}</button><button type="button" className="btn-secondary" disabled={pending} onClick={() => setConfirmed(false)}>Keep reviewing</button></div></div>
           : <button type="button" className="btn-primary" disabled={pending || !selected.length || !reason.trim() || (hasWarnings && !acknowledge)} onClick={() => setConfirmed(true)}>Review update for {selected.length} {selected.length === 1 ? 'product' : 'products'}</button>}
       </div>}
     </section>}
