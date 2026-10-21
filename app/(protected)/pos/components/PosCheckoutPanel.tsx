@@ -43,6 +43,7 @@ type PosCheckoutPanelProps = {
   momoGuidance: string;
   totalDue: number;
   totalPaid: number;
+  cashTenderedPence?: number;
   balanceRemaining: number;
   changeDue: number;
   dueDateDecision: DueDateDecision;
@@ -85,6 +86,7 @@ export default function PosCheckoutPanel({
   momoGuidance,
   totalDue,
   totalPaid,
+  cashTenderedPence = 0,
   dueDateDecision,
   dueDate,
   onDueDateDecisionChange,
@@ -136,7 +138,7 @@ export default function PosCheckoutPanel({
                       ? method === 'MOBILE_MONEY'
                         ? 'bg-yellow-500 text-white'
                         : 'bg-accent text-white'
-                      : 'bg-black/5 text-black/50 hover:bg-black/10'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   {paymentMethodLabel(method)}
@@ -149,7 +151,7 @@ export default function PosCheckoutPanel({
                 className={`rounded-full px-3 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                   isSplit || showSplitPanel
                     ? 'bg-slate-800 text-white'
-                    : 'bg-black/5 text-black/50 hover:bg-black/10'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 Split…
@@ -354,7 +356,7 @@ export default function PosCheckoutPanel({
         </div>
       ) : null}
 
-      {!isUnpaid ? <div className="flex justify-between gap-2 text-sm text-slate-600"><span>Received</span><span className="font-semibold tabular-nums">{formatMoney(totalPaid, currency)}</span></div> : null}
+      {!isUnpaid ? <div className="space-y-1 text-sm text-slate-600" data-pos-payment-amounts="true">{showCashControls ? <div className="flex justify-between gap-2"><span>Cash tendered</span><span className="font-semibold tabular-nums">{formatMoney(cashTenderedPence, currency)}</span></div> : null}<div className="flex justify-between gap-2"><span>Applied to sale</span><span className="font-semibold tabular-nums">{formatMoney(totalPaid, currency)}</span></div></div> : null}
 
     </div>
   );

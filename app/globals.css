@@ -1261,3 +1261,24 @@ main#main-content { animation: fade-in-up .25s ease-out; }
 @media (max-width: 639px) {
   .pos-branch-banner [data-effective-store] > div:last-child:not(.font-semibold) { display: none; }
 }
+
+/* POS finishing pass: align scan targets and keep the default checkout short. */
+@media (min-width: 1024px) {
+  .pos-cart-line, .pos-cart-column-headings { grid-template-columns: minmax(0, 1fr) 8rem 7rem; gap: .75rem; }
+  .pos-cart-quantity { display: contents; }
+  .pos-cart-quantity > div:first-child { grid-column: 2; justify-content: flex-start; }
+  .pos-cart-quantity > div:last-child { grid-column: 3; margin-left: 0; min-width: 0; }
+  .pos-checkout-fields [data-pos-till-form] { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+  .pos-checkout-fields [data-pos-till-form] > details { min-width: 8rem; }
+  .pos-checkout-fields [data-pos-till-form] > details[open] { grid-column: 1 / -1; }
+}
+@media (min-width: 1600px) {
+  .pos-selling-layout { max-width: 112rem; grid-template-columns: minmax(0, 1fr) clamp(29rem, 32vw, 36rem); }
+  .pos-selling-layout .pos-cart-identity .text-sm, .pos-selling-layout .pos-cart-quantity .text-sm { font-size: 1rem; line-height: 1.5rem; }
+  .pos-selling-layout .pos-shortcut-tile { font-size: 1rem; }
+}
+@media (max-width: 1023px) {
+  [data-pos-mobile-view="cart"] .pos-cart-line { padding-block: .625rem; }
+  [data-pos-mobile-view="cart"] .pos-cart-quantity { margin-top: .375rem; }
+  [data-pos-mobile-view="cart"] .pos-cart-identity > div:first-child { display: none; }
+}

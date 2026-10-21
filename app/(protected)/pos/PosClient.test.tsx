@@ -93,6 +93,16 @@ const baseProps = {
   categories: [{ id: 'soft-drinks', name: 'Soft Drinks', colour: '#2563eb' }],
 };
 
+async function addCocaColaToCart() {
+  const search = screen.getByPlaceholderText(/type product name/i);
+  fireEvent.focus(search);
+  fireEvent.change(search, { target: { value: 'Coca' } });
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+  });
+  fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+}
+
 describe('PosClient desktop layout', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -146,6 +156,7 @@ describe('PosClient desktop layout', () => {
   it('closes transient overlays after an orientation change', async () => {
     render(<PosClient {...baseProps} />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Change customer' }));
     fireEvent.click(screen.getByRole('button', { name: /\+ new/i }));
     expect(screen.getByTestId('quick-add-customer')).toBeInTheDocument();
 
@@ -338,15 +349,6 @@ describe('PosClient desktop layout', () => {
     expect(screen.getAllByText(/choose a due date or no due date/i).length).toBeGreaterThan(0);
   });
 
-  async function addCocaColaToCart() {
-    const search = screen.getByPlaceholderText(/type product name/i);
-    fireEvent.focus(search);
-    fireEvent.change(search, { target: { value: 'Coca' } });
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
-  }
 
   it('completes an exact-cash sale with one primary action and only resets after success', async () => {
     mockedCompleteSaleAction.mockResolvedValue({
@@ -1123,4 +1125,39 @@ it('does not let an earlier search blur close a newly reopened catalogue dropdow
   fireEvent.change(search, { target: { value: 'Coca' } });
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 250)); });
   expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+});
+
+describe('POS checkout clarity', () => {
+  beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); searchParamsGet.mockReturnValue(null); });
+it('shows a genuine closed-till reason without pretending to prepare or select a till', async () => {
+  render(<PosClient {...baseProps} openShiftTillIds={[]} openShifts={[]} />);
+  await addCocaColaToCart();
+  await waitFor(() => expect(document.querySelector('select[name="tillId"]')).toHaveValue(''));
+  expect(screen.getByRole('option', { name: 'No open till — open a shift' })).toBeInTheDocument();
+  expect(screen.queryByText('Preparing checkout…')).not.toBeInTheDocument();
+  expect(document.querySelector('[data-pos-completion-status]')).toHaveTextContent('Open a till shift before recording sales.');
+  expect(screen.getByTestId('pos-complete-checkout')).toBeDisabled();
+});
+it('distinguishes tendered cash from the amount applied to the sale', async () => {
+  render(<PosClient {...baseProps} />);
+  await addCocaColaToCart();
+  fireEvent.change(screen.getByLabelText(/cash tendered/i), { target: { value: '20' } });
+  const amounts = document.querySelector('[data-pos-payment-amounts]');
+  expect(amounts).toHaveTextContent('Cash tenderedGH₵20.00');
+  expect(amounts).toHaveTextContent('Applied to saleGH₵2.50');
+  expect(document.querySelector('[data-pos-change-due]')).toHaveTextContent('GH₵17.50');
+});
+it('keeps walk-in checkout compact and automatically opens customer selection for credit', async () => {
+  render(<PosClient {...baseProps} />);
+  expect(screen.getByText('Walk-in')).toBeInTheDocument();
+  expect(screen.queryByRole('textbox', { name: 'Search customers' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Change customer' }));
+  fireEvent.change(screen.getByLabelText('Customer'), { target: { value: 'cust-1' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+  expect(document.querySelector('[data-pos-customer-summary]')).toHaveTextContent('Walk In Customer');
+  fireEvent.change(screen.getByLabelText(/payment status/i), { target: { value: 'UNPAID' } });
+  expect(screen.getByRole('textbox', { name: 'Search customers' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Customer (required)')).toHaveValue('cust-1');
+});
+
 });

@@ -1318,7 +1318,7 @@ export default function PosClient({
     if (checkoutExtrasReady && !checkoutUnavailable && tills.length === 0) {
       issues.push({ tone: 'warning', message: 'No tills are configured for this store.' });
     } else if (checkoutExtrasReady && !checkoutUnavailable && tills.length > 0 && !tillSelected) {
-      issues.push({ tone: 'warning', message: 'Preparing checkout…' });
+      issues.push({ tone: 'warning', message: openShiftTillIds.length > 0 ? 'Select an open till before recording sales.' : 'Open a till shift before recording sales.' });
     } else if (checkoutExtrasReady && !checkoutUnavailable && !tillReady) {
       issues.push({ tone: 'warning', message: 'Open this till shift before recording sales.' });
     }
@@ -1344,7 +1344,7 @@ export default function PosClient({
       issues.push({ tone: 'warning', message: 'Payment amounts cannot be negative or invalid.' });
     }
     return issues;
-  }, [ambiguousFailure, checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, dueDateReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, partPaidValid, paymentStatus, requiresCustomer, requiresDiscountApproval, tenderMalformed, tillReady, tillSelected, tills.length]);
+  }, [ambiguousFailure, checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, dueDateReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, openShiftTillIds.length, partPaidValid, paymentStatus, requiresCustomer, requiresDiscountApproval, tenderMalformed, tillReady, tillSelected, tills.length]);
   const primaryCheckoutIssue = checkoutIssues.find((issue) => issue.tone === 'warning') ?? checkoutIssues[0] ?? null;
   const errorParam = searchParams?.get('error');
   const selectedTillName = tills.find((till) => till.id === tillId)?.name ?? null;
@@ -1995,6 +1995,7 @@ export default function PosClient({
               </div>
             </div>
 
+            {cartDetails.length > 0 ? <div className="pos-cart-column-headings hidden border-b border-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 lg:grid" aria-hidden="true"><span>Product</span><span>Quantity</span><span className="text-right">Amount</span></div> : null}
             {cartDetails.length === 0 ? (
               <div
                 className="flex flex-col items-center justify-center px-3 py-4 text-center md:py-12"
@@ -2248,11 +2249,12 @@ export default function PosClient({
                   ) : tills.length === 0 ? (
                     <option value="">No tills configured</option>
                   ) : (
-                    tills.map((till) => (
-                      <option key={till.id} value={till.id}>
-                        {till.name}
-                      </option>
-                    ))
+                    <>
+                      <option value="">{openShiftTillIds.length ? 'Choose an open till…' : 'No open till — open a shift'}</option>
+                      {tills.map((till) => (
+                        <option key={till.id} value={till.id}>{till.name}{openShiftTillIds.includes(till.id) ? ' · Open' : ' · Closed'}</option>
+                      ))}
+                    </>
                   )}
                 </select>
                 {checkoutLoading ? (
@@ -2410,6 +2412,7 @@ export default function PosClient({
               momoGuidance={momoGuidance}
               totalDue={totalDue}
               totalPaid={totalPaid}
+              cashTenderedPence={cashTenderedValue}
               balanceRemaining={balanceRemaining}
               changeDue={changeDue}
               dueDateDecision={dueDateDecision}
@@ -2435,29 +2438,10 @@ export default function PosClient({
               </div>
             )}
 
-            {checkoutIssues.length > 0 ? (
-              <div className="space-y-1.5">
-                {checkoutIssues.filter(issue => !showNoTillBlock || !issue.message.includes('Open this till')).map((issue) => (
-                  <div
-                    key={issue.message}
-                    className={`rounded-xl px-3 py-2 text-xs font-medium ${
-                      issue.tone === 'success'
-                        ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
-                        : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'
-                    }`}
-                  >
-                    {issue.tone === 'success' ? '✓ ' : '• '}{issue.message}
-                  </div>
-                ))}
-              </div>
-            ) : cart.length > 0 ? (
-              <div className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
-                ✓ Ready — {activePaymentMethodLabels.join(' + ')}
-              </div>
-            ) : null}
 
             </div>
             <div className="pos-checkout-footer space-y-3">
+              {cartFilled ? <div role="status" data-pos-completion-status="true" className={`hidden rounded-xl px-3 py-2 text-xs font-medium ring-1 lg:block ${primaryCheckoutIssue?.tone === 'warning' ? 'bg-amber-50 text-amber-950 ring-amber-200' : 'bg-emerald-50 text-emerald-950 ring-emerald-200'}`}>{primaryCheckoutIssue?.message ?? `✓ Ready — ${activePaymentMethodLabels.join(' + ')}`}</div> : null}
               <div className="hidden lg:block"><PosPaymentSummary currency={business.currency} subtotal={totals.netSubtotal} discount={orderDiscount} tax={vatTotal} totalDue={totalDue} changeDue={changeDue} hasCash={paymentStatus !== 'UNPAID' && hasMethod('CASH')} balanceRemaining={balanceRemaining} /></div>
             <div className="flex flex-col gap-2 md:flex-row lg:flex-col">
               {/* Narrow screens complete through the Cart/Payment sheet. */}
