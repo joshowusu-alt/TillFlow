@@ -1,3 +1,4 @@
+import {purchaseDocumentFixture} from '@/lib/test/purchase-document-fixture';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -12,7 +13,8 @@ const {
     supplier: { findFirst: vi.fn() },
     product: { findMany: vi.fn(), updateMany: vi.fn() },
     productUnit: { findMany: vi.fn() },
-    account: { findMany: vi.fn() },
+    account: { findMany: vi.fn(), upsert: vi.fn() },
+    journalLine: { aggregate: vi.fn() },
     purchaseInvoice: { create: vi.fn() },
     purchaseInvoiceLine: { createMany: vi.fn() },
     purchasePayment: { create: vi.fn() },
@@ -133,8 +135,19 @@ describe('purchase invoice cash drawer linkage', () => {
     ensureChartOfAccountsMock.mockResolvedValue(undefined);
   });
 
+  it.each(['BUSINESS_CASH', 'OWNER_LOAN', 'OWNER_CAPITAL'] as const)('posts %s payments without an open drawer and stores their funding reference', async cashSource => {
+    prismaMock.account.upsert.mockResolvedValue({});
+    prismaMock.journalLine.aggregate.mockResolvedValue({ _sum: { debitPence: 300000, creditPence: 0 } });
+    const code = cashSource === 'BUSINESS_CASH' ? `1000.HOLD.${storeId}.${userId}` : `${cashSource === 'OWNER_CAPITAL' ? '3100' : '2300'}.OWNER.${userId}`;
+    prismaMock.account.findMany.mockResolvedValue([{ code, id: 'acc-source' }, { code: '1200', id: 'acc-inventory' }]);
+    await createPurchase({sourceDocuments:[purchaseDocumentFixture()], businessId: bizId, storeId, paymentStatus: 'PAID', payments: [{ method: 'CASH', amountPence: 229800 }], lines: [productLine], userId, cashSource, cashHolderId: userId, fundingOwnerId: userId, idempotencyKey: `funded-${cashSource}` });
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({ data: expect.objectContaining({ reference: `funding:${code}` }) });
+    expect(postJournalEntryMock).toHaveBeenCalledWith(expect.objectContaining({ lines: expect.arrayContaining([{ accountCode: code, creditPence: 229800 }]) }));
+  });
+
   it('creates PAID/CASH purchase payment with recordedBy and supplier drawer entry', async () => {
-    await createPurchase({
+    await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       supplierId: 'supplier-accra',
@@ -173,7 +186,7 @@ describe('purchase invoice cash drawer linkage', () => {
   });
 
   it('auto-created PAID invoice cash payment also links to the cash drawer', async () => {
-    await createPurchase({
+    await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       supplierId: 'supplier-accra',
@@ -199,7 +212,7 @@ describe('purchase invoice cash drawer linkage', () => {
     prismaMock.shift.findFirst.mockResolvedValue(null);
 
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId: bizId,
         storeId,
         supplierId: 'supplier-accra',
@@ -218,7 +231,7 @@ describe('purchase invoice cash drawer linkage', () => {
 
   it('does not guess a user OPEN shift when cash purchase has no tillId', async () => {
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId: bizId,
         storeId,
         supplierId: 'supplier-accra',
@@ -236,7 +249,7 @@ describe('purchase invoice cash drawer linkage', () => {
   });
 
   it('does not guess a user shift when skipCashDrawerRequirement is set', async () => {
-    await createPurchase({
+    await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       supplierId: 'supplier-accra',
@@ -254,7 +267,7 @@ describe('purchase invoice cash drawer linkage', () => {
   });
 
   it('does not create drawer entries for non-cash purchase payments', async () => {
-    await createPurchase({
+    await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       supplierId: 'supplier-accra',
@@ -280,7 +293,7 @@ describe('purchase invoice cash drawer linkage', () => {
       .mockResolvedValueOnce({ id: 'payment-cash', method: 'CASH', amountPence: 100000 })
       .mockResolvedValueOnce({ id: 'payment-transfer', method: 'TRANSFER', amountPence: 129800 });
 
-    await createPurchase({
+    await createPurchase({sourceDocuments:[purchaseDocumentFixture()],
       businessId: bizId,
       storeId,
       supplierId: 'supplier-accra',
@@ -316,7 +329,7 @@ describe('purchase invoice cash drawer linkage', () => {
     });
 
     await expect(
-      createPurchase({
+      createPurchase({sourceDocuments:[purchaseDocumentFixture()],
         businessId: bizId,
         storeId,
         supplierId: 'supplier-accra',

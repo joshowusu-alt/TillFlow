@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
+import { evaluateMarginLines } from '@/lib/reports/margin-line';
 import { ReportingScopeStoreError, requireAuthorisedStoreIds } from '@/lib/reports/reporting-scope';
 
 // ---------------------------------------------------------------------------
@@ -7,6 +8,10 @@ import { ReportingScopeStoreError, requireAuthorisedStoreIds } from '@/lib/repor
 // ---------------------------------------------------------------------------
 
 export type SupplierSalesProductRow = {
+  netRevenuePence: number;
+  costPence: number | null;
+  profitPence: number | null;
+  marginPercent: number | null;
   productId: string;
   productName: string;
   sku: string | null;
@@ -16,6 +21,10 @@ export type SupplierSalesProductRow = {
 };
 
 export type SupplierSalesRow = {
+  netRevenuePence: number;
+  costPence: number | null;
+  profitPence: number | null;
+  marginPercent: number | null;
   supplierId: string;
   supplierName: string;
   linkedProductCount: number;
@@ -50,6 +59,9 @@ export async function getSupplierSalesReport(
     end: Date;
     supplierId?: string;
     storeIds?: readonly string[];
+    categoryId?: string;
+    divisionId?: string;
+    groupId?: string;
   },
 ): Promise<SupplierSalesReport> {
   const { start, end, supplierId, storeIds } = opts;
@@ -64,6 +76,9 @@ export async function getSupplierSalesReport(
       businessId,
       preferredSupplierId: { not: null },
       ...(supplierId ? { preferredSupplierId: supplierId } : {}),
+      ...(opts.categoryId ? { categoryId: opts.categoryId } : {}),
+      ...(opts.divisionId ? { group: { divisionId: opts.divisionId } } : {}),
+      ...(opts.groupId ? { groupId: opts.groupId } : {}),
     },
     select: {
       id: true,
@@ -108,6 +123,9 @@ export async function getSupplierSalesReport(
               select: {
                 productId: true,
                 qtyBase: true,
+                qtyInUnit: true,
+                lineCostPence: true,
+                costBasis: true,
                 lineSubtotalPence: true,
                 lineDiscountPence: true,
                 promoDiscountPence: true,
@@ -121,6 +139,9 @@ export async function getSupplierSalesReport(
 
   // Step 3: Aggregate in JS — one pass over sales lines.
   type SupplierAcc = {
+    netRevenuePence: number;
+    knownCostPence: number;
+    incompleteCosts: boolean;
     supplierId: string;
     supplierName: string;
     totalRevenuePence: number;
@@ -134,6 +155,9 @@ export async function getSupplierSalesReport(
         sku: string | null;
         revenuePence: number;
         qtyBase: number;
+        netRevenuePence: number;
+        knownCostPence: number;
+        incompleteCosts: boolean;
         invoiceIds: Set<string>;
       }
     >;
@@ -148,6 +172,7 @@ export async function getSupplierSalesReport(
       supplierId: sid,
       supplierName: name,
       totalRevenuePence: 0,
+      netRevenuePence: 0, knownCostPence: 0, incompleteCosts: false,
       totalQtyBase: 0,
       invoiceIds: new Set(),
       products: new Map(),
@@ -155,6 +180,7 @@ export async function getSupplierSalesReport(
   }
 
   for (const invoice of salesInvoices) {
+    const margins = evaluateMarginLines([{ paymentStatus: invoice.paymentStatus, discountPence: invoice.discountPence, lines: invoice.lines }]);
     const ranked = rankRecognisedProductSales({
       paymentStatus: invoice.paymentStatus,
       discountPence: invoice.discountPence,
@@ -179,6 +205,10 @@ export async function getSupplierSalesReport(
       if (!product?.preferredSupplierId) return;
       const supplier = supplierAcc.get(product.preferredSupplierId);
       if (!supplier) return;
+      const margin = margins.lines[index];
+      supplier.netRevenuePence += margin.revenuePence;
+      supplier.knownCostPence += margin.costPence ?? 0;
+      supplier.incompleteCosts ||= !margin.ready;
       supplier.totalRevenuePence += rankedLine.amountPence;
       supplier.totalQtyBase += line.qtyBase;
       supplier.invoiceIds.add(invoice.id);
@@ -186,6 +216,9 @@ export async function getSupplierSalesReport(
       if (existing) {
         existing.revenuePence += rankedLine.amountPence;
         existing.qtyBase += line.qtyBase;
+        existing.netRevenuePence += margin.revenuePence;
+        existing.knownCostPence += margin.costPence ?? 0;
+        existing.incompleteCosts ||= !margin.ready;
         existing.invoiceIds.add(invoice.id);
       } else {
         supplier.products.set(line.productId, {
@@ -194,6 +227,7 @@ export async function getSupplierSalesReport(
           sku: product.sku,
           revenuePence: rankedLine.amountPence,
           qtyBase: line.qtyBase,
+          netRevenuePence: margin.revenuePence, knownCostPence: margin.costPence ?? 0, incompleteCosts: !margin.ready,
           invoiceIds: new Set([invoice.id]),
         });
       }
@@ -204,6 +238,10 @@ export async function getSupplierSalesReport(
   const rows: SupplierSalesRow[] = [...supplierAcc.values()]
     .map((s) => ({
       supplierId: s.supplierId,
+      netRevenuePence: s.netRevenuePence,
+      costPence: s.incompleteCosts ? null : s.knownCostPence,
+      profitPence: s.incompleteCosts ? null : s.netRevenuePence - s.knownCostPence,
+      marginPercent: s.incompleteCosts || s.netRevenuePence === 0 ? null : (s.netRevenuePence - s.knownCostPence) / s.netRevenuePence * 100,
       supplierName: s.supplierName,
       linkedProductCount: linkedProductsBySupplier.get(s.supplierId) ?? 0,
       totalRevenuePence: s.totalRevenuePence,
@@ -218,6 +256,10 @@ export async function getSupplierSalesReport(
           sku: p.sku,
           qtyBase: p.qtyBase,
           revenuePence: p.revenuePence,
+          netRevenuePence: p.netRevenuePence,
+          costPence: p.incompleteCosts ? null : p.knownCostPence,
+          profitPence: p.incompleteCosts ? null : p.netRevenuePence - p.knownCostPence,
+          marginPercent: p.incompleteCosts || p.netRevenuePence === 0 ? null : (p.netRevenuePence - p.knownCostPence) / p.netRevenuePence * 100,
           salesCount: p.invoiceIds.size,
         }))
         .sort((a, b) => b.revenuePence - a.revenuePence),

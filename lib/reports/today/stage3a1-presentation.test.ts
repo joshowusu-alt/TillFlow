@@ -24,11 +24,12 @@ const SHELL_PAGES = [
 ];
 
 describe('Stage 3A.1 customer presentation', () => {
-  it('uses one 1440 canvas and removes the extra Today inset', () => {
+  it('fills the available screen with one canvas and no extra Today inset', () => {
     const canvas = read('components/reports/ReportsCanvas.tsx');
     const layout = read('app/(protected)/reports/layout.tsx');
     const today = read('components/reports/today/TodayScreen.tsx');
-    expect(canvas).toContain('max-w-[1440px]');
+    expect(canvas).toContain('w-full min-w-0 max-w-full');
+    expect(canvas).not.toContain('max-w-[1440px]');
     expect(canvas).toContain('data-reports-canvas');
     expect(layout).toContain('ReportsCanvas');
     expect(layout).toContain('/reports/command-center');

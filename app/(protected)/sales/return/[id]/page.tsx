@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
@@ -12,7 +13,7 @@ export default async function SalesReturnPage({ params, searchParams }: { params
       <div className="card p-6 text-center">
         <div className="text-lg font-semibold">Setup Required</div>
         <div className="mt-2 text-sm text-black/60">Complete your business setup in Settings to get started.</div>
-        <a href="/settings" className="btn-primary mt-4 inline-block">Go to Settings</a>
+        <Link href="/settings" className="btn-primary mt-4 inline-block">Go to Settings</Link>
       </div>
     );
   }
@@ -35,7 +36,7 @@ export default async function SalesReturnPage({ params, searchParams }: { params
       <div className="card p-6 text-center">
         <div className="text-lg font-semibold">Sale Not Found</div>
         <div className="mt-2 text-sm text-black/60">The sale you're looking for doesn't exist.</div>
-        <a href="/sales" className="btn-primary mt-4 inline-block">Back to Sales</a>
+        <Link href="/sales" className="btn-primary mt-4 inline-block">Back to Sales</Link>
       </div>
     );
   }
@@ -45,7 +46,7 @@ export default async function SalesReturnPage({ params, searchParams }: { params
       <div className="card p-6 text-center">
         <div className="text-lg font-semibold">Already Returned</div>
         <div className="mt-2 text-sm text-black/60">This sale has already been returned or voided.</div>
-        <a href="/sales" className="btn-primary mt-4 inline-block">Back to Sales</a>
+        <Link href="/sales" className="btn-primary mt-4 inline-block">Back to Sales</Link>
       </div>
     );
   }

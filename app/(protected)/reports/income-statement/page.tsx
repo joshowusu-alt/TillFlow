@@ -9,7 +9,8 @@ import { ReportReadOnlyBanner, ReportScopeLabel } from '@/components/reports/Rep
 import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { formatMoney } from '@/lib/format';
-import { getIncomeStatement } from '@/lib/reports/financials';
+import { getIncomeStatementBreakdown as getIncomeStatement } from '@/lib/reports/financials';
+import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, type IncomeStatementMetric } from '@/lib/reports/income-statement-breakdown';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
@@ -43,6 +44,13 @@ export default async function IncomeStatementPage({
   );
 
   const statement = await getIncomeStatement(business.id, start, end);
+  const breakdownLink = (metric: IncomeStatementMetric, value: ReactNode) => (
+    <Link href={incomeStatementEntriesHref(metric, fromStr, toStr)}
+      aria-label={`View ${INCOME_STATEMENT_METRICS[metric].label} supporting records: ${statement[metric] === null ? 'Costs incomplete' : formatMoney(statement[metric], business.currency)}`}
+      className="rounded underline decoration-current/30 underline-offset-4 hover:decoration-current focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
+      {value}
+    </Link>
+  );
   const costsIncomplete = statement.grossProfit == null || statement.netProfit == null || statement.cogs == null;
   const gpPct = !costsIncomplete && statement.revenue > 0 ? Math.round((statement.grossProfit! / statement.revenue) * 100) : 0;
   const npPct = !costsIncomplete && statement.revenue > 0 ? Math.round((statement.netProfit! / statement.revenue) * 100) : 0;
@@ -77,27 +85,28 @@ export default async function IncomeStatementPage({
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Revenue"
-          value={formatMoney(statement.revenue, business.currency)}
+          value={breakdownLink('revenue', formatMoney(statement.revenue, business.currency))}
           tone="accent"
         />
         <StatCard
           label="Cost of products sold"
-          value={costsIncomplete ? 'Costs incomplete' : formatMoney(statement.cogs ?? 0, business.currency)}
+          value={breakdownLink('cogs', costsIncomplete ? 'Costs incomplete' : formatMoney(statement.cogs ?? 0, business.currency))}
         />
         <StatCard
           label={costsIncomplete ? 'Gross Profit' : `Gross Profit (${gpPct}%)`}
-          value={costsIncomplete ? 'Costs incomplete' : formatMoney(statement.grossProfit ?? 0, business.currency)}
+          value={breakdownLink('grossProfit', costsIncomplete ? 'Costs incomplete' : formatMoney(statement.grossProfit ?? 0, business.currency))}
           tone={costsIncomplete ? 'warn' : gpPct >= 20 ? 'success' : gpPct >= 0 ? 'warn' : 'danger'}
           helper={costsIncomplete ? `${statement.incompleteLineCount} line${statement.incompleteLineCount === 1 ? '' : 's'} without authoritative cost` : undefined}
         />
         <StatCard
           label={costsIncomplete ? 'Net Profit' : `Net Profit (${npPct}%)`}
-          value={costsIncomplete ? 'Costs incomplete' : formatMoney(statement.netProfit ?? 0, business.currency)}
+          value={breakdownLink('netProfit', costsIncomplete ? 'Costs incomplete' : formatMoney(statement.netProfit ?? 0, business.currency))}
           tone={costsIncomplete ? 'warn' : npPct >= 10 ? 'success' : npPct >= 0 ? 'warn' : 'danger'}
         />
       </div>
 
       <DateRangeFilterCard from={fromStr} to={toStr} />
+      <p className="text-sm text-ink/60">Tap an amount to see the records that make it up for this period.</p>
 
       <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
         Sales and product costs come from your recorded sales. Expenses come from recorded business costs. Sales figures include credit sales not yet collected — this report shows profit performance, not cash in the bank.
@@ -126,15 +135,15 @@ export default async function IncomeStatementPage({
         <ReportSummaryCard>
           <ReportSummaryRow
             label="Revenue"
-            value={formatMoney(statement.revenue, business.currency)}
+            value={breakdownLink('revenue', formatMoney(statement.revenue, business.currency))}
           />
           <ReportSummaryRow
             label="Cost of products sold"
-            value={costsIncomplete ? 'Costs incomplete' : formatMoney(statement.cogs ?? 0, business.currency)}
+            value={breakdownLink('cogs', costsIncomplete ? 'Costs incomplete' : formatMoney(statement.cogs ?? 0, business.currency))}
           />
           <ReportSummaryRow
             label="Gross Profit"
-            value={costsIncomplete ? 'Costs incomplete' : formatMoney(statement.grossProfit ?? 0, business.currency)}
+            value={breakdownLink('grossProfit', costsIncomplete ? 'Costs incomplete' : formatMoney(statement.grossProfit ?? 0, business.currency))}
             divider="default"
             emphasis="strong"
           />
@@ -143,7 +152,7 @@ export default async function IncomeStatementPage({
               label={<span className="text-black/70">Other operating income</span>}
               value={
                 <span className="text-emerald-700">
-                  {formatMoney(statement.otherOperatingIncome, business.currency)}
+                  {breakdownLink('otherOperatingIncome', formatMoney(statement.otherOperatingIncome, business.currency))}
                 </span>
               }
             />
@@ -151,12 +160,12 @@ export default async function IncomeStatementPage({
           {statement.otherExpenses !== 0 && (
             <ReportSummaryRow
               label={<span className="text-black/70">Operating Expenses</span>}
-              value={<span className="text-rose-600">({formatMoney(statement.otherExpenses, business.currency)})</span>}
+              value={<span className="text-rose-600">{breakdownLink('otherExpenses', `(${formatMoney(statement.otherExpenses, business.currency)})`)}</span>}
             />
           )}
           <ReportSummaryRow
             label="Net Profit"
-            value={costsIncomplete ? 'Costs incomplete' : <span className={(statement.netProfit ?? 0) >= 0 ? 'text-emerald-700' : 'text-rose-600'}>{formatMoney(statement.netProfit ?? 0, business.currency)}</span>}
+            value={breakdownLink('netProfit', costsIncomplete ? 'Costs incomplete' : <span className={(statement.netProfit ?? 0) >= 0 ? 'text-emerald-700' : 'text-rose-600'}>{formatMoney(statement.netProfit ?? 0, business.currency)}</span>)}
             divider="default"
             emphasis="strong"
           />
@@ -165,3 +174,5 @@ export default async function IncomeStatementPage({
     </div>
   );
 }
+import Link from 'next/link';
+import type { ReactNode } from 'react';

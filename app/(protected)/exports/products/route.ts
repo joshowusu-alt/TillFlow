@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const [products, business] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: user.businessId },
-      include: { productUnits: { include: { unit: true } } },
+      include: { category: true, group: { include: { division: true } }, productUnits: { include: { unit: true } } },
       orderBy: { name: 'asc' },
     }),
     prisma.business.findUnique({
@@ -23,6 +23,9 @@ export async function GET(request: Request) {
     { header: 'SKU', key: 'sku' },
     { header: 'Barcode', key: 'barcode' },
     { header: 'Name', key: 'name', width: 25 },
+    { header: 'Category', key: 'category' },
+    { header: 'Division', key: 'division' },
+    { header: 'Group', key: 'group' },
     { header: 'Base Price', key: 'basePrice' },
     { header: 'Default Cost', key: 'defaultCost' },
     { header: 'Base Unit', key: 'baseUnit' },
@@ -40,6 +43,9 @@ export async function GET(request: Request) {
       sku: product.sku ?? '',
       barcode: product.barcode ?? '',
       name: product.name,
+      category: product.category?.name ?? '',
+      division: product.group?.division.name ?? '',
+      group: product.group?.name ?? '',
       basePrice: formatPence(product.sellingPriceBasePence),
       defaultCost: formatPence(product.defaultCostBasePence),
       baseUnit: baseUnit?.unit.name ?? '',

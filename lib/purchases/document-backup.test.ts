@@ -1,0 +1,6 @@
+import {it,expect} from 'vitest';
+import {serializePurchaseDocument,restorePurchaseDocument} from './document-backup';
+import {validatePurchaseDocuments} from './source-documents';
+import {purchaseDocumentFixture} from '@/lib/test/purchase-document-fixture';
+it('retains invoice bytes and proof metadata through JSON backup and restore',()=>{const [file]=validatePurchaseDocuments([purchaseDocumentFixture()]);const original={id:'doc',businessId:'old-business',purchaseInvoiceId:'purchase',uploadedByUserId:'owner',createdAt:new Date('2026-10-19'),...file};const backup=JSON.parse(JSON.stringify(serializePurchaseDocument(original)));expect(backup.body).toBeUndefined();const restored=restorePurchaseDocument(backup,'current-business',new Set(['purchase']));expect(restored.body).toEqual(file.body);expect(restored.sha256).toBe(file.sha256);expect(restored.businessId).toBe('current-business');});
+it('rejects corrupt or unrelated invoice documents before restoring',()=>{const [file]=validatePurchaseDocuments([purchaseDocumentFixture()]);const backup=serializePurchaseDocument({id:'doc',purchaseInvoiceId:'purchase',createdAt:new Date(),...file});expect(()=>restorePurchaseDocument({...backup,sha256:'wrong'},'biz',new Set(['purchase']))).toThrow('integrity');expect(()=>restorePurchaseDocument(backup,'biz',new Set(['another-purchase']))).toThrow('belong');});

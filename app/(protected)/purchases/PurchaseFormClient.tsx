@@ -1,13 +1,20 @@
 'use client';
+import Link from 'next/link';
+
+import PurchaseDocumentInput from '@/components/purchases/PurchaseDocumentInput';
+import { pricePurchaseLines, purchaseDiscountBps } from '@/lib/purchases/discounts';
+import ProductIdentityFields from '@/components/products/ProductIdentityFields';
+import { ProductMarginResult } from '@/components/products/ProductMarginPreview';
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
-import { createPurchaseAction } from '@/app/actions/purchases';
+import { checkSupplierInvoiceReferenceAction, createPurchaseAction } from '@/app/actions/purchases';
 import { quickCreateProductAction } from '@/app/actions/products';
 import ProductUnitPricingEditor, { type EditableProductUnitConfig } from '@/components/ProductUnitPricingEditor';
-import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
-import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared';
+import { formatMoney, getCurrencySymbol } from '@/lib/format';
+import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared/product-unit-pricing';
+import type { PurchaseCashSource } from '@/lib/services/purchase-funding';
 import type { PaymentStatus } from '@/lib/services/shared';
 import { creditPurchaseRequiresSupplier } from '@/lib/reliability/walkthrough-contracts';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
@@ -34,6 +41,7 @@ type ProductDto = {
   id: string;
   name: string;
   barcode: string | null;
+  additionalBarcodes?: string[];
   defaultCostBasePence: number;
   sellingPriceBasePence: number;
   vatRateBps: number;
@@ -62,6 +70,7 @@ function buildDefaultUnitConfigs(units: UnitOption[]): EditableProductUnitConfig
 }
 
 type CartLine = {
+  discountPercent?: string;
   id: string;
   productId: string;
   unitId: string;
@@ -70,9 +79,15 @@ type CartLine = {
 };
 
 type PurchaseDraft = {
+  purchaseDiscountPercent?: string;
+  receiptDocumentType?: 'INVOICE' | 'DELIVERY_NOTE';
   version: 1;
   updatedAt: number;
   supplierId: string;
+  supplierInvoiceNumber?: string;
+  additionalCost?: string;
+  additionalCostTreatment?: 'INVENTORY' | 'EXPENSE';
+  additionalCostNote?: string;
   cart: CartLine[];
   paymentMethods: PaymentMethod[];
   cashPaid: string;
@@ -80,6 +95,9 @@ type PurchaseDraft = {
   transferPaid: string;
   paymentStatus: PaymentStatus;
   dueDate: string;
+  cashSource?: PurchaseCashSource;
+  cashHolderId?: string;
+  fundingOwnerId?: string;
 };
 
 type OpenTillOption = { tillId: string; tillName: string; shiftId: string };
@@ -92,6 +110,7 @@ export default function PurchaseFormClient({
   units,
   vatEnabled,
   openTills = [],
+  cashPeople = [],
 }: {
   storeId: string;
   products: ProductDto[];
@@ -100,6 +119,7 @@ export default function PurchaseFormClient({
   units: UnitOption[];
   vatEnabled: boolean;
   openTills?: OpenTillOption[];
+  cashPeople?: { id: string; name: string; role: string; balancePence: number }[];
 }) {
   const searchParams = useSearchParams();
   const draftStorageKey = getPurchaseDraftStorageKey(storeId);
@@ -107,6 +127,13 @@ export default function PurchaseFormClient({
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const [productOptions, setProductOptions] = useState<ProductDto[]>(products);
   const [supplierId, setSupplierId] = useState('');
+  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('');
+  const [purchaseDiscountPercent, setPurchaseDiscountPercent] = useState('');
+  const [receiptDocumentType, setReceiptDocumentType] = useState<'INVOICE' | 'DELIVERY_NOTE'>('INVOICE');
+  const [duplicateInvoice, setDuplicateInvoice] = useState<{ id: string; transactionNumber: string | null } | null>(null);
+  const [additionalCost, setAdditionalCost] = useState('');
+  const [additionalCostTreatment, setAdditionalCostTreatment] = useState<'INVENTORY' | 'EXPENSE'>('EXPENSE');
+  const [additionalCostNote, setAdditionalCostNote] = useState('');
   const [productId, setProductId] = useState(products[0]?.id ?? '');
   const [unitId, setUnitId] = useState(products[0]?.units[0]?.id ?? '');
   const [qtyInput, setQtyInput] = useState('1');
@@ -116,7 +143,12 @@ export default function PurchaseFormClient({
   const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({});
   const [costDrafts, setCostDrafts] = useState<Record<string, string>>({});
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(['CASH']);
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('PAID');
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('UNPAID');
+  const submittingRef = useRef(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [cashSource, setCashSource] = useState<PurchaseCashSource>('TILL');
+  const [cashHolderId, setCashHolderId] = useState('');
+  const [fundingOwnerId, setFundingOwnerId] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [cashPaid, setCashPaid] = useState('');
   const [cardPaid, setCardPaid] = useState('');
@@ -131,6 +163,8 @@ export default function PurchaseFormClient({
   const [quickName, setQuickName] = useState('');
   const [quickSku, setQuickSku] = useState('');
   const [quickBarcode, setQuickBarcode] = useState('');
+  const quickIdentityRef = useRef<HTMLDivElement>(null);
+  const [quickIdentityKey, setQuickIdentityKey] = useState(0);
   const [quickUnitConfigs, setQuickUnitConfigs] = useState<EditableProductUnitConfig[]>(() => buildDefaultUnitConfigs(units));
   const [quickSellPrice, setQuickSellPrice] = useState('');
   const [quickCost, setQuickCost] = useState('');
@@ -169,11 +203,13 @@ export default function PurchaseFormClient({
     setQtyDrafts({});
     setCostDrafts({});
     setPaymentMethods(['CASH']);
-    setPaymentStatus('PAID');
+    setPaymentStatus('UNPAID');
     setDueDate('');
     setCashPaid('');
     setCardPaid('');
     setTransferPaid('');
+    setSupplierInvoiceNumber(''); setAdditionalCost(''); setAdditionalCostNote(''); setAdditionalCostTreatment('EXPENSE'); setDuplicateInvoice(null);
+    setPurchaseDiscountPercent(''); setReceiptDocumentType('INVOICE');
     setBarcodeLookup('');
     setProductSearch('');
     setProductDropdownOpen(false);
@@ -218,14 +254,18 @@ export default function PurchaseFormClient({
         ? parsed.paymentMethods.filter((method): method is PaymentMethod => ['CASH', 'CARD', 'TRANSFER'].includes(method))
         : [];
 
+      setSupplierInvoiceNumber(parsed.supplierInvoiceNumber ?? ''); setAdditionalCost(parsed.additionalCost ?? ''); setAdditionalCostTreatment(parsed.additionalCostTreatment === 'INVENTORY' ? 'INVENTORY' : 'EXPENSE'); setAdditionalCostNote(parsed.additionalCostNote ?? '');
+      setPurchaseDiscountPercent(parsed.purchaseDiscountPercent ?? ''); setReceiptDocumentType(parsed.receiptDocumentType === 'DELIVERY_NOTE' ? 'DELIVERY_NOTE' : 'INVOICE');
       setSupplierId(validRequestedSupplierId || (typeof parsed.supplierId === 'string' ? parsed.supplierId : ''));
       setCart(restoredCart);
       setPaymentMethods(restoredMethods.length > 0 ? restoredMethods : ['CASH']);
       setPaymentStatus(
         parsed.paymentStatus && ['PAID', 'PART_PAID', 'UNPAID'].includes(parsed.paymentStatus)
           ? parsed.paymentStatus
-          : 'PAID',
+          : 'UNPAID',
       );
+      if (parsed.cashSource && ['TILL', 'BUSINESS_CASH', 'OWNER_LOAN', 'OWNER_CAPITAL'].includes(parsed.cashSource)) setCashSource(parsed.cashSource);
+      setCashHolderId(parsed.cashHolderId ?? ''); setFundingOwnerId(parsed.fundingOwnerId ?? '');
       setDueDate(typeof parsed.dueDate === 'string' ? parsed.dueDate : '');
       setCashPaid(typeof parsed.cashPaid === 'string' ? parsed.cashPaid : '');
       setCardPaid(typeof parsed.cardPaid === 'string' ? parsed.cardPaid : '');
@@ -245,12 +285,12 @@ export default function PurchaseFormClient({
     if (!draftReadyRef.current) return;
 
     const hasDraft =
-      supplierId ||
+      supplierId || supplierInvoiceNumber || additionalCost || additionalCostNote ||
       cart.length > 0 ||
       cashPaid ||
       cardPaid ||
       transferPaid ||
-      paymentStatus !== 'PAID' ||
+      paymentStatus !== 'UNPAID' ||
       dueDate;
 
     try {
@@ -261,38 +301,40 @@ export default function PurchaseFormClient({
       const draft: PurchaseDraft = {
         version: PURCHASE_DRAFT_VERSION,
         updatedAt: Date.now(),
-        supplierId,
+        supplierId, supplierInvoiceNumber, additionalCost, additionalCostTreatment, additionalCostNote, purchaseDiscountPercent, receiptDocumentType,
         cart,
         paymentMethods,
         cashPaid,
         cardPaid,
         transferPaid,
         paymentStatus,
-        dueDate,
+        dueDate, cashSource, cashHolderId, fundingOwnerId,
       };
       window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
     } catch {}
-  }, [cardPaid, cart, cashPaid, dueDate, paymentMethods, paymentStatus, storeId, supplierId, transferPaid]);
+  }, [cardPaid, cart, cashPaid, dueDate, paymentMethods, paymentStatus, storeId, supplierId, transferPaid, cashSource, cashHolderId, fundingOwnerId, draftStorageKey, supplierInvoiceNumber, additionalCost, additionalCostTreatment, additionalCostNote, purchaseDiscountPercent, receiptDocumentType]);
 
   useEffect(() => {
     if (!draftReadyRef.current) return;
     const hasUnsavedPurchase =
       cart.length > 0 ||
+      supplierInvoiceNumber || additionalCost || additionalCostNote ||
       supplierId ||
       cashPaid ||
       cardPaid ||
       transferPaid ||
-      paymentStatus !== 'PAID' ||
+      paymentStatus !== 'UNPAID' ||
       dueDate;
     if (!hasUnsavedPurchase) return;
 
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (submittingRef.current) return;
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [cardPaid, cart.length, cashPaid, dueDate, paymentStatus, supplierId, transferPaid]);
+  }, [cardPaid, cart.length, cashPaid, dueDate, paymentStatus, supplierId, transferPaid, supplierInvoiceNumber, additionalCost, additionalCostNote]);
 
   // Keep productSearch display in sync when productId changes programmatically
   useEffect(() => {
@@ -342,6 +384,7 @@ export default function PurchaseFormClient({
     setQuickName('');
     setQuickSku('');
     setQuickBarcode('');
+    setQuickIdentityKey(current => current + 1);
     setQuickUnitConfigs(buildDefaultUnitConfigs(units));
     setQuickSellPrice('');
     setQuickCost('');
@@ -359,7 +402,7 @@ export default function PurchaseFormClient({
   const handleBarcodeLookup = (codeOverride?: string) => {
     const code = (codeOverride ?? barcodeLookup).trim();
     if (!code) return;
-    const match = productOptions.find((product) => product.barcode === code);
+    const match = productOptions.find((product) => product.barcode === code || product.additionalBarcodes?.includes(code));
     if (match) {
       setProductId(match.id);
       setProductSearch(match.name);
@@ -398,6 +441,10 @@ export default function PurchaseFormClient({
     try {
       const result = await quickCreateProductAction({
         name: quickName.trim(),
+        publisher: quickIdentityRef.current?.querySelector<HTMLInputElement>('[name=publisher]')?.value,
+        edition: quickIdentityRef.current?.querySelector<HTMLInputElement>('[name=edition]')?.value,
+        attributesJson: quickIdentityRef.current?.querySelector<HTMLInputElement>('[name=attributesJson]')?.value,
+        additionalBarcodes: quickIdentityRef.current?.querySelector<HTMLInputElement>('[name=additionalBarcodes]')?.value.split('\n').filter(Boolean),
         sku: quickSku.trim() || null,
         barcode: quickBarcode.trim() || null,
         sellingPriceBasePence: selling,
@@ -409,7 +456,7 @@ export default function PurchaseFormClient({
         unitConfigs: quickUnitConfigs,
       });
       if (!result || !result.success) throw new Error(result?.error ?? 'Unable to create product.');
-      const created = result.data;
+      const created = { ...result.data, name: `${result.data.name} · ${result.data.barcode || 'No barcode'} · ${formatMoney(result.data.sellingPriceBasePence, currency)}` };
       setProductOptions((prev) => [...prev, created]);
       setProductId(created.id);
       setProductSearch(created.name);
@@ -485,15 +532,19 @@ export default function PurchaseFormClient({
     });
   };
 
+  const discountPricing = useMemo(() => {
+    try { return { lines: pricePurchaseLines(cart.map(line => ({ qtyInUnit: line.qtyInUnit, unitCostPence: parseCurrencyToPence(line.unitCostInput), discountBps: purchaseDiscountBps(line.discountPercent) })), purchaseDiscountBps(purchaseDiscountPercent)), error: '' }; }
+    catch (error) { return { lines: [], error: error instanceof Error ? error.message : 'Review purchase discounts.' }; }
+  }, [cart, purchaseDiscountPercent]);
   const cartDetails = useMemo(() => {
     return cart
-      .map((line) => {
+      .map((line, index) => {
         const product = productOptions.find((item) => item.id === line.productId);
         const unit = product?.units.find((item) => item.id === line.unitId);
         if (!product || !unit) return null;
         const qtyBase = line.qtyInUnit * unit.conversionToBase;
         const unitCostPence = parseCurrencyToPence(line.unitCostInput);
-        const lineSubtotal = unitCostPence * line.qtyInUnit;
+        const lineSubtotal = discountPricing.lines[index]?.netPence ?? unitCostPence * line.qtyInUnit;
         const lineVat = vatEnabled ? Math.round((lineSubtotal * product.vatRateBps) / 10000) : 0;
         const lineTotal = lineSubtotal + lineVat;
         const baseUnit = product.units.find((item) => item.isBaseUnit);
@@ -530,7 +581,7 @@ export default function PurchaseFormClient({
         lineTotal: number;
       }
     >;
-  }, [cart, productOptions, vatEnabled]);
+  }, [cart, productOptions, vatEnabled, discountPricing]);
 
   const totals = cartDetails.reduce(
     (acc, line) => {
@@ -542,10 +593,15 @@ export default function PurchaseFormClient({
     { subtotal: 0, vat: 0, total: 0 }
   );
 
+  const goodsTotal = totals.total;
+  const extraCostPence = parseCurrencyToPence(additionalCost);
+  totals.total += extraCostPence;
+  const baseCount = cartDetails.reduce((sum, line) => sum + line.qtyInUnit * line.unit.conversionToBase, 0);
+
   const hasMethod = (method: PaymentMethod) => paymentMethods.includes(method);
-  const cashPaidPence = hasMethod('CASH') ? parseCurrencyToPence(cashPaid) : 0;
-  const cardPaidPence = hasMethod('CARD') ? parseCurrencyToPence(cardPaid) : 0;
-  const transferPaidPence = hasMethod('TRANSFER') ? parseCurrencyToPence(transferPaid) : 0;
+  const cashPaidPence = paymentStatus !== 'UNPAID' && hasMethod('CASH') ? parseCurrencyToPence(cashPaid) : 0;
+  const cardPaidPence = paymentStatus !== 'UNPAID' && hasMethod('CARD') ? parseCurrencyToPence(cardPaid) : 0;
+  const transferPaidPence = paymentStatus !== 'UNPAID' && hasMethod('TRANSFER') ? parseCurrencyToPence(transferPaid) : 0;
   const totalPaid = cashPaidPence + cardPaidPence + transferPaidPence;
   const overpay = totals.total > 0 && totalPaid > totals.total;
   const effectivePaid = paymentStatus === 'PAID' && totalPaid === 0 ? totals.total : totalPaid;
@@ -569,12 +625,14 @@ export default function PurchaseFormClient({
   };
 
   const discardDraft = () => {
+    setPurchaseDiscountPercent('');
+    setReceiptDocumentType('INVOICE');
     setSupplierId('');
     setCart([]);
     setQtyDrafts({});
     setCostDrafts({});
     setPaymentMethods(['CASH']);
-    setPaymentStatus('PAID');
+    setPaymentStatus('UNPAID');
     setDueDate('');
     setCashPaid('');
     setCardPaid('');
@@ -625,18 +683,14 @@ export default function PurchaseFormClient({
               <input className="input" value={quickName} onChange={(e) => setQuickName(e.target.value)} />
             </div>
             <div>
-              <label className="label">SKU</label>
-              <input className="input" value={quickSku} onChange={(e) => setQuickSku(e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Barcode</label>
+              <label className="label">Barcode — USB/Bluetooth reader or typing</label>
               <div className="relative">
-                <input className="input pr-11" value={quickBarcode} onChange={(e) => setQuickBarcode(e.target.value)} />
+                <input aria-label="New product barcode — scan with USB/Bluetooth reader" onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }} placeholder="Click here, then scan with your reader" className="input pr-11" value={quickBarcode} onChange={(e) => setQuickBarcode(e.target.value)} />
                 <button
                   type="button"
                   onClick={() => setQuickCameraOpen(true)}
                   className="absolute inset-y-0 right-2 flex items-center px-1 text-black/40 hover:text-accent transition"
-                  aria-label="Open barcode scanner"
+                  aria-label="Scan barcode with camera"
                   title="Scan with camera"
                 >
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -647,7 +701,7 @@ export default function PurchaseFormClient({
               </div>
             </div>
             <div>
-              <label className="label">Selling Price ({getMinorUnitLabel(currency)})</label>
+              <label className="label">Selling Price ({getCurrencySymbol(currency)})</label>
               <input
                 className="input"
                 type="number"
@@ -658,7 +712,7 @@ export default function PurchaseFormClient({
                 onChange={(e) => setQuickSellPrice(e.target.value)}
               />
             </div>
-            <div className="sm:col-span-2 xl:col-span-3">
+            <details className="sm:col-span-2 xl:col-span-3 rounded-xl border p-4"><summary className="cursor-pointer text-sm font-semibold">Stock unit and packs</summary>
               <ProductUnitPricingEditor
                 units={units}
                 currencySymbol={getCurrencySymbol(currency)}
@@ -668,9 +722,9 @@ export default function PurchaseFormClient({
                 initialConfigs={quickUnitConfigs}
                 onConfigsChange={setQuickUnitConfigs}
               />
-            </div>
+            </details>
             <div>
-              <label className="label">Default Cost ({getMinorUnitLabel(currency)})</label>
+              <label className="label">Cost per item ({getCurrencySymbol(currency)})</label>
               <input
                 className="input"
                 type="number"
@@ -691,12 +745,18 @@ export default function PurchaseFormClient({
                 onChange={(e) => setQuickVatRate(e.target.value)}
               />
             </div>
+            <details className="sm:col-span-2 xl:col-span-3 rounded-xl border p-4"><summary className="cursor-pointer text-sm font-semibold">More product details (optional)</summary><div className="mt-4 grid gap-4 sm:grid-cols-2">            <div>
+              <label className="label">Internal product code (optional)</label>
+              <input className="input" value={quickSku} onChange={(e) => setQuickSku(e.target.value)} />
+            </div>
+<div ref={quickIdentityRef} key={quickIdentityKey}><ProductIdentityFields /></div></div></details>
             {quickAddError ? (
               <div className="rounded-xl border border-rose/30 bg-rose/10 px-3 py-2 text-sm text-rose sm:col-span-2 xl:col-span-3">
                 {quickAddError}
               </div>
             ) : null}
             <div className="flex flex-col gap-3 sm:col-span-2 sm:flex-row xl:col-span-3">
+              <ProductMarginResult currency={currency} cost={parseCurrencyToPence(quickCost) / 100} sell={parseCurrencyToPence(quickSellPrice) / 100} />
               <button type="button" className="btn-primary w-full sm:w-auto" onClick={handleQuickCreate} disabled={isCreating}>
                 {isCreating ? 'Creating...' : 'Create product'}
               </button>
@@ -715,15 +775,30 @@ export default function PurchaseFormClient({
         ) : null}
       </div>
 
-      <form action={createPurchaseAction} className="space-y-6">
+      <form action={async data => {
+        submittingRef.current = true;
+        setSubmitError(null);
+        try { const result = await createPurchaseAction(data); if (result && !result.success) { setSubmitError(result.error); submittingRef.current = false; } }
+        catch (error) { if (!(error && typeof error === 'object' && 'digest' in error && String(error.digest).startsWith('NEXT_REDIRECT'))) submittingRef.current = false; throw error; }
+      }} className="space-y-6">
+        {submitError ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{submitError}</div> : null}
         <input type="hidden" name="storeId" value={storeId} />
         <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
         <input type="hidden" name="cart" value={JSON.stringify(cart)} />
         <input type="hidden" name="cashPaid" value={Math.max(0, cashPaidPence)} />
         <input type="hidden" name="cardPaid" value={Math.max(0, cardPaidPence)} />
         <input type="hidden" name="transferPaid" value={Math.max(0, transferPaidPence)} />
-        {openTills.length === 1 ? <input type="hidden" name="tillId" value={openTills[0]!.tillId} /> : null}
+        {paymentStatus !== 'UNPAID' && cashSource === 'TILL' && openTills.length === 1 ? <input type="hidden" name="tillId" value={openTills[0]!.tillId} /> : null}
 
+        <label className="label">Receiving document<select name="receiptDocumentType" className="input mt-1" value={receiptDocumentType} onChange={event=>setReceiptDocumentType(event.target.value as 'INVOICE' | 'DELIVERY_NOTE')}><option value="INVOICE">Supplier invoice</option><option value="DELIVERY_NOTE">Delivery note — invoice to follow</option></select></label>
+        {receiptDocumentType === 'DELIVERY_NOTE' ? <p className="text-sm text-amber-800">Confirm quantities and supplier costs before recording. This purchase will stay in Awaiting invoice until the supplier invoice is attached.</p> : null}
+        <PurchaseDocumentInput /><p className="text-xs text-black/50">If you restore a draft or reopen this page, select the document files again before recording.</p>
+        <div className="rounded-xl border border-slate-200 p-4">
+          <label className="label" htmlFor="supplier-invoice-number">Supplier’s original invoice number (optional)</label>
+          <input id="supplier-invoice-number" name="supplierInvoiceNumber" className="input" maxLength={100} value={supplierInvoiceNumber} onChange={event => { setSupplierInvoiceNumber(event.target.value); setDuplicateInvoice(null); }} onBlur={async () => { try { const result = await checkSupplierInvoiceReferenceAction(supplierId, supplierInvoiceNumber); if (result.success) setDuplicateInvoice(result.data); } catch { /* Optional duplicate hint must not interrupt entry. */ } }} placeholder="e.g. INV-2026-1042" />
+          <p className="mt-1 text-xs text-black/55">Copy the number printed on the supplier’s invoice. TillFlow also creates its own PUR number.</p>
+          {duplicateInvoice ? <p role="status" className="mt-2 text-sm text-amber-800">This supplier’s invoice number is already recorded on <Link className="underline" href={`/purchases/${duplicateInvoice.id}`}>{duplicateInvoice.transactionNumber || 'an earlier purchase'}</Link>. Check before recording it again.</p> : null}
+        </div>
         <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-4 sm:p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -735,10 +810,12 @@ export default function PurchaseFormClient({
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <div className="sm:col-span-2 xl:col-span-2">
-            <label className="label">Barcode Lookup</label>
+            <label className="label" htmlFor="purchase-barcode-lookup">Scan with USB/Bluetooth reader</label>
             <div className="relative">
               <input
                 className="input pr-11"
+                id="purchase-barcode-lookup"
+                autoComplete="off"
                 value={barcodeLookup}
                 onChange={(event) => setBarcodeLookup(event.target.value)}
                 onKeyDown={(event) => {
@@ -747,13 +824,13 @@ export default function PurchaseFormClient({
                     handleBarcodeLookup();
                   }
                 }}
-                placeholder="Scan barcode to select product"
+                placeholder="Click here, scan a barcode, then Enter"
               />
               <button
                 type="button"
                 onClick={() => setLookupCameraOpen(true)}
                 className="absolute inset-y-0 right-2 flex items-center px-1 text-black/40 hover:text-accent transition"
-                aria-label="Open barcode scanner"
+                aria-label="Scan barcode with camera"
                 title="Scan with camera"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1022,6 +1099,7 @@ export default function PurchaseFormClient({
                     </div>
 
                     <div className="mt-4 rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2 text-sm">
+                      <label className="label">Item discount (%)<input className="input mb-2" type="number" min="0" max="100" step="0.01" value={line.discountPercent ?? ''} onChange={event=>updateLine(line.id,{discountPercent:event.target.value})} /></label>
                       <span className="text-black/50">Line total</span>
                       <span className="ml-2 font-semibold text-ink">{formatMoney(line.lineTotal, currency)}</span>
                     </div>
@@ -1097,6 +1175,7 @@ export default function PurchaseFormClient({
                       </div>
                     </td>
                     <td className="px-3 py-3 text-sm font-semibold">
+                      <label className="label">Item discount (%)<input className="input mb-2" type="number" min="0" max="100" step="0.01" value={line.discountPercent ?? ''} onChange={event=>updateLine(line.id,{discountPercent:event.target.value})} /></label>
                       {formatMoney(line.lineTotal, currency)}
                     </td>
                     <td className="px-3 py-3 text-right">
@@ -1113,16 +1192,28 @@ export default function PurchaseFormClient({
           )}
         </div>
 
+        <div className="rounded-xl border border-slate-200 p-4"><label className="label" htmlFor="purchase-discount">Extra invoice discount (%)</label><input id="purchase-discount" name="purchaseDiscountPercent" className="input mt-1 max-w-xs" type="number" min="0" max="100" step="0.01" value={purchaseDiscountPercent} onChange={event=>setPurchaseDiscountPercent(event.target.value)} /><p className="mt-2 text-sm text-black/60">Applied after item discounts, before VAT. Total discount: {formatMoney(discountPricing.lines.reduce((sum,line)=>sum+line.discountPence,0),currency)}.</p>{discountPricing.error ? <p role="alert" className="text-sm text-red-700">{discountPricing.error}</p> : null}</div>
+        <details className="rounded-xl border border-slate-200 p-4" open={extraCostPence > 0 || undefined}>
+          <summary className="cursor-pointer font-semibold text-sm">Add delivery or other purchase costs</summary>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div><label className="label" htmlFor="purchase-additional-cost">Additional cost</label><input id="purchase-additional-cost" name="additionalCost" className="input" type="number" min="0" step="0.01" inputMode="decimal" value={additionalCost} onChange={event => setAdditionalCost(event.target.value)} /></div>
+            <div><label className="label" htmlFor="purchase-cost-note">Description / reference</label><input id="purchase-cost-note" name="additionalCostNote" className="input" maxLength={300} placeholder="e.g. delivery from wholesaler" value={additionalCostNote} onChange={event => setAdditionalCostNote(event.target.value)} /></div>
+            <div className="sm:col-span-2"><label className="label" htmlFor="purchase-cost-treatment">Include this cost in the products’ stock value?</label><select id="purchase-cost-treatment" name="additionalCostTreatment" className="input" value={additionalCostTreatment} onChange={event => setAdditionalCostTreatment(event.target.value as 'INVENTORY' | 'EXPENSE')}><option value="EXPENSE">No — record a linked expense</option><option value="INVENTORY">Yes — share equally per individual item</option></select>
+              <p className="mt-2 text-xs text-black/60">{additionalCostTreatment === 'INVENTORY' ? `Shared by quantity across ${baseCount} individual items, with exact rounding. Stock cost changes; no extra expense is posted.` : 'A separate linked expense is recorded. Any payment below is split between goods and this cost, so cash is taken only once.'} Choose the treatment that follows your business’s accounting policy.</p>
+              <p className="mt-1 text-xs text-black/60">Goods: {formatMoney(goodsTotal, currency)} · Additional cost: {formatMoney(extraCostPence, currency)} · Combined total: {formatMoney(totals.total, currency)}. Additional costs use the entered final amount; no extra VAT is calculated on them.</p>
+            </div>
+          </div>
+        </details>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div>
-            <label className="label">Payment Status</label>
-            <select className="input" name="paymentStatus" value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value as PaymentStatus)}>
+            <label className="label" htmlFor="purchase-payment-status">Payment Status</label>
+            <select id="purchase-payment-status" className="input" name="paymentStatus" value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value as PaymentStatus)}>
               <option value="PAID">Paid</option>
               <option value="PART_PAID">Part Paid</option>
               <option value="UNPAID">Unpaid</option>
             </select>
           </div>
-          <div>
+          {paymentStatus !== 'UNPAID' ? <div>
             <label className="label">Payment Method</label>
             <div className="mt-2 flex flex-wrap gap-3 text-sm text-black/70">
               {(['CASH', 'CARD', 'TRANSFER'] as PaymentMethod[]).map((method) => (
@@ -1137,8 +1228,16 @@ export default function PurchaseFormClient({
               ))}
             </div>
             <div className="mt-1 text-xs text-black/50">Select one or more methods.</div>
-          </div>
-          {openTills.length !== 1 ? (
+          </div> : null}
+          {paymentStatus !== 'UNPAID' && hasMethod('CASH') ? <div>
+            <label className="label" htmlFor="purchase-cash-source">Where is the cash coming from?</label>
+            <select id="purchase-cash-source" name="cashSource" className="input" value={cashSource} onChange={event => setCashSource(event.target.value as PurchaseCashSource)}>
+              <option value="TILL">Till drawer</option><option value="BUSINESS_CASH">Business cash held outside the till</option><option value="OWNER_LOAN">Owner’s money — repay the owner</option><option value="OWNER_CAPITAL">Owner’s money — contribution</option>
+            </select>
+            {cashSource === 'BUSINESS_CASH' ? <><label className="label mt-2">Who holds the business cash?</label><select name="cashHolderId" className="input" required value={cashHolderId} onChange={event => setCashHolderId(event.target.value)}><option value="">Select person…</option>{cashPeople.map(person => <option key={person.id} value={person.id}>{person.name} — {formatMoney(person.balancePence, currency)}</option>)}</select><Link className="mt-2 block text-sm underline" href={`/purchases/cash?storeId=${storeId}`}>Record a cash handover or return</Link></> : null}
+            {cashSource.startsWith('OWNER_') ? <><label className="label mt-2">Owner providing the money</label><select name="fundingOwnerId" className="input" required value={fundingOwnerId} onChange={event => setFundingOwnerId(event.target.value)}><option value="">Select owner…</option>{cashPeople.filter(person => person.role === 'OWNER').map(person => <option key={person.id} value={person.id}>{person.name}</option>)}</select><p className="mt-1 text-xs text-black/50">Paid directly by the owner. No money is taken from the till.</p></> : null}
+          </div> : null}
+          {paymentStatus !== 'UNPAID' && hasMethod('CASH') && cashSource === 'TILL' && openTills.length !== 1 ? (
             <div>
               <label className="label">Till (cash from this drawer)</label>
               <select
@@ -1162,10 +1261,10 @@ export default function PurchaseFormClient({
               </select>
             </div>
           ) : null}
-          <div>
-            <label className="label">Due Date</label>
-            <input className="input" name="dueDate" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
-          </div>
+          {paymentStatus !== 'PAID' ? <div>
+            <label className="label" htmlFor="purchase-due-date">Due Date</label>
+            <input id="purchase-due-date" className="input" name="dueDate" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+          </div> : null}
           <div>
             <label className="label">Cart Total</label>
             <div className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold">
@@ -1175,7 +1274,7 @@ export default function PurchaseFormClient({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {hasMethod('CASH') ? (
+          {paymentStatus !== 'UNPAID' && hasMethod('CASH') ? (
             <div>
               <label className="label">Cash Paid</label>
               <input
@@ -1189,7 +1288,7 @@ export default function PurchaseFormClient({
               />
             </div>
           ) : null}
-          {hasMethod('CARD') ? (
+          {paymentStatus !== 'UNPAID' && hasMethod('CARD') ? (
             <div>
               <label className="label">Card Paid</label>
               <input
@@ -1203,7 +1302,7 @@ export default function PurchaseFormClient({
               />
             </div>
           ) : null}
-          {hasMethod('TRANSFER') ? (
+          {paymentStatus !== 'UNPAID' && hasMethod('TRANSFER') ? (
             <div>
               <label className="label">Transfer Paid</label>
               <input
@@ -1230,7 +1329,7 @@ export default function PurchaseFormClient({
             Ready to receive <span className="font-semibold text-ink">{cart.length}</span> line{cart.length === 1 ? '' : 's'} totaling{' '}
             <span className="font-semibold text-ink">{formatMoney(totals.total, currency)}</span>.
           </div>
-          <ReceivePurchaseButton disabled={cart.length === 0 || overpay || missingRequiredSupplier} />
+          <ReceivePurchaseButton disabled={cart.length === 0 || overpay || missingRequiredSupplier || Boolean(discountPricing.error)} />
         </div>
       </form>
 

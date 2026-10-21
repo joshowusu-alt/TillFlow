@@ -1,4 +1,5 @@
 'use client';
+import PurchaseDocumentInput from '@/components/purchases/PurchaseDocumentInput';
 
 import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
@@ -267,6 +268,7 @@ export default function ImportStockClient({
   initialMode?: ImportMode | null;
 }) {
   const [stage, setStage] = useState<'upload' | 'preview' | 'result'>('upload');
+  const [purchaseDocumentsJson,setPurchaseDocumentsJson]=useState('[]');
   const [importMode, setImportMode] = useState<ImportMode | null>(initialMode);
   const [legacyPaymentStatusColumn, setLegacyPaymentStatusColumn] = useState(false);
   const [clientImportKey, setClientImportKey] = useState('');
@@ -294,6 +296,7 @@ export default function ImportStockClient({
       }
       setParseError(null);
       setFileName(file.name);
+      setPurchaseDocumentsJson('[]');
       const safeName = file.name.replace(/[^\w.-]/g, '_').slice(0, 40);
       setClientImportKey(`imp:${importMode}:${file.size}:${file.lastModified}:${safeName}`);
       try {
@@ -364,7 +367,7 @@ export default function ImportStockClient({
   const hasErrors = previewRows.some((r) => rowStatus(r) === 'error');
   const hasUnresolvedWarnings = previewRows.some((r) => rowStatus(r) === 'warning');
   const readyCount = previewRows.filter((r) => rowStatus(r) === 'ready').length;
-  const canConfirm = !hasErrors && previewRows.length > 0 && readyCount > 0;
+  const canConfirm = !hasErrors && previewRows.length > 0 && readyCount > 0 && (importMode !== 'PURCHASES' || purchaseDocumentsJson !== '[]');
 
   // ── Confirm ──────────────────────────────────────────────────────────────
 
@@ -382,7 +385,9 @@ export default function ImportStockClient({
         name: r.name,
         sku: r.sku,
         barcode: r.barcode,
-        category: r.suggestedCategory || r.category,
+        category: r.division || r.group ? r.category : r.suggestedCategory || r.category,
+        division: r.division,
+        group: r.group,
         sellingPricePence: r.sellingPricePence,
         costPricePence: r.costPricePence,
         quantity: importMode === 'CATALOGUE' ? 0 : r.quantity,
@@ -419,6 +424,7 @@ export default function ImportStockClient({
           rows: confirmedRows,
           meta: {
             importMode,
+            purchaseDocumentsJson,
             legacyPaymentStatusColumn,
             clientImportKey,
             fileName: fileName ?? undefined,
@@ -935,7 +941,7 @@ export default function ImportStockClient({
           </>
         ) : null}
         {importMode === 'PURCHASES' ? (
-          <p className="text-xs text-black/60">Genuine purchases only. Paid reduces the selected payment account; unpaid requires a supplier and creates AP.</p>
+          <div className="space-y-3"><PurchaseDocumentInput onDocumentsChange={documents=>setPurchaseDocumentsJson(JSON.stringify(documents))}/><p className="text-xs text-black/60">Genuine purchases only. Paid reduces the selected payment account; unpaid requires a supplier and creates AP. Attach the invoice documents covering the rows in this import.</p></div>
         ) : null}
         <p className="text-xs text-black/55">
           <span data-testid="import-stock-ready-count">Ready {readyCount}</span>
@@ -1128,7 +1134,7 @@ export default function ImportStockClient({
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <div className="text-xs uppercase tracking-[0.16em] text-black/40">Category</div>
-                  <div className="mt-1 text-black/65">{row.category || '—'}</div>
+                  <div className="mt-1 text-black/65">{[row.category,row.division,row.group].filter(Boolean).join(' → ') || '—'}</div>
                 </div>
                 {importMode === 'PURCHASES' ? (
                   <div>
@@ -1279,7 +1285,7 @@ export default function ImportStockClient({
                       {row.sku && <div className="text-xs text-black/40">{row.sku}</div>}
                     </td>
                     <td className="px-3 py-2 text-black/60 hidden sm:table-cell">
-                      {row.category || <span className="text-black/30">—</span>}
+                      {[row.category,row.division,row.group].filter(Boolean).join(' → ') || <span className="text-black/30">—</span>}
                     </td>
                     <td className="px-3 py-2 text-right">
                       {row.sellingPricePence > 0
@@ -1493,7 +1499,7 @@ export default function ImportStockClient({
                 <div className="absolute bottom-full mb-1.5 right-0 hidden group-hover:block w-56 rounded-lg bg-black/80 px-3 py-2 text-xs text-white shadow-lg">
                   {hasErrors
                     ? 'Fix all red errors first (re-upload the corrected file).'
-                    : 'No ready rows to import.'}
+                    : importMode === 'PURCHASES' && purchaseDocumentsJson === '[]' ? 'Attach the supplier invoice before importing purchases.' : 'No ready rows to import.'}
                 </div>
               )}
               {canConfirm && hasUnresolvedWarnings && (

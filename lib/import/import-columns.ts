@@ -20,6 +20,8 @@ export const TEMPLATE_HEADERS = [
   'image_url',
   'notes',
   'payment_status',
+  'division',
+  'group',
 ] as const;
 
 export type TemplateColumn = (typeof TEMPLATE_HEADERS)[number];

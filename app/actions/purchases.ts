@@ -1,5 +1,7 @@
 'use server';
 
+import {decodePurchaseDocuments,validatePurchaseDocuments} from '@/lib/purchases/source-documents';
+import type { PurchaseCashSource } from '@/lib/services/purchase-funding';
 import { createPurchase } from '@/lib/services/purchases';
 import { EXPLICIT_CASH_TILL_REQUIRED_MSG } from '@/lib/services/cash-drawer';
 import { createSupplier } from '@/lib/services/suppliers';
@@ -16,6 +18,7 @@ import { audit } from '@/lib/audit';
 import type { PaymentStatus } from '@/lib/services/shared';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
+import { purchaseDiscountBps } from '@/lib/purchases/discounts';
 import { purchaseNeedsSupplierLink, isOpeningStockMovement } from '@/lib/improve-records-classify';
 import {
   OPENING_STOCK_MOVEMENT_TYPES,
@@ -23,22 +26,31 @@ import {
 } from '@/lib/improve-records-constants';
 import { revalidateImproveRecordsHome } from '@/lib/improve-records-revalidate';
 
-export async function createPurchaseAction(formData: FormData): Promise<void> {
-  return formAction(async () => {
+export async function createPurchaseAction(formData: FormData): Promise<ActionResult> {
+  return safeAction(async () => {
     const requestedStoreId = formString(formData, 'storeId');
     const { user, businessId, storeId } = await requireSelectedStoreContext(
       ['MANAGER', 'OWNER'],
       requestedStoreId,
     );
     const supplierId = formString(formData, 'supplierId') || null;
-    const paymentStatus = (formString(formData, 'paymentStatus') || 'PAID') as PaymentStatus;
+    const supplierInvoiceNumber = formString(formData, 'supplierInvoiceNumber');
+    const discountBps = purchaseDiscountBps(formString(formData, 'purchaseDiscountPercent'));
+    const receiptDocumentType = formString(formData, 'receiptDocumentType') || 'INVOICE';
+    if (receiptDocumentType !== 'INVOICE' && receiptDocumentType !== 'DELIVERY_NOTE') return err('Choose an invoice or delivery note.');
+    const additionalCostRaw = formString(formData, 'additionalCost');
+    if (additionalCostRaw && (!Number.isFinite(Number(additionalCostRaw.replace(/,/g,''))) || Number(additionalCostRaw.replace(/,/g,'')) < 0)) return err('Enter a valid additional cost.');
+    const additionalCostPence = toPence(additionalCostRaw);
+    const additionalCostTreatment = formString(formData, 'additionalCostTreatment') === 'INVENTORY' ? 'INVENTORY' as const : 'EXPENSE' as const;
+    const additionalCostNote = formString(formData, 'additionalCostNote');
+    const paymentStatus = (formString(formData, 'paymentStatus') || 'UNPAID') as PaymentStatus;
     const psValidation = PaymentStatusEnum.safeParse(paymentStatus);
     if (!psValidation.success) {
-      redirect('/purchases?error=invalid-payment-status');
+      return err('Choose a valid payment status.');
     }
-    const dueDate = formDate(formData, 'dueDate');
+    const dueDate = paymentStatus === 'PAID' ? null : formDate(formData, 'dueDate');
 
-    let lines: { productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null }[] = [];
+    let lines: { productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null; discountBps?: number }[] = [];
     const cartRaw = formData.get('cart');
     if (cartRaw) {
       try {
@@ -49,6 +61,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
               productId: String(item.productId || ''),
               unitId: String(item.unitId || ''),
               qtyInUnit: Number(item.qtyInUnit || 0),
+              discountBps: purchaseDiscountBps(item.discountPercent),
               unitCostPence: toPence(item.unitCostInput ?? item.unitCostPence ?? '')
             }))
             .filter((item) => item.productId && item.unitId && item.qtyInUnit > 0);
@@ -63,13 +76,18 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
     const transferPaid = formInt(formData, 'transferPaid');
     const tillId = formString(formData, 'tillId');
     const idempotencyKey = formString(formData, 'idempotencyKey');
+    if (paymentStatus === 'PAID' && cashPaid + cardPaid + transferPaid === 0 && lines.some(line => (line.unitCostPence ?? 0) > 0)) return err('Enter the amount paid using the selected payment method.');
+    if (paymentStatus === 'UNPAID' && cashPaid + cardPaid + transferPaid > 0) return err('Choose Part paid or Paid when recording a payment.');
     const paidTender = cashPaid + cardPaid + transferPaid > 0 || paymentStatus === 'PAID';
     if (paidTender && !idempotencyKey) {
-      redirect('/purchases?error=stale-purchase-form');
+      return err('This purchase form is out of date. Refresh the page and try again.');
     }
+    const cashSource = (formString(formData, 'cashSource') || 'TILL') as PurchaseCashSource;
+    const cashHolderId = formString(formData, 'cashHolderId');
+    const fundingOwnerId = formString(formData, 'fundingOwnerId');
     const willUseCash =
       cashPaid > 0 || (paymentStatus === 'PAID' && cashPaid + cardPaid + transferPaid === 0);
-    if (willUseCash && !tillId) {
+    if (willUseCash && cashSource === 'TILL' && !tillId) {
       return err(EXPLICIT_CASH_TILL_REQUIRED_MSG);
     }
     // A till from another branch is refused by name before any write; the service
@@ -78,10 +96,15 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       await resolveStoreFromTill(businessId, tillId, storeId);
     }
 
+    const sourceDocuments=decodePurchaseDocuments(formString(formData,'purchaseDocumentsJson'));
+    validatePurchaseDocuments(sourceDocuments);
     const invoice = await createPurchase({
       businessId,
       storeId,
-      supplierId,
+      sourceDocuments,
+      discountBps, receiptDocumentType,
+      supplierId, supplierInvoiceNumber, additionalCostPence, additionalCostTreatment, additionalCostNote,
+      cashSource, cashHolderId, fundingOwnerId,
       paymentStatus,
       dueDate,
       payments: [
@@ -95,7 +118,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       idempotencyKey: idempotencyKey || undefined,
     });
 
-    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } }).catch((e) => console.error('[audit]', e));
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId, supplierInvoiceNumber, additionalCostPence, additionalCostTreatment, cashSource, cashHolderId, fundingOwnerId } }).catch((e) => console.error('[audit]', e));
 
     revalidatePosCatalog(businessId, storeId);
     revalidateTag('reports');
@@ -118,7 +141,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
     }
 
     redirect(`/purchases/${invoice.id}?${params.toString()}`);
-  }, '/purchases');
+  });
 }
 
 /**
@@ -340,12 +363,16 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
 
     const invoice = await prisma.purchaseInvoice.findFirst({
       where: { id: purchaseId, businessId },
-      include: { lines: true, payments: true, purchaseReturn: true },
+      include: { lines: true, payments: true, purchaseReturn: true, documents:{select:{id:true}} },
     });
 
     if (!invoice) {
       return err('Purchase not found.');
     }
+
+    if (invoice.documents?.length) return err('This purchase has supporting invoice documents. Use a return to preserve its records.');
+    if (invoice.additionalCostPence > 0) return err('This purchase has linked costs. Use a return to preserve its cost and payment history.');
+    if (invoice.payments.some(payment => payment.reference?.startsWith('funding:'))) return err('This purchase has tracked funding. Use a purchase return to keep its payment history intact.');
 
     if (invoice.purchaseReturn) {
       return err('Cannot delete a purchase that has been returned.');
@@ -463,5 +490,54 @@ export async function setPurchaseDueDateAction(
     }
 
     return ok();
+  });
+}
+
+export async function checkSupplierInvoiceReferenceAction(supplierId: string, reference: string) {
+  return safeAction(async () => {
+    const { businessId } = await withBusinessContext(['OWNER', 'MANAGER']);
+    const number = reference.trim();
+    if (!supplierId || !number || number.length > 100) return ok(null);
+    const matches = await prisma.purchaseInvoice.findMany({ where: { businessId, supplierId, supplierInvoiceNumber: {not:null} }, select: { id: true, transactionNumber: true, supplierInvoiceNumber:true } });
+    const existing = matches.find(item=>item.supplierInvoiceNumber?.toLowerCase()===number.toLowerCase()) ?? null;
+    return ok(existing);
+  });
+}
+
+export async function updatePurchaseDetailsAction(formData: FormData) {
+  return safeAction(async () => {
+    const {user,businessId}=await withBusinessContext(['MANAGER','OWNER']);
+    const {updatePurchaseDetails}=await import('@/lib/services/purchase-details');
+    const supplierId=formOptionalString(formData,'supplierId')||null;
+    const expectedDetails=formString(formData,'expectedDetails');
+    if (!expectedDetails) return err('Refresh this purchase before editing it.');
+    const result=await updatePurchaseDetails({businessId,expectedDetails,invoiceId:formString(formData,'invoiceId'),actor:{id:user.id,name:user.name,role:user.role},supplierId,supplierInvoiceNumber:formString(formData,'supplierInvoiceNumber'),dueDate:formString(formData,'dueDate'),additionalCostNote:formString(formData,'additionalCostNote'),reason:formString(formData,'reason')});
+    revalidateTag('reports'); revalidateOwnerDashboardCache(); revalidateImproveRecordsHome();
+    for (const path of ['/purchases',`/purchases/${result.invoiceId}`,'/payments/supplier-aging','/payments/supplier-payments',...(supplierId?[`/suppliers/${supplierId}`]:[]),...(result.previousSupplierId?[`/suppliers/${result.previousSupplierId}`]:[])]) revalidatePath(path);
+    return ok({invoiceId:result.invoiceId});
+  });
+}
+
+
+export async function addPurchaseDocumentsAction(formData:FormData){
+  return safeAction(async()=>{
+    const {user,businessId}=await withBusinessContext(['OWNER','MANAGER']);
+    const invoiceId=formString(formData,'invoiceId');
+    const documentKind=formString(formData,'documentKind')||'INVOICE';
+    if(!['INVOICE','DELIVERY_NOTE'].includes(documentKind))return err('Choose an invoice or delivery note.');
+    const supplierInvoiceNumber=formString(formData,'supplierInvoiceNumber').trim();
+    if(supplierInvoiceNumber.length>100||/[\x00-\x1f]/.test(supplierInvoiceNumber))return err('Supplier invoice number must be up to 100 characters.');
+    const documents=validatePurchaseDocuments(decodePurchaseDocuments(formString(formData,'purchaseDocumentsJson')));
+    await prisma.$transaction(async tx=>{
+      const invoice=await tx.purchaseInvoice.findFirst({where:{id:invoiceId,businessId},select:{id:true,receiptDocumentType:true,invoiceReceivedAt:true,supplierInvoiceNumber:true,documents:{select:{sha256:true,documentKind:true}}}});
+      if(!invoice)throw new Error('Purchase not found.');
+      const existing=new Set(invoice.documents.map(d=>d.sha256));
+      const added=documents.filter(d=>{if(existing.has(d.sha256))return false;existing.add(d.sha256);return true;});
+      if(!added.length){if(documentKind==='INVOICE'&&invoice.receiptDocumentType==='DELIVERY_NOTE'&&!invoice.invoiceReceivedAt)throw new Error('Attach the supplier invoice as a new document. The delivery note is already saved.');return;}
+      await tx.purchaseDocument.createMany({data:added.map(document=>({...document,documentKind,businessId,purchaseInvoiceId:invoiceId,uploadedByUserId:user.id}))});
+      if(documentKind==='INVOICE')await tx.purchaseInvoice.update({where:{id:invoiceId},data:{invoiceReceivedAt:invoice.invoiceReceivedAt??new Date(),...(supplierInvoiceNumber?{supplierInvoiceNumber}:{})}});
+      await tx.auditLog.create({data:{businessId,userId:user.id,userName:user.name??'Unknown',userRole:user.role,action:'PURCHASE_DOCUMENT_ADD',entity:'PurchaseInvoice',entityId:invoiceId,details:JSON.stringify({documentKind,supplierInvoiceNumberBefore:invoice.supplierInvoiceNumber,supplierInvoiceNumberAfter:documentKind==='INVOICE'&&supplierInvoiceNumber?supplierInvoiceNumber:invoice.supplierInvoiceNumber,files:added.map(d=>({name:d.originalFilename,sha256:d.sha256}))})}});
+    },{isolationLevel:'Serializable',maxWait:5000,timeout:15000});
+    revalidatePath(`/purchases/${invoiceId}`);revalidatePath('/purchases');return ok({invoiceId});
   });
 }

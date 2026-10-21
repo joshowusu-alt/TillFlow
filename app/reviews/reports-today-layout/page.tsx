@@ -170,6 +170,7 @@ export default function ReportsTodayLayoutReviewPage({
       profitTrend: { labels: ['Mon'], values: [-1_234_567_890] },
       hourlyData: [{ day: 'Mon', hour: 10, sales: 4 }],
       categoryData: [{ name: 'Groceries', value: 1_234_567_890 }],
+      netCategoryData: [{ name: 'Groceries', value: 1_234_567_890 }],
       productData: [{ name: 'Rice', revenue: 1_234_567_890, profit: 500_000, margin: 20 }],
       comparison: { labels: ['Mon'], current: [1_234_567_890], previous: [800_000] },
       kpis: { totalSales: 1_234_567_890, totalProfit: -1_234_567_890, marginPercent: -100,

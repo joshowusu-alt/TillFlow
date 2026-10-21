@@ -125,6 +125,7 @@ export async function requireOpenCashShiftForTill(
 }
 
 export type CashPurchasePaymentRef = {
+  reference?: string | null;
   id: string;
   method: string;
   amountPence: number;
@@ -142,7 +143,7 @@ export function findOrphanCashPurchasePayments(
   drawerEntries: CashDrawerEntryRef[]
 ) {
   return payments.filter((payment) => {
-    if (payment.method !== 'CASH' || payment.amountPence <= 0) return false;
+    if (payment.method !== 'CASH' || payment.amountPence <= 0 || /^funding:(1000\.HOLD\.|2300\.OWNER\.|3100\.OWNER\.)/.test(payment.reference ?? '')) return false;
     return !drawerEntries.some(
       (entry) =>
         entry.entryType === 'PAID_OUT_SUPPLIER' &&

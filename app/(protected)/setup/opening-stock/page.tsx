@@ -28,9 +28,9 @@ export default async function OpeningStockPage({
         <div className="mt-2 text-sm text-black/60">
           Complete your business setup in Settings first.
         </div>
-        <a href="/settings" className="btn-primary mt-4 inline-block">
+        <Link href="/settings" className="btn-primary mt-4 inline-block">
           Go to Settings
-        </a>
+        </Link>
       </div>
     );
   }

@@ -300,7 +300,8 @@ export async function saveOpeningAP(
       if (obPurchaseIds.length > 0) {
         await tx.purchasePayment.deleteMany({ where: { purchaseInvoiceId: { in: obPurchaseIds } } });
         await tx.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoiceId: { in: obPurchaseIds } } });
-        await tx.purchaseInvoice.deleteMany({ where: { id: { in: obPurchaseIds } } });
+        await tx.purchaseDocument.deleteMany({where:{businessId,purchaseInvoiceId:{in:obPurchaseIds}}});
+        await tx.purchaseInvoice.deleteMany({ where: {businessId, id: { in: obPurchaseIds } } });
       }
 
       // Delete previous OB AP journal entries

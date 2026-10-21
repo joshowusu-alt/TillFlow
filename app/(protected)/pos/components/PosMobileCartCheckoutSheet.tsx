@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import ResponsiveModal from '@/components/ResponsiveModal';
 
 type PosMobileCartCheckoutSheetProps = {
@@ -12,6 +12,7 @@ type PosMobileCartCheckoutSheetProps = {
   banner?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  summary?: ReactNode;
 };
 
 /**
@@ -24,20 +25,22 @@ export default function PosMobileCartCheckoutSheet({
   banner,
   children,
   footer,
+  summary,
 }: PosMobileCartCheckoutSheetProps) {
+  const [view, setView] = useState<'cart' | 'payment'>('cart');
   return (
     <ResponsiveModal
       open={open}
       onClose={onClose}
       labelledBy="pos-mobile-cart-checkout-title"
       maxWidthClassName="max-w-lg"
-      panelClassName="rounded-t-2xl border border-black/10 sm:rounded-2xl"
+      panelClassName="max-sm:mb-[calc(env(safe-area-inset-bottom,0px)+2rem)] rounded-t-2xl border border-black/10 sm:rounded-2xl"
       backdropClassName="bg-slate-950/45 backdrop-blur-[1.5px]"
       closeOnBackdrop={dismissible}
       closeOnEscape={dismissible}
       restoreFocus
       keyboardSafeFooter
-      footer={footer}
+      footer={<div className="space-y-2" data-pos-mobile-sheet-footer="true">{summary}{view === 'cart' ? <button type="button" className="btn-primary min-h-12 w-full" onClick={() => setView('payment')}>Continue to payment →</button> : footer}</div>}
     >
       <div className="sticky top-0 z-10 border-b border-black/5 bg-white">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -56,13 +59,14 @@ export default function PosMobileCartCheckoutSheet({
             Close
           </button>
         </div>
+        <div className="flex gap-2 px-4 pb-3" aria-label="Cart and payment steps"><button type="button" className={view === 'cart' ? 'btn-primary flex-1' : 'btn-secondary flex-1'} aria-pressed={view === 'cart'} disabled={!dismissible} onClick={() => setView('cart')}>Cart</button><button type="button" className={view === 'payment' ? 'btn-primary flex-1' : 'btn-secondary flex-1'} aria-pressed={view === 'payment'} disabled={!dismissible} onClick={() => setView('payment')}>Payment</button></div>
         {banner ? (
           <div className="border-t border-black/5 px-3 pb-3 pt-0 sm:px-4" data-pos-mobile-sheet-banner="true">
             {banner}
           </div>
         ) : null}
       </div>
-      <div className="space-y-3 px-3 py-3 sm:px-4" data-pos-mobile-cart-checkout-body="true">
+      <div className="space-y-3 px-3 py-3 sm:px-4" data-pos-mobile-cart-checkout-body="true" data-pos-mobile-view={view}>
         {children}
       </div>
     </ResponsiveModal>

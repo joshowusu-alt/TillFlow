@@ -144,13 +144,13 @@ export default function ProductUnitPricingEditor({
       <input type="hidden" name={fieldName} value={hiddenValue} />
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-black/40">Selling units</div>
+          <div className="text-xs uppercase tracking-[0.2em] text-black/40">How do you sell this item?</div>
           <div className="mt-1 text-sm text-black/60">
-            Keep inventory in the physical base unit, then add exact sellable units like quarter-pack, half-pack, pack, or carton.
+            Start with the smallest item you count, such as one bottle or one book. If you also sell packs or cartons, add them below: e.g. 1 carton contains 12 bottles.
           </div>
         </div>
         <button type="button" className="btn-secondary w-full text-xs sm:w-auto" onClick={addRow}>
-          Add selling unit
+          Add a pack or carton
         </button>
       </div>
 
@@ -163,10 +163,10 @@ export default function ProductUnitPricingEditor({
 
           return (
             <div key={row.key} className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_160px_repeat(2,minmax(0,1fr))_auto] lg:items-start">
+              <div className={row.isBaseUnit ? "grid gap-4 sm:grid-cols-[1fr_auto] sm:items-center" : "grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_160px_repeat(2,minmax(0,1fr))_auto] lg:items-start"}>
                 <div className="min-w-0">
                   <label className="label" htmlFor={`${fieldName}-${row.key}-unit`}>
-                    {row.isBaseUnit ? 'Base unit' : 'Sellable unit'}
+                    {row.isBaseUnit ? 'Smallest stock unit' : 'Pack or carton'}
                   </label>
                   <select
                     id={`${fieldName}-${row.key}-unit`}
@@ -183,13 +183,14 @@ export default function ProductUnitPricingEditor({
                   </select>
                   <div className="mt-1 text-xs text-black/50">
                     {row.isBaseUnit
-                      ? 'Inventory is always stored in this physical base unit.'
+                      ? 'Stock is counted one of these at a time.'
                       : 'Cashiers will sell this unit directly — no decimal quantity entry needed.'}
                   </div>
                 </div>
 
+                {!row.isBaseUnit ? <>
                 <div className="min-w-0">
-                  <label className="label">Base units inside</label>
+                  <label className="label">Number of smallest items inside</label>
                   <input
                     className="input"
                     type="number"
@@ -201,12 +202,12 @@ export default function ProductUnitPricingEditor({
                     onChange={(event) => updateRow(row.key, { conversionToBase: event.target.value })}
                   />
                   <div className="mt-1 text-xs text-black/50">
-                    {row.isBaseUnit ? 'Base unit is always 1.' : `1 configured unit = ${conversionToBase} base units`}
+                    {row.isBaseUnit ? 'Base unit is always 1.' : `1 configured unit = ${conversionToBase} individual items`}
                   </div>
                 </div>
 
                 <div className="min-w-0">
-                  <label className="label">Selling price override</label>
+                  <label className="label">Price for this pack (optional)</label>
                   <input
                     className="input"
                     type="number"
@@ -214,7 +215,7 @@ export default function ProductUnitPricingEditor({
                     step="0.01"
                     inputMode="decimal"
                     disabled={row.isBaseUnit}
-                    placeholder="Use fallback"
+                    placeholder="Use item price × quantity"
                     value={row.sellingPrice}
                     onChange={(event) => updateRow(row.key, { sellingPrice: event.target.value })}
                   />
@@ -222,13 +223,13 @@ export default function ProductUnitPricingEditor({
                     {row.isBaseUnit
                       ? 'Uses the base price above.'
                       : basePricePence > 0
-                        ? `Fallback: ${currencySymbol}${(fallbackSellingPrice / 100).toFixed(2)}`
-                        : 'Falls back to the base price above when left blank.'}
+                        ? `Calculated price: ${currencySymbol}${(fallbackSellingPrice / 100).toFixed(2)}`
+                        : 'Leave blank to calculate from the item price.'}
                   </div>
                 </div>
 
                 <div className="min-w-0">
-                  <label className="label">Default cost override</label>
+                  <label className="label">Cost for this pack (optional)</label>
                   <input
                     className="input"
                     type="number"
@@ -236,7 +237,7 @@ export default function ProductUnitPricingEditor({
                     step="0.01"
                     inputMode="decimal"
                     disabled={row.isBaseUnit}
-                    placeholder="Use fallback"
+                    placeholder="Use item price × quantity"
                     value={row.defaultCost}
                     onChange={(event) => updateRow(row.key, { defaultCost: event.target.value })}
                   />
@@ -244,11 +245,12 @@ export default function ProductUnitPricingEditor({
                     {row.isBaseUnit
                       ? 'Uses the base cost above.'
                       : baseCostPence > 0
-                        ? `Fallback: ${currencySymbol}${(fallbackDefaultCost / 100).toFixed(2)}`
-                        : 'Falls back to the base cost above when left blank.'}
+                        ? `Calculated price: ${currencySymbol}${(fallbackDefaultCost / 100).toFixed(2)}`
+                        : 'Leave blank to calculate from the item cost.'}
                   </div>
                 </div>
 
+                </> : null}
                 <div className="flex items-end lg:justify-end">
                   {!row.isBaseUnit ? (
                     <button type="button" className="btn-ghost w-full text-xs lg:w-auto" onClick={() => removeRow(row.key)}>
@@ -256,7 +258,7 @@ export default function ProductUnitPricingEditor({
                     </button>
                   ) : (
                     <span className="rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
-                      Inventory base
+                      Stock unit
                     </span>
                   )}
                 </div>

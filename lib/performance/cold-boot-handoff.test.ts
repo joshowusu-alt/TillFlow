@@ -52,7 +52,7 @@ describe('Trust Breakers T2b: cold boot launch handoff', () => {
     expect(rootLaunchLoading).toContain('ROOT_COLD_START_MESSAGE');
     expect(rootLaunchLoading).toContain('LAUNCH_GENERIC_MESSAGE');
     expect(rootLaunchLoading).toContain('isIntentionalLaunchSession');
-    expect(rootLaunchLoading).toContain('return null');
+    expect(rootLaunchLoading).toContain('ProtectedRouteLoading');
     expect(rootLaunchLoading).not.toContain('message={');
     expect(rootLaunchLoading).not.toContain('useState<boolean | null>');
   });

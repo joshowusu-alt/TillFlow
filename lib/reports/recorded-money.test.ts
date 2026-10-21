@@ -30,6 +30,12 @@ describe('recorded cash and bank movement foundation', () => {
     expect(result.netMovementPence).toBe(0);
     expect(result.endingCashPence).toBe(result.beginningCashPence);
   });
+  it('includes outside-till business cash without inflating the total on handover', async () => {
+    const db = fixture([sums('bank', 100000, 0)], [sums('bank', 0, 80000), sums('held', 100000, 100000)]);
+    db.account.findMany.mockResolvedValue([{ id: 'bank', code: '1010', name: 'Bank' }, { id: 'held', code: '1000.HOLD.store.manager', name: 'Cash held by manager' }]);
+    const result = await readRecordedMoneyMovement(db as unknown as PrismaClient, 'biz', start, end);
+    expect(result).toMatchObject({ beginningCashPence: 100000, netMovementPence: -80000, endingCashPence: 20000 });
+  });
   it('preserves negative positions and reports an empty ledger as zero', async () => {
     const negative = await readRecordedMoneyMovement(fixture([], [sums('bank', 0, 500)]) as unknown as PrismaClient, 'biz', start, end);
     expect(negative.endingCashPence).toBe(-500);
@@ -39,7 +45,7 @@ describe('recorded cash and bank movement foundation', () => {
   it('scopes both relations to the business and uses exclusive boundaries', async () => {
     const db = fixture();
     await readRecordedMoneyMovement(db as unknown as PrismaClient, 'biz', start, end);
-    const account = { businessId: 'biz', code: { in: ['1000', '1010'] }, type: 'ASSET' };
+    const account = { businessId: 'biz', OR: [{ code: { in: ['1000', '1010'] } }, { code: { startsWith: '1000.HOLD.' } }], type: 'ASSET' };
     expect(db.journalLine.groupBy.mock.calls[0][0].where).toEqual({ account, journalEntry: { businessId: 'biz', entryDate: { lt: start } } });
     expect(db.journalLine.groupBy.mock.calls[1][0].where).toEqual({ account, journalEntry: { businessId: 'biz', entryDate: { gte: start, lt: end } } });
   });

@@ -1,0 +1,45 @@
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { expect, it, vi } from 'vitest';
+import ClassificationList from './ClassificationList';
+const items = Array.from({ length: 1000 }, (_, i) => ({ id: `cat-${i}`, name: `Category ${String(i).padStart(4, '0')}` }));
+it('keeps a thousand choices compact, finds the final item and preserves the selected context', () => {
+  const select = vi.fn();
+  render(<ClassificationList items={items} selectedId="cat-700" label="Categories" onSelect={select} />);
+  const choices = screen.getByRole('list', { name: 'Categories choices' });
+  expect(within(choices).getAllByRole('button')).toHaveLength(5);
+  expect(within(choices).getAllByRole('button')[0]).toHaveTextContent('Category 0700');
+  fireEvent.click(screen.getByRole('button', { name: /Show more/ }));
+  expect(within(choices).getAllByRole('button')).toHaveLength(25);
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Search categories' }), { target: { value: '  CATEGORY 0999 ' } });
+  expect(within(choices).getAllByRole('button')).toHaveLength(1);
+  expect(screen.getByText('Category 0700', { selector: 'strong' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Category 0999' }));
+  expect(select).toHaveBeenCalledWith('cat-999');
+  fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+  expect(within(choices).getAllByRole('button')).toHaveLength(5);
+});
+it('reports no matches without clearing the selection and does not reset children by reselecting the current item', () => {
+  const select = vi.fn();
+  render(<ClassificationList items={items} selectedId="cat-700" label="Categories" onSelect={select} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Category 0700' }));
+  expect(select).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'not present' } });
+  expect(screen.getByText(/No matching categories/)).toBeVisible();
+  expect(screen.getByText('Category 0700', { selector: 'strong' })).toBeVisible();
+  expect(screen.getByText('Showing 0 of 0 matches')).toBeVisible();
+});
+it('uses the same search and bounded choices for large division and group lists', () => {
+  const select = vi.fn();
+  const view = render(<ClassificationList items={items} label="Divisions" onSelect={select} />);
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Search divisions' }), { target: { value: '0999' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Category 0999' }));
+  expect(select).toHaveBeenCalledWith('cat-999');
+  view.rerender(<ClassificationList key="groups-parent" items={items} label="Groups" onSelect={select} />);
+  expect(within(screen.getByRole('list', { name: 'Groups choices' })).getAllByRole('button')).toHaveLength(5);
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Search groups' }), { target: { value: '0998' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Category 0998' }));
+  expect(select).toHaveBeenCalledWith('cat-998');
+  view.rerender(<ClassificationList key="new-parent" items={[{ id: 'new', name: 'New parent group' }]} label="Groups" onSelect={select} />);
+  expect(screen.getByRole('searchbox', { name: 'Search groups' })).toHaveValue('');
+  expect(screen.getByRole('button', { name: 'New parent group' })).toBeVisible();
+});

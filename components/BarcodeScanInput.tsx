@@ -34,14 +34,16 @@ export default function BarcodeScanInput({ name, defaultValue, value, onChange }
           name={name}
           value={displayValue}
           onChange={(e) => handleChange(e.target.value)}
+          onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }}
+          aria-label="Barcode — USB/Bluetooth scanner or typing"
           autoComplete="off"
-          placeholder="e.g. 5012345678901"
+          placeholder="Click here, then scan with USB/Bluetooth reader"
         />
         <button
           type="button"
           onClick={() => setCameraOpen(true)}
           className="absolute inset-y-0 right-2 flex items-center px-1 text-black/40 hover:text-accent transition"
-          aria-label="Open barcode scanner"
+          aria-label="Scan barcode with camera"
           title="Scan with camera"
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -50,6 +52,7 @@ export default function BarcodeScanInput({ name, defaultValue, value, onChange }
           </svg>
         </button>
       </div>
+      <p className="mt-1 text-xs text-black/50">Click the field and scan with a connected keyboard-mode reader, or type a code. Camera scanning is optional.</p>
       <CameraScanner
         open={cameraOpen}
         onScan={(code) => {

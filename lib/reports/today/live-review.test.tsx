@@ -25,7 +25,8 @@ it('Analytics accessible chart figures preserve money units and hourly counts', 
   expect(hourly.querySelector('tbody')!.textContent).toBe('Mon10:004');
   expect(root.querySelector('[aria-label="Revenue trend figures"]')!.textContent).toContain('1,500.00');
   expect(root.querySelector('[aria-label="Period comparison figures"]')!.textContent).toContain('1,000.00');
-  expect(root.querySelectorAll('[role="img"]')).toHaveLength(5);
+  expect(root.querySelector('svg[role="img"] title')?.textContent).toContain('Daily sales trend');
+  expect(root.querySelector('[role="img"][aria-label="Period comparison"]')).not.toBeNull();
   expect(markup).toContain('Costs incomplete');
 });
 

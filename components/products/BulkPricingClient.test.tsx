@@ -1,0 +1,63 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import BulkPricingClient from './BulkPricingClient';
+const actions = vi.hoisted(() => ({ preview: vi.fn(), apply: vi.fn() }));
+vi.mock('@/app/actions/bulk-pricing', () => ({ previewBulkPricingAction: actions.preview, submitBulkPricingAction: actions.apply }));
+const input = { categoryId: '', divisionId: '', groupId: '', search: '', basis: 'SELLING_PRICE', operation: 'INCREASE', method: 'PERCENT', value: '10', decimals: 2, units: 'BASE_ONLY' };
+const row = { id: 'book', name: 'Example book', baseBefore: 1000, baseAfter: 1100, changed: true, error: null, warnings: ['Base price is below cost'], prices: [{ id: 'copy', label: 'copy', before: 1000, after: 1100, afterOverride: null, changed: true }] };
+function show() { render(<BulkPricingClient currency="GHS" categories={[{ id: 'cat', name: 'Books' }]} divisions={[{ id: 'div', categoryId: 'cat', name: 'Literature', groups: [{ id: 'group', name: 'Fiction' }] }]} />); }
+beforeEach(() => { vi.resetAllMocks(); actions.preview.mockResolvedValue({ success: true, data: { input, fingerprint: 'fingerprint', rows: [row] } }); actions.apply.mockResolvedValue({ success: true, data: { updated: 1, batchId: 'batch' } }); });
+it('requires a reason, selected warnings acknowledgement and explicit confirmation before applying', async () => {
+  show(); fireEvent.click(screen.getByRole('button', { name: 'Preview prices' }));
+  await screen.findByText('Example book');
+  expect(screen.getByText('1. Choose products and adjustment').closest('details')).not.toHaveAttribute('open');
+  expect(actions.apply).not.toHaveBeenCalled();
+  const review = screen.getByRole('button', { name: 'Review update for 1 product' });
+  expect(review).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Reason for change'), { target: { value: 'Supplier increase' } });
+  expect(review).toBeDisabled();
+  fireEvent.click(screen.getByLabelText(/I have reviewed/)); fireEvent.click(review);
+  expect(actions.apply).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm price update' }));
+  await screen.findByRole('status');
+  expect(actions.apply).toHaveBeenCalledWith({ input, fingerprint: 'fingerprint', selectedIds: ['book'], acknowledgeWarnings: true, reason: 'Supplier increase' });
+  expect(screen.queryByText('Example book')).not.toBeInTheDocument();
+});
+it('invalidates the preview when settings change and cascades classification filters', async () => {
+  show(); fireEvent.click(screen.getByRole('button', { name: 'Preview prices' })); await screen.findByText('Example book');
+  fireEvent.click(screen.getByText('1. Choose products and adjustment'));
+  fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'cat' } });
+  expect(screen.queryByText('Example book')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Division'), { target: { value: 'div' } });
+  fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'group' } });
+  fireEvent.change(screen.getByLabelText('Category'), { target: { value: '' } });
+  expect(screen.getByLabelText('Division')).toHaveValue(''); expect(screen.getByLabelText('Group')).toHaveValue('');
+});
+it('blocks duplicate submits while awaiting preview or apply and discards an uncertain result', async () => {
+  let resolvePreview!: (r: unknown) => void;
+  actions.preview.mockReturnValue(new Promise(resolve => { resolvePreview = resolve; }));
+  show(); const form = screen.getByRole('form', { name: 'Bulk pricing settings' });
+  fireEvent.submit(form); fireEvent.submit(form);
+  expect(actions.preview).toHaveBeenCalledOnce();
+  expect(form.closest('[data-bulk-pricing]')).toHaveAttribute('aria-busy', 'true');
+  resolvePreview({ success: true, data: { input, fingerprint: 'fingerprint', rows: [row] } });
+  await screen.findByText('Example book');
+  expect(form.closest('[data-bulk-pricing]')).toHaveAttribute('aria-busy', 'false');
+  fireEvent.change(screen.getByLabelText('Reason for change'), { target: { value: 'Review' } }); fireEvent.click(screen.getByLabelText(/I have reviewed/));
+  fireEvent.click(screen.getByRole('button', { name: 'Review update for 1 product' }));
+  let rejectApply!: () => void;
+  actions.apply.mockReturnValue(new Promise((_resolve, reject) => { rejectApply = () => reject(new Error('network lost')); }));
+  const confirm = screen.getByRole('button', { name: 'Confirm price update' }); fireEvent.click(confirm); fireEvent.click(confirm);
+  expect(actions.apply).toHaveBeenCalledOnce();
+  rejectApply();
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Check the product prices'));
+  expect(screen.queryByText('Example book')).not.toBeInTheDocument();
+});
+it('does not select invalid or unchanged rows and removes stale previews after server refusal', async () => {
+  actions.preview.mockResolvedValue({ success: true, data: { input, fingerprint: 'fp', rows: [row, { ...row, id: 'bad', name: 'Missing cost', error: 'Cost missing', changed: false }, { ...row, id: 'same', name: 'Unchanged', changed: false, warnings: [] }] } });
+  show(); fireEvent.click(screen.getByRole('button', { name: 'Preview prices' })); await screen.findByText('Example book');
+  const boxes = screen.getAllByRole('checkbox'); expect(boxes[0]).toBeChecked(); expect(boxes[1]).toBeDisabled(); expect(boxes[2]).toBeDisabled();
+  actions.apply.mockResolvedValue({ success: false, error: 'Products changed since this preview.' });
+  fireEvent.change(screen.getByLabelText('Reason for change'), { target: { value: 'Review' } }); fireEvent.click(screen.getByLabelText(/I have reviewed/)); fireEvent.click(screen.getByRole('button', { name: 'Review update for 1 product' })); fireEvent.click(screen.getByRole('button', { name: 'Confirm price update' }));
+  await screen.findByRole('alert'); expect(screen.queryByText('Example book')).not.toBeInTheDocument();
+});

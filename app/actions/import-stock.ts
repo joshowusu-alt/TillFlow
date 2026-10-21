@@ -1,4 +1,5 @@
 ﻿'use server';
+import {decodePurchaseDocuments,validatePurchaseDocuments} from '@/lib/purchases/source-documents';
 
 import { prisma } from '@/lib/prisma';
 import { revalidateTag } from 'next/cache';
@@ -20,6 +21,7 @@ import { buildProductUnitCreates } from '@/lib/services/products';
 import { ensureChartOfAccounts } from '@/lib/accounting';
 import { audit } from '@/lib/audit';
 import { suggestImportCategoryName } from '@/lib/import/category-import';
+import { classificationName, createClassificationNode } from '@/lib/services/product-classification';
 import type { DuplicateAction } from '@/lib/import/import-validation';
 import {
   isImportMode,
@@ -35,6 +37,8 @@ import type { PaymentMethod } from '@/lib/services/shared/payment-utils';
 // ---------------------------------------------------------------------------
 
 export type ConfirmedImportRow = {
+  division?: string;
+  group?: string;
   name: string;
   sku: string;
   barcode: string;
@@ -62,6 +66,7 @@ export type ConfirmedImportRow = {
 };
 
 export type ImportStockMeta = {
+  purchaseDocumentsJson?: string;
   fileName?: string;
   rowsParsed?: number;
   rowsErrors?: number;
@@ -291,6 +296,8 @@ async function _runImport(
       return err('Choose an import purpose first: Product catalogue, Opening stock, or Purchases.');
     }
     const importMode = meta.importMode;
+    const sourceDocuments = importMode==='PURCHASES' ? decodePurchaseDocuments(meta.purchaseDocumentsJson??'') : [];
+    if(importMode==='PURCHASES')validatePurchaseDocuments(sourceDocuments);
 
     // Legacy spreadsheets with payment_status must still pick a mode explicitly
     // (UI enforces this). Opening stock ignores PAID/UNPAID entirely.
@@ -303,6 +310,16 @@ async function _runImport(
       importMode === 'CATALOGUE'
         ? rows.map((r) => ({ ...r, quantity: 0, paymentStatus: undefined, openingFunding: undefined }))
         : rows;
+
+    for (const row of incomingRows) {
+      if (row.division?.trim() || row.group?.trim()) {
+        if (!row.category?.trim() || !row.division?.trim() || !row.group?.trim()) throw new Error(`Provide category, division and group together for ${row.name}.`);
+        [row.category, row.division, row.group].forEach(name => classificationName(name!));
+      }
+    }
+    const categoryForRow = (row: ConfirmedImportRow) => row.division?.trim() || row.group?.trim()
+      ? row.category.trim() : suggestImportCategoryName(row.category) || row.category;
+    const pathKey = (row: ConfirmedImportRow) => JSON.stringify([categoryForRow(row), row.division?.trim(), row.group?.trim()]).toLowerCase();
 
     // ── Resolve "new:UnitName" sentinels → create Unit records ──────────
     // The preview UI sets baseUnitId / packUnitId / qtyInUnitId to "new:Name"
@@ -353,8 +370,10 @@ async function _runImport(
     // (mode:'insensitive' is not supported on all Prisma adapters).
     const existingProductNames = await prisma.product.findMany({
       where: { businessId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, barcode: true },
     });
+    const ambiguousNames = new Set(existingProductNames.filter((p, i, all) => all.some((other, j) => i !== j && other.name.toLowerCase() === p.name.toLowerCase())).map(p => p.name.toLowerCase()));
+    if (resolvedRows.some(row => ambiguousNames.has(row.name.toLowerCase()))) throw new Error("This import includes a title with multiple publisher versions. Receive or edit the exact product by barcode/SKU instead of matching by title.");
     const existingNameSet = new Set(existingProductNames.map((p) => p.name.toLowerCase()));
     // Build id map keyed by lowercase — reused in Step 3 so no second round-trip needed.
     const existingNameToIdMap = new Map(
@@ -395,29 +414,14 @@ async function _runImport(
 
     const rowsAfterNameFilter = rowsForCreate;
 
-    // ── Pre-check for duplicate barcodes — strip conflicts rather than abort ──
-    // A single duplicate barcode would otherwise throw inside the transaction
-    // and roll back all 1000+ products. Instead we null out the offending
-    // barcode so the product still gets created (can be set manually later).
-    // IMPORTANT: barcode has a GLOBAL @unique constraint (not scoped to businessId).
-    // Must query ALL businesses — not just { businessId } — or a cross-business
-    // collision still causes a P2002 that kills the entire createMany batch.
-    const existingBarcodesRaw = await prisma.product.findMany({
-      where: { barcode: { not: null } },
-      select: { barcode: true },
-    });
-    const existingBarcodeSet = new Set(existingBarcodesRaw.map((p) => p.barcode as string));
-
-    // Also deduplicate within the batch itself (two rows with the same barcode).
+    const existingBarcodesRaw = await prisma.productBarcode.findMany({ where: { businessId }, select: { code: true } });
+    const primaryCodes = await prisma.product.findMany({ where: { businessId, barcode: { not: null } }, select: { barcode: true } });
+    const existingBarcodeSet = new Set([...existingBarcodesRaw.map(p => p.code), ...primaryCodes.map(p => p.barcode!)]);
     const seenBarcodesInBatch = new Set<string>();
-    let barcodesCleared = 0;
-    const rowsToCreate = rowsAfterNameFilter.map((r) => {
-      if (!r.barcode) return r;
-      if (existingBarcodeSet.has(r.barcode) || seenBarcodesInBatch.has(r.barcode)) {
-        barcodesCleared++;
-        return { ...r, barcode: '' }; // strip duplicate; product still created
-      }
-      seenBarcodesInBatch.add(r.barcode);
+    const barcodesCleared = 0;
+    const rowsToCreate = rowsAfterNameFilter.map(r => {
+      if (r.barcode && (existingBarcodeSet.has(r.barcode) || seenBarcodesInBatch.has(r.barcode))) throw new Error(`Barcode ${r.barcode} is duplicated in this business/import. Correct it before importing; no barcode was removed.`);
+      if (r.barcode) seenBarcodesInBatch.add(r.barcode);
       return r;
     });
 
@@ -453,7 +457,7 @@ async function _runImport(
       ...new Set(
         [...rowsToCreate, ...rowsForUpdate.map((u) => u.row)]
           .filter((r) => r.category)
-          .map((r) => suggestImportCategoryName(r.category) || r.category)
+          .map(categoryForRow)
       ),
     ];
     for (const catName of allCategoryNames) {
@@ -468,10 +472,17 @@ async function _runImport(
       }
     }
 
+    const groupIds = new Map<string, string>();
+    for (const row of [...rowsToCreate, ...rowsForUpdate.map(item => item.row)]) {
+      if (!row.group?.trim() || groupIds.has(pathKey(row))) continue;
+      const division = await createClassificationNode(businessId, 'division', categoryMap.get(categoryForRow(row).toLowerCase())!, row.division!);
+      const group = await createClassificationNode(businessId, 'group', division.id, row.group);
+      groupIds.set(pathKey(row), group.id);
+    }
     let updatedCount = 0;
     for (const { row, productId } of rowsForUpdate) {
       const categoryName = row.category
-        ? suggestImportCategoryName(row.category) || row.category
+        ? categoryForRow(row)
         : '';
       const categoryId = categoryName
         ? categoryMap.get(categoryName.toLowerCase()) ?? null
@@ -479,18 +490,18 @@ async function _runImport(
       let barcode = row.barcode || null;
       if (barcode) {
         const conflict = await prisma.product.findFirst({
-          where: { barcode, id: { not: productId } },
+          where: { businessId, OR: [{ barcode }, { barcodes: { some: { code: barcode } } }], id: { not: productId } },
           select: { id: true },
         });
-        if (conflict) barcode = null;
+        if (conflict) throw new Error(`Barcode ${barcode} belongs to another product. No barcode was removed.`);
       }
 
       await prisma.product.update({
         where: { id: productId },
         data: {
+          ...(row.group?.trim() ? { categoryId, groupId: groupIds.get(pathKey(row))! } : {}),
           sellingPriceBasePence: row.sellingPricePence,
           defaultCostBasePence: row.costPricePence,
-          ...(categoryId ? { categoryId } : {}),
           ...(row.sku ? { sku: row.sku } : {}),
           ...(barcode ? { barcode } : {}),
           ...(row.reorderPointBase && row.reorderPointBase > 0
@@ -501,6 +512,11 @@ async function _runImport(
             : {}),
           ...(row.imageUrl ? { imageUrl: row.imageUrl } : {}),
         },
+      });
+      // A category-only CSV must not detach an existing group's umbrella.
+      // Group assignments are managed explicitly in the product editor.
+      if (categoryId && !row.group?.trim()) await prisma.product.updateMany({
+        where: { id: productId, businessId, groupId: null }, data: { categoryId },
       });
       updatedCount++;
     }
@@ -531,7 +547,7 @@ async function _runImport(
       const productData = await Promise.all(
         rowsToCreate.map(async (row) => {
           const categoryName = row.category
-            ? suggestImportCategoryName(row.category) || row.category
+            ? categoryForRow(row)
             : '';
           const supplierId = await resolveSupplierIdForRow(row);
           return {
@@ -539,6 +555,7 @@ async function _runImport(
             name: row.name,
             sku: row.sku || null,
             barcode: row.barcode || null,
+            groupId: row.group?.trim() ? groupIds.get(pathKey(row))! : null,
             categoryId: categoryName
               ? categoryMap.get(categoryName.toLowerCase()) ?? null
               : null,
@@ -914,6 +931,7 @@ async function _runImport(
               payments: chunkTotal > 0 ? [{ method, amountPence: chunkTotal }] : [],
               lines: chunk,
               userId: user.id,
+              sourceDocuments,
               stockMovementType: 'PURCHASE',
               acknowledgeHighCost: true,
               skipCashDrawerRequirement: true,
@@ -954,6 +972,7 @@ async function _runImport(
               payments: [],
               lines: chunk,
               userId: user.id,
+              sourceDocuments,
               stockMovementType: 'PURCHASE',
               acknowledgeHighCost: true,
               idempotencyKey: buildImportChunkKey({

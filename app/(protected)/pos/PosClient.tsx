@@ -65,7 +65,9 @@ import {
 import { DISCOUNT_REASON_CODES } from '@/lib/fraud/reason-codes';
 import { queueOfflineSale } from '@/lib/offline';
 import { usePosCustomers, type PosCustomerOption } from '@/hooks/usePosCustomers';
-import SummarySidebar from './components/SummarySidebar';
+import PosPaymentSummary from './components/PosPaymentSummary';
+import ClearCartDialog from './components/ClearCartDialog';
+import ProductShortcuts from './components/ProductShortcuts';
 import KeyboardHelpModal from './components/KeyboardHelpModal';
 import QuickAddPanel from './components/QuickAddPanel';
 import ParkModal from './components/ParkModal';
@@ -259,6 +261,9 @@ export default function PosClient({
 
   const cashRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const checkoutCardRef = useRef<HTMLDivElement>(null);
+  const productDropdownCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (productDropdownCloseTimer.current) clearTimeout(productDropdownCloseTimer.current); }, []);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddBarcode, setQuickAddBarcode] = useState('');
   const [pendingScan, setPendingScan] = useState<string | null>(null);
@@ -294,7 +299,11 @@ export default function PosClient({
   // Park/hold state
   const [showParkModal, setShowParkModal] = useState(false);
   const [showParkedPanel, setShowParkedPanel] = useState(false);
+  const [productWorkspaceTab, setProductWorkspaceTab] = useState<'cart' | 'products'>('cart');
   const [phoneCheckoutSheetOpen, setPhoneCheckoutSheetOpen] = useState(false);
+  const [showClearCart, setShowClearCart] = useState(false);
+  const [clearUndoAvailable, setClearUndoAvailable] = useState(false);
+  const clearUndoRestore = useRef<(() => void) | null>(null);
   const mobileCartBarRef = useRef<HTMLButtonElement>(null);
   const storageScope = useMemo(
     () => ({ businessId: business.id, storeId: store.id }),
@@ -365,11 +374,26 @@ export default function PosClient({
   }, []);
 
   const handleUndo = useCallback(() => {
+    if (isCompletingSale || ambiguousFailure) return;
+    if (cart.length === 0 && clearUndoRestore.current) {
+      const restore = clearUndoRestore.current;
+      clearUndoRestore.current = null;
+      setClearUndoAvailable(false);
+      restore();
+      return;
+    }
     const previousCart = popUndoSnapshot();
     if (!previousCart) return;
     setCart(previousCart);
     playBeep(true);
-  }, [popUndoSnapshot, playBeep, setCart]);
+  }, [popUndoSnapshot, playBeep, setCart, cart.length, isCompletingSale, ambiguousFailure]);
+
+  useEffect(() => {
+    if (!clearUndoAvailable) return;
+    if (cart.length > 0) { clearUndoRestore.current = null; setClearUndoAvailable(false); return; }
+    const timer = window.setTimeout(() => { clearUndoRestore.current = null; setClearUndoAvailable(false); }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [clearUndoAvailable, cart.length]);
 
   const urlCatalogueMode = searchParams?.get('posCatalogueMode');
   const useServerCatalogue =
@@ -1037,6 +1061,26 @@ export default function PosClient({
     momoSignature,
   } = checkoutSummary;
 
+  const confirmClearCart = () => {
+    if (!cartFilled || isCompletingSale || ambiguousFailure || isInitiatingMomo) return;
+    const discount = orderDiscountForm.snapshot();
+    const momo = { momoPaid, momoRef, momoPayerMsisdn, momoNetwork, momoCollectionId, momoCollectionStatus, momoCollectionError, momoIdempotencyKey, momoCollectionSignature };
+    clearUndoRestore.current = () => {
+      setCart(cart); setCustomerId(customerId); setCustomerSearch(customerSearch);
+      setCashTendered(cashTendered); setCardPaid(cardPaid); setCardRef(cardRef);
+      setTransferPaid(transferPaid); setTransferRef(transferRef); restoreMomoSnapshot(momo);
+      setPaymentStatus(paymentStatus); setPaymentMethods(paymentMethods); setShowSplitPanel(showSplitPanel);
+      setDueDate(dueDate); setDueDateDecision(dueDateDecision);
+      orderDiscountForm.restore(discount); loyaltyRedemption.setPointsInput(loyaltyRedemption.pointsInput);
+      setQtyDrafts(qtyDrafts); restoreUndoStack(undoStack); setSaleAttemptId(saleAttemptId);
+      setSaleError(saleError); setActiveLineId(activeLineId);
+    };
+    resetActiveSale({ resetPaymentStatus: true });
+    setSaleAttemptId(nextSaleAttemptId()); setSaleError(null); setActiveLineId(null); setCustomerSearch('');
+    setShowClearCart(false); setPhoneCheckoutSheetOpen(false); setClearUndoAvailable(true);
+    barcodeRef.current?.focus();
+  };
+
   const handleParkCurrentCart = useCallback((label: string) => {
     const result = parkCurrentCart({ cart, customerId, label });
     if (!result) return;
@@ -1313,7 +1357,7 @@ export default function PosClient({
     if (checkoutExtrasReady && !checkoutUnavailable && tills.length === 0) {
       issues.push({ tone: 'warning', message: 'No tills are configured for this store.' });
     } else if (checkoutExtrasReady && !checkoutUnavailable && tills.length > 0 && !tillSelected) {
-      issues.push({ tone: 'warning', message: 'Preparing checkout…' });
+      issues.push({ tone: 'warning', message: openShiftTillIds.length > 0 ? 'Select an open till before recording sales.' : 'Open a till shift before recording sales.' });
     } else if (checkoutExtrasReady && !checkoutUnavailable && !tillReady) {
       issues.push({ tone: 'warning', message: 'Open this till shift before recording sales.' });
     }
@@ -1339,7 +1383,7 @@ export default function PosClient({
       issues.push({ tone: 'warning', message: 'Payment amounts cannot be negative or invalid.' });
     }
     return issues;
-  }, [ambiguousFailure, checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, dueDateReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, partPaidValid, paymentStatus, requiresCustomer, requiresDiscountApproval, tenderMalformed, tillReady, tillSelected, tills.length]);
+  }, [ambiguousFailure, checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, dueDateReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, openShiftTillIds.length, partPaidValid, paymentStatus, requiresCustomer, requiresDiscountApproval, tenderMalformed, tillReady, tillSelected, tills.length]);
   const primaryCheckoutIssue = checkoutIssues.find((issue) => issue.tone === 'warning') ?? checkoutIssues[0] ?? null;
   const errorParam = searchParams?.get('error');
   const selectedTillName = tills.find((till) => till.id === tillId)?.name ?? null;
@@ -1436,11 +1480,31 @@ export default function PosClient({
     setAmbiguousFailure(false);
   }, [cartHydrated, isCompletingSale, saleIdentity]);
 
+  useEffect(() => {
+    const node = checkoutCardRef.current;
+    if (!node) return;
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const top = Math.max(node.getBoundingClientRect().top, 0);
+        node.style.setProperty('--pos-checkout-height', `${Math.max(280, window.innerHeight - top - 12)}px`);
+      });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    const workspace = node.closest('.pos-selling-layout');
+    if (workspace) observer?.observe(workspace);
+    return () => { cancelAnimationFrame(frame); observer?.disconnect(); window.removeEventListener('resize', measure); window.removeEventListener('scroll', measure); };
+  }, [cartFilled, checkoutExtrasReady, phoneCheckoutSheetOpen]);
+
   return (
     <div
-      className={`grid gap-4 lg:grid-cols-[3fr_1fr] lg:items-start lg:gap-6 lg:pb-0 ${
+      className={`grid gap-4 lg:pb-0 ${
         cartFilled
-          ? 'max-md:pb-[calc(var(--pos-mobile-cart-bar-clearance)+1rem)] md:max-lg:pb-[calc(var(--pos-mobile-bottom-clearance)+1rem)]'
+          ? 'max-lg:pb-[calc(var(--pos-mobile-cart-bar-clearance)+1rem)]'
           : 'pb-4'
       }`}
       data-pos-mobile-phase="2"
@@ -1448,7 +1512,8 @@ export default function PosClient({
       data-selected-till-id={tillId}
       data-selected-shift-id={boundShiftId || undefined}
     >
-      <div className="space-y-3 sm:space-y-4">
+      {clearUndoAvailable ? <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"><span>Cart cleared. Sale details reset.</span><button type="button" className="min-h-11 px-3 font-semibold text-accent" onClick={handleUndo}>Undo clear</button></div> : null}
+      <div className="pos-selling-layout space-y-3 sm:space-y-4" data-pos-workspace-tab={productWorkspaceTab}>
         {/* ── Scan / Search bar ─────────────────────────────── */}
         <div className="card scroll-mt-[calc(var(--app-header-offset)+0.5rem)] p-3 sm:p-4" data-pos-search-card="true">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
@@ -1498,16 +1563,19 @@ export default function PosClient({
                 ref={productSearchRef}
                 value={productSearch}
                 onChange={(event) => {
+                  if (productDropdownCloseTimer.current) clearTimeout(productDropdownCloseTimer.current);
                   setProductSearch(event.target.value);
                   setProductDropdownOpen(true);
                   window.requestAnimationFrame(recomputeProductDropdownViewport);
                 }}
                 onFocus={() => {
+                  if (productDropdownCloseTimer.current) clearTimeout(productDropdownCloseTimer.current);
                   setProductDropdownOpen(true);
                   window.requestAnimationFrame(recomputeProductDropdownViewport);
                 }}
                 onBlur={() => {
-                  setTimeout(() => setProductDropdownOpen(false), 200);
+                  if (productDropdownCloseTimer.current) clearTimeout(productDropdownCloseTimer.current);
+                  productDropdownCloseTimer.current = setTimeout(() => setProductDropdownOpen(false), 200);
                 }}
                 placeholder="Type product name…"
                 autoComplete="off"
@@ -1619,7 +1687,7 @@ export default function PosClient({
             </div>
 
             <div className="flex items-center gap-2 self-end sm:self-auto">
-              {canUndo && (
+              {(canUndo || clearUndoAvailable) && (
                 <button
                   type="button"
                   className="flex items-center gap-1 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold transition hover:bg-black/5"
@@ -1735,6 +1803,23 @@ export default function PosClient({
           )}
         </div>
 
+        <ProductShortcuts
+          key={`${business.id}.${store.id}`}
+          workspaceTab={productWorkspaceTab} onWorkspaceTabChange={setProductWorkspaceTab} cartCount={cartDetails.length}
+          businessId={business.id} storeId={store.id} currency={business.currency}
+          products={productOptions} serverCatalogue={useServerCatalogue} onProductLoaded={mergeProductOption} getAvailable={getAvailableBase}
+          onSelect={(product) => {
+            const baseUnitId = getProductBaseUnitId(product);
+            if (!baseUnitId || getAvailableBase(product.id) <= 0) return;
+            if (product.units.length > 1) stageProduct(product);
+            else {
+              addToCart({ productId: product.id, unitId: baseUnitId, qtyInUnit: 1 });
+              playBeep(true);
+              barcodeRef.current?.focus();
+            }
+          }}
+        />
+
         {/* ── Staged product: unit + qty picker ──────────────── */}
         {stagedProduct && (
           <div className="card p-4 border-2 border-accent/20 bg-accentSoft/30">
@@ -1816,7 +1901,7 @@ export default function PosClient({
             // Enter inside inputs must not complete the sale — only Ctrl+Enter / explicit CTA.
             e.preventDefault();
           }}
-          className="space-y-4"
+          className="pos-sale-form space-y-4"
           ref={formRef}
         >
 
@@ -1920,30 +2005,7 @@ export default function PosClient({
             </div>
           ) : null}
 
-          {showNoTillBlock ? (
-            <div
-              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-950 shadow-sm"
-              role="alert"
-              data-pos-till-block="true"
-            >
-              <div className="font-semibold">
-                {tills.length === 0 ? 'No tills are configured for this store' : 'Open a till before completing sales'}
-              </div>
-              <p className="mt-1 text-xs leading-relaxed text-rose-900/80">
-                {tills.length === 0
-                  ? 'Ask an owner or manager to configure a till for this store.'
-                  : 'Sales stay blocked until a till shift is open. Open or select a till, then return here.'}
-              </p>
-              {tills.length > 0 ? (
-                <Link
-                  href="/shifts"
-                  className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl bg-rose-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-rose-800"
-                >
-                  Open till
-                </Link>
-              ) : null}
-            </div>
-          ) : null}
+
 
           {(() => {
             const activeSalePanel = (
@@ -1965,7 +2027,8 @@ export default function PosClient({
                   <button
                     type="button"
                     className="text-xs font-medium text-rose-500 hover:text-rose-700"
-                    onClick={() => { if (confirm('Clear the entire cart?')) { pushUndo(cart); setCart([]); clearSavedCart(); } }}
+                    onClick={() => setShowClearCart(true)}
+                    disabled={isCompletingSale || ambiguousFailure || isInitiatingMomo}
                   >
                     Clear all
                   </button>
@@ -1973,6 +2036,7 @@ export default function PosClient({
               </div>
             </div>
 
+            {cartDetails.length > 0 ? <div className="pos-cart-column-headings hidden border-b border-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 lg:grid" aria-hidden="true"><span>Product</span><span>Quantity</span><span className="text-right">Amount</span></div> : null}
             {cartDetails.length === 0 ? (
               <div
                 className="flex flex-col items-center justify-center px-3 py-4 text-center md:py-12"
@@ -2024,10 +2088,10 @@ export default function PosClient({
                   return (
                     <div
                       key={line.id}
-                      className={`px-4 py-3 transition-colors ${isActive ? 'bg-accentSoft/50' : 'hover:bg-black/[.02]'}`}
+                      className={`pos-cart-line px-4 py-3 transition-colors ${isActive ? 'bg-accentSoft/50' : 'hover:bg-black/[.02]'}`}
                       onClick={() => setActiveLineId(line.id)}
                     >
-                      <div className="flex items-start gap-3">
+                      <div className="pos-cart-identity flex items-start gap-3">
                         <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-black/5 text-xs font-bold text-black/40">
                           {index + 1}
                         </div>
@@ -2046,7 +2110,9 @@ export default function PosClient({
                         </div>
                         <button
                           type="button"
-                          className="flex-shrink-0 rounded-lg p-3 text-black/20 hover:text-rose-500 hover:bg-rose-50 transition"
+                          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 hover:text-rose-700 hover:bg-rose-50 transition"
+                          aria-label={`Remove ${line.product.name}`}
+                          disabled={isCompletingSale || ambiguousFailure}
                           onClick={(e) => { e.stopPropagation(); removeLine(line.id); }}
                           title="Remove"
                         >
@@ -2055,7 +2121,7 @@ export default function PosClient({
                           </svg>
                         </button>
                       </div>
-                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 sm:mt-2 sm:flex-nowrap">
+                      <div className="pos-cart-quantity mt-3 flex flex-wrap items-center justify-between gap-3 sm:mt-2 sm:flex-nowrap">
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
@@ -2104,7 +2170,7 @@ export default function PosClient({
 
           {/* ── Inline discount for selected line ────────────── */}
           {activeLineId && cartDetails.find((l) => l.id === activeLineId) && (
-            <div className="card p-3">
+            <div className="card p-3" data-pos-line-editor="true">
               <div className="flex flex-wrap items-center gap-3 text-sm">
                 <span className="text-xs text-black/40 font-semibold uppercase">Line discount</span>
                 <select
@@ -2158,12 +2224,16 @@ export default function PosClient({
           )}
 
           {/* ── Compact checkout ─────────────────────────────── */}
+          <div className="pos-checkout-column">
           <div
             className={`card scroll-mt-[calc(var(--app-header-offset)+0.75rem)] space-y-3 p-3 sm:p-4 lg:pb-4 ${
               cartFilled ? 'md:max-lg:pb-[calc(1rem+env(safe-area-inset-bottom,0px)+5.5rem)]' : 'pb-3'
             }`}
+            ref={checkoutCardRef}
             data-pos-checkout-card="true"
           >
+            <div className="pos-checkout-fields space-y-3">
+            {showNoTillBlock ? <div role="alert" data-pos-till-block="true" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-950"><span>{tills.length === 0 ? 'No tills configured for this branch.' : 'Open a till to complete sales.'}</span>{tills.length > 0 ? <Link href="/shifts" className="min-h-11 inline-flex items-center font-semibold underline">Open till →</Link> : null}</div> : null}
             <div
               className={
                 checkoutLoading
@@ -2222,11 +2292,12 @@ export default function PosClient({
                   ) : tills.length === 0 ? (
                     <option value="">No tills configured</option>
                   ) : (
-                    tills.map((till) => (
-                      <option key={till.id} value={till.id}>
-                        {till.name}
-                      </option>
-                    ))
+                    <>
+                      <option value="">{openShiftTillIds.length ? 'Choose an open till…' : 'No open till — open a shift'}</option>
+                      {tills.map((till) => (
+                        <option key={till.id} value={till.id}>{till.name}{openShiftTillIds.includes(till.id) ? ' · Open' : ' · Closed'}</option>
+                      ))}
+                    </>
                   )}
                 </select>
                 {checkoutLoading ? (
@@ -2243,7 +2314,7 @@ export default function PosClient({
                   </div>
                 ) : (
                   <div
-                    className={`mt-1 hidden text-xs md:block ${tillReady ? 'text-emerald-700' : 'text-rose'}`}
+                    className={`mt-1 text-xs ${tillReady ? 'hidden md:block text-emerald-700' : 'sr-only'}`}
                     data-checkout-state={tillReady ? 'ready' : 'closed'}
                   >
                     {tillReady ? 'Till is open' : 'Till is not open'}
@@ -2384,6 +2455,8 @@ export default function PosClient({
               momoGuidance={momoGuidance}
               totalDue={totalDue}
               totalPaid={totalPaid}
+              cashTenderedPence={cashTenderedValue}
+              exactCashAssumed={checkoutSummary.usedExactCashDefault}
               balanceRemaining={balanceRemaining}
               changeDue={changeDue}
               dueDateDecision={dueDateDecision}
@@ -2409,29 +2482,13 @@ export default function PosClient({
               </div>
             )}
 
-            {checkoutIssues.length > 0 ? (
-              <div className="space-y-1.5">
-                {checkoutIssues.map((issue) => (
-                  <div
-                    key={issue.message}
-                    className={`rounded-xl px-3 py-2 text-xs font-medium ${
-                      issue.tone === 'success'
-                        ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
-                        : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'
-                    }`}
-                  >
-                    {issue.tone === 'success' ? '✓ ' : '• '}{issue.message}
-                  </div>
-                ))}
-              </div>
-            ) : cart.length > 0 ? (
-              <div className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
-                ✓ Ready — {activePaymentMethodLabels.join(' + ')}
-              </div>
-            ) : null}
 
-            <div className="flex flex-col gap-2 md:flex-row">
-              {/* Desktop complete control, next to Park Sale. Hidden below lg, where the tablet bar or phone sheet is the only complete button. */}
+            </div>
+            <div className="pos-checkout-footer space-y-3">
+              {cartFilled ? <div role="status" data-pos-completion-status="true" className={`hidden rounded-xl px-3 py-2 text-xs font-medium ring-1 lg:block ${primaryCheckoutIssue?.tone === 'warning' ? 'bg-amber-50 text-amber-950 ring-amber-200' : 'bg-emerald-50 text-emerald-950 ring-emerald-200'}`}>{primaryCheckoutIssue?.message ?? `✓ Ready — ${activePaymentMethodLabels.join(' + ')}`}</div> : null}
+              <div className="hidden lg:block"><PosPaymentSummary currency={business.currency} subtotal={totals.netSubtotal} discount={orderDiscount} tax={vatTotal} totalDue={totalDue} changeDue={changeDue} hasCash={paymentStatus !== 'UNPAID' && hasMethod('CASH')} balanceRemaining={balanceRemaining} /></div>
+            <div className="flex flex-col gap-2 md:flex-row lg:flex-col">
+              {/* Narrow screens complete through the Cart/Payment sheet. */}
               <button
                 className={`btn-primary hidden flex-1 py-3 text-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent lg:inline-flex lg:items-center lg:justify-center ${
                   paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
@@ -2446,7 +2503,7 @@ export default function PosClient({
               {cartFilled ? (
                 <button
                   type="button"
-                  className="hidden w-full items-center justify-center gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 md:flex md:w-auto"
+                  className="hidden w-full items-center justify-center gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 lg:flex lg:w-auto"
                   onClick={() => setShowParkModal(true)}
                   title="Park this sale and serve another customer"
                 >
@@ -2457,16 +2514,19 @@ export default function PosClient({
                 </button>
               ) : null}
             </div>
+            {lastReceiptId ? <Link href={`/receipts/${lastReceiptId}`} target="_blank" className="hidden min-h-9 items-center justify-center text-xs font-semibold text-accent underline lg:flex">Reprint last receipt</Link> : null}
+            </div>
+          </div>
           </div>
               </>
             );
             return (
               <>
-                <div className={cartFilled ? 'max-md:hidden' : undefined}>
+                <div className={cartFilled ? 'pos-sale-content max-lg:hidden' : 'pos-sale-content'}>
                   {phoneCheckoutSheetOpen ? null : activeSalePanel}
                 </div>
                 {cartFilled ? (
-                  <div className="md:hidden">
+                  <div className="lg:hidden">
                   <PosMobileCartCheckoutSheet
                     open={phoneCheckoutSheetOpen}
                     onClose={closePhoneCheckoutSheet}
@@ -2489,8 +2549,9 @@ export default function PosClient({
                         </div>
                       ) : null
                     }
+                    summary={<PosPaymentSummary currency={business.currency} subtotal={totals.netSubtotal} discount={orderDiscount} tax={vatTotal} totalDue={totalDue} changeDue={changeDue} hasCash={paymentStatus !== 'UNPAID' && hasMethod('CASH')} balanceRemaining={balanceRemaining} />}
                     footer={
-                      <div className="space-y-2" data-pos-mobile-sheet-footer="true">
+                      <div className="space-y-2" data-pos-mobile-payment-actions="true">
                         <div
                           className={`rounded-2xl px-3 py-2 text-xs font-medium ${
                             canSubmit
@@ -2547,39 +2608,6 @@ export default function PosClient({
         )}
       </div>
 
-      {/* ── Summary sidebar (hidden on mobile — use sticky bottom bar) ── */}
-      <div
-        className="app-desktop-sidebar-sticky hidden lg:block lg:h-fit lg:self-start"
-        style={{
-          position: 'sticky',
-          top: 'calc(var(--app-header-offset-desktop) + 0.5rem)',
-          maxHeight: 'calc(100dvh - var(--app-header-offset-desktop) - 0.5rem)',
-          overflowY: 'auto',
-          paddingRight: '0.25rem',
-        }}
-      >
-        <SummarySidebar
-          business={business}
-          store={store}
-          cartItemCount={cartDetails.length}
-          totals={totals}
-          orderDiscount={orderDiscount}
-          vatTotal={vatTotal}
-          totalDue={totalDue}
-          totalPaid={totalPaid}
-          balanceRemaining={balanceRemaining}
-          cashTenderedValue={cashTenderedValue}
-          changeDue={changeDue}
-          hasCash={hasMethod('CASH')}
-          lastReceiptId={lastReceiptId}
-          parkedCarts={parkedCarts}
-          showParkedPanel={showParkedPanel}
-          onToggleParkedPanel={() => setShowParkedPanel(!showParkedPanel)}
-          onRecallParked={(id) => { handleRecallParkedCart(id); setShowParkedPanel(false); }}
-          onDeleteParked={deleteParkedCart}
-        />
-      </div>
-
       <KeyboardHelpModal
         show={showKeyboardHelp}
         onClose={() => setShowKeyboardHelp(false)}
@@ -2608,7 +2636,7 @@ export default function PosClient({
 
       {showParkedPanel && parkedCarts.length > 0 ? (
         <div
-          className={`fixed inset-x-4 z-20 max-h-[45vh] overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl lg:hidden hide-when-keyboard-open ${
+          className={`fixed inset-x-4 z-20 max-h-[45vh] overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl lg:inset-x-auto lg:right-4 lg:w-[26rem] hide-when-keyboard-open ${
             cartFilled
               ? 'bottom-[calc(env(safe-area-inset-bottom,0px)+var(--keyboard-safe-bottom)+7rem)] max-md:bottom-[calc(env(safe-area-inset-bottom,0px)+var(--keyboard-safe-bottom)+var(--pos-mobile-cart-bar-clearance))]'
               : 'bottom-[calc(env(safe-area-inset-bottom,0px)+var(--keyboard-safe-bottom)+7rem)]'
@@ -2661,9 +2689,9 @@ export default function PosClient({
         </div>
       ) : null}
 
-      {/* ── Phone cart bar (Phase 2) — CSS-hidden from md up ─ */}
+      {/* One cart bar and Cart/Payment sheet below the desktop breakpoint. */}
       {cartFilled ? (
-        <div className="md:hidden">
+        <div className="lg:hidden">
           {parkedCarts.length > 0 ? (
             <button
               type="button"
@@ -2688,72 +2716,8 @@ export default function PosClient({
         </div>
       ) : null}
 
-      {/* ── Tablet sticky checkout (Phase 1; phone uses sheet) ─ */}
-      {cartFilled ? (
-        <div
-          className="fixed inset-x-0 z-30 hidden border-t border-black/10 bg-white px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] keyboard-safe-fixed-bottom md:block lg:hidden"
-          data-pos-mobile-checkout-bar="true"
-        >
-          <div className="space-y-3">
-            <div className={`rounded-2xl px-3 py-2 text-xs font-medium ${canSubmit ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'}`}>
-              {canSubmit
-                ? `Ready to complete • ${activePaymentMethodLabels.join(' + ')} • ${formatMoney(totalDue, business.currency)}`
-                : primaryCheckoutIssue?.message ?? `Review checkout before completing this ${formatMoney(totalDue, business.currency)} sale.`}
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-xs text-black/50">{cartDetails.length} item{cartDetails.length !== 1 ? 's' : ''}</div>
-                <div className="text-lg font-bold text-ink truncate">{formatMoney(totalDue, business.currency)}</div>
-                <div className="text-[11px] text-black/45">
-                  {balanceRemaining > 0 ? `Balance ${formatMoney(balanceRemaining, business.currency)}` : changeDue > 0 ? `Change ${formatMoney(changeDue, business.currency)}` : 'Fully covered'}
-                </div>
-              </div>
-              {parkedCarts.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setShowParkedPanel((prev) => !prev)}
-                  className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-700"
-                >
-                  {parkedCarts.length} parked
-                </button>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-2">
-              {!canSubmit ? (
-                <button
-                  type="button"
-                  className="rounded-xl border border-accent/20 bg-accentSoft px-3 py-3 text-xs font-semibold text-accent transition hover:bg-accent/10"
-                  onClick={() => {
-                    const paymentPanel = document.getElementById('pos-payment-panel');
-                    paymentPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    paymentPanel?.focus({ preventScroll: true });
-                  }}
-                >
-                  Review
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
-                onClick={() => setShowParkModal(true)}
-                title="Park this sale"
-              >
-                Park
-              </button>
-              <button
-                type="button"
-                className={`btn-primary flex-1 px-5 py-3 text-sm font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                  paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
-                }`}
-                disabled={!canSubmit || isCompletingSale}
-                onClick={handleCompleteSale}
-              >
-                {completeLabel}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+
+      <ClearCartDialog open={showClearCart} count={cartDetails.length} total={totalDue} currency={business.currency} onCancel={() => setShowClearCart(false)} onConfirm={confirmClearCart} />
     </div>
   );
 }

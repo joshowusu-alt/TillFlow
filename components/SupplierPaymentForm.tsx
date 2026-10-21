@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import SupplierCashSourceFields from '@/components/SupplierCashSourceFields';
 import SubmitButton from '@/components/SubmitButton';
 import { recordSupplierPaymentAction } from '@/app/actions/payments';
 import StableIdempotencyKeyInput from '@/components/StableIdempotencyKeyInput';
@@ -36,6 +38,8 @@ export default function SupplierPaymentForm({
   storeId,
   storeName,
 }: Props) {
+  const [method, setMethod] = useState('CASH');
+  const [cashSource, setCashSource] = useState('TILL');
   return (
     <form action={recordSupplierPaymentAction} className={formClassName}>
       <input type="hidden" name="invoiceId" value={invoiceId} />
@@ -49,14 +53,15 @@ export default function SupplierPaymentForm({
       {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
       <div>
         <div className="text-xs font-medium text-black/50">Payment method</div>
-        <select className="input" name="paymentMethod" defaultValue="CASH">
+        <select className="input" name="paymentMethod" value={method} onChange={event => setMethod(event.target.value)}>
           <option value="CASH">Cash</option>
           <option value="CARD">Card</option>
           <option value="TRANSFER">Bank Transfer</option>
           <option value="MOBILE_MONEY">Mobile Money (MoMo)</option>
         </select>
       </div>
-      <div>
+      {method === 'CASH' ? <SupplierCashSourceFields storeId={storeId} source={cashSource} onSource={setCashSource} /> : null}
+      {method === 'CASH' && cashSource === 'TILL' ? <div>
         <div className="text-xs font-medium text-black/50">Till (cash from this drawer)</div>
         <select
           className="input"
@@ -77,7 +82,7 @@ export default function SupplierPaymentForm({
             </>
           )}
         </select>
-      </div>
+      </div> : null}
       <div>
         <div className="text-xs font-medium text-black/50">Amount paid</div>
         <input

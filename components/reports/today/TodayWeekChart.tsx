@@ -1,3 +1,7 @@
+'use client';
+
+import { useState } from 'react';
+import { formatMoney } from '@/lib/format';
 import FinancialAmount from '@/components/reports/FinancialAmount';
 import type { TodaySnapshot } from '@/lib/reports/today/model';
 
@@ -8,6 +12,10 @@ export default function TodayWeekChart({ days, currency }: { days: TodaySnapshot
   const negativePeak = Math.max(0, ...days.map((day) => -day.salesPence));
   const range = positivePeak + negativePeak || 1;
   const baseline = (positivePeak / range) * 100;
+  const [selectedKey, setSelectedKey] = useState(() => days.reduce((best, day) => Math.abs(day.salesPence) > Math.abs(best?.salesPence ?? 0) ? day : best, days[0])?.key);
+  const selected = days.find((day) => day.key === selectedKey) ?? days.at(-1);
+  const ticks = [...new Set([positivePeak, 0, -negativePeak])];
+  const axisAmount = (pence: number) => new Intl.NumberFormat('en-GB', { notation: 'compact', maximumFractionDigits: 1 }).format(pence / 100);
   return (
     <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-card" aria-labelledby="today-week-title" data-today-week>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -16,19 +24,33 @@ export default function TodayWeekChart({ days, currency }: { days: TodaySnapshot
       </div>
       {hasSales ? (
         <>
-          <div className="today-week-chart mt-5" aria-hidden="true" data-week-chart>
-            <div className="today-week-chart__baseline" style={{ top: `${baseline}%` }} />
-            <div className="today-week-chart__columns" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
-              {days.map((day, index) => (
-                <div key={day.key} className="today-week-chart__column">
-                  <span className={`today-week-chart__bar ${index === days.length - 1 ? 'today-week-chart__bar--today' : ''}`}
-                    style={{ top: `${day.salesPence >= 0 ? baseline - (day.salesPence / range) * 100 : baseline}%`, height: `${Math.abs(day.salesPence / range) * 100}%` }} />
-                  <span className="today-week-chart__label">{index === days.length - 1 ? 'Today' : day.label}</span>
-                </div>
-              ))}
+          <div className="today-week-chart mt-6" data-week-chart>
+            <div className="today-week-chart__axis" aria-hidden="true">
+              {ticks.map((tick) => <span key={tick} style={{ top: `${((positivePeak - tick) / range) * 100}%` }}>{axisAmount(tick)}</span>)}
+            </div>
+            <div className="today-week-chart__plot">
+              {ticks.map((tick) => <span key={tick} className="today-week-chart__gridline" aria-hidden="true" style={{ top: `${((positivePeak - tick) / range) * 100}%` }} />)}
+              <ul className="today-week-chart__columns" aria-label="Daily sales summary" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
+                {days.map((day, index) => (
+                  <li key={day.key} className="min-w-0">
+                    <button type="button" className="today-week-chart__day focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                      aria-label={`${index === days.length - 1 ? 'Today' : day.label} ${day.key}: ${day.salesPence < 0 ? '−' : ''}${formatMoney(Math.abs(day.salesPence), currency)}`}
+                      aria-pressed={selected?.key === day.key} onClick={() => setSelectedKey(day.key)}>
+                      <span className={`today-week-chart__bar ${day.salesPence < 0 ? 'today-week-chart__bar--negative' : index === days.length - 1 ? 'today-week-chart__bar--today' : ''}`} aria-hidden="true"
+                        style={{ top: `${day.salesPence >= 0 ? baseline - (day.salesPence / range) * 100 : baseline}%`, height: `${Math.abs(day.salesPence / range) * 100}%` }} />
+                      {day.salesPence === 0 ? <span className="today-week-chart__dot" aria-hidden="true" style={{ top: `${baseline}%` }} /> : null}
+                      <span className="today-week-chart__label" aria-hidden="true">{index === days.length - 1 ? 'Today' : day.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
-          <p className="mt-10 text-xs leading-5 text-muted">Today shows sales so far. Previous days cover the full calendar day.</p>
+          {selected ? <div className="mt-4 flex min-w-0 flex-wrap items-baseline justify-between gap-2 rounded-xl bg-accentSoft p-3 text-sm text-ink" aria-live="polite" aria-atomic="true">
+            <span><time dateTime={selected.key}>{selected.key.slice(5).split('-').reverse().join('/')}</time> · {selected.key === days.at(-1)?.key ? 'Today so far' : 'Full day'}</span>
+            <FinancialAmount pence={selected.salesPence} currency={currency} variant="compact" />
+          </div> : null}
+          <p className="mt-4 text-xs leading-5 text-muted">Today shows sales so far. Previous days cover the full calendar day.</p>
           {days.at(-1)?.salesPence === 0 ? <p className="mt-1 text-xs leading-5 text-muted">No sales recorded today yet.</p> : null}
           <details className="mt-2">
             <summary className="inline-flex min-h-11 cursor-pointer items-center rounded-lg px-1 text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">View daily sales figures</summary>

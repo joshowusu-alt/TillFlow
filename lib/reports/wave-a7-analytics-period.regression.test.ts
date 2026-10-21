@@ -237,3 +237,30 @@ describe('A7 analytics report period covers exactly periodDays tenant-local date
     },
   );
 });
+
+it('charts the selected historical dates instead of padding with today', async () => {
+  salesInvoiceFindManyMock.mockClear();
+  const report = await loadAnalyticsReport({ businessId: 'biz-1', currency: 'GHS', periodDays: 7, timeZone: ACCRA,
+    now: new Date('2026-10-20T12:00:00Z'), periodStart: new Date('2026-08-01T00:00:00Z'), periodEndExclusive: new Date('2026-08-08T00:00:00Z') });
+  expect(report.salesTrend.labels).toEqual(['Sat 1', 'Sun 2', 'Mon 3', 'Tue 4', 'Wed 5', 'Thu 6', 'Fri 7']);
+  expect(report.profitTrend.labels).toEqual(report.salesTrend.labels);
+  expect(report.salesTrend.values).toEqual(Array(7).fill(0));
+});
+
+
+it('allocates full-invoice discounts before building category net sales, excluding VAT', async () => {
+  const line = (productId: string, category: string, subtotal: number) => ({
+    productId, qtyBase: 1, lineSubtotalPence: subtotal, lineDiscountPence: 0,
+    promoDiscountPence: 0, lineVatPence: 100, lineTotalPence: subtotal + 100,
+    lineCostPence: 500, costBasis: 'RECORDED',
+    product: { name: productId, defaultCostBasePence: 500, category: { name: category } },
+  });
+  salesInvoiceFindManyMock.mockResolvedValueOnce([{
+    createdAt: new Date('2026-10-20T12:00:00Z'), paymentStatus: 'PAID',
+    discountPence: 300, vatPence: 200, totalPence: 2900,
+    lines: [line('a', 'Books', 2000), line('b', 'Gifts', 1000)],
+  }] as never);
+  const data = await loadAnalyticsReport({ businessId: 'biz-1', currency: 'GHS', periodDays: 7, timeZone: ACCRA, now: new Date('2026-10-20T13:00:00Z') });
+  expect(data.netCategoryData).toEqual([{ name: 'Books', value: 1800 }, { name: 'Gifts', value: 900 }]);
+  expect(data.categoryData.reduce((sum, row) => sum + row.value, 0)).toBe(3000);
+});

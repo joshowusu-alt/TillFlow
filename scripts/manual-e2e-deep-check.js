@@ -6,7 +6,7 @@ const { PrismaClient } = require('@prisma/client');
 const BASE_URL = process.env.BASE_URL || 'http://localhost:6200';
 const OWNER_EMAIL = process.env.E2E_OWNER_EMAIL || 'owner@store.com';
 const OWNER_PASSWORD = process.env.E2E_OWNER_PASSWORD || 'Pass1234!';
-const ARTIFACT_DIR = path.join(process.cwd(), '.playwright-mcp');
+const ARTIFACT_DIR = path.join(process.cwd(), 'playwright', 'test-results', 'deep-owner-flow');
 const prisma = new PrismaClient();
 
 /** Current POS CTAs: Complete Cash/Part-Paid/Credit Sale — /Complete Sale/i does not match these. */
@@ -283,6 +283,18 @@ async function openPurchaseForm(page) {
   await addLineButton.waitFor({ state: 'visible', timeout: 10000 });
 }
 
+async function attachPurchaseEvidence(page) {
+  await page.locator('#record-purchase-form input[type="file"]').setInputFiles({
+    name: 'synthetic-supplier-invoice.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.4\nSynthetic CI supplier invoice\n%%EOF'),
+  });
+  await page.waitForFunction(() => {
+    const input = document.querySelector('#record-purchase-form input[name="purchaseDocumentsJson"]');
+    return input && JSON.parse(input.value || '[]').length === 1;
+  });
+}
+
 async function seedUnpaidExpense() {
   const owner = await prisma.user.findUnique({
     where: { email: OWNER_EMAIL },
@@ -392,6 +404,7 @@ async function run() {
     // cash-drawer dependency.
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
+    await attachPurchaseEvidence(page);
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     // On success, createPurchaseAction redirects to the invoice detail page
     // (/purchases/{id}?created=1), not back to the list page, so wait for
@@ -400,6 +413,17 @@ async function run() {
     // one - only the /purchases list page does).
     await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
     const createdInvoiceId = new URL(page.url()).pathname.split('/').pop();
+    const amountHeaders = page.getByRole('columnheader', { name: /^(Unit Cost|Line Total)$/i });
+    await amountHeaders.first().waitFor({ state: 'visible', timeout: 10000 });
+    if (await amountHeaders.count() !== 2) throw new Error('Purchase amount headings are missing');
+    const alignment = await amountHeaders.evaluateAll(headers => headers.map(header => {
+      const index = Array.from(header.parentElement.children).indexOf(header);
+      const cell = header.closest('table').querySelector('tbody tr').children[index];
+      const headingText = document.createRange(), amountText = document.createRange();
+      headingText.selectNodeContents(header); amountText.selectNodeContents(cell);
+      return { label: header.textContent, difference: Math.abs(headingText.getBoundingClientRect().right - amountText.getBoundingClientRect().right) };
+    }));
+    if (alignment.some(column => column.difference > 2)) throw new Error(`Purchase column alignment: ${JSON.stringify(alignment)}`);
     if (!createdInvoiceId) {
       await screenshotStep(page, '05-purchase-no-return-link');
       throw new Error('Could not determine invoice id after creating purchase');
@@ -428,6 +452,7 @@ async function run() {
     await page.waitForTimeout(500);
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
+    await attachPurchaseEvidence(page);
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
     step('6b/12 Create unpaid purchase OK');
@@ -570,6 +595,341 @@ async function run() {
     report.payments.expensePayment = true;
     step('12/12 Expense payment OK');
 
+    step('BONUS Income Statement supporting records');
+    const reportOwner = await prisma.user.findUnique({ where: { email: OWNER_EMAIL }, select: { businessId: true } });
+    const originalPlan = await prisma.business.findUniqueOrThrow({ where: { id: reportOwner.businessId }, select: { plan: true, selectedPlan: true } });
+    // CI seeds Starter. This Growth report needs an entitled synthetic fixture;
+    // never change a hosted business or relax the application's report policy.
+    const needsReportFixture = originalPlan.plan === 'STARTER';
+    if (!['localhost', '127.0.0.1'].includes(new URL(BASE_URL).hostname) || !String(process.env.DATABASE_URL).startsWith('file:')) {
+      throw new Error('Report and label fixtures require a local SQLite test business.');
+    }
+    if (needsReportFixture) await prisma.business.update({ where: { id: reportOwner.businessId }, data: { plan: 'GROWTH', selectedPlan: 'GROWTH' } });
+    try {
+    await page.goto(`${BASE_URL}/reports/income-statement`, { waitUntil: 'networkidle' });
+    const revenueRecords = page.getByRole('link', { name: /^View Revenue supporting records:/ }).first();
+    await revenueRecords.waitFor({ state: 'visible' });
+    const detailUrl = new URL(await revenueRecords.getAttribute('href'), BASE_URL);
+    await revenueRecords.click();
+    await page.waitForURL(url => url.pathname === '/reports/income-statement/entries' && url.searchParams.get('metric') === 'revenue');
+    await page.getByRole('heading', { name: 'Revenue — supporting records', exact: true }).waitFor();
+    await page.locator('a[href^="/sales/"]').first().waitFor({ state: 'visible' });
+    await page.getByRole('link', { name: '← Income Statement', exact: true }).click();
+    await page.waitForURL(url => url.pathname === '/reports/income-statement' && ['from', 'to'].every(key => url.searchParams.get(key) === detailUrl.searchParams.get(key)));
+    step('BONUS Income Statement supporting records OK');
+    step('BONUS Classification assignment and analytics');
+    await page.goto(`${BASE_URL}/products?tab=categories`, { waitUntil: 'networkidle' });
+    await page.getByRole('link', { name: 'Classification', exact: true }).waitFor();
+    const classificationSetup = page.getByRole('region', { name: 'Classification setup' });
+    const setupCategories = classificationSetup.getByRole('region', { name: 'Categories', exact: true });
+    if (await setupCategories.getByRole('list').getByRole('button').count() > 5) throw new Error('Classification initially renders more than five category choices');
+    const moreCategories = setupCategories.getByRole('button', { name: /^Show more/ });
+    if (await moreCategories.count()) {
+      await moreCategories.click();
+      await setupCategories.getByRole('button', { name: 'Show fewer', exact: true }).click();
+    }
+    const classificationCategoryName = `CI catalogue ${stamp}`;
+    const divisionName = `CI division ${stamp}`, groupName = `CI group ${stamp}`;
+    await classificationSetup.getByRole('button', { name: 'Add category', exact: true }).click();
+    await classificationSetup.getByLabel('Category name', { exact: true }).fill(classificationCategoryName);
+    await classificationSetup.getByRole('button', { name: 'Save category', exact: true }).click();
+    await classificationSetup.getByLabel('Division name', { exact: true }).waitFor();
+    const savedCategory = await prisma.category.findFirstOrThrow({ where: { businessId: reportOwner.businessId, name: classificationCategoryName } });
+    const classificationCategoryId = savedCategory.id;
+    await classificationSetup.getByLabel('Division name', { exact: true }).fill(divisionName);
+    await classificationSetup.getByRole('button', { name: 'Save division', exact: true }).click();
+    await classificationSetup.getByLabel('Group name', { exact: true }).waitFor();
+    const savedDivision = await prisma.productDivision.findFirstOrThrow({ where: { businessId: reportOwner.businessId, categoryId: classificationCategoryId, name: divisionName } });
+    const classificationDivisionId = savedDivision.id;
+    await classificationSetup.getByLabel('Group name', { exact: true }).fill(groupName);
+    await classificationSetup.getByRole('button', { name: 'Save group', exact: true }).click();
+    const setupGroupProducts = classificationSetup.getByRole('link', { name: 'View products in this group', exact: true });
+    await setupGroupProducts.waitFor();
+    const classificationGroup = await prisma.productGroup.findFirstOrThrow({ where: { businessId: reportOwner.businessId, divisionId: classificationDivisionId, name: groupName } });
+    const setupPath = new URL(await setupGroupProducts.getAttribute('href'), BASE_URL);
+    if (setupPath.searchParams.get('category') !== classificationCategoryId || setupPath.searchParams.get('division') !== classificationDivisionId || setupPath.searchParams.get('group') !== classificationGroup.id) throw new Error('Classification setup product link has incorrect ancestry');
+    await classificationSetup.getByRole('searchbox', { name: 'Search categories', exact: true }).fill(classificationCategoryName.toUpperCase());
+    await classificationSetup.getByRole('searchbox', { name: 'Search divisions', exact: true }).fill(divisionName);
+    await classificationSetup.getByRole('searchbox', { name: 'Search groups', exact: true }).fill(groupName);
+    for (const label of ['Categories', 'Divisions', 'Groups']) {
+      if (await classificationSetup.getByRole('list', { name: `${label} choices`, exact: true }).getByRole('button').count() !== 1) throw new Error(`Classification ${label} search did not narrow to the saved entry`);
+    }
+    const setupGroups = classificationSetup.getByRole('region', { name: 'Groups', exact: true });
+    await setupGroups.getByRole('searchbox').fill('no matching CI group');
+    await setupGroups.getByText(/No matching groups/).waitFor();
+    if (await setupGroupProducts.getAttribute('href') !== `${setupPath.pathname}${setupPath.search}`) throw new Error('Searching cleared the selected classification');
+    await setupGroups.getByRole('button', { name: 'Clear search', exact: true }).click();
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error(`Classification setup overflows at ${width}px`);
+      await screenshotStep(page, `classification-setup-${width}`);
+    }
+    step('BONUS Classification setup three-level creation and parent links OK');
+    const classifiedSale = await prisma.salesInvoice.findFirstOrThrow({ where: { businessId: reportOwner.businessId, paymentStatus: 'PAID', lines: { some: {} } }, select: { lines: { take: 1, select: { productId: true } } } });
+    const classifiedProduct = await prisma.product.findUniqueOrThrow({ where: { id: classifiedSale.lines[0].productId }, select: { id: true, name: true } });
+    // Fictional CI product: exercise generating a missing barcode through the UI.
+    await prisma.product.update({ where: { id: classifiedProduct.id }, data: { barcode: null } });
+    await page.goto(`${BASE_URL}/products/${classifiedProduct.id}`, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: 'Generate', exact: true }).click();
+    await page.getByRole('link', { name: 'Barcode saved — print this product’s label' }).waitFor();
+    await page.goto(`${BASE_URL}/products/${classifiedProduct.id}`, { waitUntil: 'networkidle' });
+    await page.getByRole('link', { name: 'Barcode saved — print this product’s label' }).waitFor();
+    await page.getByLabel('Category', { exact: true }).selectOption(classificationCategoryId);
+    const productClassification = page.locator('details').filter({ has: page.getByText('Division and group (optional)', { exact: true }) });
+    if (!await productClassification.evaluate(element => element.open)) await productClassification.locator('summary').click();
+    await page.getByLabel('Division', { exact: true }).selectOption(classificationDivisionId);
+    await page.getByLabel('Group', { exact: true }).selectOption(classificationGroup.id);
+    await Promise.all([
+      page.waitForResponse(response => response.request().method() === 'POST' && response.url().includes(`/products/${classifiedProduct.id}`) && response.status() < 400),
+      page.getByRole('button', { name: 'Save changes', exact: true }).click(),
+    ]);
+    const storedClassification = await prisma.product.findUniqueOrThrow({ where: { id: classifiedProduct.id }, select: { categoryId: true, groupId: true, barcode: true } });
+    if (storedClassification.groupId !== classificationGroup.id || storedClassification.categoryId !== classificationCategoryId || !storedClassification.barcode) throw new Error('Product classification/barcode was not saved');
+    step('BONUS Cascading catalogue navigation');
+    await page.setViewportSize({ width: 390, height: 900 });
+    const cascadeSearch = encodeURIComponent(classifiedProduct.name);
+    await page.goto(`${BASE_URL}/products?q=${cascadeSearch}&page=4`, { waitUntil: 'networkidle' });
+    const catalogueNav = page.getByRole('navigation', { name: 'Browse catalogue classification', exact: true });
+    await catalogueNav.getByRole('link').filter({ hasText: classificationCategoryName.trim() }).click();
+    await page.waitForURL(url => url.searchParams.get('category') === classificationCategoryId && !url.searchParams.has('page'));
+    await catalogueNav.getByRole('link').filter({ hasText: divisionName }).click();
+    await page.waitForURL(url => url.searchParams.get('division') === classificationDivisionId);
+    await catalogueNav.getByRole('link').filter({ hasText: groupName }).click();
+    await page.waitForURL(url => url.searchParams.get('group') === classificationGroup.id);
+    if (new URL(page.url()).searchParams.get('q') !== classifiedProduct.name) throw new Error('Catalogue hierarchy lost search');
+    const catalogueGroupLink = catalogueNav.getByRole('link').filter({ hasText: groupName });
+    const expectedCatalogueCount = await prisma.product.count({ where: { businessId: reportOwner.businessId, active: true, categoryId: classificationCategoryId, groupId: classificationGroup.id } });
+    const displayedCatalogueCount = Number(await catalogueGroupLink.locator('[aria-label$=" products"]').textContent());
+    if (displayedCatalogueCount !== expectedCatalogueCount) throw new Error('Catalogue group count differs from stored products');
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error(`Catalogue hierarchy overflows at ${width}px`);
+      await screenshotStep(page, `catalogue-hierarchy-${width}`);
+    }
+    await catalogueNav.getByRole('link', { name: /^All categories/ }).click();
+    await page.waitForURL(url => !url.searchParams.has('category') && !url.searchParams.has('division') && !url.searchParams.has('group'));
+    await page.goBack();
+    await page.waitForURL(url => url.searchParams.get('group') === classificationGroup.id);
+    step('BONUS Cascading catalogue navigation OK');
+    await page.goto(`${BASE_URL}/reports/analytics`, { waitUntil: 'networkidle' });
+    await page.locator('[data-classification-disclosure] > summary').click();
+    const classification = page.locator('#classification-performance');
+    await classification.getByRole('button', { name: `${classificationCategoryName} →`, exact: true }).click();
+    await classification.getByRole('button', { name: `${divisionName} →`, exact: true }).click();
+    await classification.getByRole('button', { name: `${groupName} →`, exact: true }).click();
+    await classification.getByRole('link', { name: classifiedProduct.name, exact: true }).waitFor();
+    fs.mkdirSync(path.join(process.cwd(), 'tmp', 'ui-programme-evidence'), { recursive: true });
+    await page.screenshot({ path: path.join(process.cwd(), 'tmp', 'ui-programme-evidence', 'classification-performance-desktop.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error('Classification report overflows the phone viewport');
+    await page.screenshot({ path: path.join(process.cwd(), 'tmp', 'ui-programme-evidence', 'classification-performance-mobile.png'), fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    step('BONUS Classification assignment and analytics OK');
+    await context.addInitScript(() => {
+      window.__labelPrintRequested = false;
+      window.print = () => { window.__labelPrintRequested = true; };
+      const nativeOpen = window.open;
+      window.open = function (...args) {
+        const popup = nativeOpen.apply(window, args);
+        if (popup) popup.print = () => { popup.__labelPrintRequested = true; };
+        return popup;
+      };
+    });
+    await page.goto(`${BASE_URL}/products/labels?select=${classifiedProduct.id}`, { waitUntil: 'networkidle' });
+    await page.getByText('Ready to print', { exact: true }).waitFor();
+    const [printPage] = await Promise.all([context.waitForEvent('page'), page.getByRole('button', { name: 'Print Labels', exact: true }).first().click()]);
+    await printPage.waitForFunction(name => document.body.textContent.includes(name), classifiedProduct.name);
+    await printPage.waitForFunction(() => window.__labelPrintRequested === true);
+    const readableValue = printPage.locator('[data-barcode-value]').first();
+    await readableValue.waitFor({ state: 'visible' });
+    if ((await readableValue.textContent()).trim() !== storedClassification.barcode) throw new Error('Printed readable barcode does not match saved value');
+    await printPage.screenshot({ path: path.join(process.cwd(), 'playwright', 'test-results', 'generated-barcode-label.png'), fullPage: true });
+    await printPage.close();
+    step('BONUS Generated barcode to selected label and print request OK');
+    for (const width of [390, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${BASE_URL}/reports/sales-by-supplier`, { waitUntil: 'networkidle' });
+      const viewProducts = page.getByRole('link', { name: /^View products for / }).first();
+      await viewProducts.waitFor({ state: 'visible' });
+      const geometry = await viewProducts.evaluate(el => {
+        const box = el.getBoundingClientRect(), shell = el.closest('.responsive-table-shell').getBoundingClientRect();
+        const canvas = el.closest('[data-reports-canvas]').getBoundingClientRect();
+        const main = document.querySelector('.app-main-shell'), style = getComputedStyle(main);
+        return { left: box.left, right: box.right, shellLeft: shell.left, shellRight: shell.right,
+          canvasWidth: canvas.width, available: main.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+          pageWidth: document.documentElement.scrollWidth, viewport: window.innerWidth };
+      });
+      if (geometry.left < geometry.shellLeft - 1 || geometry.right > geometry.shellRight + 1 || geometry.pageWidth > geometry.viewport || Math.abs(geometry.canvasWidth - geometry.available) > 2) {
+        throw new Error(`Supplier responsive layout: ${JSON.stringify(geometry)}`);
+      }
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
+    step('BONUS Supplier action and fluid report widths OK');
+    step('BONUS Product history and compact supplier account');
+    let reportHistoryStoreId;
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${BASE_URL}/products/${classifiedProduct.id}`, { waitUntil: 'networkidle' });
+      await page.getByRole('link', { name: 'View history', exact: true }).click();
+      await page.getByRole('heading', { name: 'Product history', exact: true }).waitFor();
+      const history = page.locator('[data-product-history-store]');
+      const historyStoreId = await history.getAttribute('data-product-history-store');
+      reportHistoryStoreId = historyStoreId;
+      const [balance, recorded] = await Promise.all([
+        prisma.inventoryBalance.findUnique({ where: { storeId_productId: { storeId: historyStoreId, productId: classifiedProduct.id } } }),
+        prisma.stockMovement.aggregate({ where: { productId: classifiedProduct.id, storeId: historyStoreId }, _sum: { qtyBase: true } }),
+      ]);
+      if (Number(await history.getAttribute('data-history-current-quantity')) !== (balance?.qtyOnHandBase ?? 0)) throw new Error('Product history current quantity differs from stored balance');
+      if (Number(await history.getAttribute('data-history-recorded-quantity')) !== (recorded._sum.qtyBase ?? 0)) throw new Error('Product history movement quantity differs from stored movements');
+      await page.locator('#supplier-costs summary').click();
+      if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Product history overflows viewport');
+      await screenshotStep(page, `product-history-${width}`);
+    }
+    const historySupplier = await prisma.supplier.findFirstOrThrow({ where: { businessId: reportOwner.businessId }, select: { id: true } });
+    await page.goto(`${BASE_URL}/suppliers/${historySupplier.id}`, { waitUntil: 'networkidle' });
+    for (const id of ['purchase-history', 'supplier-statement', 'products-supplied']) {
+      if (await page.locator(`#${id}`).evaluate(el => el.open)) throw new Error(`Supplier ${id} starts expanded`);
+    }
+    await screenshotStep(page, 'supplier-account-collapsed');
+    await page.locator('#purchase-history summary').click();
+    await page.locator('#purchase-history form button').filter({ hasText: 'Filter' }).click();
+    await page.waitForURL(url => url.searchParams.get('historyPage') === '1');
+    if (!await page.locator('#purchase-history').evaluate(el => el.open)) throw new Error('Supplier history closes after filtering');
+    await page.getByRole('link', { name: /View linked products|Link products/, exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('#products-supplied').open);
+    await screenshotStep(page, 'supplier-account-expanded');
+    step('BONUS Product history and compact supplier account OK');
+    step('BONUS Bulk pricing preview, stale guard and audited apply');
+    async function confirmBulkPriceUpdate() {
+      await page.getByRole('button', { name: 'Confirm price update', exact: true }).click();
+      // An earlier alert may remain briefly during a server-action response.
+      // Finish this mutation before inspecting the DB or removing a failure trigger.
+      await page.locator('[data-bulk-pricing][aria-busy="false"]').waitFor();
+    }
+    // Isolated local fixtures only; this block shares the localhost/SQLite guard above.
+    const bulkBaseUnit = await prisma.unit.create({ data: { name: `CI copy ${stamp}`, pluralName: 'copies' } });
+    const bulkPackUnit = await prisma.unit.create({ data: { name: `CI pack ${stamp}`, pluralName: 'packs' } });
+    const bulkInheritedUnit = await prisma.unit.create({ data: { name: `CI pair ${stamp}`, pluralName: 'pairs' } });
+    const bulkName = `CI pricing ${stamp}`;
+    const bulkProducts = [];
+    for (const suffix of ['A', 'B']) bulkProducts.push(await prisma.product.create({ data: {
+      businessId: reportOwner.businessId, name: `${bulkName} ${suffix}`, categoryId: classificationCategoryId, groupId: classificationGroup.id,
+      sellingPriceBasePence: 1000, defaultCostBasePence: 600,
+      productUnits: { create: [
+        { unitId: bulkBaseUnit.id, conversionToBase: 1, isBaseUnit: true, sellingPricePence: 1000 },
+        { unitId: bulkPackUnit.id, conversionToBase: 3, sellingPricePence: 2700 },
+        { unitId: bulkInheritedUnit.id, conversionToBase: 2 },
+      ] },
+    } }));
+    await page.goto(`${BASE_URL}/products/bulk-pricing`, { waitUntil: 'networkidle' });
+    await page.getByRole('combobox', { name: 'Category', exact: true }).selectOption(classificationCategoryId);
+    await page.getByRole('combobox', { name: 'Division', exact: true }).selectOption(classificationDivisionId);
+    await page.getByRole('combobox', { name: 'Group', exact: true }).selectOption(classificationGroup.id);
+    await page.getByRole('textbox', { name: 'Search', exact: true }).fill(bulkName);
+    await page.getByRole('spinbutton', { name: 'Percentage (%)', exact: true }).fill('20');
+    await page.getByRole('button', { name: 'Preview prices', exact: true }).click();
+    await page.getByText(`${bulkName} A`, { exact: true }).waitFor();
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error(`Bulk pricing overflows at ${width}px`);
+      await screenshotStep(page, `bulk-pricing-preview-${width}`);
+    }
+    // An edit after review must reject the whole selected batch, including the unchanged first product.
+    await prisma.product.update({ where: { id: bulkProducts[1].id }, data: { defaultCostBasePence: 650 } });
+    await page.getByRole('textbox', { name: 'Reason for change', exact: true }).fill('CI stale preview check');
+    await page.getByRole('button', { name: 'Review update for 2 products', exact: true }).click();
+    await confirmBulkPriceUpdate();
+    await page.getByRole('alert').filter({ hasText: 'Products changed since this preview' }).waitFor();
+    const untouched = await prisma.product.findMany({ where: { id: { in: bulkProducts.map(p => p.id) } } });
+    if (untouched.some(p => p.sellingPriceBasePence !== 1000)) throw new Error('Stale pricing batch partially applied');
+    // Force the second write to fail in the isolated CI database: first write and audit must roll back.
+    const blockedProductId = bulkProducts[1].id;
+    if (!/^[a-z0-9]+$/.test(blockedProductId)) throw new Error('Unexpected CI product ID');
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER "ci_bulk_price_rollback" BEFORE UPDATE OF "sellingPriceBasePence" ON "Product" WHEN NEW."id" = '${blockedProductId}' AND NEW."sellingPriceBasePence" <> OLD."sellingPriceBasePence" BEGIN SELECT RAISE(ABORT, 'CI forced bulk failure'); END`);
+    try {
+      await page.getByRole('button', { name: 'Preview prices', exact: true }).click();
+      await page.getByText(`${bulkName} A`, { exact: true }).waitFor();
+      await page.getByRole('textbox', { name: 'Reason for change', exact: true }).fill('CI rollback check');
+      await page.getByRole('button', { name: 'Review update for 2 products', exact: true }).click();
+      await confirmBulkPriceUpdate();
+      await page.locator('[data-bulk-pricing-error]').waitFor();
+      const rolledBack = await prisma.product.findMany({ where: { id: { in: bulkProducts.map(p => p.id) } }, include: { productUnits: true } });
+      if (rolledBack.some(p => p.sellingPriceBasePence !== 1000 || p.productUnits.find(u => u.unitId === bulkBaseUnit.id).sellingPricePence !== 1000)) throw new Error('Failed bulk batch did not roll back all prices');
+      if (await prisma.auditLog.count({ where: { businessId: reportOwner.businessId, action: 'PRICE_CHANGE', entityId: { in: bulkProducts.map(p => p.id) } } })) throw new Error('Failed bulk batch left successful audit entries');
+    } finally {
+      await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS "ci_bulk_price_rollback"');
+    }
+    await page.getByRole('button', { name: 'Preview prices', exact: true }).click();
+    await page.getByText(`${bulkName} A`, { exact: true }).waitFor();
+    await page.getByRole('textbox', { name: 'Reason for change', exact: true }).fill('CI reviewed supplier increase');
+    await page.getByRole('button', { name: 'Review update for 2 products', exact: true }).click();
+    await confirmBulkPriceUpdate();
+    const bulkUpdated = await prisma.product.findMany({ where: { id: { in: bulkProducts.map(p => p.id) } }, include: { productUnits: true } });
+    for (const p of bulkUpdated) {
+      if (p.sellingPriceBasePence !== 1200 || p.productUnits.find(u => u.unitId === bulkBaseUnit.id).sellingPricePence !== 1200 || p.productUnits.find(u => u.unitId === bulkPackUnit.id).sellingPricePence !== 2700 || p.productUnits.find(u => u.unitId === bulkInheritedUnit.id).sellingPricePence !== null) throw new Error('Bulk base/pack pricing is inconsistent');
+    }
+    const priceAudits = await prisma.auditLog.findMany({ where: { businessId: reportOwner.businessId, action: 'PRICE_CHANGE', entityId: { in: bulkProducts.map(p => p.id) } } });
+    if (priceAudits.length !== 2 || priceAudits.some(a => a.reason !== 'CI reviewed supplier increase' || JSON.parse(a.beforeState).sellingPriceBasePence !== 1000 || JSON.parse(a.afterState).sellingPriceBasePence !== 1200)) throw new Error('Bulk price audit is missing before/after evidence');
+    step('BONUS Bulk pricing database prices and audit OK');
+    const savedBatchId = JSON.parse(priceAudits[0].details).batchId;
+    await page.waitForURL(url => url.searchParams.get('batch') === savedBatchId);
+    await page.getByRole('status').filter({ hasText: 'Updated 2 products' }).waitFor();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.getByRole('status').filter({ hasText: 'Updated 2 products' }).waitFor();
+    await page.getByRole('status').filter({ hasText: 'CI reviewed supplier increase' }).waitFor();
+    step('BONUS Bulk pricing preview, stale guard and audited apply OK');
+    step('BONUS Branch product shortcut screens');
+    const shortcutStoreId = reportHistoryStoreId;
+    for (const product of bulkProducts) await prisma.inventoryBalance.create({ data: { storeId: shortcutStoreId, productId: product.id, qtyOnHandBase: 10 } });
+    const shortcutLoad = page.waitForResponse(response => response.url().includes('/api/pos/shortcuts?'));
+    await page.goto(`${BASE_URL}/pos`, { waitUntil: 'networkidle' });
+    const shortcutPanel = page.getByRole('region', { name: 'Product shortcuts', exact: true });
+    const shortcutResponse = await shortcutLoad;
+    if (new URL(shortcutResponse.url()).searchParams.get('storeId') !== shortcutStoreId) throw new Error('Shortcut branch differs from selected branch');
+    if (!shortcutResponse.ok()) throw new Error('Shortcut read failed');
+    const originalShortcutStore = await prisma.store.findUniqueOrThrow({ where: { id: shortcutStoreId }, select: { posShortcutsJson: true } });
+    try {
+      await shortcutPanel.getByRole('button', { name: 'Manage shortcuts', exact: true }).click();
+      await shortcutPanel.getByRole('button', { name: 'Add screen', exact: true }).click();
+      const shortcutScreenName = `QA Shortcuts ${Date.now()}`;
+      await shortcutPanel.getByLabel('Screen name', { exact: true }).fill(shortcutScreenName);
+      await shortcutPanel.getByLabel('Find products for this screen', { exact: true }).fill(bulkName);
+      await shortcutPanel.getByRole('button', { name: / Add$/ }).first().click();
+      await shortcutPanel.getByRole('button', { name: 'Save shortcuts', exact: true }).click();
+      await shortcutPanel.getByText(/Shortcuts saved for this branch/).waitFor();
+      const savedShortcutStore = await prisma.store.findUniqueOrThrow({ where: { id: shortcutStoreId }, select: { posShortcutsJson: true } });
+      const savedShortcutScreen = JSON.parse(savedShortcutStore.posShortcutsJson).screens.find(screen => screen.name === shortcutScreenName);
+      if (!savedShortcutScreen || !bulkProducts.some(product => savedShortcutScreen.productIds.includes(product.id))) throw new Error('Shortcut did not save actual product IDs');
+      await page.reload({ waitUntil: 'networkidle' });
+      await shortcutPanel.getByRole('combobox', { name: 'Quick access screen', exact: true }).selectOption(savedShortcutScreen.id);
+      const shortcutTile = shortcutPanel.locator('div.grid button').first();
+      await shortcutTile.waitFor();
+      if (!(await shortcutTile.isEnabled())) throw new Error('In-stock shortcut should be enabled');
+      await shortcutTile.click();
+      await page.getByText('Select how you want to sell', { exact: true }).waitFor();
+      await shortcutPanel.getByRole('button', { name: 'Products', exact: true }).click();
+      if (await page.locator('[data-pos-cart-card]').isVisible()) throw new Error('Cart remained visible in Products view');
+      await shortcutPanel.getByRole('button', { name: /^Cart ·/ }).click();
+      await shortcutPanel.getByRole('button', { name: 'Hide shortcuts', exact: true }).click();
+      if (await shortcutPanel.locator('.pos-shortcut-tile:visible').count()) throw new Error('Shortcut collapse failed');
+      await shortcutPanel.getByRole('button', { name: 'Show shortcuts', exact: true }).click();
+      await page.locator('[data-pos-checkout-card] [data-pos-change-due]').waitFor();
+      for (const width of [320, 390, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error(`Shortcut screen overflows at ${width}px`);
+        await screenshotStep(page, `product-shortcuts-${width}`);
+      }
+      await page.setViewportSize({ width: 1280, height: 900 });
+    } finally {
+      await prisma.inventoryBalance.deleteMany({ where: { storeId: shortcutStoreId, productId: { in: bulkProducts.map(p => p.id) } } });
+      await prisma.store.update({ where: { id: shortcutStoreId }, data: { posShortcutsJson: originalShortcutStore.posShortcutsJson } });
+    }
+    step('BONUS Branch product shortcut screens OK');
+
+    } finally {
+      if (needsReportFixture) await prisma.business.update({ where: { id: reportOwner.businessId }, data: originalPlan });
+    }
+
     // Backup export + restore (run at end because restore invalidates sessions/passwords)
     step('BONUS Backup export + restore');
     await page.goto(`${BASE_URL}/settings/backup`, { waitUntil: 'networkidle' });
@@ -609,6 +969,7 @@ async function run() {
     console.log(JSON.stringify({ success: true, report }, null, 2));
   } catch (error) {
     step(`FAILED: ${error instanceof Error ? error.message : String(error)}`);
+    if (['localhost', '127.0.0.1'].includes(new URL(BASE_URL).hostname)) step(`Failure surface: ${(await page.locator('body').innerText().catch(() => 'unavailable')).slice(-6000)}`);
     // Take screenshot on failure for CI debugging
     try {
       fs.mkdirSync(ARTIFACT_DIR, { recursive: true });

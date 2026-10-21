@@ -3,6 +3,8 @@
  * No imageUrl, no cost/management metadata.
  */
 
+import { productDisplayName } from '@/lib/products/barcode-identity';
+
 export const POS_LOCAL_INDEX_MAX = 2000;
 export const POS_OFFLINE_CATALOGUE_MAX = 5000;
 export const POS_SEARCH_TAKE_DEFAULT = 12;
@@ -24,6 +26,7 @@ export type SellableProductDto = {
   name: string;
   sku: string | null;
   barcode: string | null;
+  additionalBarcodes?: string[];
   sellingPriceBasePence: number;
   vatRateBps: number;
   isTaxable: boolean;
@@ -40,6 +43,9 @@ export const SELLABLE_PRODUCT_SELECT = {
   name: true,
   sku: true,
   barcode: true,
+  publisher: true,
+  edition: true,
+  barcodes: { select: { code: true } },
   sellingPriceBasePence: true,
   vatRateBps: true,
   isTaxable: true,
@@ -59,6 +65,9 @@ export const SELLABLE_PRODUCT_SELECT = {
 } as const;
 
 export type SellableProductRow = {
+  publisher?: string;
+  edition?: string;
+  barcodes?: Array<{ code: string }>;
   id: string;
   name: string;
   sku: string | null;
@@ -84,9 +93,10 @@ export function toSellableProductDto(
 ): SellableProductDto {
   return {
     id: product.id,
-    name: product.name,
+    name: productDisplayName(product),
     sku: product.sku,
     barcode: product.barcode,
+    additionalBarcodes: product.barcodes?.map(b => b.code) ?? [],
     sellingPriceBasePence: product.sellingPriceBasePence,
     vatRateBps: product.vatRateBps,
     isTaxable: product.isTaxable,

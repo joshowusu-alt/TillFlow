@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import ProtectedRouteLoading from '@/components/ProtectedRouteLoading';
 import AppLaunchLoading from '@/components/AppLaunchLoading';
 import {
   LAUNCH_GENERIC_DETAIL,
@@ -16,13 +17,13 @@ export const ROOT_COLD_START_DETAIL = LAUNCH_GENERIC_DETAIL;
  * Root Instant Loading UI.
  * Fullscreen TillFlow launch branding is gated to an intentional /launch session
  * (`tillflow:launching`). Ordinary hard refreshes, post-save redirects, and
- * authenticated route transitions render nothing so nested route skeletons can show.
+ * authenticated root waits use a neutral skeleton instead of an empty screen.
  */
 export default function RootLaunchLoading() {
   const [intentionalLaunch] = useState(isIntentionalLaunchSession);
 
   if (!intentionalLaunch) {
-    return null;
+    return <div className="min-h-screen bg-paper px-4 py-6 sm:px-6"><ProtectedRouteLoading /></div>;
   }
 
   return (

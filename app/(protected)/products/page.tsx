@@ -1,4 +1,12 @@
+import ProductCategoryField from '@/components/products/ProductCategoryField';
+import CatalogueClassificationNav from '@/components/products/CatalogueClassificationNav';
+import ProductClassificationLabel from '@/components/products/ProductClassificationLabel';
+import { isSqliteRuntimeEnv } from '@/lib/database-runtime';
+import ClassificationSetup from '@/components/products/ClassificationSetup';
+import { listProductDivisions } from '@/lib/services/product-classification';
 import PageHeader from '@/components/PageHeader';
+import ProductIdentityFields from '@/components/products/ProductIdentityFields';
+import ProductMarginPreview from '@/components/products/ProductMarginPreview';
 import FormError from '@/components/FormError';
 import { AdminProductImage } from '@/components/AdminProductImage';
 import SubmitButton from '@/components/SubmitButton';
@@ -71,6 +79,11 @@ export default async function ProductsPage({
   searchParams?: {
     error?: string;
     tab?: string;
+    setupCategory?: string;
+    setupDivision?: string;
+    setupGroup?: string;
+    setupAdd?: string;
+    setupSaved?: string;
     q?: string;
     page?: string;
     created?: string;
@@ -79,6 +92,9 @@ export default async function ProductsPage({
     barcodesFailed?: string;
     missingCost?: string;
     issue?: string;
+    category?: string;
+    division?: string;
+    group?: string;
   };
 }) {
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
@@ -88,6 +104,7 @@ export default async function ProductsPage({
   const isManager = user.role !== 'CASHIER';
 
   const q = searchParams?.q?.trim() ?? '';
+  const divisionsPromise = listProductDivisions(business.id);
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
   const requestedIssue = resolveProductsIssueParam({
     issue: searchParams?.issue,
@@ -118,15 +135,22 @@ export default async function ProductsPage({
     issueProductWhere = { id: { in: ['__none__'] } };
   }
 
-  const productWhere = {
+  const textSearch = { contains: q, ...(!isSqliteRuntimeEnv() ? { mode: 'insensitive' as const } : {}) };
+  const productScopeWhere = {
     businessId: business.id,
     active: issueKey === 'MISSING_COST' ? undefined : true,
-    ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
+    ...(q ? { OR: [{ name: textSearch }, { publisher: textSearch }, { edition: textSearch }, { barcode: q }, { barcodes: { some: { code: q } } }] } : {}),
     ...(issueProductWhere ?? {}),
   } as Prisma.ProductWhereInput;
+  const productWhere: Prisma.ProductWhereInput = {
+    ...productScopeWhere,
+    ...(searchParams?.category ? { categoryId: searchParams.category } : {}),
+    ...(searchParams?.division ? { group: { divisionId: searchParams.division } } : {}),
+    ...(searchParams?.group ? { groupId: searchParams.group } : {}),
+  };
 
   // Run all data queries in parallel
-  const [totalProductCount, products, categories, units, suppliers, missingBarcodeCount] = await measureServerOperation(
+  const [totalProductCount, products, categories, units, suppliers, missingBarcodeCount, classificationCounts] = await measureServerOperation(
     'page.products.load',
     () => Promise.all([
       prisma.product.count({ where: productWhere }),
@@ -138,7 +162,9 @@ export default async function ProductsPage({
           name: true,
           imageUrl: true,
           sellingPriceBasePence: true,
-          defaultCostBasePence: true,
+          defaultCostBasePence: isManager,
+          publisher: true,
+          edition: true,
           productUnits: {
             select: {
               isBaseUnit: true,
@@ -147,6 +173,7 @@ export default async function ProductsPage({
             }
           },
           category: { select: { name: true, colour: true } },
+          group: { select: { name: true, division: { select: { name: true } } } },
           preferredSupplier: { select: { id: true, name: true } }
         },
         orderBy: { name: 'asc' },
@@ -176,6 +203,11 @@ export default async function ProductsPage({
           active: true,
           OR: [{ barcode: null }, { barcode: '' }],
         },
+      }),
+      prisma.product.groupBy({
+        by: ['categoryId', 'groupId'],
+        where: productScopeWhere,
+        _count: { _all: true },
       }),
     ]),
     {
@@ -226,15 +258,21 @@ export default async function ProductsPage({
         page={page}
         tab={activeTab}
         issue={issueQueryValue}
+        category={searchParams?.category}
+        division={searchParams?.division}
+        group={searchParams?.group}
       />
       <PageHeader
         title={pageTitle}
         subtitle={pageSubtitle}
         actions={
           issueActive ? undefined : (
+            <div className="flex flex-wrap gap-2">
+            {isManager && features.advancedOps && <Link href="/products/bulk-pricing" className="btn-secondary justify-center text-sm">Bulk pricing</Link>}
             <Link href="/products/labels" className="btn-secondary justify-center text-sm">
               Print Labels
             </Link>
+            </div>
           )
         }
       />
@@ -290,7 +328,7 @@ export default async function ProductsPage({
         </Suspense>
       ) : null}
 
-      {!issueActive ? (
+      {!issueActive && activeTab === 'products' ? (
         <div className="operational-metric-grid operational-metric-grid--4">
           <ProductStatCard
             label="Total products"
@@ -305,7 +343,7 @@ export default async function ProductsPage({
           <ProductStatCard
             label="Categories"
             value={categories.length.toLocaleString('en-GH')}
-            helper="Available product groups"
+            helper="Categories for your catalogue"
           />
           <ProductStatCard
             label="Suppliers available"
@@ -317,18 +355,20 @@ export default async function ProductsPage({
 
       {/* Tab switcher */}
       {!issueActive ? (
-        <div className="flex gap-1 rounded-xl bg-black/5 p-1 w-fit">
+        <div className="flex max-w-full gap-1 rounded-xl bg-black/5 p-1 w-fit">
           <Link
             href="/products?tab=products"
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'products' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
+            aria-current={activeTab === 'products' ? 'page' : undefined}
+            className={`inline-flex min-h-[44px] items-center px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'products' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
           >
             Products ({totalProductCount})
           </Link>
           <Link
             href="/products?tab=categories"
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'categories' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
+            aria-current={activeTab === 'categories' ? 'page' : undefined}
+            className={`inline-flex min-h-[44px] items-center px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'categories' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
           >
-            Categories ({categories.length})
+            Classification
           </Link>
         </div>
       ) : null}
@@ -336,6 +376,7 @@ export default async function ProductsPage({
       {/* ───── Products Tab ───── */}
       {(activeTab === 'products' || issueActive) && !issueResolved && (
         <>
+          {!issueActive ? <p className="text-sm text-ink/60">Use categories on their own, or <Link href="/products?tab=categories" className="font-semibold text-accent underline">set up categories, divisions and groups</Link> for more detail.</p> : null}
           {searchParams?.created === '1' && !issueActive && (
             <div role="status" data-testid="product-created-banner" className="flex items-center gap-3 rounded-2xl border border-success/20 bg-success/5 px-5 py-3.5">
               <svg className="h-5 w-5 flex-shrink-0 text-success" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -351,6 +392,10 @@ export default async function ProductsPage({
             </div>
           )}
           {/* Product search and actions */}
+          <CatalogueClassificationNav categories={categories} divisions={await divisionsPromise}
+            counts={classificationCounts.map(row => ({ categoryId: row.categoryId, groupId: row.groupId, count: row._count._all }))}
+            selection={{ category: searchParams?.category, division: searchParams?.division, group: searchParams?.group }}
+            context={{ q, tab: 'products', issue: issueQueryValue, missingCost: searchParams?.missingCost, stock: searchParams?.stock }} />
           <div className="operational-filter-row">
             <div className="operational-search-shell">
               <Suspense><SearchFilter placeholder={issueActive ? 'Search within affected products…' : 'Search products…'} /></Suspense>
@@ -399,43 +444,26 @@ export default async function ProductsPage({
                     <input className="input" id="create-product-name" name="name" required />
                   </div>
                   <div>
-                    <label className="label" htmlFor="create-product-sku">SKU</label>
-                    <input className="input" id="create-product-sku" name="sku" />
-                  </div>
-                  <div>
                     <label className="label">Barcode</label>
                     <BarcodeScanInput name="barcode" />
                   </div>
                   <div>
-                    <div className="label">Product image</div>
-                    <ProductImageInput fileUploadEnabled={fileUploadEnabled} />
-                  </div>
-                  <div>
-                    <label className="label" htmlFor="create-product-categoryId">Category</label>
-                    <select className="input" id="create-product-categoryId" name="categoryId">
-                      <option value="">Uncategorised</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="mt-1 text-xs text-black/50">
-                      Don&apos;t see your category? <a href="/products?tab=categories" className="text-accent underline">Add one here</a>.
-                    </div>
-                  </div>
-                  <div>
-                    <label className="label" htmlFor="create-product-sellingPriceBasePence">Base Price ({getCurrencySymbol(business.currency)})</label>
+                    <label className="label" htmlFor="create-product-sellingPriceBasePence">Selling price ({getCurrencySymbol(business.currency)})</label>
                     <input className="input" id="create-product-sellingPriceBasePence" name="sellingPriceBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
                     <div className="mt-1 text-xs text-black/50">Price per base unit, e.g. 5.00 for {getCurrencySymbol(business.currency)}5.00.</div>
                   </div>
                   <div>
-                    <label className="label" htmlFor="create-product-defaultCostBasePence">Base Cost ({getCurrencySymbol(business.currency)})</label>
+                    <label className="label" htmlFor="create-product-defaultCostBasePence">Cost per item ({getCurrencySymbol(business.currency)})</label>
                     <input className="input" id="create-product-defaultCostBasePence" name="defaultCostBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
                     <div className="mt-1 text-xs text-black/50">Cost per base unit, e.g. 3.50 for {getCurrencySymbol(business.currency)}3.50.</div>
                   </div>
                 </ProductFormSection>
-                <ProductFormSection title="Stock and purchasing" description="Supplier, units, and optional opening quantity.">
+                <ProductFormSection title="Product details" description="Add a photo, category or any details that help identify this item.">                  <div>
+                    <label className="label" htmlFor="create-product-sku">Internal product code (optional)</label>
+                    <input className="input" id="create-product-sku" name="sku" />
+                  </div>
+<div><div className="label">Product image</div><ProductImageInput fileUploadEnabled={fileUploadEnabled} /></div><div><ProductCategoryField categories={categories} divisions={await divisionsPromise} /></div><div className="md:col-span-3"><ProductIdentityFields /></div></ProductFormSection>
+                <ProductFormSection title="Stock and purchasing" description="Supplier, pack sizes and stock carried into TillFlow.">
                   <div>
                     <label className="label" htmlFor="create-product-preferredSupplierId">Preferred supplier</label>
                     <select className="input" id="create-product-preferredSupplierId" name="preferredSupplierId">
@@ -463,6 +491,7 @@ export default async function ProductsPage({
                     defaultBaseUnitId={preferredBaseUnitId}
                   />
                 </ProductFormSection>
+                <ProductMarginPreview currency={business.currency} />
                 <ProductFormSection title="Advanced" description="Margin target, tax, and promotions. Leave blank to use business defaults.">
                   <div>
                     <label className="label" htmlFor="create-product-minimumMarginThresholdPercent">Target Margin Override (%)</label>
@@ -544,9 +573,9 @@ export default async function ProductsPage({
                           {product.imageUrl ? (
                             <AdminProductImage
                               src={product.imageUrl}
-                              alt={product.name}
+                              alt={[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                               fallbackChar={product.name.charAt(0)}
-                              className="h-10 w-10 rounded-xl object-cover"
+                              className="h-10 w-10 shrink-0 rounded-xl object-cover"
                               fallbackClassName="flex h-10 w-10 items-center justify-center rounded-xl bg-accentSoft text-sm font-bold text-accent"
                             />
                           ) : (
@@ -554,26 +583,16 @@ export default async function ProductsPage({
                               {product.name.charAt(0)}
                             </div>
                           )}
-                          <Link href={`/products/${product.id}`} className="min-h-[44px] truncate py-2 hover:underline">
-                            {product.name}
+                          <Link href={`/products/${product.id}`} className="min-h-[44px] min-w-0 break-words py-2 [overflow-wrap:anywhere] hover:underline">
+                            {[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                           </Link>
                         </div>
                       }
-                      subtitle={product.category ? 'Catalog item' : 'Uncategorised product'}
-                      aside={product.category ? (
-                        <span
-                          className="inline-block rounded-full px-2.5 py-1 text-xs font-medium text-white"
-                          style={{ backgroundColor: product.category.colour }}
-                        >
-                          {product.category.name}
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs font-semibold text-black/45">No category</span>
-                      )}
+                      subtitle={<ProductClassificationLabel category={product.category} group={product.group} />}
                     />
                     <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                       <DataCardField label="Base price" value={<span className="font-semibold text-ink">{formatMoney(product.sellingPriceBasePence, business.currency)}</span>} />
-                      <DataCardField label="Default cost" value={<span className="font-semibold text-ink">{formatMoney(product.defaultCostBasePence, business.currency)}</span>} />
+                      {isManager ? <DataCardField label="Default cost" value={<span className="font-semibold text-ink">{formatMoney(product.defaultCostBasePence, business.currency)}</span>} /> : null}
                       <DataCardField label="Preferred supplier" value={<span className="text-black/65">{product.preferredSupplier?.name ?? 'None'}</span>} className="col-span-2" />
                       <DataCardField label="Unit display" value={<span className="text-black/65">{unitLabel}</span>} className="col-span-2" />
                     </div>
@@ -608,7 +627,7 @@ export default async function ProductsPage({
                               {issueKey === 'UNUSED_CATALOGUE' ? (
                                 <DeactivateProductIssueButton
                                   productId={product.id}
-                                  productName={product.name}
+                                  productName={[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                                   returnTo={issueReturnHref}
                                 />
                               ) : null}
@@ -633,9 +652,9 @@ export default async function ProductsPage({
                   <tr>
                     <th className="hidden sm:table-cell"></th>
                     <th>Product</th>
-                    <th className="hidden sm:table-cell">Category</th>
+                    <th className="hidden sm:table-cell">Classification</th>
                     <th>Base Price</th>
-                    <th className="hidden lg:table-cell">Default Cost</th>
+                    {isManager ? <th className="hidden lg:table-cell">Default Cost</th> : null}
                     <th className="hidden xl:table-cell">Preferred Supplier</th>
                     <th className="hidden lg:table-cell">{issueKey ? 'Status' : 'Unit Display'}</th>
                     {issueKey ? <th>Actions</th> : null}
@@ -672,7 +691,7 @@ export default async function ProductsPage({
                           {product.imageUrl ? (
                             <AdminProductImage
                               src={product.imageUrl}
-                              alt={product.name}
+                              alt={[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                               fallbackChar={product.name.charAt(0)}
                               className="w-8 h-8 rounded-md object-cover"
                               fallbackClassName="w-8 h-8 rounded-md bg-accentSoft flex items-center justify-center text-xs font-bold text-accent"
@@ -685,23 +704,14 @@ export default async function ProductsPage({
                         </td>
                         <td className="px-3 py-3 font-semibold">
                           <Link href={`/products/${product.id}`} className="hover:underline">
-                            {product.name}
+                            {[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                           </Link>
                         </td>
                         <td className="hidden sm:table-cell px-3 py-3">
-                          {product.category ? (
-                            <span
-                              className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
-                              style={{ backgroundColor: product.category.colour }}
-                            >
-                              {product.category.name}
-                            </span>
-                          ) : (
-                            <span className="text-black/30 text-xs">—</span>
-                          )}
+                          <ProductClassificationLabel category={product.category} group={product.group} />
                         </td>
                         <td className="px-3 py-3">{formatMoney(product.sellingPriceBasePence, business.currency)}</td>
-                        <td className="hidden lg:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td>
+                        {isManager ? <td className="hidden lg:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td> : null}
                         <td className="hidden xl:table-cell px-3 py-3 text-sm text-black/60">
                           {product.preferredSupplier ? (
                             <Link href={`/suppliers/${product.preferredSupplier.id}`} className="hover:underline">
@@ -748,7 +758,7 @@ export default async function ProductsPage({
                                   {issueKey === 'UNUSED_CATALOGUE' ? (
                                     <DeactivateProductIssueButton
                                       productId={product.id}
-                                      productName={product.name}
+                                      productName={[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                                       returnTo={issueReturnHref}
                                     />
                                   ) : null}
@@ -769,6 +779,9 @@ export default async function ProductsPage({
               basePath="/products"
               searchParams={{
                 q: q || undefined,
+                category: searchParams?.category,
+                division: searchParams?.division,
+                group: searchParams?.group,
                 tab: issueActive ? undefined : 'products',
                 issue: issueQueryValue,
                 missingCost:
@@ -782,9 +795,12 @@ export default async function ProductsPage({
       {/* ───── Categories Tab ───── */}
       {activeTab === 'categories' && !issueActive && (
         <>
+          {isManager ? <ClassificationSetup key={[searchParams?.setupCategory, searchParams?.setupDivision, searchParams?.setupGroup, searchParams?.setupAdd].join(':')}
+            categories={categories} divisions={await divisionsPromise} initialCategoryId={searchParams?.setupCategory}
+            initialDivisionId={searchParams?.setupDivision} initialGroupId={searchParams?.setupGroup} initialAdd={searchParams?.setupAdd} saved={searchParams?.setupSaved} /> : null}
           {isManager ? (
-            <div className="card p-4 sm:p-5">
-              <h2 className="text-lg font-display font-semibold">Add category</h2>
+            <details className="card p-4 sm:p-5">
+              <summary className="cursor-pointer text-sm font-semibold">Advanced category creation · colour, image and sort order</summary>
               <form action={createCategoryAction} className="mt-4 grid gap-4 md:grid-cols-4">
                 <div>
                   <label className="label">Name</label>
@@ -806,10 +822,10 @@ export default async function ProductsPage({
                   <SubmitButton className="btn-primary" loadingText="Creating…">Create category</SubmitButton>
                 </div>
               </form>
-            </div>
+            </details>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <details className="card p-4 sm:p-5"><summary className="cursor-pointer text-sm font-semibold">Category settings · colours and removal</summary><div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {categories.map((cat) => (
               <div key={cat.id} className="card p-5 flex gap-4">
                 {cat.imageUrl ? (
@@ -854,7 +870,7 @@ export default async function ProductsPage({
                 No categories yet. Create one above to organise your products.
               </p>
             )}
-          </div>
+          </div></details>
         </>
       )}
     </div>

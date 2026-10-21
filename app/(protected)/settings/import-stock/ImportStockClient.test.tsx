@@ -74,7 +74,7 @@ describe('settings Import Stock destination', () => {
       'utf8',
     );
     expect(settings).toContain('href="/settings/import-stock"');
-    expect(settings).toContain('>Import Stock</a>');
+    expect(settings).toContain('>Import Stock</Link>');
   });
 });
 

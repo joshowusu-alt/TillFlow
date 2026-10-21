@@ -151,7 +151,7 @@ export default async function SystemHealthPage() {
                 <div className="mt-1 font-medium text-ink">
                   {openRiskAlerts === 0
                     ? <span className="text-emerald-600">None</span>
-                    : <a href="/reports/risk-monitor" className="text-rose-600 hover:underline">{openRiskAlerts} open →</a>}
+                    : <Link href="/reports/risk-monitor" className="text-rose-600 hover:underline">{openRiskAlerts} open →</Link>}
                 </div>
               </div>
             </div>

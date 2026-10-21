@@ -1,3 +1,5 @@
+import PurchaseDocuments from '@/components/purchases/PurchaseDocuments';
+import PurchaseDetailsEditor from '@/components/purchases/PurchaseDetailsEditor';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
@@ -15,6 +17,13 @@ import SupplierPaymentForm from '@/components/SupplierPaymentForm';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
+function paymentMethodLabel(payment: { method: string; reference?: string | null }) {
+  if (payment.reference?.startsWith('funding:1000.HOLD.')) return 'Cash — business cash held outside the till';
+  if (payment.reference?.startsWith('funding:2300.OWNER.')) return 'Owner’s money — repay owner';
+  if (payment.reference?.startsWith('funding:3100.OWNER.')) return 'Owner’s money — contribution';
+  return payment.method;
+}
+
 export default async function PurchaseInvoicePage({
   params,
   searchParams,
@@ -22,6 +31,7 @@ export default async function PurchaseInvoicePage({
   params: { id: string };
   searchParams?: {
     error?: string;
+    edit?: string;
     created?: string;
     linked?: string;
     already?: string;
@@ -52,6 +62,8 @@ export default async function PurchaseInvoicePage({
         },
         orderBy: { createdAt: 'asc' },
       },
+      documents:{select:{id:true,originalFilename:true,documentKind:true,contentType:true,byteLength:true,createdAt:true},orderBy:{createdAt:'asc'}},
+      linkedCostExpense: { include: { payments: true } },
       payments: {
         include: { recordedBy: { select: { name: true } } },
         orderBy: { paidAt: 'asc' },
@@ -84,6 +96,7 @@ export default async function PurchaseInvoicePage({
   const totalPaid = purchaseDocument.paidPence;
   const outstanding = purchaseDocument.balancePence;
   const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
+  const editSuppliers = !isClosed ? await prisma.supplier.findMany({where:{businessId:business.id},select:{id:true,name:true},orderBy:{name:'asc'}}) : [];
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const supplierLinkedCount = Number.parseInt(searchParams?.linked ?? '0', 10) || 0;
@@ -162,6 +175,11 @@ export default async function PurchaseInvoicePage({
           </p>
         </div>
       )}
+
+      {!isClosed ? <PurchaseDetailsEditor invoice={{id:invoice.id,supplierId:invoice.supplierId,supplierInvoiceNumber:invoice.supplierInvoiceNumber,dueDate:invoice.dueDate?.toISOString().slice(0,10)??'',additionalCostNote:invoice.additionalCostNote,additionalCostPence:invoice.additionalCostPence}} suppliers={editSuppliers} expectedDetails={JSON.stringify({supplierId:invoice.supplierId,supplierInvoiceNumber:invoice.supplierInvoiceNumber,dueDate:invoice.dueDate?.toISOString()??null,additionalCostNote:invoice.additionalCostNote})} initiallyOpen={searchParams?.edit==='1'} /> : null}
+
+      <PurchaseDocuments invoiceId={invoice.id} awaitingInvoice={invoice.receiptDocumentType==='DELIVERY_NOTE'&&!invoice.invoiceReceivedAt} documents={invoice.documents.map(d=>({...d,createdAt:d.createdAt.toISOString()}))} />
+      {invoice.discountPence>0?<p className="card p-4 text-sm">Purchase discount: {formatMoney(invoice.discountPence,business.currency)}. Line totals, stock values and amounts payable include this discount.</p>:null}
 
       {/* Summary card */}
       <div className="card grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -282,6 +300,7 @@ export default async function PurchaseInvoicePage({
                   </span>
                 }
               />
+              {line.allocatedCostPence > 0 ? <p className="mt-2 text-xs text-black/60">Allocated stock cost: {formatMoney(line.allocatedCostPence,business.currency)}</p> : null}
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <DataCardField
                   label="Unit cost"
@@ -296,6 +315,7 @@ export default async function PurchaseInvoicePage({
               </div>
             </DataCard>
           ))}
+          {invoice.additionalCostTreatment === 'INVENTORY' && invoice.additionalCostPence > 0 ? <p className="flex justify-between text-sm"><span>Additional costs included in stock</span><span>{formatMoney(invoice.additionalCostPence,business.currency)}</span></p> : null}
           <div className="flex items-center justify-between gap-3 rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3">
             <span className="text-xs uppercase tracking-wider text-black/40">Total (incl. VAT)</span>
             <span className="text-sm font-bold tabular-nums">{formatMoney(invoice.totalPence, business.currency)}</span>
@@ -307,19 +327,20 @@ export default async function PurchaseInvoicePage({
               <tr>
                 <th>Product</th>
                 <th>Qty</th>
-                <th className="text-right">Unit Cost</th>
-                <th className="text-right">Line Total</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Unit Cost</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Line Total</th>
               </tr>
             </thead>
             <tbody>
               {invoice.lines.map((line) => (
                 <tr key={line.id} className="rounded-xl bg-white">
-                  <td className="px-3 py-2">{line.product.name}</td>
+                  <td className="px-3 py-2">{line.product.name}{line.allocatedCostPence > 0 ? <p className="mt-1 text-xs text-black/60">Allocated stock cost: {formatMoney(line.allocatedCostPence, business.currency)}</p> : null}</td>
                   <td className="px-3 py-2">{line.qtyInUnit} {line.unit.name}</td>
                   <td className="px-3 py-2 text-right">{formatMoney(line.unitCostPence, business.currency)}</td>
                   <td className="px-3 py-2 text-right font-semibold">{formatMoney(line.lineTotalPence, business.currency)}</td>
                 </tr>
               ))}
+              {invoice.additionalCostTreatment === 'INVENTORY' && invoice.additionalCostPence > 0 ? <tr><td colSpan={3} className="px-3 py-2 text-right text-sm">Additional costs included in stock</td><td className="px-3 py-2 text-right">{formatMoney(invoice.additionalCostPence,business.currency)}</td></tr> : null}
               <tr className="bg-black/[0.02]">
                 <td colSpan={3} className="px-3 py-2 text-right text-xs uppercase tracking-wider text-black/40">Total (incl. VAT)</td>
                 <td className="px-3 py-2 text-right text-sm font-bold">{formatMoney(invoice.totalPence, business.currency)}</td>
@@ -328,6 +349,12 @@ export default async function PurchaseInvoicePage({
           </table>
         </div>
       </div>
+
+      <section className="card space-y-3 p-5" aria-label="Supplier invoice and additional costs">
+        <h2 className="font-semibold">Supplier invoice and other costs</h2>
+        <p className="text-sm">Supplier’s original invoice number: <strong>{invoice.supplierInvoiceNumber || 'Not recorded'}</strong></p>
+        {invoice.additionalCostPence > 0 ? <><p className="text-sm">{invoice.additionalCostNote || 'Delivery / other cost'}: <strong>{formatMoney(invoice.additionalCostPence, business.currency)}</strong></p><p className="text-sm text-black/60">{invoice.additionalCostTreatment === 'INVENTORY' ? 'Included in stock value, allocated by individual-item quantity. It is not an additional expense.' : 'Recorded as a separate linked expense. Its payments are separate from the goods payments below.'}</p>{invoice.linkedCostExpense ? <p className="text-sm"><Link className="text-accent underline" href={`/expenses/${invoice.linkedCostExpense.id}`}>View linked expense</Link> · Paid {formatMoney(invoice.linkedCostExpense.payments.reduce((sum, payment) => sum + payment.amountPence, 0), business.currency)} · Total {formatMoney(invoice.linkedCostExpense.amountPence, business.currency)}</p> : null}</> : <p className="text-sm text-black/60">No additional costs recorded.</p>}
+      </section>
 
       {/* Payment history */}
       <div className="card p-6 pb-28 lg:pb-6" data-purchase-detail-payments>
@@ -341,7 +368,7 @@ export default async function PurchaseInvoicePage({
                 <DataCard key={payment.id}>
                   <DataCardHeader
                     title={formatDate(payment.paidAt)}
-                    subtitle={payment.method}
+                    subtitle={paymentMethodLabel(payment)}
                     aside={
                       <span className="text-sm font-semibold tabular-nums">
                         {formatMoney(payment.amountPence, business.currency)}
@@ -380,7 +407,7 @@ export default async function PurchaseInvoicePage({
                   {invoice.payments.map((payment) => (
                     <tr key={payment.id} className="rounded-xl bg-white">
                       <td className="px-3 py-2">{formatDate(payment.paidAt)}</td>
-                      <td className="px-3 py-2">{payment.method}</td>
+                      <td className="px-3 py-2">{paymentMethodLabel(payment)}</td>
                       <td className="px-3 py-2 text-right font-semibold">{formatMoney(payment.amountPence, business.currency)}</td>
                       <td className="px-3 py-2 text-black/50">{payment.notes ?? '—'}</td>
                       <td className="px-3 py-2 text-black/50">{payment.recordedBy?.name ?? '—'}</td>
@@ -402,7 +429,7 @@ export default async function PurchaseInvoicePage({
         )}
         {/* Record payment form — unchanged SupplierPaymentForm (PR #78 controls). */}
         {!isClosed && outstanding > 0 && canPayHere && (
-          <div className="mt-6 scroll-mb-28" data-purchase-payment-form>
+          <div className="mt-6 scroll-mb-28" data-purchase-payment-form id="record-payment">
             <h3 className="text-sm font-semibold">Record a payment</h3>
             <div className="mt-3">
               <SupplierPaymentForm

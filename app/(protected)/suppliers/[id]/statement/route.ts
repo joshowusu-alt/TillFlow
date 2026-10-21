@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import { summarizeOpenPayables } from '@/lib/reports/surface-balances';
+import { getSupplierAccountSummary } from '@/lib/services/supplier-account-summary';
 import { localDateInstant, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 const csvEscape = (value: string | number | null | undefined) => {
@@ -55,6 +56,8 @@ export async function GET(
     return NextResponse.json({ error: 'Supplier not found' }, { status: 404 });
   }
 
+  const balances = await getSupplierAccountSummary(user.businessId, params.id, { start, endExclusive });
+
   const invoices = supplier.purchaseInvoices.map((invoice) => {
     const document = payableDocumentBalance({
       paymentStatus: invoice.paymentStatus,
@@ -74,6 +77,9 @@ export async function GET(
   rows.push(`Supplier,${csvEscape(supplier.name)}`);
   rows.push(`Generated,${csvEscape(new Date().toISOString())}`);
   rows.push(`Period,${csvEscape(from ?? '')},${csvEscape(to ?? '')}`);
+  rows.push(`Account balance (all purchase dates),${formatPence(balances.account.outstandingPence)}`);
+  rows.push(`Balance on selected purchases,${formatPence(outstanding)}`);
+  rows.push('Basis,Purchase-date selection includes all recorded payments against those purchases; not a historical end-date balance');
   rows.push('');
   rows.push('Invoice,Date,Status,Total,Paid,Balance');
   for (const invoice of invoices) {
@@ -92,7 +98,7 @@ export async function GET(
   rows.push('Summary,Total billed,Total paid,Balance');
   rows.push(
     [
-      csvEscape('Totals'),
+      csvEscape('Selected purchases totals'),
       csvEscape(formatPence(totalBilled)),
       csvEscape(formatPence(totalPaid)),
       csvEscape(formatPence(outstanding))

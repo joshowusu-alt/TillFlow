@@ -2,6 +2,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
+vi.mock('@/app/actions/purchase-funding', () => ({ listFundingPeopleAction: vi.fn().mockResolvedValue({ success: true, data: [] }) }));
 vi.mock('@/app/actions/payments', () => ({ recordSupplierPaymentAction: vi.fn() }));
 vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams('') }));
 // react-dom 18.2 in jsdom has no useFormStatus (Next ships its own canary).

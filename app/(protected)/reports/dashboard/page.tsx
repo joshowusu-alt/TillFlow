@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -39,7 +40,7 @@ export default async function DashboardPage({
       <div className="card p-6 text-center">
         <div className="text-lg font-semibold">Setup Required</div>
         <div className="mt-2 text-sm text-black/60">Complete your business setup in Settings to get started.</div>
-        <a href="/settings" className="btn-primary mt-4 inline-block">Go to Settings</a>
+        <Link href="/settings" className="btn-primary mt-4 inline-block">Go to Settings</Link>
       </div>
     );
   }
@@ -88,9 +89,9 @@ export default async function DashboardPage({
             submitLabel="Apply filters"
             submitTone="primary"
             actions={
-              <a href="/reports/dashboard" className="btn-secondary w-full justify-center text-sm sm:w-auto">
+              <Link href="/reports/dashboard" className="btn-secondary w-full justify-center text-sm sm:w-auto">
                 Reset
-              </a>
+              </Link>
             }
           >
             <div>

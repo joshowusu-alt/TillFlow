@@ -137,7 +137,7 @@ describe('barcode + stocktake hardening source guards', () => {
   it('keeps bulk generate success feedback across products revalidation', () => {
     const button = read('components/products/GenerateMissingBarcodesButton.tsx');
     expect(button).toContain('barcodesGenerated');
-    expect(button).toContain('You can now print labels');
+    expect(button).toContain('Open labels, select the products, then print.');
     expect(button).toContain('Print labels');
 
     const page = read('app/(protected)/products/page.tsx');

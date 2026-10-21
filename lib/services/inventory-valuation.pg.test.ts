@@ -1,3 +1,4 @@
+import {purchaseDocumentFixture} from '@/lib/test/purchase-document-fixture';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
@@ -43,6 +44,7 @@ describePg('isolated inventory valuation and COGS evidence', () => {
       () => db.purchaseReturn.deleteMany({ where: { purchaseInvoice: { businessId } } }),
       () => db.stockTransfer.deleteMany({ where: { businessId } }),
       () => db.salesInvoice.deleteMany({ where: { businessId } }),
+      () => db.purchaseDocument.deleteMany({where:{businessId}}),
       () => db.purchaseInvoice.deleteMany({ where: { businessId } }),
       () => db.cashDrawerEntry.deleteMany({ where: { businessId } }),
       () => db.moneyIdempotency.deleteMany({ where: { businessId } }),
@@ -67,7 +69,7 @@ describePg('isolated inventory valuation and COGS evidence', () => {
       productUnits: { create: { unitId, isBaseUnit: true, conversionToBase: 1 } } } });
     return p.id;
   }
-  const buy = (productId: string, qty: number, cost: number, extra = {}) => purchases.createPurchase({
+  const buy = (productId: string, qty: number, cost: number, extra = {}) => purchases.createPurchase({sourceDocuments:[purchaseDocumentFixture()],
     businessId, storeId, supplierId, userId, paymentStatus: 'UNPAID', payments: [],
     lines: [{ productId, unitId, qtyInUnit: qty, unitCostPence: cost }], ...extra,
   });
@@ -156,7 +158,7 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     const p = await product(); const pack = await db.unit.create({ data: { name: `Pack ${p}`, pluralName: 'Packs' } });
     extraUnitIds.push(pack.id);
     await db.productUnit.create({ data: { productId: p, unitId: pack.id, conversionToBase: 3 } });
-      const purchase = await purchases.createPurchase({ businessId, storeId, supplierId, userId, paymentStatus: 'UNPAID', payments: [], lines: [{ productId: p, unitId: pack.id, qtyInUnit: 1, unitCostPence: 1000 }] });
+      const purchase = await purchases.createPurchase({sourceDocuments:[purchaseDocumentFixture()], businessId, storeId, supplierId, userId, paymentStatus: 'UNPAID', payments: [], lines: [{ productId: p, unitId: pack.id, qtyInUnit: 1, unitCostPence: 1000 }] });
       const current = await stock(p); const ledger = await inventoryPosting([purchase.id]);
       expect(ledger).toBe(1000);
       expect(current.qtyOnHandBase * current.avgCostBasePence - ledger).toBe(-1);
@@ -220,7 +222,7 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     const p = await product(); const other = await db.store.create({ data: { businessId, name: `Rounding destination ${p}` } });
     const pack = await db.unit.create({ data: { name: `Transfer pack ${p}`, pluralName: 'Packs' } }); extraUnitIds.push(pack.id);
     await db.productUnit.create({ data: { productId: p, unitId: pack.id, conversionToBase: 3 } });
-    const original = await purchases.createPurchase({ businessId, storeId, supplierId, userId, paymentStatus: 'UNPAID', payments: [], lines: [{ productId: p, unitId: pack.id, qtyInUnit: 1, unitCostPence: 1000 }] });
+    const original = await purchases.createPurchase({sourceDocuments:[purchaseDocumentFixture()], businessId, storeId, supplierId, userId, paymentStatus: 'UNPAID', payments: [], lines: [{ productId: p, unitId: pack.id, qtyInUnit: 1, unitCostPence: 1000 }] });
     const transfer = await transfers.requestStockTransfer({ businessId, requestedByUserId: userId, fromStoreId: storeId, toStoreId: other.id, lines: [{ productId: p, qtyBase: 2 }] });
     await transfers.approveAndCompleteStockTransfer({ businessId, transferId: transfer.id, approvedByUserId: userId });
     const target = await db.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId: other.id, productId: p } } });

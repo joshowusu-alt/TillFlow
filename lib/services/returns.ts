@@ -445,7 +445,7 @@ async function createPurchaseReturnImpl(input: {
       if (nextOnHand < 0) {
         throw new Error('Return would result in negative stock');
       }
-      const originalValue = invoice.lines.filter(line => line.productId === productId).reduce((sum, line) => sum + line.lineSubtotalPence, 0);
+      const originalValue = invoice.lines.filter(line => line.productId === productId).reduce((sum, line) => sum + line.lineSubtotalPence + (line.allocatedCostPence ?? 0), 0);
       const before = inventoryMap.get(productId);
       const value = before ? removeRecordedStockValue(before, qtyBase, originalValue) : undefined;
       await upsertInventoryBalance(tx, invoice.storeId, productId, nextOnHand, value?.avgCostBasePence ?? avgCost, value);
@@ -457,7 +457,7 @@ async function createPurchaseReturnImpl(input: {
         productId: line.productId,
         qtyBase: -line.qtyBase,
         unitCostBasePence: avgCostMap.get(line.productId) ?? line.product.defaultCostBasePence,
-        valuePence: -line.lineSubtotalPence,
+        valuePence: -(line.lineSubtotalPence + (line.allocatedCostPence ?? 0)),
         costBasis: INVENTORY_VALUE_V1,
         type: 'PURCHASE_RETURN',
         referenceType: 'PURCHASE_RETURN',
@@ -466,7 +466,7 @@ async function createPurchaseReturnImpl(input: {
       }))
     });
 
-    const inventoryCreditTotal = invoice.lines.reduce((sum, line) => sum + line.lineSubtotalPence, 0);
+    const inventoryCreditTotal = invoice.lines.reduce((sum, line) => sum + line.lineSubtotalPence + (line.allocatedCostPence ?? 0), 0);
 
     const journalLines: JournalLine[] = [
       { accountCode: ACCOUNT_CODES.inventory, creditPence: inventoryCreditTotal },

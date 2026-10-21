@@ -1,3 +1,4 @@
+import { PeriodComparisonChart } from '@/components/reports/charts/ReportVisuals';
 import Link from 'next/link';
 import DownloadLink from '@/components/DownloadLink';
 import ReportHeader from './ReportHeader';
@@ -82,46 +83,6 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
           </div>
         }
       />
-      {queryFailed ? <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Payment figures could not be loaded. Receipts, refunds, pending MoMo and the gap are unavailable. Sales figures remain separate.</p> : null}
-      <BusinessMovementSummary result={result} labels={chrome} strip={strip} />
-
-      <div className="grid min-w-0 grid-cols-2 gap-3 xl:grid-cols-4">
-        <ReportMetric currency={currency}
-          label="Confirmed receipts"
-          value="Could not load"
-          pence={queryFailed ? null : result.money.moneyReceived.current}
-          helper={
-            queryFailed
-              ? 'Confirmed receipts could not be loaded'
-              : changeHelper(result.money.moneyReceived, currency, chrome)
-          }
-
-        />
-        <ReportMetric currency={currency}
-          label="Refunds"
-          value="Could not load"
-          pence={queryFailed ? null : result.money.refundOutflows.current}
-          helper={queryFailed ? 'Refund figures could not be loaded' : changeHelper(result.money.refundOutflows, currency, chrome, 'refunds')}
-          warning={result.money.refundOutflows.absoluteChange > 0}
-        />
-        <ReportMetric currency={currency}
-          label="MoMo to confirm"
-          value="Could not load"
-          pence={queryFailed ? null : result.money.needsMomoConfirmation.current}
-          helper={queryFailed ? 'Pending payments could not be loaded' : changeHelper(result.money.needsMomoConfirmation, currency, chrome, 'pending MoMo payments')}
-          warning={result.money.needsMomoConfirmation.current > 0}
-        />
-        <ReportMetric currency={currency}
-          label="Sales and receipts gap"
-          value="Could not load"
-          pence={queryFailed || gap == null ? null : Math.abs(gap)}
-          helper={movementGapCopy(queryFailed ? null : gap, currency)}
-
-        />
-      </div>
-
-      <p className="text-sm leading-6 text-slate-600">Refunds are shown separately here. Confirmed receipts are different from Today’s net money received.</p>
-
       <details className="rounded-xl border border-slate-200 bg-white px-3 py-1">
         <summary className="flex min-h-11 w-fit max-w-full cursor-pointer items-center rounded-lg px-1 text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">Change period or branch</summary>
       <ReportFilterCard columnsClassName="md:grid-cols-2 xl:grid-cols-4">
@@ -163,27 +124,93 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
         </div>
       </ReportFilterCard>
       </details>
+      {queryFailed ? <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Payment figures could not be loaded. Receipts, refunds, pending MoMo and the gap are unavailable. Sales figures remain separate.</p> : null}
+      <BusinessMovementSummary result={result} labels={chrome} strip={strip} />
+
+      <div className="grid min-w-0 grid-cols-2 gap-3 xl:grid-cols-4">
+        <ReportMetric currency={currency}
+          label="Confirmed receipts"
+          value="Could not load"
+          pence={queryFailed ? null : result.money.moneyReceived.current}
+          helper={
+            queryFailed
+              ? 'Confirmed receipts could not be loaded'
+              : changeHelper(result.money.moneyReceived, currency, chrome)
+          }
+
+        />
+        <ReportMetric currency={currency}
+          label="Refunds"
+          value="Could not load"
+          pence={queryFailed ? null : result.money.refundOutflows.current}
+          helper={queryFailed ? 'Refund figures could not be loaded' : changeHelper(result.money.refundOutflows, currency, chrome, 'refunds')}
+          warning={result.money.refundOutflows.absoluteChange > 0}
+        />
+        <ReportMetric currency={currency}
+          label="MoMo to confirm"
+          value="Could not load"
+          pence={queryFailed ? null : result.money.needsMomoConfirmation.current}
+          helper={queryFailed ? 'Pending payments could not be loaded' : changeHelper(result.money.needsMomoConfirmation, currency, chrome, 'pending MoMo payments')}
+          warning={result.money.needsMomoConfirmation.current > 0}
+        />
+        <ReportMetric currency={currency}
+          label="Sales and receipts gap"
+          value="Could not load"
+          pence={queryFailed || gap == null ? null : Math.abs(gap)}
+          helper={movementGapCopy(queryFailed ? null : gap, currency)}
+
+        />
+      </div>
+
+      <p className="text-sm leading-6 text-slate-600">Refunds are shown separately here. Confirmed receipts are different from Today’s net money received.</p>
+
+      <div className="grid min-w-0 items-start gap-4 xl:grid-cols-2" data-movement-charts>
+      <ReportSection title="Current and earlier period" description="The same dates and branch selection as the figures above.">
+        <PeriodComparisonChart columns currency={currency} currentLabel={chrome.currentFull} previousLabel={chrome.comparisonFull} rows={[
+          { name: 'Sales', current: result.headline.salesValuePence.current, previous: result.headline.salesValuePence.comparison },
+          ...(!queryFailed ? [
+            { name: 'Confirmed receipts', current: result.money.moneyReceived.current, previous: result.money.moneyReceived.comparison },
+            { name: 'Refunds', current: result.money.refundOutflows.current, previous: result.money.refundOutflows.comparison },
+          ] : []),
+        ]} />
+      </ReportSection>
+      <div className="min-w-0 space-y-4">
+      <ReportSection title="Largest product changes" description="Recorded sales changes in the ranked product list. An increase or decrease does not establish its cause.">
+        <ReportValueBars compact diverging currency={currency} rows={productMovers.slice(0, 6).map(row => ({ label: row.productName, pence: row.changePence, helper: row.side === 'New product' ? 'No sales in the earlier period' : row.side, href: `/products/${encodeURIComponent(row.productId)}` }))} empty="No material product changes for these periods." />
+      </ReportSection>
+        <ReportSection title="Money movement" description="Separate payment measures for the selected dates. These are not profit.">
+          {queryFailed ? <p className="text-sm text-slate-600">Payment figures could not be loaded.</p> : <ReportValueBars compact currency={currency} rows={[
+            { label: 'Confirmed receipts', pence: result.money.moneyReceived.current },
+            { label: 'Refund outflows', pence: result.money.refundOutflows.current },
+            { label: 'MoMo awaiting confirmation', pence: result.money.needsMomoConfirmation.current },
+          ]} />}
+        </ReportSection>
+      </div>
+      </div>
 
 
-      <section className="space-y-3">
+
+      <div className="grid min-w-0 items-start gap-4 xl:grid-cols-3">
+      <section className="space-y-3 xl:col-span-2">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">What to look at</h2>
           <p className="text-sm text-slate-600">
             Recorded changes to review in {chrome.currentFull}.
           </p>
         </div>
-        <div className="grid gap-3 lg:grid-cols-3">
-          {insights.slice(0, 3).map((insight) => (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {insights.slice(0, 2).map((insight) => (
             <BusinessMovementInsight key={insight.id} insight={insight} labels={chrome} currency={currency} />
           ))}
         </div>
         {insights.length === 0 ? <p className="text-sm text-slate-600">No material recorded changes for these periods.</p> : null}
-        {insights.length > 3 ? <ReportDisclosure title={`More recorded changes (${insights.length - 3})`}><div className="grid gap-3 lg:grid-cols-2">{insights.slice(3).map(insight => <BusinessMovementInsight key={insight.id} insight={insight} labels={chrome} currency={currency} />)}</div></ReportDisclosure> : null}
+        {insights.length > 2 ? <ReportDisclosure title={`More recorded changes (${insights.length - 2})`}><div className="grid gap-3 lg:grid-cols-2">{insights.slice(2).map(insight => <BusinessMovementInsight key={insight.id} insight={insight} labels={chrome} currency={currency} />)}</div></ReportDisclosure> : null}
       </section>
-
-      <ReportSection title="Largest product changes" description="Recorded sales changes in the ranked product list. An increase or decrease does not establish its cause.">
-        <ReportValueBars currency={currency} rows={productMovers.slice(0, 6).map(row => ({ label: row.productName, pence: row.changePence, helper: row.side === 'New product' ? 'No sales in the earlier period' : row.side, href: `/products/${encodeURIComponent(row.productId)}` }))} empty="No material product changes for these periods." />
-      </ReportSection>
+        <ReportSection title="Cashier sales" description={`Recorded sales attributed to each cashier in ${chrome.currentFull}. This is not a measure of individual productivity.`}>
+          <ReportValueBars compact currency={currency} rows={result.cashiers.slice(0, 5).map(row => ({ label: row.cashierName, pence: row.salesValuePence.current }))} empty="No cashier-attributed sales in this period." />
+          <p className="mt-3 text-xs text-slate-600">Up to five cashiers shown. Complete current and earlier figures remain below.</p>
+        </ReportSection>
+      </div>
       <ReportDisclosure title="All product figures">
       <BusinessMovementProductCards rows={productMovers} labels={chrome} currency={currency} />
       <div className="hidden lg:block">
@@ -195,10 +222,10 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
           <tr>
             <th className="text-left">Product</th>
             <th className="text-left">What happened</th>
-            <th className="text-right">{chrome.currentFull}</th>
-            <th className="text-right">{chrome.comparisonFull}</th>
-            <th className="text-right">Change</th>
-            <th className="text-right">Quantity</th>
+            <th className="!text-right">{chrome.currentFull}</th>
+            <th className="!text-right">{chrome.comparisonFull}</th>
+            <th className="!text-right">Change</th>
+            <th className="!text-right">Quantity</th>
           </tr>
         </thead>
         <tbody>
@@ -212,10 +239,10 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
               <tr key={`${row.side}-${row.productId}`}>
                 <td><Link href={`/products/${encodeURIComponent(row.productId)}`} className={REPORT_LINK}>{row.productName}</Link></td>
                 <td>{row.side === 'New product' ? 'No sales in the earlier period' : row.side}</td>
-                <td className="text-right">{formatMoney(row.currentPence, currency)}</td>
-                <td className="text-right">{formatMoney(row.comparisonPence, currency)}</td>
-                <td className="text-right">{row.changePence > 0 ? '+' : null}<FinancialAmount pence={row.changePence} currency={currency} variant="compact" /></td>
-                <td className="text-right">{row.qtyWording}</td>
+                <td className="!text-right">{formatMoney(row.currentPence, currency)}</td>
+                <td className="!text-right">{formatMoney(row.comparisonPence, currency)}</td>
+                <td className="!text-right">{row.changePence > 0 ? '+' : null}<FinancialAmount pence={row.changePence} currency={currency} variant="compact" /></td>
+                <td className="!text-right">{row.qtyWording}</td>
               </tr>
             ))
           )}
@@ -240,22 +267,22 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
           <thead>
             <tr>
               <th className="text-left">Branch</th>
-              <th className="text-right">{chrome.currentFull}</th>
-              <th className="text-right">{chrome.comparisonFull}</th>
-              <th className="text-right">Change</th>
-              <th className="text-right">Transactions</th>
+              <th className="!text-right">{chrome.currentFull}</th>
+              <th className="!text-right">{chrome.comparisonFull}</th>
+              <th className="!text-right">Change</th>
+              <th className="!text-right">Transactions</th>
             </tr>
           </thead>
           <tbody>
             {result.branches.map((row) => (
               <tr key={row.storeId}>
                 <td>{row.storeName}</td>
-                <td className="text-right">{formatMoney(row.salesValuePence.current, currency)}</td>
-                <td className="text-right">
+                <td className="!text-right">{formatMoney(row.salesValuePence.current, currency)}</td>
+                <td className="!text-right">
                   {formatMoney(row.salesValuePence.comparison, currency)}
                 </td>
-                <td className="text-right">{row.salesValuePence.absoluteChange > 0 ? '+' : null}<FinancialAmount pence={row.salesValuePence.absoluteChange} currency={currency} variant="compact" /></td>
-                <td className="text-right">
+                <td className="!text-right">{row.salesValuePence.absoluteChange > 0 ? '+' : null}<FinancialAmount pence={row.salesValuePence.absoluteChange} currency={currency} variant="compact" /></td>
+                <td className="!text-right">
                   {row.transactionCount.current} / {row.transactionCount.comparison}
                 </td>
               </tr>
@@ -282,22 +309,22 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
           <thead>
             <tr>
               <th className="text-left">Cashier</th>
-              <th className="text-right">{chrome.currentFull}</th>
-              <th className="text-right">{chrome.comparisonFull}</th>
-              <th className="text-right">Change</th>
-              <th className="text-right">Transactions</th>
+              <th className="!text-right">{chrome.currentFull}</th>
+              <th className="!text-right">{chrome.comparisonFull}</th>
+              <th className="!text-right">Change</th>
+              <th className="!text-right">Transactions</th>
             </tr>
           </thead>
           <tbody>
             {result.cashiers.map((row) => (
               <tr key={row.cashierUserId}>
                 <td>{row.cashierName}</td>
-                <td className="text-right">{formatMoney(row.salesValuePence.current, currency)}</td>
-                <td className="text-right">
+                <td className="!text-right">{formatMoney(row.salesValuePence.current, currency)}</td>
+                <td className="!text-right">
                   {formatMoney(row.salesValuePence.comparison, currency)}
                 </td>
-                <td className="text-right">{row.salesValuePence.absoluteChange > 0 ? '+' : null}<FinancialAmount pence={row.salesValuePence.absoluteChange} currency={currency} variant="compact" /></td>
-                <td className="text-right">
+                <td className="!text-right">{row.salesValuePence.absoluteChange > 0 ? '+' : null}<FinancialAmount pence={row.salesValuePence.absoluteChange} currency={currency} variant="compact" /></td>
+                <td className="!text-right">
                   {row.transactionCount.current} / {row.transactionCount.comparison}
                 </td>
               </tr>

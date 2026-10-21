@@ -1,4 +1,7 @@
+import { normalizeProductAttributes } from '@/lib/products/attributes';
 import { prisma } from '@/lib/prisma';
+import { resolveProductClassification } from '@/lib/services/product-classification';
+import { aliasCodes, assertAvailableBarcodes, productDisplayName } from '@/lib/products/barcode-identity';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 // ---------------------------------------------------------------------------
@@ -9,7 +12,12 @@ export type ProductCoreInput = {
   name: string;
   sku: string | null;
   barcode: string | null;
+  attributesJson?: string | null;
+  publisher?: string;
+  edition?: string;
+  additionalBarcodes?: string[];
   categoryId: string | null;
+  groupId?: string | null;
   preferredSupplierId?: string | null;
   imageUrl: string | null;
   sellingPriceBasePence: number;
@@ -36,6 +44,10 @@ export type QuickCreateProductInput = {
   name: string;
   sku?: string | null;
   barcode?: string | null;
+  attributesJson?: string | null;
+  publisher?: string;
+  edition?: string;
+  additionalBarcodes?: string[];
   sellingPriceBasePence: number;
   defaultCostBasePence: number;
   vatRateBps: number;
@@ -46,6 +58,7 @@ export type QuickCreateProductInput = {
 };
 
 export type QuickCreateProductResult = {
+  additionalBarcodes?: string[];
   id: string;
   name: string;
   barcode: string | null;
@@ -100,34 +113,6 @@ export type CatalogSanitySnapshot = {
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Throws if a product with the same name (case-insensitive) already exists in
- * the business. Pass `excludeId` when updating so the product itself is ignored.
- * Pass `db` to run inside an existing transaction.
- */
-async function assertNoDuplicateProductName(
-  businessId: string,
-  name: string,
-  excludeId?: string,
-  db: any = prisma
-): Promise<void> {
-  const rows = excludeId
-    ? await db.$queryRaw<{ id: string }[]>`
-        SELECT id FROM "Product"
-        WHERE "businessId" = ${businessId}
-          AND lower("name") = lower(${name})
-          AND id <> ${excludeId}
-        LIMIT 1`
-    : await db.$queryRaw<{ id: string }[]>`
-        SELECT id FROM "Product"
-        WHERE "businessId" = ${businessId}
-          AND lower("name") = lower(${name})
-        LIMIT 1`;
-  if (rows.length > 0) {
-    throw new Error('A product with that name already exists. Please choose a different name.');
-  }
-}
 
 async function assertSupplierBelongsToBusiness(businessId: string, supplierId: string | null | undefined): Promise<void> {
   if (!supplierId) return;
@@ -186,6 +171,9 @@ function normalizeCoreProductInput(data: ProductCoreInput): ProductCoreInput {
   return {
     ...data,
     name: data.name.trim(),
+    attributesJson: normalizeProductAttributes(data.attributesJson),
+    publisher: data.publisher?.trim() ?? "",
+    edition: data.edition?.trim() ?? "",
     sku: data.sku?.trim() ? data.sku.trim() : null,
     barcode: data.barcode?.trim() ? data.barcode.trim() : null,
     categoryId: data.categoryId?.trim() ? data.categoryId.trim() : null,
@@ -207,6 +195,9 @@ function normalizeQuickCreateInput(input: QuickCreateProductInput): QuickCreateP
   return {
     ...input,
     name: input.name.trim(),
+    attributesJson: normalizeProductAttributes(input.attributesJson),
+    publisher: input.publisher?.trim() ?? "",
+    edition: input.edition?.trim() ?? "",
     sku: input.sku?.trim() ? input.sku.trim() : null,
     barcode: input.barcode?.trim() ? input.barcode.trim() : null,
     baseUnitId: input.baseUnitId.trim(),
@@ -418,17 +409,24 @@ async function createProductImpl(
   const normalized = normalizeCoreProductInput(data);
   validateProductValues(normalized);
   validateMarginThresholdBps(normalized.minimumMarginThresholdBps);
+  if ((normalized.publisher?.length ?? 0) > 120 || (normalized.edition?.length ?? 0) > 120) throw new Error("Publisher and edition must be 120 characters or fewer.");
 
   await assertSupplierBelongsToBusiness(businessId, normalized.preferredSupplierId);
-  await assertNoDuplicateProductName(businessId, normalized.name);
+  await assertAvailableBarcodes(db ?? prisma, businessId, normalized);
+
+  const classification = await resolveProductClassification(db ?? prisma, businessId, normalized.categoryId, normalized.groupId);
 
   const product = await (db ?? prisma).product.create({
     data: {
       businessId,
       name: normalized.name,
+      attributesJson: normalized.attributesJson,
+      publisher: normalized.publisher,
+      edition: normalized.edition,
       sku: normalized.sku,
       barcode: normalized.barcode,
-      categoryId: normalized.categoryId,
+      barcodes: { create: aliasCodes(normalized).map(code => ({ businessId, code })) },
+      ...classification,
       preferredSupplierId: normalized.preferredSupplierId,
       imageUrl: normalized.imageUrl,
       sellingPriceBasePence: normalized.sellingPriceBasePence,
@@ -456,7 +454,7 @@ async function createProductImpl(
 /**
  * Update an existing product's fields and reconcile its unit records inside a
  * single transaction.
- * Throws if the product is not found or the new name collides with another product.
+ * Throws if the product is not found or a barcode belongs to another product.
  * Returns the product id (for use in audit logs / redirects).
  */
 export async function updateProduct(
@@ -484,26 +482,34 @@ async function updateProductImpl(
   const normalized = normalizeCoreProductInput(data);
   validateProductValues(normalized);
   validateMarginThresholdBps(normalized.minimumMarginThresholdBps);
+  if ((normalized.publisher?.length ?? 0) > 120 || (normalized.edition?.length ?? 0) > 120) throw new Error("Publisher and edition must be 120 characters or fewer.");
 
   const existing = await prisma.product.findFirst({
     where: { id, businessId },
-    select: { id: true, defaultCostBasePence: true },
+    select: { id: true, defaultCostBasePence: true, groupId: true },
   });
   if (!existing) {
     throw new Error('Product not found. It may have been removed.');
   }
 
-  await assertNoDuplicateProductName(businessId, normalized.name, existing.id);
+  await assertAvailableBarcodes(prisma, businessId, normalized, existing.id);
   await assertSupplierBelongsToBusiness(businessId, normalized.preferredSupplierId);
 
   await prisma.$transaction(async (tx) => {
+    // Legacy callers which do not expose classification preserve the current group.
+    // Explicit null from the product form switches back to a simple category.
+    const classification = await resolveProductClassification(tx, businessId, normalized.categoryId,
+      normalized.groupId === undefined ? existing.groupId : normalized.groupId);
     await tx.product.update({
       where: { id: existing.id },
       data: {
         name: normalized.name,
+      attributesJson: normalized.attributesJson,
+      publisher: normalized.publisher,
+      edition: normalized.edition,
         sku: normalized.sku,
         barcode: normalized.barcode,
-        categoryId: normalized.categoryId,
+        ...classification,
         preferredSupplierId: normalized.preferredSupplierId,
         imageUrl: normalized.imageUrl,
         sellingPriceBasePence: normalized.sellingPriceBasePence,
@@ -514,6 +520,13 @@ async function updateProductImpl(
         promoGetQty: normalized.promoGetQty,
       } as any,
     });
+
+    if (normalized.additionalBarcodes !== undefined) {
+      await tx.productBarcode.deleteMany({ where: { productId: existing.id, code: { not: normalized.barcode ?? '' } } });
+      for (const code of aliasCodes(normalized)) {
+        await tx.productBarcode.create({ data: { businessId, productId: existing.id, code } });
+      }
+    }
 
     if (existing.defaultCostBasePence !== normalized.defaultCostBasePence) {
       await syncDefaultCostManagedInventoryBalances(tx, {
@@ -659,7 +672,7 @@ async function quickCreateProductImpl(
     unitConfigs: normalized.unitConfigs,
   });
 
-  await assertNoDuplicateProductName(businessId, normalized.name, undefined, db);
+  await assertAvailableBarcodes(db, businessId, normalized);
 
   if (normalized.barcode) {
     const dup = await db.product.findFirst({
@@ -673,8 +686,12 @@ async function quickCreateProductImpl(
     data: {
       businessId,
       name: normalized.name,
+      attributesJson: normalized.attributesJson,
+      publisher: normalized.publisher,
+      edition: normalized.edition,
       sku: normalized.sku ?? null,
       barcode: normalized.barcode ?? null,
+      barcodes: { create: aliasCodes(normalized).map(code => ({ businessId, code })) },
       sellingPriceBasePence: normalized.sellingPriceBasePence,
       defaultCostBasePence: normalized.defaultCostBasePence,
       vatRateBps: normalized.vatRateBps,
@@ -693,8 +710,9 @@ async function quickCreateProductImpl(
 
   return {
     id: created.id,
-    name: created.name,
+    name: productDisplayName(created),
     barcode: created.barcode,
+    additionalBarcodes: aliasCodes(normalized),
     defaultCostBasePence: created.defaultCostBasePence,
     sellingPriceBasePence: created.sellingPriceBasePence,
     vatRateBps: created.vatRateBps,

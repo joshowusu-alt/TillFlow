@@ -235,9 +235,9 @@ export default async function MarginsPage({
             submitLabel="Apply filters"
             submitTone="primary"
             actions={
-              <a href="/reports/margins?period=30d&view=all" className="btn-secondary w-full justify-center text-sm sm:w-auto">
+              <Link href="/reports/margins?period=30d&view=all" className="btn-secondary w-full justify-center text-sm sm:w-auto">
                 Reset
-              </a>
+              </Link>
             }
           >
             <div>

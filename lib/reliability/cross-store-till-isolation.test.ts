@@ -13,6 +13,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { getOpenCashShiftForPayment } from '@/lib/services/cash-drawer';
 import { resolveStoreFromTill, STORE_MISMATCH_MSG } from '@/lib/reliability/selected-store';
 
+// These helpers receive explicit fake clients; do not initialise a live database.
+vi.mock('@/lib/prisma', () => ({ prisma: {} }));
+
 const root = process.cwd();
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
 

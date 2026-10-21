@@ -8,7 +8,7 @@ import { generateMissingBarcodesAction } from '@/app/actions/products';
 function buildSuccessMessage(generated: number, failed: number) {
   if (generated <= 0 && failed <= 0) return null;
   const parts = [
-    `Generated ${generated} internal barcode${generated === 1 ? '' : 's'}. You can now print labels.`,
+    `Generated ${generated} internal barcode${generated === 1 ? '' : 's'}. Open labels, select the products, then print.`,
   ];
   if (failed > 0) {
     parts.push(`${failed} failed.`);

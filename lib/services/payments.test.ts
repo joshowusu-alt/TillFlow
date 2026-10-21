@@ -26,6 +26,8 @@ const { prismaMock, postJournalEntryMock, recordCashDrawerEntryTxMock, reserveNe
       findUnique: vi.fn(),
       create: vi.fn(),
     },
+    account: { upsert: vi.fn() },
+    journalLine: { aggregate: vi.fn() },
     store: { findFirst: vi.fn() },
     user: { findFirst: vi.fn() },
     till: { findFirst: vi.fn() },
@@ -126,6 +128,18 @@ describe('payments service', () => {
     });
     recordCashDrawerEntryTxMock.mockResolvedValue({ entry: { id: 'cde-1' } });
     postJournalEntryMock.mockResolvedValue(undefined);
+  });
+
+  it.each(['BUSINESS_CASH', 'OWNER_LOAN', 'OWNER_CAPITAL'] as const)('supports later supplier payments from %s without taking drawer cash', async cashSource => {
+    prismaMock.account.upsert.mockResolvedValue({});
+    prismaMock.journalLine.aggregate.mockResolvedValue({ _sum: { debitPence: 10000, creditPence: 0 } });
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({ id: 'purchase-1', businessId: 'biz-1', storeId: 'store-1', totalPence: 10000, payments: [], supplier: null });
+    prismaMock.purchaseInvoice.update.mockResolvedValue({ id: 'purchase-1', payments: [] });
+    await recordSupplierPayment('biz-1', 'purchase-1', [{ method: 'CASH', amountPence: 2000 }], { ...ownerOpts, cashSource, cashHolderId: 'user-1', fundingOwnerId: 'user-1', idempotencyKey: `later-${cashSource}` });
+    const code = cashSource === 'BUSINESS_CASH' ? '1000.HOLD.store-1.user-1' : `${cashSource === 'OWNER_CAPITAL' ? '3100' : '2300'}.OWNER.user-1`;
+    expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({ data: expect.objectContaining({ reference: `funding:${code}` }) });
+    expect(postJournalEntryMock).toHaveBeenCalledWith(expect.objectContaining({ lines: expect.arrayContaining([{ accountCode: code, creditPence: 2000 }]) }));
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
   });
 
   it('rejects overpayment before writing customer payments', async () => {

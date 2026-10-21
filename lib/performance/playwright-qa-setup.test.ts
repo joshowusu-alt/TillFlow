@@ -41,7 +41,7 @@ describe('Authenticated Playwright QA setup', () => {
     expect(read('components/RootLaunchLoading.tsx')).toContain('LAUNCH_GENERIC_MESSAGE');
     expect(read('components/RootLaunchLoading.tsx')).toContain('ROOT_COLD_START_MESSAGE');
     expect(read('components/RootLaunchLoading.tsx')).toContain('isIntentionalLaunchSession');
-    expect(read('components/RootLaunchLoading.tsx')).toContain('return null');
+    expect(read('components/RootLaunchLoading.tsx')).toContain('ProtectedRouteLoading');
     expect(read('components/RootLaunchLoading.tsx')).not.toContain('message={');
   });
 

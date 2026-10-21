@@ -59,6 +59,8 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
         select: {
           id: true,
           name: true,
+          publisher: true,
+          edition: true,
           reorderPointBase: true,
           defaultCostBasePence: true,
           productUnits: {
@@ -205,7 +207,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="font-semibold text-ink">{product.name}</div>
+                    <div className="font-semibold text-ink">{[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}</div>
                     <div className="mt-1 text-sm text-black/60">On hand: <span className="font-semibold text-black/75">{formatted}</span></div>
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isOut ? 'bg-rose-100 text-rose-700' : isLow ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
@@ -277,7 +279,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
                         : 'bg-white hover:-translate-y-px hover:bg-slate-50 hover:shadow-card'
                     }`}
                   >
-                    <td className="px-3 py-3 font-semibold">{product.name}</td>
+                    <td className="px-3 py-3 font-semibold">{[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}</td>
                     <td className={`px-3 py-3 font-semibold ${isOut ? 'text-rose-600' : isLow ? 'text-amber-700' : ''}`}>{formatted}</td>
                     <td className="px-3 py-3 text-sm font-semibold">
                       {formatMoney(avgCostBase, business.currency)}

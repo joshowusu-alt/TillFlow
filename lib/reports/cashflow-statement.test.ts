@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { cashflowAccumulator, getCashflowStatement, type CashflowJournal } from './cashflow-statement';
-const types: Record<string, string> = { '1000': 'ASSET', '1010': 'ASSET', '1100': 'ASSET', '1200': 'ASSET', '1300': 'ASSET', '1500': 'ASSET', '2000': 'LIABILITY', '2100': 'LIABILITY', '3000': 'EQUITY', '3200': 'EQUITY', '4000': 'INCOME', '4100': 'INCOME', '5000': 'EXPENSE', '5100': 'EXPENSE', '6000': 'EXPENSE' };
+const types: Record<string, string> = { '1000.HOLD.store.manager': 'ASSET', '2300.OWNER.owner': 'LIABILITY', '3100.OWNER.owner': 'EQUITY', '1000': 'ASSET', '1010': 'ASSET', '1100': 'ASSET', '1200': 'ASSET', '1300': 'ASSET', '1500': 'ASSET', '2000': 'LIABILITY', '2100': 'LIABILITY', '3000': 'EQUITY', '3200': 'EQUITY', '4000': 'INCOME', '4100': 'INCOME', '5000': 'EXPENSE', '5100': 'EXPENSE', '6000': 'EXPENSE' };
 const journal = (referenceType: string | null, values: Record<string, number>): CashflowJournal => ({ id: 'entry', referenceType, lines: Object.entries(values).map(([code, amount]) => ({ account: { code, name: code, type: types[code] }, debitPence: Math.max(amount, 0), creditPence: Math.max(-amount, 0) })) });
 const report = (...entries: CashflowJournal[]) => { const accumulator = cashflowAccumulator(); entries.forEach(accumulator.add); return accumulator.finish(); };
 describe('indirect cash flow and direct supporting detail', () => {
@@ -69,5 +69,21 @@ describe('indirect cash flow and direct supporting detail', () => {
     expect(db.$transaction).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({ isolationLevel: 'Serializable' }));
     expect(db.journalEntry.findMany.mock.calls[0][0]).toMatchObject({ where: { businessId: 'biz', entryDate: { gte: start, lt: end } }, select: { lines: { where: { account: { businessId: 'biz' } } } } });
     expect(db.journalEntry.findMany.mock.calls[1][0]).toMatchObject({ cursor: { id: '499' }, skip: 1 });
+  });
+});
+
+describe('cash custody and owner funding', () => {
+  it('excludes handovers from total cash movement and recognises supplier spending once', () => {
+    const result = report(journal('CASH_TRANSFER', { '1010': -100000, '1000.HOLD.store.manager': 100000 }), journal('PURCHASE_INVOICE', { '1200': 80000, '1000.HOLD.store.manager': -80000 }), journal('CASH_TRANSFER', { '1000.HOLD.store.manager': -20000, '1010': 20000 }));
+    expect(result).toMatchObject({ netCashFromOps: -80000, directOperatingPence: -80000, operatingDifferencePence: 0, classifiedMovementPence: -80000 });
+  });
+  it('does not invent business cash movement when an owner pays a supplier directly', () => {
+    for (const code of ['2300.OWNER.owner', '3100.OWNER.owner']) {
+      expect(report(journal('PURCHASE_INVOICE', { '1200': 80000, [code]: -80000 }))).toMatchObject({ netCashFromOps: 0, directOperatingPence: 0, operatingDifferencePence: 0, classifiedMovementPence: 0 });
+    }
+  });
+  it('classifies actual owner funding and repayment as financing', () => {
+    const result = report(journal('CASH_TRANSFER', { '1000.HOLD.store.manager': 100000, '2300.OWNER.owner': -100000 }), journal('CASH_TRANSFER', { '1010': -20000, '2300.OWNER.owner': 20000 }));
+    expect(result).toMatchObject({ financingPence: 80000, netCashFromOps: 0, classifiedMovementPence: 80000 });
   });
 });

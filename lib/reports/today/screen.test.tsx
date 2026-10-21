@@ -82,6 +82,31 @@ describe('Today screen', () => {
     expect(markup).toContain('min-h-11');
   });
 
+  it('prioritises three checks and keeps the remaining checks available on demand', () => {
+    const rows = ([1, 2, 3, 4, 5] as const).map((rank) => ({
+      ...snapshot().attention[0], rank, title: `Check number ${rank}`,
+    }));
+    const markup = html({ snapshot: snapshot({ attention: rows }) });
+    const collapsedAt = markup.indexOf('More checks (2)');
+    expect(markup.slice(0, collapsedAt)).toContain('Check number 3');
+    expect(markup.slice(0, collapsedAt)).not.toContain('Check number 4');
+    expect(markup.slice(collapsedAt)).toContain('Check number 4');
+    expect(markup.slice(collapsedAt)).toContain('Check number 5');
+    expect(markup).not.toContain('<details open');
+  });
+
+  it('keeps today profit in the overview and longer comparisons in a separate disclosure', () => {
+    const markup = html({ snapshot: snapshot({
+      profit: { state: 'ready', grossProfitPence: 45000 },
+      comparison: { last30Pence: 900000, previous30Pence: 800000 },
+    }) });
+    expect(markup.indexOf('data-profit-state="ready"')).toBeLessThan(markup.indexOf('data-today-attention'));
+    expect(markup).toContain('before operating expenses');
+    expect(markup).toContain('30-day sales comparison');
+    expect(markup).toContain('Payment methods and top products');
+    expect(markup).toContain('GH₵450.00');
+  });
+
   it('shows the empty, restricted, failed and blocked states without substitute figures', () => {
     const empty = html({
       snapshot: snapshot({
@@ -239,7 +264,7 @@ describe('Option 2 presentation', () => {
   it('distinguishes partial today from yesterday and exposes daily chart figures', () => {
     const markup = html();
     expect(markup).toContain('sales so far today');
-    expect(markup).toContain('Yesterday’s sales:');
+    expect(markup).toContain('Yesterday (full day):');
     expect(markup).not.toContain('Full day');
     expect(markup).toContain('Sales over the last seven days');
     expect(markup).toContain('View daily sales figures');
@@ -253,8 +278,8 @@ describe('Option 2 presentation', () => {
       { key: '2026-09-29', label: 'Tue', salesPence: 10000 },
       { key: '2026-09-30', label: 'Wed', salesPence: -5000 },
     ] }) });
-    expect(markup).toContain('top:66.66666666666666%');
-    expect(markup).toContain('height:33.33333333333333%');
+    expect(markup).toContain('top:0%;height:66.66666666666666%');
+    expect(markup).toContain('top:66.66666666666666%;height:33.33333333333333%');
     expect(markup).toContain('−GH₵50.00');
     expect(markup).not.toMatch(/height:-/);
   });

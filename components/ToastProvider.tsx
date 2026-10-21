@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { Suspense, createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 
 type ToastType = 'success' | 'error' | 'info';
@@ -30,24 +30,17 @@ const ToastIcon = ({ type }: { type: ToastType }) => {
   );
 };
 
-export default function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+// URL-driven notifications may suspend independently while page content stays mounted.
+function UrlToastSync({ onToast }: { onToast: (message: string, type?: ToastType) => void }) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
-
-  const addToast = useCallback((message: string, type: ToastType = 'info') => {
-    const id = nextId++;
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4500);
-  }, []);
-
   const successMsg = searchParams?.get('success') ?? '';
   const errorMsg = searchParams?.get('error') ?? '';
 
   useEffect(() => {
-    if (successMsg) addToast(successMsg, 'success');
-    if (errorMsg && errorMsg !== 'locked' && errorMsg !== 'missing') addToast(errorMsg, 'error');
+    if (successMsg) onToast(successMsg, 'success');
+    if (errorMsg && errorMsg !== 'locked' && errorMsg !== 'missing') onToast(errorMsg, 'error');
     if (successMsg || (errorMsg && errorMsg !== 'locked' && errorMsg !== 'missing')) {
       const params = new URLSearchParams(searchParams?.toString() ?? '');
       params.delete('success');
@@ -56,7 +49,19 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
       router.replace(`${pathname ?? ''}${qs ? `?${qs}` : ''}`, { scroll: false });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [successMsg, errorMsg, pathname, router, addToast]);
+  }, [successMsg, errorMsg, pathname, router, onToast]);
+
+  return null;
+}
+
+export default function ToastProvider({ children }: { children: React.ReactNode }) {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = useCallback((message: string, type: ToastType = 'info') => {
+    const id = nextId++;
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4500);
+  }, []);
 
   const dismiss = (id: number) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
@@ -69,6 +74,7 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
   return (
     <ToastContext.Provider value={{ toast: addToast }}>
       {children}
+      <Suspense fallback={null}><UrlToastSync onToast={addToast} /></Suspense>
       <div
         className="safe-floating-bottom fixed left-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none sm:left-auto sm:right-4 sm:items-end"
         aria-live="assertive"

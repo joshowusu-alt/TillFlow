@@ -20,6 +20,8 @@ export type ParsedImportRow = {
   sku: string;
   barcode: string;
   category: string;
+  division?: string;
+  group?: string;
   suggestedCategory: string;
   sellingPricePence: number;
   costPricePence: number;
@@ -42,6 +44,12 @@ export type ParsedImportRow = {
 };
 
 let _counter = 0;
+function hierarchyErrors(row: { category: string; division?: string; group?: string }) {
+  if (!row.division?.trim() && !row.group?.trim()) return [];
+  if (![row.category, row.division, row.group].every(value => value?.trim())) return ['Provide category, division and group together.'];
+  if ([row.category, row.division!, row.group!].some(value => value.trim().length > 100 || /[\x00-\x1f]/.test(value))) return ['Category, division and group names must be up to 100 characters.'];
+  return [];
+}
 function uniqueId() {
   return `row-${++_counter}-${Math.random().toString(36).slice(2, 6)}`;
 }
@@ -156,6 +164,8 @@ function buildRow(raw: Record<string, string>, rowNumber: number, seen: { names:
     barcode,
     category,
     suggestedCategory: validation.suggestedCategory || category,
+    division: g('division'),
+    group: g('group'),
     sellingPricePence: sellingPricePence < 0 ? 0 : sellingPricePence,
     costPricePence: costPricePence < 0 ? 0 : costPricePence,
     quantity: quantity < 0 ? 0 : Math.max(0, quantity),
@@ -172,7 +182,7 @@ function buildRow(raw: Record<string, string>, rowNumber: number, seen: { names:
     duplicateKind: validation.duplicateKind,
     duplicateAction: validation.defaultDuplicateAction,
     confirmBelowCost: false,
-    errors: validation.errors,
+    errors: [...validation.errors, ...hierarchyErrors({ category, division:g('division'), group:g('group') })],
     warnings: validation.warnings,
   } satisfies ParsedImportRow;
 }
@@ -297,7 +307,7 @@ export function enrichRowsWithCatalog(
       duplicateAction: row.duplicateAction === 'create' && validation.duplicateKind === 'barcode'
         ? 'skip'
         : validation.defaultDuplicateAction,
-      errors: [...new Set([...row.errors, ...validation.errors])],
+      errors: [...new Set([...row.errors, ...validation.errors, ...hierarchyErrors(row)])],
       warnings: [...new Set([...row.warnings, ...validation.warnings])],
     };
   });

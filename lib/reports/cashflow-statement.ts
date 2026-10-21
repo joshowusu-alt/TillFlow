@@ -17,13 +17,18 @@ const SOURCES: Record<string, string> = {
   SUPPLIER_PAYMENT: 'Suppliers', PURCHASE_RETURN: 'Supplier refunds',
   EXPENSE: 'Operating expenses', EXPENSE_PAYMENT: 'Operating expenses', STOCK_ADJUSTMENT: 'Stock adjustments',
 };
+function workingAccount(line: Line) {
+  if (line.account.code.startsWith('2300.OWNER.') && line.account.type === 'LIABILITY') return ['Owner-funded purchases', 'LIABILITY'];
+  if (line.account.code.startsWith('3100.OWNER.') && line.account.type === 'EQUITY') return ['Owner-funded purchases', 'EQUITY'];
+  return WORKING.get(line.account.code);
+}
 function exact(value: number): number {
   if (!Number.isSafeInteger(value)) throw new Error('Cash-flow total exceeds supported precision');
   return value === 0 ? 0 : value;
 }
 const net = (line: Line) => exact(exact(line.debitPence) - exact(line.creditPence));
 const sum = (values: number[]) => values.reduce((a, b) => exact(a + b), 0);
-const isMoney = (line: Line) => MONEY.has(line.account.code) && line.account.type === 'ASSET';
+const isMoney = (line: Line) => (MONEY.has(line.account.code) || line.account.code.startsWith('1000.HOLD.')) && line.account.type === 'ASSET';
 
 /** Both views are independently calculated from the same dated, posted entries. */
 export function cashflowAccumulator() {
@@ -47,11 +52,11 @@ export function cashflowAccumulator() {
       netProfit = exact(netProfit + profit);
       const opening = entry.referenceType?.startsWith('OPENING_BALANCE_') === true;
       const operating = !opening && Object.prototype.hasOwnProperty.call(SOURCES, entry.referenceType ?? '') && nonMoney.every(line =>
-        ['INCOME', 'EXPENSE'].includes(line.account.type) || WORKING.get(line.account.code)?.[1] === line.account.type);
+        ['INCOME', 'EXPENSE'].includes(line.account.type) || workingAccount(line)?.[1] === line.account.type);
       if (operating) {
         operatingCash = exact(operatingCash + money);
         for (const line of nonMoney) {
-          const working = WORKING.get(line.account.code);
+          const working = workingAccount(line);
           if (working && working[1] === line.account.type) add(adjustments, line.account.code, working[0], -net(line));
         }
         if (money !== 0) {
@@ -61,7 +66,7 @@ export function cashflowAccumulator() {
       } else {
         excludedProfit = exact(excludedProfit - profit);
         if (opening) openingEntries = exact(openingEntries + money);
-        else if (nonMoney.length > 0 && nonMoney.every(line => line.account.type === 'EQUITY' && line.account.code === '3000')) {
+        else if (nonMoney.length > 0 && nonMoney.every(line => (line.account.type === 'EQUITY' && (line.account.code === '3000' || line.account.code.startsWith('3100.OWNER.'))) || (line.account.type === 'LIABILITY' && line.account.code.startsWith('2300.OWNER.')))) {
           financingCash = exact(financingCash + money);
           if (money !== 0) add(direct, money > 0 ? 'equity-in' : 'equity-out', money > 0 ? 'Equity funding received' : 'Equity payments', money);
         } else if (money !== 0) {

@@ -23,6 +23,7 @@ export interface StocktakeLineDto {
   productId: string;
   productName: string;
   barcode: string | null;
+  additionalBarcodes?: string[];
   baseUnit: string;
   baseUnitPlural: string;
   expectedBase: number;
@@ -113,11 +114,13 @@ export default function StocktakeClient({
   useEffect(() => {
     const map = new Map<string, string>();
     for (const line of initialLines) {
-      const code = line.barcode?.trim();
+      for (const raw of [line.barcode, ...(line.additionalBarcodes ?? [])]) {
+      const code = raw?.trim();
       if (code) {
         map.set(code, line.id);
         map.set(code.toLowerCase(), line.id);
       }
+    }
     }
     barcodeIndexRef.current = map;
   }, [initialLines]);

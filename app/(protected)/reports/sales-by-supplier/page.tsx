@@ -1,3 +1,4 @@
+import { SalesMixChart } from '@/components/reports/charts/ReportVisuals';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
@@ -14,6 +15,7 @@ import { formatMoney } from '@/lib/format';
 import { resolveSelectableReportDateRange } from '@/lib/reports/date-parsing';
 import { getSupplierSalesReport } from '@/lib/reports/supplier-sales';
 import { prisma } from '@/lib/prisma';
+import { listProductDivisions } from '@/lib/services/product-classification';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,14 +28,20 @@ const PERIOD_OPTIONS = [
   { value: 'custom', label: 'Custom' },
 ] as const;
 
-function buildHref(params: { period?: string; from?: string; to?: string; supplierId?: string }) {
+type ReportFilters = { period?: string; from?: string; to?: string; supplierId?: string; storeId?: string; categoryId?: string; divisionId?: string; groupId?: string };
+function buildHref(params: ReportFilters) {
   const p = new URLSearchParams();
   if (params.period) p.set('period', params.period);
   if (params.from) p.set('from', params.from);
   if (params.to) p.set('to', params.to);
   if (params.supplierId) p.set('supplierId', params.supplierId);
+  for(const key of ['storeId','categoryId','divisionId','groupId'] as const) if(params[key])p.set(key,params[key]!);
   const qs = p.toString();
   return `/reports/sales-by-supplier${qs ? `?${qs}` : ''}`;
+}
+
+function ProfitCells({row,currency}:{row:{netRevenuePence:number;costPence:number|null;profitPence:number|null;marginPercent:number|null};currency:string}){
+  return <><td className="px-3 py-3 text-sm tabular-nums">{formatMoney(row.netRevenuePence,currency)}</td><td className="px-3 py-3 text-sm tabular-nums">{row.costPence===null?'Incomplete costs':formatMoney(row.costPence,currency)}</td><td className="px-3 py-3 text-sm tabular-nums">{row.profitPence===null?'—':formatMoney(row.profitPence,currency)}</td><td className="px-3 py-3 text-sm tabular-nums">{row.marginPercent===null?'—':`${row.marginPercent.toFixed(1)}%`}</td></>;
 }
 
 function ReportSetupEmptyState({
@@ -69,7 +77,7 @@ function ReportSetupEmptyState({
 export default async function SalesBySupplierPage({
   searchParams,
 }: {
-  searchParams?: { period?: string; from?: string; to?: string; supplierId?: string; storeId?: string };
+  searchParams?: ReportFilters;
 }) {
   const opened = await openLiveReport({
     surfaceId: 'sales_by_supplier',
@@ -94,19 +102,23 @@ export default async function SalesBySupplierPage({
     );
 
   const supplierId = searchParams?.supplierId?.trim() || undefined;
+  const hierarchy = {categoryId:searchParams?.categoryId,divisionId:searchParams?.divisionId,groupId:searchParams?.groupId};
+  const reportHref=(params:ReportFilters)=>buildHref({...hierarchy,storeId:searchParams?.storeId,...params});
 
   // When drilling into a supplier, also fetch its name for the header
-  const [report, drilledSupplier] = await Promise.all([
-    getSupplierSalesReport(business.id, { start, end, supplierId, storeIds: opened.branch.storeIds }),
+  const [report, drilledSupplier, categories, divisions] = await Promise.all([
+    getSupplierSalesReport(business.id, { start, end, supplierId, storeIds: opened.branch.storeIds,...hierarchy }),
     supplierId
       ? prisma.supplier.findFirst({
           where: { id: supplierId, businessId: business.id },
           select: { id: true, name: true },
         })
       : Promise.resolve(null),
+    prisma.category.findMany({where:{businessId:business.id},select:{id:true,name:true},orderBy:{name:'asc'}}),
+    listProductDivisions(business.id),
   ]);
 
-  const exportHref = buildHref({ period: periodInputValue, from: fromInputValue, to: toInputValue, supplierId })
+  const exportHref = reportHref({ period: periodInputValue, from: fromInputValue, to: toInputValue, supplierId })
     .replace('/reports/sales-by-supplier', '/reports/sales-by-supplier/export');
 
   const isDrillDown = Boolean(supplierId && drilledSupplier);
@@ -127,7 +139,7 @@ export default async function SalesBySupplierPage({
             : 'Understand sales performance by the preferred supplier linked to each product.'
         }
         actions={isDrillDown ? (
-          <Link href={buildHref({ period: periodInputValue, from: fromInputValue, to: toInputValue })} className="btn-secondary justify-center text-sm">
+          <Link href={reportHref({ period: periodInputValue, from: fromInputValue, to: toInputValue })} className="btn-secondary justify-center text-sm">
             ← All suppliers
           </Link>
         ) : undefined}
@@ -139,12 +151,13 @@ export default async function SalesBySupplierPage({
             <p className="font-semibold">Based on preferred supplier links on products.</p>
             <p className="mt-1">
               This is a sales performance view, not supplier debt. It does not prove which supplier supplied the exact
-              item sold, and it does not track exact stock batch origin.
+              item sold, and it does not track exact stock batch origin. Changing a product’s preferred supplier also changes which supplier its earlier sales appear under.
             </p>
             <p className="mt-1">
               Returned and void sales are excluded. Supplier sales performance is separate from supplier purchases,
               balances, and payments.
             </p>
+            <p className="mt-1">Cost is recorded at the time of sale. Net sales and calculated gross profit exclude tax and include discounts. Missing costs leave profit incomplete. When all proceeds go back to the supplier, calculated gross profit is not retained shop earnings. Use agreed terms when settling suppliers.</p>
           </div>
           <div className="flex flex-wrap gap-2 lg:justify-end">
             <Link href="/payments/supplier-aging" className="btn-secondary text-xs">
@@ -191,6 +204,9 @@ export default async function SalesBySupplierPage({
           </>
         ) : null}
         {supplierId ? <input type="hidden" name="supplierId" value={supplierId} /> : null}
+        {searchParams?.storeId?<input type="hidden" name="storeId" value={searchParams.storeId}/>:null}
+        <label className="label">Category<select className="input" name="categoryId" defaultValue={hierarchy.categoryId??''}><option value="">All categories</option>{categories.map(category=><option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+        {divisions.length?<><label className="label">Division<select className="input" name="divisionId" defaultValue={hierarchy.divisionId??''}><option value="">All divisions</option>{divisions.map(division=><option key={division.id} value={division.id}>{categories.find(category=>category.id===division.categoryId)?.name} / {division.name}</option>)}</select></label><label className="label">Group<select className="input" name="groupId" defaultValue={hierarchy.groupId??''}><option value="">All groups</option>{divisions.flatMap(division=>division.groups.map(group=><option key={group.id} value={group.id}>{division.name} / {group.name}</option>))}</select></label></>:null}
       </ReportFilterCard>
 
       {/* Summary cards — not shown in drill-down mode */}
@@ -222,6 +238,7 @@ export default async function SalesBySupplierPage({
       ) : null}
 
       {/* Drill-down: product breakdown for a specific supplier */}
+      {!isDrillDown ? <SalesMixChart title="Supplier-linked sales mix" currency={business.currency} rows={report.rows.map(row => ({ name: row.supplierName, value: row.totalRevenuePence }))} /> : null}
       {isDrillDown ? (
         <div className="space-y-4">
           {/* Supplier summary */}
@@ -262,7 +279,7 @@ export default async function SalesBySupplierPage({
               title="No sales for linked products in this period"
               body={`Products are linked to ${drilledSupplier!.name}, but none were sold in the selected date range. This report only shows sales performance for linked products, not purchases or supplier balances.`}
               actions={[
-                { label: 'Change period', href: buildHref({ period: 'mtd', supplierId }) },
+                { label: 'Change period', href: reportHref({ period: 'mtd', supplierId }) },
                 { label: 'View linked products', href: `/suppliers/${supplierId}#products-supplied`, primary: true },
               ]}
             />
@@ -277,6 +294,7 @@ export default async function SalesBySupplierPage({
                 <th>Quantity sold</th>
                 <th>Sales value</th>
                 <th>Sales count</th>
+                <th>Net sales</th><th>Recorded cost</th><th>Calculated gross profit</th><th>Margin</th>
               </tr>
             </thead>
             <tbody>
@@ -294,11 +312,12 @@ export default async function SalesBySupplierPage({
                       {formatMoney(p.revenuePence, business.currency)}
                     </td>
                     <td className="px-3 py-3 text-sm tabular-nums">{p.salesCount.toLocaleString()}</td>
+                    <ProfitCells row={p} currency={business.currency}/>
                   </tr>
                 ))
               ) : (
                 <ReportTableEmptyRow
-                  colSpan={5}
+                  colSpan={9}
                   message={
                     drilledRow && drilledRow.linkedProductCount > 0
                       ? `No sales for linked products in this period.`
@@ -347,7 +366,7 @@ export default async function SalesBySupplierPage({
               title="No sales for linked products in this period"
               body="Supplier links exist, but no linked products were sold in the selected date range. Use supplier payables for what you owe suppliers."
               actions={[
-                { label: 'Change period', href: buildHref({ period: 'mtd' }) },
+                { label: 'Change period', href: reportHref({ period: 'mtd' }) },
                 { label: 'Manage products', href: '/products', primary: true },
               ]}
             />
@@ -361,7 +380,8 @@ export default async function SalesBySupplierPage({
                 <th className="hidden lg:table-cell">Quantity sold</th>
                 <th className="hidden lg:table-cell">Sales count</th>
                 <th className="hidden xl:table-cell">Average sale value</th>
-                <th></th>
+                <th>Net sales</th><th>Recorded cost</th><th>Calculated gross profit</th><th>Margin</th>
+                <th className="sticky right-0 bg-slate-50" scope="col">Details</th>
               </tr>
             </thead>
             <tbody>
@@ -375,6 +395,7 @@ export default async function SalesBySupplierPage({
                   <td className="hidden lg:table-cell px-3 py-3 text-sm">—</td>
                   <td className="hidden lg:table-cell px-3 py-3 text-sm">—</td>
                   <td className="hidden xl:table-cell px-3 py-3 text-sm">—</td>
+                  <td>—</td><td>—</td><td>—</td><td>—</td>
                   <td className="px-3 py-3 text-sm" />
                 </tr>
               ) : null}
@@ -403,15 +424,17 @@ export default async function SalesBySupplierPage({
                     <td className="hidden xl:table-cell px-3 py-3 text-sm tabular-nums text-black/60">
                       {row.avgSaleValuePence > 0 ? formatMoney(row.avgSaleValuePence, business.currency) : <span className="text-black/30">—</span>}
                     </td>
-                    <td className="px-3 py-3 text-sm">
+                    <ProfitCells row={row} currency={business.currency}/>
+                    <td className="sticky right-0 bg-white px-3 py-3 text-sm shadow-[-4px_0_6px_-5px_rgba(15,23,42,0.3)]">
                       <Link
-                        href={buildHref({
+                        href={reportHref({
                           period: periodInputValue,
                           from: fromInputValue,
                           to: toInputValue,
                           supplierId: row.supplierId,
                         })}
                         className="btn-ghost text-xs whitespace-nowrap"
+                        aria-label={`View products for ${row.supplierName}`}
                       >
                         View products
                       </Link>
@@ -420,7 +443,7 @@ export default async function SalesBySupplierPage({
                 ))
               ) : (
                 <ReportTableEmptyRow
-                  colSpan={7}
+                  colSpan={11}
                   message="Link products to their preferred supplier to start this sales performance report."
                 />
               )}

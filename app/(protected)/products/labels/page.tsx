@@ -16,6 +16,7 @@ export default async function ProductLabelsPage({
     barcode?: string;
     category?: string;
     page?: string;
+    select?: string;
   };
 }) {
   const { business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
@@ -41,6 +42,8 @@ export default async function ProductLabelsPage({
       select: {
         id: true,
         name: true,
+        publisher: true,
+        edition: true,
         barcode: true,
         sku: true,
         createdAt: true,
@@ -110,7 +113,7 @@ export default async function ProductLabelsPage({
       <LabelPrintClient
         products={products.map((product) => ({
           id: product.id,
-          name: product.name,
+          name: [product.name, product.publisher, product.edition].filter(Boolean).join(" · "),
           barcode: product.barcode,
           sku: product.sku,
           sellingPriceBasePence: product.sellingPriceBasePence,
@@ -129,6 +132,7 @@ export default async function ProductLabelsPage({
         initialBarcode={searchParams?.barcode ?? ''}
         initialCategoryId={searchParams?.category ?? 'ALL'}
         initialPage={initialPage}
+        initialSelectedProductId={searchParams?.select}
       />
     </div>
   );

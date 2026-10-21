@@ -398,6 +398,7 @@ model Store {
   vatRateBps     Int      @default(1500)
   nhilRateBps    Int      @default(250)
   getFundRateBps Int      @default(250)
+  posShortcutsJson String?
   createdAt      DateTime @default(now())
 
   business               Business                @relation(fields: [businessId], references: [id])
@@ -642,9 +643,32 @@ model Category {
 
   business Business  @relation(fields: [businessId], references: [id])
   products Product[]
+  divisions ProductDivision[]
 
   @@unique([businessId, name])
   @@index([businessId, sortOrder])
+}
+
+model ProductDivision {
+  id String @id @default(cuid())
+  businessId String
+  categoryId String
+  name String
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  groups ProductGroup[]
+  @@unique([categoryId, name])
+  @@index([businessId])
+}
+
+model ProductGroup {
+  id String @id @default(cuid())
+  businessId String
+  divisionId String
+  name String
+  division ProductDivision @relation(fields: [divisionId], references: [id], onDelete: Restrict)
+  products Product[]
+  @@unique([divisionId, name])
+  @@index([businessId])
 }
 
 model StorefrontCategoryMapping {
@@ -664,11 +688,16 @@ model StorefrontCategoryMapping {
 }
 
 model Product {
+  attributesJson String?
   id                    String   @id @default(cuid())
   businessId            String
   categoryId            String?
+  groupId               String?
+  publisher             String   @default("")
+  edition               String   @default("")
+  barcodes              ProductBarcode[]
   sku                   String?
-  barcode               String?  @unique
+  barcode               String?
   name                  String
   active                Boolean  @default(true)
   imageUrl              String?
@@ -695,6 +724,7 @@ model Product {
 
   business           Business              @relation(fields: [businessId], references: [id])
   category           Category?             @relation(fields: [categoryId], references: [id])
+  group              ProductGroup?         @relation(fields: [groupId], references: [id], onDelete: Restrict)
   preferredSupplier  Supplier?             @relation("ProductPreferredSupplier", fields: [preferredSupplierId], references: [id])
   productUnits       ProductUnit[]
   inventoryBalances  InventoryBalance[]
@@ -708,10 +738,13 @@ model Product {
   onlineOrderLines   OnlineOrderLine[]
   storefrontEvents   StorefrontEvent[]
 
-  @@unique([businessId, name])
+  @@unique([businessId, barcode])
+  @@index([businessId, name, publisher, edition])
+  @@unique([id, businessId])
   @@index([businessId, active, createdAt])
   @@index([businessId, active, storefrontPublished])
   @@index([categoryId])
+  @@index([groupId])
   @@index([preferredSupplierId])
 }
 
@@ -1411,9 +1444,20 @@ model SalesPayment {
 }
 
 model PurchaseInvoice {
+  receiptDocumentType String @default("INVOICE")
+  invoiceReceivedAt DateTime?
+  discountBps Int @default(0)
+  discountPence Int @default(0)
+  documents PurchaseDocument[]
   id            String    @id @default(cuid())
   businessId    String
   storeId       String
+  supplierInvoiceNumber String?
+  additionalCostPence Int @default(0)
+  additionalCostTreatment String @default("EXPENSE")
+  additionalCostNote String?
+  linkedCostExpenseId String?
+  linkedCostExpense Expense? @relation("PurchaseCostExpense", fields: [linkedCostExpenseId], references: [id], onDelete: Restrict)
   supplierId    String?
   paymentStatus String
   dueDate       DateTime?
@@ -1434,6 +1478,7 @@ model PurchaseInvoice {
   purchaseReturn PurchaseReturn?
 
   @@unique([businessId, transactionNumber])
+  @@index([businessId, supplierId, supplierInvoiceNumber])
   @@index([businessId, createdAt])
   @@index([storeId, createdAt])
   @@index([businessId, paymentStatus, createdAt])
@@ -1461,6 +1506,9 @@ model PurchaseReturn {
 }
 
 model PurchaseInvoiceLine {
+  discountBps Int @default(0)
+  discountPence Int @default(0)
+  allocatedCostPence Int @default(0)
   id                String   @id @default(cuid())
   purchaseInvoiceId String
   productId         String
@@ -1528,6 +1576,7 @@ model Account {
 }
 
 model Expense {
+  purchaseCostInvoices PurchaseInvoice[] @relation("PurchaseCostExpense")
   id             String    @id @default(cuid())
   businessId     String
   storeId        String
@@ -2100,4 +2149,29 @@ model BusinessSequence {
   business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@id([businessId, sequenceName])
+}
+
+model ProductBarcode {
+  businessId String
+  code       String
+  productId  String
+  product Product @relation(fields: [productId, businessId], references: [id, businessId], onDelete: Cascade)
+  @@id([businessId, code])
+  @@index([productId])
+}
+
+model PurchaseDocument {
+  documentKind String @default("INVOICE")
+  id String @id @default(cuid())
+  businessId String
+  purchaseInvoiceId String
+  originalFilename String
+  contentType String
+  byteLength Int
+  sha256 String
+  body Bytes
+  uploadedByUserId String?
+  createdAt DateTime @default(now())
+  purchaseInvoice PurchaseInvoice @relation(fields:[purchaseInvoiceId],references:[id],onDelete:Restrict)
+  @@index([businessId,purchaseInvoiceId])
 }

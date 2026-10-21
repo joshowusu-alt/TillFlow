@@ -1,4 +1,9 @@
+import { parseProductAttributes } from '@/lib/products/attributes';
+import ProductCategoryField from '@/components/products/ProductCategoryField';
+import { listProductDivisions } from '@/lib/services/product-classification';
 import PageHeader from '@/components/PageHeader';
+import ProductIdentityFields from '@/components/products/ProductIdentityFields';
+import ProductMarginPreview from '@/components/products/ProductMarginPreview';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import HashScroll from '@/components/HashScroll';
@@ -30,7 +35,11 @@ export default async function ProductDetailPage({
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
   const canGenerateBarcode = user.role !== 'CASHIER' && features.advancedOps;
 
-  const [product, units, categories, suppliers] = await Promise.all([
+  if (user.role === 'CASHIER') {
+    const safe = await prisma.product.findFirst({ where: { id: params.id, businessId: business.id }, select: { name: true, publisher: true, edition: true, barcode: true, sellingPriceBasePence: true } });
+    return <div className="card p-6">{safe ? <><h1 className="text-xl font-semibold">{[safe.name, safe.publisher, safe.edition].filter(Boolean).join(' · ')}</h1><p>Barcode: {safe.barcode ?? 'None'}</p><p>Selling price: {formatMoney(safe.sellingPriceBasePence, business.currency)}</p><Link href="/products">Back to products</Link></> : 'Product not found.'}</div>;
+  }
+  const [product, units, categories, suppliers, divisions] = await Promise.all([
     prisma.product.findFirst({
       where: { id: params.id, businessId: business.id },
         include: {
@@ -40,6 +49,7 @@ export default async function ProductDetailPage({
             select: { storeId: true, qtyOnHandBase: true, avgCostBasePence: true }
           },
           category: true,
+          barcodes: true,
           preferredSupplier: { select: { id: true, name: true } }
         }
     }),
@@ -52,10 +62,13 @@ export default async function ProductDetailPage({
       where: { businessId: business.id },
       select: { id: true, name: true },
       orderBy: { name: 'asc' }
-    })
+    }),
+    listProductDivisions(business.id),
   ]);
 
   if (!product) return <div className="card p-6">Product not found.</div>;
+  const assignedDivision = divisions.find(division => division.groups.some(group => group.id === product.groupId));
+  const assignedGroup = assignedDivision?.groups.find(group => group.id === product.groupId);
   const isManager = user.role !== 'CASHIER';
   const businessMarginThresholdBps = business.minimumMarginThresholdBps ?? 1500;
   const productMarginThresholdBps = product.minimumMarginThresholdBps ?? null;
@@ -89,7 +102,7 @@ export default async function ProductDetailPage({
   return (
     <div className="space-y-6">
       <HashScroll />
-      <PageHeader title={product.name} subtitle="Product detail and unit breakdown." secondaryCta={{ label: '← Back to products', href: '/products' }} />
+      <PageHeader title={[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")} subtitle="Product detail and unit breakdown." primaryCta={{ label: 'View history', href: `/products/${product.id}/history` }} secondaryCta={{ label: '← Back to products', href: '/products' }} />
 
       {/* Hero row with image + summary */}
       <div className="card flex flex-col gap-6 p-6 sm:flex-row">
@@ -101,22 +114,23 @@ export default async function ProductDetailPage({
           </div>
         )}
         <div>
-          <h2 className="text-xl font-semibold">{product.name}</h2>
+          <h2 className="text-xl font-semibold">{[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}</h2>
           {product.category ? (
             <span className="inline-block mt-1 rounded-full px-2.5 py-0.5 text-xs font-medium text-white" style={{ backgroundColor: product.category.colour }}>
-              {product.category.name}
+              {[product.category.name, assignedDivision?.name, assignedGroup?.name].filter(Boolean).join(' / ')}
             </span>
           ) : (
             <span className="text-xs text-black/40 mt-1 inline-block">Uncategorised</span>
           )}
+          {product.attributesJson ? <dl className="mt-3 space-y-1 text-sm">{parseProductAttributes(product.attributesJson).map((detail,index)=><div key={index} className="flex gap-2"><dt className="text-black/55">{detail.label}:</dt><dd>{detail.value}</dd></div>)}</dl> : null}
           {product.sku && <div className="text-xs text-black/50 mt-1">SKU: {product.sku}</div>}
           {product.barcode && <div className="text-xs text-black/50">Barcode: {product.barcode}</div>}
           <div className="text-xs text-black/50">
             Preferred supplier:{' '}
             {product.preferredSupplier ? (
-              <a href={`/suppliers/${product.preferredSupplier.id}`} className="text-accent hover:underline">
+              <Link href={`/suppliers/${product.preferredSupplier.id}`} className="text-accent hover:underline">
                 {product.preferredSupplier.name}
-              </a>
+              </Link>
             ) : (
               'None'
             )}
@@ -165,7 +179,7 @@ export default async function ProductDetailPage({
               <input className="input" name="name" defaultValue={product.name} required />
             </div>
             <div>
-              <label className="label">SKU</label>
+              <label className="label">Internal product code (optional)</label>
               <input className="input" name="sku" defaultValue={product.sku ?? ''} />
             </div>
             <div>
@@ -178,7 +192,7 @@ export default async function ProductDetailPage({
               {product.barcode?.trim() ? (
                 <div className="mt-2">
                   <Link
-                    href={`/products/labels?q=${encodeURIComponent(product.name)}`}
+                    href={`/products/labels?q=${encodeURIComponent(product.name)}&select=${encodeURIComponent(product.id)}`}
                     className="text-xs font-semibold text-accent hover:underline"
                   >
                     Print label
@@ -191,16 +205,8 @@ export default async function ProductDetailPage({
               <ProductImageInput defaultUrl={product.imageUrl} fileUploadEnabled={fileUploadEnabled} />
             </div>
             <div>
-              <label className="label">Category</label>
-              <select className="input" name="categoryId" defaultValue={product.categoryId ?? ''}>
-                <option value="">Uncategorised</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-              <div className="mt-1 text-xs text-black/50">
-                Don&apos;t see your category? <a href="/products?tab=categories" className="text-accent underline">Add one here</a>.
-              </div>
+              <ProductIdentityFields attributesJson={product.attributesJson} publisher={product.publisher} edition={product.edition} barcodes={product.barcodes.filter(b => b.code !== product.barcode).map(b => b.code)} />
+              <ProductCategoryField categories={categories} divisions={divisions} defaultValue={product.categoryId ?? ''} defaultGroupId={product.groupId ?? ''} />
             </div>
             <div>
               <label className="label">Preferred supplier</label>
@@ -243,6 +249,7 @@ export default async function ProductDetailPage({
               </div>
             </div>
             <div>
+              <ProductMarginPreview currency={business.currency} />
               <label className="label">Target Margin Override (%)</label>
               <input
                 className="input"

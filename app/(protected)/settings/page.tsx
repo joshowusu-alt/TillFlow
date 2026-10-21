@@ -244,9 +244,9 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
                   Set the default label format and choose whether product labels are prepared for browser printing or Zebra-compatible ZPL workflows.
                 </p>
               </div>
-              <a href="/products/labels" className="btn-ghost text-xs">
+              <Link href="/products/labels" className="btn-ghost text-xs">
                 Open label workspace
-              </a>
+              </Link>
             </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -458,10 +458,10 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <a href="/settings/organization" className="btn-secondary text-sm">Organization</a>
-            <a href="/settings/billing" className="btn-secondary text-sm">Billing</a>
-            <a href="/settings/import-stock" className="btn-secondary text-sm">Import Stock</a>
-            <a href="/settings/data-repair" className="btn-secondary text-sm">Data Repair</a>
+            <Link href="/settings/organization" className="btn-secondary text-sm">Organization</Link>
+            <Link href="/settings/billing" className="btn-secondary text-sm">Billing</Link>
+            <Link href="/settings/import-stock" className="btn-secondary text-sm">Import Stock</Link>
+            <Link href="/settings/data-repair" className="btn-secondary text-sm">Data Repair</Link>
           </div>
         </div>
       </div>

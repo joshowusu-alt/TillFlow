@@ -93,6 +93,9 @@ async function resolveProductImageUrl(formData: FormData): Promise<string | null
 }
 
 async function parseProductFields(formData: FormData): Promise<ProductCoreInput> {
+  if (formOptionalString(formData, 'divisionId')?.trim() && !formOptionalString(formData, 'groupId')?.trim()) {
+    throw new UserError('Choose a group under this division, or choose “Use category only”.');
+  }
   const unitConfigs = parseUnitConfigs(formData);
   const baseUnit = unitConfigs?.find((config) => config.isBaseUnit);
   const firstNonBaseUnit = unitConfigs?.find((config) => !config.isBaseUnit);
@@ -103,9 +106,14 @@ async function parseProductFields(formData: FormData): Promise<ProductCoreInput>
 
   return {
     name: formString(formData, 'name'),
+    attributesJson: formString(formData, 'attributesJson'),
+    publisher: formString(formData, 'publisher'),
+    edition: formString(formData, 'edition'),
+    additionalBarcodes: formString(formData, 'additionalBarcodes').split(/[\n,]+/).map(code => code.trim()).filter(Boolean),
     sku: formString(formData, 'sku') || null,
     barcode: formString(formData, 'barcode') || null,
     categoryId: formOptionalString(formData, 'categoryId') || null,
+    groupId: formData.has('groupId') ? formOptionalString(formData, 'groupId') || null : undefined,
     preferredSupplierId: formOptionalString(formData, 'preferredSupplierId') || null,
     imageUrl: await resolveProductImageUrl(formData),
     sellingPriceBasePence: formPence(formData, 'sellingPriceBasePence'),
@@ -437,8 +445,8 @@ async function allocateUniqueInternalBarcode(businessId: string): Promise<string
   for (let attempts = 0; attempts < 20; attempts++) {
     const sequence = await reserveInternalBarcodeSequence(businessId);
     const candidate = formatInternalBarcode(businessId, sequence);
-    const conflict = await prisma.product.findUnique({
-      where: { barcode: candidate },
+    const conflict = await prisma.product.findFirst({
+      where: { businessId, OR: [{ barcode: candidate }, { barcodes: { some: { code: candidate } } }] },
       select: { id: true },
     });
     if (!conflict) return candidate;
