@@ -1159,7 +1159,7 @@ main#main-content { animation: fade-in-up .25s ease-out; }
   background: rgba(0, 0, 0, 0.3);
 }
 
-/* Option 2 is confined to Reports Today; shared Home metrics are untouched. */
+/* Reports Today overview; shared Home metrics are untouched. */
 .today-dashboard {
   display: grid;
   gap: 1rem;
@@ -1177,6 +1177,10 @@ main#main-content { animation: fade-in-up .25s ease-out; }
 }
 .today-sales-hero .financial-amount { color: white; }
 .today-sales-value .financial-amount--hero { font-size: clamp(1rem, var(--today-amount-size, 8.8cqi), 3.5rem); }
+@media (max-width: 639px) {
+  .today-sales-value .financial-amount--hero { font-size: clamp(1rem, var(--today-amount-size, 8.8cqi), 2.5rem); }
+  .today-sales-hero .today-sales-value { margin-top: 0.5rem; }
+}
 .today-support-card .financial-amount--prominent { font-size: clamp(1rem, 7.2cqi, 2rem); }
 .today-week-chart { position: relative; height: 11rem; margin-inline: 0.5rem; }
 .today-week-chart__baseline { position: absolute; inset-inline: 0; border-top: 1px solid #cbd5e1; }

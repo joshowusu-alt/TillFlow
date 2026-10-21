@@ -260,7 +260,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
     <div className="today-dashboard mt-4 min-w-0" data-today-state={partial.length > 0 ? 'partial' : 'ready'} data-partial={partial.join(' ')}>
       <div className="today-dashboard__main min-w-0 space-y-4">
         <div className="min-w-0 space-y-4" data-reconciliation-grid="" data-primary-card="true">
-          <section className="today-sales-hero min-w-0 rounded-2xl p-5 sm:p-6" data-today-sales-card data-metric-block="sales">
+          <section className="today-sales-hero min-w-0 rounded-2xl p-4 sm:p-6" data-today-sales-card data-metric-block="sales">
             <h2 className="text-base font-semibold text-white">Sales today</h2>
             {salesKnownZero ? (
               <p className="mt-3 text-xl font-semibold text-white">No sales recorded yet today</p>
@@ -276,7 +276,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
             <p className="mt-2 text-sm text-white">{snapshot.salesCount} {saleWord} so far today</p>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-white/25 pt-3">
               <p className="min-w-0 text-sm text-white">
-                {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday’s sales: <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" className="today-yesterday-amount" /></>}
+                {snapshot.yesterdayPence === 0 ? 'No sales yesterday.' : <>Yesterday (full day): <FinancialAmount pence={snapshot.yesterdayPence} currency={currency} variant="compact" className="today-yesterday-amount" /></>}
               </p>
               {props.salesHref ? (
                 <Link href={props.salesHref} data-today-primary-action className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-white hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
@@ -317,6 +317,7 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
               <p className="mt-2 text-xs leading-5 text-muted">{cashDiff == null ? 'Shown after a till is closed' : cashNeedsLook ? cashDiff < 0 ? 'Counted cash is below expected' : 'Counted cash is above expected' : 'Below the GH₵5.00 attention threshold'}</p>
             </section>
           </div>
+          <Profit profit={snapshot.profit} currency={currency} comparison={null} />
         </div>
         <div className="today-dashboard__help">
           <TodayHelpControl>
@@ -326,27 +327,35 @@ function ActiveToday(props: TodayScreenProps & { snapshot: TodaySnapshot }) {
       </div>
       <div className="today-dashboard__side min-w-0 lg:space-y-4">
         <div className="today-dashboard__attention min-w-0"><Attention snapshot={snapshot} /></div>
-        <div className="today-dashboard__detail min-w-0 space-y-4">
-          <Methods snapshot={snapshot} currency={currency} />
-          {snapshot.topProducts.length > 0 ? (
-            <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-              <h3 className="font-display text-lg font-semibold text-ink">Top products today</h3>
-              <ol className="mt-3 divide-y divide-slate-100">
-                {snapshot.topProducts.map((product) => (
-                  <li key={product.name} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-3 text-sm">
-                    <span className="min-w-0 break-words text-ink">{product.name}</span>
-                    <FinancialAmount pence={product.salesPence} currency={currency} variant="compact" className="text-ink" />
-                  </li>
-                ))}
-              </ol>
-              <p className="mt-2 text-xs leading-5 text-muted">By recorded product sales</p>
-            </section>
-          ) : null}
-        </div>
+        <details className="today-dashboard__detail min-w-0 rounded-2xl border border-slate-200 bg-white shadow-card">
+          <summary className={`cursor-pointer rounded-2xl p-4 text-sm font-semibold text-accent ${FOCUS}`}>Payment methods and top products</summary>
+          <div className="space-y-3 px-3 pb-3">
+            <Methods snapshot={snapshot} currency={currency} />
+            {snapshot.topProducts.length > 0 ? (
+              <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+                <h3 className="font-display text-lg font-semibold text-ink">Top products today</h3>
+                <ol className="mt-3 divide-y divide-slate-100">
+                  {snapshot.topProducts.map((product) => (
+                    <li key={product.name} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-3 text-sm">
+                      <span className="min-w-0 break-words text-ink">{product.name}</span>
+                      <FinancialAmount pence={product.salesPence} currency={currency} variant="compact" className="text-ink" />
+                    </li>
+                  ))}
+                </ol>
+                <p className="mt-2 text-xs leading-5 text-muted">By recorded product sales</p>
+              </section>
+            ) : null}
+          </div>
+        </details>
       </div>
       <div className="today-dashboard__week min-w-0"><TodayWeekChart days={snapshot.days} currency={currency} /></div>
       <div className="today-dashboard__context min-w-0 space-y-4">
-        <Profit profit={snapshot.profit} currency={currency} comparison={snapshot.comparison} />
+        {snapshot.comparison ? (
+          <details className="rounded-2xl border border-slate-200 bg-white shadow-card">
+            <summary className={`cursor-pointer rounded-2xl p-4 text-sm font-semibold text-accent ${FOCUS}`}>30-day sales comparison</summary>
+            <Profit profit={{ state: 'omitted', grossProfitPence: null }} currency={currency} comparison={snapshot.comparison} />
+          </details>
+        ) : null}
         {snapshot.branches ? (
           <section aria-labelledby="today-branches" className="min-w-0">
             <h3 id="today-branches" className="font-display text-lg font-semibold text-ink">Sales by branch</h3>
@@ -375,25 +384,39 @@ function Attention({ snapshot }: { snapshot: TodaySnapshot }) {
           Nothing needs attention right now.
         </p>
       ) : (
-        <ul className="mt-2 space-y-2">
-          {snapshot.attention.map((row) => (
-            <li key={`${row.rank}-${row.title}`} className="min-w-0">
-              <Link href={row.href} className={`flex min-h-11 w-full items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-2 shadow-sm hover:bg-slate-50 ${FOCUS}`}>
-                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase ${row.severity === 'high' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>
-                  {row.severity === 'high' ? 'High' : 'Check'}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold leading-5 text-ink">{row.title}</span>
-                  <span className="block text-xs leading-5 text-muted">{row.detail}</span>
-                  {row.rank === 3 || row.rank === 4 ? <span className="block text-xs leading-5 text-muted">Pending queue across dates; not limited to today.</span> : null}
-                </span>
-                <span className="max-w-[5rem] shrink-0 text-sm font-semibold text-accent">{row.action}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <>
+          <AttentionRows rows={snapshot.attention.slice(0, 3)} />
+          {snapshot.attention.length > 3 ? (
+            <details className="mt-3">
+              <summary className={`min-h-11 cursor-pointer rounded-lg py-3 text-sm font-semibold text-accent ${FOCUS}`}>More checks ({snapshot.attention.length - 3})</summary>
+              <AttentionRows rows={snapshot.attention.slice(3)} />
+            </details>
+          ) : null}
+        </>
       )}
     </section>
+  );
+}
+
+function AttentionRows({ rows }: { rows: TodaySnapshot['attention'] }) {
+  return (
+    <ul className="mt-2 space-y-2">
+      {rows.map((row) => (
+        <li key={`${row.rank}-${row.title}`} className="min-w-0">
+          <Link href={row.href} className={`flex min-h-11 w-full items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-2 shadow-sm hover:bg-slate-50 ${FOCUS}`}>
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase ${row.severity === 'high' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>
+              {row.severity === 'high' ? 'High' : 'Check'}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold leading-5 text-ink">{row.title}</span>
+              <span className="block text-xs leading-5 text-muted">{row.detail}</span>
+              {row.rank === 3 || row.rank === 4 ? <span className="block text-xs leading-5 text-muted">Pending queue across dates; not limited to today.</span> : null}
+            </span>
+            <span className="max-w-[5rem] shrink-0 text-sm font-semibold text-accent">{row.action}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -456,7 +479,7 @@ function Profit({
   if (profit.state === 'omitted' && !comparison) return null;
   return (
     <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
-      <h3 className="mb-2 text-sm font-semibold text-ink">Sales comparison and profit</h3>
+      <h3 className="mb-2 text-sm font-semibold text-ink">{comparison ? 'Sales comparison' : 'Estimated gross profit today'}</h3>
       {comparison ? (
         comparison.last30Pence === 0 && comparison.previous30Pence === 0 ? (
           <p className="text-sm text-ink">There is no earlier 30-day period with sales to compare.</p>
@@ -471,7 +494,7 @@ function Profit({
         <p className="mt-2 text-sm text-ink" data-profit-state="incomplete">Profit is hidden because some product costs are missing.</p>
       ) : profit.state === 'ready' && profit.grossProfitPence != null ? (
         <p className="mt-2 text-sm text-ink" data-profit-state="ready">
-          Estimated gross profit today <FinancialAmount pence={profit.grossProfitPence} currency={currency} variant="compact" />. Every product cost used here is recorded.
+          <span className="financial-fit block"><FinancialAmount pence={profit.grossProfitPence} currency={currency} variant="prominent" /></span><span className="mt-2 block text-xs leading-5 text-muted">Sales less recorded product costs; before operating expenses. Every product cost used here is recorded.</span>
         </p>
       ) : null}
     </section>
