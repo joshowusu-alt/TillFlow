@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useId, useRef, useState, useTransition } from 'react';
 import { saveClassificationSetupAction } from '@/app/actions/product-classification';
 import type { ClassificationDivision } from './ProductCategoryField';
+import ClassificationList from './ClassificationList';
 
 type Category = { id: string; name: string };
 type Kind = 'category' | 'division' | 'group';
@@ -51,10 +52,6 @@ export default function ClassificationSetup({ categories, divisions, initialCate
     setGroupId(''); setKind(null); setName(''); setError(''); setMessage('');
   }
   function chooseDivision(value: string) { setDivisionId(value); setGroupId(''); setKind(null); setName(''); setError(''); setMessage(''); }
-  function entry(value: string, label: string, selected: boolean, choose: () => void) {
-    return <button key={value} type="button" disabled={busy} aria-pressed={selected} onClick={choose}
-      className={`min-h-[44px] w-full break-words rounded-lg border px-3 py-2 text-left text-sm [overflow-wrap:anywhere] ${selected ? 'border-accent bg-accentSoft font-semibold text-accent' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>{label}</button>;
-  }
   function editor(forKind: Kind) {
     if (kind !== forKind) return null;
     const parentId = forKind === 'division' ? category?.id : division?.id;
@@ -100,21 +97,21 @@ export default function ClassificationSetup({ categories, divisions, initialCate
         <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">1. Category <span className="text-sm font-normal text-ink/60">({availableCategories.length})</span></h3><button type="button" className="btn-secondary text-xs" disabled={busy} onClick={() => open('category')}>Add category</button></div>
         <p className="text-xs text-ink/60">The broadest level of your catalogue.</p>
         {editor('category')}
-        <div className="max-h-80 space-y-2 overflow-y-auto">{availableCategories.map(c => entry(c.id, c.name, c.id === category?.id, () => chooseCategory(c.id)))}</div>
+        <ClassificationList items={availableCategories} selectedId={category?.id} label="Categories" disabled={busy} onSelect={chooseCategory} />
         {!availableCategories.length && <p className="text-sm text-ink/60">No categories yet. Add your first category above.</p>}
       </section>
       <section aria-label="Divisions" className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">2. Division <span className="text-sm font-normal text-ink/60">({children.length})</span></h3><button type="button" className="btn-secondary text-xs" disabled={busy || !category} onClick={() => open('division')}>Add division</button></div>
         <p className="break-words text-xs text-ink/60">{category ? `Under category: ${category.name}` : 'Select a category first.'}</p>
         {editor('division')}
-        <div className="max-h-80 space-y-2 overflow-y-auto">{children.map(d => entry(d.id, d.name, d.id === division?.id, () => chooseDivision(d.id)))}</div>
+        <ClassificationList key={category?.id ?? 'no-category'} items={children} selectedId={division?.id} label="Divisions" disabled={busy} onSelect={chooseDivision} />
         {category && !children.length && <p className="text-sm text-ink/60">No divisions in this category yet. Add a division, or keep using the category on its own.</p>}
       </section>
       <section aria-label="Groups" className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">3. Group <span className="text-sm font-normal text-ink/60">({division?.groups.length ?? 0})</span></h3><button type="button" className="btn-secondary text-xs" disabled={busy || !division} onClick={() => open('group')}>Add group</button></div>
         <p className="break-words text-xs text-ink/60">{division ? `Under division: ${division.name}` : 'Select a division first.'}</p>
         {editor('group')}
-        <div className="max-h-80 space-y-2 overflow-y-auto">{division?.groups.map(g => entry(g.id, g.name, g.id === group?.id, () => { setGroupId(g.id); setKind(null); setError(''); setMessage(''); }))}</div>
+        <ClassificationList key={division?.id ?? 'no-division'} items={division?.groups ?? []} selectedId={group?.id} label="Groups" disabled={busy} onSelect={value => { setGroupId(value); setKind(null); setError(''); setMessage(''); }} />
         {division && !division.groups.length && <p className="text-sm text-ink/60">No groups in this division yet. Add a group above.</p>}
       </section>
     </div>

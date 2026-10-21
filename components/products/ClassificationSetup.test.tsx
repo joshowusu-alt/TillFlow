@@ -64,3 +64,16 @@ it('restores the selected parents and next editor after a successful server navi
   expect(screen.getByLabelText('Group name')).toBeVisible();
   expect(screen.getByRole('status')).toHaveTextContent('Division saved');
 });
+
+it('clears child searches when switching parent while retaining the category search', () => {
+  render(<ClassificationSetup categories={categories} divisions={divisions} />);
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Search divisions' }), { target: { value: 'not here' } });
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Search groups' }), { target: { value: 'not here' } });
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Search categories' }), { target: { value: 'Household' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Household' }));
+  expect(screen.getByRole('searchbox', { name: 'Search divisions' })).toHaveValue('');
+  expect(screen.getByRole('searchbox', { name: 'Search groups' })).toHaveValue('');
+  expect(screen.getByRole('searchbox', { name: 'Search categories' })).toHaveValue('Household');
+  expect(screen.getByRole('button', { name: 'Cleaning' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Detergents' })).toBeVisible();
+});

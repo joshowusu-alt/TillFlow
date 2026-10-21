@@ -38,3 +38,10 @@ editor. These parameters do not filter the Products tab's count. Server redirect
 derive division/group ancestry from tenant-scoped database records. This retains
 the next step when cache revalidation remounts the client form. Category colour,
 image and sort-order creation plus category removal remain in collapsed sections.
+
+Each setup column includes case-insensitive name search and a fixed-height scroll
+area. Five choices render initially (the selected match comes first); Show more
+adds twenty, and Show fewer restores five. Search never changes the selected
+classification, which stays labelled above the results even when filtered out.
+Changing category/division clears stale child searches. Tests exercise 1,000
+entries per level, the final result, empty matches and rendering limits.

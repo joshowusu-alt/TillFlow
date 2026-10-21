@@ -621,6 +621,13 @@ async function run() {
     await page.goto(`${BASE_URL}/products?tab=categories`, { waitUntil: 'networkidle' });
     await page.getByRole('link', { name: 'Classification', exact: true }).waitFor();
     const classificationSetup = page.getByRole('region', { name: 'Classification setup' });
+    const setupCategories = classificationSetup.getByRole('region', { name: 'Categories', exact: true });
+    if (await setupCategories.getByRole('list').getByRole('button').count() > 5) throw new Error('Classification initially renders more than five category choices');
+    const moreCategories = setupCategories.getByRole('button', { name: /^Show more/ });
+    if (await moreCategories.count()) {
+      await moreCategories.click();
+      await setupCategories.getByRole('button', { name: 'Show fewer', exact: true }).click();
+    }
     const classificationCategoryName = `CI catalogue ${stamp}`;
     const divisionName = `CI division ${stamp}`, groupName = `CI group ${stamp}`;
     await classificationSetup.getByRole('button', { name: 'Add category', exact: true }).click();
@@ -641,6 +648,17 @@ async function run() {
     const classificationGroup = await prisma.productGroup.findFirstOrThrow({ where: { businessId: reportOwner.businessId, divisionId: classificationDivisionId, name: groupName } });
     const setupPath = new URL(await setupGroupProducts.getAttribute('href'), BASE_URL);
     if (setupPath.searchParams.get('category') !== classificationCategoryId || setupPath.searchParams.get('division') !== classificationDivisionId || setupPath.searchParams.get('group') !== classificationGroup.id) throw new Error('Classification setup product link has incorrect ancestry');
+    await classificationSetup.getByRole('searchbox', { name: 'Search categories', exact: true }).fill(classificationCategoryName.toUpperCase());
+    await classificationSetup.getByRole('searchbox', { name: 'Search divisions', exact: true }).fill(divisionName);
+    await classificationSetup.getByRole('searchbox', { name: 'Search groups', exact: true }).fill(groupName);
+    for (const label of ['Categories', 'Divisions', 'Groups']) {
+      if (await classificationSetup.getByRole('list', { name: `${label} choices`, exact: true }).getByRole('button').count() !== 1) throw new Error(`Classification ${label} search did not narrow to the saved entry`);
+    }
+    const setupGroups = classificationSetup.getByRole('region', { name: 'Groups', exact: true });
+    await setupGroups.getByRole('searchbox').fill('no matching CI group');
+    await setupGroups.getByText(/No matching groups/).waitFor();
+    if (await setupGroupProducts.getAttribute('href') !== `${setupPath.pathname}${setupPath.search}`) throw new Error('Searching cleared the selected classification');
+    await setupGroups.getByRole('button', { name: 'Clear search', exact: true }).click();
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error(`Classification setup overflows at ${width}px`);
