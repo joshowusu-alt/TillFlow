@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { withBusinessContext, safeAction, ok, UserError } from '@/lib/action-utils';
 import { previewBulkPricing, applyBulkPricing } from '@/lib/services/bulk-pricing';
 import { BulkPricingError } from '@/lib/products/bulk-pricing';
@@ -26,4 +27,10 @@ export async function applyBulkPricingAction(request: Parameters<typeof applyBul
       return ok(result);
     } catch (error) { if (error instanceof BulkPricingError) throw new UserError(error.message); throw error; }
   });
+}
+
+export async function submitBulkPricingAction(request: Parameters<typeof applyBulkPricing>[1]): Promise<Awaited<ReturnType<typeof applyBulkPricingAction>>> {
+  const result = await applyBulkPricingAction(request);
+  if (result.success) redirect(`/products/bulk-pricing?batch=${encodeURIComponent(result.data.batchId)}`);
+  return result;
 }

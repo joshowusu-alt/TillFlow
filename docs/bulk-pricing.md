@@ -1,5 +1,7 @@
 # Bulk pricing
 
+Successful submissions open a saved-batch receipt read from this business's committed audit records. The product count, reason and timestamp survive reloads; a receipt URL cannot apply prices again. Invalid or unavailable batch identifiers display no success claim.
+
 Preview scope: Growth and Pro, Owner and Manager. Open **Products → Bulk pricing**.
 The catalogue is shared across branches. This change adds no database migration.
 

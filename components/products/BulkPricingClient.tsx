@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { previewBulkPricingAction, applyBulkPricingAction } from '@/app/actions/bulk-pricing';
+import { previewBulkPricingAction, submitBulkPricingAction as applyBulkPricingAction } from '@/app/actions/bulk-pricing';
 import { formatMoney, getCurrencySymbol } from '@/lib/format';
 import { BULK_PRICING_LIMIT, type BulkPricingInput, type BulkPricingPreview } from '@/lib/products/bulk-pricing';
 
@@ -59,6 +59,7 @@ export default function BulkPricingClient({ currency, categories, divisions }: P
     setError('');
       try {
         const result = await applyBulkPricingAction({ input: preview.input, fingerprint: preview.fingerprint, selectedIds: selected, acknowledgeWarnings: acknowledge, reason });
+        if (!result) return; // Successful submission navigates to its saved receipt.
         setConfirmed(false);
         if (!result.success) { setError(result.error); setPreview(null); return; }
         setSuccess(`Updated ${result.data.updated} ${result.data.updated === 1 ? 'product' : 'products'}. The price changes and your reason have been recorded.`);

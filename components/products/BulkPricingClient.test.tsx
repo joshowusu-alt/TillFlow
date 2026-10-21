@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import BulkPricingClient from './BulkPricingClient';
 const actions = vi.hoisted(() => ({ preview: vi.fn(), apply: vi.fn() }));
-vi.mock('@/app/actions/bulk-pricing', () => ({ previewBulkPricingAction: actions.preview, applyBulkPricingAction: actions.apply }));
+vi.mock('@/app/actions/bulk-pricing', () => ({ previewBulkPricingAction: actions.preview, submitBulkPricingAction: actions.apply }));
 const input = { categoryId: '', divisionId: '', groupId: '', search: '', basis: 'SELLING_PRICE', operation: 'INCREASE', method: 'PERCENT', value: '10', decimals: 2, units: 'BASE_ONLY' };
 const row = { id: 'book', name: 'Example book', baseBefore: 1000, baseAfter: 1100, changed: true, error: null, warnings: ['Base price is below cost'], prices: [{ id: 'copy', label: 'copy', before: 1000, after: 1100, afterOverride: null, changed: true }] };
 function show() { render(<BulkPricingClient currency="GHS" categories={[{ id: 'cat', name: 'Books' }]} divisions={[{ id: 'div', categoryId: 'cat', name: 'Literature', groups: [{ id: 'group', name: 'Fiction' }] }]} />); }

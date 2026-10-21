@@ -2,10 +2,10 @@ import { beforeEach, expect, it, vi } from 'vitest';
 const db = vi.hoisted(() => ({
   business: { findUnique: vi.fn() }, product: { findMany: vi.fn(), updateMany: vi.fn() },
   category: { findFirst: vi.fn() }, productDivision: { findFirst: vi.fn() }, productGroup: { findFirst: vi.fn() },
-  productUnit: { updateMany: vi.fn() }, auditLog: { createMany: vi.fn() }, $transaction: vi.fn(),
+  productUnit: { updateMany: vi.fn() }, auditLog: { createMany: vi.fn(), findMany: vi.fn() }, $transaction: vi.fn(),
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: db }));
-import { applyBulkPricing, previewBulkPricing } from './bulk-pricing';
+import { applyBulkPricing, previewBulkPricing, getBulkPricingReceipt } from './bulk-pricing';
 import type { BulkPricingInput } from '@/lib/products/bulk-pricing';
 const input: BulkPricingInput = { categoryId: '', divisionId: '', groupId: '', search: '', basis: 'SELLING_PRICE', operation: 'INCREASE', method: 'PERCENT', value: '20', decimals: 2, units: 'BASE_ONLY' };
 const actor = { businessId: 'business', id: 'owner', name: 'Owner', role: 'OWNER' };
@@ -24,6 +24,28 @@ async function request(patch = {}) {
   const preview = await previewBulkPricing(actor.businessId, input);
   return { input, fingerprint: preview.fingerprint, selectedIds: ['p1'], acknowledgeWarnings: false, reason: 'Supplier price increase', ...patch };
 }
+it('reads a receipt only from the authenticated business and exact committed bulk batch', async () => {
+  const batchId = 'c4914979-0aa1-4fa6-9ded-9ca0edcbf468';
+  const createdAt = new Date('2026-10-21T09:00:00Z');
+  const detail = JSON.stringify({ batchId, source: 'BULK_PRICING' });
+  db.auditLog.findMany.mockResolvedValue([
+    { entityId: 'p1', details: detail, reason: 'Reviewed', createdAt },
+    { entityId: 'p1', details: detail, reason: 'Reviewed', createdAt },
+    { entityId: 'p2', details: detail, reason: 'Reviewed', createdAt },
+    { entityId: 'other', details: JSON.stringify({ batchId, source: 'OTHER' }), createdAt },
+    { entityId: 'broken', details: '{', createdAt },
+  ]);
+  expect(await getBulkPricingReceipt('business', batchId)).toEqual({ updated: 2, reason: 'Reviewed', createdAt });
+  expect(db.auditLog.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
+    businessId: 'business', action: 'PRICE_CHANGE', details: { contains: `"batchId":"${batchId}"` },
+  } }));
+});
+it('does not query invalid receipt identifiers or invent missing receipts', async () => {
+  expect(await getBulkPricingReceipt('business', 'forged')).toBeNull();
+  expect(db.auditLog.findMany).not.toHaveBeenCalled();
+  db.auditLog.findMany.mockResolvedValue([]);
+  expect(await getBulkPricingReceipt('business', 'c4914979-0aa1-4fa6-9ded-9ca0edcbf468')).toBeNull();
+});
 it('preserves explicit pack prices and previews inherited pack changes in base-only mode', async () => {
   const p = await previewBulkPricing(actor.businessId, input);
   expect(p.rows[0]).toMatchObject({ baseBefore: 1000, baseAfter: 1200 });

@@ -840,7 +840,12 @@ async function run() {
     const priceAudits = await prisma.auditLog.findMany({ where: { businessId: reportOwner.businessId, action: 'PRICE_CHANGE', entityId: { in: bulkProducts.map(p => p.id) } } });
     if (priceAudits.length !== 2 || priceAudits.some(a => a.reason !== 'CI reviewed supplier increase' || JSON.parse(a.beforeState).sellingPriceBasePence !== 1000 || JSON.parse(a.afterState).sellingPriceBasePence !== 1200)) throw new Error('Bulk price audit is missing before/after evidence');
     step('BONUS Bulk pricing database prices and audit OK');
+    const savedBatchId = JSON.parse(priceAudits[0].details).batchId;
+    await page.waitForURL(url => url.searchParams.get('batch') === savedBatchId);
     await page.getByRole('status').filter({ hasText: 'Updated 2 products' }).waitFor();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.getByRole('status').filter({ hasText: 'Updated 2 products' }).waitFor();
+    await page.getByRole('status').filter({ hasText: 'CI reviewed supplier increase' }).waitFor();
     step('BONUS Bulk pricing preview, stale guard and audited apply OK');
     } finally {
       if (needsReportFixture) await prisma.business.update({ where: { id: reportOwner.businessId }, data: originalPlan });

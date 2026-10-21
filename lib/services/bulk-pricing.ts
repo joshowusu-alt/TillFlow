@@ -18,6 +18,22 @@ const select = {
 type PricingProduct = Prisma.ProductGetPayload<{ select: typeof select }>;
 type Db = Pick<Prisma.TransactionClient, 'product' | 'category' | 'productDivision' | 'productGroup' | 'business'>;
 
+/** A reload-safe receipt derived from this business's committed audit batch. */
+export async function getBulkPricingReceipt(businessId: string, batchId?: string) {
+  if (!batchId || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(batchId)) return null;
+  const records = await prisma.auditLog.findMany({
+    where: { businessId, action: 'PRICE_CHANGE', details: { contains: `"batchId":"${batchId}"` } },
+    select: { entityId: true, details: true, reason: true, createdAt: true },
+    orderBy: { createdAt: 'desc' }, take: BULK_PRICING_LIMIT,
+  });
+  const rows = records.filter(record => {
+    try { const detail = JSON.parse(record.details ?? '{}'); return detail.batchId === batchId && detail.source === 'BULK_PRICING' && record.entityId; }
+    catch { return false; }
+  });
+  if (!rows.length) return null;
+  return { updated: new Set(rows.map(row => row.entityId)).size, reason: rows[0].reason, createdAt: rows[0].createdAt };
+}
+
 async function loadProducts(db: Db, businessId: string, input: BulkPricingInput) {
   const business = await db.business.findUnique({ where: { id: businessId }, select: { plan: true, mode: true, storeMode: true } });
   if (!business || !getFeatures((business.plan ?? business.mode) as BusinessPlan | BusinessMode, business.storeMode as StoreMode).advancedOps) {
