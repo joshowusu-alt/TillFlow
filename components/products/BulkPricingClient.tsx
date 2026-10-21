@@ -19,10 +19,11 @@ export default function BulkPricingClient({ currency, categories, divisions }: P
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [pending, setPending] = useState(false);
+  const [saving, setPending] = useState(false);
   const busy = useRef(false);
   // Coordinate event-driven server actions with the router's revalidation render.
-  const [, startTransition] = useTransition();
+  const [transitionPending, startTransition] = useTransition();
+  const pending = saving || transitionPending;
   const reviewHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (preview) {
