@@ -273,14 +273,14 @@ describe('Option 2 presentation', () => {
     expect(markup).not.toContain('Sales this week');
   });
 
-  it('keeps a negative day left of zero and never creates a negative bar width', () => {
+  it('keeps a negative day below zero and never creates a negative bar height', () => {
     const markup = html({ snapshot: snapshot({ days: [
       { key: '2026-09-29', label: 'Tue', salesPence: 10000 },
       { key: '2026-09-30', label: 'Wed', salesPence: -5000 },
     ] }) });
-    expect(markup).toContain('left:33.33333333333333%;width:66.66666666666666%');
-    expect(markup).toContain('left:0%;width:33.33333333333333%');
+    expect(markup).toContain('top:0%;height:66.66666666666666%');
+    expect(markup).toContain('top:66.66666666666666%;height:33.33333333333333%');
     expect(markup).toContain('−GH₵50.00');
-    expect(markup).not.toMatch(/width:-/);
+    expect(markup).not.toMatch(/height:-/);
   });
 });

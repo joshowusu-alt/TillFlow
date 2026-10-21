@@ -26,3 +26,8 @@ Final layout pass: the seven-day chart spans both desktop columns below the
 overview and checks. Horizontal bars show each exact daily amount and date
 without expansion, including signed negative values on a shared zero point.
 The exact daily table remains expandable. No-sales cards use reduced spacing.
+
+Owner-selected chart: vertical bars replace the horizontal draft. Each day is a
+keyboard- and touch-accessible button; selection shows its exact amount and date.
+A labelled currency scale, zero baseline and signed negative bars preserve scale.
+The full-width desktop placement and expandable exact daily table remain.
