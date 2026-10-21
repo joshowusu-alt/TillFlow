@@ -85,8 +85,6 @@ export default function PosCheckoutPanel({
   momoGuidance,
   totalDue,
   totalPaid,
-  balanceRemaining,
-  changeDue,
   dueDateDecision,
   dueDate,
   onDueDateDecisionChange,
@@ -107,8 +105,8 @@ export default function PosCheckoutPanel({
 
   return (
     <div id="pos-payment-panel" tabIndex={-1} className="space-y-3 rounded-2xl border border-black/10 bg-white p-3 sm:p-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-[9rem] flex-1">
+      <div className="grid gap-3">
+        <div className="min-w-0">
           <label className="label" htmlFor="pos-payment-status">Payment status</label>
           <select
             id="pos-payment-status"
@@ -124,7 +122,7 @@ export default function PosCheckoutPanel({
         </div>
 
         {showMethods ? (
-          <div className="flex-[2]">
+          <div className="min-w-0">
             <div className="label">Method</div>
             <div className="mt-1.5 flex flex-wrap gap-2">
               {availablePaymentMethods.map((method) => (
@@ -229,12 +227,12 @@ export default function PosCheckoutPanel({
             placeholder={paymentStatus === 'PAID' ? 'Exact' : '0.00'}
           />
           {!compactDenominations ? (
-          <div className="mt-1.5 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-1.5" data-pos-cash-denominations="true">
+          <div className="mt-1.5 grid grid-cols-4 gap-1.5" data-pos-cash-denominations="true">
             {POS_QUICK_CASH_DENOMINATIONS_GHS.map((amount) => (
               <button
                 key={amount}
                 type="button"
-                className="rounded-md border border-black/10 bg-white px-3 py-2 text-center text-xs font-semibold hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                className="rounded-md border border-black/10 bg-white px-1 py-2 text-center text-xs font-semibold hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 onClick={() => onCashTenderedChange(String(amount))}
               >
                 {formatMoney(amount * 100, currency)}
@@ -242,23 +240,18 @@ export default function PosCheckoutPanel({
             ))}
             <button
               type="button"
-              className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700 hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:min-w-[5rem]"
+              className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700 hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               onClick={() => onCashTenderedChange(String(totalDue / 100))}
             >
               Exact
             </button>
           </div>
           ) : null}
-          {changeDue > 0 ? (
-            <div className="mt-2 text-sm font-semibold text-accent">
-              Change {formatMoney(changeDue, currency)}
-            </div>
-          ) : null}
         </div>
       ) : null}
 
       {(showCard || showTransfer || showMomo || (showSplitPanel && showMethods)) && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3">
           {(showCard || (showSplitPanel && hasMethod('CARD'))) && (
             <div>
               <label className="label">Card amount</label>
@@ -361,30 +354,8 @@ export default function PosCheckoutPanel({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-end gap-x-4 gap-y-1 rounded-xl bg-black/[.02] px-3 py-2 text-sm">
-        <div>
-          <div className="text-[11px] text-black/40">Due</div>
-          <div className="font-bold text-ink">{formatMoney(totalDue, currency)}</div>
-        </div>
-        {!isUnpaid ? (
-          <div>
-            <div className="text-[11px] text-black/40">Received</div>
-            <div className="font-semibold">{formatMoney(totalPaid, currency)}</div>
-          </div>
-        ) : null}
-        {isPartPaid || balanceRemaining > 0 ? (
-          <div>
-            <div className="text-[11px] text-black/40">Outstanding</div>
-            <div className="font-semibold text-amber-700">{formatMoney(balanceRemaining, currency)}</div>
-          </div>
-        ) : null}
-        {changeDue > 0 ? (
-          <div>
-            <div className="text-[11px] text-black/40">Change</div>
-            <div className="font-semibold text-accent">{formatMoney(changeDue, currency)}</div>
-          </div>
-        ) : null}
-      </div>
+      {!isUnpaid ? <div className="flex justify-between gap-2 text-sm text-slate-600"><span>Received</span><span className="font-semibold tabular-nums">{formatMoney(totalPaid, currency)}</span></div> : null}
+
     </div>
   );
 }

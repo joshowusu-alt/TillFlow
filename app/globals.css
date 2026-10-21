@@ -1199,7 +1199,7 @@ main#main-content { animation: fade-in-up .25s ease-out; }
 
 /* POS: one selling workspace on laptops/desktops; checkout owns the second column. */
 @media (min-width: 1024px) {
-  .pos-selling-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(21rem, 24rem); gap: 0.75rem; align-items: start; grid-auto-rows: min-content; align-content: start; min-height: calc(100dvh - var(--app-header-offset-desktop) - 8rem); }
+  .pos-selling-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(25rem, 32vw, 34rem); gap: 0.75rem; align-items: start; grid-auto-rows: min-content; align-content: start; min-height: calc(100dvh - var(--app-header-offset-desktop) - 8rem); }
   .pos-selling-layout > * { grid-column: 1; margin-top: 0 !important; min-width: 0; }
   .pos-sale-form, .pos-sale-content { display: contents; }
   .pos-sale-form > *, .pos-sale-content > * { grid-column: 1; min-width: 0; }
@@ -1236,7 +1236,28 @@ main#main-content { animation: fade-in-up .25s ease-out; }
   .pos-shortcuts[data-shortcut-view="cart"] .pos-shortcut-tiles { grid-column: 1 / -1; margin-top: 0; }
   .pos-shortcuts[data-shortcut-view="cart"] > p { grid-column: 1 / -1; }
 }
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   [data-pos-mobile-view="cart"] .pos-checkout-column { display: none; }
   [data-pos-mobile-view="payment"] [data-pos-cart-card], [data-pos-mobile-view="payment"] [data-pos-line-editor] { display: none; }
+}
+
+/* Keep selling controls close together without stretching the cart across a monitor. */
+@media (min-width: 1024px) {
+  .pos-selling-layout { max-width: 100rem; width: 100%; margin-inline: auto; }
+  .pos-shortcuts[data-shortcut-view="cart"] { padding: .625rem .75rem; gap: .375rem; }
+  .pos-shortcuts[data-shortcut-view="cart"] > [aria-label="Selling workspace"] { padding-bottom: .375rem; }
+  .pos-shortcuts[data-shortcut-view="cart"] .pos-shortcut-tile { min-height: 3.25rem; padding: .375rem .5rem; }
+  .pos-shortcut-header > button { border: 0; background: transparent; box-shadow: none; padding: .375rem; min-height: 2.25rem; }
+  .pos-cart-line { display: grid; grid-template-columns: minmax(0, 1fr) minmax(13rem, 40%); }
+  .pos-cart-quantity { justify-content: flex-end; }
+}
+@media (max-width: 1023px) {
+  [data-pos-mobile-view] [data-pos-cart-card] > .divide-y { max-height: none; overflow: visible; }
+  [data-pos-mobile-view] .pos-checkout-footer { display: none; }
+}
+
+.pos-branch-banner [data-effective-store] { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .5rem; padding-block: .375rem; }
+.pos-branch-banner [data-effective-store] > div:last-child:not(.font-semibold) { margin-top: 0; margin-left: auto; }
+@media (max-width: 639px) {
+  .pos-branch-banner [data-effective-store] > div:last-child:not(.font-semibold) { display: none; }
 }

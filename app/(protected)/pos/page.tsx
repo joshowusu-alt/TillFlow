@@ -32,7 +32,7 @@ export default async function PosPage({
   return (
     <>
       <LaunchSessionCompletion />
-      <div className="mb-3">
+      <div className="pos-branch-banner mb-3">
         <EffectiveStoreBanner
           storeName={store.name}
           actionLabel={`Sales on this screen will be recorded in ${store.name}.`}

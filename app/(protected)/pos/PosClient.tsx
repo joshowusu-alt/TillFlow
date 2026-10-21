@@ -1465,7 +1465,7 @@ export default function PosClient({
     <div
       className={`grid gap-4 lg:pb-0 ${
         cartFilled
-          ? 'max-md:pb-[calc(var(--pos-mobile-cart-bar-clearance)+1rem)] md:max-lg:pb-[calc(var(--pos-mobile-bottom-clearance)+1rem)]'
+          ? 'max-lg:pb-[calc(var(--pos-mobile-cart-bar-clearance)+1rem)]'
           : 'pb-4'
       }`}
       data-pos-mobile-phase="2"
@@ -1965,30 +1965,7 @@ export default function PosClient({
             </div>
           ) : null}
 
-          {showNoTillBlock ? (
-            <div
-              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-950 shadow-sm"
-              role="alert"
-              data-pos-till-block="true"
-            >
-              <div className="font-semibold">
-                {tills.length === 0 ? 'No tills are configured for this store' : 'Open a till before completing sales'}
-              </div>
-              <p className="mt-1 text-xs leading-relaxed text-rose-900/80">
-                {tills.length === 0
-                  ? 'Ask an owner or manager to configure a till for this store.'
-                  : 'Sales stay blocked until a till shift is open. Open or select a till, then return here.'}
-              </p>
-              {tills.length > 0 ? (
-                <Link
-                  href="/shifts"
-                  className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl bg-rose-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-rose-800"
-                >
-                  Open till
-                </Link>
-              ) : null}
-            </div>
-          ) : null}
+
 
           {(() => {
             const activeSalePanel = (
@@ -2212,6 +2189,7 @@ export default function PosClient({
             data-pos-checkout-card="true"
           >
             <div className="pos-checkout-fields space-y-3">
+            {showNoTillBlock ? <div role="alert" data-pos-till-block="true" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-950"><span>{tills.length === 0 ? 'No tills configured for this branch.' : 'Open a till to complete sales.'}</span>{tills.length > 0 ? <Link href="/shifts" className="min-h-11 inline-flex items-center font-semibold underline">Open till →</Link> : null}</div> : null}
             <div
               className={
                 checkoutLoading
@@ -2291,7 +2269,7 @@ export default function PosClient({
                   </div>
                 ) : (
                   <div
-                    className={`mt-1 hidden text-xs md:block ${tillReady ? 'text-emerald-700' : 'text-rose'}`}
+                    className={`mt-1 text-xs ${tillReady ? 'hidden md:block text-emerald-700' : 'sr-only'}`}
                     data-checkout-state={tillReady ? 'ready' : 'closed'}
                   >
                     {tillReady ? 'Till is open' : 'Till is not open'}
@@ -2459,7 +2437,7 @@ export default function PosClient({
 
             {checkoutIssues.length > 0 ? (
               <div className="space-y-1.5">
-                {checkoutIssues.map((issue) => (
+                {checkoutIssues.filter(issue => !showNoTillBlock || !issue.message.includes('Open this till')).map((issue) => (
                   <div
                     key={issue.message}
                     className={`rounded-xl px-3 py-2 text-xs font-medium ${
@@ -2480,9 +2458,9 @@ export default function PosClient({
 
             </div>
             <div className="pos-checkout-footer space-y-3">
-              <div className="hidden lg:block"><PosPaymentSummary currency={business.currency} totalDue={totalDue} changeDue={changeDue} hasCash={paymentStatus !== 'UNPAID' && hasMethod('CASH')} balanceRemaining={balanceRemaining} /></div>
+              <div className="hidden lg:block"><PosPaymentSummary currency={business.currency} subtotal={totals.netSubtotal} discount={orderDiscount} tax={vatTotal} totalDue={totalDue} changeDue={changeDue} hasCash={paymentStatus !== 'UNPAID' && hasMethod('CASH')} balanceRemaining={balanceRemaining} /></div>
             <div className="flex flex-col gap-2 md:flex-row lg:flex-col">
-              {/* Desktop complete control, next to Park Sale. Hidden below lg, where the tablet bar or phone sheet is the only complete button. */}
+              {/* Narrow screens complete through the Cart/Payment sheet. */}
               <button
                 className={`btn-primary hidden flex-1 py-3 text-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent lg:inline-flex lg:items-center lg:justify-center ${
                   paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
@@ -2497,7 +2475,7 @@ export default function PosClient({
               {cartFilled ? (
                 <button
                   type="button"
-                  className="hidden w-full items-center justify-center gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 md:flex md:w-auto"
+                  className="hidden w-full items-center justify-center gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 lg:flex lg:w-auto"
                   onClick={() => setShowParkModal(true)}
                   title="Park this sale and serve another customer"
                 >
@@ -2516,11 +2494,11 @@ export default function PosClient({
             );
             return (
               <>
-                <div className={cartFilled ? 'pos-sale-content max-md:hidden' : 'pos-sale-content'}>
+                <div className={cartFilled ? 'pos-sale-content max-lg:hidden' : 'pos-sale-content'}>
                   {phoneCheckoutSheetOpen ? null : activeSalePanel}
                 </div>
                 {cartFilled ? (
-                  <div className="md:hidden">
+                  <div className="lg:hidden">
                   <PosMobileCartCheckoutSheet
                     open={phoneCheckoutSheetOpen}
                     onClose={closePhoneCheckoutSheet}
@@ -2543,7 +2521,7 @@ export default function PosClient({
                         </div>
                       ) : null
                     }
-                    summary={<PosPaymentSummary currency={business.currency} totalDue={totalDue} changeDue={changeDue} hasCash={paymentStatus !== 'UNPAID' && hasMethod('CASH')} balanceRemaining={balanceRemaining} />}
+                    summary={<PosPaymentSummary currency={business.currency} subtotal={totals.netSubtotal} discount={orderDiscount} tax={vatTotal} totalDue={totalDue} changeDue={changeDue} hasCash={paymentStatus !== 'UNPAID' && hasMethod('CASH')} balanceRemaining={balanceRemaining} />}
                     footer={
                       <div className="space-y-2" data-pos-mobile-payment-actions="true">
                         <div
@@ -2683,9 +2661,9 @@ export default function PosClient({
         </div>
       ) : null}
 
-      {/* ── Phone cart bar (Phase 2) — CSS-hidden from md up ─ */}
+      {/* One cart bar and Cart/Payment sheet below the desktop breakpoint. */}
       {cartFilled ? (
-        <div className="md:hidden">
+        <div className="lg:hidden">
           {parkedCarts.length > 0 ? (
             <button
               type="button"
@@ -2710,71 +2688,7 @@ export default function PosClient({
         </div>
       ) : null}
 
-      {/* ── Tablet sticky checkout (Phase 1; phone uses sheet) ─ */}
-      {cartFilled ? (
-        <div
-          className="fixed inset-x-0 z-30 hidden border-t border-black/10 bg-white px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] keyboard-safe-fixed-bottom md:block lg:hidden"
-          data-pos-mobile-checkout-bar="true"
-        >
-          <div className="space-y-3">
-            <div className={`rounded-2xl px-3 py-2 text-xs font-medium ${canSubmit ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'}`}>
-              {canSubmit
-                ? `Ready to complete • ${activePaymentMethodLabels.join(' + ')} • ${formatMoney(totalDue, business.currency)}`
-                : primaryCheckoutIssue?.message ?? `Review checkout before completing this ${formatMoney(totalDue, business.currency)} sale.`}
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-xs text-black/50">{cartDetails.length} item{cartDetails.length !== 1 ? 's' : ''}</div>
-                <div className="text-lg font-bold text-ink truncate">{formatMoney(totalDue, business.currency)}</div>
-                {paymentStatus !== 'UNPAID' && hasMethod('CASH') ? <div className="mt-1 rounded-lg bg-emerald-50 px-2 py-1 text-emerald-950"><div className="text-xs font-bold">Change to give</div><div className="text-2xl font-extrabold tabular-nums">{formatMoney(changeDue, business.currency)}</div></div> : null}
-                {balanceRemaining > 0 ? <div className="text-sm font-semibold text-amber-900">Still to pay {formatMoney(balanceRemaining, business.currency)}</div> : null}
-              </div>
-              {parkedCarts.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setShowParkedPanel((prev) => !prev)}
-                  className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-700"
-                >
-                  {parkedCarts.length} parked
-                </button>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-2">
-              {!canSubmit ? (
-                <button
-                  type="button"
-                  className="rounded-xl border border-accent/20 bg-accentSoft px-3 py-3 text-xs font-semibold text-accent transition hover:bg-accent/10"
-                  onClick={() => {
-                    const paymentPanel = document.getElementById('pos-payment-panel');
-                    paymentPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    paymentPanel?.focus({ preventScroll: true });
-                  }}
-                >
-                  Review
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
-                onClick={() => setShowParkModal(true)}
-                title="Park this sale"
-              >
-                Park
-              </button>
-              <button
-                type="button"
-                className={`btn-primary flex-1 px-5 py-3 text-sm font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                  paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
-                }`}
-                disabled={!canSubmit || isCompletingSale}
-                onClick={handleCompleteSale}
-              >
-                {completeLabel}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+
     </div>
   );
 }

@@ -13,3 +13,11 @@ it('shows an unpaid balance without implying a noncash sale has cash change', ()
   render(<PosPaymentSummary currency="GHS" totalDue={13900} changeDue={0} hasCash={false} balanceRemaining={3900} />);
   expect(screen.getByText('Still to pay')).toBeInTheDocument(); expect(screen.getByText('GH₵39.00')).toBeInTheDocument(); expect(screen.queryByText('Change to give')).not.toBeInTheDocument();
 });
+it('explains the discounted total with explicit amounts', () => {
+  render(<PosPaymentSummary currency="GHS" subtotal={13900} discount={1390} tax={0} totalDue={12510} changeDue={7490} hasCash balanceRemaining={0} />);
+  expect(screen.getByText('Items subtotal')).toBeInTheDocument();
+  expect(screen.getByText('GH₵139.00')).toBeInTheDocument();
+  expect(screen.getByText('−GH₵13.90')).toBeInTheDocument();
+  expect(screen.getByText('GH₵125.10')).toBeInTheDocument();
+  expect(screen.getByText('GH₵74.90')).toBeInTheDocument();
+});

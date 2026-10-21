@@ -326,9 +326,8 @@ describe('PosClient desktop layout', () => {
     expect(inlineComplete).not.toHaveAttribute('aria-hidden');
     expect(inlineComplete).not.toHaveAttribute('tabindex');
     const tabletBar = document.querySelector('[data-pos-mobile-checkout-bar="true"]');
-    expect(tabletBar?.className).toContain('md:block');
-    expect(tabletBar?.className).toContain('lg:hidden');
-    expect(tabletBar?.textContent).toMatch(/Complete Cash Sale/i);
+    expect(tabletBar).toBeNull();
+    expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')?.parentElement?.className).toContain('lg:hidden');
     expect(summarySidebarSpy.props?.onCompleteSale).toBeUndefined();
   });
 
@@ -547,7 +546,7 @@ describe('PosClient mobile phase 1 layout', () => {
       expect(document.querySelector('[data-pos-till-block="true"]')).not.toBeNull();
     });
     expect(screen.getByRole('link', { name: /Open till/i })).toHaveAttribute('href', '/shifts');
-    expect(screen.getByText(/Open a till before completing sales/i)).toBeInTheDocument();
+    expect(screen.getByText(/Open a till to complete sales/i)).toBeInTheDocument();
   });
 
   it('keeps Option B defaults and mutual exclusivity after adding an item on phone', async () => {
@@ -568,10 +567,9 @@ describe('PosClient mobile phase 1 layout', () => {
       expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')).not.toBeNull();
     });
     // Phase 2: phone chrome hides the inline sale panel with CSS; checkout stays in the sheet.
-    expectHiddenBelowMd(document.querySelector('[data-pos-cart-card="true"]')?.parentElement ?? null);
+    expectClassName(document.querySelector('[data-pos-cart-card="true"]')?.parentElement ?? null, 'max-lg:hidden');
     const tabletBar = document.querySelector('[data-pos-mobile-checkout-bar="true"]');
-    expectClassName(tabletBar, 'hidden');
-    expectClassName(tabletBar, 'md:block');
+    expect(tabletBar).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
@@ -643,7 +641,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     expect(openButton).toBeInTheDocument();
     expect(openButton).toHaveTextContent(/1 item/i);
     expect(openButton.textContent).toMatch(/GH₵|GHS|₵/);
-    expectHiddenBelowMd(document.querySelector('[data-pos-cart-card="true"]')?.parentElement ?? null);
+    expectClassName(document.querySelector('[data-pos-cart-card="true"]')?.parentElement ?? null, 'max-lg:hidden');
   });
 
   it('updates the cart bar total when quantity changes inside the sheet', async () => {
@@ -692,7 +690,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: /Cart & checkout/i })).not.toBeInTheDocument();
     });
-    expectHiddenBelowMd(document.querySelector('[data-pos-cart-card="true"]')?.parentElement ?? null);
+    expectClassName(document.querySelector('[data-pos-cart-card="true"]')?.parentElement ?? null, 'max-lg:hidden');
     expect(screen.getByRole('button', { name: /View cart, 1 item/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
@@ -777,7 +775,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     expect(screen.getByPlaceholderText(/scan barcode/i)).toHaveFocus();
   });
 
-  it('does not mount the phone cart bar at tablet/desktop widths', async () => {
+  it('CSS-hides the unified narrow-screen cart bar at desktop widths', async () => {
     mockPhoneViewport(false);
     render(<PosClient {...baseProps} />);
     expect(screen.getByRole('button', { name: /F2 focus barcode/i })).toBeInTheDocument();
@@ -791,7 +789,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     await waitFor(() => {
       expect(document.querySelector('#pos-payment-panel')).not.toBeNull();
     });
-    expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')?.closest('[class*="md:hidden"]')).not.toBeNull();
+    expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')?.closest('[class*="lg:hidden"]')).not.toBeNull();
     expect(screen.queryByRole('dialog', { name: /Cart & checkout/i })).not.toBeInTheDocument();
     expect(document.querySelector('[data-pos-cart-card="true"]')).not.toBeNull();
   });
