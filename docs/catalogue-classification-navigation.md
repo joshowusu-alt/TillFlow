@@ -24,3 +24,17 @@ explicit. Saved list state includes category, division and group as well as sear
 Verification covers ancestry validation, parent resets, count totals, preserved
 search/issue context, category-only shops, and list state. The local owner browser
 walkthrough exercises actual URL navigation and database counts at 320/390/1280px.
+
+## Classification setup
+
+Stock → Products now has Products and Classification tabs. Classification uses
+three clearly labelled category/division/group columns with a separate add action
+at each level. A selected category limits divisions; a selected division limits
+groups. The selected path links directly to the matching product list.
+
+Creation uses the selected parent. Successful saves navigate back to the saved
+category/division/group using setup-specific URL parameters and open the next
+editor. These parameters do not filter the Products tab's count. Server redirects
+derive division/group ancestry from tenant-scoped database records. This retains
+the next step when cache revalidation remounts the client form. Category colour,
+image and sort-order creation plus category removal remain in collapsed sections.

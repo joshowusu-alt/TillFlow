@@ -619,23 +619,34 @@ async function run() {
     step('BONUS Income Statement supporting records OK');
     step('BONUS Classification assignment and analytics');
     await page.goto(`${BASE_URL}/products?tab=categories`, { waitUntil: 'networkidle' });
-    const parentCategory = page.getByLabel('Under category');
-    await parentCategory.selectOption({ index: 1 });
-    const classificationCategoryId = await parentCategory.inputValue();
-    const classificationCategoryName = await parentCategory.locator('option:checked').textContent();
+    await page.getByRole('link', { name: 'Classification', exact: true }).waitFor();
+    const classificationSetup = page.getByRole('region', { name: 'Classification setup' });
+    const classificationCategoryName = `CI catalogue ${stamp}`;
     const divisionName = `CI division ${stamp}`, groupName = `CI group ${stamp}`;
-    await page.getByLabel('Division name').fill(divisionName);
-    await page.getByRole('button', { name: 'Add division', exact: true }).click();
-    await page.getByText(divisionName, { exact: true }).waitFor();
+    await classificationSetup.getByRole('button', { name: 'Add category', exact: true }).click();
+    await classificationSetup.getByLabel('Category name', { exact: true }).fill(classificationCategoryName);
+    await classificationSetup.getByRole('button', { name: 'Save category', exact: true }).click();
+    await classificationSetup.getByLabel('Division name', { exact: true }).waitFor();
+    const savedCategory = await prisma.category.findFirstOrThrow({ where: { businessId: reportOwner.businessId, name: classificationCategoryName } });
+    const classificationCategoryId = savedCategory.id;
+    await classificationSetup.getByLabel('Division name', { exact: true }).fill(divisionName);
+    await classificationSetup.getByRole('button', { name: 'Save division', exact: true }).click();
+    await classificationSetup.getByLabel('Group name', { exact: true }).waitFor();
     const savedDivision = await prisma.productDivision.findFirstOrThrow({ where: { businessId: reportOwner.businessId, categoryId: classificationCategoryId, name: divisionName } });
     const classificationDivisionId = savedDivision.id;
-    // Reload persisted setup before the next submit; don't type into an in-flight RSC refresh.
-    await page.goto(`${BASE_URL}/products?tab=categories`, { waitUntil: 'networkidle' });
-    await page.getByRole('button', { name: `Add group under ${divisionName}`, exact: true }).click();
-    await page.getByLabel('Group name').fill(groupName);
-    await page.getByRole('button', { name: 'Add group', exact: true }).click();
-    await page.getByText(`Groups: ${groupName}`, { exact: true }).waitFor();
+    await classificationSetup.getByLabel('Group name', { exact: true }).fill(groupName);
+    await classificationSetup.getByRole('button', { name: 'Save group', exact: true }).click();
+    const setupGroupProducts = classificationSetup.getByRole('link', { name: 'View products in this group', exact: true });
+    await setupGroupProducts.waitFor();
     const classificationGroup = await prisma.productGroup.findFirstOrThrow({ where: { businessId: reportOwner.businessId, divisionId: classificationDivisionId, name: groupName } });
+    const setupPath = new URL(await setupGroupProducts.getAttribute('href'), BASE_URL);
+    if (setupPath.searchParams.get('category') !== classificationCategoryId || setupPath.searchParams.get('division') !== classificationDivisionId || setupPath.searchParams.get('group') !== classificationGroup.id) throw new Error('Classification setup product link has incorrect ancestry');
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error(`Classification setup overflows at ${width}px`);
+      await screenshotStep(page, `classification-setup-${width}`);
+    }
+    step('BONUS Classification setup three-level creation and parent links OK');
     const classifiedSale = await prisma.salesInvoice.findFirstOrThrow({ where: { businessId: reportOwner.businessId, paymentStatus: 'PAID', lines: { some: {} } }, select: { lines: { take: 1, select: { productId: true } } } });
     const classifiedProduct = await prisma.product.findUniqueOrThrow({ where: { id: classifiedSale.lines[0].productId }, select: { id: true, name: true } });
     // Fictional CI product: exercise generating a missing barcode through the UI.

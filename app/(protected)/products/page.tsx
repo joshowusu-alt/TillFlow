@@ -79,6 +79,11 @@ export default async function ProductsPage({
   searchParams?: {
     error?: string;
     tab?: string;
+    setupCategory?: string;
+    setupDivision?: string;
+    setupGroup?: string;
+    setupAdd?: string;
+    setupSaved?: string;
     q?: string;
     page?: string;
     created?: string;
@@ -323,7 +328,7 @@ export default async function ProductsPage({
         </Suspense>
       ) : null}
 
-      {!issueActive ? (
+      {!issueActive && activeTab === 'products' ? (
         <div className="operational-metric-grid operational-metric-grid--4">
           <ProductStatCard
             label="Total products"
@@ -350,18 +355,20 @@ export default async function ProductsPage({
 
       {/* Tab switcher */}
       {!issueActive ? (
-        <div className="flex gap-1 rounded-xl bg-black/5 p-1 w-fit">
+        <div className="flex max-w-full gap-1 rounded-xl bg-black/5 p-1 w-fit">
           <Link
             href="/products?tab=products"
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'products' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
+            aria-current={activeTab === 'products' ? 'page' : undefined}
+            className={`inline-flex min-h-[44px] items-center px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'products' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
           >
             Products ({totalProductCount})
           </Link>
           <Link
             href="/products?tab=categories"
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'categories' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
+            aria-current={activeTab === 'categories' ? 'page' : undefined}
+            className={`inline-flex min-h-[44px] items-center px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'categories' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
           >
-            Categories & groups ({categories.length})
+            Classification
           </Link>
         </div>
       ) : null}
@@ -788,10 +795,12 @@ export default async function ProductsPage({
       {/* ───── Categories Tab ───── */}
       {activeTab === 'categories' && !issueActive && (
         <>
-          {isManager ? <ClassificationSetup categories={categories} divisions={await divisionsPromise} /> : null}
+          {isManager ? <ClassificationSetup key={[searchParams?.setupCategory, searchParams?.setupDivision, searchParams?.setupGroup, searchParams?.setupAdd].join(':')}
+            categories={categories} divisions={await divisionsPromise} initialCategoryId={searchParams?.setupCategory}
+            initialDivisionId={searchParams?.setupDivision} initialGroupId={searchParams?.setupGroup} initialAdd={searchParams?.setupAdd} saved={searchParams?.setupSaved} /> : null}
           {isManager ? (
-            <div className="card p-4 sm:p-5">
-              <h2 className="text-lg font-display font-semibold">Add category</h2>
+            <details className="card p-4 sm:p-5">
+              <summary className="cursor-pointer text-sm font-semibold">Advanced category creation · colour, image and sort order</summary>
               <form action={createCategoryAction} className="mt-4 grid gap-4 md:grid-cols-4">
                 <div>
                   <label className="label">Name</label>
@@ -813,10 +822,10 @@ export default async function ProductsPage({
                   <SubmitButton className="btn-primary" loadingText="Creating…">Create category</SubmitButton>
                 </div>
               </form>
-            </div>
+            </details>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <details className="card p-4 sm:p-5"><summary className="cursor-pointer text-sm font-semibold">Category settings · colours and removal</summary><div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {categories.map((cat) => (
               <div key={cat.id} className="card p-5 flex gap-4">
                 {cat.imageUrl ? (
@@ -861,7 +870,7 @@ export default async function ProductsPage({
                 No categories yet. Create one above to organise your products.
               </p>
             )}
-          </div>
+          </div></details>
         </>
       )}
     </div>
