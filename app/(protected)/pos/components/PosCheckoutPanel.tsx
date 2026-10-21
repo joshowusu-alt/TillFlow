@@ -44,6 +44,7 @@ type PosCheckoutPanelProps = {
   totalDue: number;
   totalPaid: number;
   cashTenderedPence?: number;
+  exactCashAssumed?: boolean;
   balanceRemaining: number;
   changeDue: number;
   dueDateDecision: DueDateDecision;
@@ -87,6 +88,7 @@ export default function PosCheckoutPanel({
   totalDue,
   totalPaid,
   cashTenderedPence = 0,
+  exactCashAssumed = false,
   dueDateDecision,
   dueDate,
   onDueDateDecisionChange,
@@ -356,7 +358,7 @@ export default function PosCheckoutPanel({
         </div>
       ) : null}
 
-      {!isUnpaid ? <div className="space-y-1 text-sm text-slate-600" data-pos-payment-amounts="true">{showCashControls ? <div className="flex justify-between gap-2"><span>Cash tendered</span><span className="font-semibold tabular-nums">{formatMoney(cashTenderedPence, currency)}</span></div> : null}<div className="flex justify-between gap-2"><span>Applied to sale</span><span className="font-semibold tabular-nums">{formatMoney(totalPaid, currency)}</span></div></div> : null}
+      {!isUnpaid ? <div className="space-y-1 text-sm text-slate-600" data-pos-payment-amounts="true">{showCashControls ? <div className="flex justify-between gap-2"><span>{exactCashAssumed ? 'Exact cash assumed' : 'Cash tendered'}</span><span className="font-semibold tabular-nums">{formatMoney(cashTenderedPence, currency)}</span></div> : null}<div className="flex justify-between gap-2"><span>Applied to sale</span><span className="font-semibold tabular-nums">{formatMoney(totalPaid, currency)}</span></div></div> : null}
 
     </div>
   );

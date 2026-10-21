@@ -98,9 +98,9 @@ async function addCocaColaToCart() {
   fireEvent.focus(search);
   fireEvent.change(search, { target: { value: 'Coca' } });
   await waitFor(() => {
-    expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Coca Cola/i })).toBeInTheDocument();
   });
-  fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^Coca Cola/i }));
 }
 
 describe('PosClient desktop layout', () => {
@@ -322,9 +322,9 @@ describe('PosClient desktop layout', () => {
     fireEvent.focus(search);
     fireEvent.change(search, { target: { value: 'Coca' } });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Coca Cola/i })).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Coca Cola/i }));
 
     await waitFor(() => {
       expect(document.querySelector('.keyboard-safe-fixed-bottom')).not.toBeNull();
@@ -513,9 +513,9 @@ describe('PosClient mobile phase 1 layout', () => {
     fireEvent.focus(search);
     fireEvent.change(search, { target: { value: 'Coca' } });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Coca Cola/i })).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Coca Cola/i }));
     await waitFor(() => {
       expect(document.querySelector('[data-pos-checkout-collapsed="true"]')).toBeNull();
     });
@@ -561,9 +561,9 @@ describe('PosClient mobile phase 1 layout', () => {
     fireEvent.focus(search);
     fireEvent.change(search, { target: { value: 'Coca' } });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Coca Cola/i })).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Coca Cola/i }));
 
     await waitFor(() => {
       expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')).not.toBeNull();
@@ -604,9 +604,9 @@ async function addCocaColaOnPhone() {
   fireEvent.focus(search);
   fireEvent.change(search, { target: { value: 'Coca' } });
   await waitFor(() => {
-    expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Coca Cola/i })).toBeInTheDocument();
   });
-  fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^Coca Cola/i }));
   await waitFor(() => {
     expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')).not.toBeNull();
   });
@@ -785,9 +785,9 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     fireEvent.focus(search);
     fireEvent.change(search, { target: { value: 'Coca' } });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Coca Cola/i })).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Coca Cola/i }));
     await waitFor(() => {
       expect(document.querySelector('#pos-payment-panel')).not.toBeNull();
     });
@@ -1032,9 +1032,9 @@ describe('PosClient till selection', () => {
     fireEvent.focus(search);
     fireEvent.change(search, { target: { value: 'Coca' } });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Coca Cola/i })).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Coca Cola/i }));
     const completeButtons = screen.getAllByRole('button', { name: /Complete Cash Sale/i });
     const complete = completeButtons.find((btn) => !(btn as HTMLButtonElement).disabled)!;
     fireEvent.click(complete);
@@ -1099,7 +1099,7 @@ it('preserves cash received and readable change when moving between mobile cart 
   const search = screen.getByLabelText('Search products');
   fireEvent.focus(search);
   fireEvent.change(search, { target: { value: 'Coca' } });
-  fireEvent.click(await screen.findByRole('button', { name: /Coca Cola/i }));
+  fireEvent.click(await screen.findByRole('button', { name: /^Coca Cola/i }));
   fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
   fireEvent.click(screen.getByRole('button', { name: /Continue to payment/ }));
   fireEvent.change(screen.getByLabelText(/Cash tendered/), { target: { value: '20' } });
@@ -1119,12 +1119,12 @@ it('does not let an earlier search blur close a newly reopened catalogue dropdow
   const search = screen.getByLabelText('Search products');
   fireEvent.focus(search);
   fireEvent.change(search, { target: { value: 'Coca' } });
-  fireEvent.click(await screen.findByRole('button', { name: /Coca Cola/i }));
+  fireEvent.click(await screen.findByRole('button', { name: /^Coca Cola/i }));
   fireEvent.blur(search);
   fireEvent.focus(search);
   fireEvent.change(search, { target: { value: 'Coca' } });
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 250)); });
-  expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /^Coca Cola/i })).toBeInTheDocument();
 });
 
 describe('POS checkout clarity', () => {
@@ -1160,4 +1160,73 @@ it('keeps walk-in checkout compact and automatically opens customer selection fo
   expect(screen.getByLabelText('Customer (required)')).toHaveValue('cust-1');
 });
 
+});
+
+describe('POS clear cart confirmation and recovery', () => {
+  beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); searchParamsGet.mockReturnValue(null); });
+
+  it('cancels without changing cash and Escape keeps the phone cart sheet open', async () => {
+    render(<PosClient {...baseProps} />);
+    await addCocaColaToCart();
+    fireEvent.change(screen.getByLabelText(/cash tendered/i), { target: { value: '20' } });
+    fireEvent.click(screen.getByRole('button', { name: /View cart,/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
+    const keep = await screen.findByRole('button', { name: 'Keep cart' });
+    await waitFor(() => expect(keep).toHaveFocus());
+    fireEvent.keyDown(keep, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Clear this cart?' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /Cart & checkout/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Payment' }));
+    expect(screen.getByLabelText(/cash tendered/i)).toHaveValue(20);
+    expect(screen.getByText('Coca Cola')).toBeInTheDocument();
+  });
+
+  it('resets stale sale details, restores them with Undo, then starts a clean next sale', async () => {
+    render(<PosClient {...baseProps} />);
+    await addCocaColaToCart();
+    fireEvent.click(screen.getByRole('button', { name: 'Change customer' }));
+    fireEvent.change(screen.getByLabelText('Customer'), { target: { value: 'cust-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    const discount = document.querySelector('[data-pos-till-form] details')!;
+    fireEvent.change(discount.querySelector('select')!, { target: { value: 'PERCENT' } });
+    fireEvent.change(discount.querySelector('input[type="number"]')!, { target: { value: '10' } });
+    fireEvent.change(screen.getByLabelText(/cash tendered/i), { target: { value: '20' } });
+    const clear = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Clear cart' }));
+    };
+    await clear();
+    expect(screen.getByText('Cart is empty')).toBeInTheDocument();
+    expect(screen.getByLabelText(/cash tendered/i)).toHaveValue(null);
+    expect(document.querySelector('[data-pos-customer-summary]')).toHaveTextContent('Walk-in');
+    expect(discount.querySelector('select')).toHaveValue('NONE');
+    expect(document.querySelector('select[name="tillId"]')).toHaveValue('till-1');
+    fireEvent.click(screen.getByRole('button', { name: 'Undo clear' }));
+    expect(screen.getByText('Coca Cola')).toBeInTheDocument();
+    expect(screen.getByLabelText(/cash tendered/i)).toHaveValue(20);
+    expect(document.querySelector('[data-pos-customer-summary]')).toHaveTextContent('Walk In Customer');
+    expect(discount.querySelector('select')).toHaveValue('PERCENT');
+    expect(document.querySelector('[data-pos-change-due]')).toHaveTextContent('GH₵17.75');
+    await clear();
+    await addCocaColaToCart();
+    expect(screen.queryByRole('button', { name: 'Undo clear' })).not.toBeInTheDocument();
+    expect(screen.getByText('Exact cash assumed')).toBeInTheDocument();
+    expect(document.querySelector('[data-pos-payment-amounts]')).toHaveTextContent('Applied to saleGH₵2.50');
+  });
+
+  it('restores required customer and due-date decisions when undoing a cleared part-paid sale', async () => {
+    render(<PosClient {...baseProps} />); await addCocaColaToCart();
+    fireEvent.change(screen.getByLabelText(/payment status/i), { target: { value: 'PART_PAID' } });
+    fireEvent.change(screen.getByLabelText('Customer (required)'), { target: { value: 'cust-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'No due date' }));
+    fireEvent.change(screen.getByLabelText(/cash tendered/i), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear cart' }));
+    expect(screen.getByLabelText(/payment status/i)).toHaveValue('PAID');
+    fireEvent.click(screen.getByRole('button', { name: 'Undo clear' }));
+    expect(screen.getByLabelText(/payment status/i)).toHaveValue('PART_PAID');
+    expect(screen.getByLabelText('Customer (required)')).toHaveValue('cust-1');
+    expect(screen.getByLabelText(/cash tendered/i)).toHaveValue(1);
+    expect(screen.getByTestId('pos-complete-checkout')).toBeEnabled();
+  });
 });

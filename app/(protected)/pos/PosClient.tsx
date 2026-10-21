@@ -66,6 +66,7 @@ import { DISCOUNT_REASON_CODES } from '@/lib/fraud/reason-codes';
 import { queueOfflineSale } from '@/lib/offline';
 import { usePosCustomers, type PosCustomerOption } from '@/hooks/usePosCustomers';
 import PosPaymentSummary from './components/PosPaymentSummary';
+import ClearCartDialog from './components/ClearCartDialog';
 import ProductShortcuts from './components/ProductShortcuts';
 import KeyboardHelpModal from './components/KeyboardHelpModal';
 import QuickAddPanel from './components/QuickAddPanel';
@@ -300,6 +301,9 @@ export default function PosClient({
   const [showParkedPanel, setShowParkedPanel] = useState(false);
   const [productWorkspaceTab, setProductWorkspaceTab] = useState<'cart' | 'products'>('cart');
   const [phoneCheckoutSheetOpen, setPhoneCheckoutSheetOpen] = useState(false);
+  const [showClearCart, setShowClearCart] = useState(false);
+  const [clearUndoAvailable, setClearUndoAvailable] = useState(false);
+  const clearUndoRestore = useRef<(() => void) | null>(null);
   const mobileCartBarRef = useRef<HTMLButtonElement>(null);
   const storageScope = useMemo(
     () => ({ businessId: business.id, storeId: store.id }),
@@ -370,11 +374,26 @@ export default function PosClient({
   }, []);
 
   const handleUndo = useCallback(() => {
+    if (isCompletingSale || ambiguousFailure) return;
+    if (cart.length === 0 && clearUndoRestore.current) {
+      const restore = clearUndoRestore.current;
+      clearUndoRestore.current = null;
+      setClearUndoAvailable(false);
+      restore();
+      return;
+    }
     const previousCart = popUndoSnapshot();
     if (!previousCart) return;
     setCart(previousCart);
     playBeep(true);
-  }, [popUndoSnapshot, playBeep, setCart]);
+  }, [popUndoSnapshot, playBeep, setCart, cart.length, isCompletingSale, ambiguousFailure]);
+
+  useEffect(() => {
+    if (!clearUndoAvailable) return;
+    if (cart.length > 0) { clearUndoRestore.current = null; setClearUndoAvailable(false); return; }
+    const timer = window.setTimeout(() => { clearUndoRestore.current = null; setClearUndoAvailable(false); }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [clearUndoAvailable, cart.length]);
 
   const urlCatalogueMode = searchParams?.get('posCatalogueMode');
   const useServerCatalogue =
@@ -1042,6 +1061,26 @@ export default function PosClient({
     momoSignature,
   } = checkoutSummary;
 
+  const confirmClearCart = () => {
+    if (!cartFilled || isCompletingSale || ambiguousFailure || isInitiatingMomo) return;
+    const discount = orderDiscountForm.snapshot();
+    const momo = { momoPaid, momoRef, momoPayerMsisdn, momoNetwork, momoCollectionId, momoCollectionStatus, momoCollectionError, momoIdempotencyKey, momoCollectionSignature };
+    clearUndoRestore.current = () => {
+      setCart(cart); setCustomerId(customerId); setCustomerSearch(customerSearch);
+      setCashTendered(cashTendered); setCardPaid(cardPaid); setCardRef(cardRef);
+      setTransferPaid(transferPaid); setTransferRef(transferRef); restoreMomoSnapshot(momo);
+      setPaymentStatus(paymentStatus); setPaymentMethods(paymentMethods); setShowSplitPanel(showSplitPanel);
+      setDueDate(dueDate); setDueDateDecision(dueDateDecision);
+      orderDiscountForm.restore(discount); loyaltyRedemption.setPointsInput(loyaltyRedemption.pointsInput);
+      setQtyDrafts(qtyDrafts); restoreUndoStack(undoStack); setSaleAttemptId(saleAttemptId);
+      setSaleError(saleError); setActiveLineId(activeLineId);
+    };
+    resetActiveSale({ resetPaymentStatus: true });
+    setSaleAttemptId(nextSaleAttemptId()); setSaleError(null); setActiveLineId(null); setCustomerSearch('');
+    setShowClearCart(false); setPhoneCheckoutSheetOpen(false); setClearUndoAvailable(true);
+    barcodeRef.current?.focus();
+  };
+
   const handleParkCurrentCart = useCallback((label: string) => {
     const result = parkCurrentCart({ cart, customerId, label });
     if (!result) return;
@@ -1473,6 +1512,7 @@ export default function PosClient({
       data-selected-till-id={tillId}
       data-selected-shift-id={boundShiftId || undefined}
     >
+      {clearUndoAvailable ? <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"><span>Cart cleared. Sale details reset.</span><button type="button" className="min-h-11 px-3 font-semibold text-accent" onClick={handleUndo}>Undo clear</button></div> : null}
       <div className="pos-selling-layout space-y-3 sm:space-y-4" data-pos-workspace-tab={productWorkspaceTab}>
         {/* ── Scan / Search bar ─────────────────────────────── */}
         <div className="card scroll-mt-[calc(var(--app-header-offset)+0.5rem)] p-3 sm:p-4" data-pos-search-card="true">
@@ -1647,7 +1687,7 @@ export default function PosClient({
             </div>
 
             <div className="flex items-center gap-2 self-end sm:self-auto">
-              {canUndo && (
+              {(canUndo || clearUndoAvailable) && (
                 <button
                   type="button"
                   className="flex items-center gap-1 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold transition hover:bg-black/5"
@@ -1987,7 +2027,8 @@ export default function PosClient({
                   <button
                     type="button"
                     className="text-xs font-medium text-rose-500 hover:text-rose-700"
-                    onClick={() => { if (confirm('Clear the entire cart?')) { pushUndo(cart); setCart([]); clearSavedCart(); } }}
+                    onClick={() => setShowClearCart(true)}
+                    disabled={isCompletingSale || ambiguousFailure || isInitiatingMomo}
                   >
                     Clear all
                   </button>
@@ -2069,7 +2110,9 @@ export default function PosClient({
                         </div>
                         <button
                           type="button"
-                          className="flex-shrink-0 rounded-lg p-3 text-black/20 hover:text-rose-500 hover:bg-rose-50 transition"
+                          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 hover:text-rose-700 hover:bg-rose-50 transition"
+                          aria-label={`Remove ${line.product.name}`}
+                          disabled={isCompletingSale || ambiguousFailure}
                           onClick={(e) => { e.stopPropagation(); removeLine(line.id); }}
                           title="Remove"
                         >
@@ -2413,6 +2456,7 @@ export default function PosClient({
               totalDue={totalDue}
               totalPaid={totalPaid}
               cashTenderedPence={cashTenderedValue}
+              exactCashAssumed={checkoutSummary.usedExactCashDefault}
               balanceRemaining={balanceRemaining}
               changeDue={changeDue}
               dueDateDecision={dueDateDecision}
@@ -2673,6 +2717,7 @@ export default function PosClient({
       ) : null}
 
 
+      <ClearCartDialog open={showClearCart} count={cartDetails.length} total={totalDue} currency={business.currency} onCancel={() => setShowClearCart(false)} onConfirm={confirmClearCart} />
     </div>
   );
 }
