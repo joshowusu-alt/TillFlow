@@ -398,6 +398,7 @@ model Store {
   vatRateBps     Int      @default(1500)
   nhilRateBps    Int      @default(250)
   getFundRateBps Int      @default(250)
+  posShortcutsJson String?
   createdAt      DateTime @default(now())
 
   business               Business                @relation(fields: [businessId], references: [id])

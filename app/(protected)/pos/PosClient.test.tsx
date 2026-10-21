@@ -43,6 +43,7 @@ vi.mock('./components/SummarySidebar', () => ({
 vi.mock('./components/KeyboardHelpModal', () => ({
   default: ({ show }: { show: boolean }) => (show ? <div data-testid="keyboard-help-modal" /> : null),
 }));
+vi.mock('./components/ProductShortcuts', () => ({ default: () => null }));
 vi.mock('./components/QuickAddPanel', () => ({
   default: () => <div data-testid="quick-add-panel" />,
 }));

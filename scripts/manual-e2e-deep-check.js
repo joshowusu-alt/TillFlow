@@ -766,6 +766,7 @@ async function run() {
     await page.setViewportSize({ width: 1280, height: 720 });
     step('BONUS Supplier action and fluid report widths OK');
     step('BONUS Product history and compact supplier account');
+    let reportHistoryStoreId;
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${BASE_URL}/products/${classifiedProduct.id}`, { waitUntil: 'networkidle' });
@@ -773,6 +774,7 @@ async function run() {
       await page.getByRole('heading', { name: 'Product history', exact: true }).waitFor();
       const history = page.locator('[data-product-history-store]');
       const historyStoreId = await history.getAttribute('data-product-history-store');
+      reportHistoryStoreId = historyStoreId;
       const [balance, recorded] = await Promise.all([
         prisma.inventoryBalance.findUnique({ where: { storeId_productId: { storeId: historyStoreId, productId: classifiedProduct.id } } }),
         prisma.stockMovement.aggregate({ where: { productId: classifiedProduct.id, storeId: historyStoreId }, _sum: { qtyBase: true } }),
@@ -876,6 +878,47 @@ async function run() {
     await page.getByRole('status').filter({ hasText: 'Updated 2 products' }).waitFor();
     await page.getByRole('status').filter({ hasText: 'CI reviewed supplier increase' }).waitFor();
     step('BONUS Bulk pricing preview, stale guard and audited apply OK');
+    step('BONUS Branch product shortcut screens');
+    const shortcutStoreId = reportHistoryStoreId;
+    for (const product of bulkProducts) await prisma.inventoryBalance.create({ data: { storeId: shortcutStoreId, productId: product.id, qtyOnHandBase: 10 } });
+    const shortcutLoad = page.waitForResponse(response => response.url().includes('/api/pos/shortcuts?'));
+    await page.goto(`${BASE_URL}/pos`, { waitUntil: 'networkidle' });
+    const shortcutPanel = page.getByRole('region', { name: 'Product shortcuts', exact: true });
+    const shortcutResponse = await shortcutLoad;
+    if (new URL(shortcutResponse.url()).searchParams.get('storeId') !== shortcutStoreId) throw new Error('Shortcut branch differs from selected branch');
+    if (!shortcutResponse.ok()) throw new Error('Shortcut read failed');
+    const originalShortcutStore = await prisma.store.findUniqueOrThrow({ where: { id: shortcutStoreId }, select: { posShortcutsJson: true } });
+    try {
+      await shortcutPanel.getByRole('button', { name: 'Manage shortcuts', exact: true }).click();
+      await shortcutPanel.getByRole('button', { name: 'Add screen', exact: true }).click();
+      const shortcutScreenName = `QA Shortcuts ${Date.now()}`;
+      await shortcutPanel.getByLabel('Screen name', { exact: true }).fill(shortcutScreenName);
+      await shortcutPanel.getByLabel('Find products for this screen', { exact: true }).fill(bulkName);
+      await shortcutPanel.getByRole('button', { name: / Add$/ }).first().click();
+      await shortcutPanel.getByRole('button', { name: 'Save shortcuts', exact: true }).click();
+      await shortcutPanel.getByText(/Shortcuts saved for this branch/).waitFor();
+      const savedShortcutStore = await prisma.store.findUniqueOrThrow({ where: { id: shortcutStoreId }, select: { posShortcutsJson: true } });
+      const savedShortcutScreen = JSON.parse(savedShortcutStore.posShortcutsJson).screens.find(screen => screen.name === shortcutScreenName);
+      if (!savedShortcutScreen || !bulkProducts.some(product => savedShortcutScreen.productIds.includes(product.id))) throw new Error('Shortcut did not save actual product IDs');
+      await page.reload({ waitUntil: 'networkidle' });
+      await shortcutPanel.getByRole('button', { name: shortcutScreenName, exact: true }).click();
+      const shortcutTile = shortcutPanel.locator('div.grid button').first();
+      await shortcutTile.waitFor();
+      if (!(await shortcutTile.isEnabled())) throw new Error('In-stock shortcut should be enabled');
+      await shortcutTile.click();
+      await page.getByText('Select how you want to sell', { exact: true }).waitFor();
+      for (const width of [320, 390, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error(`Shortcut screen overflows at ${width}px`);
+        await screenshotStep(page, `product-shortcuts-${width}`);
+      }
+      await page.setViewportSize({ width: 1280, height: 900 });
+    } finally {
+      await prisma.inventoryBalance.deleteMany({ where: { storeId: shortcutStoreId, productId: { in: bulkProducts.map(p => p.id) } } });
+      await prisma.store.update({ where: { id: shortcutStoreId }, data: { posShortcutsJson: originalShortcutStore.posShortcutsJson } });
+    }
+    step('BONUS Branch product shortcut screens OK');
+
     } finally {
       if (needsReportFixture) await prisma.business.update({ where: { id: reportOwner.businessId }, data: originalPlan });
     }

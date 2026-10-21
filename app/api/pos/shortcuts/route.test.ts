@@ -1,0 +1,11 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
+const m = vi.hoisted(() => ({ user: vi.fn(), store: vi.fn(), products: vi.fn(), balances: vi.fn() }));
+vi.mock('@/lib/auth', () => ({ getUser: m.user }));
+vi.mock('@/lib/prisma', () => ({ prisma: { store: { findFirst: m.store }, product: { findMany: m.products }, inventoryBalance: { findMany: m.balances } } }));
+import { GET } from './route';
+const request = () => new NextRequest('http://localhost/api/pos/shortcuts?storeId=s1');
+beforeEach(() => { vi.clearAllMocks(); m.user.mockResolvedValue({ businessId: 'b1', role: 'CASHIER' }); m.store.mockResolvedValue({ id:'s1', posShortcutsJson: JSON.stringify({ screens:[{ id:'main', name:'Main', productIds:['p1'] }] }) }); m.products.mockResolvedValue([]); m.balances.mockResolvedValue([]); });
+it('returns 401 without querying branch data when signed out', async () => { m.user.mockResolvedValue(null); expect((await GET(request())).status).toBe(401); expect(m.store).not.toHaveBeenCalled(); });
+it('hides foreign branches and never loads their products', async () => { m.store.mockResolvedValue(null); expect((await GET(request())).status).toBe(404); expect(m.store).toHaveBeenCalledWith(expect.objectContaining({ where: { id:'s1', businessId:'b1' } })); expect(m.products).not.toHaveBeenCalled(); });
+it('returns saved IDs with tenant-scoped active products and no cashier management permission', async () => { const response = await GET(request()); const body = await response.json(); expect(body.canManage).toBe(false); expect(body.layout.screens[0].productIds).toEqual(['p1']); expect(m.products).toHaveBeenCalledWith(expect.objectContaining({ where:{ businessId:'b1', active:true, id:{ in:['p1'] } } })); expect(response.headers.get('Cache-Control')).toContain('no-store'); });

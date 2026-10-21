@@ -66,6 +66,7 @@ import { DISCOUNT_REASON_CODES } from '@/lib/fraud/reason-codes';
 import { queueOfflineSale } from '@/lib/offline';
 import { usePosCustomers, type PosCustomerOption } from '@/hooks/usePosCustomers';
 import SummarySidebar from './components/SummarySidebar';
+import ProductShortcuts from './components/ProductShortcuts';
 import KeyboardHelpModal from './components/KeyboardHelpModal';
 import QuickAddPanel from './components/QuickAddPanel';
 import ParkModal from './components/ParkModal';
@@ -1734,6 +1735,22 @@ export default function PosClient({
             </div>
           )}
         </div>
+
+        <ProductShortcuts
+          key={`${business.id}.${store.id}`}
+          businessId={business.id} storeId={store.id} currency={business.currency}
+          products={productOptions} serverCatalogue={useServerCatalogue} onProductLoaded={mergeProductOption} getAvailable={getAvailableBase}
+          onSelect={(product) => {
+            const baseUnitId = getProductBaseUnitId(product);
+            if (!baseUnitId || getAvailableBase(product.id) <= 0) return;
+            if (product.units.length > 1) stageProduct(product);
+            else {
+              addToCart({ productId: product.id, unitId: baseUnitId, qtyInUnit: 1 });
+              playBeep(true);
+              barcodeRef.current?.focus();
+            }
+          }}
+        />
 
         {/* ── Staged product: unit + qty picker ──────────────── */}
         {stagedProduct && (
