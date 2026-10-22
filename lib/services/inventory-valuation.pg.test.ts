@@ -3,7 +3,14 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
 
-vi.mock('@/lib/action-utils', () => ({ UserError: class UserError extends Error {} }));
+const backupContext = vi.hoisted(() => ({ businessId: '', user: { id: '', name: 'Owner', role: 'OWNER' } }));
+vi.mock('@/lib/action-utils', () => ({ UserError: class UserError extends Error {},
+  withBusinessContext: async () => backupContext,
+  safeAction: (work: () => unknown) => work(),
+  ok: (data: unknown) => ({ success: true, data }),
+  err: (error: string) => ({ success: false, error }),
+}));
+vi.mock('@/lib/audit', () => ({ audit: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('./risk-monitor', () => ({ detectVoidFrequencyRisk: vi.fn().mockResolvedValue(undefined), detectExcessiveDiscountRisk: vi.fn().mockResolvedValue(undefined), detectNegativeMarginRisk: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('next/cache', () => ({ unstable_cache: (fn: unknown) => fn }));
 const describePg = canRunLivePostgresTests() ? describe : describe.skip;
@@ -27,6 +34,7 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     businessId = (await db.business.create({ data: { name: `Valuation audit ${Date.now()}`, currency: 'GHS' } })).id;
     storeId = (await db.store.create({ data: { businessId, name: 'Disposable valuation branch' } })).id;
     userId = (await db.user.create({ data: { businessId, name: 'Owner', email: `valuation-${Date.now()}@example.invalid`, role: 'OWNER', passwordHash: 'fixture' } })).id;
+    backupContext.businessId = businessId; backupContext.user.id = userId;
     supplierId = (await db.supplier.create({ data: { businessId, name: 'Fixture supplier' } })).id;
     customerId = (await db.customer.create({ data: { businessId, name: 'Fixture customer' } })).id;
     tillId = (await db.till.create({ data: { storeId, name: 'Fixture till' } })).id;
@@ -277,6 +285,32 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     await expect(withMissingMovement(() => sales.amendSale({ businessId, salesInvoiceId: sale.id, userId, reason: 'Missing-movement regression', keepLineIds, newLines: [{ productId: p, unitId, qtyInUnit: 1 }], additionalPaymentMethod: 'TRANSFER' })))
       .rejects.toThrow('Unable to record all sale stock movements');
     expect(await saleEvidenceSnapshot(p)).toEqual(before);
+  }, 60000);
+  it('exports a consistent stock and sale snapshot while another sale commits', async () => {
+    const p = await product(); await buy(p, 3, 1000);
+    const { exportDatabaseAction } = await import('@/app/actions/backup');
+    const transaction = singleton.$transaction.bind(singleton);
+    let concurrentSaleId = '';
+    const interception = vi.spyOn(singleton, '$transaction').mockImplementation((async (callback: (tx: Prisma.TransactionClient) => Promise<unknown>, options: object) =>
+      transaction(async tx => {
+        const read = tx.salesInvoice.findMany.bind(tx.salesInvoice);
+        const invoices = vi.spyOn(tx.salesInvoice, 'findMany').mockImplementation((async (args: Parameters<typeof read>[0]) => {
+          concurrentSaleId = (await sell(p, 1)).id;
+          return read(args);
+        }) as typeof tx.salesInvoice.findMany);
+        try { return await callback(tx); }
+        finally { invoices.mockRestore(); }
+      }, options)) as typeof singleton.$transaction);
+    let result: Awaited<ReturnType<typeof exportDatabaseAction>>;
+    try { result = await exportDatabaseAction(); }
+    finally { interception.mockRestore(); }
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error(result.error);
+    expect(concurrentSaleId).not.toBe('');
+    expect(result.data.salesInvoices.some(row => row.id === concurrentSaleId)).toBe(false);
+    expect(result.data.stockMovements.some(row => row.referenceId === concurrentSaleId)).toBe(false);
+    expect(result.data.inventoryBalances.find(row => row.productId === p).qtyOnHandBase).toBe(3);
+    expect((await stock(p)).qtyOnHandBase).toBe(2);
   }, 60000);
   it('records opening pack cost exactly and supports verified sub-pesewa unit allocations', async () => {
     const p = await product(); const pack = await db.unit.create({ data: { name: `Opening pack ${p}`, pluralName: 'Packs' } }); extraUnitIds.push(pack.id);
