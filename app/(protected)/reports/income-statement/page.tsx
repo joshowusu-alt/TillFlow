@@ -116,9 +116,9 @@ export default async function IncomeStatementPage({
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           <p className="font-semibold">Stock value is incomplete</p>
           <p className="mt-1">{statement.incompleteStockMessage}</p>
-          {statement.profitMayBeIncomplete ? (
+          {costsIncomplete ? (
             <p className="mt-1">Profit may also be incomplete until those costs are confirmed.</p>
-          ) : null}
+          ) : <p className="mt-1">Sales costs for this reporting period are complete. The stock-value review is separate.</p>}
         </div>
       ) : null}
 

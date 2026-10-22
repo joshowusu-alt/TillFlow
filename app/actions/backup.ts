@@ -2,6 +2,8 @@
 
 import {serializePurchaseDocument,restorePurchaseDocument} from '@/lib/purchases/document-backup';
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
+import { isPostgresRuntimeEnv } from '@/lib/database-runtime';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
@@ -49,8 +51,10 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
   return safeAction(async () => {
     const { businessId, user } = await withBusinessContext(['OWNER'], { requireWrite: false });
 
-    const business = await prisma.business.findUnique({ where: { id: businessId } });
-    if (!business) return err('No business set up yet. Please complete onboarding first.');
+    // A backup must represent one committed moment, even while tills are trading.
+    const backupData = await prisma.$transaction(async tx => {
+    const business = await tx.business.findUnique({ where: { id: businessId } });
+    if (!business) return null;
 
         // Export all tables
         const [
@@ -84,38 +88,38 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             tills,
             shifts
         ] = await Promise.all([
-            prisma.store.findMany({ where: { businessId } }),
-            prisma.user.findMany({ where: { businessId }, select: { id: true, businessId: true, name: true, email: true, role: true, active: true, createdAt: true } }),
-            prisma.customer.findMany({ where: { businessId } }),
-            prisma.supplier.findMany({ where: { businessId } }),
-            prisma.category.findMany({ where: { businessId } }),
-            prisma.productDivision.findMany({ where: { businessId, category: { businessId } } }),
-            prisma.productGroup.findMany({ where: { businessId, division: { businessId, category: { businessId } } } }),
-            prisma.product.findMany({ where: { businessId } }),
-            prisma.unit.findMany({ where: { productUnits: { some: { product: { businessId } } } } }),
-            prisma.productUnit.findMany({ where: { product: { businessId } } }),
-            prisma.inventoryBalance.findMany({ where: { store: { businessId } } }),
-            prisma.account.findMany({ where: { businessId } }),
-            prisma.journalEntry.findMany({ where: { businessId } }),
-            prisma.journalLine.findMany({ where: { journalEntry: { businessId } } }),
-            prisma.salesInvoice.findMany({ where: { businessId } }),
-            prisma.salesInvoiceLine.findMany({ where: { salesInvoice: { businessId } } }),
-            prisma.salesPayment.findMany({ where: { salesInvoice: { businessId } } }),
-            prisma.salesReturn.findMany({ where: { salesInvoice: { businessId } } }),
-            prisma.purchaseInvoice.findMany({ where: { businessId } }),
-            prisma.purchaseDocument.findMany({where:{businessId,purchaseInvoice:{businessId}}}),
-            prisma.purchaseInvoiceLine.findMany({ where: { purchaseInvoice: { businessId } } }),
-            prisma.purchasePayment.findMany({ where: { purchaseInvoice: { businessId } } }),
-            prisma.purchaseReturn.findMany({ where: { purchaseInvoice: { businessId } } }),
-            prisma.expense.findMany({ where: { businessId } }),
-            prisma.expensePayment.findMany({ where: { businessId } }),
-            prisma.stockMovement.findMany({ where: { store: { businessId } } }),
-            prisma.stockAdjustment.findMany({ where: { store: { businessId } } }),
-            prisma.till.findMany({ where: { store: { businessId } } }),
-            prisma.shift.findMany({ where: { till: { store: { businessId } } } })
+            tx.store.findMany({ where: { businessId } }),
+            tx.user.findMany({ where: { businessId }, select: { id: true, businessId: true, name: true, email: true, role: true, active: true, createdAt: true } }),
+            tx.customer.findMany({ where: { businessId } }),
+            tx.supplier.findMany({ where: { businessId } }),
+            tx.category.findMany({ where: { businessId } }),
+            tx.productDivision.findMany({ where: { businessId, category: { businessId } } }),
+            tx.productGroup.findMany({ where: { businessId, division: { businessId, category: { businessId } } } }),
+            tx.product.findMany({ where: { businessId } }),
+            tx.unit.findMany({ where: { productUnits: { some: { product: { businessId } } } } }),
+            tx.productUnit.findMany({ where: { product: { businessId } } }),
+            tx.inventoryBalance.findMany({ where: { store: { businessId } } }),
+            tx.account.findMany({ where: { businessId } }),
+            tx.journalEntry.findMany({ where: { businessId } }),
+            tx.journalLine.findMany({ where: { journalEntry: { businessId } } }),
+            tx.salesInvoice.findMany({ where: { businessId } }),
+            tx.salesInvoiceLine.findMany({ where: { salesInvoice: { businessId } } }),
+            tx.salesPayment.findMany({ where: { salesInvoice: { businessId } } }),
+            tx.salesReturn.findMany({ where: { salesInvoice: { businessId } } }),
+            tx.purchaseInvoice.findMany({ where: { businessId } }),
+            tx.purchaseDocument.findMany({where:{businessId,purchaseInvoice:{businessId}}}),
+            tx.purchaseInvoiceLine.findMany({ where: { purchaseInvoice: { businessId } } }),
+            tx.purchasePayment.findMany({ where: { purchaseInvoice: { businessId } } }),
+            tx.purchaseReturn.findMany({ where: { purchaseInvoice: { businessId } } }),
+            tx.expense.findMany({ where: { businessId } }),
+            tx.expensePayment.findMany({ where: { businessId } }),
+            tx.stockMovement.findMany({ where: { store: { businessId } } }),
+            tx.stockAdjustment.findMany({ where: { store: { businessId } } }),
+            tx.till.findMany({ where: { store: { businessId } } }),
+            tx.shift.findMany({ where: { till: { store: { businessId } } } })
         ]);
 
-        const backupData: BackupData = {
+        return {
             version: '1.3',
             exportedAt: new Date().toISOString(),
             business,
@@ -148,7 +152,9 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             stockAdjustments,
             tills,
             shifts
-        };
+        } satisfies BackupData;
+    }, { isolationLevel: (isPostgresRuntimeEnv() ? 'RepeatableRead' : 'Serializable') as Prisma.TransactionIsolationLevel, maxWait: 10000, timeout: 120000 });
+    if (!backupData) return err('No business set up yet. Please complete onboarding first.');
 
     await audit({
       businessId,
@@ -158,9 +164,9 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
       action: 'BACKUP_EXPORT',
       details: {
         exportedAt: backupData.exportedAt,
-        productCount: products.length,
-        salesCount: salesInvoices.length,
-        purchaseCount: purchaseInvoices.length,
+        productCount: backupData.products.length,
+        salesCount: backupData.salesInvoices.length,
+        purchaseCount: backupData.purchaseInvoices.length,
       },
     }).catch(() => {});
 

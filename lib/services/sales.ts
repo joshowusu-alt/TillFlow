@@ -8,6 +8,7 @@ import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { UserError } from '@/lib/action-utils';
 import { allocateLineValues, issueStockValue, receiveStockValue, INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1, type StockValue } from '@/lib/inventory-value';
 import { lockInventoryValues } from './shared/inventory-utils';
+import { recordSaleStockMovements } from './shared/sale-stock-movements';
 import {
   filterPositivePayments,
   splitPayments,
@@ -1408,8 +1409,7 @@ async function createSaleImpl(input: CreateSaleInput) {
         measureCheckoutStage(
           'action.checkout.stock-movements',
           input,
-          async () => tx.stockMovement.createMany({
-            data: lineDetails.map((line, index) => {
+          async () => recordSaleStockMovements(tx, lineDetails.map((line, index) => {
               const beforeQtyBase = stockMovementInventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
               return {
                 storeId: input.storeId,
@@ -1427,8 +1427,7 @@ async function createSaleImpl(input: CreateSaleInput) {
                 referenceId: created.id,
                 userId: input.cashierUserId,
               };
-            }),
-          }),
+            }), stockMovementInventoryMap),
           { stage: 'stock-movements', rowCount: lineDetails.length },
           CHECKOUT_STAGE_THRESHOLDS_MS.stockMovements,
         ),
@@ -1838,11 +1837,10 @@ export async function amendSale(input: AmendSaleInput) {
       txPromises.push(upsertInventoryBalance(tx, invoice.storeId, productId, finalOnHand, avgCost, value));
     }
 
-    // 5. Create stock movements for restored items
-    if (removedLines.length > 0) {
-      txPromises.push(
-        tx.stockMovement.createMany({
-          data: removedLines.map((line) => ({
+    // Restorations precede additions, including when both use the same product.
+    // Persist one checked batch so every quantity change has a movement.
+    const amendmentMovements: Prisma.StockMovementCreateManyInput[] = [
+          ...removedLines.map((line) => ({
             storeId: invoice.storeId,
             productId: line.productId,
             qtyBase: line.qtyBase, // positive = stock returned
@@ -1854,15 +1852,7 @@ export async function amendSale(input: AmendSaleInput) {
             referenceId: invoice.id,
             userId: input.userId,
           })),
-        })
-      );
-    }
-
-    // 6. Create stock movements for added items
-    if (newLineDetails.length > 0) {
-      txPromises.push(
-        tx.stockMovement.createMany({
-          data: newLineDetails.map((line, index) => ({
+          ...newLineDetails.map((line, index) => ({
             storeId: invoice.storeId,
             productId: line.productId,
             qtyBase: -line.qtyBase, // negative = stock sold
@@ -1874,9 +1864,7 @@ export async function amendSale(input: AmendSaleInput) {
             referenceId: invoice.id,
             userId: input.userId,
           })),
-        })
-      );
-    }
+    ];
 
     // 7. Create refund payment if total decreased
     if (refundAmount > 0) {
@@ -2022,6 +2010,11 @@ export async function amendSale(input: AmendSaleInput) {
     } else if (arChange < 0) {
       journalLines.push({ accountCode: ACCOUNT_CODES.ar, creditPence: -arChange });
     }
+
+    // Await checked movements directly: amendments can await receipt numbers
+    // while building their other writes, so an eagerly rejected movement promise
+    // must never sit unobserved in txPromises during those awaits.
+    await recordSaleStockMovements(tx, amendmentMovements, inventoryMap);
 
     if (journalLines.length > 0) {
       txPromises.push(
