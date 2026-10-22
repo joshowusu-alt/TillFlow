@@ -79,6 +79,7 @@ type CartLine = {
 };
 
 type PurchaseDraft = {
+  idempotencyKey?: string;
   purchaseDiscountPercent?: string;
   receiptDocumentType?: 'INVOICE' | 'DELIVERY_NOTE';
   version: 1;
@@ -181,12 +182,8 @@ export default function PurchaseFormClient({
   }, [productSearch, productOptions]);
 
   useEffect(() => {
-    const isRetry = Boolean(searchParams?.get('error'));
-    if (!isRetry) {
-      clearPurchaseOperationKey(storeId);
-    }
-    setIdempotencyKey((current) => readOrCreatePurchaseOperationKey(storeId, isRetry ? current : undefined));
-  }, [storeId, searchParams]);
+    setIdempotencyKey((current) => readOrCreatePurchaseOperationKey(storeId, current));
+  }, [storeId]);
 
   const resetPurchaseForm = useCallback(() => {
     clearPurchaseDraft(storeId);
@@ -241,6 +238,12 @@ export default function PurchaseFormClient({
         clearPurchaseDraft(storeId);
         draftReadyRef.current = true;
         return;
+      }
+
+      // A restored receipt is the same operation, even after a reload/new tab.
+      // Only completion or an explicit discard should start a new identity.
+      if (typeof parsed.idempotencyKey === 'string' && parsed.idempotencyKey.trim()) {
+        setIdempotencyKey(parsed.idempotencyKey);
       }
 
       const productById = new Map(productOptions.map((product) => [product.id, product]));
@@ -299,6 +302,7 @@ export default function PurchaseFormClient({
         return;
       }
       const draft: PurchaseDraft = {
+        idempotencyKey,
         version: PURCHASE_DRAFT_VERSION,
         updatedAt: Date.now(),
         supplierId, supplierInvoiceNumber, additionalCost, additionalCostTreatment, additionalCostNote, purchaseDiscountPercent, receiptDocumentType,
@@ -312,7 +316,7 @@ export default function PurchaseFormClient({
       };
       window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
     } catch {}
-  }, [cardPaid, cart, cashPaid, dueDate, paymentMethods, paymentStatus, storeId, supplierId, transferPaid, cashSource, cashHolderId, fundingOwnerId, draftStorageKey, supplierInvoiceNumber, additionalCost, additionalCostTreatment, additionalCostNote, purchaseDiscountPercent, receiptDocumentType]);
+  }, [idempotencyKey, cardPaid, cart, cashPaid, dueDate, paymentMethods, paymentStatus, storeId, supplierId, transferPaid, cashSource, cashHolderId, fundingOwnerId, draftStorageKey, supplierInvoiceNumber, additionalCost, additionalCostTreatment, additionalCostNote, purchaseDiscountPercent, receiptDocumentType]);
 
   useEffect(() => {
     if (!draftReadyRef.current) return;
@@ -625,6 +629,8 @@ export default function PurchaseFormClient({
   };
 
   const discardDraft = () => {
+    clearPurchaseOperationKey(storeId);
+    setIdempotencyKey(readOrCreatePurchaseOperationKey(storeId));
     setPurchaseDiscountPercent('');
     setReceiptDocumentType('INVOICE');
     setSupplierId('');
