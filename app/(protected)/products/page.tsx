@@ -605,7 +605,7 @@ export default async function ProductsPage({
                               : issueDef?.recordStatusLabel}
                           </span>
                           {issueKey === 'MISSING_COST' ? (
-                            <Link href={historicalMissingCostProductIds.has(product.id) ? '/sales' : '/inventory'} className="btn-primary min-h-[44px] text-xs">
+                            <Link href={`/products/${encodeURIComponent(product.id)}/cost-review`} className="btn-primary min-h-[44px] text-xs">
                               {historicalMissingCostProductIds.has(product.id) ? 'Review sales' : 'Review stock value'}
                             </Link>
                           ) : null}
@@ -736,7 +736,7 @@ export default async function ProductsPage({
                           <td className="px-3 py-3">
                             <div className="flex flex-wrap gap-2">
                               {issueKey === 'MISSING_COST' ? (
-                                <Link href={historicalMissingCostProductIds.has(product.id) ? '/sales' : '/inventory'} className="btn-primary text-xs">
+                                <Link href={`/products/${encodeURIComponent(product.id)}/cost-review`} className="btn-primary text-xs">
                                   {historicalMissingCostProductIds.has(product.id) ? 'Review sales' : 'Review stock value'}
                                 </Link>
                               ) : null}

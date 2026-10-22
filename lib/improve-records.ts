@@ -141,11 +141,10 @@ export function buildImproveRecordsCandidates(
 
   if (snapshot.missingCostProductCount > 0) {
     const n = snapshot.missingCostProductCount;
-    const verb = n === 1 ? 'has' : 'have';
     items.push({
       key: 'missing-costs',
       title: 'Complete your product costs',
-      explanation: `Profit is incomplete for ${n} product${n === 1 ? '' : 's'} that ${verb} been stocked or sold without a reliable cost.`,
+      explanation: `${n} product${n === 1 ? '' : 's'} need${n === 1 ? 's' : ''} stock-value or earlier sale-cost evidence. A current product cost alone does not resolve these records.`,
       actionLabel: 'Review missing costs',
       href: IMPROVE_RECORDS_ISSUE_DEFS.MISSING_COST.href,
       priority: 100,
