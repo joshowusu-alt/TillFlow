@@ -77,7 +77,7 @@ describe('Improve Your Records recommendation engine', () => {
     expect(result.primary?.key).toBe('missing-costs');
     expect(result.primary?.href).toBe('/products?issue=MISSING_COST');
     expect(result.primary?.explanation).toContain(
-      'stocked or sold without a reliable cost'
+      'stock-value or earlier sale-cost evidence'
     );
     expect(result.primary?.explanation).toContain('12');
   });
