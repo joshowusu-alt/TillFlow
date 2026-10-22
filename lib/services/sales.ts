@@ -1865,7 +1865,6 @@ export async function amendSale(input: AmendSaleInput) {
             userId: input.userId,
           })),
     ];
-    txPromises.push(recordSaleStockMovements(tx, amendmentMovements, inventoryMap));
 
     // 7. Create refund payment if total decreased
     if (refundAmount > 0) {
@@ -2011,6 +2010,11 @@ export async function amendSale(input: AmendSaleInput) {
     } else if (arChange < 0) {
       journalLines.push({ accountCode: ACCOUNT_CODES.ar, creditPence: -arChange });
     }
+
+    // Await checked movements directly: amendments can await receipt numbers
+    // while building their other writes, so an eagerly rejected movement promise
+    // must never sit unobserved in txPromises during those awaits.
+    await recordSaleStockMovements(tx, amendmentMovements, inventoryMap);
 
     if (journalLines.length > 0) {
       txPromises.push(
