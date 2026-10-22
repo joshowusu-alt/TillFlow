@@ -587,6 +587,25 @@ describe('purchase unit conversion', () => {
     expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
     expect(prismaMock.moneyIdempotency.create).not.toHaveBeenCalled();
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      maxWait: 10000, timeout: 30000,
+    });
+  });
+
+  it('returns an actionable transaction-expiry error without retrying writes', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([{
+      productId: 'prod-1', unitId: 'unit-piece', conversionToBase: 1,
+      product: { defaultCostBasePence: 100, vatRateBps: 0 }, unit: { name: 'Piece' },
+    }]);
+    prismaMock.$transaction.mockRejectedValueOnce(Object.assign(new Error('Transaction expired'), { code: 'P2028' }));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await expect(createPurchase({ sourceDocuments: [purchaseDocumentFixture()], businessId: bizId,
+        storeId, supplierId: 'supplier-a', userId, paymentStatus: 'UNPAID', payments: [],
+        lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
+      })).rejects.toThrow('Purchase saving timed out. Your draft is still available.');
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    } finally { log.mockRestore(); }
   });
 
   it('rejects a new credit purchase without a supplier', async () => {

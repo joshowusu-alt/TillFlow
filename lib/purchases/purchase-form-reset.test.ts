@@ -38,7 +38,7 @@ describe('Purchase form reset after completion', () => {
     expect(form).toContain("setPaymentStatus('UNPAID')");
     expect(form).toContain('readOrCreatePurchaseOperationKey');
     expect(form).toContain('clearPurchaseOperationKey');
-    expect(form).toContain("searchParams?.get('error')");
+    expect(form).toContain('setIdempotencyKey(parsed.idempotencyKey)');
   });
 
   it('incomplete purchase drafts still persist in localStorage', () => {

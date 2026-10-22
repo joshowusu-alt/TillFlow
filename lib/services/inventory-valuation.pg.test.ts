@@ -205,6 +205,30 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     expect(await db.inventoryBalance.findUnique({ where: { storeId_productId: { storeId, productId: p } } })).toBeNull();
     expect(await db.moneyIdempotency.count({ where: { businessId, key } })).toBe(0);
     expect(await db.purchasePayment.count({ where: { businessId, purchaseInvoice: { lines: { some: { productId: p } } } } })).toBe(0);
+    expect(await db.purchaseDocument.count({ where: { businessId, purchaseInvoice: { lines: { some: { productId: p } } } } })).toBe(0);
+  }, 60000);
+  it('saves an attached receipt beyond five seconds and replays without duplicate stock or postings', async () => {
+    const p = await product();
+    const key = `slow-receipt-${p}`;
+    const originalTransaction = singleton.$transaction.bind(singleton);
+    const injected = vi.spyOn(singleton, '$transaction').mockImplementationOnce((async (callback: any, options: any) =>
+      originalTransaction(async tx => {
+        // Real database time inside the transaction reproduces the production
+        // failure, not a fake clock or an assertion of configuration alone.
+        await tx.$executeRaw`SELECT 1 FROM pg_sleep(5.1)`;
+        return callback(tx);
+      }, options)) as typeof singleton.$transaction);
+    let receipt: Awaited<ReturnType<typeof buy>>;
+    try { receipt = await buy(p, 2, 1000, { idempotencyKey: key }); }
+    finally { injected.mockRestore(); }
+    const replay = await buy(p, 2, 1000, { idempotencyKey: key });
+    expect(replay.id).toBe(receipt.id);
+    expect(await stock(p)).toMatchObject({ qtyOnHandBase: 2, knownValuePence: 2000 });
+    expect(await db.purchaseInvoice.count({ where: { businessId, lines: { some: { productId: p } } } })).toBe(1);
+    expect(await db.purchaseDocument.count({ where: { purchaseInvoiceId: receipt.id } })).toBe(1);
+    expect(await db.stockMovement.count({ where: { referenceId: receipt.id } })).toBe(1);
+    expect(await db.journalEntry.count({ where: { referenceId: receipt.id } })).toBe(1);
+    await balanced([receipt.id]);
   }, 60000);
   it('reconciles concurrent distinct credit purchases on the same product', async () => {
     const p = await product();

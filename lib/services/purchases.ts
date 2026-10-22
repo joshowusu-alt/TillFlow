@@ -759,11 +759,22 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     const { created, replayed } = await runWithMoneyTx(db);
     invoice = replayed ? created : await finishInvoice(created, db);
   } else {
-    invoice = await prisma.$transaction(async (tx) => {
-      const { created, replayed } = await runWithMoneyTx(tx);
-      if (replayed) return created;
-      return finishInvoice(created, tx);
-    });
+    try {
+      invoice = await prisma.$transaction(async (tx) => {
+        const { created, replayed } = await runWithMoneyTx(tx);
+        if (replayed) return created;
+        return finishInvoice(created, tx);
+      }, { maxWait: 10000, timeout: 30000 });
+    } catch (error) {
+      // A receipt writes documents, ledger, payments and stock in ONE commit.
+      // Prisma's implicit 5-second budget expired on real supplier receipts.
+      // Keep the budget bounded and never retry money/stock writes blindly.
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2028') {
+        console.error('[purchase.create] Transaction closed before saving completed', error);
+        throw new UserError('Purchase saving timed out. Your draft is still available. Retry this same purchase; do not create a second purchase.');
+      }
+      throw error;
+    }
   }
 
   return invoice;

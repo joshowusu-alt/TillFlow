@@ -6,9 +6,9 @@ vi.mock('react-dom', async () => ({ ...await vi.importActual<typeof import('reac
 vi.mock('@/app/actions/purchases', () => ({ createPurchaseAction: vi.fn() }));
 vi.mock('@/app/actions/products', () => ({ quickCreateProductAction: vi.fn() }));
 vi.mock('@/app/(protected)/pos/components/CameraScanner', () => ({ default: () => null }));
-beforeEach(() => localStorage.clear());
+beforeEach(() => { localStorage.clear(); sessionStorage.clear(); });
 function mount() {
-  render(<PurchaseFormClient storeId="scanner-demo" currency="GHS" vatEnabled={false} suppliers={[]} units={[{ id: 'each', name: 'Book' }]} products={['X','Y'].map(id => ({ id, name: `Book A · Publisher ${id}`, barcode: `00123${id}`, additionalBarcodes: [`ALT-${id}`], defaultCostBasePence: 8000, sellingPriceBasePence: 10000, vatRateBps: 0, units: [{ id: 'each', name: 'Book', conversionToBase: 1, isBaseUnit: true }] }))} />);
+  return render(<PurchaseFormClient storeId="scanner-demo" currency="GHS" vatEnabled={false} suppliers={[]} units={[{ id: 'each', name: 'Book' }]} products={['X','Y'].map(id => ({ id, name: `Book A · Publisher ${id}`, barcode: `00123${id}`, additionalBarcodes: [`ALT-${id}`], defaultCostBasePence: 8000, sellingPriceBasePence: 10000, vatRateBps: 0, units: [{ id: 'each', name: 'Book', conversionToBase: 1, isBaseUnit: true }] }))} />);
 }
 it('physical scanner Enter selects the matching publisher through its alternate code', () => {
   mount();
@@ -38,4 +38,20 @@ it('starts unpaid, shows due dates only while money is owed and reveals payment 
   expect(screen.getByLabelText('Where is the cash coming from?')).toBeInTheDocument();
   fireEvent.change(status, { target: { value: 'PART_PAID' } });
   expect(screen.getByLabelText('Due Date')).toBeInTheDocument();
+});
+
+it('keeps a restored purchase identity across remounts and creates a new one only on discard', () => {
+  localStorage.setItem('tillflow:purchase-draft:scanner-demo', JSON.stringify({
+    version: 1, idempotencyKey: 'receipt-retry-original', supplierId: 'supplier-a',
+    cart: [{ id: 'line-X', productId: 'X', unitId: 'each', qtyInUnit: 1, unitCostInput: '80' }],
+  }));
+  const mounted = mount();
+  expect(document.querySelector('input[name="idempotencyKey"]')).toHaveValue('receipt-retry-original');
+  expect(JSON.parse(localStorage.getItem('tillflow:purchase-draft:scanner-demo')!).idempotencyKey).toBe('receipt-retry-original');
+  mounted.unmount();
+  sessionStorage.clear(); // A new tab has no session identity; the draft must supply it.
+  mount();
+  expect(document.querySelector('input[name="idempotencyKey"]')).toHaveValue('receipt-retry-original');
+  fireEvent.click(screen.getByRole('button', { name: /discard/i }));
+  expect(document.querySelector('input[name="idempotencyKey"]')).not.toHaveValue('receipt-retry-original');
 });
