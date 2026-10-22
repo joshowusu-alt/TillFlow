@@ -159,7 +159,9 @@ describe('purchase invoice cash drawer linkage', () => {
       idempotencyKey: 'po-drawer',
     });
 
-    expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function));
+    expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      maxWait: 10000, timeout: 30000,
+    });
     expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         purchaseInvoiceId: 'inv-accra',
