@@ -1,6 +1,6 @@
 import {purchaseDocumentFixture} from '@/lib/test/purchase-document-fixture';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient, Prisma } from '@prisma/client';
 import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
 
 vi.mock('@/lib/action-utils', () => ({ UserError: class UserError extends Error {} }));
@@ -237,8 +237,46 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     await sales.amendSale({ businessId, salesInvoiceId: sale.id, userId, reason: 'Replace fixture line', keepLineIds: [], newLines: [{ productId: p, unitId, qtyInUnit: 1 }], additionalPaymentMethod: 'TRANSFER' });
     expect(await stock(p)).toMatchObject({ qtyOnHandBase: 1, knownValuePence: 1500, avgCostBasePence: 1500 });
     expect(await db.salesInvoiceLine.findFirstOrThrow({ where: { salesInvoiceId: sale.id } })).toMatchObject({ lineCostPence: 1500, costBasis: 'INVENTORY_VALUE_V1' });
+    const movements = await db.stockMovement.findMany({ where: { referenceId: sale.id, type: 'SALE_AMENDMENT' }, orderBy: { id: 'asc' } });
+    expect(movements.map(row => ({ qty: row.qtyBase, before: row.beforeQtyBase, after: row.afterQtyBase, value: row.valuePence }))).toEqual([
+      { qty: 1, before: 1, after: 2, value: 1000 },
+      { qty: -1, before: 2, after: 1, value: -1500 },
+    ]);
     expect((await stock(p)).knownValuePence).toBe(await inventoryPosting([a.id, b.id, sale.id]));
     await balanced([a.id, b.id, sale.id]);
+  }, 60000);
+  async function withMissingMovement(work: () => Promise<unknown>) {
+    const transaction = singleton.$transaction.bind(singleton);
+    const interception = vi.spyOn(singleton, '$transaction').mockImplementation((async (callback: (tx: Prisma.TransactionClient) => Promise<unknown>, options: object) =>
+      transaction(async tx => {
+        const movement = vi.spyOn(tx.stockMovement, 'createMany').mockResolvedValueOnce({ count: 0 });
+        try { return await callback(tx); }
+        finally { movement.mockRestore(); }
+      }, options)) as typeof singleton.$transaction);
+    try { return await work(); }
+    finally { interception.mockRestore(); }
+  }
+  async function saleEvidenceSnapshot(productId: string) {
+    return {
+      stock: await stock(productId),
+      invoices: await db.salesInvoice.findMany({ where: { businessId }, orderBy: { id: 'asc' }, include: { lines: { orderBy: { id: 'asc' } }, payments: { orderBy: { id: 'asc' } } } }),
+      movements: await db.stockMovement.findMany({ where: { storeId }, orderBy: { id: 'asc' } }),
+      journals: await db.journalEntry.findMany({ where: { businessId }, orderBy: { id: 'asc' }, include: { lines: { orderBy: { id: 'asc' } } } }),
+    };
+  }
+  it('rolls back checkout invoice, stock, movements and accounting when movement evidence is missing', async () => {
+    const p = await product(); await buy(p, 3, 1000);
+    const before = await saleEvidenceSnapshot(p);
+    await expect(withMissingMovement(() => sell(p, 1))).rejects.toThrow('Unable to record all sale stock movements');
+    expect(await saleEvidenceSnapshot(p)).toEqual(before);
+  }, 60000);
+  it('rolls back an amendment and its payment when its movement evidence is missing', async () => {
+    const p = await product(); await buy(p, 3, 1000); const sale = await sell(p, 1);
+    const before = await saleEvidenceSnapshot(p);
+    const keepLineIds = (await db.salesInvoiceLine.findMany({ where: { salesInvoiceId: sale.id } })).map(line => line.id);
+    await expect(withMissingMovement(() => sales.amendSale({ businessId, salesInvoiceId: sale.id, userId, reason: 'Missing-movement regression', keepLineIds, newLines: [{ productId: p, unitId, qtyInUnit: 1 }], additionalPaymentMethod: 'TRANSFER' })))
+      .rejects.toThrow('Unable to record all sale stock movements');
+    expect(await saleEvidenceSnapshot(p)).toEqual(before);
   }, 60000);
   it('records opening pack cost exactly and supports verified sub-pesewa unit allocations', async () => {
     const p = await product(); const pack = await db.unit.create({ data: { name: `Opening pack ${p}`, pluralName: 'Packs' } }); extraUnitIds.push(pack.id);

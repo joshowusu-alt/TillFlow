@@ -262,7 +262,7 @@ beforeEach(() => {
     lines: [],
     payments: [],
   });
-  prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
+  prismaMock.stockMovement.createMany.mockImplementation(async ({ data }) => ({ count: data.length }));
   prismaMock.$queryRaw.mockResolvedValue([{ id: 'cde-1' }]);
   // Additional tx models used inside the transaction
   (prismaMock as any).cashDrawerEntry = { create: vi.fn().mockResolvedValue({}) };

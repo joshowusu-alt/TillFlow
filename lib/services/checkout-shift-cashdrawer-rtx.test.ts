@@ -182,7 +182,7 @@ beforeEach(() => {
   prismaMock.businessSequence.upsert.mockResolvedValue({ nextVal: 1 });
   prismaMock.salesInvoice.findMany.mockResolvedValue([]);
   prismaMock.salesInvoice.create.mockResolvedValue({ id: INV_ID, totalPence: 500, lines: [], payments: [] });
-  prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
+  prismaMock.stockMovement.createMany.mockImplementation(async ({ data }) => ({ count: data.length }));
   prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
   prismaMock.$queryRaw.mockResolvedValue([{ id: 'cde-1' }]);
 
