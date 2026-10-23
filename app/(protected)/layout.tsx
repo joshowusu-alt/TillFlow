@@ -170,6 +170,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         storeId={store?.id ?? null}
         stores={stores.map((row) => ({ id: row.id, name: row.name }))}
         businessName={business.name}
+        businessCategory={business.businessCategory}
         merchantBranding={{
           businessName: business.name,
           logoUrl: business.logoUrl ?? null,

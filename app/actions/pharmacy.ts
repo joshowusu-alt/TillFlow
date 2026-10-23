@@ -41,7 +41,7 @@ export async function savePharmacyPractitionerAction(data: FormData) {
     });
     revalidatePath('/pharmacy');
     return ok();
-  }, '/pharmacy');
+  }, '/pharmacy?section=setup');
 }
 
 export async function setPharmacyEnabledAction(data: FormData) {
@@ -59,7 +59,7 @@ export async function setPharmacyEnabledAction(data: FormData) {
     revalidateTag(checkoutContextTag(ctx.businessId));
     revalidatePath('/pharmacy'); revalidatePath('/pos');
     return ok();
-  }, '/pharmacy');
+  }, '/pharmacy?section=setup');
 }
 
 export async function savePharmacyProductAction(data: FormData) {
@@ -84,7 +84,7 @@ export async function savePharmacyProductAction(data: FormData) {
     revalidatePosCatalog(ctx.businessId);
     revalidatePath('/pharmacy'); revalidatePath(`/products/${productId}`);
     return ok();
-  }, '/pharmacy');
+  }, data.get('returnToProduct') === 'true' ? `/products/${encodeURIComponent(formString(data, 'productId'))}` : `/pharmacy?section=products&productId=${encodeURIComponent(formString(data, 'productId'))}`);
 }
 
 export async function savePharmacyBatchAction(data: FormData) {
@@ -115,7 +115,7 @@ export async function savePharmacyBatchAction(data: FormData) {
     }, { maxWait: 10000, timeout: 30000 });
     revalidatePath('/pharmacy');
     return ok();
-  }, '/pharmacy');
+  }, `/pharmacy?section=batches&productId=${encodeURIComponent(formString(data, 'productId'))}`);
 }
 
 export async function recordPharmacyPrescriptionAction(data: FormData) {
@@ -154,7 +154,7 @@ export async function recordPharmacyPrescriptionAction(data: FormData) {
     });
     revalidatePath('/pharmacy');
     return ok();
-  }, '/pharmacy');
+  }, '/pharmacy?section=prescriptions');
 }
 
 export async function approvePharmacyReviewAction(data: FormData) {
@@ -168,7 +168,7 @@ export async function approvePharmacyReviewAction(data: FormData) {
     await approvePharmacyReview(ctx.businessId, id, ctx.user.id);
     revalidatePath('/pharmacy');
     return ok();
-  }, '/pharmacy');
+  }, '/pharmacy?section=reviews');
 }
 
 export async function cancelPharmacyPrescriptionAction(data: FormData) {
@@ -184,7 +184,7 @@ export async function cancelPharmacyPrescriptionAction(data: FormData) {
       await recordAudit(db, ctx, 'PHARMACY_PRESCRIPTION_CANCELLED', formString(data, 'prescriptionId'), { reason });
     });
     revalidatePath('/pharmacy'); return ok();
-  }, '/pharmacy');
+  }, '/pharmacy?section=prescriptions');
 }
 
 export async function declinePharmacyReviewAction(data: FormData) {
@@ -202,7 +202,7 @@ export async function declinePharmacyReviewAction(data: FormData) {
       await recordAudit(db, ctx, 'PHARMACY_REVIEW_DECLINED', id, {});
     });
     revalidatePath('/pharmacy'); return ok();
-  }, '/pharmacy');
+  }, '/pharmacy?section=reviews');
 }
 
 export async function pharmacyCartStatusAction(input: { storeId: string; productIds: string[]; reviewId?: string }) {

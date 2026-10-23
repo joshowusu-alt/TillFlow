@@ -46,6 +46,7 @@ export default function TopNav({
   storeId,
   stores = [],
   businessName,
+  businessCategory,
   merchantBranding,
   momoEnabled,
   addonOnlineStorefront = false,
@@ -60,6 +61,7 @@ export default function TopNav({
   storeId?: string | null;
   stores?: OperationalStoreOption[];
   businessName?: string;
+  businessCategory?: string | null;
   merchantBranding?: MerchantBrandProfile;
   momoEnabled?: boolean;
   addonOnlineStorefront?: boolean;
@@ -127,6 +129,7 @@ export default function TopNav({
   const visibleGroups = useMemo(() => {
     const itemIsVisible = (item: (typeof NAV_GROUPS)[number]['items'][number]) =>
       item.roles.includes(user.role) &&
+      (!item.pharmacyOnly || businessCategory === 'PHARMACY') &&
       (features.multiStore || item.href !== '/transfers') &&
       (momoEnabled !== false || item.href !== '/payments/reconciliation') &&
       (!allowedReports || !isReportNavHref(item.href) || allowedReports.has(item.href));
@@ -140,7 +143,7 @@ export default function TopNav({
         return { ...group, items, sections };
       })
       .filter((group) => group.items.length > 0);
-  }, [user.role, features.multiStore, momoEnabled, allowedReports]);
+  }, [user.role, features.multiStore, momoEnabled, allowedReports, businessCategory]);
 
   const onReports = pathname === '/reports' || pathname.startsWith('/reports/');
   const showMobileSalesPulse = Boolean(liveTodaySales) && !pathname.startsWith('/onboarding') && !onReports;

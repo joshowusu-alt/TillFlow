@@ -51,6 +51,7 @@ export function getFeatureLockLabel(feature: FeatureKey, plan: BusinessPlan) {
 }
 
 export type NavigationItem = {
+  pharmacyOnly?: boolean;
   href: string;
   label: string;
   roles: AppRole[];
@@ -113,6 +114,7 @@ export const NAV_GROUPS: NavigationGroup[] = [
     id: 'stock',
     label: 'Stock',
     items: [
+      { href: '/pharmacy', label: 'Pharmacy', roles: ['MANAGER', 'OWNER'], iconKey: 'inventory', description: 'Dispensing checks, prescriptions and batch expiry.', pharmacyOnly: true },
       { href: '/inventory', label: 'Inventory', roles: ['MANAGER', 'OWNER'], iconKey: 'inventory', description: 'View stock levels and reorder needs.' },
       { href: '/inventory/stocktake', label: 'Stocktake', roles: ['MANAGER', 'OWNER'], iconKey: 'inventory', description: 'Count stock with barcode scanning and variance posting.', minimumPlan: 'GROWTH' },
       { href: '/inventory/adjustments', label: 'Stock Adjustments', roles: ['MANAGER', 'OWNER'], iconKey: 'stockAdjustments', description: 'Correct stock counts safely.' },
