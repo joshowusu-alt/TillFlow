@@ -1,3 +1,4 @@
+import ProductDispensingRules from '@/components/pharmacy/ProductDispensingRules';
 import { parseProductAttributes } from '@/lib/products/attributes';
 import ProductCategoryField from '@/components/products/ProductCategoryField';
 import { listProductDivisions } from '@/lib/services/product-classification';
@@ -67,6 +68,7 @@ export default async function ProductDetailPage({
   ]);
 
   if (!product) return <div className="card p-6">Product not found.</div>;
+  const dispensingRule = business.businessCategory === 'PHARMACY' ? await prisma.pharmacyProductRule.findUnique({ where: { productId: product.id } }) : null;
   const assignedDivision = divisions.find(division => division.groups.some(group => group.id === product.groupId));
   const assignedGroup = assignedDivision?.groups.find(group => group.id === product.groupId);
   const isManager = user.role !== 'CASHIER';
@@ -103,6 +105,7 @@ export default async function ProductDetailPage({
     <div className="space-y-6">
       <HashScroll />
       <PageHeader title={[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")} subtitle="Product detail and unit breakdown." primaryCta={{ label: 'View history', href: `/products/${product.id}/history` }} secondaryCta={{ label: '← Back to products', href: '/products' }} />
+      {business.businessCategory === 'PHARMACY' ? <section className="card space-y-4 p-5"><h2 className="text-lg font-semibold">Medicine dispensing rules</h2><ProductDispensingRules returnToProduct product={product} rule={dispensingRule} /><Link className="inline-block text-sm font-semibold text-blue-700" href={`/pharmacy?section=batches&productId=${product.id}`}>Manage this medicine’s batches & expiry →</Link></section> : null}
 
       {/* Hero row with image + summary */}
       <div className="card flex flex-col gap-6 p-6 sm:flex-row">

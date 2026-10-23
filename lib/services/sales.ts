@@ -9,6 +9,7 @@ import { UserError } from '@/lib/action-utils';
 import { allocateLineValues, issueStockValue, receiveStockValue, INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1, type StockValue } from '@/lib/inventory-value';
 import { lockInventoryValues } from './shared/inventory-utils';
 import { recordSaleStockMovements } from './shared/sale-stock-movements';
+import { assertPharmacyChannel, consumePharmacyReviewTx, lockPharmacyPolicy } from './pharmacy';
 import {
   filterPositivePayments,
   splitPayments,
@@ -319,6 +320,8 @@ export type SaleLineInput = {
 };
 
 export type CreateSaleInput = {
+  pharmacyReviewId?: string;
+  pharmacyBatchesConfirmed?: boolean;
   businessId: string;
   storeId: string;
   tillId: string;
@@ -647,6 +650,9 @@ async function createSaleImpl(input: CreateSaleInput) {
   );
 
   if (!business) throw new Error('Business not found');
+  if (business.businessCategory === 'PHARMACY') {
+    await assertPharmacyChannel(prisma, input.businessId, productIds, input.onlineOrderId || input.bypassOpenTillRequirement ? 'ONLINE_ORDER' : input.saleSource ?? 'POS');
+  }
   if (!store) throw new Error('Store not found');
   if (!till) throw new UserError('Till not found');
   if (till.store.businessId !== input.businessId) {
@@ -1477,6 +1483,9 @@ async function createSaleImpl(input: CreateSaleInput) {
 
     // Run inventory batch + journal entry in parallel
     await Promise.all(txPromises);
+    if (business.businessCategory === 'PHARMACY') {
+      await consumePharmacyReviewTx(tx, input, Array.from(qtyByProduct, ([productId, qtyBase]) => ({ productId, qtyBase })), created.id, stockMovementInventoryMap);
+    }
     if (onlineOrder) await tx.onlineOrder.update({ where: { id: onlineOrder.id }, data: { salesInvoiceId: created.id } });
 
     return created;
@@ -1583,6 +1592,9 @@ export async function amendSale(input: AmendSaleInput) {
   });
 
   if (!invoice) throw new Error('Sale not found');
+  if (invoice.business.businessCategory === 'PHARMACY') {
+    await assertPharmacyChannel(prisma, input.businessId, [...invoice.lines.map(line => line.productId), ...(input.newLines ?? []).map(line => line.productId)], 'AMENDMENT');
+  }
   if (invoice.salesReturn) throw new Error('Cannot amend a returned or voided sale');
   if (invoice.payments.some(isPendingMomo)) {
     throw new UserError('Reconcile pending MoMo receipts before amending this sale.');
@@ -1722,6 +1734,10 @@ export async function amendSale(input: AmendSaleInput) {
     }
     // Re-read inventory inside transaction to prevent TOCTOU race
     await lockInventoryValues(tx, invoice.storeId, Array.from(allAffectedProductIds));
+    if (invoice.business.businessCategory === 'PHARMACY') {
+      await lockPharmacyPolicy(tx, input.businessId);
+      await assertPharmacyChannel(tx, input.businessId, Array.from(allAffectedProductIds), 'AMENDMENT');
+    }
     const inventoryMap = await fetchInventoryMap(invoice.storeId, Array.from(allAffectedProductIds), tx);
 
     // Validate stock for newly added items

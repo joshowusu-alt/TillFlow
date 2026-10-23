@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import PharmacyCheckout, { type PharmacyCheckoutCheck } from '@/components/pharmacy/PharmacyCheckout';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
 import { useParkedCarts } from '@/hooks/useParkedCarts';
@@ -100,6 +101,8 @@ type CategoryDto = { id: string; name: string; colour: string };
 
 type PosClientProps = {
   business: {
+    businessCategory?: string | null;
+    pharmacyEnabled?: boolean;
     id: string;
     currency: string;
     vatEnabled: boolean;
@@ -201,6 +204,7 @@ export default function PosClient({
     [business.id, store.id]
   );
   const [saleAttemptId, setSaleAttemptId] = useState(nextSaleAttemptId);
+  const [pharmacyCheck, setPharmacyCheck] = useState<PharmacyCheckoutCheck>({ signature: '', ready: false });
   const [ambiguousFailure, setAmbiguousFailure] = useState(false);
   const saleIdentityRef = useRef<string>('');
   const saleAttemptRestoredRef = useRef(false);
@@ -1105,6 +1109,13 @@ export default function PosClient({
 
   const handleCompleteSale = async () => {
     if (!canSubmit || isCompletingSale) return;
+    if (business.businessCategory === 'PHARMACY' && !navigator.onLine) {
+      setSaleError('Pharmacy sales require an online connection in this pilot. Your cart has been kept.'); return;
+    }
+    const pharmacySignature = JSON.stringify({ cart, checkoutRef: buildOnlineSaleExternalRef(saleAttemptId) });
+    if (business.pharmacyEnabled && (pharmacyCheck.signature !== pharmacySignature || !pharmacyCheck.ready || (pharmacyCheck.expiresAt && new Date(pharmacyCheck.expiresAt).getTime() <= Date.now()))) {
+      setSaleError('Complete the current pharmacy dispensing checks and confirm the physical batches before selling.'); return;
+    }
 
     const dueResolved = resolveDueDateForSubmit({
       paymentStatus,
@@ -1156,6 +1167,8 @@ export default function PosClient({
     try {
       const result = await completeSaleAction({
         storeId: store.id,
+        pharmacyReviewId: pharmacyCheck.reviewId,
+        pharmacyBatchesConfirmed: pharmacyCheck.confirmed,
         tillId,
         cart: JSON.stringify(saleSnapshot.cart),
         paymentStatus,
@@ -1200,7 +1213,7 @@ export default function PosClient({
         setSaleError(result.error);
       }
     } catch (err) {
-      if (!navigator.onLine || (err instanceof TypeError && err.message.includes('fetch'))) {
+      if (business.businessCategory !== 'PHARMACY' && (!navigator.onLine || (err instanceof TypeError && err.message.includes('fetch')))) {
         try {
           const offlineId = await queueOfflineSale({
             businessId: business.id,
@@ -1904,6 +1917,7 @@ export default function PosClient({
           className="pos-sale-form space-y-4"
           ref={formRef}
         >
+          {business.pharmacyEnabled && cart.length > 0 ? <PharmacyCheckout storeId={store.id} checkoutRef={buildOnlineSaleExternalRef(saleAttemptId)} cartJson={JSON.stringify(cart)} signature={JSON.stringify({ cart, checkoutRef: buildOnlineSaleExternalRef(saleAttemptId) })} onChange={setPharmacyCheck} /> : null}
 
           {/* Success toast */}
           {saleSuccess && (

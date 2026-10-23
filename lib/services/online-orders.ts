@@ -11,6 +11,7 @@ import { normalizeGhanaPhone } from '@/lib/storefront-phone';
 import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
 import { getOpenStatus, parseWeeklyHours, type OpenStatus } from '@/lib/business-hours';
 import { lockInventoryValues, fetchInventoryMap } from '@/lib/services/shared/inventory-utils';
+import { assertPharmacyChannel, lockPharmacyPolicy } from '@/lib/services/pharmacy';
 import { issueStockValue, receiveStockValue, allocateLineValues, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
 import { parseStoredStorefrontPaymentConfig, normalizePaymentMode, paymentConfigIsReady, type StorefrontPaymentConfig } from '@/lib/storefront-payments';
 import {
@@ -363,6 +364,7 @@ async function getStorefrontBusinessBySlug(slug: string) {
       timezone: true,
       storefrontEnabled: true,
       storefrontSlug: true,
+      businessCategory: true,
       storefrontHoursJson: true,
       storefrontPickupPrepMinutes: true,
       storefrontPaymentMode: true,
@@ -1019,6 +1021,7 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
   const replay = await findReplay();
   if (replay) return responseFor(replay);
   const productIds = [...new Set(input.items.map((item) => item.productId))];
+  if (business.businessCategory === 'PHARMACY') await assertPharmacyChannel(prisma, business.id, productIds, 'ONLINE_ORDER');
 
   const products = await prisma.product.findMany({
     where: {
@@ -1063,6 +1066,10 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
 
   const order = await prisma.$transaction(async (tx) => {
     await lockInventoryValues(tx, store.id, [...qtyByProduct.keys()]);
+    if (business.businessCategory === 'PHARMACY') {
+      await lockPharmacyPolicy(tx, business.id);
+      await assertPharmacyChannel(tx, business.id, productIds, 'ONLINE_ORDER');
+    }
     const balances = await fetchInventoryMap(store.id, [...qtyByProduct.keys()], tx);
     const capturedCosts = new Map<number, { lineCostPence: number; costBasis: string | null }>();
     const movements: Array<{ productId: string; qtyBase: number; beforeQtyBase: number; afterQtyBase: number; valuePence: number | null; costBasis: string | null }> = [];

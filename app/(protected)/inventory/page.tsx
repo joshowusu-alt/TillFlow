@@ -139,6 +139,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
         actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
       />
 
+      {business.businessCategory === 'PHARMACY' ? <Link href="/pharmacy" className="card flex flex-wrap items-center justify-between gap-3 border-blue-200 p-4"><span><strong>Pharmacy dispensing</strong><span className="mt-1 block text-sm text-slate-600">Medicine rules, prescriptions, approvals and batch expiry.</span></span><span className="font-semibold text-blue-700">Open pharmacy →</span></Link> : null}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-card">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Products</div>
