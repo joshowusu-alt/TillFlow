@@ -103,6 +103,7 @@ export default async function ProductDetailPage({
     <div className="space-y-6">
       <HashScroll />
       <PageHeader title={[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")} subtitle="Product detail and unit breakdown." primaryCta={{ label: 'View history', href: `/products/${product.id}/history` }} secondaryCta={{ label: '← Back to products', href: '/products' }} />
+      {business.businessCategory === 'PHARMACY' ? <Link className="btn-ghost inline-block" href={`/pharmacy?productId=${product.id}#products`}>Medicine restrictions, prescriptions and expiry batches →</Link> : null}
 
       {/* Hero row with image + summary */}
       <div className="card flex flex-col gap-6 p-6 sm:flex-row">

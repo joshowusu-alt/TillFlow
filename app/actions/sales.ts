@@ -232,6 +232,8 @@ export async function createSaleAction(formData: FormData): Promise<void> {
  * Called from PosClient via JavaScript for a seamless checkout flow.
  */
 export async function completeSaleAction(data: {
+  pharmacyReviewId?: string;
+  pharmacyBatchesConfirmed?: boolean;
   storeId: string;
   tillId: string;
   cart: string;
@@ -395,6 +397,8 @@ export async function completeSaleAction(data: {
     const invoice = await createSale({
       businessId,
       storeId: data.storeId,
+      pharmacyReviewId: data.pharmacyReviewId,
+      pharmacyBatchesConfirmed: data.pharmacyBatchesConfirmed,
       tillId: data.tillId,
       cashierUserId: user.id,
       customerId,

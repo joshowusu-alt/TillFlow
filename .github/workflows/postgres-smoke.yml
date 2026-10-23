@@ -44,6 +44,9 @@ on:
       - 'lib/services/migration/**'
       - 'lib/services/sales.ts'
       - 'lib/services/inventory-valuation.pg.test.ts'
+      - 'lib/services/pharmacy*'
+      - 'lib/pharmacy/**'
+      - 'app/actions/pharmacy.ts'
       - 'lib/reports/incomplete-stock.ts'
       - 'lib/services/shifts.ts'
       - 'lib/services/cash-drawer.ts'
@@ -169,6 +172,7 @@ jobs:
           set -euo pipefail
           files=(
             lib/services/inventory-valuation.pg.test.ts
+            lib/services/pharmacy.pg.test.ts
             lib/services/stocktake-completion-concurrency.pg.test.ts
             lib/services/inventory-reversal-concurrency.pg.test.ts
             lib/services/inventory-increase-concurrency.test.ts

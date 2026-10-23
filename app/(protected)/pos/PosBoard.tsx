@@ -140,6 +140,8 @@ export default async function PosBoard({
         <PosProgressiveShell
           business={{
             id: business.id,
+            businessCategory: business.businessCategory,
+            pharmacyEnabled: business.businessCategory === 'PHARMACY' ? Boolean((await prisma.pharmacySettings.findUnique({ where: { businessId: business.id } }))?.enabled) : false,
             currency: business.currency,
             vatEnabled: business.vatEnabled,
             momoEnabled: (business as any).momoEnabled ?? false,

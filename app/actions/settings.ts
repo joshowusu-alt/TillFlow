@@ -99,6 +99,9 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
       'HARDWARE', 'WHOLESALE', 'RESTAURANT_STOCK', 'OTHER',
     ]);
     const businessCategory = rawCategory && allowedCategories.has(rawCategory) ? rawCategory : undefined;
+    if ((currentBusiness as { businessCategory?: string } | null)?.businessCategory === 'PHARMACY' && businessCategory && businessCategory !== 'PHARMACY' && (await prisma.pharmacySettings.findUnique({ where: { businessId } }))?.enabled) {
+      throw new Error('Disable pharmacy dispensing checks explicitly in Pharmacy before changing the business category.');
+    }
 
     await prisma.business.update({
       where: { id: businessId },

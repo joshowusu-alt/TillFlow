@@ -45,6 +45,8 @@ const EMPTY_DEFERRED: PosDeferredPayload = {
 
 type PosProgressiveShellProps = {
   business: {
+    businessCategory?: string | null;
+    pharmacyEnabled?: boolean;
     id: string;
     currency: string;
     vatEnabled: boolean;

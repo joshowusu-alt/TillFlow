@@ -1,6 +1,114 @@
 generator client {
   provider = "prisma-client-js"
 }
+model PharmacySettings {
+  businessId String @id
+  enabled Boolean @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+model PharmacyPractitioner {
+  id String @id @default(cuid())
+  businessId String
+  userId String
+  registrationNumber String
+  registrationExpiresAt DateTime
+  active Boolean @default(true)
+  recordedByUserId String
+  updatedAt DateTime @updatedAt
+  @@unique([businessId, userId])
+}
+
+model PharmacyProductRule {
+  productId String @id
+  businessId String
+  medicineClass String
+  minimumPatientAge Int?
+  checkInstructions String @default("")
+  updatedAt DateTime @updatedAt
+  @@index([businessId])
+}
+
+model PharmacyBatch {
+  id String @id @default(cuid())
+  businessId String
+  storeId String
+  productId String
+  batchNumber String
+  expiresAt DateTime
+  qtyRemainingBase Int
+  quarantined Boolean @default(false)
+  recordedByUserId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([businessId, storeId, productId, batchNumber])
+  @@index([businessId, storeId, productId, expiresAt])
+}
+
+model PharmacyPrescription {
+  id String @id @default(cuid())
+  businessId String
+  patientName String
+  patientDateOfBirth DateTime
+  prescriberName String
+  prescriberReference String
+  issuedAt DateTime
+  validUntil DateTime?
+  documentName String
+  documentContentType String
+  documentBody Bytes
+  documentSha256 String
+  status String @default("ACTIVE")
+  recordedByUserId String
+  createdAt DateTime @default(now())
+  lines PharmacyPrescriptionLine[]
+  @@index([businessId, createdAt])
+}
+
+model PharmacyPrescriptionLine {
+  id String @id @default(cuid())
+  prescriptionId String
+  productId String
+  authorisedQtyBase Int
+  dispensedQtyBase Int @default(0)
+  directions String
+  prescription PharmacyPrescription @relation(fields: [prescriptionId], references: [id], onDelete: Restrict)
+  @@unique([prescriptionId, productId])
+}
+
+model PharmacyReview {
+  id String @id @default(cuid())
+  businessId String
+  storeId String
+  cashierUserId String
+  checkoutRef String
+  cartJson String
+  cartHash String
+  patientName String
+  patientDateOfBirth DateTime?
+  ageCheckConfirmed Boolean @default(false)
+  prescriptionId String?
+  status String @default("PENDING")
+  pharmacistUserId String?
+  approvedAt DateTime?
+  expiresAt DateTime?
+  salesInvoiceId String? @unique
+  createdAt DateTime @default(now())
+  allocations PharmacyDispenseAllocation[]
+  @@index([businessId, storeId, status, createdAt])
+}
+
+model PharmacyDispenseAllocation {
+  id String @id @default(cuid())
+  reviewId String
+  batchId String
+  productId String
+  qtyBase Int
+  batchNumber String
+  expiresAt DateTime
+  review PharmacyReview @relation(fields: [reviewId], references: [id], onDelete: Restrict)
+  @@index([batchId])
+}
 
 datasource db {
   provider = "sqlite"
