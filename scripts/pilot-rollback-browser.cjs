@@ -35,7 +35,7 @@ async function main() {
       if (req.url === '/api/offline/batch-sync') { req.resume(); res.writeHead(404); res.end('{}'); return; }
       const salePost = req.url === '/api/offline/sync-sale' && req.method === 'POST';
       if (salePost && state.outage) { req.resume(); res.writeHead(503); res.end('{}'); return; }
-      const upstream = http.request({ hostname: '127.0.0.1', port: state.variant === 'candidate' ? 6200 : 6201, path: req.url, method: req.method, headers: req.headers }, response => {
+      const upstream = http.request({ hostname: '127.0.0.1', port: state.variant === 'candidate' ? 6200 : 6201, path: req.url, method: req.method, headers: { ...req.headers, 'x-forwarded-host': req.headers.host, 'x-forwarded-proto': 'http' } }, response => {
         if (salePost && state.loseAck && response.statusCode === 200) {
           // Let the real server commit and finish its response, then lose the acknowledgement.
           state.loseAck = false; response.resume();
@@ -45,7 +45,9 @@ async function main() {
       });
       upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); }); req.pipe(upstream);
     });
-    await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve));
+    // Use an existing allowed local Server Action origin, just as both builds
+    // use6200/6201. A random proxy port is not an approved login origin.
+    await new Promise((resolve,reject) => { proxy.once('error',reject); proxy.listen(6202, '127.0.0.1', resolve); });
     const origin = `http://127.0.0.1:${proxy.address().port}`;
     browser = await chromium.launch();
     const context = await browser.newContext({ baseURL: origin, serviceWorkers: 'block' });
