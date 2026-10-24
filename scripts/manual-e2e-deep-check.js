@@ -1,13 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
-const { PrismaClient } = require('@prisma/client');
+const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:6200';
 const OWNER_EMAIL = process.env.E2E_OWNER_EMAIL || 'owner@store.com';
 const OWNER_PASSWORD = process.env.E2E_OWNER_PASSWORD || 'Pass1234!';
 const ARTIFACT_DIR = path.join(process.cwd(), 'playwright', 'test-results', 'deep-owner-flow');
-const prisma = new PrismaClient();
+let prisma;
 
 /** Current POS CTAs: Complete Cash/Part-Paid/Credit Sale — /Complete Sale/i does not match these. */
 const COMPLETE_CASH_SALE = /Complete Cash Sale/i;
@@ -15,6 +15,22 @@ const COMPLETE_CREDIT_SALE = /Complete Credit Sale/i;
 const COMPLETE_PART_PAID_SALE = /Complete Part-Paid Sale/i;
 
 function step(msg) { console.log(`[deep-e2e] ${msg}`); }
+
+// Persisted financial evidence only; never log row contents on a mismatch.
+async function recoveryFinancialControls(businessId) {
+  const rows = await Promise.all([
+    prisma.inventoryBalance.findMany({ where: { store: { businessId } }, orderBy: { id: 'asc' } }),
+    prisma.stockMovement.findMany({ where: { store: { businessId } }, orderBy: { id: 'asc' } }),
+    prisma.cashDrawerEntry.findMany({ where: { businessId }, orderBy: { id: 'asc' } }),
+    prisma.journalEntry.findMany({ where: { businessId }, include: { lines: { orderBy: { id: 'asc' } } }, orderBy: { id: 'asc' } }),
+    prisma.salesInvoice.findMany({ where: { businessId }, orderBy: { id: 'asc' } }),
+    prisma.salesPayment.findMany({ where: { salesInvoice: { businessId } }, orderBy: { id: 'asc' } }),
+    prisma.purchaseInvoice.findMany({ where: { businessId }, orderBy: { id: 'asc' } }),
+    prisma.purchasePayment.findMany({ where: { purchaseInvoice: { businessId } }, orderBy: { id: 'asc' } }),
+    prisma.expense.findMany({ where: { businessId }, orderBy: { id: 'asc' } }),
+  ]);
+  return require('node:crypto').createHash('sha256').update(JSON.stringify(rows)).digest('hex');
+}
 
 async function screenshotStep(page, name) {
   try {
@@ -328,6 +344,11 @@ async function seedUnpaidExpense() {
 }
 
 async function run() {
+  if (!['localhost', '127.0.0.1'].includes(new URL(BASE_URL).hostname) || !String(process.env.DATABASE_URL).startsWith('file:')) {
+    throw new Error('Deep owner-flow writes require a local server and explicitly selected disposable SQLite database');
+  }
+  // Pin every Prisma alias before any seed, password or financial write.
+  ({ prisma } = await openGuardedPrismaClient({ url: process.env.DATABASE_URL }));
   const browser = await chromium.launch({ headless: true });
   // Desktop POS: Complete Sale CTAs live in checkout panel + sidebar (not phone sheet).
   const context = await browser.newContext({
@@ -983,8 +1004,12 @@ async function run() {
       if (needsReportFixture) await prisma.business.update({ where: { id: reportOwner.businessId }, data: originalPlan });
     }
 
-    // Backup export + restore (run at end because restore invalidates sessions/passwords)
-    step('BONUS Backup export + restore');
+    // A rich operational business must refuse this limited JSON restore.
+    // Separately exercise successful core recovery, including owner re-login.
+    step('BONUS Backup export, guarded refusal and core restore');
+    const guardEvidence = await prisma.riskAlert.create({ data: { businessId: reportOwner.businessId,
+      alertType: 'FICTIONAL_RECOVERY_GUARD', summary: 'Fictional evidence that a trading snapshot must not destroy' } });
+    const guardedBefore = await recoveryFinancialControls(reportOwner.businessId);
     await page.goto(`${BASE_URL}/settings/backup`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(1000);
     fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
@@ -1002,13 +1027,44 @@ async function run() {
     await page.getByText(/Backup Preview/i).waitFor({ timeout: 15000 });
 
     page.once('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: /Restore Backup/i }).click();
-    await Promise.race([
-      page.getByText(/Restored backup from/i).waitFor({ timeout: 45000 }),
-      page.waitForURL(/\/login/, { timeout: 45000 })
+    await Promise.all([
+      page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/settings/backup'),
+      page.getByRole('button', { name: /Restore Backup/i }).click(),
     ]);
-    report.backup.restore = true;
-    step('BONUS Backup export + restore OK');
+    await page.getByText('This business has records outside this trading snapshot requiring an operator-assisted full recovery. No records were changed.', { exact: true }).waitFor();
+    if (await recoveryFinancialControls(reportOwner.businessId) !== guardedBefore) throw new Error('Refused restore changed persisted financial records');
+    if (!await prisma.riskAlert.findUnique({ where: { id: guardEvidence.id } })) throw new Error('Refused restore removed operational evidence');
+    report.backup.guardedRefusal = true;
+    const { createPilotFixture } = require('./pilot-acceptance-fixture.cjs');
+    const core = await createPilotFixture(prisma, `deep-recovery-${stamp}`);
+    const recoveryContext = await browser.newContext({ acceptDownloads: true, viewport: { width: 1280, height: 900 } });
+    try {
+      const recoveryPage = await recoveryContext.newPage();
+      await login(recoveryPage, core.users.owner.email, core.password);
+      await recoveryPage.goto(`${BASE_URL}/settings/backup`, { waitUntil: 'networkidle' });
+      const coreBefore = await recoveryFinancialControls(core.businessId);
+      const corePath = path.join(ARTIFACT_DIR, `backup-core-${stamp}.json`);
+      const [coreDownload] = await Promise.all([
+        recoveryPage.waitForEvent('download'),
+        recoveryPage.getByRole('button', { name: /Download Backup/i }).click(),
+      ]);
+      await coreDownload.saveAs(corePath);
+      await recoveryPage.locator('input[type="file"]').setInputFiles(corePath);
+      await recoveryPage.getByText(/Backup Preview/i).waitFor();
+      recoveryPage.once('dialog', dialog => dialog.accept());
+      await recoveryPage.getByRole('button', { name: /Restore Backup/i }).click();
+      await Promise.any([
+        recoveryPage.getByText(/Restored backup from/i).waitFor({ timeout: 45000 }),
+        recoveryPage.waitForURL(/\/login/, { timeout: 45000 }),
+      ]);
+      if (await recoveryFinancialControls(core.businessId) !== coreBefore) throw new Error('Core restore changed stock, drawer, invoice, payment or journal controls');
+      if (await prisma.session.count({ where: { user: { businessId: core.businessId } } })) throw new Error('Core recovery did not invalidate sessions');
+      await login(recoveryPage, core.users.owner.email, core.password);
+      if (!await prisma.user.findUnique({ where: { id: core.users.owner.id } })) throw new Error('Core restore lost owner identity');
+      report.backup.restore = true;
+      report.backup.ownerRelogin = true;
+    } finally { await recoveryContext.close(); }
+    step('BONUS Backup export, safe refusal, persisted core restore and owner re-login OK');
 
     // Re-seed the owner password so any subsequent tests can still log in
     const bcrypt = require('bcryptjs');
