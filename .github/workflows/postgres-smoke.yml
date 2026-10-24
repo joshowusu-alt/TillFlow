@@ -175,6 +175,7 @@ jobs:
             lib/services/inventory-reversal-concurrency.pg.test.ts
             lib/services/inventory-increase-concurrency.test.ts
             lib/services/receipt-ledger.pg.test.ts
+            lib/reports/momo-confirmation/outstanding-queue.pg.test.ts
             lib/services/checkout-shift-cashdrawer-rtx.test.ts
             lib/services/payments-concurrency.test.ts
             lib/services/purchase-return-payment-race.pg.test.ts

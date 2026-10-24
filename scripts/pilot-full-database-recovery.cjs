@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const bcrypt = require('bcryptjs');
+const { createHash, randomBytes } = require('node:crypto');
 const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
 
 const quote = value => `"${value.replaceAll('"', '""')}"`;
@@ -104,10 +105,43 @@ async function main() {
     try {
       execFileSync('docker', ['exec', container, 'pg_dump', '-U', 'postgres', '-d', 'tillflow_ci_pilot', '--format=custom', '--no-owner', '--no-acl'], { stdio: ['ignore', fd, 'pipe'] });
     } finally { fs.closeSync(fd); }
+    // Operator-package rehearsal uses fictional external/configuration bytes;
+    // it does not claim a live Blob export or production secret-vault backup.
+    phase = 'encrypted operational recovery package';
+    const packageDir = path.join(dir, 'package'); fs.mkdirSync(packageDir, { mode: 0o700 });
+    fs.copyFileSync(dump, path.join(packageDir, 'database.dump'));
+    const externalBytes = Buffer.from('FICTIONAL external product image recovery evidence');
+    const configBytes = Buffer.from(JSON.stringify({ NEXTAUTH_SECRET: 'fictional-not-a-real-secret', NODE_VERSION: '22', TILLFLOW_PILOT_MANUAL_PAYMENTS: '1' }));
+    fs.writeFileSync(path.join(packageDir, 'external-image.fixture'), externalBytes, { mode: 0o600 });
+    fs.writeFileSync(path.join(packageDir, 'environment.fixture.json'), configBytes, { mode: 0o600 });
+    const digest = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+    const manifest = Object.fromEntries(['database.dump','external-image.fixture','environment.fixture.json'].map(name => [name, digest(path.join(packageDir,name))]));
+    fs.writeFileSync(path.join(packageDir,'manifest.json'), JSON.stringify(manifest), { mode: 0o600 });
+    const archive = path.join(dir,'package.tar'), encrypted = path.join(dir,'package.tar.gpg');
+    execFileSync('tar',['-cf',archive,'-C',packageDir,'.']);
+    const secretFile = path.join(dir,'fictional-package-key'); fs.writeFileSync(secretFile,randomBytes(32).toString('hex'),{mode:0o600});
+    const gnupg = path.join(dir,'gnupg'); fs.mkdirSync(gnupg,{mode:0o700});
+    const crypt = (args, keyFile=secretFile) => {
+      const keyFd = fs.openSync(keyFile,'r');
+      try { return execFileSync('gpg',['--homedir',gnupg,'--batch','--yes','--no-symkey-cache','--pinentry-mode','loopback','--passphrase-fd','3',...args],{stdio:['ignore','ignore','pipe',keyFd]}); }
+      finally { fs.closeSync(keyFd); }
+    };
+    crypt(['--symmetric','--cipher-algo','AES256','--output',encrypted,archive]);
+    const wrongKey = path.join(dir,'wrong-key'); fs.writeFileSync(wrongKey,randomBytes(32).toString('hex'),{mode:0o600});
+    assert.throws(()=>crypt(['--output',path.join(dir,'wrong-key.tar'),'--decrypt',encrypted],wrongKey),'Wrong recovery key must fail');
+    const corrupt = path.join(dir,'tampered.gpg'), corruptedBytes = fs.readFileSync(encrypted);
+    corruptedBytes[Math.floor(corruptedBytes.length/2)] ^= 1; fs.writeFileSync(corrupt,corruptedBytes,{mode:0o600});
+    assert.throws(()=>crypt(['--output',path.join(dir,'tampered.tar'),'--decrypt',corrupt]),'Tampered encrypted package must fail');
+    const decrypted = path.join(dir,'recovered.tar'); crypt(['--output',decrypted,'--decrypt',encrypted]);
+    const packageRestore = path.join(dir,'recovered-package'); fs.mkdirSync(packageRestore,{mode:0o700});
+    execFileSync('tar',['-xf',decrypted,'-C',packageRestore]);
+    for(const [name,hash] of Object.entries(manifest)) assert.equal(digest(path.join(packageRestore,name)),hash);
+    assert.deepEqual(fs.readFileSync(path.join(packageRestore,'external-image.fixture')),externalBytes);
+    assert.deepEqual(fs.readFileSync(path.join(packageRestore,'environment.fixture.json')),configBytes);
     phase = 'create isolated restore database';
     execFileSync('docker', ['exec', container, 'createdb', '-U', 'postgres', restoredName]);
     phase = 'native restore';
-    const input = fs.openSync(dump, 'r');
+    const input = fs.openSync(path.join(packageRestore,'database.dump'), 'r');
     try {
       execFileSync('docker', ['exec', '-i', container, 'pg_restore', '-U', 'postgres', '-d', restoredName, '--exit-on-error', '--no-owner', '--no-acl'], { stdio: [input, 'ignore', 'pipe'] });
     } finally { fs.closeSync(input); }
@@ -128,6 +162,7 @@ async function main() {
     }
     assert.deepEqual(after, before, 'Every public table, column, constraint, index, trigger, routine and sequence must match');
     assert.deepEqual(await controls(original), before, 'Source must remain unchanged during dump/restore');
+    console.log('OPERATIONAL_PACKAGE_RECOVERY '+JSON.stringify({passed:true,encryption:'GnuPG AES256',manifestFiles:3,wrongKeyRejected:true,tamperRejected:true,externalFixtureRestored:true,fictionalEnvironmentRestored:true,liveBlobAndSecretBackup:false}));
     phase = 'restored authentication';
     for (const key of ['owner', 'cashier1', 'cashier2']) {
       const user = await recovered.user.findUniqueOrThrow({ where: { id: fixture.users[key].id } });

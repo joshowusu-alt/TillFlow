@@ -9,6 +9,7 @@ on:
       - 'lib/services/pilot-native-recovery.pg.test.ts'
       - 'scripts/pilot-acceptance*'
       - 'scripts/pilot-full-database-recovery.cjs'
+      - 'scripts/pilot-rollback-browser.cjs'
       - '.github/workflows/pilot-acceptance.yml'
 permissions:
   contents: read
@@ -45,6 +46,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Node22 and isolated database configuration preflight
+        run: node scripts/pilot-release-preflight.cjs
+        env:
+          TILLFLOW_PILOT_MANUAL_PAYMENTS: '1'
       - run: npx prisma migrate deploy --schema=prisma/schema.postgres.prisma
       - name: Recovery controls and complete trading day, real PostgreSQL
         run: npx vitest run lib/services/pilot-recovery.pg.test.ts lib/services/commercial-audit.pg.test.ts --reporter=verbose
@@ -62,6 +67,7 @@ jobs:
           exit 1
         env:
           VERCEL_ENV: preview
+          TILLFLOW_PILOT_MANUAL_PAYMENTS: '1'
       - name: Password login, barcode checkout, roles, mobile and tablet
         run: node scripts/pilot-acceptance-browser.cjs
       - name: Native offline migration preservation
@@ -84,4 +90,43 @@ jobs:
         env:
           TILLFLOW_RUN_FULL_DB_RECOVERY: '1'
           TILLFLOW_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+      - name: Checkout immutable v4 fallback
+        uses: actions/checkout@v4
+        with:
+          ref: 9a5289d00c231cfe96296e0599ee173309eeec77
+          path: .pilot-fallback
+          persist-credentials: false
+      - name: Independently build fallback on Node22 and PostgreSQL
+        working-directory: .pilot-fallback
+        run: |
+          npm ci
+          npx prisma generate --schema=prisma/schema.postgres.prisma
+          npm run build
+      - name: Start isolated fallback production server
+        working-directory: .pilot-fallback
+        run: |
+          npm run start -- -p 6201 > /tmp/tillflow-fallback-server.log 2>&1 &
+          for attempt in {1..60}; do
+            if curl -fsS http://localhost:6201/login >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+        env:
+          VERCEL_ENV: preview
+          TILLFLOW_PILOT_MANUAL_PAYMENTS: '1'
+      - name: Candidate to fallback to candidate with real pending financial transactions
+        run: node scripts/pilot-rollback-browser.cjs
+      - name: Retain immutable fallback build for immediate review
+        uses: actions/upload-artifact@v4
+        with:
+          name: pilot-v4-fallback-node22
+          path: |
+            .pilot-fallback/.next
+            .pilot-fallback/public
+            .pilot-fallback/package.json
+            .pilot-fallback/package-lock.json
+            .pilot-fallback/next.config.*
+            .pilot-fallback/prisma/schema.postgres.prisma
+          include-hidden-files: true
+          retention-days: 1
       # No dumps, snapshots, fixture passwords, auth cookies or server logs uploaded.

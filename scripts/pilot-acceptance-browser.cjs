@@ -110,6 +110,14 @@ async function main() {
         // This is not an authentication/session cookie forgery.
         await context.addCookies([{ name: 'tillflow_operational_store', value: store.id, url: baseURL }]);
         if (role === 'owner') {
+          const collections = await prisma.mobileMoneyCollection.count({ where: { businessId: fixture.businessId } });
+          const disabledWebhook = await page.request.post(`${baseURL}/api/payments/momo/webhook/mtn`, { data: { status: 'SUCCESSFUL' } });
+          assert.equal(disabledWebhook.status(), 503);
+          const disabledPoll = await page.request.post(`${baseURL}/api/payments/momo/collections/fictional-disabled/status`);
+          assert.equal(disabledPoll.status(), 400);
+          assert.match((await disabledPoll.json()).error, /Automated MoMo collections are disabled/);
+          assert.equal(await prisma.mobileMoneyCollection.count({ where: { businessId: fixture.businessId } }), collections);
+          results.push('PASS real HTTP pilot restriction blocks automated webhook and authenticated provider polling');
           for (const [route, placeholder, name] of [
             ['/suppliers', 'Search suppliers…', fixture.supplier.name],
             ['/customers', 'Search customers by name...', fixture.customer.name],
