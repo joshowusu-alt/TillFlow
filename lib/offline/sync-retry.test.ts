@@ -83,7 +83,54 @@ describe('service worker background retry', () => {
     await expect(run(async () => ({ status: 401, ok: false, json: async () => ({ error: 'Unauthorized' }) }), move)).rejects.toThrow();
     expect(move).not.toHaveBeenCalled();
   });
+  it('retains a sale when current session is forbidden until correct access is restored', async () => {
+    const move = vi.fn();
+    await expect(run(async () => ({ status: 403, ok: false, json: async () => ({ error: 'Forbidden' }) }), move)).rejects.toThrow();
+    expect(move).not.toHaveBeenCalled();
+  });
+  it('retains explicit tenant_mismatch without weakening other HTTP400 rejection', async () => {
+    const move = vi.fn();
+    await expect(run(async () => ({ status: 400, ok: false, json: async () => ({ status: 'rejected', reason: 'tenant_mismatch' }) }), move)).rejects.toThrow();
+    expect(move).not.toHaveBeenCalled();
+    await expect(run(async () => ({ status: 400, ok: false, json: async () => ({ status: 'rejected', reason: 'invalid_payload' }) }), move)).resolves.toBeUndefined();
+    expect(move).toHaveBeenCalledTimes(1);
+    expect(move).toHaveBeenCalledWith({ id: 'sale' }, 400, 'invalid_payload');
+  });
   it('resolves a successful background sync', async () => {
     await expect(run(async () => ({ status: 200, ok: true }))).resolves.toBeUndefined();
+  });
+});
+
+describe('service worker pending queue scope and IndexedDB event ordering', () => {
+  const source = readFileSync('public/sw.js', 'utf8');
+  const functionSource = source.slice(source.indexOf('function getPendingSalesFromDB(db)'), source.indexOf('function markSaleSyncedInDB(db'));
+  const rows = [{ id: 'a', businessId: 'biz-a', synced: false, status: 'pending' }, { id: 'b', businessId: 'biz-b', synced: false, status: 'pending' }];
+  function read(active: string | null, microtask = false) {
+    let reads = 0;
+    const db = { transaction: () => ({ objectStore: () => ({ getAll: () => {
+      reads++;
+      const request: { result: typeof rows; onsuccess?: () => void } = { result: rows };
+      if (microtask) queueMicrotask(() => request.onsuccess?.());
+      else setTimeout(() => request.onsuccess?.(), 0);
+      return request;
+    } }) }) };
+    const execute = new Function('db', 'getActiveBusinessIdFromDB', `${functionSource}; return getPendingSalesFromDB(db);`);
+    return { result: execute(db, () => Promise.resolve(active)) as Promise<typeof rows>, reads: () => reads };
+  }
+  it('does not read another business queue when active metadata is missing', async () => {
+    const run = read(null);
+    expect(await run.result).toEqual([]);
+    expect(run.reads()).toBe(0);
+  });
+  it('selects only pending rows for the active business', async () => {
+    expect(await read('biz-b').result).toEqual([rows[1]]);
+  });
+  it('attaches the getAll event handler before IndexedDB can complete the request', async () => {
+    const run = read('biz-a', true);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race([run.result, new Promise(resolve => { timer = setTimeout(() => resolve('request completion was lost'), 25); })]);
+      expect(result).toEqual([rows[0]]);
+    } finally { clearTimeout(timer); }
   });
 });

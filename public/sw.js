@@ -299,18 +299,21 @@ function getActiveBusinessIdFromDB(db) {
 }
 
 function getPendingSalesFromDB(db) {
-  return new Promise(async (resolve, reject) => {
-    const tx = db.transaction('salesQueue', 'readonly');
-    const store = tx.objectStore('salesQueue');
-    const req = store.getAll();
-    const activeBusinessId = await getActiveBusinessIdFromDB(db).catch(() => null);
-    req.onsuccess = () => resolve((req.result || []).filter((s) => {
-      if (s.synced) return false;
-      if (activeBusinessId && s.businessId !== activeBusinessId) return false;
-      const status = s.status || 'pending';
-      return status === 'pending';
-    }));
-    req.onerror = () => reject(req.error);
+  // Read scope before starting the queue request: awaiting between getAll() and
+  // attaching onsuccess can lose IndexedDB's completion event. Missing metadata
+  // must never turn a scoped background sync into a scan across every business.
+  return getActiveBusinessIdFromDB(db).catch(() => null).then((activeBusinessId) => {
+    if (!activeBusinessId) return [];
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('salesQueue', 'readonly');
+      const store = tx.objectStore('salesQueue');
+      const req = store.getAll();
+      req.onsuccess = () => resolve((req.result || []).filter((s) => {
+        if (s.synced || s.businessId !== activeBusinessId) return false;
+        return (s.status || 'pending') === 'pending';
+      }));
+      req.onerror = () => reject(req.error);
+    });
   });
 }
 
@@ -344,12 +347,17 @@ async function syncSalesDirectly() {
       });
       // A logged-out/expired session must not reclassify retained sales as rejected.
       // Keep the durable queue until authentication is restored, just as for transport failures.
-      if (res.status === 401 || res.status === 408 || res.status === 429) {
+      if (res.status === 401 || res.status === 403 || res.status === 408 || res.status === 429) {
         throw new Error(`Sync temporarily unavailable: HTTP ${res.status}`);
       }
       if (res.status >= 400 && res.status < 500) {
         const body = await res.json().catch(() => ({}));
         const syncStatus = body && body.status;
+        // The browser may have switched accounts since the SW cached its scope.
+        // Keep another business's sale untouched until its correct session returns.
+        if (body.reason === 'tenant_mismatch') {
+          throw new Error('Offline sale belongs to a different active business.');
+        }
         // needs_review stays in the queue for Recovery centre — do not recreate.
         if (syncStatus === 'needs_review') {
           continue;
