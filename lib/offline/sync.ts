@@ -268,21 +268,30 @@ export function setupAutoSync(
     onSyncError: (error: Error) => void
 ): () => void {
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let disposed = false;
     let retryCount = 0;
     const MAX_RETRIES = 5;
     const BASE_DELAY = 2000;
     const MAX_DELAY = 30000;
 
     const attemptSync = async () => {
+        if (disposed) return;
         onSyncStart();
         try {
             const syncResult = await syncOfflineSales();
             if (syncResult.synced > 0 || syncResult.failed > 0) {
                 await refreshOfflineCache(undefined, { suppressErrors: true });
             }
-            retryCount = 0;
+            if (disposed) return;
             onSyncComplete(syncResult);
+            // Transport failures are returned as counts, not thrown by syncOfflineSales.
+            // Only pending rows are retryable; rejected/review rows require manual recovery.
+            if (syncResult.failed > 0 && (await getPendingSales(getClientActiveBusinessId() ?? undefined)).length > 0) {
+                throw new Error('Offline sales remain pending after sync.');
+            }
+            retryCount = 0;
         } catch (error) {
+            if (disposed) return;
             retryCount++;
             if (retryCount <= MAX_RETRIES && navigator.onLine) {
                 const delay = Math.min(BASE_DELAY * Math.pow(2, retryCount - 1), MAX_DELAY);
@@ -306,10 +315,11 @@ export function setupAutoSync(
     // Also attempt sync on setup if already online and there might be pending sales
     if (navigator.onLine) {
         void hydrateOfflineCaptureContext();
-        setTimeout(attemptSync, 1000);
+        retryTimer = setTimeout(attemptSync, 1000);
     }
 
     return () => {
+        disposed = true;
         window.removeEventListener('online', handleOnline);
         if (retryTimer) clearTimeout(retryTimer);
     };

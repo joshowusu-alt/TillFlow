@@ -142,6 +142,51 @@ describe('payments service', () => {
     expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { method: 'UNKNOWN', amountPence: 1000, error: 'Choose a valid payment method.' },
+    ...[-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1].map(amountPence =>
+      ({ method: 'CARD', amountPence, error: 'Payment amounts must be non-negative whole minor units.' })),
+  ])('rejects invalid customer and supplier payment input $method/$amountPence before database work', async ({ method, amountPence, error }) => {
+    const payments = [{ method, amountPence }] as PaymentInput[];
+    await expect(recordCustomerPayment('biz-1', 'sale-1', payments, 'user-1', { idempotencyKey: 'invalid-customer' }))
+      .rejects.toThrow(error);
+    await expect(recordSupplierPayment('biz-1', 'purchase-1', payments, { ...ownerOpts, idempotencyKey: 'invalid-supplier' }))
+      .rejects.toThrow(error);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.salesInvoice.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.purchaseInvoice.findFirst).not.toHaveBeenCalled();
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['RETURNED', 'VOID'])('rejects customer receipts on a %s invoice without financial writes', async paymentStatus => {
+    prismaMock.salesInvoice.findFirst.mockResolvedValue({
+      id: 'sale-1', businessId: 'biz-1', storeId: 'store-1',
+      totalPence: 10000, paymentStatus, payments: [],
+    });
+    await expect(recordCustomerPayment('biz-1', 'sale-1', [{ method: 'CARD', amountPence: 10000 }],
+      'user-1', { idempotencyKey: `closed-sale-${paymentStatus}` }))
+      .rejects.toThrow('Cannot record payments against a returned or voided invoice.');
+    expect(prismaMock.salesPayment.create).not.toHaveBeenCalled();
+    expect(prismaMock.salesInvoice.update).not.toHaveBeenCalled();
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    expect(prismaMock.moneyIdempotency.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['RETURNED', 'VOID'])('rejects supplier payments on a %s invoice without financial writes', async paymentStatus => {
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({
+      id: 'purchase-1', businessId: 'biz-1', storeId: 'store-1',
+      totalPence: 10000, paymentStatus, payments: [], supplier: null,
+    });
+    await expect(recordSupplierPayment('biz-1', 'purchase-1', [{ method: 'CARD', amountPence: 10000 }],
+      { ...ownerOpts, idempotencyKey: `closed-purchase-${paymentStatus}` }))
+      .rejects.toThrow('Cannot record payments against a returned or voided invoice.');
+    expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+    expect(prismaMock.purchaseInvoice.update).not.toHaveBeenCalled();
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+  });
+
   it('rejects overpayment before writing customer payments', async () => {
     prismaMock.salesInvoice.findFirst.mockResolvedValue({
       id: 'sale-1',
@@ -160,6 +205,17 @@ describe('payments service', () => {
     expect(prismaMock.salesPayment.createMany).not.toHaveBeenCalled();
     expect(prismaMock.salesPayment.create).not.toHaveBeenCalled();
     expect(prismaMock.salesInvoice.update).not.toHaveBeenCalled();
+  });
+
+  it('uses the supplier payment effective date for its journal', async () => {
+    const paidAt = new Date('2026-09-30T00:00:00.000Z');
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({ id: 'purchase-1', businessId: 'biz-1',
+      storeId: 'store-1', totalPence: 10000, paymentStatus: 'UNPAID', payments: [], supplier: null });
+    prismaMock.purchaseInvoice.update.mockResolvedValue({ id: 'purchase-1', payments: [] });
+    await recordSupplierPayment('biz-1', 'purchase-1', [{ method: 'CARD', amountPence: 1000 }],
+      { ...ownerOpts, paidAt });
+    expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({ data: expect.objectContaining({ paidAt }) });
+    expect(postJournalEntryMock).toHaveBeenCalledWith(expect.objectContaining({ entryDate: paidAt }));
   });
 
   it('scopes supplier invoice lookup by business and writes inside a transaction', async () => {
