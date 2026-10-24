@@ -1,0 +1,74 @@
+name: Pilot Acceptance
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'app/actions/backup.ts'
+      - 'lib/backup-restore-contract*'
+      - 'lib/services/pilot-recovery.pg.test.ts'
+      - 'scripts/pilot-acceptance*'
+      - '.github/workflows/pilot-acceptance.yml'
+permissions:
+  contents: read
+jobs:
+  fictional-business:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tillflow_ci_pilot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tillflow_ci_pilot"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TZ: Africa/Accra
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci_pilot?schema=public
+      POSTGRES_PRISMA_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci_pilot?schema=public
+      POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci_pilot?schema=public
+      TILLFLOW_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci_pilot?schema=public
+      TILLFLOW_INCLUDE_PG_TESTS: '1'
+      BASE_URL: http://localhost:6200
+      NEXT_PUBLIC_APP_URL: http://localhost:6200
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma migrate deploy --schema=prisma/schema.postgres.prisma
+      - name: Recovery controls and complete trading day, real PostgreSQL
+        run: npx vitest run lib/services/pilot-recovery.pg.test.ts lib/services/commercial-audit.pg.test.ts --reporter=verbose
+      - name: Create dedicated fictional fixture
+        run: node scripts/pilot-acceptance-fixture.cjs
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Start isolated application
+        run: |
+          npm run start -- -p 6200 > /tmp/tillflow-pilot-server.log 2>&1 &
+          for attempt in {1..60}; do
+            if curl -fsS http://localhost:6200/login >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+        env:
+          VERCEL_ENV: preview
+      - name: Password login, barcode checkout, roles, mobile and tablet
+        run: node scripts/pilot-acceptance-browser.cjs
+      - name: Native offline migration preservation
+        run: node scripts/commercial-offline-browser-audit.cjs
+      - name: Native offline retry failure recovery
+        run: |
+          if test -f scripts/commercial-offline-retry-browser.cjs; then
+            node scripts/commercial-offline-retry-browser.cjs
+          else
+            echo 'Retry browser harness is on the companion financial PR; not executed in this branch.'
+          fi
+      # No snapshots, fixture passwords, auth cookies or server logs uploaded.
