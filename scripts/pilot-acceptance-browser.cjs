@@ -21,6 +21,62 @@ async function main() {
   const browser = await chromium.launch();
   const results = [];
   try {
+    // Registration and first cashier setup go through public/owner forms, not fixture writes.
+    const registration = await browser.newContext({ baseURL, serviceWorkers: 'block' });
+    try {
+      const page = await registration.newPage();
+      const email = `registered-${fixture.run}@example.invalid`;
+      const cashierEmail = `first-cashier-${fixture.run}@example.invalid`;
+      await page.goto('/register');
+      await page.locator('#register-business').fill(`FICTIONAL registered ${fixture.run}`);
+      await page.locator('#register-owner').fill('Fictional Registered Owner');
+      await page.getByRole('button', { name: 'Next — Account Details' }).click();
+      await page.locator('#register-email').fill(email);
+      await page.locator('#register-password').fill(fixture.password);
+      await page.getByRole('button', { name: 'Next — Choose Plan' }).click();
+      await page.getByRole('button', { name: /^Pro\b/ }).click();
+      await page.getByRole('button', { name: 'Next — Currency' }).click();
+      await page.locator('#register-currency').selectOption('GHS');
+      await page.getByRole('button', { name: 'Create My Business' }).click();
+      await page.waitForURL('**/getting-started', { timeout: 60000 });
+      const owner = await prisma.user.findFirstOrThrow({ where: { email }, include: { business: true } });
+      assert.equal(owner.role, 'OWNER');
+      assert.equal(owner.business.currency, 'GHS');
+      assert.equal(owner.business.plan, 'PRO');
+      assert(owner.business.trialEndsAt > new Date());
+      assert.equal(await prisma.store.count({ where: { businessId: owner.businessId } }), 1);
+      assert.equal(await prisma.till.count({ where: { store: { businessId: owner.businessId } } }), 2);
+      assert(await prisma.account.count({ where: { businessId: owner.businessId } }) > 0);
+      assert.equal(await prisma.controlBusinessProfile.count({ where: { businessId: owner.businessId } }), 1);
+      assert((await registration.cookies()).some(cookie => cookie.name === `pos_session_${owner.businessId}` && cookie.httpOnly));
+      results.push('PASS public business registration, live owner session, trial and required bootstrap persisted');
+      await page.goto('/users');
+      await page.locator('input[name=name]').fill('Fictional First Cashier');
+      await page.locator('input[name=email]').fill(cashierEmail);
+      await page.locator('input[name=password]').fill(fixture.password);
+      await page.locator('select[name=role]').selectOption('CASHIER');
+      await page.getByRole('button', { name: 'Create User', exact: true }).click();
+      await page.getByText('User created successfully.', { exact: true }).waitFor({ timeout: 45000 });
+      const cashier = await prisma.user.findFirstOrThrow({ where: { email: cashierEmail } });
+      assert.equal(cashier.businessId, owner.businessId);
+      assert.equal(cashier.role, 'CASHIER');
+      assert.equal(cashier.active, true);
+      results.push('PASS first cashier created through newly registered owner UI');
+      const firstLogin = await browser.newContext({ baseURL, serviceWorkers: 'block' });
+      try {
+        const firstPage = await firstLogin.newPage();
+        await firstPage.goto('/login');
+        await firstPage.locator('input[name=email]').fill(cashierEmail);
+        await firstPage.locator('input[name=password]').fill(fixture.password);
+        await firstPage.getByRole('button', { name: /sign in/i }).click();
+        await firstPage.waitForURL(url => !url.pathname.startsWith('/login'), { timeout: 60000 });
+        assert((await firstLogin.cookies()).some(cookie => cookie.name === `pos_session_${owner.businessId}` && cookie.httpOnly));
+        await firstPage.goto('/users');
+        assert.notEqual(new URL(firstPage.url()).pathname, '/users');
+        results.push('PASS newly onboarded cashier password login and owner-route denial');
+      } finally { await firstLogin.close(); }
+
+    } finally { await registration.close(); }
     for (const [index, role] of ['owner','manager','cashier1','cashier2'].entries()) {
       const context = await browser.newContext({ baseURL, serviceWorkers: 'block', viewport: role === 'cashier1' ? { width: 390, height: 844 } : role === 'cashier2' ? { width: 768, height: 1024 } : { width: 1280, height: 900 } });
       try {

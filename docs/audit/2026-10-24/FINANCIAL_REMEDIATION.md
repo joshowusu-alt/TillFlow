@@ -53,3 +53,11 @@ node scripts/commercial-offline-retry-browser.cjs
 Five native Chromium checks use real IndexedDB, browser reload, actual application sync/backoff code and a clearly simulated local API:503 leaves the sale pending; refresh preserves it; a lost response after simulated commit causes same-ID retry; automatic backoff recovers without another online event; acknowledged sale never resubmits on later refresh. The simulated server must record one economic commit despite at least three requests. This complements real PostgreSQL idempotency checks; it does not certify a live provider or real-server browser checkout.
 
 No production data, environment variables, infrastructure, merge or deployment is changed by this work.
+
+## Concurrent purchase replay hardening
+
+Review found an older unsafe retry path in `purchases.ts`: a unique idempotency-key insert error was caught inside the PostgreSQL transaction, then the same aborted transaction was queried for the winner. Existing parallel tests hid the user-visible failure by allowing only one of two identical callers to succeed. Those tests now require both paid and unpaid callers to receive the same committed invoice. A further parallel different-payment payload test requires one accepted request, one explicit idempotency conflict, and one invoice/payment/stock/journal effect.
+
+The service now rechecks the durable key after waiting for inventory locks. Any unique-key exception still propagates out of the transaction so rollback finishes before the persisted winner is read through a fresh client. Money/stock writes are never retried blindly. A composed caller-supplied transaction must still propagate any unique violation to its own transaction owner for rollback; no query is attempted on its aborted client.
+
+A unit regression with a PostgreSQL-aborted-client contract failed before (one failure/21 passes). After the fix, four purchase unit subsets pass **46 tests with zero failures/skips and no unhandled errors**, using the correct SQLite-generated unit client. An initial PG-generated-client unit attempt had one environment-provider error and is not counted as a clean pass. Real parallel purchase execution must pass isolated PostgreSQL CI before this fix is accepted.
