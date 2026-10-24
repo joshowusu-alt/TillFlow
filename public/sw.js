@@ -342,7 +342,9 @@ async function syncSalesDirectly() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sale),
       });
-      if (res.status === 408 || res.status === 429) {
+      // A logged-out/expired session must not reclassify retained sales as rejected.
+      // Keep the durable queue until authentication is restored, just as for transport failures.
+      if (res.status === 401 || res.status === 408 || res.status === 429) {
         throw new Error(`Sync temporarily unavailable: HTTP ${res.status}`);
       }
       if (res.status >= 400 && res.status < 500) {

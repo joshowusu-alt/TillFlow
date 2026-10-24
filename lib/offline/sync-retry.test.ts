@@ -78,6 +78,11 @@ describe('service worker background retry', () => {
     await expect(run(async () => ({ status: 429, ok: false, json: async () => ({}) }), move)).rejects.toThrow();
     expect(move).not.toHaveBeenCalled();
   });
+  it('retains the queued sale when a session expires instead of dead-lettering it', async () => {
+    const move = vi.fn();
+    await expect(run(async () => ({ status: 401, ok: false, json: async () => ({ error: 'Unauthorized' }) }), move)).rejects.toThrow();
+    expect(move).not.toHaveBeenCalled();
+  });
   it('resolves a successful background sync', async () => {
     await expect(run(async () => ({ status: 200, ok: true }))).resolves.toBeUndefined();
   });
