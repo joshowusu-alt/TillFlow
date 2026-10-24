@@ -106,26 +106,25 @@ runPg('pilot financial recovery from complete application export', () => {
     expect(await controls()).toEqual(before);
   }, 60000);
 
-  it('refuses unsupported stocktake and branch/device records without deleting them', async () => {
+  it('refuses each unsupported stocktake, branch, device and risk record without deleting it', async () => {
     const businessId = fixture.businessId;
-    const stocktake = await prisma.stocktake.create({ data: { storeId: fixture.stores[0].id, userId: auth.owner.id, notes: 'Fictional protected stocktake' } });
-    const organization = await prisma.organization.create({ data: { businessId, name: 'Fictional protected organization' } });
-    const branch = await prisma.branch.create({ data: { businessId, organizationId: organization.id, storeId: fixture.stores[0].id, name: 'Fictional protected branch' } });
-    const device = await prisma.device.create({ data: { businessId, branchId: branch.id, organizationId: organization.id, userId: auth.owner.id, label: 'Fictional protected device', deviceKey: `recovery-${businessId}` } });
-    try {
-      const before = await controls();
-      const result = await backup.importDatabaseAction(snapshot);
-      expect(result).toMatchObject({ success: false, error: expect.stringContaining('operator-assisted') });
-      expect(await controls()).toEqual(before);
-      expect(await prisma.stocktake.findUniqueOrThrow({ where: { id: stocktake.id } })).toEqual(stocktake);
-      expect(await prisma.device.findUniqueOrThrow({ where: { id: device.id } })).toEqual(device);
-      expect(await prisma.branch.findUniqueOrThrow({ where: { id: branch.id } })).toEqual(branch);
-      expect(await prisma.organization.findUniqueOrThrow({ where: { id: organization.id } })).toEqual(organization);
-    } finally {
-      await prisma.device.delete({ where: { id: device.id } });
-      await prisma.branch.delete({ where: { id: branch.id } });
-      await prisma.organization.delete({ where: { id: organization.id } });
-      await prisma.stocktake.delete({ where: { id: stocktake.id } });
+    const cases = [
+      ['stocktake', { storeId: fixture.stores[0].id, userId: auth.owner.id, notes: 'Fictional protected stocktake' }],
+      ['organization', { businessId, name: 'Fictional protected organization' }],
+      ['branch', { businessId, storeId: fixture.stores[0].id, name: 'Fictional protected branch' }],
+      ['device', { businessId, userId: auth.owner.id, label: 'Fictional protected device', deviceKey: `recovery-${businessId}` }],
+      ['riskAlert', { businessId, alertType: 'FICTIONAL_RECOVERY', summary: 'Retain acknowledged risk evidence', status: 'ACKNOWLEDGED', acknowledgedByUserId: auth.owner.id, acknowledgedAt: new Date() }],
+    ] as const;
+    for (const [modelName, data] of cases) {
+      const model = prisma[modelName] as any;
+      const record = await model.create({ data });
+      try {
+        const before = await controls();
+        const result = await backup.importDatabaseAction(snapshot);
+        expect(result).toMatchObject({ success: false, error: expect.stringContaining('operator-assisted') });
+        expect(await controls()).toEqual(before);
+        expect(await model.findUniqueOrThrow({ where: { id: record.id } })).toEqual(record);
+      } finally { await model.delete({ where: { id: record.id } }); }
     }
   }, 60000);
 

@@ -277,6 +277,7 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
         tx.device.count({ where: { businessId } }),
         tx.branch.count({ where: { businessId } }),
         tx.organization.count({ where: { businessId } }),
+      tx.riskAlert.count({ where: { businessId } }),
       ]);
       if (unsupported.some(Boolean)) throw new UserError('This business has records outside this trading snapshot requiring an operator-assisted full recovery. No records were changed.');
       // Audit history is authoritative server-side evidence, never backup
