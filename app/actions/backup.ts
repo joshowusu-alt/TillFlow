@@ -420,7 +420,10 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       for (const product of list(backup.products)) {
         if (product.groupId && !groupIds.has(product.groupId)) throw new Error('A product group is missing from this backup.');
         // Classification parents are restored before their product links.
-        await tx.product.create({ data: { ...product, businessId } });
+        // PostgreSQL registers a primary barcode via an INSERT trigger. Restore
+        // the registry explicitly first, then set primaries, so it is inserted
+        // exactly once on both PostgreSQL and SQLite.
+        await tx.product.create({ data: { ...product, businessId, barcode: null } });
       }
 
       for (const pu of list(backup.productUnits)) {
@@ -532,6 +535,9 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       for (const row of list(backup.stockTransfers)) await tx.stockTransfer.create({ data: row });
       for (const row of list(backup.stockTransferLines)) await tx.stockTransferLine.create({ data: row });
       for (const row of list(backup.productBarcodes)) await tx.productBarcode.create({ data: row });
+      for (const product of list(backup.products)) {
+        if (product.barcode != null) await tx.product.update({ where: { id: product.id }, data: { barcode: product.barcode, updatedAt: product.updatedAt } });
+      }
       for (const row of list(backup.paymentReconciliations)) await tx.paymentReconciliation.create({ data: row });
       for (const row of list(backup.dayClosures)) await tx.dayClosure.create({ data: row });
       for (const row of list(backup.openingBalances)) await tx.openingBalance.create({ data: row });

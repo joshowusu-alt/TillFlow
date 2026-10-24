@@ -20,6 +20,7 @@ runPg('pilot financial recovery from complete application export', () => {
     ({ prisma } = await openTestPrismaClient());
     const { createPilotFixture } = createRequire(import.meta.url)('../../scripts/pilot-acceptance-fixture.cjs');
     fixture = await createPilotFixture(prisma, `recovery-${Date.now()}`);
+    await prisma.productBarcode.create({ data: { businessId: fixture.businessId, productId: fixture.products[0].id, code: `recovery-alias-${fixture.products[0].id}` } });
     auth.owner = fixture.users.owner;
     ownerHash = fixture.users.owner.passwordHash;
     await prisma.user.update({ where: { id: auth.owner.id }, data: { twoFactorEnabled: true, twoFactorSecret: 'FICTIONAL-FACTOR', approvalPinHash: 'FICTIONAL-PIN-HASH' } });
@@ -74,6 +75,8 @@ runPg('pilot financial recovery from complete application export', () => {
   }, 60000);
 
   const controls = async () => ({
+    products: await prisma.product.findMany({ where: { businessId: fixture.businessId }, orderBy: { id: 'asc' } }),
+    barcodes: await prisma.productBarcode.findMany({ where: { businessId: fixture.businessId }, orderBy: { code: 'asc' } }),
     stock: await prisma.inventoryBalance.findMany({ where: { store: { businessId: fixture.businessId } }, orderBy: { id: 'asc' } }),
     drawer: await prisma.cashDrawerEntry.findMany({ where: { businessId: fixture.businessId }, orderBy: { id: 'asc' } }),
     shifts: await prisma.shift.findMany({ where: { till: { store: { businessId: fixture.businessId } } }, orderBy: { id: 'asc' } }),

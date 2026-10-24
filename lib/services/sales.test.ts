@@ -32,6 +32,7 @@ const {
     stockMovement: { createMany: vi.fn(), updateMany: vi.fn() },
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
+    $executeRaw: vi.fn(),
   },
   postJournalEntryMock: vi.fn(),
   fetchInventoryMapMock: vi.fn(),
@@ -252,7 +253,7 @@ beforeEach(() => {
   prismaMock.productUnit.findMany.mockResolvedValue([makeProductUnit()]);
   prismaMock.salesInvoice.findFirst.mockResolvedValue(null);
   prismaMock.businessSequence.create.mockResolvedValue({ nextVal: 1 });
-  prismaMock.businessSequence.update.mockResolvedValue({ nextVal: 1 });
+  prismaMock.businessSequence.update.mockReset().mockResolvedValue({ nextVal: 1 });
   prismaMock.businessSequence.upsert.mockResolvedValue({ nextVal: 1 });
   prismaMock.salesInvoice.aggregate.mockResolvedValue({ _sum: { totalPence: 0 } });
   prismaMock.salesInvoice.findMany.mockResolvedValue([]);
@@ -265,6 +266,7 @@ beforeEach(() => {
   });
   prismaMock.stockMovement.createMany.mockImplementation(async ({ data }) => ({ count: data.length }));
   prismaMock.$queryRaw.mockResolvedValue([{ id: 'cde-1' }]);
+  prismaMock.$executeRaw.mockReset().mockResolvedValue(1);
   // Additional tx models used inside the transaction
   (prismaMock as any).cashDrawerEntry = { create: vi.fn().mockResolvedValue({}) };
   (prismaMock as any).shift = {

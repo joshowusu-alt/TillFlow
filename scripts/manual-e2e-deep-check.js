@@ -377,15 +377,25 @@ async function run() {
     await page.waitForTimeout(2000);
     await page.locator('input[name="name"]').fill(`E2E User Updated ${stamp}`);
     await page.locator('select[name="role"]').selectOption('MANAGER');
-    await page.getByRole('button', { name: /Update User/i }).click();
-    // Wait for the updated role to appear
-    await page.getByText(/Manager/i).first().waitFor({ timeout: 30000 });
+    // The role select already contains "Manager" before submission. Wait for
+    // the action redirect and persisted change, not that pre-existing text.
+    await Promise.all([
+      page.waitForURL(/\/users\?success=updated$/, { timeout: 30000 }),
+      page.getByRole('button', { name: /Update User/i }).click(),
+    ]);
+    const editedUser = await prisma.user.findFirstOrThrow({ where: { email: e2eUserEmail } });
+    if (editedUser.role !== 'MANAGER' || editedUser.name !== `E2E User Updated ${stamp}`) throw new Error('Edited user was not persisted');
     report.users.edit = true;
     step('3/12 Edit user OK');
 
     step('4/12 Deactivate user');
     const updatedUserRow = page.locator('tr', { hasText: e2eUserEmail }).first();
-    await updatedUserRow.getByRole('button', { name: /Deactivate/i }).click();
+    await Promise.all([
+      page.waitForURL(url => url.pathname === '/users' && !url.search, { timeout: 30000 }),
+      updatedUserRow.getByRole('button', { name: /Deactivate/i }).click(),
+    ]);
+    const deactivatedUser = await prisma.user.findUniqueOrThrow({ where: { id: editedUser.id } });
+    if (deactivatedUser.active) throw new Error('User deactivation was not persisted');
     await page.locator('tr', { hasText: e2eUserEmail }).getByText(/Inactive/i).waitFor({ timeout: 30000 });
     report.users.deactivate = true;
     step('4/12 Deactivate user OK');

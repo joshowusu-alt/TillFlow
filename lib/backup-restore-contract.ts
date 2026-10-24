@@ -14,6 +14,16 @@ export function validateRecoverySnapshot(backup: Record<string, any>, businessId
     throw new Error('The signed-in owner must be present in the backup to retain recovery access.');
   }
   const rows = (key: string): any[] => Array.isArray(backup[key]) ? backup[key] : [];
+  const barcodeOwners = new Map<string, string>();
+  for (const barcode of rows('productBarcodes')) {
+    if (typeof barcode.code !== 'string' || barcodeOwners.has(barcode.code)) throw new Error('Backup contains an invalid or duplicate barcode.');
+    barcodeOwners.set(barcode.code, barcode.productId);
+  }
+  for (const product of rows('products')) {
+    if (product.barcode != null && barcodeOwners.get(product.barcode) !== product.id) {
+      throw new Error('Backup primary barcode does not match its product registry.');
+    }
+  }
   for (const key of [...RECOVERY_TABLES, 'stores', 'users', 'customers', 'suppliers', 'categories', 'products', 'accounts', 'salesInvoices', 'purchaseInvoices', 'expenses', 'journalEntries']) {
     for (const row of rows(key)) if (row.businessId != null && row.businessId !== businessId) throw new Error(`Backup ${key} contains another business's record.`);
   }
