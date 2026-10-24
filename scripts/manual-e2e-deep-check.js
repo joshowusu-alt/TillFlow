@@ -43,7 +43,10 @@ async function fillVisiblePaymentForm(page, amount) {
 async function waitForURLPattern(page, pattern, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (typeof pattern === 'function' ? pattern(new URL(page.url())) : pattern.test(page.url())) return;
+    // Read the browser's actual address, rather than waiting on a cached
+    // frame-navigation event for an App Router history update.
+    const href = await page.evaluate(() => window.location.href);
+    if (typeof pattern === 'function' ? pattern(new URL(href)) : pattern.test(href)) return;
     await page.waitForTimeout(500);
   }
   throw new Error(`URL did not match ${pattern} within ${timeoutMs}ms. Current: ${page.url()}`);
