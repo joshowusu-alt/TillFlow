@@ -79,6 +79,15 @@ async function main() {
     ({ prisma: recovered } = await openGuardedPrismaClient({ url: target.toString() }));
     const after = await controls(recovered);
     phase = 'compare complete controls';
+    if (JSON.stringify(after) !== JSON.stringify(before)) {
+      // Diagnostic metadata only: never print financial rows, authentication
+      // factors, row fingerprints or native archive contents on a mismatch.
+      console.error('RECOVERY_CONTROL_DIFFERENCES', JSON.stringify({
+        tables: Object.keys(before.rows).filter(table => JSON.stringify(before.rows[table]) !== JSON.stringify(after.rows[table])).map(table => ({ table, beforeCount: before.rows[table].count, afterCount: after.rows[table]?.count })),
+        schema: ['schema', 'columns', 'sequences'].map(key => ({ key, beforeCount: before[key].length, afterCount: after[key].length, mismatches: before[key].flatMap((row, index) => JSON.stringify(row) === JSON.stringify(after[key][index]) ? [] : [{ object: row.object || row.table_name || row.sequencename, name: row.name || row.column_name, fields: Object.keys(row).filter(field => row[field] !== after[key][index]?.[field]) }]).slice(0, 12) })),
+        ledgerMatches: JSON.stringify(before.ledger) === JSON.stringify(after.ledger),
+      }));
+    }
     assert.deepEqual(after, before, 'Every public table, column, constraint, index, trigger, routine and sequence must match');
     assert.deepEqual(await controls(original), before, 'Source must remain unchanged during dump/restore');
     phase = 'restored authentication';

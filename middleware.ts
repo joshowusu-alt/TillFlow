@@ -128,7 +128,7 @@ export function middleware(request: NextRequest) {
   }
 
   const isPublic =
-    pathname === PUBLIC_DEPLOY_SHA_PATH || PUBLIC_FONT_PATHS.has(pathname) || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+    pathname === PUBLIC_DEPLOY_SHA_PATH || PUBLIC_PATHS.some((p) => pathname.startsWith(p)) || PUBLIC_FONT_PATHS.has(pathname);
   if (!sessionToken && !isPublic) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

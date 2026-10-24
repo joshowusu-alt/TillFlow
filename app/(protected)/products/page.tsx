@@ -401,7 +401,7 @@ export default async function ProductsPage(
             context={{ q, tab: 'products', issue: issueQueryValue, missingCost: searchParams?.missingCost, stock: searchParams?.stock }} />
           <div className="operational-filter-row">
             <div className="operational-search-shell">
-              <Suspense><SearchFilter documentNavigation placeholder={issueActive ? 'Search within affected products…' : 'Search products…'} /></Suspense>
+              <Suspense><SearchFilter placeholder={issueActive ? 'Search within affected products…' : 'Search products…'} documentNavigation /></Suspense>
             </div>
             {isManager && !issueActive ? (
               <div className="flex flex-wrap gap-2">

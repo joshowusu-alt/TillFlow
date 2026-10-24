@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable @next/next/no-html-link-for-pages -- Catalogue query navigation deliberately uses a full server render; report links still use App Router. */
 
 import Link from 'next/link';
 import { useId, useRef, useState } from 'react';
@@ -62,6 +63,7 @@ export default function ClassificationSetup({ categories, divisions, initialCate
           const result = await saveClassificationSetupAction(forKind, parentId ?? '', name);
           if (!result) return; // Successful saves navigate to the persisted parent and next step.
           if (!result.success) { setError(result.error); return; }
+          if (result.redirectTo) { window.location.assign(result.redirectTo); return; }
           if (forKind === 'category') {
             setCreatedCategories(rows => [...rows.filter(row => row.id !== result.data.id), result.data]);
             setCategoryId(result.data.id); setDivisionId(''); setGroupId(''); setKind('division');
@@ -114,7 +116,7 @@ export default function ClassificationSetup({ categories, divisions, initialCate
       </section>
     </div>
     {category && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/15 bg-accentSoft/30 p-3"><div className="min-w-0"><p className="text-xs font-semibold text-ink/60">Selected classification</p><p className="break-words text-sm font-semibold [overflow-wrap:anywhere]">{path}</p></div>
-      <Link className="btn-secondary text-sm" href={browse(group ? 'group' : division ? 'division' : 'category')}>View products in this {group ? 'group' : division ? 'division' : 'category'}</Link></div>}
+      <a className="btn-secondary text-sm" href={browse(group ? 'group' : division ? 'division' : 'category')}>View products in this {group ? 'group' : division ? 'division' : 'category'}</a></div>}
     {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
     {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
   </section>;
