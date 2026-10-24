@@ -94,6 +94,7 @@ export default async function ProductsPage(
       category?: string;
       division?: string;
       group?: string;
+      resetClassification?: string;
     }>;
   }
 ) {
@@ -262,6 +263,7 @@ export default async function ProductsPage(
         category={searchParams?.category}
         division={searchParams?.division}
         group={searchParams?.group}
+        resetClassification={searchParams?.resetClassification === '1'}
       />
       <PageHeader
         title={pageTitle}
@@ -399,7 +401,7 @@ export default async function ProductsPage(
             context={{ q, tab: 'products', issue: issueQueryValue, missingCost: searchParams?.missingCost, stock: searchParams?.stock }} />
           <div className="operational-filter-row">
             <div className="operational-search-shell">
-              <Suspense><SearchFilter placeholder={issueActive ? 'Search within affected products…' : 'Search products…'} /></Suspense>
+              <Suspense><SearchFilter documentNavigation placeholder={issueActive ? 'Search within affected products…' : 'Search products…'} /></Suspense>
             </div>
             {isManager && !issueActive ? (
               <div className="flex flex-wrap gap-2">
@@ -775,6 +777,7 @@ export default async function ProductsPage(
               </table>
             </div>
             <Pagination
+              documentNavigation
               currentPage={page}
               totalPages={totalProductPages}
               basePath="/products"

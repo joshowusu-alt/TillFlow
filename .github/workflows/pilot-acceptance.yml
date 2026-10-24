@@ -6,6 +6,7 @@ on:
       - 'app/actions/backup.ts'
       - 'lib/backup-restore-contract*'
       - 'lib/services/pilot-recovery.pg.test.ts'
+      - 'lib/services/pilot-native-recovery.pg.test.ts'
       - 'scripts/pilot-acceptance*'
       - 'scripts/pilot-full-database-recovery.cjs'
       - '.github/workflows/pilot-acceptance.yml'
@@ -65,6 +66,8 @@ jobs:
         run: node scripts/pilot-acceptance-browser.cjs
       - name: Native offline migration preservation
         run: node scripts/commercial-offline-browser-audit.cjs
+        env:
+          TILLFLOW_VERIFY_ROLLBACK_READER: '1'
       - name: Native offline retry failure recovery
         run: |
           if test -f scripts/commercial-offline-retry-browser.cjs; then
@@ -72,6 +75,10 @@ jobs:
           else
             echo 'Retry browser harness is on the companion financial PR; not executed in this branch.'
           fi
+      - name: Persist real debtor, supplier and expense records for native recovery
+        run: npx vitest run lib/services/pilot-native-recovery.pg.test.ts --reporter=verbose
+        env:
+          TILLFLOW_RUN_FULL_DB_RECOVERY: '1'
       - name: Full native PostgreSQL backup and restore with complete controls
         run: node scripts/pilot-full-database-recovery.cjs
         env:

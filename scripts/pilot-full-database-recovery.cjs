@@ -9,23 +9,30 @@ const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
 
 const quote = value => `"${value.replaceAll('"', '""')}"`;
 
+let phase = 'guard';
 async function controls(db) {
+  phase = 'enumerate tables';
   const tables = await db.$queryRawUnsafe("SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename");
   const rows = {};
   for (const { tablename } of tables) {
+    phase = `control table ${tablename}`;
     // Full rows include authentication factors, audit history, idempotency keys,
     // operational evidence and tables outside the limited application JSON export.
     const [result] = await db.$queryRawUnsafe(`SELECT count(*)::int AS count, md5(coalesce(string_agg(to_jsonb(t)::text, E'\\n' ORDER BY to_jsonb(t)::text), '')) AS digest FROM public.${quote(tablename)} t`);
     rows[tablename] = result;
   }
+  phase = 'schema controls';
   const schema = await db.$queryRawUnsafe(`SELECT 'constraint' AS kind, c.relname AS object, con.conname AS name, pg_get_constraintdef(con.oid) AS definition, con.convalidated AS valid
     FROM pg_constraint con JOIN pg_class c ON c.oid=con.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public'
     UNION ALL SELECT 'index', tablename, indexname, indexdef, true FROM pg_indexes WHERE schemaname='public'
     UNION ALL SELECT 'trigger', c.relname, t.tgname, pg_get_triggerdef(t.oid), t.tgenabled <> 'D' FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND NOT t.tgisinternal
     UNION ALL SELECT 'routine', p.proname, pg_get_function_identity_arguments(p.oid), pg_get_functiondef(p.oid), true FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prokind IN ('f','p')
     ORDER BY kind, object, name, definition`);
+  phase = 'column controls';
   const columns = await db.$queryRawUnsafe("SELECT table_name, column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name, ordinal_position");
+  phase = 'sequence controls';
   const sequences = await db.$queryRawUnsafe("SELECT sequencename, start_value::text, min_value::text, max_value::text, increment_by::text, cycle, last_value::text FROM pg_sequences WHERE schemaname='public' ORDER BY sequencename");
+  phase = 'ledger controls';
   const [ledger] = await db.$queryRawUnsafe('SELECT coalesce(sum("debitPence"),0)::text AS debit, coalesce(sum("creditPence"),0)::text AS credit FROM "JournalLine"');
   assert.equal(ledger.debit, ledger.credit, 'Whole fictional ledger must balance');
   return { rows, schema, columns, sequences, ledger };
@@ -51,15 +58,19 @@ async function main() {
     await original.auditLog.create({ data: { businessId: business.id, userId: fixture.users.owner.id, userName: 'Fictional owner', userRole: 'OWNER', action: 'FULL_DATABASE_RECOVERY_DRILL', details: 'Native backup must retain this audit evidence' } });
     await original.riskAlert.create({ data: { businessId: business.id, storeId: fixture.stores[0].id, alertType: 'FICTIONAL_RECOVERY', summary: 'Isolated full recovery evidence' } });
     await original.stocktake.create({ data: { storeId: fixture.stores[0].id, userId: fixture.users.owner.id, notes: 'Fictional in-progress count retained by native backup', lines: { create: { productId: fixture.products[0].id, expectedBase: 99, countedBase: 99, varianceBase: 0 } } } });
+    phase = 'fixture controls';
     const before = await controls(original);
-    for (const table of ['Business', 'User', 'Product', 'InventoryBalance', 'StockMovement', 'SalesInvoice', 'SalesPayment', 'JournalEntry', 'JournalLine', 'AuditLog', 'RiskAlert', 'Stocktake', 'StocktakeLine']) assert(before.rows[table]?.count > 0, `Non-empty ${table} evidence required`);
+    for (const table of ['Business', 'User', 'Product', 'InventoryBalance', 'StockMovement', 'SalesInvoice', 'SalesPayment', 'PurchaseInvoice', 'PurchasePayment', 'Expense', 'ExpensePayment', 'CashDrawerEntry', 'MoneyIdempotency', 'JournalEntry', 'JournalLine', 'AuditLog', 'RiskAlert', 'Stocktake', 'StocktakeLine']) assert(before.rows[table]?.count > 0, `Non-empty ${table} evidence required`);
+    phase = 'native dump';
     const dump = path.join(dir, 'fictional.dump');
     const fd = fs.openSync(dump, 'wx', 0o600);
     const started = performance.now();
     try {
       execFileSync('docker', ['exec', container, 'pg_dump', '-U', 'postgres', '-d', 'tillflow_ci_pilot', '--format=custom', '--no-owner', '--no-acl'], { stdio: ['ignore', fd, 'pipe'] });
     } finally { fs.closeSync(fd); }
+    phase = 'create isolated restore database';
     execFileSync('docker', ['exec', container, 'createdb', '-U', 'postgres', restoredName]);
+    phase = 'native restore';
     const input = fs.openSync(dump, 'r');
     try {
       execFileSync('docker', ['exec', '-i', container, 'pg_restore', '-U', 'postgres', '-d', restoredName, '--exit-on-error', '--no-owner', '--no-acl'], { stdio: [input, 'ignore', 'pipe'] });
@@ -67,8 +78,10 @@ async function main() {
     const recoveryMs = performance.now() - started;
     ({ prisma: recovered } = await openGuardedPrismaClient({ url: target.toString() }));
     const after = await controls(recovered);
+    phase = 'compare complete controls';
     assert.deepEqual(after, before, 'Every public table, column, constraint, index, trigger, routine and sequence must match');
     assert.deepEqual(await controls(original), before, 'Source must remain unchanged during dump/restore');
+    phase = 'restored authentication';
     for (const key of ['owner', 'cashier1', 'cashier2']) {
       const user = await recovered.user.findUniqueOrThrow({ where: { id: fixture.users[key].id } });
       assert.equal(await bcrypt.compare(fixture.password, user.passwordHash), true, `${key} restored password must authenticate`);
@@ -84,4 +97,4 @@ async function main() {
   }
 }
 module.exports = { controls };
-if (require.main === module) main().catch(() => { console.error('Full isolated database recovery failed; no dump or credentials are logged.'); process.exitCode = 1; });
+if (require.main === module) main().catch(error => { console.error('Full isolated database recovery failed', { phase, code: error.code, databaseCode: error.meta?.code, assertion: error.code === 'ERR_ASSERTION' ? error.message.split('\n')[0] : undefined }); process.exitCode = 1; });

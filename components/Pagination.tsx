@@ -7,6 +7,7 @@ interface PaginationProps {
   searchParams?: Record<string, string | undefined>;
   pageSize?: number;
   pageSizeOptions?: number[];
+  documentNavigation?: boolean;
 }
 
 export default function Pagination({
@@ -16,10 +17,12 @@ export default function Pagination({
   searchParams = {},
   pageSize,
   pageSizeOptions = [10, 20, 50],
+  documentNavigation = false,
 }: PaginationProps) {
   if (totalPages <= 1) return null;
 
   const hasPageSize = typeof pageSize === 'number';
+  const PageLink = documentNavigation ? 'a' : Link;
   const normalizedPageSizeOptions = Array.from(new Set(pageSizeOptions)).filter((option) => option > 0).sort((a, b) => a - b);
 
   function buildHref(page: number) {
@@ -37,7 +40,7 @@ export default function Pagination({
     <div className="mt-5 space-y-3 rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 text-sm shadow-card">
       <div className="flex items-center justify-between">
         {currentPage > 1 ? (
-          <Link className="btn-ghost text-xs" href={buildHref(currentPage - 1)}>← Prev</Link>
+          <PageLink className="btn-ghost text-xs" href={buildHref(currentPage - 1)}>← Prev</PageLink>
         ) : (
           <span className="w-[76px]" />
         )}
@@ -45,7 +48,7 @@ export default function Pagination({
           Page {currentPage} of {totalPages}
         </span>
         {currentPage < totalPages ? (
-          <Link className="btn-ghost text-xs" href={buildHref(currentPage + 1)}>Next →</Link>
+          <PageLink className="btn-ghost text-xs" href={buildHref(currentPage + 1)}>Next →</PageLink>
         ) : (
           <span className="w-[76px]" />
         )}

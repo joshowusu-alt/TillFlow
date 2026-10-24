@@ -1,4 +1,4 @@
-import Link from 'next/link';
+/* eslint-disable @next/next/no-html-link-for-pages -- Deliberate document navigation: query-only App Router transitions can remain suspended with a fulfilled retry promise. */
 import { catalogueCount, catalogueHref, catalogueSelection, type CatalogueCategory, type CatalogueDivision,
   type CatalogueCount, type CatalogueSelection } from '@/lib/products/catalogue-classification';
 
@@ -11,12 +11,15 @@ export default function CatalogueClassificationNav({ categories, divisions, coun
   const children = divisions.filter(d => d.categoryId === categoryId);
   const total = (scope: CatalogueSelection) => catalogueCount(counts, divisions, scope);
   function choice(label: string, scope: CatalogueSelection, selected: boolean) {
-    return <Link key={label + JSON.stringify(scope)} href={catalogueHref(context, scope)} scroll={false}
+    // The server owns both the product scope and selected ancestry. A document
+    // navigation commits them together, including back/forward, without relying
+    // on the query-only RSC transition that stalled in the production build.
+    return <a key={label + JSON.stringify(scope)} href={catalogueHref(context, scope)}
       aria-current={selected && current.valid ? 'page' : undefined}
       className={`inline-flex min-h-[44px] min-w-0 max-w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${selected && current.valid ? 'border-accent bg-accent text-white' : 'border-slate-200 bg-white text-ink hover:bg-slate-50'}`}>
       <span className="break-words [overflow-wrap:anywhere]">{label}</span>
       <span className="shrink-0 text-xs tabular-nums opacity-80" aria-label={`${total(scope)} products`}>{total(scope).toLocaleString()}</span>
-    </Link>;
+    </a>;
   }
   return <nav aria-label="Browse catalogue classification" className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4">
     <p className="text-xs text-ink/65">Product counts{context.q ? ' within this search' : context.issue || context.missingCost ? ' within this review' : ''} · not stock quantities</p>
@@ -34,7 +37,7 @@ export default function CatalogueClassificationNav({ categories, divisions, coun
     </div></div>}
     <p className="border-t border-slate-200 pt-3 text-sm text-ink/75" aria-live="polite">
       {current.valid ? [current.category?.name ?? 'All categories', current.division?.name, current.group?.name].filter(Boolean).join(' → ')
-        : <>This classification combination is unavailable. <Link href={catalogueHref(context, {})} className="font-semibold text-accent underline">Clear classification filters</Link></>}
+        : <>This classification combination is unavailable. <a href={catalogueHref(context, {})} className="font-semibold text-accent underline">Clear classification filters</a></>}
     </p>
   </nav>;
 }

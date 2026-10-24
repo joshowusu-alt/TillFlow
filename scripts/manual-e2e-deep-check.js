@@ -733,6 +733,37 @@ async function run() {
     await waitForURLPattern(page, url => url.searchParams.get('group') === classificationGroup.id);
     await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: groupName }).waitFor();
     step('BONUS Cascading catalogue navigation OK');
+    // Document navigation must not restore a cleared hierarchy from stored
+    // list state when there is no search term (the genuinely bare-list case).
+    await page.goto(`${BASE_URL}/products?tab=products&category=${classificationCategoryId}&division=${classificationDivisionId}&group=${classificationGroup.id}`, { waitUntil: 'networkidle' });
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: groupName }).waitFor();
+    await catalogueNav.getByRole('link', { name: /^All categories/ }).click();
+    await waitForURLPattern(page, url => !url.searchParams.has('q') && !url.searchParams.has('category') && !url.searchParams.has('division') && !url.searchParams.has('group'));
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: 'All categories' }).waitFor();
+    await page.reload({ waitUntil: 'networkidle' });
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: 'All categories' }).waitFor();
+    if (new URL(page.url()).searchParams.has('category')) throw new Error('Empty-search clear restored stale category');
+    step('BONUS Empty-search catalogue clear survives reload OK');
+    const temporaryPageProducts = Array.from({ length: 30 }, (_, index) => ({ id: `catalogue-page-${stamp}-${index}`, businessId: reportOwner.businessId, name: `Fictional pagination ${stamp} ${index}`, sellingPriceBasePence: 100 }));
+    await prisma.product.createMany({ data: temporaryPageProducts });
+    try {
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.getByRole('link', { name: 'Next →', exact: true }).click();
+      await waitForURLPattern(page, url => url.searchParams.get('page') === '2');
+      await page.getByText(/Page 2 of/).waitFor();
+      await page.getByRole('link', { name: '← Prev', exact: true }).click();
+      await waitForURLPattern(page, url => !url.searchParams.has('page'));
+      await page.getByText(/Page 1 of/).waitFor();
+    } finally { await prisma.product.deleteMany({ where: { id: { in: temporaryPageProducts.map(product => product.id) } } }); }
+    await page.getByPlaceholder('Search products…', { exact: true }).fill(classifiedProduct.name);
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await waitForURLPattern(page, url => url.searchParams.get('q') === classifiedProduct.name && !url.searchParams.has('page'));
+    await page.getByRole('link', { name: classifiedProduct.name, exact: true }).first().waitFor();
+    await page.getByRole('link', { name: 'Clear search', exact: true }).click();
+    await waitForURLPattern(page, url => !url.searchParams.has('q'));
+    await page.getByPlaceholder('Search products…', { exact: true }).waitFor();
+    if (await page.getByPlaceholder('Search products…', { exact: true }).inputValue()) throw new Error('Catalogue clear did not clear the rendered search');
+    step('BONUS Real catalogue search, clear and pagination OK');
     await page.goto(`${BASE_URL}/reports/analytics`, { waitUntil: 'networkidle' });
     await page.locator('[data-classification-disclosure] > summary').click();
     const classification = page.locator('#classification-performance');
