@@ -5,11 +5,12 @@ import { openLiveReport } from '@/lib/entitlements/live-report';
 
 export const dynamic = 'force-dynamic';
 
-export default async function CashflowForecastPage({
-  searchParams,
-}: {
-  searchParams?: { days?: string; scenario?: string; storeId?: string; businessId?: string };
-}) {
+export default async function CashflowForecastPage(
+  props: {
+    searchParams?: Promise<{ days?: string; scenario?: string; storeId?: string; businessId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'cashflow_forecast',
     search: searchParams,

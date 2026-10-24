@@ -2,11 +2,12 @@ import { redirect } from 'next/navigation';
 import { openLiveReport } from '@/lib/entitlements/live-report';
 
 /** Legacy path — sales reporting lives on the trading report after the view gate. */
-export default async function ReportsSalesRedirectPage({
-  searchParams,
-}: {
-  searchParams?: { storeId?: string; businessId?: string };
-}) {
+export default async function ReportsSalesRedirectPage(
+  props: {
+    searchParams?: Promise<{ storeId?: string; businessId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'legacy_reports_sales_redirect',
     search: searchParams,

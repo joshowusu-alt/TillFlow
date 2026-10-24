@@ -13,11 +13,12 @@ function isOwnerHomePreviewAllowed(): boolean {
   );
 }
 
-export default async function OwnerHomePreviewPage({
-  searchParams,
-}: {
-  searchParams?: { fixture?: string };
-}) {
+export default async function OwnerHomePreviewPage(
+  props: {
+    searchParams?: Promise<{ fixture?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   if (!isOwnerHomePreviewAllowed()) {
     notFound();
   }

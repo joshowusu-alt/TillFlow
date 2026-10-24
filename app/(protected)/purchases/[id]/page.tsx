@@ -24,21 +24,22 @@ function paymentMethodLabel(payment: { method: string; reference?: string | null
   return payment.method;
 }
 
-export default async function PurchaseInvoicePage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: {
-    error?: string;
-    edit?: string;
-    created?: string;
-    linked?: string;
-    already?: string;
-    left?: string;
-    supplierLinkChanged?: string;
-  };
-}) {
+export default async function PurchaseInvoicePage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<{
+      error?: string;
+      edit?: string;
+      created?: string;
+      linked?: string;
+      already?: string;
+      left?: string;
+      supplierLinkChanged?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const { business, store: operationalStore } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 

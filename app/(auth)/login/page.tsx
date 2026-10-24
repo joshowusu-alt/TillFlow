@@ -6,7 +6,8 @@ import LoginForm from '@/components/auth/LoginForm';
 import ClearLaunchIdentityOnAuthEntry from '@/components/ClearLaunchIdentityOnAuthEntry';
 import { parseLoginErrorParam } from '@/lib/auth/login-form-state';
 
-export default async function LoginPage({ searchParams }: { searchParams: { error?: string; success?: string } }) {
+export default async function LoginPage(props: { searchParams: Promise<{ error?: string; success?: string }> }) {
+  const searchParams = await props.searchParams;
   // If the user already has a valid session, send them to their landing page
   const user = await getUser();
   if (user) redirect(user.role === 'OWNER' ? '/onboarding' : '/pos');

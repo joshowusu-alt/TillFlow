@@ -472,7 +472,7 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
     }, { timeout: 60000, maxWait: 10000 });
 
     // Imported users have random temporary passwords and sessions were cleared.
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     cookieStore.getAll()
       .filter((cookie) => cookie.name.startsWith(SESSION_COOKIE_PREFIX))
       .forEach((cookie) => cookieStore.delete(cookie.name));

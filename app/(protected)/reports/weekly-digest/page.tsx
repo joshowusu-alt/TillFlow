@@ -28,11 +28,12 @@ const PAYMENT_LABEL: Record<string, string> = {
   TRANSFER: 'Bank Transfer',
 };
 
-export default async function WeeklyDigestPage({
-  searchParams,
-}: {
-  searchParams?: { week?: string };
-}) {
+export default async function WeeklyDigestPage(
+  props: {
+    searchParams?: Promise<{ week?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'weekly_digest',
     search: searchParams,

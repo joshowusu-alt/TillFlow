@@ -7,11 +7,12 @@ import { requireRole } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createUserAction, updateUserAction, toggleUserActiveAction } from '@/app/actions/users';
 
-export default async function UsersPage({
-  searchParams
-}: {
-  searchParams: { error?: string; success?: string; edit?: string };
-}) {
+export default async function UsersPage(
+  props: {
+    searchParams: Promise<{ error?: string; success?: string; edit?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const owner = await requireRole(['OWNER']);
 
   // Run both queries in parallel (users uses businessId directly)

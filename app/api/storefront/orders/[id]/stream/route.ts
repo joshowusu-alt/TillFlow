@@ -57,10 +57,8 @@ async function createListenerClient() {
   return client;
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   // Next.js 14 invokes force-dynamic Route Handlers once during the production
   // build to collect response metadata. Return immediately so the build worker
   // never opens a database connection or a long-lived stream.

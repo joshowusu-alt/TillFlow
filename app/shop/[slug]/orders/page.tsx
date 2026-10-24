@@ -9,13 +9,13 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export default async function StorefrontOrdersPage({
-  params,
-  searchParams,
-}: {
-  params: { slug: string };
-  searchParams?: { phone?: string | string[] };
-}) {
+export default async function StorefrontOrdersPage(
+  props: {
+    params: Promise<{ slug: string }>;
+    searchParams?: Promise<{ phone?: string | string[] }>;
+  }
+) {
+  const params = await props.params;
   const storefront = await getPublicStorefrontBySlug(params.slug);
   if (!storefront) {
     notFound();

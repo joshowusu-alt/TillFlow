@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { submitMerchantHelpRequestAction } from '@/app/actions/help-request';
 import { getSetupHelpHref } from '@/lib/activation-display';
@@ -41,9 +42,9 @@ export default function HelpRequestCard({ relatedRoute }: { relatedRoute?: strin
         <h3 className="font-semibold text-ink">Need help?</h3>
         <p className="text-sm text-muted mt-1">
           Send a short message to Tish Group or chat on WhatsApp.{' '}
-          <a href="/help" className="font-medium text-accent hover:underline">
+          <Link href="/help" className="font-medium text-accent hover:underline">
             Browse guides
-          </a>
+          </Link>
         </p>
       </div>
 

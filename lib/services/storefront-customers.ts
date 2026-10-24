@@ -269,8 +269,8 @@ export async function verifyStorefrontOtp(input: VerifyOtpInput): Promise<Verify
   };
 }
 
-export function setStorefrontSessionCookie(slug: string, token: string, expiresAt: Date) {
-  cookies().set(sessionCookieName(slug), token, {
+export async function setStorefrontSessionCookie(slug: string, token: string, expiresAt: Date) {
+  (await cookies()).set(sessionCookieName(slug), token, {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
@@ -279,9 +279,9 @@ export function setStorefrontSessionCookie(slug: string, token: string, expiresA
   });
 }
 
-export function clearStorefrontSessionCookie(slug: string) {
+export async function clearStorefrontSessionCookie(slug: string) {
   try {
-    cookies().delete(sessionCookieName(slug));
+    (await cookies()).delete(sessionCookieName(slug));
   } catch {
     // cookies().delete can throw outside a server-action / route-handler context.
   }
@@ -295,7 +295,7 @@ export function clearStorefrontSessionCookie(slug: string) {
  * a meaningful "last seen" without writing on every page render.
  */
 export async function getStorefrontSessionCustomer(slug: string): Promise<StorefrontSessionCustomer | null> {
-  const token = cookies().get(sessionCookieName(slug))?.value;
+  const token = (await cookies()).get(sessionCookieName(slug))?.value;
   if (!token) return null;
 
   const tokenHash = hashToken(token);
@@ -329,12 +329,12 @@ export async function getStorefrontSessionCustomer(slug: string): Promise<Storef
 }
 
 export async function destroyStorefrontSession(slug: string) {
-  const token = cookies().get(sessionCookieName(slug))?.value;
+  const token = (await cookies()).get(sessionCookieName(slug))?.value;
   if (token) {
     const tokenHash = hashToken(token);
     await prisma.storefrontCustomerSession.deleteMany({ where: { tokenHash } });
   }
-  clearStorefrontSessionCookie(slug);
+  await clearStorefrontSessionCookie(slug);
 }
 
 export async function getCustomerOrderHistory(customerId: string, phone: string, limit = 20, businessId?: string | null) {

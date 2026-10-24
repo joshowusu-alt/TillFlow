@@ -37,7 +37,7 @@ export async function switchOperationalStoreResultAction(formData: FormData): Pr
     });
     if (!store) return err(FOREIGN_OPERATIONAL_STORE_MSG);
 
-    cookies().set(OPERATIONAL_STORE_COOKIE, store.id, operationalStoreCookieOptions());
+    (await cookies()).set(OPERATIONAL_STORE_COOKIE, store.id, operationalStoreCookieOptions());
     revalidatePath('/', 'layout');
 
     redirect(pathAfterOperationalSwitch(returnTo, store.id));

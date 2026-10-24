@@ -7,11 +7,12 @@ import LoginClient from './LoginClient';
 export const dynamic = 'force-dynamic';
 
 type LoginPageProps = {
-  params: { slug: string };
-  searchParams?: { redirect?: string | string[] };
+  params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ redirect?: string | string[] }>;
 };
 
-export async function generateMetadata({ params }: LoginPageProps): Promise<Metadata> {
+export async function generateMetadata(props: LoginPageProps): Promise<Metadata> {
+  const params = await props.params;
   const storefront = await getPublicStorefrontBySlug(params.slug);
   return {
     title: storefront ? `Sign in — ${storefront.name}` : 'Sign in',
@@ -26,7 +27,9 @@ function readRedirect(value: string | string[] | undefined, slug: string): strin
   return raw;
 }
 
-export default async function StorefrontLoginPage({ params, searchParams }: LoginPageProps) {
+export default async function StorefrontLoginPage(props: LoginPageProps) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const storefront = await getPublicStorefrontBySlug(params.slug);
   if (!storefront) notFound();
 

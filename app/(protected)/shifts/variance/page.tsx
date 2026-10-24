@@ -7,11 +7,7 @@ import { withStoreQuery } from '@/lib/reliability/selected-store';
 import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import { prisma } from '@/lib/prisma';
 
-export default async function CashVarianceListPage({
-  searchParams,
-}: {
-  searchParams?: { storeId?: string };
-}) {
+export default async function CashVarianceListPage() {
   const { business, store, stores, user } = await requireBusinessAndOptionalStore();
   if (!store) {
     return (

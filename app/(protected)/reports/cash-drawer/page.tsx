@@ -49,11 +49,12 @@ function notesText(varianceReason: string | null | undefined, notes: string | nu
   return varianceReason || notes || '-';
 }
 
-export default async function CashDrawerReportPage({
-  searchParams,
-}: {
-  searchParams?: { from?: string; to?: string; storeId?: string; page?: string; pageSize?: string };
-}) {
+export default async function CashDrawerReportPage(
+  props: {
+    searchParams?: Promise<{ from?: string; to?: string; storeId?: string; page?: string; pageSize?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'cash_drawer_report',
     search: searchParams,
