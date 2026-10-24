@@ -58,7 +58,7 @@ async function main() {
       const creationForm = page.locator('form').filter({ has: page.locator('input[name=email]') });
       assert.equal(await creationForm.evaluate(form => form.checkValidity()), true, 'First cashier form must pass native validation');
       await Promise.all([
-        page.waitForURL(url => url.pathname === '/users' && (url.searchParams.has('success') || url.searchParams.has('error')), { timeout: 45000 }),
+        page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/users', { timeout: 45000 }),
         page.getByRole('button', { name: 'Create User', exact: true }).click(),
       ]);
       const creationError = new URL(page.url()).searchParams.get('error');

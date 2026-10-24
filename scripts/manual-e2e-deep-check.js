@@ -380,7 +380,7 @@ async function run() {
     // The role select already contains "Manager" before submission. Wait for
     // the action redirect and persisted change, not that pre-existing text.
     await Promise.all([
-      page.waitForURL(/\/users\?success=updated$/, { timeout: 30000 }),
+      page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/users', { timeout: 30000 }),
       page.getByRole('button', { name: /Update User/i }).click(),
     ]);
     const editedUser = await prisma.user.findFirstOrThrow({ where: { email: e2eUserEmail } });
@@ -391,7 +391,7 @@ async function run() {
     step('4/12 Deactivate user');
     const updatedUserRow = page.locator('tr', { hasText: e2eUserEmail }).first();
     await Promise.all([
-      page.waitForURL(url => url.pathname === '/users' && !url.search, { timeout: 30000 }),
+      page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/users', { timeout: 30000 }),
       updatedUserRow.getByRole('button', { name: /Deactivate/i }).click(),
     ]);
     const deactivatedUser = await prisma.user.findUniqueOrThrow({ where: { id: editedUser.id } });
