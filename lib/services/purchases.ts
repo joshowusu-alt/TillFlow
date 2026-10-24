@@ -521,18 +521,21 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       })
     : null;
 
-  if (idempotencyKey && payloadHash) {
-    const existing = await findMoneyIdempotency((db ?? prisma) as any, input.businessId, idempotencyKey);
-    if (existing) {
-      replayOrConflict(existing, { payloadHash, commandKind: 'PURCHASE_CREATE' });
-      const parsed = parseIdempotencyResult<{ invoiceId: string }>(existing.resultJson);
-      const replayed = await (db ?? prisma).purchaseInvoice.findFirst({
-        where: { id: parsed.invoiceId, businessId: input.businessId },
-      });
-      if (!replayed) throw new Error('Purchase invoice not found');
-      return replayed;
-    }
-  }
+  const loadCommittedReplay = async (client: any) => {
+    if (!idempotencyKey || !payloadHash) return null;
+    const existing = await findMoneyIdempotency(client, input.businessId, idempotencyKey);
+    if (!existing) return null;
+    replayOrConflict(existing, { payloadHash, commandKind: 'PURCHASE_CREATE' });
+    const parsed = parseIdempotencyResult<{ invoiceId: string }>(existing.resultJson);
+    const replayed = await client.purchaseInvoice.findFirst({
+      where: { id: parsed.invoiceId, businessId: input.businessId },
+    });
+    if (!replayed) throw new Error('Purchase invoice not found');
+    return replayed;
+  };
+
+  const existingInvoice = await loadCommittedReplay(db ?? prisma);
+  if (existingInvoice) return existingInvoice;
 
   const journalLines: JournalLine[] = [
     { accountCode: ACCOUNT_CODES.inventory, debitPence: subtotal + (costTreatment === 'INVENTORY' ? additionalCost : 0) },
@@ -730,26 +733,13 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     // Stock locks must precede shared journal/document counters, matching sales.
     // Taking them after posting the purchase journal can deadlock a concurrent sale.
     await lockInventoryValues(client, store.id, Array.from(productTotals.keys()));
-    try {
-      return { created: await _doInvoice(client), replayed: false };
-    } catch (error) {
-      if (idempotencyKey && payloadHash && isPrismaUniqueConstraintOn(error, ['businessId', 'key'])) {
-        const winner = await findMoneyIdempotency(client, input.businessId, idempotencyKey);
-        if (winner) {
-          replayOrConflict(winner, { payloadHash, commandKind: 'PURCHASE_CREATE' });
-          const parsed = parseIdempotencyResult<{ invoiceId: string }>(winner.resultJson);
-          const replayedInvoice = await client.purchaseInvoice.findFirst({
-            where: { id: parsed.invoiceId, businessId: input.businessId },
-          });
-          if (replayedInvoice) return { created: replayedInvoice, replayed: true };
-        }
-        throw new MoneyIdempotencyError(
-          MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_CONFLICT,
-          'This payment request conflicts with a previous submission.',
-        );
-      }
-      throw error;
-    }
+    // A competing identical receipt may have committed while we waited for stock.
+    // Read its durable result before producing any invoice/payment/journal writes.
+    const replayedInvoice = await loadCommittedReplay(client);
+    if (replayedInvoice) return { created: replayedInvoice, replayed: true };
+    // Never query after a unique violation inside PostgreSQL: the transaction is
+    // aborted and every subsequent statement would fail until the outer rollback.
+    return { created: await _doInvoice(client), replayed: false };
   };
 
   let invoice: Awaited<ReturnType<typeof _doInvoice>>;
@@ -766,6 +756,16 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         return finishInvoice(created, tx);
       }, { maxWait: 10000, timeout: 30000 });
     } catch (error) {
+      if (idempotencyKey && payloadHash && isPrismaUniqueConstraintOn(error, ['businessId', 'key'])) {
+        // $transaction has completed rollback here. Resolve only the persisted
+        // winner through a fresh connection; never rerun money/stock writes.
+        const replayedInvoice = await loadCommittedReplay(prisma);
+        if (replayedInvoice) return replayedInvoice;
+        throw new MoneyIdempotencyError(
+          MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_CONFLICT,
+          'This payment request conflicts with a previous submission.',
+        );
+      }
       // A receipt writes documents, ledger, payments and stock in ONE commit.
       // Prisma's implicit 5-second budget expired on real supplier receipts.
       // Keep the budget bounded and never retry money/stock writes blindly.

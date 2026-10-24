@@ -215,4 +215,49 @@ describePg('database pilot: six concurrent cashiers, three businesses, five pool
       expect(await prisma.moneyIdempotency.count({ where: { businessId: actor.businessId, key: `outer-pool-proof-${actor.shiftId}` } })).toBe(1);
     }
   }, 60000);
+
+  it('returns one committed sale to both overlapping requests with the same externalRef', async () => {
+    const actor = actors[0];
+    const externalRef = `OFFLINE_SYNC:parallel-identical-${actor.shiftId}`;
+    let preflightReads = 0;
+    let release!: () => void;
+    const bothReadNoWinner = new Promise<void>(resolve => { release = resolve; });
+    prisma.$use(async (params, next) => {
+      const result = await next(params);
+      if (params.model === 'SalesInvoice' && params.action === 'findFirst' &&
+        !params.runInTransaction && params.args?.where?.externalRef === externalRef && !result) {
+        preflightReads++;
+        if (preflightReads === 2) release();
+        await bothReadNoWinner;
+      }
+      return result;
+    });
+    const input = { businessId: actor.businessId, storeId: actor.storeId, tillId: actor.tillId, cashierUserId: actor.userId,
+      capturedShiftId: actor.shiftId, externalRef, paymentStatus: 'PAID' as const,
+      lines: [{ productId: actor.productId, unitId: actor.unitId, qtyInUnit: 1 }], payments: [{ method: 'CASH' as const, amountPence: 5000 }] };
+    const beforeCash = (await prisma.shift.findUniqueOrThrow({ where: { id: actor.shiftId } })).expectedCashPence;
+    const results = await Promise.all([sales.createSale(input), sales.createSale(input)]);
+    expect(preflightReads).toBe(2);
+    expect(results[0].id).toBe(results[1].id);
+    expect(await prisma.salesInvoice.count({ where: { businessId: actor.businessId, externalRef } })).toBe(1);
+    expect(await prisma.salesPayment.count({ where: { salesInvoiceId: results[0].id } })).toBe(1);
+    expect(await prisma.journalEntry.count({ where: { businessId: actor.businessId, referenceType: 'SALES_INVOICE', referenceId: results[0].id } })).toBe(1);
+    expect((await prisma.shift.findUniqueOrThrow({ where: { id: actor.shiftId } })).expectedCashPence).toBe(beforeCash + 5000);
+  }, 30000);
+
+  it('recovers a stale invoice counter only after rollback with one financial effect', async () => {
+    const actor = actors[1];
+    const existing = await prisma.salesInvoice.findMany({ where: { businessId: actor.businessId }, select: { transactionNumber: true } });
+    const priorMax = Math.max(...existing.map(row => Number(row.transactionNumber?.slice(4) || 0)));
+    await prisma.businessSequence.update({ where: { businessId_sequenceName: { businessId: actor.businessId, sequenceName: 'invoice' } }, data: { nextVal: 0 } });
+    const beforeCash = (await prisma.shift.findUniqueOrThrow({ where: { id: actor.shiftId } })).expectedCashPence;
+    const invoiceCount = await prisma.salesInvoice.count({ where: { businessId: actor.businessId } });
+    const sale = await sales.createSale({ businessId: actor.businessId, storeId: actor.storeId, tillId: actor.tillId,
+      cashierUserId: actor.userId, capturedShiftId: actor.shiftId, externalRef: `OFFLINE_SYNC:stale-counter-${actor.shiftId}`,
+      paymentStatus: 'PAID', lines: [{ productId: actor.productId, unitId: actor.unitId, qtyInUnit: 1 }], payments: [{ method: 'CASH', amountPence: 5000 }] });
+    expect(Number(sale.transactionNumber?.slice(4))).toBe(priorMax + 1);
+    expect(await prisma.salesInvoice.count({ where: { businessId: actor.businessId } })).toBe(invoiceCount + 1);
+    expect(await prisma.salesPayment.count({ where: { salesInvoiceId: sale.id } })).toBe(1);
+    expect((await prisma.shift.findUniqueOrThrow({ where: { id: actor.shiftId } })).expectedCashPence).toBe(beforeCash + 5000);
+  }, 30000);
 });
