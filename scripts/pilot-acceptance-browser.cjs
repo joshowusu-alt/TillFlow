@@ -105,6 +105,10 @@ async function main() {
         const cookies = await context.cookies();
         assert(cookies.some(cookie => cookie.name === `pos_session_${fixture.businessId}` && cookie.httpOnly));
         results.push(`PASS real password login ${role}`);
+        const store = fixture.stores[role === 'cashier2' ? 1 : 0];
+        // Select the device branch before branch-required lists as well as POS.
+        // This is not an authentication/session cookie forgery.
+        await context.addCookies([{ name: 'tillflow_operational_store', value: store.id, url: baseURL }]);
         if (role === 'owner') {
           for (const [route, placeholder, name] of [
             ['/suppliers', 'Search suppliers…', fixture.supplier.name],
@@ -129,9 +133,6 @@ async function main() {
             results.push(`PASS persisted ${route} search, no-result and explicit clear`);
           }
         }
-        const store = fixture.stores[role === 'cashier2' ? 1 : 0];
-        // Device branch selection, never an authentication/session cookie forgery.
-        await context.addCookies([{ name: 'tillflow_operational_store', value: store.id, url: baseURL }]);
         if (role.startsWith('cashier')) {
           const before = await prisma.salesInvoice.count({ where: { businessId: fixture.businessId, cashierUserId: fixture.users[role].id } });
           await page.goto('/pos');
