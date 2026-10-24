@@ -7,6 +7,7 @@ on:
       - 'lib/backup-restore-contract*'
       - 'lib/services/pilot-recovery.pg.test.ts'
       - 'scripts/pilot-acceptance*'
+      - 'scripts/pilot-full-database-recovery.cjs'
       - '.github/workflows/pilot-acceptance.yml'
 permissions:
   contents: read
@@ -71,4 +72,9 @@ jobs:
           else
             echo 'Retry browser harness is on the companion financial PR; not executed in this branch.'
           fi
-      # No snapshots, fixture passwords, auth cookies or server logs uploaded.
+      - name: Full native PostgreSQL backup and restore with complete controls
+        run: node scripts/pilot-full-database-recovery.cjs
+        env:
+          TILLFLOW_RUN_FULL_DB_RECOVERY: '1'
+          TILLFLOW_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+      # No dumps, snapshots, fixture passwords, auth cookies or server logs uploaded.
