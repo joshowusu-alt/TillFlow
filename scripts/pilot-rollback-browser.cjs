@@ -29,17 +29,31 @@ async function main() {
     const other = await createPilotFixture(prisma, `pilot-other-${Date.now()}`);
     proxy = http.createServer((req, res) => {
       res.setHeader('Cache-Control', 'no-store');
+      // NextRequest.nextUrl uses the upstream server's authority. This local
+      // adapter checks the real browser origin first, then translates authority
+      // consistently for upstream CSRF. Do not weaken application CSRF rules.
+      const mutating = ['POST','PUT','PATCH','DELETE'].includes(req.method);
+      if (mutating && req.headers.origin !== 'http://127.0.0.1:6202') {
+        req.resume(); res.writeHead(403); res.end('{}'); return;
+      }
       if (req.url === '/__rollback') { res.end('<!doctype html><title>Isolated rollback</title><body>Offline recovery harness</body>'); return; }
       if (req.url === '/__rollback.js') { res.setHeader('Content-Type', 'application/javascript'); res.end(bundles[state.variant]); return; }
       // Deliberately unavailable batch route exercises the genuine single-sale fallback.
       if (req.url === '/api/offline/batch-sync') { req.resume(); res.writeHead(404); res.end('{}'); return; }
       const salePost = req.url === '/api/offline/sync-sale' && req.method === 'POST';
       if (salePost && state.outage) { req.resume(); res.writeHead(503); res.end('{}'); return; }
-      const upstream = http.request({ hostname: '127.0.0.1', port: state.variant === 'candidate' ? 6200 : 6201, path: req.url, method: req.method, headers: { ...req.headers, 'x-forwarded-host': req.headers.host, 'x-forwarded-proto': 'http' } }, response => {
+      const port = state.variant === 'candidate' ? 6200 : 6201;
+      const authority = `127.0.0.1:${port}`;
+      const headers = { ...req.headers, host: authority, 'x-forwarded-host': authority, 'x-forwarded-proto': 'http' };
+      if (req.headers.origin) headers.origin = `http://${authority}`;
+      if (req.headers.referer) headers.referer = `http://${authority}${new URL(req.headers.referer).pathname}`;
+      const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
         if (salePost && state.loseAck && response.statusCode === 200) {
-          // Let the real server commit and finish its response, then lose the acknowledgement.
+          // Let the real server commit, but the gateway times out before it can
+          // acknowledge that commit. A bare TCP close can be transparently
+          // retried by Chromium, which would not leave an uncertain queued sale.
           state.loseAck = false; response.resume();
-          response.on('end', () => { state.lost++; res.destroy(); }); return;
+          response.on('end', () => { state.lost++; res.writeHead(504, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Simulated gateway timeout after upstream commit' })); }); return;
         }
         res.writeHead(response.statusCode, { ...response.headers, 'x-tested-build': state.variant }); response.pipe(res);
       });
@@ -52,6 +66,11 @@ async function main() {
     browser = await chromium.launch();
     const context = await browser.newContext({ baseURL: origin, serviceWorkers: 'block' });
     const page = await context.newPage();
+    const denied = await context.request.post('/api/offline/sync-sale', { headers: { origin: 'https://untrusted.example' }, data: {} });
+    assert.equal(denied.status(), 403);
+    const directDenied = await context.request.post('http://127.0.0.1:6200/api/offline/sync-sale', { headers: { origin: 'https://untrusted.example' }, data: {} });
+    assert.equal(directDenied.status(),403);
+    results.push('PASS adapter and unmodified application independently refuse foreign-origin financial requests');
     await page.goto('/login');
     await page.locator('input[name=email]').fill(f.users.cashier1.email);
     await page.locator('input[name=password]').fill(f.password);
@@ -78,7 +97,9 @@ async function main() {
     assert.equal(await prisma.salesInvoice.count({ where: { businessId: f.businessId } }), 0);
     results.push('PASS unavailable network retains unsynced capture with zero persisted financial effects');
     state.outage = false; state.loseAck = true;
-    assert.equal((await sync()).failed, 1); assert.equal(state.lost, 1);
+    const uncertain = await sync();
+    assert.equal(uncertain.failed, 1, 'Gateway timeout must retain the uncertain sale');
+    assert.equal(state.lost, 1, 'Real upstream must have committed before lost acknowledgement');
     assert.equal(await prisma.salesInvoice.count({ where: { businessId: f.businessId, externalRef: `OFFLINE_SYNC:${firstId}` } }), 1);
     assert.deepEqual((await pending())[0], first);
     results.push('PASS lost acknowledgement after real PostgreSQL commit preserves original replay identity');
