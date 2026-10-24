@@ -744,7 +744,7 @@ async function run() {
     await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: 'All categories' }).waitFor();
     if (new URL(page.url()).searchParams.has('category')) throw new Error('Empty-search clear restored stale category');
     step('BONUS Empty-search catalogue clear survives reload OK');
-    const temporaryPageProducts = Array.from({ length: 30 }, (_, index) => ({ id: `catalogue-page-${stamp}-${index}`, businessId: reportOwner.businessId, name: `Fictional pagination ${stamp} ${index}`, sellingPriceBasePence: 100 }));
+    const temporaryPageProducts = Array.from({ length: 30 }, (_, index) => ({ id: `catalogue-page-${stamp}-${index}`, businessId: reportOwner.businessId, name: `Fictional pagination ${stamp} ${index}`, sellingPriceBasePence: 100, defaultCostBasePence: 50 }));
     await prisma.product.createMany({ data: temporaryPageProducts });
     try {
       await page.reload({ waitUntil: 'networkidle' });

@@ -10,6 +10,40 @@ const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
 const quote = value => `"${value.replaceAll('"', '""')}"`;
 
 let phase = 'guard';
+function normalizeConstraintDefinition(row) {
+  if (row.kind !== 'constraint' || !['PurchaseInvoice_discount_check', 'PurchaseInvoiceLine_discount_check'].includes(row.name)) return row;
+  // pg_dump reparses BETWEEN's nested AND expression as one flat AND. Only
+  // this exact pure conjunction is canonicalized; OR, changed bounds, extra
+  // terms and NOT VALID remain distinct. Behaviour is also tested on both DBs.
+  const flat = row.definition.replace(/[()]/g, '').replace(/\s+/g, ' ').trim();
+  const expected = 'CHECK "discountBps" >= 0 AND "discountBps" <= 10000 AND "discountPence" >= 0';
+  return flat === expected ? { ...row, definition: expected } : row;
+}
+
+async function verifyDiscountConstraints(db, businessId) {
+  for (const table of ['PurchaseInvoice', 'PurchaseInvoiceLine']) {
+    const rows = table === 'PurchaseInvoice'
+      ? await db.$queryRawUnsafe('SELECT id FROM "PurchaseInvoice" WHERE "businessId"=$1 LIMIT 1', businessId)
+      : await db.$queryRawUnsafe('SELECT l.id FROM "PurchaseInvoiceLine" l JOIN "PurchaseInvoice" p ON p.id=l."purchaseInvoiceId" WHERE p."businessId"=$1 LIMIT 1', businessId);
+    assert.equal(rows.length, 1, 'Persisted purchase discount evidence required');
+    for (const [column, value] of [['discountBps', -1], ['discountBps', 10001], ['discountPence', -1]]) {
+      let rejected = false;
+      try {
+        await db.$transaction(async tx => { await tx.$executeRawUnsafe(`UPDATE ${quote(table)} SET ${quote(column)}=$1 WHERE id=$2`, value, rows[0].id); });
+      } catch (error) {
+        rejected = error.meta?.code === '23514' && String(error.meta?.message).includes(`${table}_discount_check`);
+      }
+      assert(rejected, `${table} must reject ${column}=${value} with its discount CHECK`);
+    }
+    const rollback = new Error('rollback-valid-discount-boundaries');
+    try {
+      await db.$transaction(async tx => {
+        for (const value of [0, 10000]) await tx.$executeRawUnsafe(`UPDATE ${quote(table)} SET "discountBps"=$1, "discountPence"=0 WHERE id=$2`, value, rows[0].id);
+        throw rollback;
+      });
+    } catch (error) { if (error !== rollback) throw error; }
+  }
+}
 async function controls(db) {
   phase = 'enumerate tables';
   const tables = await db.$queryRawUnsafe("SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename");
@@ -35,7 +69,7 @@ async function controls(db) {
   phase = 'ledger controls';
   const [ledger] = await db.$queryRawUnsafe('SELECT coalesce(sum("debitPence"),0)::text AS debit, coalesce(sum("creditPence"),0)::text AS credit FROM "JournalLine"');
   assert.equal(ledger.debit, ledger.credit, 'Whole fictional ledger must balance');
-  return { rows, schema, columns, sequences, ledger };
+  return { rows, schema: schema.map(normalizeConstraintDefinition), columns, sequences, ledger };
 }
 
 async function main() {
@@ -58,6 +92,8 @@ async function main() {
     await original.auditLog.create({ data: { businessId: business.id, userId: fixture.users.owner.id, userName: 'Fictional owner', userRole: 'OWNER', action: 'FULL_DATABASE_RECOVERY_DRILL', details: 'Native backup must retain this audit evidence' } });
     await original.riskAlert.create({ data: { businessId: business.id, storeId: fixture.stores[0].id, alertType: 'FICTIONAL_RECOVERY', summary: 'Isolated full recovery evidence' } });
     await original.stocktake.create({ data: { storeId: fixture.stores[0].id, userId: fixture.users.owner.id, notes: 'Fictional in-progress count retained by native backup', lines: { create: { productId: fixture.products[0].id, expectedBase: 99, countedBase: 99, varianceBase: 0 } } } });
+    phase = 'source discount constraint behaviour';
+    await verifyDiscountConstraints(original, business.id);
     phase = 'fixture controls';
     const before = await controls(original);
     for (const table of ['Business', 'User', 'Product', 'InventoryBalance', 'StockMovement', 'SalesInvoice', 'SalesPayment', 'PurchaseInvoice', 'PurchasePayment', 'Expense', 'ExpensePayment', 'CashDrawerEntry', 'MoneyIdempotency', 'JournalEntry', 'JournalLine', 'AuditLog', 'RiskAlert', 'Stocktake', 'StocktakeLine']) assert(before.rows[table]?.count > 0, `Non-empty ${table} evidence required`);
@@ -77,6 +113,8 @@ async function main() {
     } finally { fs.closeSync(input); }
     const recoveryMs = performance.now() - started;
     ({ prisma: recovered } = await openGuardedPrismaClient({ url: target.toString() }));
+    phase = 'restored discount constraint behaviour';
+    await verifyDiscountConstraints(recovered, business.id);
     const after = await controls(recovered);
     phase = 'compare complete controls';
     if (JSON.stringify(after) !== JSON.stringify(before)) {
@@ -97,7 +135,7 @@ async function main() {
       assert.equal(user.active, true);
       assert.equal(user.role, fixture.users[key].role);
     }
-    console.log('FULL_DATABASE_RECOVERY ' + JSON.stringify({ passed: true, fictional: true, tableCount: Object.keys(after.rows).length, nonEmptyTables: Object.values(after.rows).filter(row => row.count).length, rowCount: Object.values(after.rows).reduce((sum, row) => sum + row.count, 0), recoveryMs: Math.round(recoveryMs), ledger: after.ledger, controls: Object.fromEntries(Object.entries(after.rows).map(([name, row]) => [name, row.count])), credentialsVerified: ['owner', 'cashier1', 'cashier2'], schemaAndAuditHistoryMatch: true, sourceUnchanged: true }));
+    console.log('FULL_DATABASE_RECOVERY ' + JSON.stringify({ passed: true, fictional: true, tableCount: Object.keys(after.rows).length, nonEmptyTables: Object.values(after.rows).filter(row => row.count).length, rowCount: Object.values(after.rows).reduce((sum, row) => sum + row.count, 0), recoveryMs: Math.round(recoveryMs), ledger: after.ledger, controls: Object.fromEntries(Object.entries(after.rows).map(([name, row]) => [name, row.count])), credentialsVerified: ['owner', 'cashier1', 'cashier2'], schemaAndAuditHistoryMatch: true, sourceUnchanged: true, schemaObjectCount: after.schema.length, columnCount: after.columns.length, discountConstraintChecks: 20 }));
   } finally {
     await original.$disconnect();
     if (recovered) await recovered.$disconnect();
@@ -105,5 +143,5 @@ async function main() {
     // Both databases/container are ephemeral CI resources. No production drop or cleanup command exists.
   }
 }
-module.exports = { controls };
+module.exports = { controls, normalizeConstraintDefinition };
 if (require.main === module) main().catch(error => { console.error('Full isolated database recovery failed', { phase, code: error.code, databaseCode: error.meta?.code, assertion: error.code === 'ERR_ASSERTION' ? error.message.split('\n')[0] : undefined }); process.exitCode = 1; });
