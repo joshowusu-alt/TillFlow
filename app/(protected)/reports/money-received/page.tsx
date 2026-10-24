@@ -47,19 +47,20 @@ function formatScopeInstant(value: Date, timeZone: string) {
   });
 }
 
-export default async function MoneyReceivedReportPage({
-  searchParams,
-}: {
-  searchParams?: {
-    from?: string;
-    to?: string;
-    storeId?: string;
-    businessId?: string;
-    metric?: string;
-    page?: string;
-    pageSize?: string;
-  };
-}) {
+export default async function MoneyReceivedReportPage(
+  props: {
+    searchParams?: Promise<{
+      from?: string;
+      to?: string;
+      storeId?: string;
+      businessId?: string;
+      metric?: string;
+      page?: string;
+      pageSize?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'money_received',
     search: searchParams,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/auth';
 import { toPublicMigrationError } from '@/lib/services/migration/errors';
 import { openMigrationFileDownload } from '@/lib/services/migration/file-download';
-import { isRedirectError } from 'next/dist/client/components/redirect';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 
 export const runtime = 'nodejs';
 
@@ -13,11 +13,11 @@ export const runtime = 'nodejs';
  */
 export async function GET(
   _request: NextRequest,
-  context: { params: Promise<{ fileId: string }> | { fileId: string } },
+  context: { params: Promise<{ fileId: string }> },
 ) {
   try {
     const user = await requireRole(['OWNER', 'MANAGER']);
-    const params = await Promise.resolve(context.params);
+    const params = await Promise.resolve((await context.params));
     const fileId = params.fileId;
     if (!fileId) {
       return NextResponse.json({ error: 'fileId required', code: 'CONTRACT' }, { status: 400 });

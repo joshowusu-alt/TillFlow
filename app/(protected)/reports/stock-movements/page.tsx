@@ -78,11 +78,12 @@ function stockMovementSourceLabel(type: string, referenceType?: string | null, r
   return resolveSourceLink({ type, referenceType, referenceId }).label;
 }
 
-export default async function StockMovementsPage({
-  searchParams,
-}: {
-  searchParams?: Record<string, string | string[] | undefined>;
-}) {
+export default async function StockMovementsPage(
+  props: {
+    searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'stock_movements',
     search: searchParams,

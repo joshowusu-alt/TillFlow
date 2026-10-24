@@ -36,7 +36,7 @@ import { resolveBranchIdForStore } from './branches';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS, appLog } from '@/lib/observability';
 import { isSqliteDatabaseUrl } from '@/lib/database-runtime';
 import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
-import { reserveNextDocumentNumber } from './document-numbers';
+import { reserveNextDocumentNumber, reserveNextSequenceValue } from './document-numbers';
 import { unstable_cache } from 'next/cache';
 import { checkoutContextTag } from '@/lib/cache/pos-tags';
 
@@ -242,28 +242,10 @@ async function reserveNextInvoiceNumber(
   const initialNextVal =
     (parseInvoiceSequenceValue(latestInvoice?.transactionNumber) ?? 0) + 1;
 
-  try {
-    const createdSequence = await tx.businessSequence.create({
-      data: {
-        businessId,
-        sequenceName: 'invoice',
-        nextVal: initialNextVal,
-      },
-      select: { nextVal: true },
-    });
-    return createdSequence.nextVal;
-  } catch (error) {
-    if (!isPrismaUniqueConstraintOn(error, ['businessId', 'sequenceName'])) {
-      throw error;
-    }
-
-    const updatedSequence = await tx.businessSequence.update({
-      where: sequenceWhere,
-      data: { nextVal: { increment: 1 } },
-      select: { nextVal: true },
-    });
-    return updatedSequence.nextVal;
-  }
+  // A caught unique violation still aborts a PostgreSQL transaction. Use the
+  // same atomic upsert as other document numbers; preserve historical invoices
+  // as the initial floor when this business has not yet created a sequence.
+  return reserveNextSequenceValue(tx, businessId, 'invoice', initialNextVal);
 }
 
 type SaleCostProduct = {
@@ -495,7 +477,37 @@ function measureCheckoutStage<T>(
 export async function createSale(input: CreateSaleInput) {
   return measureServerOperation(
     'action.checkout.create-sale',
-    () => createSaleImpl(input),
+    async () => {
+      // A PostgreSQL unique violation aborts its transaction. Resolve a known
+      // replay/counter conflict only after that transaction fully rolled back.
+      for (let attempt = 0; ; attempt++) {
+        try { return await createSaleImpl(input); }
+        catch (error) {
+          if (isSqliteDatabaseUrl(process.env.DATABASE_URL)) throw error;
+          if (input.externalRef && isPrismaUniqueConstraintOn(error, ['businessId', 'externalRef'])) {
+            const winner = await prisma.salesInvoice.findFirst({ where: { businessId: input.businessId, externalRef: input.externalRef } });
+            if (winner) {
+              if (!idempotentCheckoutMatchesExisting(winner, input)) throw new UserError(IDEMPOTENT_SALE_CONTEXT_MISMATCH_MSG);
+              return winner;
+            }
+          }
+          if (attempt === 0 && isPrismaUniqueConstraintOn(error, ['businessId', 'transactionNumber'])) {
+            // The failed INSERT committed no stock or money. GREATEST keeps a
+            // concurrently advanced counter intact while repairing a stale one.
+            await prisma.$executeRaw`
+              INSERT INTO "BusinessSequence" ("businessId", "sequenceName", "nextVal")
+              SELECT ${input.businessId}, ${'invoice'}, COALESCE(MAX(SUBSTRING("transactionNumber" FROM 5)::bigint), 0)::integer
+              FROM "SalesInvoice"
+              WHERE "businessId" = ${input.businessId} AND "transactionNumber" ~ ${'^INV-[0-9]+$'}
+              ON CONFLICT ("businessId", "sequenceName") DO UPDATE
+              SET "nextVal" = GREATEST("BusinessSequence"."nextVal", EXCLUDED."nextVal")
+            `;
+            continue;
+          }
+          throw error;
+        }
+      }
+    },
     checkoutPerformanceMetadata(input, { rowCount: input.lines.length }),
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
   );
@@ -1164,6 +1176,7 @@ async function createSaleImpl(input: CreateSaleInput) {
         } catch (error) {
           // Concurrent retry with the same externalRef: the loser must return the
           // winner's invoice and MUST NOT re-apply stock, drawer, or journal effects.
+          if (!isSqliteDatabaseUrl(process.env.DATABASE_URL)) throw error;
           if (input.externalRef && isPrismaUniqueConstraintOn(error, ['businessId', 'externalRef'])) {
             const existingByRef = await tx.salesInvoice.findFirst({
               where: {

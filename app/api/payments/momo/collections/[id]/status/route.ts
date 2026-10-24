@@ -4,10 +4,8 @@ import { checkMobileMoneyCollectionStatus } from '@/lib/services/mobile-money';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(_request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

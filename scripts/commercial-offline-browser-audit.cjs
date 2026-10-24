@@ -6,6 +6,7 @@ const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 
 async function main() {
   const root = path.resolve(__dirname, '..');
@@ -29,6 +30,18 @@ async function main() {
   let browser;
   const results = [];
   try {
+    if (process.env.TILLFLOW_VERIFY_ROLLBACK_READER === '1') {
+      // Exact core v4 reader/sync/SW source in immutable fallback900d0f7.
+      // The native queue tests below therefore exercise that fallback reader,
+      // not an assumed-compatible v3 deployment or a mocked IndexedDB.
+      const fallback = {
+        'lib/offline/storage.ts': '334310987b4c9f221f3a6b81210677a62547c56a0188c523ff9d0b0e1de6743e',
+        'lib/offline/sync.ts': 'aa26451e82f0115331dc892ebe785028f3d1f617b4c7dc6c33d2167ae9d1921a',
+        'public/sw.js': 'e782e99525636aa531479b3fd94752b24e181edfb2a6842f8332d7223b36fe21',
+      };
+      for (const [file, expected] of Object.entries(fallback)) assert.equal(createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex'), expected, `Review rollback reader compatibility after changing ${file}`);
+      results.push('PASS immutable fallback900d0f7 uses the same v4 storage/sync/service-worker reader exercised below');
+    }
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext();
     const page = await context.newPage();

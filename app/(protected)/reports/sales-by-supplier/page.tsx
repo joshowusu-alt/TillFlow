@@ -74,11 +74,12 @@ function ReportSetupEmptyState({
   );
 }
 
-export default async function SalesBySupplierPage({
-  searchParams,
-}: {
-  searchParams?: ReportFilters;
-}) {
+export default async function SalesBySupplierPage(
+  props: {
+    searchParams?: Promise<ReportFilters>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'sales_by_supplier',
     search: searchParams,

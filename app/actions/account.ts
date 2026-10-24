@@ -67,8 +67,8 @@ export async function updateMyAccountAction(formData: FormData) {
 
   // Invalidate all OTHER sessions when password changes
   if (newPassword) {
-    const activeBusinessId = cookies().get(ACTIVE_BUSINESS_COOKIE)?.value ?? user.businessId;
-    const currentToken = cookies().get(getBusinessSessionCookieName(activeBusinessId))?.value;
+    const activeBusinessId = (await cookies()).get(ACTIVE_BUSINESS_COOKIE)?.value ?? user.businessId;
+    const currentToken = (await cookies()).get(getBusinessSessionCookieName(activeBusinessId))?.value;
     await prisma.session.deleteMany({
       where: { userId: user.id, NOT: { token: currentToken ?? '' } },
     });

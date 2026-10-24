@@ -43,11 +43,12 @@ interface DeeperLink {
 
 /* ─── Page ───────────────────────────────────────────────────────────── */
 
-export default async function CommandCenterPage({
-  searchParams,
-}: {
-  searchParams?: { storeId?: string; businessId?: string };
-}) {
+export default async function CommandCenterPage(
+  props: {
+    searchParams?: Promise<{ storeId?: string; businessId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'command_center',
     search: searchParams,

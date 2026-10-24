@@ -48,7 +48,8 @@ function shell(props: Omit<TodayScreenProps, 'section' | 'links'> & { section?: 
   };
 }
 
-export default function ReportsPage({ searchParams }: { searchParams?: Search }) {
+export default async function ReportsPage(props: { searchParams?: Promise<Search> }) {
+  const searchParams = await props.searchParams;
   return (
     <Suspense fallback={<TodayLoading />}>
       <ReportsToday search={searchParams} />

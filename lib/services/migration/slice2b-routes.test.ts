@@ -57,7 +57,7 @@ describe('migration slice 2B validate route', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ expectedVersion: 1, businessId: 'attacker-biz' }),
     });
-    const res = await POST(req as never, { params: { packageId: 'pkg-a' } });
+    const res = await POST(req as never, { params: Promise.resolve({ packageId: 'pkg-a' }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.packageStatus).toBe('VALIDATED');
@@ -90,7 +90,7 @@ describe('migration slice 2B validate route', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({}),
     });
-    const res = await POST(req as never, { params: { packageId: 'pkg-a' } });
+    const res = await POST(req as never, { params: Promise.resolve({ packageId: 'pkg-a' }) });
     expect(res.status).toBe(409);
     const body = await res.json();
     expect(body.code).toBe('STALE_VERSION');
@@ -112,7 +112,7 @@ describe('migration slice 2B validate route', () => {
     });
     // If not classified as redirect, public mapper returns INTERNAL — either is closed.
     try {
-      const res = await POST(req as never, { params: { packageId: 'pkg-a' } });
+      const res = await POST(req as never, { params: Promise.resolve({ packageId: 'pkg-a' }) });
       expect([307, 401, 403, 500]).toContain(res.status);
     } catch (e) {
       expect(e).toBe(redirectErr);

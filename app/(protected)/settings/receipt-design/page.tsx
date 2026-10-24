@@ -21,7 +21,7 @@ export default async function ReceiptDesignPage() {
     const businessAny = business as any;
     const storefrontEnabled = Boolean(businessAny.storefrontEnabled);
     const storefrontSlug = businessAny.storefrontSlug ?? null;
-    const requestHeaders = headers();
+    const requestHeaders = await headers();
     const requestHost = requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host');
     const requestProtocol = requestHeaders.get('x-forwarded-proto') ?? 'https';
     const requestOrigin = requestHost ? `${requestProtocol}://${requestHost}` : null;

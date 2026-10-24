@@ -6,7 +6,11 @@ import { formatMoney, formatDateTime } from '@/lib/format';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import ReturnFormClient from './ReturnFormClient';
 
-export default async function SalesReturnPage({ params, searchParams }: { params: { id: string }; searchParams?: { error?: string } }) {
+export default async function SalesReturnPage(
+  props: { params: Promise<{ id: string }>; searchParams?: Promise<{ error?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {
     return (

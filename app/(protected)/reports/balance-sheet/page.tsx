@@ -7,9 +7,12 @@ import { getBalanceSheet } from '@/lib/reports/financials';
 import { formatMoney } from '@/lib/format';
 import DownloadLink from '@/components/DownloadLink';
 
-export default async function BalanceSheetPage({ searchParams }: {
-  searchParams?: { asOf?: string; storeId?: string; businessId?: string; cutoff?: string };
-}) {
+export default async function BalanceSheetPage(
+  props: {
+    searchParams?: Promise<{ asOf?: string; storeId?: string; businessId?: string; cutoff?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const now = new Date();
   const opened = await openLiveReport({ surfaceId: 'balance_sheet', search: searchParams,
     range: ({ timezone }) => {

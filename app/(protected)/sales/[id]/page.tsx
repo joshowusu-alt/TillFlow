@@ -11,7 +11,8 @@ import { pendingMomoReceipt } from '@/lib/payments/pending-momo-receipt';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SaleDetailPage({ params }: { params: { id: string } }) {
+export default async function SaleDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { business } = await requireBusiness();
   const invoice = await prisma.salesInvoice.findFirst({
     where: { id: params.id, businessId: business.id },

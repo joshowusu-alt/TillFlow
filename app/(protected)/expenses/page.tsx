@@ -14,11 +14,12 @@ import { ACCOUNT_CODES } from '@/lib/accounting';
 import { displayDocumentNumber, remainingBalancePence } from '@/lib/reliability/walkthrough-contracts';
 import ExpenseForm from './ExpenseForm';
 
-export default async function ExpensesPage({
-  searchParams,
-}: {
-  searchParams?: { error?: string; page?: string; recorded?: string; sourceAdjustmentId?: string; storeId?: string };
-}) {
+export default async function ExpensesPage(
+  props: {
+    searchParams?: Promise<{ error?: string; page?: string; recorded?: string; sourceAdjustmentId?: string; storeId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user, business, store: operationalStore, stores } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const selectedStoreId = operationalStore?.id ?? resolveSoleOrSelectedStoreId(stores, searchParams?.storeId);

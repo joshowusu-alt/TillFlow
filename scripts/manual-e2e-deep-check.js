@@ -43,7 +43,10 @@ async function fillVisiblePaymentForm(page, amount) {
 async function waitForURLPattern(page, pattern, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (pattern.test(page.url())) return;
+    // Read the browser's actual address, rather than waiting on a cached
+    // frame-navigation event for an App Router history update.
+    const href = await page.evaluate(() => window.location.href);
+    if (typeof pattern === 'function' ? pattern(new URL(href)) : pattern.test(href)) return;
     await page.waitForTimeout(500);
   }
   throw new Error(`URL did not match ${pattern} within ${timeoutMs}ms. Current: ${page.url()}`);
@@ -377,15 +380,25 @@ async function run() {
     await page.waitForTimeout(2000);
     await page.locator('input[name="name"]').fill(`E2E User Updated ${stamp}`);
     await page.locator('select[name="role"]').selectOption('MANAGER');
-    await page.getByRole('button', { name: /Update User/i }).click();
-    // Wait for the updated role to appear
-    await page.getByText(/Manager/i).first().waitFor({ timeout: 30000 });
+    // The role select already contains "Manager" before submission. Wait for
+    // the action redirect and persisted change, not that pre-existing text.
+    await Promise.all([
+      page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/users', { timeout: 30000 }),
+      page.getByRole('button', { name: /Update User/i }).click(),
+    ]);
+    const editedUser = await prisma.user.findFirstOrThrow({ where: { email: e2eUserEmail } });
+    if (editedUser.role !== 'MANAGER' || editedUser.name !== `E2E User Updated ${stamp}`) throw new Error('Edited user was not persisted');
     report.users.edit = true;
     step('3/12 Edit user OK');
 
     step('4/12 Deactivate user');
     const updatedUserRow = page.locator('tr', { hasText: e2eUserEmail }).first();
-    await updatedUserRow.getByRole('button', { name: /Deactivate/i }).click();
+    await Promise.all([
+      page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/users', { timeout: 30000 }),
+      updatedUserRow.getByRole('button', { name: /Deactivate/i }).click(),
+    ]);
+    const deactivatedUser = await prisma.user.findUniqueOrThrow({ where: { id: editedUser.id } });
+    if (deactivatedUser.active) throw new Error('User deactivation was not persisted');
     await page.locator('tr', { hasText: e2eUserEmail }).getByText(/Inactive/i).waitFor({ timeout: 30000 });
     report.users.deactivate = true;
     step('4/12 Deactivate user OK');
@@ -691,11 +704,17 @@ async function run() {
     await page.goto(`${BASE_URL}/products?q=${cascadeSearch}&page=4`, { waitUntil: 'networkidle' });
     const catalogueNav = page.getByRole('navigation', { name: 'Browse catalogue classification', exact: true });
     await catalogueNav.getByRole('link').filter({ hasText: classificationCategoryName.trim() }).click();
-    await page.waitForURL(url => url.searchParams.get('category') === classificationCategoryId && !url.searchParams.has('page'));
+    await waitForURLPattern(page, url => url.searchParams.get('category') === classificationCategoryId && !url.searchParams.has('page'));
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: classificationCategoryName.trim() }).waitFor();
+    step('BONUS Catalogue category selection committed');
     await catalogueNav.getByRole('link').filter({ hasText: divisionName }).click();
-    await page.waitForURL(url => url.searchParams.get('division') === classificationDivisionId);
+    await waitForURLPattern(page, url => url.searchParams.get('division') === classificationDivisionId);
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: divisionName }).waitFor();
+    step('BONUS Catalogue division selection committed');
     await catalogueNav.getByRole('link').filter({ hasText: groupName }).click();
-    await page.waitForURL(url => url.searchParams.get('group') === classificationGroup.id);
+    await waitForURLPattern(page, url => url.searchParams.get('group') === classificationGroup.id);
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: groupName }).waitFor();
+    step('BONUS Catalogue group selection committed');
     if (new URL(page.url()).searchParams.get('q') !== classifiedProduct.name) throw new Error('Catalogue hierarchy lost search');
     const catalogueGroupLink = catalogueNav.getByRole('link').filter({ hasText: groupName });
     const expectedCatalogueCount = await prisma.product.count({ where: { businessId: reportOwner.businessId, active: true, categoryId: classificationCategoryId, groupId: classificationGroup.id } });
@@ -707,10 +726,44 @@ async function run() {
       await screenshotStep(page, `catalogue-hierarchy-${width}`);
     }
     await catalogueNav.getByRole('link', { name: /^All categories/ }).click();
-    await page.waitForURL(url => !url.searchParams.has('category') && !url.searchParams.has('division') && !url.searchParams.has('group'));
-    await page.goBack();
-    await page.waitForURL(url => url.searchParams.get('group') === classificationGroup.id);
+    await waitForURLPattern(page, url => !url.searchParams.has('category') && !url.searchParams.has('division') && !url.searchParams.has('group'));
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: 'All categories' }).waitFor();
+    step('BONUS Catalogue filters cleared');
+    await page.goBack({ waitUntil: 'commit' });
+    await waitForURLPattern(page, url => url.searchParams.get('group') === classificationGroup.id);
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: groupName }).waitFor();
     step('BONUS Cascading catalogue navigation OK');
+    // Document navigation must not restore a cleared hierarchy from stored
+    // list state when there is no search term (the genuinely bare-list case).
+    await page.goto(`${BASE_URL}/products?tab=products&category=${classificationCategoryId}&division=${classificationDivisionId}&group=${classificationGroup.id}`, { waitUntil: 'networkidle' });
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: groupName }).waitFor();
+    await catalogueNav.getByRole('link', { name: /^All categories/ }).click();
+    await waitForURLPattern(page, url => !url.searchParams.has('q') && !url.searchParams.has('category') && !url.searchParams.has('division') && !url.searchParams.has('group'));
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: 'All categories' }).waitFor();
+    await page.reload({ waitUntil: 'networkidle' });
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: 'All categories' }).waitFor();
+    if (new URL(page.url()).searchParams.has('category')) throw new Error('Empty-search clear restored stale category');
+    step('BONUS Empty-search catalogue clear survives reload OK');
+    const temporaryPageProducts = Array.from({ length: 30 }, (_, index) => ({ id: `catalogue-page-${stamp}-${index}`, businessId: reportOwner.businessId, name: `Fictional pagination ${stamp} ${index}`, sellingPriceBasePence: 100, defaultCostBasePence: 50 }));
+    await prisma.product.createMany({ data: temporaryPageProducts });
+    try {
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.getByRole('link', { name: 'Next →', exact: true }).click();
+      await waitForURLPattern(page, url => url.searchParams.get('page') === '2');
+      await page.getByText(/Page 2 of/).waitFor();
+      await page.getByRole('link', { name: '← Prev', exact: true }).click();
+      await waitForURLPattern(page, url => !url.searchParams.has('page'));
+      await page.getByText(/Page 1 of/).waitFor();
+    } finally { await prisma.product.deleteMany({ where: { id: { in: temporaryPageProducts.map(product => product.id) } } }); }
+    await page.getByPlaceholder('Search products…', { exact: true }).fill(classifiedProduct.name);
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await waitForURLPattern(page, url => url.searchParams.get('q') === classifiedProduct.name && !url.searchParams.has('page'));
+    await page.getByRole('link', { name: classifiedProduct.name, exact: true }).first().waitFor();
+    await page.getByRole('link', { name: 'Clear search', exact: true }).click();
+    await waitForURLPattern(page, url => !url.searchParams.has('q'));
+    await page.getByPlaceholder('Search products…', { exact: true }).waitFor();
+    if (await page.getByPlaceholder('Search products…', { exact: true }).inputValue()) throw new Error('Catalogue clear did not clear the rendered search');
+    step('BONUS Real catalogue search, clear and pagination OK');
     await page.goto(`${BASE_URL}/reports/analytics`, { waitUntil: 'networkidle' });
     await page.locator('[data-classification-disclosure] > summary').click();
     const classification = page.locator('#classification-performance');

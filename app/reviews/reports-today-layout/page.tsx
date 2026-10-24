@@ -148,11 +148,12 @@ function reviewToday(section: Stage3aSection, extras: Partial<Parameters<typeof 
   );
 }
 
-export default function ReportsTodayLayoutReviewPage({
-  searchParams,
-}: {
-  searchParams?: { fixture?: string; state?: string; banner?: string; destination?: string };
-}) {
+export default async function ReportsTodayLayoutReviewPage(
+  props: {
+    searchParams?: Promise<{ fixture?: string; state?: string; banner?: string; destination?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   if (!isReportsStage3aAllowed()) notFound();
   if (['stage3b-trading', 'stage3b-analytics', 'stage3b-movement'].includes(searchParams?.state ?? '')) {
     const screen = searchParams!.state!.slice(8) as 'trading' | 'analytics' | 'movement';

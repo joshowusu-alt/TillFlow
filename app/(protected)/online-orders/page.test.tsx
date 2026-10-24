@@ -22,7 +22,7 @@ it('paginates oldest outstanding work with branch isolation', async () => {
 });
 it('loads page two of full history and keeps search in page and status links', async () => {
   mocks.count.mockResolvedValueOnce(100).mockResolvedValueOnce(3);
-  const html = renderToStaticMarkup(await OnlineOrdersPage({ searchParams: { status: 'ALL_ORDERS', page: '2', q: 'Ama' } }));
+  const html = renderToStaticMarkup(await OnlineOrdersPage({ searchParams: Promise.resolve({ status: 'ALL_ORDERS', page: '2', q: 'Ama' }) }));
   expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 20, take: 20, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], where: expect.objectContaining({ AND: [{ OR: expect.arrayContaining([{ customerName: { contains: 'Ama', mode: 'insensitive' } }]) }] }) }));
   expect(html).toContain('Page 2 of 5');
   expect(html).toContain('status=ALL_ORDERS&amp;q=Ama&amp;page=3');
@@ -30,17 +30,17 @@ it('loads page two of full history and keeps search in page and status links', a
 });
 it('clamps stale and malformed page numbers', async () => {
   mocks.count.mockResolvedValueOnce(41).mockResolvedValueOnce(0);
-  await OnlineOrdersPage({ searchParams: { status: 'ALL_ORDERS', page: '9999999' } });
+  await OnlineOrdersPage({ searchParams: Promise.resolve({ status: 'ALL_ORDERS', page: '9999999' }) });
   expect(mocks.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 40 }));
-  await OnlineOrdersPage({ searchParams: { page: '-5' } });
+  await OnlineOrdersPage({ searchParams: Promise.resolve({ page: '-5' }) });
   expect(mocks.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 0 }));
 });
 it('normalizes a Ghana local phone query while preserving business and branch restrictions', async () => {
-  await OnlineOrdersPage({ searchParams: { status: 'REFUNDS', q: '024 000 0134' } });
+  await OnlineOrdersPage({ searchParams: Promise.resolve({ status: 'REFUNDS', q: '024 000 0134' }) });
   expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ businessId: 'test-business', storeId: 'test-branch', status: 'CANCELLED', refundStatus: 'MANUAL_REFUND_NEEDED', AND: [{ OR: expect.arrayContaining([{ customerPhone: { contains: '233240000134' } }]) }] }) }));
 });
 it('refund filter excludes settled cancellations and preserves selected-order scope', async () => {
-  await OnlineOrdersPage({ searchParams: { status: 'REFUNDS', order: 'test-order' } });
+  await OnlineOrdersPage({ searchParams: Promise.resolve({ status: 'REFUNDS', order: 'test-order' }) });
   expect(mocks.findMany).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ where: { businessId: 'test-business', storeId: 'test-branch', status: 'CANCELLED', refundStatus: 'MANUAL_REFUND_NEEDED', id: 'test-order' } }));
 });
 it('gives cashiers guidance for fulfilment and escalation', async () => {
