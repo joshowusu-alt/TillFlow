@@ -22,6 +22,7 @@ runPg('pilot financial recovery from complete application export', () => {
     fixture = await createPilotFixture(prisma, `recovery-${Date.now()}`);
     auth.owner = fixture.users.owner;
     ownerHash = fixture.users.owner.passwordHash;
+    await prisma.user.update({ where: { id: auth.owner.id }, data: { twoFactorEnabled: true, twoFactorSecret: 'FICTIONAL-FACTOR', approvalPinHash: 'FICTIONAL-PIN-HASH' } });
     const accounting = await import('@/lib/accounting');
     await accounting.ensureChartOfAccounts(fixture.businessId, prisma);
     const sales = await import('./sales');
@@ -88,6 +89,7 @@ runPg('pilot financial recovery from complete application export', () => {
     expect(restored).toMatchObject({ success: true });
     expect(await controls()).toEqual(before);
     expect((await prisma.user.findUniqueOrThrow({ where: { id: auth.owner.id } })).passwordHash).toBe(ownerHash);
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: auth.owner.id } })).toMatchObject({ twoFactorEnabled: true, twoFactorSecret: 'FICTIONAL-FACTOR', approvalPinHash: 'FICTIONAL-PIN-HASH' });
     const sale = snapshot.salesInvoices.find((row: any) => row.customerId === fixture.customer.id);
     await payments.recordCustomerPayment(fixture.businessId, sale.id, [{ method: 'CASH', amountPence: 1000 }], fixture.users.cashier1.id, { idempotencyKey: 'recovery-receipt' });
     expect(await controls()).toEqual(before);

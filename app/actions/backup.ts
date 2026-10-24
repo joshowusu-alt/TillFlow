@@ -238,7 +238,7 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
 
     try { validateRecoverySnapshot(backup, businessId, user.id); }
     catch (error) { return err(error instanceof Error ? error.message : 'Invalid recovery snapshot.'); }
-    const currentOwner = await prisma.user.findFirst({ where: { id: user.id, businessId, role: 'OWNER', active: true }, select: { passwordHash: true } });
+    const currentOwner = await prisma.user.findFirst({ where: { id: user.id, businessId, role: 'OWNER', active: true }, select: { passwordHash: true, twoFactorEnabled: true, twoFactorSecret: true, twoFactorTempSecret: true, approvalPinHash: true } });
     if (!backup.users.some(restored => restored.id === user.id && restored.email === user.email && restored.active !== false)) return err('The backup must retain the restoring owner email and active status.');
     if (!currentOwner) return err('An active owner account is required for recovery.');
     // Do not destroy unsupported workflows that this core-trading snapshot cannot restore.
@@ -380,13 +380,15 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
         await tx.store.create({ data: { ...store, businessId } });
       }
 
-      for (const user of users) {
-        const safeHash = userHashes.get(user.id)!;
+      for (const restoredUser of users) {
+        const safeHash = userHashes.get(restoredUser.id)!;
         await tx.user.create({
           data: {
-            ...user,
+            ...restoredUser,
             businessId,
-            passwordHash: safeHash
+            passwordHash: safeHash,
+            // Never export MFA/PIN secrets; retain restoring owner's server-side factors.
+            ...(restoredUser.id === user.id ? currentOwner : {}),
           }
         });
       }
