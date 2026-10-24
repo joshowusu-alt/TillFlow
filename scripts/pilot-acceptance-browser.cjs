@@ -3,6 +3,13 @@ const { chromium } = require('playwright');
 const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
+const Module = require('node:module');
+function offlineHasher() {
+  const compiled = require('esbuild').transformSync(fs.readFileSync('lib/offline/payload-hash.ts', 'utf8'), { loader: 'ts', format: 'cjs', target: 'node22' }).code;
+  const helper = new Module('pilot-offline-hash');
+  helper._compile(compiled, 'pilot-offline-hash.cjs');
+  return helper.exports.hashOfflineSalePayload;
+}
 async function main() {
   const baseURL = process.env.BASE_URL || 'http://localhost:6200';
   if (!['localhost','127.0.0.1'].includes(new URL(baseURL).hostname)) throw new Error('Pilot acceptance only targets a local isolated server');
@@ -57,10 +64,48 @@ async function main() {
           await page.goto(`/receipts/${sale.id}`);
           assert.match(await page.locator('body').innerText(), /50[.,]00/);
           results.push(`PASS barcode keyboard checkout, receipt and persisted cash ${role}`);
+          if (role === 'cashier2') {
+            const beforeStock = await prisma.inventoryBalance.aggregate({ where: { store: { businessId: fixture.businessId } }, _sum: { qtyOnHandBase: true } });
+            const beforeSales = await prisma.salesInvoice.count({ where: { businessId: fixture.businessId } });
+            const beforeJournals = await prisma.journalEntry.count({ where: { businessId: fixture.businessId } });
+            const old = new Date(Date.now() - 10 * 86400000);
+            try {
+              await prisma.business.update({ where: { id: fixture.businessId }, data: { currentPeriodEndsAt: old, nextBillingDate: old, nextPaymentDueAt: old, paymentGraceEndsAt: old, suspendedAt: old, subscriptionStatus: 'SUSPENDED', planStatus: 'SUSPENDED' } });
+              const payload = { id: `expired-${fixture.run}`, idempotencyKey: `expired-${fixture.run}`, businessId: fixture.businessId, storeId: store.id, tillId: store.tillId, shiftId: store.shiftId, cashierUserId: fixture.users[role].id, customerId: null, paymentStatus: 'PAID', lines: [{ productId: fixture.products[0].id, unitId: fixture.unitId, qtyInUnit: 1, discountType: 'NONE', discountValue: '' }], payments: [{ method: 'CASH', amountPence: 5000 }], orderDiscountType: 'NONE', orderDiscountValue: '', createdAt: new Date().toISOString() };
+              payload.payloadHash = await offlineHasher()(payload);
+              const response = await page.request.post(`${baseURL}/api/offline/sync-sale`, { data: payload, headers: { origin: baseURL } });
+              assert.equal(response.status(), 400);
+              assert.equal((await response.json()).reason, 'read_only');
+              assert.equal(await prisma.salesInvoice.count({ where: { businessId: fixture.businessId } }), beforeSales);
+              assert.equal(await prisma.journalEntry.count({ where: { businessId: fixture.businessId } }), beforeJournals);
+              assert.deepEqual(await prisma.inventoryBalance.aggregate({ where: { store: { businessId: fixture.businessId } }, _sum: { qtyOnHandBase: true } }), beforeStock);
+              results.push('PASS expired subscription authenticated HTTP write denial; sales, stock and journal unchanged');
+            } finally {
+              await prisma.business.update({ where: { id: fixture.businessId }, data: { currentPeriodEndsAt: business.currentPeriodEndsAt, nextBillingDate: business.nextBillingDate, nextPaymentDueAt: business.nextPaymentDueAt, paymentGraceEndsAt: business.paymentGraceEndsAt, suspendedAt: business.suspendedAt, subscriptionStatus: business.subscriptionStatus, planStatus: business.planStatus } });
+            }
+          }
           await page.goto('/suppliers');
           assert(!new URL(page.url()).pathname.startsWith('/suppliers'), 'Cashier must not read supplier management');
           results.push(`PASS cashier supplier-route denial ${role}`);
         } else {
+          if (role === 'owner') {
+            const beforeStock = await prisma.inventoryBalance.aggregate({ where: { store: { businessId: fixture.businessId } }, _sum: { qtyOnHandBase: true } });
+            const beforeJournals = await prisma.journalEntry.count({ where: { businessId: fixture.businessId } });
+            const unit = await prisma.unit.findUniqueOrThrow({ where: { id: fixture.unitId } });
+            const XLSX = require('xlsx');
+            const book = XLSX.utils.book_new();
+            const name = `Fictional imported gari ${fixture.run}`;
+            XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet([{ name, barcode: `IMPORT-${fixture.run}`, category: 'Fictional groceries', selling_price: 20, cost_price: 10, base_unit: unit.name }]), 'Products');
+            const buffer = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' });
+            await page.goto('/settings/import-stock?mode=CATALOGUE');
+            await page.getByTestId('import-stock-file-input').setInputFiles({ name: 'fictional-catalogue.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer });
+            await page.getByRole('button', { name: /Confirm Import/i }).click({ timeout: 45000 });
+            await page.getByText('Import complete!', { exact: true }).waitFor({ timeout: 60000 });
+            assert.equal(await prisma.product.count({ where: { businessId: fixture.businessId, name } }), 1);
+            assert.equal(await prisma.journalEntry.count({ where: { businessId: fixture.businessId } }), beforeJournals);
+            assert.deepEqual(await prisma.inventoryBalance.aggregate({ where: { store: { businessId: fixture.businessId } }, _sum: { qtyOnHandBase: true } }), beforeStock);
+            results.push('PASS real workbook upload and catalogue import; no stock or journal movement');
+          }
           for (const route of ['/products','/purchases','/suppliers','/reports/dashboard']) {
             await page.goto(route);
             const body = await page.locator('body').innerText();

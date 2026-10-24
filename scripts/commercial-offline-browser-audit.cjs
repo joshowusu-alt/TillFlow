@@ -19,6 +19,7 @@ async function main() {
   const swEnd = sw.indexOf('function getActiveBusinessIdFromDB', swStart);
   if (swStart < 0 || swEnd < 0) throw new Error('Cannot locate service-worker schema opener');
   const swOpener = sw.slice(swStart, swEnd);
+  const swReaders = sw.slice(sw.indexOf('function getActiveBusinessIdFromDB'), sw.indexOf('function markSaleSyncedInDB'));
   const server = http.createServer((req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     if (req.url === '/storage.js') { res.setHeader('Content-Type', 'application/javascript'); res.end(bundle.outputFiles[0].text); }
@@ -93,6 +94,28 @@ async function main() {
     }, swOpener);
     assert.equal(swCurrent, 4);
     results.push('PASS service-worker opener accepts application v4 database');
+    const swPending = await page.evaluate(async ({ opener, readers }) => {
+      const db = await window.auditStorage.getDB();
+      await db.put('syncMeta', { key: 'active-business', value: 'audit-biz' });
+      await db.put('salesQueue', { id: 'other-business-sale', businessId: 'other-biz', shiftId: 'other-shift', synced: false, status: 'pending' });
+      const sw = new Function(`${opener}; ${readers}; return { open: openOfflineDB, read: getPendingSalesFromDB };`)();
+      const rawDb = await sw.open();
+      const pending = await Promise.race([sw.read(rawDb), new Promise(resolve => setTimeout(() => resolve('completion lost'), 1000))]);
+      rawDb.close();
+      return pending;
+    }, { opener: swOpener, readers: swReaders });
+    assert.ok(Array.isArray(swPending));
+    assert.deepEqual(swPending.map(sale => sale.id), ['audit-sale']);
+    results.push('PASS native service-worker queue read completes and excludes another business');
+    const swNoScope = await page.evaluate(async ({ opener, readers }) => {
+      const db = await window.auditStorage.getDB();
+      await db.delete('syncMeta', 'active-business');
+      const sw = new Function(`${opener}; ${readers}; return { open: openOfflineDB, read: getPendingSalesFromDB };`)();
+      const rawDb = await sw.open();
+      const pending = await sw.read(rawDb); rawDb.close(); return pending;
+    }, { opener: swOpener, readers: swReaders });
+    assert.deepEqual(swNoScope, []);
+    results.push('PASS service worker with missing active scope retains all queues without submission');
     const otherContext = await browser.newContext();
     const swPage = await otherContext.newPage();
     await swPage.goto(`http://127.0.0.1:${server.address().port}`);

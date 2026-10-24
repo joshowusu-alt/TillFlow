@@ -10,7 +10,9 @@ The offline v4 composite key and no-scope readers preserve queued money records.
 
 ## Additional confirmed defect and fix
 
-An expired session's HTTP401 reached the service worker's permanent4xx rejection branch, moving an otherwise recoverable sale to dead letter. New regression first failed (one failure/seven passes), then passed after401 was classified with408/429 as a recoverable event. Sale stays queued until authentication is restored. Authorisation403 handling is unchanged: no automatic bypass or permanent permission escalation was introduced.
+An expired session's HTTP401 reached the service worker's permanent4xx rejection branch, moving an otherwise recoverable sale to dead letter. New regression first failed (one failure/seven passes), then passed after401 was classified with408/429 as a recoverable event. Follow-up scope review found that wrong-tenant responses actually use HTTP400 with reason `tenant_mismatch`; these and HTTP403 now retain the original pending sale until correct authentication/authorisation returns. Other HTTP400 permanent rejects still follow the existing manual-recovery policy. No server-side permission bypass is introduced.
+
+The SW queue reader also failed open when active-business metadata was absent and could lose its native IndexedDB completion event by awaiting metadata after starting `getAll`. It now reads scope first, returns no work without scope, and installs the request event handlers without an intervening await. Four follow-up regressions failed before this fix; all13 offline retry/scope tests pass afterward. The native browser migration harness now adds two real SW reader cases (eight total checks), pending CI execution.
 
 Local Node22.23.4 execution:
 
