@@ -7,7 +7,7 @@ const auth = vi.hoisted(() => ({ owner: null as any }));
 vi.mock('@/lib/auth', () => ({ requireRole: async () => auth.owner, requireUser: async () => auth.owner }));
 vi.mock('next/headers', () => ({ headers: () => new Headers(), cookies: () => ({ getAll: () => [], delete: vi.fn() }) }));
 vi.mock('next/cache', () => ({ unstable_cache: (fn: any) => fn }));
-vi.mock('@/lib/services/risk-monitor', () => ({ detectVoidFrequencyRisk: vi.fn(), detectExcessiveDiscountRisk: vi.fn(), detectNegativeMarginRisk: vi.fn(), detectCashVarianceRisk: vi.fn() }));
+vi.mock('@/lib/services/risk-monitor', () => ({ detectVoidFrequencyRisk: vi.fn().mockResolvedValue(undefined), detectExcessiveDiscountRisk: vi.fn().mockResolvedValue(undefined), detectNegativeMarginRisk: vi.fn().mockResolvedValue(undefined), detectCashVarianceRisk: vi.fn().mockResolvedValue(undefined) }));
 const runPg = canRunLivePostgresTests() ? describe : describe.skip;
 runPg('pilot financial recovery from complete application export', () => {
   let prisma: PrismaClient;
