@@ -1,6 +1,6 @@
 'use server';
 
-import { validateRecoverySnapshot } from '@/lib/backup-restore-contract';
+import { completeRecoveryBarcodes, validateRecoverySnapshot } from '@/lib/backup-restore-contract';
 import {serializePurchaseDocument,restorePurchaseDocument} from '@/lib/purchases/document-backup';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
@@ -202,7 +202,7 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             cashVarianceInvestigations,
             stockTransfers,
             stockTransferLines,
-            productBarcodes,
+            productBarcodes: completeRecoveryBarcodes(businessId, products, productBarcodes),
             paymentReconciliations,
             dayClosures,
             openingBalances
@@ -236,7 +236,10 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       return err('The backup file is not in the right format. Please use a file exported from TillFlow.');
     }
 
-    try { validateRecoverySnapshot(backup, businessId, user.id); }
+    try {
+      validateRecoverySnapshot(backup, businessId, user.id);
+      backup = { ...backup, productBarcodes: completeRecoveryBarcodes(businessId, backup.products, backup.productBarcodes ?? []) };
+    }
     catch (error) { return err(error instanceof Error ? error.message : 'Invalid recovery snapshot.'); }
     const currentOwner = await prisma.user.findFirst({ where: { id: user.id, businessId, role: 'OWNER', active: true }, select: { passwordHash: true, twoFactorEnabled: true, twoFactorSecret: true, twoFactorTempSecret: true, approvalPinHash: true } });
     if (!backup.users.some(restored => restored.id === user.id && restored.email === user.email && restored.active !== false)) return err('The backup must retain the restoring owner email and active status.');

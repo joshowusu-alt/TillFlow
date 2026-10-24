@@ -1,14 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { RECOVERY_TABLES, validateRecoverySnapshot } from './backup-restore-contract';
+import { completeRecoveryBarcodes, RECOVERY_TABLES, validateRecoverySnapshot } from './backup-restore-contract';
 function snapshot() { return { version: '1.4', business: { id: 'b' }, users: [{ id: 'o', businessId: 'b', role: 'OWNER' }], ...Object.fromEntries(RECOVERY_TABLES.map(key => [key, []])) }; }
 describe('complete financial recovery contract', () => {
   it('accepts an empty complete same-business snapshot', () => expect(() => validateRecoverySnapshot(snapshot(), 'b', 'o')).not.toThrow());
   it('accepts primary and alias registry entries for their products', () => {
     expect(() => validateRecoverySnapshot({ ...snapshot(), products: [{ id: 'p', businessId: 'b', barcode: 'primary' }], productBarcodes: [{ businessId: 'b', productId: 'p', code: 'primary' }, { businessId: 'b', productId: 'p', code: 'alias' }] }, 'b', 'o')).not.toThrow();
   });
-  it('rejects a missing or conflicting primary registry before any restore writes', () => {
-    expect(() => validateRecoverySnapshot({ ...snapshot(), products: [{ id: 'p', barcode: 'primary' }], productBarcodes: [] }, 'b', 'o')).toThrow('primary barcode');
+  it('derives SQLite primary registry rows and rejects conflicting ownership', () => {
+    const products = [{ id: 'p', businessId: 'b', barcode: 'primary' }];
+    expect(() => validateRecoverySnapshot({ ...snapshot(), products, productBarcodes: [] }, 'b', 'o')).not.toThrow();
+    expect(completeRecoveryBarcodes('b', products, [])).toEqual([{ businessId: 'b', productId: 'p', code: 'primary' }]);
     expect(() => validateRecoverySnapshot({ ...snapshot(), products: [{ id: 'p', barcode: 'primary' }, { id: 'q', barcode: null }], productBarcodes: [{ businessId: 'b', productId: 'q', code: 'primary' }] }, 'b', 'o')).toThrow('primary barcode');
+  });
+  it('keeps aliases and already registered primaries exactly once without mutating input', () => {
+    const rows = [{ businessId: 'b', productId: 'p', code: 'alias' }, { businessId: 'b', productId: 'p', code: 'primary' }];
+    expect(completeRecoveryBarcodes('b', [{ id: 'p', barcode: 'primary' }], rows)).toEqual(rows);
+    expect(rows).toHaveLength(2);
   });
   it('rejects duplicate registry codes rather than silently skipping them', () => {
     expect(() => validateRecoverySnapshot({ ...snapshot(), productBarcodes: [{ code: 'same', productId: 'p' }, { code: 'same', productId: 'p' }] }, 'b', 'o')).toThrow('duplicate barcode');

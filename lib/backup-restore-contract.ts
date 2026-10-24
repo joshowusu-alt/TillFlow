@@ -5,6 +5,26 @@ export const RECOVERY_TABLES = [
   'stockTransfers', 'stockTransferLines', 'productBarcodes', 'paymentReconciliations', 'dayClosures', 'openingBalances',
 ] as const;
 
+/** SQLite writers keep primaries on Product; PostgreSQL mirrors them by trigger. */
+export function completeRecoveryBarcodes(businessId: string, products: any[], registry: any[]) {
+  const result = registry.map(row => ({ ...row }));
+  const owners = new Map<string, string>();
+  for (const row of result) {
+    if (typeof row.code !== 'string' || owners.has(row.code)) throw new Error('Backup contains an invalid or duplicate barcode.');
+    owners.set(row.code, row.productId);
+  }
+  for (const product of products) {
+    if (product.barcode == null) continue;
+    const owner = owners.get(product.barcode);
+    if (owner != null && owner !== product.id) throw new Error('Backup primary barcode does not match its product registry.');
+    if (owner == null) {
+      owners.set(product.barcode, product.id);
+      result.push({ businessId, productId: product.id, code: product.barcode });
+    }
+  }
+  return result;
+}
+
 export function validateRecoverySnapshot(backup: Record<string, any>, businessId: string, ownerId: string) {
   if (backup.business?.id !== businessId) throw new Error('Restore must target the same business as this backup.');
   if (backup.version !== '1.4' || RECOVERY_TABLES.some(key => !Array.isArray(backup[key]))) {
@@ -14,16 +34,7 @@ export function validateRecoverySnapshot(backup: Record<string, any>, businessId
     throw new Error('The signed-in owner must be present in the backup to retain recovery access.');
   }
   const rows = (key: string): any[] => Array.isArray(backup[key]) ? backup[key] : [];
-  const barcodeOwners = new Map<string, string>();
-  for (const barcode of rows('productBarcodes')) {
-    if (typeof barcode.code !== 'string' || barcodeOwners.has(barcode.code)) throw new Error('Backup contains an invalid or duplicate barcode.');
-    barcodeOwners.set(barcode.code, barcode.productId);
-  }
-  for (const product of rows('products')) {
-    if (product.barcode != null && barcodeOwners.get(product.barcode) !== product.id) {
-      throw new Error('Backup primary barcode does not match its product registry.');
-    }
-  }
+  completeRecoveryBarcodes(businessId, rows('products'), rows('productBarcodes'));
   for (const key of [...RECOVERY_TABLES, 'stores', 'users', 'customers', 'suppliers', 'categories', 'products', 'accounts', 'salesInvoices', 'purchaseInvoices', 'expenses', 'journalEntries']) {
     for (const row of rows(key)) if (row.businessId != null && row.businessId !== businessId) throw new Error(`Backup ${key} contains another business's record.`);
   }

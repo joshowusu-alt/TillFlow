@@ -116,11 +116,18 @@ async function main() {
           await barcode.press('Enter');
           const add = page.getByRole('button', { name: /Add to Cart/i });
           const exact = page.getByRole('button', { name: /^Exact$/ });
-          const cartMode = await Promise.race([
+          const mobileCart = page.getByRole('button', { name: /^View cart,/i });
+          const cartMode = await Promise.any([
             add.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'staged'),
             exact.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'direct'),
+            mobileCart.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'mobile'),
           ]);
           if (cartMode === 'staged') await add.click();
+          const checkoutMode = cartMode === 'staged' ? await Promise.any([
+            exact.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'direct'),
+            mobileCart.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'mobile'),
+          ]) : cartMode;
+          if (checkoutMode === 'mobile') await mobileCart.click();
           const till = page.locator('#pos-till-select');
           await till.waitFor({ state: 'visible' });
           await till.selectOption(store.tillId);

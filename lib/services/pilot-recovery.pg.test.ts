@@ -93,6 +93,12 @@ runPg('pilot financial recovery from complete application export', () => {
     expect(await controls()).toEqual(before);
     expect((await prisma.user.findUniqueOrThrow({ where: { id: auth.owner.id } })).passwordHash).toBe(ownerHash);
     expect(await prisma.user.findUniqueOrThrow({ where: { id: auth.owner.id } })).toMatchObject({ twoFactorEnabled: true, twoFactorSecret: 'FICTIONAL-FACTOR', approvalPinHash: 'FICTIONAL-PIN-HASH' });
+    // Older SQLite writers store the primary on Product, without a trigger-
+    // generated registry row. Replay that valid snapshot shape on real PG.
+    const sqliteStyle = structuredClone(snapshot);
+    sqliteStyle.productBarcodes = sqliteStyle.productBarcodes.filter((row: any) => !sqliteStyle.products.some((product: any) => product.id === row.productId && product.barcode === row.code));
+    expect((await backup.importDatabaseAction(sqliteStyle)).success).toBe(true);
+    expect(await controls()).toEqual(before);
     const sale = snapshot.salesInvoices.find((row: any) => row.customerId === fixture.customer.id);
     await payments.recordCustomerPayment(fixture.businessId, sale.id, [{ method: 'CASH', amountPence: 1000 }], fixture.users.cashier1.id, { idempotencyKey: 'recovery-receipt' });
     expect(await controls()).toEqual(before);
