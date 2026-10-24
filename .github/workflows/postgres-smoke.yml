@@ -49,6 +49,8 @@ on:
       - 'lib/services/cash-drawer.ts'
       - 'lib/services/returns.ts'
       - 'lib/services/payments.ts'
+      - 'lib/services/purchase-return-payment-race.pg.test.ts'
+      - 'lib/services/final-walkthrough-gate.pg.test.ts'
       - 'lib/services/expensePayments.ts'
       - 'lib/services/expense-payments-concurrency.test.ts'
       - 'lib/database-target-guard.ts'
@@ -175,6 +177,8 @@ jobs:
             lib/services/receipt-ledger.pg.test.ts
             lib/services/checkout-shift-cashdrawer-rtx.test.ts
             lib/services/payments-concurrency.test.ts
+            lib/services/purchase-return-payment-race.pg.test.ts
+            lib/services/final-walkthrough-gate.pg.test.ts
             lib/services/purchases-concurrency.test.ts
             lib/services/expense-payments-concurrency.test.ts
             lib/services/sales.test.ts

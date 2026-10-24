@@ -4,17 +4,21 @@ import type { PrismaClient } from '@prisma/client';
 import { Client as PgClient } from 'pg';
 import { performance } from 'node:perf_hooks';
 import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
-import { pinPrismaEnv } from '@/lib/database-target-guard';
 import { purchaseDocumentFixture } from '@/lib/test/purchase-document-fixture';
 import { isExactStandardUnitName, selectUnitsForBusiness, SHARED_PIECE_UNIT_ID, standardUnitNameLookupValues } from '@/lib/units/selectable-units';
 
 vi.mock('next/cache', () => ({ unstable_cache: (fn: unknown) => fn }));
 vi.mock('next/headers', () => ({ headers: () => new Headers() }));
 vi.mock('@/lib/action-utils', () => ({ UserError: class UserError extends Error {} }));
-vi.mock('@/lib/services/risk-monitor', () => ({ detectVoidFrequencyRisk: vi.fn(), detectExcessiveDiscountRisk: vi.fn(), detectNegativeMarginRisk: vi.fn(), detectCashVarianceRisk: vi.fn() }));
+vi.mock('@/lib/services/risk-monitor', () => ({
+  detectVoidFrequencyRisk: vi.fn().mockResolvedValue(undefined),
+  detectExcessiveDiscountRisk: vi.fn().mockResolvedValue(undefined),
+  detectNegativeMarginRisk: vi.fn().mockResolvedValue(undefined),
+  detectCashVarianceRisk: vi.fn().mockResolvedValue(undefined),
+}));
 
 type Fixture = { businessId: string; storeId: string; tillId: string; userId: string; supplierId: string; productId: string; unitId: string; shiftId: string };
-const describePg = canRunLivePostgresTests() ? describe : describe.skip;
+const describePg = process.env.TILLFLOW_RUN_DATABASE_PILOT === '1' && canRunLivePostgresTests() ? describe : describe.skip;
 const percentile = (values: number[], fraction: number) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)] ?? 0;
@@ -33,11 +37,11 @@ describePg('database pilot: six concurrent cashiers, three businesses, five pool
   beforeAll(async () => {
     // Keep the observed production pool size. This benchmark does not cure errors by buying capacity.
     const target = new URL(process.env.TILLFLOW_TEST_DATABASE_URL || process.env.DATABASE_URL || '');
-    target.searchParams.set('connection_limit', '5');
-    target.searchParams.set('pool_timeout', '10');
-    target.searchParams.set('application_name', 'tillflow_pilot_database');
-    process.env.TILLFLOW_TEST_DATABASE_URL = target.toString();
-    pinPrismaEnv(process.env, target.toString());
+    // The harness owns URL selection/pinning. Tests only check the configured
+    // capacity rather than rewriting URL aliases after the guard ran.
+    expect(target.searchParams.get('connection_limit')).toBe('5');
+    expect(target.searchParams.get('pool_timeout')).toBe('10');
+    expect(target.searchParams.get('application_name')).toBe('tillflow_pilot_database');
     ({ prisma } = await openTestPrismaClient({ onQuery: e => { if (phase) queryMs[phase].push(e.durationMs); } }));
     (globalThis as unknown as { prisma: PrismaClient }).prisma = prisma;
     [sales, purchases, listUnits] = await Promise.all([import('@/lib/services/sales'), import('@/lib/services/purchases'), import('@/lib/units/list-selectable-units')]);
@@ -142,7 +146,7 @@ describePg('database pilot: six concurrent cashiers, three businesses, five pool
                 prisma.inventoryBalance.findMany({ where: { storeId: actor.storeId }, take: 25 }),
               ]);
               expect(lookups[0].some(u => u.id === actor.unitId)).toBe(true);
-              const saleInput = { businessId: actor.businessId, storeId: actor.storeId, tillId: actor.tillId, cashierUserId: actor.userId, capturedShiftId: actor.shiftId, externalRef: `OFFLINE_SYNC:load-${variant}-${actor.shiftId}-${round}`, paymentStatus: 'PAID', lines: [{ productId: actor.productId, unitId: actor.unitId, qtyInUnit: 1 }], payments: [{ method: 'CASH' as const, amountPence: 5000 }] };
+              const saleInput = { businessId: actor.businessId, storeId: actor.storeId, tillId: actor.tillId, cashierUserId: actor.userId, capturedShiftId: actor.shiftId, externalRef: `OFFLINE_SYNC:load-${variant}-${actor.shiftId}-${round}`, paymentStatus: 'PAID' as const, lines: [{ productId: actor.productId, unitId: actor.unitId, qtyInUnit: 1 }], payments: [{ method: 'CASH' as const, amountPence: 5000 }] };
               let txStart = performance.now(); const sale = await sales.createSale(saleInput); transactions.push(performance.now() - txStart); checkouts++;
               // Simulate a committed response lost by the caller: replay the same identity.
               const retry = await sales.createSale(saleInput); expect(retry.id).toBe(sale.id);
@@ -173,4 +177,32 @@ describePg('database pilot: six concurrent cashiers, three businesses, five pool
     }
     void results;
   }, 120000);
+
+  it('completes purchases when all five pool slots belong to supplied outer transactions', async () => {
+    // Reproduces import/opening-stock composition: every worker already owns a
+    // connection before createPurchase starts. A root-client read here can only
+    // wait for a connection held by one of these blocked transactions.
+    let arrived = 0;
+    let release!: () => void;
+    const allHoldingConnections = new Promise<void>(resolve => { release = resolve; });
+    const started = performance.now();
+    const results = await Promise.allSettled(actors.slice(0, 5).map(actor => prisma.$transaction(async tx => {
+      arrived++;
+      if (arrived === 5) release();
+      await allHoldingConnections;
+      return purchases.createPurchase({ sourceDocuments: [purchaseDocumentFixture()], businessId: actor.businessId,
+        storeId: actor.storeId, supplierId: actor.supplierId, userId: actor.userId, paymentStatus: 'UNPAID', payments: [],
+        lines: [{ productId: actor.productId, unitId: actor.unitId, qtyInUnit: 1, unitCostPence: 1000 }],
+        idempotencyKey: `outer-pool-proof-${actor.shiftId}` }, tx);
+    }, { maxWait: 10000, timeout: 30000 })));
+    const rejected = results.filter(result => result.status === 'rejected');
+    console.info('PILOT_OUTER_TRANSACTION_METRICS', JSON.stringify({ workers: 5, poolLimit: 5,
+      durationMs: performance.now() - started, success: results.length - rejected.length,
+      errors: rejected.map(result => result.status === 'rejected' ? String(result.reason) : '') }));
+    expect(arrived).toBe(5);
+    expect(rejected).toEqual([]);
+    for (const actor of actors.slice(0, 5)) {
+      expect(await prisma.moneyIdempotency.count({ where: { businessId: actor.businessId, key: `outer-pool-proof-${actor.shiftId}` } })).toBe(1);
+    }
+  }, 60000);
 });

@@ -335,18 +335,18 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   if (!['INVOICE', 'DELIVERY_NOTE'].includes(receiptDocumentType)) throw new UserError('Choose an invoice or delivery note.');
 
   // ── SINGLE BATCH: fire all validation lookups in parallel ──
-  // Business and store checks are stable reads; productUnits MUST use the
-  // active transaction (if any) so newly-created products/units are visible
-  // before the outer tx commits.
+  // Every read must use a supplied transaction. Imports/opening stock can hold
+  // all pool slots in outer transactions; asking the root client for a second
+  // connection here would make those transactions wait on their own pool.
   const dbClient = (db ?? prisma) as typeof prisma;
   const [business, store, supplier, productUnits] = await Promise.all([
-    prisma.business.findUnique({ where: { id: input.businessId } }),
-    prisma.store.findFirst({
+    dbClient.business.findUnique({ where: { id: input.businessId } }),
+    dbClient.store.findFirst({
       where: { id: input.storeId, businessId: input.businessId },
       select: { id: true },
     }),
     input.supplierId
-      ? prisma.supplier.findFirst({
+      ? dbClient.supplier.findFirst({
           where: { id: input.supplierId, businessId: input.businessId },
           select: { id: true, name: true },
         })
@@ -548,13 +548,13 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   // because it issues multiple writes and only one write is allowed at a time —
   // running it inside the tx causes SQLITE_BUSY which becomes the generic error.
   const glAccountCodes = [...journalLines.map((l) => l.accountCode), ...(additionalCost && costTreatment === 'EXPENSE' ? ['6000', '2000'] : [])];
-  let glAccountRows = await prisma.account.findMany({
+  let glAccountRows = await dbClient.account.findMany({
     where: { businessId: input.businessId, code: { in: glAccountCodes } },
     select: { id: true, code: true },
   });
   if (glAccountRows.length < glAccountCodes.filter((c, i, a) => a.indexOf(c) === i).length) {
-    await ensureChartOfAccounts(input.businessId);
-    glAccountRows = await prisma.account.findMany({
+    await ensureChartOfAccounts(input.businessId, dbClient);
+    glAccountRows = await dbClient.account.findMany({
       where: { businessId: input.businessId, code: { in: glAccountCodes } },
       select: { id: true, code: true },
     });

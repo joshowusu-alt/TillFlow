@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'lib/prisma.ts'
+      - 'lib/services/purchases.ts'
       - 'lib/units/list-selectable-units.ts'
       - 'lib/reliability/in-flight-read.ts'
       - 'lib/reliability/database-pilot-load.pg.test.ts'
@@ -33,13 +34,16 @@ jobs:
           --health-retries 5
     env:
       TZ: Africa/Accra
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
-      POSTGRES_PRISMA_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
-      POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
-      TILLFLOW_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public&connection_limit=5&pool_timeout=10&application_name=tillflow_pilot_database
+      POSTGRES_PRISMA_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public&connection_limit=5&pool_timeout=10&application_name=tillflow_pilot_database
+      POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public&connection_limit=5&pool_timeout=10&application_name=tillflow_pilot_database
+      TILLFLOW_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public&connection_limit=5&pool_timeout=10&application_name=tillflow_pilot_database
       TILLFLOW_INCLUDE_PG_TESTS: '1'
+      TILLFLOW_RUN_DATABASE_PILOT: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -47,6 +51,27 @@ jobs:
       - run: npm ci
       - run: npx prisma generate --schema=prisma/schema.postgres.prisma
       - run: npx prisma migrate deploy --schema=prisma/schema.postgres.prisma
+      - name: Reproduce original composed-purchase pool starvation safely
+        run: |
+          set -euo pipefail
+          cp lib/services/purchases.ts /tmp/pilot-purchases-fixed.ts
+          trap 'cp /tmp/pilot-purchases-fixed.ts lib/services/purchases.ts' EXIT
+          git show cebd811fe61363836cca65902fde083b557c0df1:lib/services/purchases.ts > lib/services/purchases.ts
+          set +e
+          npx vitest run lib/reliability/database-pilot-load.pg.test.ts -t 'all five pool slots' --reporter=verbose > database-pilot-before.log 2>&1
+          baseline_exit=$?
+          set -e
+          cat database-pilot-before.log
+          if [ "$baseline_exit" -eq 0 ]; then
+            echo 'Expected baseline starvation did not reproduce; no confirmed mechanism claim is permitted.'
+            exit 1
+          fi
+          if ! grep -q 'P2024' database-pilot-before.log; then
+            echo 'Baseline failed for a reason other than Prisma connection-pool exhaustion.'
+            exit 1
+          fi
+          cp /tmp/pilot-purchases-fixed.ts lib/services/purchases.ts
+          trap - EXIT
       - name: Five-connection pilot workload and financial invariants
         run: |
           set -o pipefail
@@ -55,5 +80,7 @@ jobs:
         if: always()
         with:
           name: database-pilot-evidence
-          path: database-pilot.log
+          path: |
+            database-pilot.log
+            database-pilot-before.log
           retention-days: 14
