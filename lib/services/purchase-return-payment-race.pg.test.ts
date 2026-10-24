@@ -132,7 +132,11 @@ describePg('purchase return versus supplier payment: persisted PostgreSQL barrie
     let armed = true;
     let holding = false;
     intercept = async (params, next) => {
-      if (holding && params.action === 'queryRaw' && String(params.args?.query ?? '').includes('PurchaseInvoice')) competitorLock.resolve();
+      // Prisma's raw-query middleware arguments are version-dependent (Sql object
+      // versus tuple), so do not introspect private argument encoding. While the
+      // first service is paused, the competing service's first raw statement is
+      // its invoice FOR UPDATE lock. No other service runs during this barrier.
+      if (holding && params.action === 'queryRaw') competitorLock.resolve();
       const result = await next(params);
       if (armed && params.model === model && params.action === 'create') {
         armed = false; holding = true; held.resolve();

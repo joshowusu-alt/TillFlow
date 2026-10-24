@@ -10,7 +10,9 @@ The offline v4 composite key and no-scope readers preserve queued money records.
 
 ## Additional confirmed defect and fix
 
-An expired session's HTTP401 reached the service worker's permanent4xx rejection branch, moving an otherwise recoverable sale to dead letter. New regression first failed (one failure/seven passes), then passed after401 was classified with408/429 as a recoverable event. Sale stays queued until authentication is restored. Authorisation403 handling is unchanged: no automatic bypass or permanent permission escalation was introduced.
+An expired session's HTTP401 reached the service worker's permanent4xx rejection branch, moving an otherwise recoverable sale to dead letter. New regression first failed (one failure/seven passes), then passed after401 was classified with408/429 as a recoverable event. Follow-up scope review found that wrong-tenant responses actually use HTTP400 with reason `tenant_mismatch`; these and HTTP403 now retain the original pending sale until correct authentication/authorisation returns. Other HTTP400 permanent rejects still follow the existing manual-recovery policy. No server-side permission bypass is introduced.
+
+The SW queue reader also failed open when active-business metadata was absent and could lose its native IndexedDB completion event by awaiting metadata after starting `getAll`. It now reads scope first, returns no work without scope, and installs the request event handlers without an intervening await. Four follow-up regressions failed before this fix; all13 offline retry/scope tests pass afterward. The native browser migration harness now adds two real SW reader cases (eight total checks), pending CI execution.
 
 Local Node22.23.4 execution:
 
@@ -51,3 +53,11 @@ node scripts/commercial-offline-retry-browser.cjs
 Five native Chromium checks use real IndexedDB, browser reload, actual application sync/backoff code and a clearly simulated local API:503 leaves the sale pending; refresh preserves it; a lost response after simulated commit causes same-ID retry; automatic backoff recovers without another online event; acknowledged sale never resubmits on later refresh. The simulated server must record one economic commit despite at least three requests. This complements real PostgreSQL idempotency checks; it does not certify a live provider or real-server browser checkout.
 
 No production data, environment variables, infrastructure, merge or deployment is changed by this work.
+
+## Concurrent purchase replay hardening
+
+Review found an older unsafe retry path in `purchases.ts`: a unique idempotency-key insert error was caught inside the PostgreSQL transaction, then the same aborted transaction was queried for the winner. Existing parallel tests hid the user-visible failure by allowing only one of two identical callers to succeed. Those tests now require both paid and unpaid callers to receive the same committed invoice. A further parallel different-payment payload test requires one accepted request, one explicit idempotency conflict, and one invoice/payment/stock/journal effect.
+
+The service now rechecks the durable key after waiting for inventory locks. Any unique-key exception still propagates out of the transaction so rollback finishes before the persisted winner is read through a fresh client. Money/stock writes are never retried blindly. A composed caller-supplied transaction must still propagate any unique violation to its own transaction owner for rollback; no query is attempted on its aborted client.
+
+A unit regression with a PostgreSQL-aborted-client contract failed before (one failure/21 passes). After the fix, four purchase unit subsets pass **46 tests with zero failures/skips and no unhandled errors**, using the correct SQLite-generated unit client. An initial PG-generated-client unit attempt had one environment-provider error and is not counted as a clean pass. Real parallel purchase execution must pass isolated PostgreSQL CI before this fix is accepted.
