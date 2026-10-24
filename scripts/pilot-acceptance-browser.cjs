@@ -55,7 +55,14 @@ async function main() {
       await page.locator('input[name=email]').fill(cashierEmail);
       await page.locator('input[name=password]').fill(fixture.password);
       await page.locator('select[name=role]').selectOption('CASHIER');
-      await page.getByRole('button', { name: 'Create User', exact: true }).click();
+      const creationForm = page.locator('form').filter({ has: page.locator('input[name=email]') });
+      assert.equal(await creationForm.evaluate(form => form.checkValidity()), true, 'First cashier form must pass native validation');
+      await Promise.all([
+        page.waitForURL(url => url.pathname === '/users' && (url.searchParams.has('success') || url.searchParams.has('error')), { timeout: 45000 }),
+        page.getByRole('button', { name: 'Create User', exact: true }).click(),
+      ]);
+      const creationError = new URL(page.url()).searchParams.get('error');
+      assert.equal(creationError, null, `First cashier creation rejected: ${creationError}`);
       await page.getByText('User created successfully.', { exact: true }).waitFor({ timeout: 45000 });
       const cashier = await prisma.user.findFirstOrThrow({ where: { email: cashierEmail } });
       assert.equal(cashier.businessId, owner.businessId);
