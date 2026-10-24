@@ -8,17 +8,18 @@ import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import type { LabelPrintMode, LabelSize } from '@/lib/labels/types';
 
-export default async function ProductLabelsPage({
-  searchParams,
-}: {
-  searchParams?: {
-    q?: string;
-    barcode?: string;
-    category?: string;
-    page?: string;
-    select?: string;
-  };
-}) {
+export default async function ProductLabelsPage(
+  props: {
+    searchParams?: Promise<{
+      q?: string;
+      barcode?: string;
+      category?: string;
+      page?: string;
+      select?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);

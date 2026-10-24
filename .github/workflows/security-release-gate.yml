@@ -1,0 +1,26 @@
+name: Security Release Gate
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'lib/security/patched-*'
+      - 'lib/import/patched-*'
+      - '.github/workflows/security-release-gate.yml'
+permissions:
+  contents: read
+jobs:
+  patched-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Real workbook, image and email runtime regressions
+        run: npx vitest run lib/import/patched-spreadsheet.test.ts lib/security/patched-image-runtime.test.ts lib/security/patched-email-runtime.test.ts --reporter=verbose

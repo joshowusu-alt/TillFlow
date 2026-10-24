@@ -11,7 +11,7 @@ const screen = readFileSync(join(root, 'components/reports/today/TodayScreen.tsx
 
 describe('Reports Today shell', () => {
   it('replaces the card catalogue with Today and does not redirect the page to Command Center', () => {
-    expect(src).toContain('export default function ReportsPage');
+    expect(src).toContain('export default async function ReportsPage');
     expect(src).not.toContain("redirect('/reports/command-center')");
     expect(src).not.toContain("title: 'Daily Action'");
     expect(src).not.toContain('const startHereCards');

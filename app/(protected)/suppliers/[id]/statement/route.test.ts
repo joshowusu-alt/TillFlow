@@ -17,7 +17,7 @@ it('exports the full account balance separately from date-selected purchase bala
   const older = { id: 'purchase-old', createdAt: new Date('2025-01-01'), paymentStatus: 'UNPAID', totalPence: 20000, payments: [] };
   mocks.db.supplier.findFirst.mockResolvedValue({ id: 'supplier-a', name: 'Supplier A', purchaseInvoices: [selected] });
   mocks.db.purchaseInvoice.findMany.mockResolvedValue([older, selected]);
-  const response = await GET(new Request('https://example.test/suppliers/supplier-a/statement?from=2026-10-01&to=2026-10-31'), { params: { id: 'supplier-a' } });
+  const response = await GET(new Request('https://example.test/suppliers/supplier-a/statement?from=2026-10-01&to=2026-10-31'), { params: Promise.resolve({ id: 'supplier-a' }) });
   const csv = await response.text();
   expect(csv).toContain('Account balance (all purchase dates),275.00');
   expect(csv).toContain('Balance on selected purchases,75.00');
@@ -28,14 +28,14 @@ it('exports the full account balance separately from date-selected purchase bala
 });
 it('does not load account totals for a supplier outside the business', async () => {
   mocks.db.supplier.findFirst.mockResolvedValue(null);
-  const response = await GET(new Request('https://example.test/suppliers/other/statement'), { params: { id: 'other' } });
+  const response = await GET(new Request('https://example.test/suppliers/other/statement'), { params: Promise.resolve({ id: 'other' }) });
   expect(response.status).toBe(404);
   expect(mocks.db.supplier.findFirst.mock.calls[0][0].where).toEqual({ id: 'other', businessId: 'business-a' });
   expect(mocks.db.purchaseInvoice.findMany).not.toHaveBeenCalled();
 });
 it('requires an owner or manager before reading financial records', async () => {
   mocks.user.mockResolvedValue({ role: 'CASHIER', businessId: 'business-a' });
-  const response = await GET(new Request('https://example.test/suppliers/supplier-a/statement'), { params: { id: 'supplier-a' } });
+  const response = await GET(new Request('https://example.test/suppliers/supplier-a/statement'), { params: Promise.resolve({ id: 'supplier-a' }) });
   expect(response.status).toBe(307);
   expect(mocks.db.supplier.findFirst).not.toHaveBeenCalled();
 });

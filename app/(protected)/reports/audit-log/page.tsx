@@ -68,11 +68,12 @@ export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
-export default async function AuditLogPage({
-  searchParams
-}: {
-  searchParams: { action?: string; user?: string; page?: string; pageSize?: string };
-}) {
+export default async function AuditLogPage(
+  props: {
+    searchParams: Promise<{ action?: string; user?: string; page?: string; pageSize?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'audit_log',
     search: searchParams,

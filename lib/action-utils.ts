@@ -12,7 +12,7 @@ import { getBillingEntitlement } from '@/lib/billing-entitlements';
 import * as Sentry from '@sentry/nextjs';
 import { requireUser, requireRole, type Role } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { isRedirectError } from 'next/dist/client/components/redirect';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 
 // ---------------------------------------------------------------------------
 // Consistent result type

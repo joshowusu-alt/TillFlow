@@ -73,30 +73,31 @@ function catalogueUnitLabel(product: {
   });
 }
 
-export default async function ProductsPage({
-  searchParams,
-}: {
-  searchParams?: {
-    error?: string;
-    tab?: string;
-    setupCategory?: string;
-    setupDivision?: string;
-    setupGroup?: string;
-    setupAdd?: string;
-    setupSaved?: string;
-    q?: string;
-    page?: string;
-    created?: string;
-    stock?: string;
-    barcodesGenerated?: string;
-    barcodesFailed?: string;
-    missingCost?: string;
-    issue?: string;
-    category?: string;
-    division?: string;
-    group?: string;
-  };
-}) {
+export default async function ProductsPage(
+  props: {
+    searchParams?: Promise<{
+      error?: string;
+      tab?: string;
+      setupCategory?: string;
+      setupDivision?: string;
+      setupGroup?: string;
+      setupAdd?: string;
+      setupSaved?: string;
+      q?: string;
+      page?: string;
+      created?: string;
+      stock?: string;
+      barcodesGenerated?: string;
+      barcodesFailed?: string;
+      missingCost?: string;
+      issue?: string;
+      category?: string;
+      division?: string;
+      group?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const defaultMarginThresholdPercent = ((business.minimumMarginThresholdBps ?? 1500) / 100).toFixed(2);

@@ -10,10 +10,11 @@ import AccountClient from './AccountClient';
 export const dynamic = 'force-dynamic';
 
 type AccountPageProps = {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
-export async function generateMetadata({ params }: AccountPageProps): Promise<Metadata> {
+export async function generateMetadata(props: AccountPageProps): Promise<Metadata> {
+  const params = await props.params;
   const storefront = await getPublicStorefrontBySlug(params.slug);
   return {
     title: storefront ? `Your account — ${storefront.name}` : 'Your account',
@@ -21,7 +22,8 @@ export async function generateMetadata({ params }: AccountPageProps): Promise<Me
   };
 }
 
-export default async function StorefrontAccountPage({ params }: AccountPageProps) {
+export default async function StorefrontAccountPage(props: AccountPageProps) {
+  const params = await props.params;
   const storefront = await getPublicStorefrontBySlug(params.slug);
   if (!storefront) notFound();
 

@@ -4,7 +4,8 @@ import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 
-export default async function ExpenseDetailPage({params}:{params:{id:string}}){
+export default async function ExpenseDetailPage(props:{params: Promise<{id:string}>}) {
+  const params = await props.params;
   const {business}=await requireBusinessAndOptionalStore(['MANAGER','OWNER']);
   if(!business)return <div className="card p-5">Business not found.</div>;
   const expense=await prisma.expense.findFirst({where:{id:params.id,businessId:business.id},include:{account:{select:{name:true}},store:{select:{name:true}},payments:{orderBy:{paidAt:'asc'},include:{user:{select:{name:true}}}},purchaseCostInvoices:{select:{id:true,transactionNumber:true,supplierInvoiceNumber:true}}}});

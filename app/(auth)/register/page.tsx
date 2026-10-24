@@ -10,7 +10,8 @@ export const metadata = buildTillflowPublicMetadata({
   canonicalPath: '/register',
 });
 
-export default async function RegisterPage({ searchParams }: { searchParams: { error?: string; mode?: string } }) {
+export default async function RegisterPage(props: { searchParams: Promise<{ error?: string; mode?: string }> }) {
+  const searchParams = await props.searchParams;
   // If the user already has a valid session, send them to POS
   const user = await getUser();
   if (user) redirect('/pos');

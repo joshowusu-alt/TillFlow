@@ -9,7 +9,11 @@ import { COST_REVIEW_PAGE_SIZE, getProductCostReview } from '@/lib/services/prod
 
 export const dynamic = 'force-dynamic';
 
-export default async function ProductCostReviewPage({ params, searchParams }: { params: { id: string }; searchParams?: { page?: string } }) {
+export default async function ProductCostReviewPage(
+  props: { params: Promise<{ id: string }>; searchParams?: Promise<{ page?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const { business } = await requireBusiness(['OWNER', 'MANAGER']);
   const data = await getProductCostReview(business.id, params.id, historyPage(searchParams?.page));
   if (!data) notFound();

@@ -31,11 +31,12 @@ function buildExportHref(
   return `${path}?${params.toString()}`;
 }
 
-export default async function ExportsPage({
-  searchParams,
-}: {
-  searchParams?: { period?: string; from?: string; to?: string };
-}) {
+export default async function ExportsPage(
+  props: {
+    searchParams?: Promise<{ period?: string; from?: string; to?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({ surfaceId: 'exports_hub', search: searchParams });
   if (!opened.ok) return opened.denial;
   const { business } = opened;

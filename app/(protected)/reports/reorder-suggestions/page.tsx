@@ -33,11 +33,12 @@ const urgencyTone = {
   OK: 'success' as const,
 };
 
-export default async function ReorderSuggestionsPage({
-  searchParams
-}: {
-  searchParams: QueryParams;
-}) {
+export default async function ReorderSuggestionsPage(
+  props: {
+    searchParams: Promise<QueryParams>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'reorder_suggestions',
     search: searchParams,

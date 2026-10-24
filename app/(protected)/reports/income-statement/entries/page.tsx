@@ -9,9 +9,12 @@ import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/report
 import { getIncomeStatementBreakdown } from '@/lib/reports/financials';
 import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, isIncomeStatementMetric, selectIncomeStatementEntries } from '@/lib/reports/income-statement-breakdown';
 
-export default async function IncomeStatementEntriesPage({ searchParams }: {
-  searchParams?: { from?: string; to?: string; metric?: string; page?: string; businessId?: string; storeId?: string };
-}) {
+export default async function IncomeStatementEntriesPage(
+  props: {
+    searchParams?: Promise<{ from?: string; to?: string; metric?: string; page?: string; businessId?: string; storeId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({ surfaceId: 'income_statement', search: searchParams,
     range: ({ timezone, now }) => {
       if (searchParams?.from && searchParams?.to) return { fromLocalDate: searchParams.from, toLocalDate: searchParams.to, preset: 'CUSTOM' };
