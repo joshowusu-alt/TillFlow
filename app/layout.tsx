@@ -1,22 +1,10 @@
 ﻿import './globals.css';
 import type { Metadata, Viewport } from 'next';
-import { Plus_Jakarta_Sans, DM_Sans } from 'next/font/google';
+import './fonts.css';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import NetworkStatus from '@/components/NetworkStatus';
 import ToastProvider from '@/components/ToastProvider';
 import KeyboardViewportBridge from '@/components/KeyboardViewportBridge';
-
-const displayFont = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
-  variable: '--font-display'
-});
-
-const bodyFont = DM_Sans({
-  subsets: ['latin'],
-  weight: ['300', '400', '500'],
-  variable: '--font-sans'
-});
 
 export const metadata: Metadata = {
   title: {
@@ -58,8 +46,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${displayFont.variable} ${bodyFont.variable} scroll-smooth`} style={{ backgroundColor: '#F8FBFF' }}>
+    <html lang="en" className="scroll-smooth" style={{ backgroundColor: '#F8FBFF' }}>
       <head>
+        <link rel="preload" href="/fonts/plus-jakarta-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         {/* Critical background painted before any CSS or React loads — prevents black flash */}
         <style dangerouslySetInnerHTML={{ __html: `html,body{background-color:#F8FBFF}` }} />
         {/* Apple PWA startup images — shown by iOS immediately on cold launch, before the WebView
