@@ -84,7 +84,11 @@ async function main() {
         await firstPage.waitForURL(url => !url.pathname.startsWith('/login'), { timeout: 60000 });
         assert((await firstLogin.cookies()).some(cookie => cookie.name === `pos_session_${owner.businessId}` && cookie.httpOnly));
         await firstPage.goto('/users');
-        assert.notEqual(new URL(firstPage.url()).pathname, '/users');
+        // App Router may stream the access-denial redirect after the document
+        // load event. Wait for its actual destination; a transient URL alone
+        // is not an authorisation result.
+        await firstPage.waitForURL(url => url.pathname === '/pos', { timeout: 45000 });
+        assert.equal(await firstPage.getByRole('button', { name: 'Create User', exact: true }).count(), 0);
         results.push('PASS newly onboarded cashier password login and owner-route denial');
       } finally { await firstLogin.close(); }
 
@@ -153,6 +157,7 @@ async function main() {
             }
           }
           await page.goto('/suppliers');
+          await page.waitForURL(url => !url.pathname.startsWith('/suppliers'), { timeout: 45000 });
           assert(!new URL(page.url()).pathname.startsWith('/suppliers'), 'Cashier must not read supplier management');
           results.push(`PASS cashier supplier-route denial ${role}`);
         } else {
