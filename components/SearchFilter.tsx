@@ -3,7 +3,7 @@
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
-export default function SearchFilter({ placeholder = 'Search…', documentNavigation = false }: { placeholder?: string; documentNavigation?: boolean }) {
+export default function SearchFilter({ placeholder = 'Search…', documentNavigation = true }: { placeholder?: string; documentNavigation?: boolean }) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
@@ -52,7 +52,7 @@ export default function SearchFilter({ placeholder = 'Search…', documentNaviga
         // A real GET also clears the stored-list restore intent, so clearing
         // the last query cannot silently restore the old search on remount.
         <a aria-label="Clear search" className="text-sm font-semibold text-accent"
-          href={(() => { const params = new URLSearchParams(searchParams?.toString()); params.delete('q'); params.delete('page'); params.set('resetClassification', '1'); return `${pathname}?${params}`; })()}>Clear</a>
+          href={(() => { const params = new URLSearchParams(searchParams?.toString()); params.delete('q'); params.delete('page'); params.set('resetList', '1'); return `${pathname}?${params}`; })()}>Clear</a>
       ) : value ? (
         <button
           type="button"
@@ -70,8 +70,8 @@ export default function SearchFilter({ placeholder = 'Search…', documentNaviga
   );
   if (!documentNavigation) return content;
   return <form method="get" action={pathname ?? ''} role="search">
-    {[...(searchParams?.entries() ?? [])].filter(([key]) => !['q', 'page', 'success', 'error', 'resetClassification'].includes(key)).map(([key, value]) => <input key={key} type="hidden" name={key} value={value} />)}
-    <input type="hidden" name="resetClassification" value="1" />
+    {[...(searchParams?.entries() ?? [])].filter(([key]) => !['q', 'page', 'success', 'error', 'resetClassification', 'resetList'].includes(key)).map(([key, value]) => <input key={key} type="hidden" name={key} value={value} />)}
+    <input type="hidden" name="resetList" value="1" />
     {content}
   </form>;
 }

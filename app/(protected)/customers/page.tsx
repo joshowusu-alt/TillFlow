@@ -362,6 +362,7 @@ export default async function CustomersPage(
           </table>
         </div>
         <Pagination
+          documentNavigation
           currentPage={page}
           totalPages={totalPages}
           basePath="/customers"

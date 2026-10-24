@@ -31,6 +31,7 @@ export default function Pagination({
       if (v && k !== 'page') params.set(k, v);
     }
     if (page > 1) params.set('page', String(page));
+    if (documentNavigation) params.set('resetList', '1');
     if (hasPageSize) params.set('pageSize', String(pageSize));
     const qs = params.toString();
     return `${basePath}${qs ? `?${qs}` : ''}`;

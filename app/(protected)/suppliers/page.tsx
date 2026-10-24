@@ -402,6 +402,7 @@ export default async function SuppliersPage(
         </div>
         <ShowingRange page={page} pageSize={DEFAULT_PAGE_SIZE} total={totalCount} noun="suppliers" />
         <Pagination
+          documentNavigation
           currentPage={page}
           totalPages={totalPages}
           basePath="/suppliers"

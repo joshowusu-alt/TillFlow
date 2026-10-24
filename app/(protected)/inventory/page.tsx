@@ -310,7 +310,7 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
             </tbody>
           </table>
         </div>
-        <Pagination currentPage={page} totalPages={totalPages} basePath="/inventory" searchParams={{ q: q || undefined }} />
+        <Pagination documentNavigation currentPage={page} totalPages={totalPages} basePath="/inventory" searchParams={{ q: q || undefined }} />
       </div>
     </div>
   );

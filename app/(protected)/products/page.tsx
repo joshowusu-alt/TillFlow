@@ -782,7 +782,6 @@ export default async function ProductsPage(
               totalPages={totalProductPages}
               basePath="/products"
               searchParams={{
-                resetClassification: '1',
                 q: q || undefined,
                 category: searchParams?.category,
                 division: searchParams?.division,

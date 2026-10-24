@@ -105,6 +105,28 @@ async function main() {
         const cookies = await context.cookies();
         assert(cookies.some(cookie => cookie.name === `pos_session_${fixture.businessId}` && cookie.httpOnly));
         results.push(`PASS real password login ${role}`);
+        if (role === 'owner') {
+          for (const [route, placeholder, name] of [
+            ['/suppliers', 'Search suppliers…', fixture.supplier.name],
+            ['/customers', 'Search customers by name...', fixture.customer.name],
+            ['/inventory', 'Search products…', fixture.products[0].name],
+          ]) {
+            await page.goto(route);
+            await page.getByPlaceholder(placeholder, { exact: true }).fill(name);
+            await page.getByRole('button', { name: 'Search', exact: true }).click();
+            await page.waitForURL(url => url.pathname === route && url.searchParams.get('q') === name);
+            await page.getByText(name, { exact: true }).first().waitFor();
+            await page.getByPlaceholder(placeholder, { exact: true }).fill(`absent-${fixture.run}`);
+            await page.getByRole('button', { name: 'Search', exact: true }).click();
+            await page.waitForURL(url => url.searchParams.get('q') === `absent-${fixture.run}`);
+            await page.getByPlaceholder(placeholder, { exact: true }).waitFor();
+            assert.equal(await page.getByText(name, { exact: true }).count(), 0);
+            await page.getByRole('link', { name: 'Clear search', exact: true }).click();
+            await page.waitForURL(url => url.pathname === route && !url.searchParams.has('q'));
+            await page.getByText(name, { exact: true }).first().waitFor();
+            results.push(`PASS persisted ${route} search, no-result and explicit clear`);
+          }
+        }
         const store = fixture.stores[role === 'cashier2' ? 1 : 0];
         // Device branch selection, never an authentication/session cookie forgery.
         await context.addCookies([{ name: 'tillflow_operational_store', value: store.id, url: baseURL }]);
