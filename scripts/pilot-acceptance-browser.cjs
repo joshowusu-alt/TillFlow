@@ -127,7 +127,10 @@ async function main() {
             exact.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'direct'),
             mobileCart.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'mobile'),
           ]) : cartMode;
-          if (checkoutMode === 'mobile') await mobileCart.click();
+          if (checkoutMode === 'mobile') {
+            await mobileCart.click();
+            await page.getByRole('button', { name: /Continue to payment/i }).click();
+          }
           const till = page.locator('#pos-till-select');
           await till.waitFor({ state: 'visible' });
           await till.selectOption(store.tillId);

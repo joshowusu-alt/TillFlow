@@ -701,11 +701,17 @@ async function run() {
     await page.goto(`${BASE_URL}/products?q=${cascadeSearch}&page=4`, { waitUntil: 'networkidle' });
     const catalogueNav = page.getByRole('navigation', { name: 'Browse catalogue classification', exact: true });
     await catalogueNav.getByRole('link').filter({ hasText: classificationCategoryName.trim() }).click();
-    await page.waitForURL(url => url.searchParams.get('category') === classificationCategoryId && !url.searchParams.has('page'));
+    await page.waitForURL(url => url.searchParams.get('category') === classificationCategoryId && !url.searchParams.has('page'), { waitUntil: 'commit' });
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: classificationCategoryName.trim() }).waitFor();
+    step('BONUS Catalogue category selection committed');
     await catalogueNav.getByRole('link').filter({ hasText: divisionName }).click();
-    await page.waitForURL(url => url.searchParams.get('division') === classificationDivisionId);
+    await page.waitForURL(url => url.searchParams.get('division') === classificationDivisionId, { waitUntil: 'commit' });
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: divisionName }).waitFor();
+    step('BONUS Catalogue division selection committed');
     await catalogueNav.getByRole('link').filter({ hasText: groupName }).click();
-    await page.waitForURL(url => url.searchParams.get('group') === classificationGroup.id);
+    await page.waitForURL(url => url.searchParams.get('group') === classificationGroup.id, { waitUntil: 'commit' });
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: groupName }).waitFor();
+    step('BONUS Catalogue group selection committed');
     if (new URL(page.url()).searchParams.get('q') !== classifiedProduct.name) throw new Error('Catalogue hierarchy lost search');
     const catalogueGroupLink = catalogueNav.getByRole('link').filter({ hasText: groupName });
     const expectedCatalogueCount = await prisma.product.count({ where: { businessId: reportOwner.businessId, active: true, categoryId: classificationCategoryId, groupId: classificationGroup.id } });
@@ -717,9 +723,12 @@ async function run() {
       await screenshotStep(page, `catalogue-hierarchy-${width}`);
     }
     await catalogueNav.getByRole('link', { name: /^All categories/ }).click();
-    await page.waitForURL(url => !url.searchParams.has('category') && !url.searchParams.has('division') && !url.searchParams.has('group'));
-    await page.goBack();
-    await page.waitForURL(url => url.searchParams.get('group') === classificationGroup.id);
+    await page.waitForURL(url => !url.searchParams.has('category') && !url.searchParams.has('division') && !url.searchParams.has('group'), { waitUntil: 'commit' });
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: 'All categories' }).waitFor();
+    step('BONUS Catalogue filters cleared');
+    await page.goBack({ waitUntil: 'commit' });
+    await page.waitForURL(url => url.searchParams.get('group') === classificationGroup.id, { waitUntil: 'commit' });
+    await catalogueNav.locator('a[aria-current="page"]').filter({ hasText: groupName }).waitFor();
     step('BONUS Cascading catalogue navigation OK');
     await page.goto(`${BASE_URL}/reports/analytics`, { waitUntil: 'networkidle' });
     await page.locator('[data-classification-disclosure] > summary').click();
