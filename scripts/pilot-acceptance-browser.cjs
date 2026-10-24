@@ -63,7 +63,12 @@ async function main() {
       ]);
       const creationError = new URL(page.url()).searchParams.get('error');
       assert.equal(creationError, null, `First cashier creation rejected: ${creationError}`);
-      await page.getByText('User created successfully.', { exact: true }).waitFor({ timeout: 45000 });
+      try {
+        await page.getByText('User created successfully.', { exact: true }).waitFor({ timeout: 15000 });
+      } catch (error) {
+        const persisted = await prisma.user.findFirst({ where: { email: cashierEmail }, select: { active: true, role: true } });
+        throw new Error(`First-cashier feedback missing: ${JSON.stringify({ path: new URL(page.url()).pathname, success: new URL(page.url()).searchParams.get('success'), persisted, visiblePage: (await page.locator('body').innerText()).slice(0, 1200) })}`);
+      }
       const cashier = await prisma.user.findFirstOrThrow({ where: { email: cashierEmail } });
       assert.equal(cashier.businessId, owner.businessId);
       assert.equal(cashier.role, 'CASHIER');

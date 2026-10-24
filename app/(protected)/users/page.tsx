@@ -217,6 +217,7 @@ export default async function UsersPage(
                   {user.id !== owner.id && (
                     <form action={toggleUserActiveAction}>
                       <input type="hidden" name="userId" value={user.id} />
+                      <input type="hidden" name="active" value={String(!user.active)} />
                       <button
                         type="submit"
                         className={`btn-ghost text-xs ${user.active ? 'text-red-500' : 'text-emerald-600'}`}
@@ -278,6 +279,7 @@ export default async function UsersPage(
                       {user.id !== owner.id && (
                         <form action={toggleUserActiveAction} className="inline">
                           <input type="hidden" name="userId" value={user.id} />
+                          <input type="hidden" name="active" value={String(!user.active)} />
                           <button
                             type="submit"
                             className={`text-xs ${
