@@ -50,7 +50,7 @@ function getDB(): Promise<IDBPDatabase> {
 
 function scopedToActiveBusiness(record: StoredDeadLetterValue): boolean {
   const activeBusinessId = getClientActiveBusinessId() ?? null;
-  if (!activeBusinessId) return true;
+  if (!activeBusinessId) return false;
   return record.payload?.businessId === activeBusinessId;
 }
 
@@ -86,6 +86,8 @@ export async function getDeadLetterCount(): Promise<number> {
 
 /** Remove a dead-lettered sale without retrying. */
 export async function removeDeadLetterSale(key: number): Promise<void> {
+  const records = await getDeadLetterSales();
+  if (!records.some((record) => record.key === key)) return;
   const db = await getDB();
   await db.delete(STORE_NAME, key);
 }
@@ -111,6 +113,7 @@ export type RetryOutcome =
  * other response we leave it in place so the owner can inspect and decide.
  */
 export async function retryDeadLetterSale(record: DeadLetterRecord): Promise<RetryOutcome> {
+  if (!scopedToActiveBusiness(record)) return { ok: false, statusCode: 403, error: 'Business scope required' };
   try {
     const response = await fetch('/api/offline/sync-sale', {
       method: 'POST',

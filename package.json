@@ -53,7 +53,7 @@
     "test:migration:slice2b:pg": "vitest run --reporter=dot lib/services/migration/slice2b-pg.integration.test.ts"
   },
   "engines": {
-    "node": ">=18 <24"
+    "node": "22.x"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
