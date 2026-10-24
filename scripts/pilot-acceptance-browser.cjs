@@ -144,6 +144,7 @@ async function main() {
           assert.equal(sale.payments.reduce((sum, p) => sum + p.amountPence, 0), 5000);
           assert.equal((await prisma.shift.findUniqueOrThrow({ where: { id: store.shiftId } })).expectedCashPence, 25000);
           await page.goto(`/receipts/${sale.id}`);
+          await page.getByText(/50[.,]00/).first().waitFor({ state: 'visible', timeout: 45000 });
           assert.match(await page.locator('body').innerText(), /50[.,]00/);
           results.push(`PASS barcode keyboard checkout, receipt and persisted cash ${role}`);
           if (role === 'cashier2') {
@@ -169,6 +170,7 @@ async function main() {
           await page.goto('/suppliers');
           await page.waitForURL(url => !url.pathname.startsWith('/suppliers'), { timeout: 45000 });
           assert(!new URL(page.url()).pathname.startsWith('/suppliers'), 'Cashier must not read supplier management');
+          await page.getByRole('textbox', { name: 'Scan barcode', exact: true }).waitFor({ state: 'visible', timeout: 45000 });
           results.push(`PASS cashier supplier-route denial ${role}`);
         } else {
           if (role === 'owner') {
@@ -191,6 +193,7 @@ async function main() {
           }
           for (const route of ['/products','/purchases','/suppliers','/reports/dashboard']) {
             await page.goto(route);
+            await page.getByRole('heading', { level: 1 }).first().waitFor({ state: 'visible', timeout: 45000 });
             const body = await page.locator('body').innerText();
             assert(!/Application error|server-side exception|Unhandled Runtime Error/i.test(body), `${role} ${route}`);
             assert(!new URL(page.url()).pathname.startsWith('/login'), `${role} session lost`);
