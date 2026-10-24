@@ -115,7 +115,9 @@ async function main() {
             await page.getByPlaceholder(placeholder, { exact: true }).fill(name);
             await page.getByRole('button', { name: 'Search', exact: true }).click();
             await page.waitForURL(url => url.pathname === route && url.searchParams.get('q') === name);
-            await page.getByText(name, { exact: true }).first().waitFor();
+            // Responsive lists render both card and table copies. Assert the
+            // visible record rather than waiting on the first (hidden) copy.
+            await page.getByText(name, { exact: true }).filter({ visible: true }).first().waitFor();
             await page.getByPlaceholder(placeholder, { exact: true }).fill(`absent-${fixture.run}`);
             await page.getByRole('button', { name: 'Search', exact: true }).click();
             await page.waitForURL(url => url.searchParams.get('q') === `absent-${fixture.run}`);
@@ -123,7 +125,7 @@ async function main() {
             assert.equal(await page.getByText(name, { exact: true }).count(), 0);
             await page.getByRole('link', { name: 'Clear search', exact: true }).click();
             await page.waitForURL(url => url.pathname === route && !url.searchParams.has('q'));
-            await page.getByText(name, { exact: true }).first().waitFor();
+            await page.getByText(name, { exact: true }).filter({ visible: true }).first().waitFor();
             results.push(`PASS persisted ${route} search, no-result and explicit clear`);
           }
         }
