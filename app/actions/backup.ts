@@ -8,7 +8,7 @@ import { isPostgresRuntimeEnv } from '@/lib/database-runtime';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
-import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, safeAction, ok, err, UserError, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import { ACTIVE_BUSINESS_COOKIE, SESSION_COOKIE_PREFIX } from '@/lib/business-scope';
 import { parseOptionalReceiptOrigin } from '@/lib/payments/receipt-origin';
@@ -244,9 +244,6 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
     const currentOwner = await prisma.user.findFirst({ where: { id: user.id, businessId, role: 'OWNER', active: true }, select: { passwordHash: true, twoFactorEnabled: true, twoFactorSecret: true, twoFactorTempSecret: true, approvalPinHash: true } });
     if (!backup.users.some(restored => restored.id === user.id && restored.email === user.email && restored.active !== false)) return err('The backup must retain the restoring owner email and active status.');
     if (!currentOwner) return err('An active owner account is required for recovery.');
-    // Do not destroy unsupported workflows that this core-trading snapshot cannot restore.
-    const unsupported = await Promise.all([prisma.onlineOrder.count({ where: { businessId } }), prisma.migrationPackage.count({ where: { businessId } }), prisma.productImport.count({ where: { businessId } })]);
-    if (unsupported.some(Boolean)) return err('This business has storefront, migration or import-history records requiring an operator-assisted full recovery. No records were changed.');
     const users = Array.isArray(backup.users) ? backup.users : [];
     const hasOwner = users.some((u) => String(u?.role || '').toUpperCase() === 'OWNER');
     if (!hasOwner) {
@@ -271,6 +268,20 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
 
     // Atomic restore: wipe + re-insert in one transaction so a partial failure rolls back fully.
     await prisma.$transaction(async (tx) => {
+      // Do not destroy unsupported workflows that this core-trading snapshot cannot restore.
+      const unsupported = await Promise.all([
+        tx.onlineOrder.count({ where: { businessId } }),
+        tx.migrationPackage.count({ where: { businessId } }),
+        tx.productImport.count({ where: { businessId } }),
+        tx.stocktake.count({ where: { store: { businessId } } }),
+        tx.device.count({ where: { businessId } }),
+        tx.branch.count({ where: { businessId } }),
+        tx.organization.count({ where: { businessId } }),
+      ]);
+      if (unsupported.some(Boolean)) throw new UserError('This business has records outside this trading snapshot requiring an operator-assisted full recovery. No records were changed.');
+      // Audit history is authoritative server-side evidence, never backup
+      // input. Keep it; optional user links are restored after users return.
+      const auditLinks = await tx.auditLog.findMany({ where: { businessId }, select: { id: true, userId: true } });
       // Clear only this business data (multi-tenant safe) in FK-safe order.
       await tx.moneyIdempotency.deleteMany({ where: { businessId } });
       await tx.businessSequence.deleteMany({ where: { businessId } });
@@ -313,7 +324,6 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       await tx.customer.deleteMany({ where: { businessId } });
       await tx.supplier.deleteMany({ where: { businessId } });
       await tx.account.deleteMany({ where: { businessId } });
-      await tx.auditLog.deleteMany({ where: { businessId } });
       await tx.device.deleteMany({ where: { businessId } });
       await tx.branch.deleteMany({ where: { businessId } });
       await tx.organization.deleteMany({ where: { businessId } });
@@ -394,6 +404,10 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
             ...(restoredUser.id === user.id ? currentOwner : {}),
           }
         });
+      }
+      const restoredUserIds = new Set(users.map(row => row.id));
+      for (const row of auditLinks) {
+        if (row.userId && restoredUserIds.has(row.userId)) await tx.auditLog.update({ where: { id: row.id }, data: { userId: row.userId } });
       }
 
       for (const customer of list(backup.customers)) {
@@ -545,7 +559,7 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       for (const row of list(backup.dayClosures)) await tx.dayClosure.create({ data: row });
       for (const row of list(backup.openingBalances)) await tx.openingBalance.create({ data: row });
 
-    }, { timeout: 60000, maxWait: 10000 });
+    }, { timeout: 60000, maxWait: 10000, isolationLevel: 'Serializable' });
 
     // Imported users have random temporary passwords and sessions were cleared.
     const cookieStore = await cookies();

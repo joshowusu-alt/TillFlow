@@ -87,10 +87,12 @@ runPg('pilot financial recovery from complete application export', () => {
   });
 
   it('roundtrips drawer/stock/ledger/payment evidence, replay keys and owner access', async () => {
+    const auditEvidence = await prisma.auditLog.create({ data: { businessId: fixture.businessId, userId: auth.owner.id, userName: 'Fictional owner', userRole: 'OWNER', action: 'RECOVERY_FIXTURE', details: 'Retain existing audit evidence across recovery' } });
     const before = await controls();
     const restored = await backup.importDatabaseAction(snapshot);
     expect(restored).toMatchObject({ success: true });
     expect(await controls()).toEqual(before);
+    expect(await prisma.auditLog.findUniqueOrThrow({ where: { id: auditEvidence.id } })).toEqual(auditEvidence);
     expect((await prisma.user.findUniqueOrThrow({ where: { id: auth.owner.id } })).passwordHash).toBe(ownerHash);
     expect(await prisma.user.findUniqueOrThrow({ where: { id: auth.owner.id } })).toMatchObject({ twoFactorEnabled: true, twoFactorSecret: 'FICTIONAL-FACTOR', approvalPinHash: 'FICTIONAL-PIN-HASH' });
     // Older SQLite writers store the primary on Product, without a trigger-
@@ -102,6 +104,29 @@ runPg('pilot financial recovery from complete application export', () => {
     const sale = snapshot.salesInvoices.find((row: any) => row.customerId === fixture.customer.id);
     await payments.recordCustomerPayment(fixture.businessId, sale.id, [{ method: 'CASH', amountPence: 1000 }], fixture.users.cashier1.id, { idempotencyKey: 'recovery-receipt' });
     expect(await controls()).toEqual(before);
+  }, 60000);
+
+  it('refuses unsupported stocktake and branch/device records without deleting them', async () => {
+    const businessId = fixture.businessId;
+    const stocktake = await prisma.stocktake.create({ data: { storeId: fixture.stores[0].id, userId: auth.owner.id, notes: 'Fictional protected stocktake' } });
+    const organization = await prisma.organization.create({ data: { businessId, name: 'Fictional protected organization' } });
+    const branch = await prisma.branch.create({ data: { businessId, organizationId: organization.id, storeId: fixture.stores[0].id, name: 'Fictional protected branch' } });
+    const device = await prisma.device.create({ data: { businessId, branchId: branch.id, organizationId: organization.id, userId: auth.owner.id, label: 'Fictional protected device', deviceKey: `recovery-${businessId}` } });
+    try {
+      const before = await controls();
+      const result = await backup.importDatabaseAction(snapshot);
+      expect(result).toMatchObject({ success: false, error: expect.stringContaining('operator-assisted') });
+      expect(await controls()).toEqual(before);
+      expect(await prisma.stocktake.findUniqueOrThrow({ where: { id: stocktake.id } })).toEqual(stocktake);
+      expect(await prisma.device.findUniqueOrThrow({ where: { id: device.id } })).toEqual(device);
+      expect(await prisma.branch.findUniqueOrThrow({ where: { id: branch.id } })).toEqual(branch);
+      expect(await prisma.organization.findUniqueOrThrow({ where: { id: organization.id } })).toEqual(organization);
+    } finally {
+      await prisma.device.delete({ where: { id: device.id } });
+      await prisma.branch.delete({ where: { id: branch.id } });
+      await prisma.organization.delete({ where: { id: organization.id } });
+      await prisma.stocktake.delete({ where: { id: stocktake.id } });
+    }
   }, 60000);
 
   it('rolls back every deletion if insertion fails during restore', async () => {
