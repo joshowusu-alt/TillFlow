@@ -36,7 +36,7 @@ import { resolveBranchIdForStore } from './branches';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS, appLog } from '@/lib/observability';
 import { isSqliteDatabaseUrl } from '@/lib/database-runtime';
 import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
-import { reserveNextDocumentNumber } from './document-numbers';
+import { reserveNextDocumentNumber, reserveNextSequenceValue } from './document-numbers';
 import { unstable_cache } from 'next/cache';
 import { checkoutContextTag } from '@/lib/cache/pos-tags';
 
@@ -242,28 +242,10 @@ async function reserveNextInvoiceNumber(
   const initialNextVal =
     (parseInvoiceSequenceValue(latestInvoice?.transactionNumber) ?? 0) + 1;
 
-  try {
-    const createdSequence = await tx.businessSequence.create({
-      data: {
-        businessId,
-        sequenceName: 'invoice',
-        nextVal: initialNextVal,
-      },
-      select: { nextVal: true },
-    });
-    return createdSequence.nextVal;
-  } catch (error) {
-    if (!isPrismaUniqueConstraintOn(error, ['businessId', 'sequenceName'])) {
-      throw error;
-    }
-
-    const updatedSequence = await tx.businessSequence.update({
-      where: sequenceWhere,
-      data: { nextVal: { increment: 1 } },
-      select: { nextVal: true },
-    });
-    return updatedSequence.nextVal;
-  }
+  // A caught unique violation still aborts a PostgreSQL transaction. Use the
+  // same atomic upsert as other document numbers; preserve historical invoices
+  // as the initial floor when this business has not yet created a sequence.
+  return reserveNextSequenceValue(tx, businessId, 'invoice', initialNextVal);
 }
 
 type SaleCostProduct = {

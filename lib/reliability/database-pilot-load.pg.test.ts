@@ -56,16 +56,25 @@ describePg('database pilot: six concurrent cashiers, three businesses, five pool
       const product = await prisma.product.create({ data: { businessId: business.id, name: 'Fictional Rice', sellingPriceBasePence: 5000, defaultCostBasePence: 1000 } });
       const unit = await prisma.unit.create({ data: { name: `Load unit ${nonce}-${businessIndex}`, pluralName: 'Load units' } }); unitIds.push(unit.id);
       await prisma.productUnit.create({ data: { productId: product.id, unitId: unit.id, isBaseUnit: true, conversionToBase: 1 } });
+      // A mini-mart catalogue, not a one-row query benchmark. Trade the first
+      // item but load/search alongside 249 other fictional stocked products.
+      const otherProducts = Array.from({ length: 249 }, (_, index) => ({
+        id: `load-product-${nonce}-${businessIndex}-${index}`, businessId: business.id,
+        name: `Fictional item ${String(index).padStart(3, '0')}`, sellingPriceBasePence: 2500, defaultCostBasePence: 1000,
+      }));
+      await prisma.product.createMany({ data: otherProducts });
+      await prisma.productUnit.createMany({ data: otherProducts.map(row => ({ productId: row.id, unitId: unit.id, isBaseUnit: true, conversionToBase: 1 })) });
       await accounting.ensureChartOfAccounts(business.id, prisma);
       for (let storeIndex = 0; storeIndex < 2; storeIndex++) {
         const store = await prisma.store.create({ data: { businessId: business.id, name: `Fictional branch ${storeIndex}` } });
         const till = await prisma.till.create({ data: { storeId: store.id, name: `Fictional till ${storeIndex}` } });
         const user = await prisma.user.create({ data: { businessId: business.id, name: `Fictional cashier ${storeIndex}`, email: `load-cashier-${nonce}-${businessIndex}-${storeIndex}@example.invalid`, role: 'CASHIER', passwordHash: 'not-a-login' } });
         await prisma.inventoryBalance.create({ data: { storeId: store.id, productId: product.id, qtyOnHandBase: 1000, avgCostBasePence: 1000, knownValuePence: 1000000, unvaluedQtyBase: 0 } });
+        await prisma.inventoryBalance.createMany({ data: otherProducts.map(row => ({ storeId: store.id, productId: row.id, qtyOnHandBase: 20, avgCostBasePence: 1000, knownValuePence: 20000, unvaluedQtyBase: 0 })) });
         const opened = await shifts.performShiftOpen({ businessId: business.id, storeId: store.id, tillId: till.id, openingCashPence: 20000, actor: { userId: user.id, userName: user.name, userRole: 'CASHIER' } });
         actors.push({ businessId: business.id, storeId: store.id, tillId: till.id, userId: user.id, supplierId: supplier.id, productId: product.id, unitId: unit.id, shiftId: opened.id });
       }
-      await accounting.postJournalEntry({ businessId: business.id, description: 'Fictional fixture opening', prismaClient: prisma, lines: [{ accountCode: '1200', debitPence: 2000000 }, { accountCode: '1000', debitPence: 40000 }, { accountCode: '3000', creditPence: 2040000 }] });
+      await accounting.postJournalEntry({ businessId: business.id, description: 'Fictional fixture opening', prismaClient: prisma, lines: [{ accountCode: '1200', debitPence: 11960000 }, { accountCode: '1000', debitPence: 40000 }, { accountCode: '3000', creditPence: 12000000 }] });
       void owner;
     }
     const observerTarget = new URL(target);
@@ -198,7 +207,8 @@ describePg('database pilot: six concurrent cashiers, three businesses, five pool
     const rejected = results.filter(result => result.status === 'rejected');
     console.info('PILOT_OUTER_TRANSACTION_METRICS', JSON.stringify({ workers: 5, poolLimit: 5,
       durationMs: performance.now() - started, success: results.length - rejected.length,
-      errors: rejected.map(result => result.status === 'rejected' ? String(result.reason) : '') }));
+      errors: rejected.map(result => result.status === 'rejected'
+        ? { code: result.reason?.code ?? null, message: String(result.reason) } : null) }));
     expect(arrived).toBe(5);
     expect(rejected).toEqual([]);
     for (const actor of actors.slice(0, 5)) {
