@@ -205,8 +205,12 @@ HTTP latency through supervised opening/close. Halt for the stop conditions abov
 
 ## Safe fallback procedure
 
-Immutable fallback source:9a5289d00c231cfe96296e0599ee173309eeec77, based on the
-previous passing dcdf73eb plus the same manual-payment guard. Independent production
+Immutable fallback source:38fbfef1ae6dd0f184d385a03177b23f01313dc1, based on the
+previous passing dcdf73eb plus the same manual-payment guard and typed-query
+preservation fix. The search regression first reproduced two failures when an
+unchanged query arrived in a new navigation snapshot; query-value dependencies
+and a native uncontrolled GET input preserve text. No wait/assertion was weakened.
+Independent production
 build and same-origin candidate -> fallback -> candidate native IndexedDB/real
 PostgreSQL test are mandatory in the final fictional-business job. It covers a
 503 capture, lost acknowledgement AFTER real commit, two queued identities,

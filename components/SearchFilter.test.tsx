@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 const { replace, params } = vi.hoisted(() => ({ replace: vi.fn(), params: new URLSearchParams('q=Rice&page=3&category=food&division=grain') }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }), usePathname: () => '/products', useSearchParams: () => params }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }), usePathname: () => '/products', useSearchParams: () => new URLSearchParams(params.toString()) }));
 import SearchFilter from './SearchFilter';
 afterEach(() => { vi.useRealTimers(); vi.clearAllMocks(); });
 it('submits shared list search as a GET, retaining hierarchy and removing the stale page', () => {
@@ -27,4 +27,11 @@ it('supports debounced router search when a caller explicitly requests it', () =
   fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Soap' } });
   vi.advanceTimersByTime(300);
   expect(replace).toHaveBeenCalledWith('/products?q=Soap&category=food&division=grain', { scroll: false });
+});
+it('preserves typed document search across an unchanged-query navigation snapshot', () => {
+  const { rerender } = render(<SearchFilter />);
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Soap' } });
+  rerender(<SearchFilter />);
+  expect(screen.getByRole('searchbox')).toHaveValue('Soap');
+  expect(new FormData(screen.getByRole('search') as HTMLFormElement).get('q')).toBe('Soap');
 });

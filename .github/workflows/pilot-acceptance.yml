@@ -93,7 +93,7 @@ jobs:
       - name: Checkout immutable v4 fallback
         uses: actions/checkout@v4
         with:
-          ref: 9a5289d00c231cfe96296e0599ee173309eeec77
+          ref: 38fbfef1ae6dd0f184d385a03177b23f01313dc1
           path: .pilot-fallback
           persist-credentials: false
       - name: Independently build fallback on Node22 and PostgreSQL

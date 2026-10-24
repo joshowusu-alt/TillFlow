@@ -8,11 +8,12 @@ export default function SearchFilter({ placeholder = 'Search…', documentNaviga
   const pathname = usePathname();
   const router = useRouter();
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
-  const [value, setValue] = useState(searchParams?.get('q') ?? '');
+  const query = searchParams?.get('q') ?? '';
+  const [value, setValue] = useState(query);
 
   useEffect(() => {
-    setValue(searchParams?.get('q') ?? '');
-  }, [searchParams]);
+    setValue(query);
+  }, [query]);
 
   function handleChange(v: string) {
     setValue(v);
@@ -41,11 +42,14 @@ export default function SearchFilter({ placeholder = 'Search…', documentNaviga
         <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M16 10.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0Z" />
       </svg>
       <input
+        key={documentNavigation ? query : 'router-search'}
         className="min-w-0 w-full flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
         type="search"
         name="q"
         placeholder={placeholder}
-        value={value}
+        // Native GET reads the DOM value, including text entered before hydration.
+        // A new search-params object with the same query must not erase typing.
+        {...(documentNavigation ? { defaultValue: query } : { value })}
         onChange={(e) => handleChange(e.target.value)}
       />
       {value && documentNavigation ? (
