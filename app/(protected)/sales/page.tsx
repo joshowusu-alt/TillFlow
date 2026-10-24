@@ -12,11 +12,12 @@ import { localDateInstant } from '@/lib/reports/reporting-clock';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { MomoPendingQualification } from '@/components/MomoPendingQualification';
 
-export default async function SalesPage({
-  searchParams,
-}: {
-  searchParams?: { q?: string; page?: string; storeId?: string; from?: string; to?: string };
-}) {
+export default async function SalesPage(
+  props: {
+    searchParams?: Promise<{ q?: string; page?: string; storeId?: string; from?: string; to?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {
     return (

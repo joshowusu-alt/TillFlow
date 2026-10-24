@@ -3,7 +3,8 @@ import { prisma } from '@/lib/prisma';
 import ReceiptClient from './ReceiptClient';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 
-export default async function ReceiptPage({ params }: { params: { id: string } }) {
+export default async function ReceiptPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await requireUser();
   const invoice = await prisma.salesInvoice.findFirst({
     where: { id: params.id, businessId: user.businessId },

@@ -19,7 +19,7 @@ describe('balance-sheet business presentation', () => {
   });
   afterEach(() => vi.useRealTimers());
   it('shows signed recorded balances, warnings, legacy disclosure and review navigation', async () => {
-    const html = renderToStaticMarkup(await Page({ searchParams: { asOf: '2026-03-31' } }));
+    const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ asOf: '2026-03-31' }) }));
     expect(html).toContain('Bank &amp; MoMo'); expect(html).toContain('-1.00');
     expect(html).toContain('Some sales have no product cost recorded');
     expect(html.indexOf('Financial position')).toBeLessThan(html.indexOf('Report notes'));
@@ -52,7 +52,7 @@ describe('balance-sheet business presentation', () => {
   });
   it('rejects invalid and future statement dates before loading figures', async () => {
     for (const asOf of ['2026-02-30', '2026-04-03']) {
-      expect(renderToStaticMarkup(await Page({ searchParams: { asOf } }))).toContain('Choose a valid statement date');
+      expect(renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ asOf }) }))).toContain('Choose a valid statement date');
     }
     expect(mocks.sheet).not.toHaveBeenCalled();
   });

@@ -26,7 +26,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('monthly balance review page', () => {
   it('shows missing evidence, signed amounts and legacy warning without a sign-off control', async () => {
-    render(await MonthlyBalanceReviewPage({ searchParams: { month: '2026-03' } }));
+    render(await MonthlyBalanceReviewPage({ searchParams: Promise.resolve({ month: '2026-03' }) }));
     expect(mocks.auth).toHaveBeenCalledWith(expect.objectContaining({ surfaceId: 'monthly_balance_review' }));
     expect(screen.getByText(/Awaiting evidence/)).toBeInTheDocument();
     expect(screen.getByText(/legacy opening-capital field/)).toBeInTheDocument();
@@ -37,25 +37,25 @@ describe('monthly balance review page', () => {
     expect(mocks.transaction.mock.calls[0][1]).toMatchObject({ isolationLevel: 'Serializable' });
   });
   it('rejects future dates without reading the ledger', async () => {
-    render(await MonthlyBalanceReviewPage({ searchParams: { month: '2026-11' } }));
+    render(await MonthlyBalanceReviewPage({ searchParams: Promise.resolve({ month: '2026-11' }) }));
     expect(screen.getByRole('heading', { name: 'Choose a valid month' })).toBeInTheDocument();
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
   it('returns access denial before reading any ledger or transaction data', async () => {
     mocks.auth.mockResolvedValue({ ok: false, denial: <p>Report access denied</p> });
-    render(await MonthlyBalanceReviewPage({ searchParams: { month: '2026-03' } }));
+    render(await MonthlyBalanceReviewPage({ searchParams: Promise.resolve({ month: '2026-03' }) }));
     expect(screen.getByText('Report access denied')).toBeInTheDocument();
     expect(mocks.transaction).not.toHaveBeenCalled();
     expect(mocks.review).not.toHaveBeenCalled();
   });
   it('does not query a foreign account passed in the URL', async () => {
-    render(await MonthlyBalanceReviewPage({ searchParams: { month: '2026-03', account: '9999' } }));
+    render(await MonthlyBalanceReviewPage({ searchParams: Promise.resolve({ month: '2026-03', account: '9999' }) }));
     expect(mocks.entries).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent('Choose an account');
   });
   it('shows paginated details without treating the page as the complete month', async () => {
     mocks.entries.mockResolvedValue({ account: { name: 'Bank', code: '1010' }, total: 101, page: 2, pageSize: 50, rows: [{ id: 'line', debitPence: 250, creditPence: 0, memo: null, journalEntry: { entryDate: new Date('2026-03-10'), description: 'Recorded receipt', referenceType: 'SALE', referenceId: 'invoice-a' } }] });
-    render(await MonthlyBalanceReviewPage({ searchParams: { month: '2026-03', account: '1010', page: '2' } }));
+    render(await MonthlyBalanceReviewPage({ searchParams: Promise.resolve({ month: '2026-03', account: '1010', page: '2' }) }));
     expect(screen.getByText(/totals above include all entries/)).toBeInTheDocument();
     expect(screen.getByText('Recorded receipt')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Next entries' })).toHaveAttribute('href', expect.stringContaining('page=3'));

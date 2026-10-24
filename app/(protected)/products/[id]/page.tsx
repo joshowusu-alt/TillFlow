@@ -22,13 +22,14 @@ import ProductImageInput from '@/components/ProductImageInput';
 import ProductHeroImage from './ProductHeroImage';
 import Link from 'next/link';
 
-export default async function ProductDetailPage({
-  params,
-  searchParams
-}: {
-  params: { id: string };
-  searchParams?: { error?: string };
-}) {
+export default async function ProductDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<{ error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const { user, business, store } = await requireBusinessStore();
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
   const fileUploadEnabled = Boolean(process.env.BLOB_READ_WRITE_TOKEN) || (process.env.VERCEL !== '1' && process.env.VERCEL !== 'true');

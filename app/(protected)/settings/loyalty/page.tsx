@@ -8,11 +8,12 @@ import { updateLoyaltySettingsAction } from '@/app/actions/settings';
 
 export const dynamic = 'force-dynamic';
 
-export default async function LoyaltySettingsPage({
-  searchParams,
-}: {
-  searchParams?: { error?: string };
-}) {
+export default async function LoyaltySettingsPage(
+  props: {
+    searchParams?: Promise<{ error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 

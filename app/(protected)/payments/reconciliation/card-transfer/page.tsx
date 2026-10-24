@@ -17,17 +17,18 @@ import {
 import { getBusinessDayBounds } from '@/lib/notifications/utils';
 import { addLocalDays, localDateInstant, localDateKey } from '@/lib/reports/reporting-clock';
 
-export default async function CardTransferReconciliationPage({
-  searchParams,
-}: {
-  searchParams?: {
-    error?: string;
-    from?: string;
-    to?: string;
-    storeId?: string;
-    detail?: string; // "2025-03-20|CARD" for drill-down
-  };
-}) {
+export default async function CardTransferReconciliationPage(
+  props: {
+    searchParams?: Promise<{
+      error?: string;
+      from?: string;
+      to?: string;
+      storeId?: string;
+      detail?: string; // "2025-03-20|CARD" for drill-down
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   const todayParts = getBusinessDayBounds(new Date(), business.timezone).localDate;
   const fromKey = searchParams?.from ?? localDateKey(addLocalDays(todayParts, -7));

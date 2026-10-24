@@ -8,7 +8,10 @@ import { getMonthlyAccountEntries, getMonthlyBalanceReview, monthlyReviewWindow 
 
 export const dynamic = 'force-dynamic';
 
-export default async function MonthlyBalanceReviewPage({ searchParams }: { searchParams?: { month?: string; account?: string; page?: string } }) {
+export default async function MonthlyBalanceReviewPage(
+  props: { searchParams?: Promise<{ month?: string; account?: string; page?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const now = new Date();
   const opened = await openLiveReport({
     surfaceId: 'monthly_balance_review', search: searchParams,

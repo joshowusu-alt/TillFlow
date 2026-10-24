@@ -12,11 +12,12 @@ import { requestStockTransferAction, approveStockTransferAction } from '@/app/ac
 import { formatDateTime } from '@/lib/format';
 import { redirect } from 'next/navigation';
 
-export default async function TransfersPage({
-  searchParams,
-}: {
-  searchParams?: { error?: string; transferId?: string };
-}) {
+export default async function TransfersPage(
+  props: {
+    searchParams?: Promise<{ error?: string; transferId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business, store, stores: authorisedStores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
 
   if (!store) {

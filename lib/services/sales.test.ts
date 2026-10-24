@@ -84,7 +84,8 @@ vi.mock('@/lib/fraud/reason-codes', () => ({
   isDiscountReasonCode: vi.fn().mockReturnValue(true),
 }));
 
-vi.mock('./document-numbers', () => ({
+vi.mock('./document-numbers', async () => ({
+  ...await vi.importActual<typeof import('./document-numbers')>('./document-numbers'),
   reserveNextDocumentNumber: vi.fn().mockResolvedValue('RCPT-000001'),
 }));
 
@@ -1160,16 +1161,18 @@ describe('createSale — payments split & AR posting', () => {
       Object.assign(new Error('missing sequence'), { code: 'P2025' })
     );
     prismaMock.salesInvoice.findFirst.mockResolvedValue({ transactionNumber: 'INV-000123' });
-    prismaMock.businessSequence.create.mockResolvedValue({ nextVal: 124 });
+    prismaMock.businessSequence.upsert.mockResolvedValueOnce({ nextVal: 124 });
 
     await createSale(makeBaseInput());
 
-    expect(prismaMock.businessSequence.create).toHaveBeenCalledWith({
-      data: {
+    expect(prismaMock.businessSequence.upsert).toHaveBeenCalledWith({
+      where: { businessId_sequenceName: { businessId: BIZ_ID, sequenceName: 'invoice' } },
+      create: {
         businessId: BIZ_ID,
         sequenceName: 'invoice',
         nextVal: 124,
       },
+      update: { nextVal: { increment: 1 } },
       select: { nextVal: true },
     });
 

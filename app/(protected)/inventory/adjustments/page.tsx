@@ -37,26 +37,27 @@ function AdjustmentsEmptyState({ q }: { q?: string }) {
   );
 }
 
-export default async function StockAdjustmentsPage({
-  searchParams,
-}: {
-  searchParams?: {
-    page?: string;
-    adjustmentId?: string;
-    reversed?: string;
-    error?: string;
-    posted?: string;
-    direction?: string;
-    ref?: string;
-    prev?: string;
-    added?: string;
-    newQty?: string;
-    value?: string;
-    cost?: string;
-    replayed?: string;
-    storeId?: string;
-  };
-}) {
+export default async function StockAdjustmentsPage(
+  props: {
+    searchParams?: Promise<{
+      page?: string;
+      adjustmentId?: string;
+      reversed?: string;
+      error?: string;
+      posted?: string;
+      direction?: string;
+      ref?: string;
+      prev?: string;
+      added?: string;
+      newQty?: string;
+      value?: string;
+      cost?: string;
+      replayed?: string;
+      storeId?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user, business, store: operationalStore, stores: authorisedStores } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) {
     return <div className="card p-6">Seed data missing.</div>;

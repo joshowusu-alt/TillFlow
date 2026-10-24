@@ -17,7 +17,7 @@ it('reveals the section when its direct action link is used', () => {
 });
 it('reopens from the same fragment link after a manual collapse', () => {
   window.history.replaceState(null, '', '/#products-supplied');
-  const { container } = render(<><a href="/#products-supplied">View products</a><AccountSection id="products-supplied" title="Products supplied">Products</AccountSection></>);
+  const { container } = render(<><a href="#products-supplied">View products</a><AccountSection id="products-supplied" title="Products supplied">Products</AccountSection></>);
   const details = container.querySelector('details')!;
   details.open = false;
   fireEvent.click(screen.getByText('View products'));
