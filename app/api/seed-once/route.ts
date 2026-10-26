@@ -145,7 +145,7 @@ export async function GET(request: Request) {
       ownerName: 'Owner',
       ownerEmail: 'owner@store.com',
       plan: business.plan,
-      status: business.planStatus,
+      status: 'TRIAL_ACTIVE',
       supportStatus: 'HEALTHY',
       notes: 'Seeded local business for development and smoke checks.',
       startedAt: business.planSetAt,

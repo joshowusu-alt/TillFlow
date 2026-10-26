@@ -237,6 +237,18 @@ describe('subscription lifecycle', () => {
     expect(access.daysRemaining).toBe(0);
   });
 
+  it('does not treat lastPaymentAt as paid confirmation', () => {
+    const access = computeBillingAccessState({
+      selectedPlan: 'GROWTH',
+      subscriptionStatus: 'TRIAL_ACTIVE',
+      trialEndsAt: new Date('2026-06-15T00:00:00.000Z'),
+      lastPaymentAt: new Date('2026-04-15T00:00:00.000Z'),
+    }, new Date('2026-05-15T00:00:00.000Z'));
+
+    expect(access.accessState).toBe('TRIAL_ACTIVE');
+    expect(access.isPaid).toBe(false);
+  });
+
   it('calculates monthly renewal dates from the payment day', () => {
     expect(calculateNextBillingDate(new Date('2026-08-08T10:00:00.000Z'))).toEqual(new Date('2026-09-08T10:00:00.000Z'));
   });

@@ -1,6 +1,6 @@
 import ControlPageHeader from '@/components/control-page-header';
 import SupportCockpitView from '@/components/support/SupportCockpitView';
-import { canWriteNotes, listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
+import { canMutateSupport, listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
 import { prisma } from '@/lib/prisma';
 import { getSupportCockpitData } from '@/lib/support-issues/service';
 import { readSearchParam, resolveSearchParams, type ControlSearchParams } from '@/lib/search-params';
@@ -64,7 +64,7 @@ export default async function SupportCockpitPage({
         initialFilter={filter}
         initialSearch={search}
         returnPath={returnPath}
-        canWrite={canWriteNotes(staff.role)}
+        canWrite={canMutateSupport(staff.role)}
       />
     </div>
   );

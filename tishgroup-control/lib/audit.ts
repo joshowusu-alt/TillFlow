@@ -1,5 +1,24 @@
 import { prisma } from '@/lib/prisma';
 
+const SECRET_METADATA_KEYS = [
+  'password',
+  'passwordHash',
+  'hash',
+  'secret',
+  'token',
+  'session',
+  'accessKey',
+  'twoFactorSecret',
+  'note',
+  'description',
+  'body',
+  'recipient',
+  'email',
+  'phone',
+];
+
+const BCRYPT_LIKE = /\$2[aby]\$\d{2}\$[A-Za-z0-9./]{22,}/;
+
 export type AuditAction =
   | 'SUBSCRIPTION_UPDATED'
   | 'PAYMENT_RECORDED'
@@ -10,10 +29,13 @@ export type AuditAction =
   | 'STAFF_CREATED'
   | 'STAFF_ACTIVATED'
   | 'STAFF_DEACTIVATED'
+  | 'STAFF_ROLE_CHANGED'
+  | 'PASSWORD_SET'
+  | 'LOGIN_SUCCESS'
+  | 'LOGIN_FAILURE'
   | 'BULK_REVIEW'
   | 'BULK_REMINDER_SENT'
   | 'SYSTEM_ERROR'
-  | 'LOGIN_FAILURE'
   | 'AGENT_ASSIGNED'
   | 'REFERRAL_UPDATED'
   | 'SETUP_CALL_COMPLETED'
@@ -24,42 +46,84 @@ export type AuditAction =
   | 'SUPPORT_ISSUE_UPDATED'
   | 'SUPPORT_NOTE_ADDED';
 
-type AuditStaff = {
+export type AuditStaff = {
   id: string;
   email: string;
   role: string;
 };
 
-type RecordAuditArgs = {
+export type RecordAuditArgs = {
   staff: AuditStaff;
   action: AuditAction;
   businessId?: string | null;
   summary: string;
   metadata?: Record<string, unknown> | null;
+  idempotencyKey?: string | null;
 };
 
+function isSensitiveKey(key: string) {
+  const lower = key.toLowerCase();
+  return SECRET_METADATA_KEYS.some((secret) => lower.includes(secret.toLowerCase()));
+}
+
+function sanitizeValue(value: unknown): unknown {
+  if (typeof value === 'string' && BCRYPT_LIKE.test(value)) {
+    return '[redacted]';
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return sanitizeAuditMetadata(value as Record<string, unknown>);
+  }
+  return value;
+}
+
+export function sanitizeAuditMetadata(metadata?: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!metadata) return null;
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (isSensitiveKey(key)) {
+      continue;
+    }
+    sanitized[key] = sanitizeValue(value);
+  }
+  return Object.keys(sanitized).length > 0 ? sanitized : null;
+}
+
+function auditData({ staff, action, businessId, summary, metadata, idempotencyKey }: RecordAuditArgs) {
+  const safeMetadata = sanitizeAuditMetadata(metadata);
+  return {
+    staffId: staff.id,
+    staffEmail: staff.email,
+    staffRole: staff.role,
+    action,
+    businessId: businessId ?? null,
+    summary,
+    metadata: safeMetadata ? JSON.stringify(safeMetadata) : null,
+    idempotencyKey: idempotencyKey ?? null,
+  };
+}
+
+export async function recordAuditInTransaction(
+  tx: { controlAuditLog: { create: (args: { data: ReturnType<typeof auditData> }) => unknown } },
+  args: RecordAuditArgs,
+): Promise<void> {
+  await tx.controlAuditLog.create({ data: auditData(args) });
+}
+
 /**
- * Append-only audit write. Never blocks the parent action: a failure here
- * is logged to console but never propagates, because losing visibility on
- * one event is preferable to rolling back a paid invoice or completed
- * review. The schema indexes (businessId+createdAt, staffId+createdAt,
- * action+createdAt) make every common query path cheap.
+ * Best-effort audit for non-critical visibility only.
+ * Remaining best-effort writers (must not change commercial, staff, support-ticket,
+ * entitlement, or merchant-visible billing state):
+ * - Scale cockpit operational fields: AGENT_ASSIGNED, REFERRAL_UPDATED,
+ *   SETUP_CALL_COMPLETED, FIRST_SALE_VERIFIED, PAYMENT_FOLLOWUP_FLAGGED, NOTE_ADDED
+ * - captureError / LOGIN_FAILURE telemetry
+ * Critical commercial, staff, support, payment, and SMS-queue mutations must use
+ * recordAuditInTransaction inside the same Prisma transaction.
  */
-export async function recordAudit({ staff, action, businessId, summary, metadata }: RecordAuditArgs): Promise<void> {
+export async function recordAudit(args: RecordAuditArgs): Promise<void> {
   try {
-    await prisma.controlAuditLog.create({
-      data: {
-        staffId: staff.id,
-        staffEmail: staff.email,
-        staffRole: staff.role,
-        action,
-        businessId: businessId ?? null,
-        summary,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-      },
-    });
+    await prisma.controlAuditLog.create({ data: auditData(args) });
   } catch (error) {
-    console.error('[control-audit] Failed to write audit row', { action, businessId, error });
+    console.error('[control-audit] Failed to write audit row', { action: args.action, businessId: args.businessId, error });
   }
 }
 

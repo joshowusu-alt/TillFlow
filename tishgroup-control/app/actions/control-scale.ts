@@ -3,12 +3,16 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { recordAudit } from '@/lib/audit';
-import { canManageSubscriptions, canWriteNotes, requireControlStaff } from '@/lib/control-auth';
+import { recordAudit, recordAuditInTransaction } from '@/lib/audit';
+import { canManageSubscriptions, canWriteNotes, requireControlStaffForMutation } from '@/lib/control-auth';
+import { safeReturnPath, withRedirectParam } from '@/lib/safe-return-path';
 
-function readReturnPath(formData: FormData) {
-  const value = String(formData.get('returnPath') ?? '').trim();
-  return value.startsWith('/') ? value : '/command/scale';
+function returnPathFromForm(formData: FormData) {
+  return safeReturnPath(String(formData.get('returnPath') ?? ''), '/command/scale');
+}
+
+function redirectError(formData: FormData, message: string): never {
+  redirect(withRedirectParam(returnPathFromForm(formData), 'error', message));
 }
 
 function revalidateScaleViews(businessId?: string) {
@@ -48,9 +52,9 @@ async function ensureProfile(businessId: string) {
 }
 
 export async function assignScaleAgentAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canWriteNotes(staff.role)) {
-    redirect(`${readReturnPath(formData)}&error=Permission denied`);
+    redirectError(formData, 'Permission denied');
   }
 
   const businessId = String(formData.get('businessId') ?? '').trim();
@@ -58,7 +62,7 @@ export async function assignScaleAgentAction(formData: FormData) {
   const managerId = String(formData.get('assignedManagerId') ?? '').trim() || null;
 
   if (!businessId || !agentName) {
-    redirect(`${readReturnPath(formData)}&error=Missing business or agent`);
+    redirectError(formData, 'Missing business or agent');
   }
 
   const profile = await ensureProfile(businessId);
@@ -81,7 +85,7 @@ export async function assignScaleAgentAction(formData: FormData) {
   });
 
   revalidateScaleViews(businessId);
-  redirect(readReturnPath(formData));
+  redirect(returnPathFromForm(formData));
 }
 
 function readReferralSnapshot(profile: {
@@ -116,13 +120,13 @@ function parseFollowUpDate(raw: string) {
 }
 
 export async function updateScaleReferralAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canWriteNotes(staff.role)) {
-    redirect(`${readReturnPath(formData)}&error=Permission denied`);
+    redirectError(formData, 'Permission denied');
   }
 
   const businessId = String(formData.get('businessId') ?? '').trim();
-  if (!businessId) redirect(`${readReturnPath(formData)}&error=Missing business`);
+  if (!businessId) redirectError(formData, 'Missing business');
 
   const referralSource = String(formData.get('referralSource') ?? '').trim() || null;
   const referredByName = String(formData.get('referredByName') ?? '').trim() || null;
@@ -174,18 +178,18 @@ export async function updateScaleReferralAction(formData: FormData) {
 
   revalidateScaleViews(businessId);
   revalidatePath('/command/referrals');
-  redirect(readReturnPath(formData));
+  redirect(returnPathFromForm(formData));
 }
 
 export async function markReferralStatusAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canWriteNotes(staff.role)) {
-    redirect(`${readReturnPath(formData)}&error=Permission denied`);
+    redirectError(formData, 'Permission denied');
   }
 
   const businessId = String(formData.get('businessId') ?? '').trim();
   const referralStatus = String(formData.get('referralStatus') ?? '').trim();
-  if (!businessId || !referralStatus) redirect(`${readReturnPath(formData)}&error=Missing status`);
+  if (!businessId || !referralStatus) redirectError(formData, 'Missing status');
 
   const profile = await ensureProfile(businessId);
   const previous = profile.referralStatus;
@@ -205,20 +209,20 @@ export async function markReferralStatusAction(formData: FormData) {
 
   revalidateScaleViews(businessId);
   revalidatePath('/command/referrals');
-  redirect(readReturnPath(formData));
+  redirect(returnPathFromForm(formData));
 }
 
 export async function addScaleSupportNoteAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canWriteNotes(staff.role)) {
-    redirect(`${readReturnPath(formData)}&error=Permission denied`);
+    redirectError(formData, 'Permission denied');
   }
 
   const businessId = String(formData.get('businessId') ?? '').trim();
   const note = String(formData.get('note') ?? '').trim();
   const category = String(formData.get('category') ?? 'SUPPORT').trim() || 'SUPPORT';
 
-  if (!businessId || !note) redirect(`${readReturnPath(formData)}&error=Missing note`);
+  if (!businessId || !note) redirectError(formData, 'Missing note');
 
   const profile = await ensureProfile(businessId);
   await prisma.controlNote.create({
@@ -234,25 +238,28 @@ export async function addScaleSupportNoteAction(formData: FormData) {
     staff: { id: staff.id, email: staff.email, role: staff.role },
     action: 'NOTE_ADDED',
     businessId,
-    summary: `Support note: ${note.slice(0, 80)}`,
+    summary: 'Internal control note added',
     metadata: { category },
   });
 
   revalidateScaleViews(businessId);
-  redirect(readReturnPath(formData));
+  redirect(returnPathFromForm(formData));
 }
 
 export async function markScaleSetupCallAction(formData: FormData) {
-  const staff = await requireControlStaff();
-  if (!canWriteNotes(staff.role)) redirect(`${readReturnPath(formData)}&error=Permission denied`);
+  const staff = await requireControlStaffForMutation();
+  if (!canWriteNotes(staff.role)) redirectError(formData, 'Permission denied');
 
   const businessId = String(formData.get('businessId') ?? '').trim();
-  if (!businessId) redirect(`${readReturnPath(formData)}&error=Missing business`);
+  if (!businessId) redirectError(formData, 'Missing business');
 
   const profile = await ensureProfile(businessId);
   await prisma.controlBusinessProfile.update({
     where: { id: profile.id },
-    data: { setupCallCompletedAt: new Date(), supportStatus: 'HEALTHY' },
+    data: {
+      setupCallCompletedAt: new Date(),
+      ...(String(profile.supportStatus).toUpperCase() === 'UNREVIEWED' ? {} : { supportStatus: 'HEALTHY' }),
+    },
   });
 
   await recordAudit({
@@ -263,15 +270,15 @@ export async function markScaleSetupCallAction(formData: FormData) {
   });
 
   revalidateScaleViews(businessId);
-  redirect(readReturnPath(formData));
+  redirect(returnPathFromForm(formData));
 }
 
 export async function markScaleFirstSaleAction(formData: FormData) {
-  const staff = await requireControlStaff();
-  if (!canWriteNotes(staff.role)) redirect(`${readReturnPath(formData)}&error=Permission denied`);
+  const staff = await requireControlStaffForMutation();
+  if (!canWriteNotes(staff.role)) redirectError(formData, 'Permission denied');
 
   const businessId = String(formData.get('businessId') ?? '').trim();
-  if (!businessId) redirect(`${readReturnPath(formData)}&error=Missing business`);
+  if (!businessId) redirectError(formData, 'Missing business');
 
   const profile = await ensureProfile(businessId);
   await prisma.controlBusinessProfile.update({
@@ -287,17 +294,17 @@ export async function markScaleFirstSaleAction(formData: FormData) {
   });
 
   revalidateScaleViews(businessId);
-  redirect(readReturnPath(formData));
+  redirect(returnPathFromForm(formData));
 }
 
 export async function markScalePaymentFollowUpAction(formData: FormData) {
-  const staff = await requireControlStaff();
-  if (!canWriteNotes(staff.role)) redirect(`${readReturnPath(formData)}&error=Permission denied`);
+  const staff = await requireControlStaffForMutation();
+  if (!canWriteNotes(staff.role)) redirectError(formData, 'Permission denied');
 
   const businessId = String(formData.get('businessId') ?? '').trim();
   const needed = formData.get('needed') !== 'false';
 
-  if (!businessId) redirect(`${readReturnPath(formData)}&error=Missing business`);
+  if (!businessId) redirectError(formData, 'Missing business');
 
   const profile = await ensureProfile(businessId);
   await prisma.controlBusinessProfile.update({
@@ -314,43 +321,49 @@ export async function markScalePaymentFollowUpAction(formData: FormData) {
   });
 
   revalidateScaleViews(businessId);
-  redirect(readReturnPath(formData));
+  redirect(returnPathFromForm(formData));
 }
 
 export async function extendScaleTrialGraceAction(formData: FormData) {
-  const staff = await requireControlStaff();
+  const staff = await requireControlStaffForMutation();
   if (!canManageSubscriptions(staff.role)) {
-    redirect(`${readReturnPath(formData)}&error=Permission denied`);
+    redirectError(formData, 'Permission denied');
   }
 
   const businessId = String(formData.get('businessId') ?? '').trim();
   const hours = Math.min(168, Math.max(24, parseInt(String(formData.get('hours') ?? '48'), 10) || 48));
 
-  if (!businessId) redirect(`${readReturnPath(formData)}&error=Missing business`);
+  if (!businessId) redirectError(formData, 'Missing business');
 
   const business = await prisma.business.findUnique({
     where: { id: businessId },
     select: { paymentGraceEndsAt: true, trialEndsAt: true },
   });
-  if (!business) redirect(`${readReturnPath(formData)}&error=Business not found`);
+  if (!business) redirectError(formData, 'Business not found');
 
   const base = business.paymentGraceEndsAt ?? business.trialEndsAt ?? new Date();
   const graceEndsAt = new Date(base.getTime() + hours * 60 * 60 * 1000);
 
   const previous = business.paymentGraceEndsAt?.toISOString() ?? null;
-  await prisma.business.update({
-    where: { id: businessId },
-    data: { paymentGraceEndsAt: graceEndsAt },
-  });
-
-  await recordAudit({
-    staff: { id: staff.id, email: staff.email, role: staff.role },
-    action: 'TRIAL_GRACE_EXTENDED',
-    businessId,
-    summary: `Trial/payment grace extended by ${hours}h`,
-    metadata: { previous, next: graceEndsAt.toISOString(), hours },
-  });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.business.update({
+        where: { id: businessId },
+        data: { paymentGraceEndsAt: graceEndsAt },
+      });
+      await recordAuditInTransaction(tx, {
+        staff: { id: staff.id, email: staff.email, role: staff.role },
+        action: 'TRIAL_GRACE_EXTENDED',
+        businessId,
+        summary: `Trial/payment grace extended by ${hours}h`,
+        metadata: { previous, next: graceEndsAt.toISOString(), hours },
+      });
+    });
+  } catch (error) {
+    if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
+    redirectError(formData, error instanceof Error ? error.message : 'Unable to extend trial grace.');
+  }
 
   revalidateScaleViews(businessId);
-  redirect(readReturnPath(formData));
+  redirect(returnPathFromForm(formData));
 }
