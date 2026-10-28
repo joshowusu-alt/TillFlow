@@ -1,15 +1,16 @@
 # Partial returns and consignment implementation contract
 
-Status: selected-item purchase returns implemented locally; not deployed or released. Consignment remains unimplemented.
+Status: selected-item purchase returns and explicit supplier credit settlements are implemented on the isolated preview branch. Production release remains gated on authenticated browser verification. Consignment remains unimplemented.
 
 ## Current implementation evidence
 
 - Source-invoice return form loads original lines, payments, current branch stock and earlier partial returns.
 - New immutable return credits retain the original invoice and payment records. Transactional writes cover stock value, movements, supplier credit, journal and audit.
 - Supplier balance calculations, payment caps, supplier history/statement, inventory history and financial source links account for credits.
-- Local disposable SQLite checks passed for unpaid, part-paid and fully paid purchases, repeat returns, replay, insufficient remaining quantities and foreign branches. Focused regression: 102 tests passed; TypeScript passed.
-- PostgreSQL deployment and concurrent replay verification remain pending. A new isolated branch of the populated preview was created: br-dark-breeze-zayhdifo. No production migration or data change was performed.
-- Hosted configuration is blocked by automatic approval review pending explicit permission to store the isolated branch credentials in Vercel's encrypted preview settings.
+- Local disposable SQLite checks passed for unpaid, part-paid and fully paid purchases, repeat returns, replay, insufficient remaining quantities and foreign branches. Focused regression: 102 tests passed; TypeScript and changed-file lint passed.
+- Explicit invoice offsets, bank refunds and open-till cash refunds preserve original invoice payments and inventory. Checks reconcile supplier balances to AP, cashflow, balance sheet and income statement. The prior hosted preview passed the settlement checks, including competing concurrent refunds, on isolated Postgres branch br-dark-breeze-zayhdifo.
+- VAT CSV now includes posted sales and purchase return reversals, including partial purchase credits, by journal entry date. Original invoice VAT stays in its invoice period; an offset or later cash/bank refund does not reverse VAT again. The hosted VAT check passed for commit f1f18079793e57d2d848dfc8e0bf6ecdbf565163, including half-open date boundaries and business isolation.
+- Authenticated browser verification of the actual saved return and settlement forms remains pending preview sign-in. The public supplier-stock example is a simulation and is not evidence that financial writes work. No production migration or data change was performed.
 - Pilot writes are disabled in production and limited to demo businesses. Capitalised delivery-cost returns are blocked pending allocation review. Missing goods expected later and cash refunds are not automatically credited or paid by this workflow.
 
 ## Purchase corrections
