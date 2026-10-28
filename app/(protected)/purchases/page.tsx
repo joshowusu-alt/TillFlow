@@ -467,8 +467,8 @@ export default async function PurchasesPage({
                               storeId={purchase.storeId}
                             />
                           )}
-                          <Link className="btn-ghost text-xs" href={`/purchases/return/${purchase.id}`}>
-                            Return
+                          <Link className="btn-ghost text-xs" href={`/purchases/partial-return/${purchase.id}`}>
+                            Return selected items
                           </Link>
                           <DeletePurchaseButton purchaseId={purchase.id} />
                         </>
@@ -561,8 +561,8 @@ export default async function PurchasesPage({
                                     storeId={purchase.storeId}
                                   />
                                 )}
-                                <Link className="btn-ghost text-xs" href={`/purchases/return/${purchase.id}`}>
-                                  Return
+                                <Link className="btn-ghost text-xs" href={`/purchases/partial-return/${purchase.id}`}>
+                                  Return selected items
                                 </Link>
                                 <DeletePurchaseButton purchaseId={purchase.id} />
                               </>
