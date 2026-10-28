@@ -11,6 +11,7 @@ export type DetailLedgerPayment = {
 };
 
 export type DetailLedgerInvoice = {
+  returnCreditPence?: number;
   id: string;
   createdAt: Date;
   paymentStatus: string;
@@ -88,7 +89,7 @@ export function buildSupplierDetailLedger(invoices: DetailLedgerInvoice[]): Deta
     .flatMap((invoice) => {
       const document = payableDocumentBalance({
         paymentStatus: invoice.paymentStatus,
-        totalPence: invoice.totalPence,
+        totalPence: invoice.totalPence, returnCreditPence: invoice.returnCreditPence,
         payments: invoice.payments.map((payment) => ({ amountPence: payment.amountPence })),
       });
       const isClosed = invoice.paymentStatus === 'RETURNED' || invoice.paymentStatus === 'VOID';

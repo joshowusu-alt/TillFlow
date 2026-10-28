@@ -63,7 +63,7 @@ export async function buildPurchasesLedgerCsv(businessId: string, range: DateRan
     orderBy: { createdAt: 'asc' },
     select: {
       id: true, createdAt: true, paymentStatus: true,
-      subtotalPence: true, vatPence: true, totalPence: true,
+      subtotalPence: true, vatPence: true, totalPence: true, returnCreditPence: true,
       supplier: { select: { name: true } },
       store: { select: { name: true } },
     },

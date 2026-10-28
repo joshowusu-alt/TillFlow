@@ -483,7 +483,7 @@ async function recordSupplierPaymentImpl(
 
   const invoiceBase = await prisma.purchaseInvoice.findFirst({
     where: { id: invoiceId, businessId },
-    select: { id: true, totalPence: true, storeId: true },
+    select: { id: true, totalPence: true, returnCreditPence: true, storeId: true },
   });
   if (!invoiceBase) {
     throw new SupplierPaymentError(SUPPLIER_PAYMENT_ERROR.NOT_FOUND, 'Invoice not found');
@@ -524,7 +524,7 @@ async function recordSupplierPaymentImpl(
 
       const previouslyPaid = sumAmountPence(invoice.payments);
       const newPaid = sumAmountPence(newPayments);
-      if (previouslyPaid + newPaid > invoice.totalPence) {
+      if (previouslyPaid + newPaid > invoice.totalPence - (invoice.returnCreditPence ?? 0)) {
         throw new Error('Payment exceeds outstanding balance');
       }
 
@@ -612,10 +612,10 @@ async function recordSupplierPaymentImpl(
         select: { amountPence: true },
       });
       const totalPaid = sumAmountPence(persisted);
-      if (totalPaid > invoice.totalPence) {
+      if (totalPaid > invoice.totalPence - (invoice.returnCreditPence ?? 0)) {
         throw new Error('Payment exceeds outstanding balance');
       }
-      const status = derivePaymentStatus(invoice.totalPence, totalPaid);
+      const status = derivePaymentStatus(invoice.totalPence - (invoice.returnCreditPence ?? 0), totalPaid);
 
       const updatedInvoice = await tx.purchaseInvoice.update({
         where: { id: invoice.id },

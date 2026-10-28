@@ -1,6 +1,16 @@
 # Partial returns and consignment implementation contract
 
-Status: implementation preparation; not released.
+Status: selected-item purchase returns implemented locally; not deployed or released. Consignment remains unimplemented.
+
+## Current implementation evidence
+
+- Source-invoice return form loads original lines, payments, current branch stock and earlier partial returns.
+- New immutable return credits retain the original invoice and payment records. Transactional writes cover stock value, movements, supplier credit, journal and audit.
+- Supplier balance calculations, payment caps, supplier history/statement, inventory history and financial source links account for credits.
+- Local disposable SQLite checks passed for unpaid, part-paid and fully paid purchases, repeat returns, replay, insufficient remaining quantities and foreign branches. Focused regression: 102 tests passed; TypeScript passed.
+- PostgreSQL deployment and concurrent replay verification remain pending. A new isolated branch of the populated preview was created: br-dark-breeze-zayhdifo. No production migration or data change was performed.
+- Hosted configuration is blocked by automatic approval review pending explicit permission to store the isolated branch credentials in Vercel's encrypted preview settings.
+- Pilot writes are disabled in production and limited to demo businesses. Capitalised delivery-cost returns are blocked pending allocation review. Missing goods expected later and cash refunds are not automatically credited or paid by this workflow.
 
 ## Purchase corrections
 

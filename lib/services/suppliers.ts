@@ -61,7 +61,7 @@ export async function getSuppliers(businessId: string, opts: SupplierListOptions
           where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
           select: {
             paymentStatus: true,
-            totalPence: true,
+            totalPence: true, returnCreditPence: true,
             payments: { select: { amountPence: true } },
           },
         },
@@ -94,7 +94,7 @@ export async function getSupplier(id: string, businessId: string) {
           id: true,
           createdAt: true,
           paymentStatus: true,
-          totalPence: true,
+          totalPence: true, returnCreditPence: true,
           payments: { select: { amountPence: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -177,7 +177,7 @@ export async function deleteSupplier(id: string, businessId: string) {
         where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
         select: {
           paymentStatus: true,
-          totalPence: true,
+          totalPence: true, returnCreditPence: true,
           payments: { select: { amountPence: true } },
         },
       },

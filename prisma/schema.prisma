@@ -1444,6 +1444,8 @@ model SalesPayment {
 }
 
 model PurchaseInvoice {
+  returnCreditPence Int @default(0)
+  returnCredits PurchaseReturnCredit[]
   receiptDocumentType String @default("INVOICE")
   invoiceReceivedAt DateTime?
   discountBps Int @default(0)
@@ -2174,4 +2176,22 @@ model PurchaseDocument {
   createdAt DateTime @default(now())
   purchaseInvoice PurchaseInvoice @relation(fields:[purchaseInvoiceId],references:[id],onDelete:Restrict)
   @@index([businessId,purchaseInvoiceId])
+}
+
+model PurchaseReturnCredit {
+  id String @id @default(cuid())
+  purchaseInvoiceId String
+  businessId String
+  storeId String
+  userId String
+  requestKey String @unique
+  payloadHash String
+  creditPence Int
+  linesJson String
+  reason String
+  kind String
+  createdAt DateTime @default(now())
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Restrict)
+  @@index([businessId, storeId, createdAt])
+  @@index([purchaseInvoiceId])
 }

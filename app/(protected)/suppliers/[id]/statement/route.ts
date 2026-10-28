@@ -61,7 +61,7 @@ export async function GET(
   const invoices = supplier.purchaseInvoices.map((invoice) => {
     const document = payableDocumentBalance({
       paymentStatus: invoice.paymentStatus,
-      totalPence: invoice.totalPence,
+      totalPence: invoice.totalPence, returnCreditPence: invoice.returnCreditPence,
       payments: invoice.payments,
     });
     const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
@@ -69,7 +69,7 @@ export async function GET(
   });
 
   const activeInvoices = invoices.filter((invoice) => !invoice.isClosed);
-  const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
+  const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence - invoice.returnCreditPence, 0);
   const totalPaid = activeInvoices.reduce((sum, invoice) => sum + invoice.paid, 0);
   const outstanding = summarizeOpenPayables(supplier.purchaseInvoices).outstandingPence;
 
@@ -81,7 +81,7 @@ export async function GET(
   rows.push(`Balance on selected purchases,${formatPence(outstanding)}`);
   rows.push('Basis,Purchase-date selection includes all recorded payments against those purchases; not a historical end-date balance');
   rows.push('');
-  rows.push('Invoice,Date,Status,Total,Paid,Balance');
+  rows.push('Invoice,Date,Status,Original total,Return credits,Revised charge,Paid,Balance');
   for (const invoice of invoices) {
     rows.push(
       [
@@ -89,6 +89,8 @@ export async function GET(
         csvEscape(invoice.createdAt.toISOString()),
         csvEscape(invoice.paymentStatus),
         csvEscape(formatPence(invoice.totalPence)),
+        csvEscape(formatPence(invoice.returnCreditPence)),
+        csvEscape(formatPence(invoice.totalPence - invoice.returnCreditPence)),
         csvEscape(formatPence(invoice.paid)),
         csvEscape(formatPence(invoice.balance))
       ].join(',')

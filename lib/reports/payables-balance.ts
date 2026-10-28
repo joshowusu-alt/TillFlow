@@ -6,6 +6,7 @@
 export type PayableDocument = {
   paymentStatus: string;
   totalPence: number;
+  returnCreditPence?: number;
   payments: Array<{ amountPence: number }>;
   refundAmountPence?: number | null;
 };
@@ -23,7 +24,7 @@ export function payableDocumentBalance(invoice: PayableDocument): PayableBalance
     return { paidPence: 0, balancePence: 0, excessPence: 0 };
   }
   const paidPence = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-  const balancePence = invoice.totalPence - paidPence;
+  const balancePence = invoice.totalPence - (invoice.returnCreditPence ?? 0) - paidPence;
   return {
     paidPence,
     balancePence,

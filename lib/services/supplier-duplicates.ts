@@ -39,7 +39,7 @@ export async function findProbableDuplicateSuppliers(
           paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
         },
         select: {
-          totalPence: true,
+          totalPence: true, returnCreditPence: true,
           paymentStatus: true,
           payments: { select: { amountPence: true } },
         },

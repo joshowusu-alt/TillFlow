@@ -344,7 +344,7 @@ export async function getOwnerDailySummaryMetrics(
       },
       select: {
         paymentStatus: true,
-        totalPence: true,
+        totalPence: true, returnCreditPence: true,
         payments: { select: { amountPence: true } },
       },
     }),

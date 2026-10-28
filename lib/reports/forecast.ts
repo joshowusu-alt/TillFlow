@@ -199,7 +199,7 @@ async function _getCashflowForecast(
     },
     select: {
       paymentStatus: true,
-      totalPence: true,
+      totalPence: true, returnCreditPence: true,
       dueDate: true,
       createdAt: true,
       payments: { select: { amountPence: true } },

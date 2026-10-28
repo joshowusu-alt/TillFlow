@@ -4,6 +4,7 @@ import { derivePaymentStatus } from './shared';
 type InvoiceKind = 'sales' | 'purchase';
 
 type InvoiceStatusRow = {
+  returnCreditPence?: number;
   id: string;
   paymentStatus: string;
   totalPence: number;
@@ -32,7 +33,8 @@ function toIssue(kind: InvoiceKind, invoice: InvoiceStatusRow): PaymentStatusIss
   if (['RETURNED', 'VOID'].includes(invoice.paymentStatus)) return null;
 
   const paidPence = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-  const expectedStatus = derivePaymentStatus(invoice.totalPence, paidPence);
+  const effectiveTotal = invoice.totalPence - (kind === 'purchase' ? invoice.returnCreditPence ?? 0 : 0);
+  const expectedStatus = derivePaymentStatus(effectiveTotal, paidPence);
   if (expectedStatus === invoice.paymentStatus) return null;
 
   const repairable =
@@ -46,7 +48,7 @@ function toIssue(kind: InvoiceKind, invoice: InvoiceStatusRow): PaymentStatusIss
     expectedStatus,
     totalPence: invoice.totalPence,
     paidPence,
-    outstandingPence: invoice.totalPence - paidPence,
+    outstandingPence: effectiveTotal - paidPence,
     repairable,
   };
 }
@@ -88,7 +90,7 @@ export async function getPaymentStatusHealth(businessId: string): Promise<Paymen
       select: {
         id: true,
         paymentStatus: true,
-        totalPence: true,
+        totalPence: true, returnCreditPence: true,
         payments: { select: { amountPence: true } },
       },
       take: 5000,

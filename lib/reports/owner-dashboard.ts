@@ -311,7 +311,7 @@ async function _getOwnerDashboardSnapshot(
 			select: {
 				id: true,
 				paymentStatus: true,
-				totalPence: true,
+				totalPence: true, returnCreditPence: true,
 				dueDate: true,
 				createdAt: true,
 				supplier: { select: { id: true, name: true } },
@@ -432,7 +432,7 @@ async function _getOwnerDashboardSnapshot(
 			where: { businessId, ...storeFilter },
 			select: {
 				id: true,
-				totalPence: true,
+				totalPence: true, returnCreditPence: true,
 				createdAt: true,
 				supplier: { select: { name: true } },
 			},

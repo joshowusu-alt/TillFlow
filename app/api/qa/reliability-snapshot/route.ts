@@ -218,7 +218,7 @@ export async function GET() {
       where: { businessId: user.businessId },
       orderBy: { createdAt: 'desc' },
       take: 10,
-      select: { id: true, paymentStatus: true, totalPence: true, qaTag: true },
+      select: { id: true, paymentStatus: true, totalPence: true, returnCreditPence: true, qaTag: true },
     }),
   ]);
 

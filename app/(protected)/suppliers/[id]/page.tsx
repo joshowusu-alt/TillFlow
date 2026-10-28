@@ -100,7 +100,8 @@ export default async function SupplierDetailPage({
             createdAt: true,
             dueDate: true,
             paymentStatus: true,
-            totalPence: true,
+            totalPence: true, returnCreditPence: true,
+            returnCredits: { select: { id: true, createdAt: true, creditPence: true, reason: true } },
             payments: {
               select: { id: true, amountPence: true, paidAt: true, method: true, notes: true },
               orderBy: { paidAt: 'asc' },
@@ -178,6 +179,16 @@ export default async function SupplierDetailPage({
         creditPence: 0,
         balanceEffectPence: invoice.isClosed ? 0 : invoice.totalPence,
       },
+      ...invoice.returnCredits.map((credit) => ({
+        key: credit.id,
+        date: credit.createdAt,
+        sortKey: credit.createdAt.getTime(),
+        type: 'adjustment' as const,
+        description: `Supplier return credit — ${credit.reason}`,
+        debitPence: 0,
+        creditPence: credit.creditPence,
+        balanceEffectPence: -credit.creditPence,
+      })),
       ...invoice.payments.map((payment) => ({
         key: payment.id,
         date: payment.paidAt,
@@ -429,7 +440,7 @@ export default async function SupplierDetailPage({
 
                   <div className="mt-3">
                     <RemainingBalance
-                      amountPence={invoice.totalPence}
+                      amountPence={invoice.totalPence - invoice.returnCreditPence}
                       paidPence={invoice.paid}
                       currency={business.currency}
                     />
@@ -506,7 +517,7 @@ export default async function SupplierDetailPage({
                       </td>
                       <td className="px-3 py-3 text-sm font-semibold">
                         <RemainingBalance
-                          amountPence={invoice.totalPence}
+                          amountPence={invoice.totalPence - invoice.returnCreditPence}
                           paidPence={invoice.paid}
                           currency={business.currency}
                         />

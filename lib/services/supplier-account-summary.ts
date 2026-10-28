@@ -5,6 +5,7 @@ type AccountInvoice = {
   createdAt: Date;
   paymentStatus: string;
   totalPence: number;
+  returnCreditPence?: number;
   payments: { amountPence: number; paidAt: Date }[];
 };
 
@@ -22,7 +23,7 @@ export function summarizeSupplierAccount(invoices: AccountInvoice[]) {
     outstandingPence += balance.balancePence;
     if (balance.balancePence > 0) unpaidInvoiceCount++;
     if (!['RETURNED', 'VOID'].includes(invoice.paymentStatus)) {
-      totalBilledPence += invoice.totalPence;
+      totalBilledPence += invoice.totalPence - (invoice.returnCreditPence ?? 0);
       totalPaidPence += balance.paidPence;
     }
   }
@@ -37,7 +38,7 @@ export async function getSupplierAccountSummary(businessId: string, supplierId: 
   const invoices = await prisma.purchaseInvoice.findMany({
     where: { businessId, supplierId },
     select: {
-      createdAt: true, paymentStatus: true, totalPence: true,
+      createdAt: true, paymentStatus: true, totalPence: true, returnCreditPence: true,
       payments: { select: { amountPence: true, paidAt: true } },
     },
   });

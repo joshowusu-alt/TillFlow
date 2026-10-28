@@ -55,7 +55,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
           createdAt: true,
           dueDate: true,
           paymentStatus: true,
-          totalPence: true,
+          totalPence: true, returnCreditPence: true,
           supplier: { select: { id: true, name: true } },
           payments: { select: { amountPence: true, paidAt: true, method: true } }
         },
@@ -139,8 +139,8 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
       storeId={store.id}
       today={today}
       currency={business.currency}
-      originalPence={invoice.totalPence}
-      paidPence={invoice.totalPence - invoice.outstanding}
+      originalPence={invoice.totalPence - invoice.returnCreditPence}
+      paidPence={invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0)}
       remainingPence={invoice.outstanding}
       returnTo={linkedSupplier ? `/suppliers/${linkedSupplier.id}` : undefined}
       openTills={openTills}
@@ -255,8 +255,8 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                         </td>
                         <td className="px-3 py-3">
                           <RemainingBalance
-                            amountPence={invoice.totalPence}
-                            paidPence={invoice.totalPence - invoice.outstanding}
+                            amountPence={invoice.totalPence - invoice.returnCreditPence}
+                            paidPence={invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0)}
                             currency={business.currency}
                           />
                           {invoice.payments.length > 0 && (
@@ -320,8 +320,8 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                           <div className="text-xs text-black/50">What you owe</div>
                           <RemainingBalance
                             className="mt-1"
-                            amountPence={invoice.totalPence}
-                            paidPence={invoice.totalPence - invoice.outstanding}
+                            amountPence={invoice.totalPence - invoice.returnCreditPence}
+                            paidPence={invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0)}
                             currency={business.currency}
                           />
                         </div>

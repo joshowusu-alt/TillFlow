@@ -180,7 +180,7 @@ export async function linkPurchaseSupplierAction(
         supplierId: true,
         paymentStatus: true,
         qaTag: true,
-        totalPence: true,
+        totalPence: true, returnCreditPence: true,
       },
     });
     if (!invoice) return err('Purchase not found.');
