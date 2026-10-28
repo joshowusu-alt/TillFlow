@@ -57,6 +57,7 @@ const DRAWER_DRILLDOWN_TYPES = [
   ['PAID_OUT_SUPPLIER', 'Supplier payments'],
   ['PAID_OUT_EXPENSE', 'Expenses paid from till'],
   ['CASH_REFUND', 'Refunds paid'],
+  ['SUPPLIER_REFUND_RECEIVED', 'Supplier refunds received'],
   ['CASH_ADJUSTMENT', 'Cash added / adjustments'],
   ['CLOSE_RECONCILIATION', 'Close reconciliation'],
 ] as const;
@@ -1149,6 +1150,14 @@ export default function ShiftClient({
                   <span>Cash Refunds</span>
                   <span className="font-semibold">
                     - {formatMoney(Math.abs(shiftToClose.cashByType.CASH_REFUND), currency)}
+                  </span>
+                </div>
+              ) : null}
+              {shiftToClose.cashByType?.SUPPLIER_REFUND_RECEIVED ? (
+                <div className="mt-2 flex justify-between text-sm">
+                  <span>Supplier refunds received</span>
+                  <span className="font-semibold">
+                    + {formatMoney(shiftToClose.cashByType.SUPPLIER_REFUND_RECEIVED, currency)}
                   </span>
                 </div>
               ) : null}

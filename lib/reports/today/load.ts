@@ -259,7 +259,7 @@ export async function loadToday(db: Db, input: TodayLoadInput): Promise<TodaySna
       },
       select: {
         paymentStatus: true,
-        totalPence: true,
+        totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
         dueDate: true,
         payments: { select: { amountPence: true } },
       },

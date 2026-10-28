@@ -34,7 +34,7 @@ export async function listOrphanCreditPurchases(businessId: string): Promise<Orp
       createdAt: true,
       dueDate: true,
       paymentStatus: true,
-      totalPence: true,
+      totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
       payments: { select: { amountPence: true } },
     },
     orderBy: { createdAt: 'desc' },
@@ -81,7 +81,7 @@ export async function assignOrphanPurchaseSupplier(input: {
       id: true,
       supplierId: true,
       paymentStatus: true,
-      totalPence: true,
+      totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
     },
   });
   if (!invoice) {

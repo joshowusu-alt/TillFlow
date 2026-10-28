@@ -125,6 +125,7 @@ export default async function PurchaseInvoicePage({
   return (
     <div className="space-y-6">
       <PurchaseDraftClearer storeId={invoice.storeId} active={searchParams?.created === '1'} />
+      {!['RETURNED', 'VOID'].includes(invoice.paymentStatus) ? <section className="card space-y-2 border-blue-200 p-4"><Link className="btn-primary inline-block" href={`/purchases/partial-return/${invoice.id}`}>Return selected items →</Link>{invoice.returnCreditPence > 0 ? <p className="text-sm">Original invoice: {formatMoney(invoice.totalPence,business.currency)} · Return credits: {formatMoney(invoice.returnCreditPence,business.currency)} · Revised supplier charge: {formatMoney(invoice.totalPence - invoice.returnCreditPence,business.currency)}. Original lines and payments remain unchanged.</p> : null}</section> : null}
       <PageHeader
         title={displayDocumentNumber('purchase', invoice.transactionNumber, invoice.id)}
         subtitle={invoice.supplier ? `Supplier: ${invoice.supplier.name}` : 'No supplier linked'}
@@ -209,7 +210,7 @@ export default async function PurchaseInvoicePage({
         </div>
         <div className="space-y-1 sm:col-span-2">
           <RemainingBalance
-            amountPence={invoice.totalPence}
+            amountPence={invoice.totalPence - invoice.returnCreditPence + invoice.creditSettledPence - invoice.creditAppliedPence}
             paidPence={totalPaid}
             currency={business.currency}
           />

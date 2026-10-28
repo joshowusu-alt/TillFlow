@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import { redirect } from 'next/navigation';
 import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
@@ -15,7 +16,7 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
     select: {
       id: true,
       createdAt: true,
-      totalPence: true,
+      totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
       paymentStatus: true,
       storeId: true,
       store: { select: { name: true } },
@@ -26,6 +27,7 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
   });
 
   if (!invoice) return <div className="card p-6">Purchase not found.</div>;
+  if (process.env.VERCEL_ENV === 'preview' && business.isDemo) redirect(`/purchases/partial-return/${encodeURIComponent(invoice.id)}`);
   if (invoice.purchaseReturn) {
     return <div className="card p-6">This purchase has already been returned.</div>;
   }

@@ -344,6 +344,7 @@ export default async function CashDrawerReportPage({
                 ['PAID_OUT_SUPPLIER', 'Supplier cash paid out'],
                 ['PAID_OUT_EXPENSE', 'Expenses paid out'],
                 ['CASH_REFUND', 'Refunds'],
+                ['SUPPLIER_REFUND_RECEIVED', 'Supplier refunds received'],
                 ['CASH_ADJUSTMENT', 'Cash added'],
               ] as const
             )
@@ -431,6 +432,7 @@ export default async function CashDrawerReportPage({
               <th className="hidden xl:table-cell">Supplier cash paid out</th>
               <th className="hidden xl:table-cell">Expenses paid out</th>
               <th className="hidden xl:table-cell">Refunds</th>
+              <th className="hidden xl:table-cell">Supplier refunds received</th>
               <th className="hidden xl:table-cell">Cash added</th>
               <th>Cash expected</th>
               <th>Cash counted</th>
@@ -455,6 +457,7 @@ export default async function CashDrawerReportPage({
                   <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.PAID_OUT_SUPPLIER ?? 0, business.currency)}</td>
                   <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.PAID_OUT_EXPENSE ?? 0, business.currency)}</td>
                   <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_REFUND ?? 0, business.currency)}</td>
+                  <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.SUPPLIER_REFUND_RECEIVED ?? 0, business.currency)}</td>
                   <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_ADJUSTMENT ?? 0, business.currency)}</td>
                   <td className="px-3 py-3 text-sm font-semibold">
                     {formatMoney(displayedExpectedCash(shift), business.currency)}
@@ -506,7 +509,7 @@ export default async function CashDrawerReportPage({
               );
             })}
             {shifts.length === 0 ? (
-              <ReportTableEmptyRow colSpan={17} message="No shifts found in this date range." paddingClassName="px-3 py-8" />
+              <ReportTableEmptyRow colSpan={18} message="No shifts found in this date range." paddingClassName="px-3 py-8" />
             ) : null}
           </tbody>
         </ReportTableCard>

@@ -10,15 +10,17 @@ export default function SubmitButton({
   children,
   loadingText = 'Please wait…',
   className = 'btn-primary w-full',
+  disabled = false,
 }: {
   children: React.ReactNode;
   loadingText?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
 
   return (
-    <button type="submit" disabled={pending} aria-busy={pending} className={`${className} relative overflow-hidden`}>
+    <button type="submit" disabled={pending || disabled} aria-busy={pending} className={`${className} relative overflow-hidden`}>
       {pending ? (
         <span className="flex items-center justify-center gap-2">
           <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">

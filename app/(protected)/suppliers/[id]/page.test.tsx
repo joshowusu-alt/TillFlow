@@ -33,7 +33,7 @@ it('labels an excess payment as supplier credit rather than an amount owed', asy
   mocks.db.purchaseInvoice.findMany.mockResolvedValue([{ createdAt: new Date('2025-01-01'), paymentStatus: 'PAID', totalPence: 1000, payments: [{ amountPence: 1500, paidAt: new Date('2026-01-01') }] }]);
   const html = renderToStaticMarkup(await SupplierDetailPage({ params: { id: 'supplier' } }));
   expect(html).toContain('Supplier credit balance');
-  expect(html).toContain('review excess payments');
+  expect(html).toContain('Unused supplier credit is due to your business.');
 });
 it('starts the long sections collapsed and limits purchases to a paged history', async () => {
   const html = renderToStaticMarkup(await SupplierDetailPage({ params: { id: 'supplier' } }));

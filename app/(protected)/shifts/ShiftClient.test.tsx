@@ -324,6 +324,21 @@ describe('ShiftClient', () => {
     expect(screen.getAllByText('GH₵2,600.00').length).toBeGreaterThanOrEqual(1);
   });
 
+  it('explains supplier refund cash in the shift card and close breakdown without calling it sales', () => {
+    render(<ShiftClient
+      tills={[{ id: 'till-1', name: 'Till 1' }]}
+      openShifts={[{ ...baseOpenShift, salesCount: 0, salesTotal: 0, expectedCash: 400,
+        cashByType: { OPEN_FLOAT: 0, CASH_SALE: 0, SUPPLIER_REFUND_RECEIVED: 400 } }]}
+      otherOpenShifts={[]} recentShifts={[]} currency="GHS" userRole="OWNER"
+    />);
+    expect(screen.getByRole('link', { name: /Supplier refunds received.*4.00/ })).toHaveAttribute(
+      'href', expect.stringContaining('type=SUPPLIER_REFUND_RECEIVED'));
+    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+    const refundLabel = screen.getAllByText('Supplier refunds received').find(element => element.tagName === 'SPAN' && element.parentElement?.textContent?.includes('+'));
+    expect(refundLabel?.parentElement).toHaveTextContent('+ GH₵4.00');
+    expect(screen.getByText('Cash Sales').parentElement).toHaveTextContent('+ GH₵0.00');
+  });
+
   it('does not offer a usable Open Shift action for an already-open till', () => {
     render(
       <ShiftClient

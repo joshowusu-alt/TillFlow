@@ -1444,6 +1444,12 @@ model SalesPayment {
 }
 
 model PurchaseInvoice {
+  creditSettledPence Int @default(0)
+  creditAppliedPence Int @default(0)
+  creditSettlements SupplierCreditSettlement[] @relation("CreditSource")
+  appliedCreditSettlements SupplierCreditSettlement[] @relation("CreditTarget")
+  returnCreditPence Int @default(0)
+  returnCredits PurchaseReturnCredit[]
   receiptDocumentType String @default("INVOICE")
   invoiceReceivedAt DateTime?
   discountBps Int @default(0)
@@ -1483,6 +1489,25 @@ model PurchaseInvoice {
   @@index([storeId, createdAt])
   @@index([businessId, paymentStatus, createdAt])
   @@index([supplierId, createdAt])
+}
+
+model SupplierCreditSettlement {
+  id String @id @default(cuid())
+  businessId String
+  storeId String
+  supplierId String
+  sourceInvoiceId String
+  targetInvoiceId String?
+  userId String
+  kind String
+  amountPence Int
+  reference String
+  requestKey String @unique
+  payloadHash String
+  createdAt DateTime @default(now())
+  sourceInvoice PurchaseInvoice @relation("CreditSource", fields: [sourceInvoiceId], references: [id], onDelete: Restrict)
+  targetInvoice PurchaseInvoice? @relation("CreditTarget", fields: [targetInvoiceId], references: [id], onDelete: Restrict)
+  @@index([businessId, supplierId, createdAt])
 }
 
 model PurchaseReturn {
@@ -2174,4 +2199,22 @@ model PurchaseDocument {
   createdAt DateTime @default(now())
   purchaseInvoice PurchaseInvoice @relation(fields:[purchaseInvoiceId],references:[id],onDelete:Restrict)
   @@index([businessId,purchaseInvoiceId])
+}
+
+model PurchaseReturnCredit {
+  id String @id @default(cuid())
+  purchaseInvoiceId String
+  businessId String
+  storeId String
+  userId String
+  requestKey String @unique
+  payloadHash String
+  creditPence Int
+  linesJson String
+  reason String
+  kind String
+  createdAt DateTime @default(now())
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Restrict)
+  @@index([businessId, storeId, createdAt])
+  @@index([purchaseInvoiceId])
 }

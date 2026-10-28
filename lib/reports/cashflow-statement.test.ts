@@ -5,6 +5,11 @@ const types: Record<string, string> = { '1000.HOLD.store.manager': 'ASSET', '230
 const journal = (referenceType: string | null, values: Record<string, number>): CashflowJournal => ({ id: 'entry', referenceType, lines: Object.entries(values).map(([code, amount]) => ({ account: { code, name: code, type: types[code] }, debitPence: Math.max(amount, 0), creditPence: Math.max(-amount, 0) })) });
 const report = (...entries: CashflowJournal[]) => { const accumulator = cashflowAccumulator(); entries.forEach(accumulator.add); return accumulator.finish(); };
 describe('indirect cash flow and direct supporting detail', () => {
+  it('classifies return credits as noncash and later supplier refunds as money received', () => {
+    const result = report(journal('PURCHASE_RETURN_CREDIT', { '1200': -1000, '1300': -200, '2000': 1200 }), journal('SUPPLIER_CREDIT_REFUND', { '1010': 1200, '2000': -1200 }));
+    expect(result).toMatchObject({ netCashFromOps: 1200, directOperatingPence: 1200, operatingDifferencePence: 0, otherPence: 0 });
+    expect(result.directRows).toEqual([expect.objectContaining({ label: 'Supplier refunds — money received', amountPence: 1200 })]);
+  });
   it('turns accrual profit into the same cash movement as receipts and payments', () => {
     const result = report(
       journal('SALES_INVOICE', { '1000': 4700000, '1100': 300000, '4000': -5000000, '1200': -3100000, '5000': 3100000 }),

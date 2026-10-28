@@ -90,7 +90,9 @@ describe('Cash Drawer report clarity pass', () => {
     expect(page).toContain('shift.expectedCashPence');
     expect(page).toContain('formatMoney(shift.actualCashPence, business.currency)');
     expect(page).toContain('formatMoney(shift.variance, business.currency)');
-    expect(page).toContain('ReportTableEmptyRow colSpan={17}');
+    expect(page).toContain('ReportTableEmptyRow colSpan={18}');
+    expect(page).toContain('<th className="hidden xl:table-cell">Supplier refunds received</th>');
+    expect(page).toContain('formatMoney(byType.SUPPLIER_REFUND_RECEIVED');
   });
 
   it('updates approval display copy only', () => {

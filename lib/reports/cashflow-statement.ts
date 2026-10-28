@@ -14,7 +14,8 @@ const WORKING = new Map([
 const SOURCES: Record<string, string> = {
   SALES_INVOICE: 'Customers', CUSTOMER_RECEIPT: 'Customers', MOMO_PAYMENT_CONFIRM: 'Customers',
   SALES_RETURN: 'Customer refunds', PURCHASE_INVOICE: 'Suppliers', PURCHASE_PAYMENT: 'Suppliers',
-  SUPPLIER_PAYMENT: 'Suppliers', PURCHASE_RETURN: 'Supplier refunds',
+  SUPPLIER_PAYMENT: 'Suppliers', PURCHASE_RETURN: 'Supplier refunds', SUPPLIER_CREDIT_REFUND: 'Supplier refunds',
+  PURCHASE_RETURN_CREDIT: 'Supplier return credits',
   EXPENSE: 'Operating expenses', EXPENSE_PAYMENT: 'Operating expenses', STOCK_ADJUSTMENT: 'Stock adjustments',
 };
 function workingAccount(line: Line) {

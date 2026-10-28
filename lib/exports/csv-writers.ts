@@ -63,7 +63,7 @@ export async function buildPurchasesLedgerCsv(businessId: string, range: DateRan
     orderBy: { createdAt: 'asc' },
     select: {
       id: true, createdAt: true, paymentStatus: true,
-      subtotalPence: true, vatPence: true, totalPence: true,
+      subtotalPence: true, vatPence: true, totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
       supplier: { select: { name: true } },
       store: { select: { name: true } },
     },
@@ -88,7 +88,7 @@ export async function buildPurchasesLedgerCsv(businessId: string, range: DateRan
 // 3. VAT Report (output tax from sales + input tax from purchases)
 // ---------------------------------------------------------------------------
 export async function buildVatReportCsv(businessId: string, range: DateRange): Promise<string> {
-  const [salesVat, purchasesVat] = await Promise.all([
+  const [salesVat, purchasesVat, reversals] = await Promise.all([
     prisma.salesInvoice.aggregate({
       where: { businessId, createdAt: { gte: range.from, lt: range.to } },
       _sum: { vatPence: true, subtotalPence: true, totalPence: true },
@@ -99,16 +99,38 @@ export async function buildVatReportCsv(businessId: string, range: DateRange): P
       _sum: { vatPence: true, subtotalPence: true, totalPence: true },
       _count: { id: true },
     }),
+    // Use the posted reversal date, not the source invoice date or settlement date.
+    // Refunds and offsets settle AP only and must never reverse VAT a second time.
+    prisma.journalEntry.findMany({
+      where: {
+        businessId,
+        entryDate: { gte: range.from, lt: range.to },
+        referenceType: { in: ['SALES_RETURN', 'PURCHASE_RETURN', 'PURCHASE_RETURN_CREDIT'] },
+      },
+      select: {
+        referenceType: true,
+        lines: { select: { debitPence: true, creditPence: true, account: { select: { code: true } } } },
+      },
+    }),
   ]);
 
-  const outVat = salesVat._sum.vatPence ?? 0;
-  const inVat = purchasesVat._sum.vatPence ?? 0;
+  const salesReturns = reversals.filter(entry => entry.referenceType === 'SALES_RETURN');
+  const purchaseReturns = reversals.filter(entry => entry.referenceType !== 'SALES_RETURN');
+  const movement = (entries: typeof reversals, code: string) => entries.reduce((sum, entry) =>
+    sum + entry.lines.filter(line => line.account.code === code)
+      .reduce((amount, line) => amount + line.debitPence - line.creditPence, 0), 0);
+  const salesVatReversed = movement(salesReturns, '2100');
+  const purchaseVatReversed = -movement(purchaseReturns, '1300');
+  const outVat = (salesVat._sum.vatPence ?? 0) - salesVatReversed;
+  const inVat = (purchasesVat._sum.vatPence ?? 0) - purchaseVatReversed;
   const netVat = outVat - inVat;
 
   const header = ['Section','Transactions','Net Sales/Purchases','VAT Amount'].join(',');
   const lines = [
-    `Output Tax (Sales),${salesVat._count.id},${fp(salesVat._sum.subtotalPence ?? 0)},${fp(outVat)}`,
-    `Input Tax (Purchases),${purchasesVat._count.id},${fp(purchasesVat._sum.subtotalPence ?? 0)},${fp(inVat)}`,
+    `Output Tax (Sales),${salesVat._count.id},${fp(salesVat._sum.subtotalPence ?? 0)},${fp(salesVat._sum.vatPence ?? 0)}`,
+    ...(salesReturns.length ? [`Output Tax Reversals (Returns),${salesReturns.length},${fp(-movement(salesReturns, '4000'))},${fp(-salesVatReversed)}`] : []),
+    `Input Tax (Purchases),${purchasesVat._count.id},${fp(purchasesVat._sum.subtotalPence ?? 0)},${fp(purchasesVat._sum.vatPence ?? 0)}`,
+    ...(purchaseReturns.length ? [`Input Tax Reversals (Purchase Credits),${purchaseReturns.length},${fp(movement(purchaseReturns, '1200'))},${fp(-purchaseVatReversed)}`] : []),
     `Net VAT Payable,,,"${fp(netVat)}"`,
     `Period,${range.from.toISOString().slice(0,10)},${range.to.toISOString().slice(0,10)},`,
   ];

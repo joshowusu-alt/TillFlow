@@ -1,4 +1,5 @@
 'use server';
+import { validateCreditBackup } from '@/lib/purchases/credit-backup';
 
 import {serializePurchaseDocument,restorePurchaseDocument} from '@/lib/purchases/document-backup';
 import { prisma } from '@/lib/prisma';
@@ -39,6 +40,8 @@ export interface BackupData {
     purchaseInvoiceLines: any[];
     purchasePayments: any[];
     purchaseReturns: any[];
+    purchaseReturnCredits?: any[];
+    supplierCreditSettlements?: any[];
     expenses: any[];
     expensePayments: any[];
     stockMovements: any[];
@@ -81,6 +84,8 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             purchaseInvoiceLines,
             purchasePayments,
             purchaseReturns,
+            purchaseReturnCredits,
+            supplierCreditSettlements,
             expenses,
             expensePayments,
             stockMovements,
@@ -111,6 +116,8 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             tx.purchaseInvoiceLine.findMany({ where: { purchaseInvoice: { businessId } } }),
             tx.purchasePayment.findMany({ where: { purchaseInvoice: { businessId } } }),
             tx.purchaseReturn.findMany({ where: { purchaseInvoice: { businessId } } }),
+            tx.purchaseReturnCredit.findMany({ where: { businessId } }),
+            tx.supplierCreditSettlement.findMany({ where: { businessId } }),
             tx.expense.findMany({ where: { businessId } }),
             tx.expensePayment.findMany({ where: { businessId } }),
             tx.stockMovement.findMany({ where: { store: { businessId } } }),
@@ -120,7 +127,7 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
         ]);
 
         return {
-            version: '1.3',
+            version: '1.4',
             exportedAt: new Date().toISOString(),
             business,
             stores,
@@ -146,6 +153,8 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             purchaseInvoiceLines,
             purchasePayments,
             purchaseReturns,
+            purchaseReturnCredits,
+            supplierCreditSettlements,
             expenses,
             expensePayments,
             stockMovements,
@@ -196,6 +205,7 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
     const list = <T = any>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
 
     const invoiceIds=new Set(list(backup.purchaseInvoices).map(invoice=>invoice.id));
+    validateCreditBackup(list(backup.purchaseInvoices), list(backup.purchaseReturnCredits), list(backup.supplierCreditSettlements));
     const restoredDocuments=list(backup.purchaseDocuments).map(document=>restorePurchaseDocument(document,businessId,invoiceIds));
 
     // Pre-compute bcrypt hashes for users before opening the transaction (CPU-only, no DB).
@@ -226,6 +236,8 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       await tx.salesInvoiceLine.deleteMany({ where: { salesInvoice: { businessId } } });
       await tx.salesInvoice.deleteMany({ where: { businessId } });
       await tx.purchasePayment.deleteMany({ where: { purchaseInvoice: { businessId } } });
+      await tx.supplierCreditSettlement.deleteMany({ where: { businessId } });
+      await tx.purchaseReturnCredit.deleteMany({ where: { businessId } });
       await tx.purchaseReturn.deleteMany({ where: { purchaseInvoice: { businessId } } });
       await tx.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } });
       await tx.purchaseDocument.deleteMany({where:{businessId}});
@@ -438,6 +450,12 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       for (const ret of list(backup.purchaseReturns)) {
         await tx.purchaseReturn.create({ data: ret });
       }
+      for (const credit of list(backup.purchaseReturnCredits)) {
+        await tx.purchaseReturnCredit.create({ data: { ...credit, businessId } });
+      }
+      for (const settlement of list(backup.supplierCreditSettlements)) {
+        await tx.supplierCreditSettlement.create({ data: { ...settlement, businessId } });
+      }
 
       for (const expense of list(backup.expenses)) {
         await tx.expense.create({ data: { ...expense, businessId } });
@@ -528,6 +546,8 @@ export async function resetAllDataAction(): Promise<ActionResult<{ message: stri
       prisma.salesInvoice.deleteMany({ where: { businessId } }),
       // Purchase chain
       prisma.purchasePayment.deleteMany({ where: { purchaseInvoice: { businessId } } }),
+      prisma.supplierCreditSettlement.deleteMany({ where: { businessId } }),
+      prisma.purchaseReturnCredit.deleteMany({ where: { businessId } }),
       prisma.purchaseReturn.deleteMany({ where: { purchaseInvoice: { businessId } } }),
       prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } }),
       prisma.purchaseDocument.deleteMany({where:{businessId}}),
