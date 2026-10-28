@@ -16,7 +16,22 @@ export default async function PartialPurchaseReturnPage({ params, searchParams }
   const prior = invoice.returnCredits.flatMap(credit => JSON.parse(credit.linesJson) as PurchaseCreditLine[]);
   const paidPence = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
   const balancePence = invoice.totalPence - invoice.returnCreditPence + invoice.creditSettledPence - invoice.creditAppliedPence - paidPence;
-  return <main className="mx-auto max-w-5xl space-y-5"><header className="card space-y-3 p-5"><Link href={`/purchases/${invoice.id}`} className="text-blue-700">← Original purchase</Link><h1 className="text-2xl font-bold">Return selected items · {invoice.transactionNumber ?? invoice.id}</h1><p>{invoice.supplier?.name ?? 'No linked supplier'} · {store.name}</p><p className="text-sm">Original invoice: {formatMoney(invoice.totalPence, business.currency)} · Credits recorded: {formatMoney(invoice.returnCreditPence, business.currency)} · Paid: {formatMoney(paidPence, business.currency)}</p><p className="rounded-xl bg-amber-50 p-3 text-sm">Saving a return updates stock and the supplier account together. Original invoice and payment records are preserved.</p></header>
+  return <main className="mx-auto max-w-5xl space-y-5">
+    <header className="card space-y-5 p-4 sm:p-6">
+      <Link href={`/purchases/${invoice.id}`} className="inline-flex text-sm font-medium text-blue-700">← Original purchase</Link>
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Purchase return</p>
+        <h1 className="font-display text-2xl font-bold text-slate-900 sm:text-3xl">Return selected items</h1>
+        <p className="break-words text-sm text-slate-600">{invoice.supplier?.name ?? 'No linked supplier'} · {store.name}</p>
+        <p className="break-all text-xs font-medium text-slate-500">Invoice {invoice.transactionNumber ?? invoice.id}</p>
+      </div>
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="rounded-xl bg-slate-50 px-4 py-3"><dt className="text-xs text-slate-500">Original invoice</dt><dd className="mt-1 text-lg font-semibold tabular-nums">{formatMoney(invoice.totalPence, business.currency)}</dd></div>
+        <div className="rounded-xl bg-slate-50 px-4 py-3"><dt className="text-xs text-slate-500">Earlier return credits</dt><dd className="mt-1 text-lg font-semibold tabular-nums">{formatMoney(invoice.returnCreditPence, business.currency)}</dd></div>
+        <div className="col-span-2 rounded-xl bg-slate-50 px-4 py-3 sm:col-span-1"><dt className="text-xs text-slate-500">Payments recorded</dt><dd className="mt-1 text-lg font-semibold tabular-nums">{formatMoney(paidPence, business.currency)}</dd></div>
+      </dl>
+      <p className="rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3 text-sm leading-relaxed text-slate-600">Choose only the items and quantities being returned. Your original invoice and payment history stay on record.</p>
+    </header>
     {searchParams?.saved ? <p role="status" className="rounded-xl bg-emerald-50 p-4">Return saved. Stock movements, supplier credit and journal were recorded together.</p> : null}
     {searchParams?.error ? <p role="alert" className="rounded-xl bg-red-50 p-4">{searchParams.error}</p> : null}
     {invoice.purchaseReturn || ['RETURNED','VOID'].includes(invoice.paymentStatus) ? <p>This purchase was fully reversed.</p> : <PartialPurchaseReturnForm invoiceId={invoice.id} storeId={store.id} totalPence={invoice.totalPence} paidPence={paidPence} previousCreditPence={invoice.returnCreditPence} creditSettledPence={invoice.creditSettledPence} creditAppliedPence={invoice.creditAppliedPence} currency={business.currency} requestKey={randomUUID()} lines={invoice.lines.map(line => ({ id: line.id, name: line.product.name, qtyBase: line.qtyBase, alreadyReturned: prior.filter(item => item.lineId === line.id).reduce((sum,item) => sum + item.qtyBase,0), onHand: stock.find(item => item.productId === line.productId)?.qtyOnHandBase ?? 0, subtotalPence: line.lineSubtotalPence, vatPence: line.lineVatPence, baseUnit: line.conversionToBase === 1 ? line.unit.name : 'base units' }))} />}
