@@ -22,6 +22,7 @@ export const EXPECTED_CASH_ENTRY_TYPES = [
   'PAID_OUT_SUPPLIER',
   'PAID_OUT_EXPENSE',
   'CASH_REFUND',
+  'SUPPLIER_REFUND_RECEIVED',
 ] as const;
 
 export type ExpectedCashEntryType = (typeof EXPECTED_CASH_ENTRY_TYPES)[number];

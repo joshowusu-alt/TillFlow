@@ -87,7 +87,7 @@ export async function getSupplierListKpis(
     },
     select: {
       supplierId: true,
-      totalPence: true, returnCreditPence: true,
+      totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
       paymentStatus: true,
       payments: { select: { amountPence: true } },
     },

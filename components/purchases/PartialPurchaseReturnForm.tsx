@@ -6,7 +6,7 @@ import SubmitButton from '@/components/SubmitButton';
 import { formatMoney } from '@/lib/format';
 
 export type ReturnSourceLine = { id: string; name: string; qtyBase: number; alreadyReturned: number; onHand: number; subtotalPence: number; vatPence: number; baseUnit: string };
-export default function PartialPurchaseReturnForm({ invoiceId, storeId, totalPence, paidPence, previousCreditPence, currency, lines, requestKey }: { invoiceId: string; storeId: string; totalPence: number; paidPence: number; previousCreditPence: number; currency: string; lines: ReturnSourceLine[]; requestKey: string }) {
+export default function PartialPurchaseReturnForm({ invoiceId, storeId, totalPence, paidPence, previousCreditPence, creditSettledPence = 0, creditAppliedPence = 0, currency, lines, requestKey }: { invoiceId: string; storeId: string; totalPence: number; paidPence: number; previousCreditPence: number; creditSettledPence?: number; creditAppliedPence?: number; currency: string; lines: ReturnSourceLine[]; requestKey: string }) {
   const [quantities, setQuantities] = useState<Record<string,string>>({});
   const [reason, setReason] = useState('');
   let credit = 0, valid = true, count = 0;
@@ -19,7 +19,7 @@ export default function PartialPurchaseReturnForm({ invoiceId, storeId, totalPen
     credit += allocatedReturnValue(line.subtotalPence, line.qtyBase, line.alreadyReturned, qty) + allocatedReturnValue(line.vatPence, line.qtyBase, line.alreadyReturned, qty);
   }
   valid = valid && credit <= totalPence - previousCreditPence;
-  const result = partialReturnSettlement({ invoiceTotalPence: totalPence, paidPence, previousCreditsPence: previousCreditPence, newCreditPence: Math.min(credit, totalPence - previousCreditPence) });
+  const result = partialReturnSettlement({ invoiceTotalPence: totalPence, paidPence, previousCreditsPence: previousCreditPence, creditSettledPence, creditAppliedPence, newCreditPence: Math.min(credit, totalPence - previousCreditPence) });
   return <form action={recordPartialPurchaseReturnAction} className="card space-y-5 p-5">
     <input type="hidden" name="invoiceId" value={invoiceId} /><input type="hidden" name="storeId" value={storeId} /><input type="hidden" name="requestKey" value={requestKey} />
     <h2 className="text-xl font-semibold">Choose quantities from this purchase</h2><p className="text-sm text-slate-600">Original quantities and payments are loaded from TillFlow. Quantities below are base units. Current stock includes all receipts, sales and adjustments in this branch.</p>

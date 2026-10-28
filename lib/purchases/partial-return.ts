@@ -9,15 +9,15 @@ export function allocatedReturnValue(totalPence: number, sourceQty: number, prev
   return cumulative(previouslyReturned + returnNow) - cumulative(previouslyReturned);
 }
 
-export function partialReturnSettlement(input: { invoiceTotalPence: number; paidPence: number; previousCreditsPence: number; newCreditPence: number }) {
+export function partialReturnSettlement(input: { invoiceTotalPence: number; paidPence: number; previousCreditsPence: number; newCreditPence: number; creditSettledPence?: number; creditAppliedPence?: number }) {
   for (const value of Object.values(input)) if (!Number.isSafeInteger(value) || value < 0) throw new Error('Invalid supplier amounts');
   const remainingBefore = input.invoiceTotalPence - input.previousCreditsPence;
   if (remainingBefore < 0 || input.newCreditPence > remainingBefore) throw new Error('Credit exceeds remaining purchase value');
   const chargeAfter = remainingBefore - input.newCreditPence;
   return {
     chargeAfterPence: chargeAfter,
-    supplierDebtPence: Math.max(0, chargeAfter - input.paidPence),
-    supplierCreditPence: Math.max(0, input.paidPence - chargeAfter),
+    supplierDebtPence: Math.max(0, chargeAfter + (input.creditSettledPence ?? 0) - (input.creditAppliedPence ?? 0) - input.paidPence),
+    supplierCreditPence: Math.max(0, input.paidPence + (input.creditAppliedPence ?? 0) - (input.creditSettledPence ?? 0) - chargeAfter),
     cashReceivedPence: 0,
   };
 }

@@ -18,7 +18,7 @@ export async function updatePurchaseDetails(input: PurchaseDetailsInput) {
   return prisma.$transaction(async tx => {
     const invoice = await tx.purchaseInvoice.findFirst({where:{id:input.invoiceId,businessId:input.businessId},include:{payments:{select:{amountPence:true}},purchaseReturn:{select:{id:true}}}});
     if (!invoice) throw new Error('Purchase not found.');
-    if (invoice.returnCreditPence > 0) throw new Error('Purchases with return credits cannot be reassigned or edited.');
+    if (invoice.returnCreditPence > 0 || invoice.creditAppliedPence > 0 || invoice.creditSettledPence > 0) throw new Error('Purchases with return credits or settlements cannot be reassigned or edited.');
     if (invoice.purchaseReturn || ['VOID','RETURNED'].includes(invoice.paymentStatus)) throw new Error('Returned or voided purchases cannot be edited.');
     if (input.supplierId) {
       const supplier = await tx.supplier.findFirst({where:{id:input.supplierId,businessId:input.businessId},select:{id:true}});

@@ -16,7 +16,7 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
     select: {
       id: true,
       createdAt: true,
-      totalPence: true, returnCreditPence: true,
+      totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
       paymentStatus: true,
       storeId: true,
       store: { select: { name: true } },

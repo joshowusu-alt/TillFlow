@@ -117,7 +117,7 @@ async function loadOutstandingAttributedInvoices(
       id: true,
       transactionNumber: true,
       dueDate: true,
-      totalPence: true, returnCreditPence: true,
+      totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
       paymentStatus: true,
       supplierId: true,
       supplier: { select: { id: true, name: true } },

@@ -19,7 +19,10 @@ async function readBalanceSheetEntries(db: Prisma.TransactionClient, businessId:
   const creditRefs=journals.filter(j=>j.referenceType==='PURCHASE_RETURN_CREDIT').map(j=>j.referenceId!).filter(Boolean);
   const credits=creditRefs.length?await db.purchaseReturnCredit.findMany({where:{id:{in:creditRefs},businessId},select:{id:true,purchaseInvoiceId:true}}):[];
   const returnMap=new Map([...returns,...credits].map(r=>[r.id,r.purchaseInvoiceId]));
-  const purchaseIdFor=(j:{referenceType:string|null;referenceId:string|null})=>['PURCHASE_RETURN','PURCHASE_RETURN_CREDIT'].includes(j.referenceType??'')?returnMap.get(j.referenceId??'')??null:['PURCHASE_INVOICE','SUPPLIER_PAYMENT'].includes(j.referenceType??'')?j.referenceId:null;
+  const refundRefs=journals.filter(j=>j.referenceType==='SUPPLIER_CREDIT_REFUND').map(j=>j.referenceId!).filter(Boolean);
+  const refunds=refundRefs.length?await db.supplierCreditSettlement.findMany({where:{id:{in:refundRefs},businessId},select:{id:true,sourceInvoiceId:true}}):[];
+  for(const refund of refunds) returnMap.set(refund.id,refund.sourceInvoiceId);
+  const purchaseIdFor=(j:{referenceType:string|null;referenceId:string|null})=>['PURCHASE_RETURN','PURCHASE_RETURN_CREDIT','SUPPLIER_CREDIT_REFUND'].includes(j.referenceType??'')?returnMap.get(j.referenceId??'')??null:['PURCHASE_INVOICE','SUPPLIER_PAYMENT'].includes(j.referenceType??'')?j.referenceId:null;
   const purchaseIds=[...new Set(journals.map(purchaseIdFor).filter((id):id is string=>Boolean(id)))];
   const saleIds=[...new Set(journals.filter(j=>['SALES_INVOICE','CUSTOMER_RECEIPT'].includes(j.referenceType??'')).map(j=>j.referenceId!).filter(Boolean))];
   const sales=saleIds.length?await db.salesInvoice.findMany({where:{businessId,id:{in:saleIds}},select:{id:true,transactionNumber:true,customer:{select:{name:true}}}}):[];

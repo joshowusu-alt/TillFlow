@@ -5,6 +5,8 @@ type InvoiceKind = 'sales' | 'purchase';
 
 type InvoiceStatusRow = {
   returnCreditPence?: number;
+  creditSettledPence?: number;
+  creditAppliedPence?: number;
   id: string;
   paymentStatus: string;
   totalPence: number;
@@ -32,8 +34,8 @@ export type PaymentStatusHealth = {
 function toIssue(kind: InvoiceKind, invoice: InvoiceStatusRow): PaymentStatusIssue | null {
   if (['RETURNED', 'VOID'].includes(invoice.paymentStatus)) return null;
 
-  const paidPence = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-  const effectiveTotal = invoice.totalPence - (kind === 'purchase' ? invoice.returnCreditPence ?? 0 : 0);
+  const paidPence = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0) + (kind === 'purchase' ? invoice.creditAppliedPence ?? 0 : 0);
+  const effectiveTotal = invoice.totalPence - (kind === 'purchase' ? invoice.returnCreditPence ?? 0 : 0) + (kind === 'purchase' ? invoice.creditSettledPence ?? 0 : 0);
   const expectedStatus = derivePaymentStatus(effectiveTotal, paidPence);
   if (expectedStatus === invoice.paymentStatus) return null;
 
@@ -90,7 +92,7 @@ export async function getPaymentStatusHealth(businessId: string): Promise<Paymen
       select: {
         id: true,
         paymentStatus: true,
-        totalPence: true, returnCreditPence: true,
+        totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
         payments: { select: { amountPence: true } },
       },
       take: 5000,

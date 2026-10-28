@@ -154,7 +154,7 @@ async function getArApDue7Days(
           { dueDate: null, createdAt: { lte: sevenDays } },
         ],
       },
-      select: { paymentStatus: true, totalPence: true, returnCreditPence: true, payments: { select: { amountPence: true } } },
+      select: { paymentStatus: true, totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true, payments: { select: { amountPence: true } } },
     }),
   ]);
 

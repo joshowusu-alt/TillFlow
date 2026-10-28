@@ -210,7 +210,7 @@ export default async function PurchaseInvoicePage({
         </div>
         <div className="space-y-1 sm:col-span-2">
           <RemainingBalance
-            amountPence={invoice.totalPence - invoice.returnCreditPence}
+            amountPence={invoice.totalPence - invoice.returnCreditPence + invoice.creditSettledPence - invoice.creditAppliedPence}
             paidPence={totalPaid}
             currency={business.currency}
           />

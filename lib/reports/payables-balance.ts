@@ -7,6 +7,8 @@ export type PayableDocument = {
   paymentStatus: string;
   totalPence: number;
   returnCreditPence?: number;
+  creditSettledPence?: number;
+  creditAppliedPence?: number;
   payments: Array<{ amountPence: number }>;
   refundAmountPence?: number | null;
 };
@@ -24,12 +26,17 @@ export function payableDocumentBalance(invoice: PayableDocument): PayableBalance
     return { paidPence: 0, balancePence: 0, excessPence: 0 };
   }
   const paidPence = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-  const balancePence = invoice.totalPence - (invoice.returnCreditPence ?? 0) - paidPence;
+  const balancePence = purchaseSettlementCharge(invoice) - paidPence;
   return {
     paidPence,
     balancePence,
     excessPence: balancePence < 0 ? -balancePence : 0,
   };
+}
+
+/** Charge less returns, adjusted for separately recorded credit settlements. Never cash paid. */
+export function purchaseSettlementCharge(invoice: Pick<PayableDocument, 'totalPence' | 'returnCreditPence' | 'creditSettledPence' | 'creditAppliedPence'>) {
+  return invoice.totalPence - (invoice.returnCreditPence ?? 0) + (invoice.creditSettledPence ?? 0) - (invoice.creditAppliedPence ?? 0);
 }
 
 export function sumPayableBalances(invoices: PayableDocument[]): number {

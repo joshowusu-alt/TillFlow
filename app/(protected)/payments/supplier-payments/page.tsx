@@ -55,7 +55,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
           createdAt: true,
           dueDate: true,
           paymentStatus: true,
-          totalPence: true, returnCreditPence: true,
+          totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
           supplier: { select: { id: true, name: true } },
           payments: { select: { amountPence: true, paidAt: true, method: true } }
         },
@@ -139,7 +139,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
       storeId={store.id}
       today={today}
       currency={business.currency}
-      originalPence={invoice.totalPence - invoice.returnCreditPence}
+      originalPence={invoice.totalPence - invoice.returnCreditPence + invoice.creditSettledPence - invoice.creditAppliedPence}
       paidPence={invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0)}
       remainingPence={invoice.outstanding}
       returnTo={linkedSupplier ? `/suppliers/${linkedSupplier.id}` : undefined}
@@ -255,7 +255,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                         </td>
                         <td className="px-3 py-3">
                           <RemainingBalance
-                            amountPence={invoice.totalPence - invoice.returnCreditPence}
+                            amountPence={invoice.totalPence - invoice.returnCreditPence + invoice.creditSettledPence - invoice.creditAppliedPence}
                             paidPence={invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0)}
                             currency={business.currency}
                           />
@@ -320,7 +320,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                           <div className="text-xs text-black/50">What you owe</div>
                           <RemainingBalance
                             className="mt-1"
-                            amountPence={invoice.totalPence - invoice.returnCreditPence}
+                            amountPence={invoice.totalPence - invoice.returnCreditPence + invoice.creditSettledPence - invoice.creditAppliedPence}
                             paidPence={invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0)}
                             currency={business.currency}
                           />

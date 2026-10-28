@@ -354,7 +354,7 @@ async function createPurchaseReturnImpl(input: {
     }
   });
   if (!invoice) throw new Error('Purchase not found');
-  if (invoice.returnCreditPence > 0) throw new Error('This purchase has partial return credits. Use selected-item returns; a whole-invoice reversal would duplicate the credit.');
+  if (invoice.returnCreditPence > 0 || invoice.creditAppliedPence > 0 || invoice.creditSettledPence > 0) throw new UserError('This purchase has return credits or settlements. Use selected-item returns; a whole-invoice reversal would duplicate the credit.');
 
   const existingReturn = await prisma.purchaseReturn.findUnique({
     where: { purchaseInvoiceId: invoice.id }
@@ -381,8 +381,8 @@ async function createPurchaseReturnImpl(input: {
   const result = await prisma.$transaction(async (tx) => {
     // Re-read inventory inside transaction to prevent TOCTOU race
     await lockPurchaseInvoiceForUpdate(tx as unknown as Parameters<typeof lockPurchaseInvoiceForUpdate>[0], input.businessId, input.purchaseInvoiceId);
-    const freshPurchase = await tx.purchaseInvoice.findFirst({ where: { id: invoice.id, businessId: input.businessId }, select: { returnCreditPence: true } });
-    if (freshPurchase?.returnCreditPence) throw new Error('This purchase has partial return credits. Use selected-item returns.');
+    const freshPurchase = await tx.purchaseInvoice.findFirst({ where: { id: invoice.id, businessId: input.businessId }, select: { returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true } });
+    if (freshPurchase?.returnCreditPence || freshPurchase?.creditAppliedPence || freshPurchase?.creditSettledPence) throw new UserError('This purchase has return credits or settlements. Use selected-item returns.');
     await lockInventoryValues(tx, invoice.storeId, Array.from(qtyByProduct.keys()));
     const inventoryMap = await fetchInventoryMap(invoice.storeId, Array.from(qtyByProduct.keys()), tx);
     const avgCostMap = buildAvgCostMap(invoice.lines, inventoryMap);

@@ -25,7 +25,7 @@ export async function loadTradingOpenDocuments(businessId: string, storeId?: str
       where: { businessId, ...storeFilter, paymentStatus: openStatus },
       select: {
         paymentStatus: true,
-        totalPence: true, returnCreditPence: true,
+        totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
         payments: { select: { amountPence: true } },
       },
     }),

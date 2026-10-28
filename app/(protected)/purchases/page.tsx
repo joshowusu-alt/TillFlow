@@ -122,7 +122,7 @@ export default async function PurchasesPage({
         invoiceReceivedAt: true,
         createdAt: true,
         paymentStatus: true,
-        totalPence: true, returnCreditPence: true,
+        totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
         supplier: { select: { name: true } },
         purchaseReturn: { select: { id: true } },
         payments: { select: { amountPence: true } },
@@ -431,7 +431,7 @@ export default async function PurchasesPage({
                     </div>
                     <div className="col-span-2">
                       <RemainingBalance
-                        amountPence={purchase.totalPence - purchase.returnCreditPence}
+                        amountPence={purchase.totalPence - purchase.returnCreditPence + purchase.creditSettledPence - purchase.creditAppliedPence}
                         paidPence={purchase.payments.reduce((sum, payment) => sum + payment.amountPence, 0)}
                         currency={business.currency}
                       />
@@ -526,7 +526,7 @@ export default async function PurchasesPage({
                       </td>
                       <td className="px-3 py-3 text-sm font-semibold">
                         <RemainingBalance
-                          amountPence={purchase.totalPence - purchase.returnCreditPence}
+                          amountPence={purchase.totalPence - purchase.returnCreditPence + purchase.creditSettledPence - purchase.creditAppliedPence}
                           paidPence={purchase.payments.reduce((sum, payment) => sum + payment.amountPence, 0)}
                           currency={business.currency}
                         />

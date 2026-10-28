@@ -5,6 +5,7 @@ export type CashDrawerEntryType =
   | 'OPEN_FLOAT'
   | 'CASH_SALE'
   | 'CASH_REFUND'
+  | 'SUPPLIER_REFUND_RECEIVED'
   | 'CASH_DEBTOR_PAYMENT'
   | 'PAID_OUT_SUPPLIER'
   | 'PAID_OUT_EXPENSE'
@@ -18,6 +19,7 @@ export const CASH_DRAWER_ENTRY_LABELS: Record<string, string> = {
   PAID_OUT_SUPPLIER: 'Supplier payments',
   PAID_OUT_EXPENSE: 'Expenses paid from till',
   CASH_REFUND: 'Refunds paid',
+  SUPPLIER_REFUND_RECEIVED: 'Supplier refunds received',
   CASH_ADJUSTMENT: 'Cash added / adjustments',
   CLOSE_RECONCILIATION: 'Close reconciliation',
 };
@@ -29,6 +31,7 @@ export const CASH_DRAWER_BREAKDOWN_ORDER = [
   'PAID_OUT_SUPPLIER',
   'PAID_OUT_EXPENSE',
   'CASH_REFUND',
+  'SUPPLIER_REFUND_RECEIVED',
   'CASH_ADJUSTMENT',
 ] as const;
 

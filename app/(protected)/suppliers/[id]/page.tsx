@@ -100,8 +100,10 @@ export default async function SupplierDetailPage({
             createdAt: true,
             dueDate: true,
             paymentStatus: true,
-            totalPence: true, returnCreditPence: true,
+            totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
             returnCredits: { select: { id: true, createdAt: true, creditPence: true, reason: true } },
+            creditSettlements: true,
+            appliedCreditSettlements: true,
             payments: {
               select: { id: true, amountPence: true, paidAt: true, method: true, notes: true },
               orderBy: { paidAt: 'asc' },
@@ -154,6 +156,7 @@ export default async function SupplierDetailPage({
   });
 
   const outstanding = balances.account.outstandingPence;
+  const refundsReceived = balances.account.creditSettlementNetPence;
   const totalBilled = balances.selection.totalBilledPence;
   const totalPaid = balances.selection.totalPaidPence;
   const activePurchaseInvoiceCount = balances.account.unpaidInvoiceCount;
@@ -188,6 +191,16 @@ export default async function SupplierDetailPage({
         debitPence: 0,
         creditPence: credit.creditPence,
         balanceEffectPence: -credit.creditPence,
+      })),
+      ...invoice.creditSettlements.map(settlement => ({
+        key: `${settlement.id}-source`, date: settlement.createdAt, sortKey: settlement.createdAt.getTime(), type: 'adjustment' as const,
+        description: `${settlement.kind === 'OFFSET' ? 'Credit applied to another invoice (no money moved)' : settlement.kind === 'REFUND_CASH' ? 'Supplier cash refund received' : 'Supplier bank refund received'} — ${settlement.reference}`,
+        debitPence: settlement.amountPence, creditPence: 0, balanceEffectPence: settlement.amountPence,
+      })),
+      ...invoice.appliedCreditSettlements.map(settlement => ({
+        key: `${settlement.id}-target`, date: settlement.createdAt, sortKey: settlement.createdAt.getTime(), type: 'adjustment' as const,
+        description: `Credit applied from another invoice (no money moved) — ${settlement.reference}`,
+        debitPence: 0, creditPence: settlement.amountPence, balanceEffectPence: -settlement.amountPence,
       })),
       ...invoice.payments.map((payment) => ({
         key: payment.id,
@@ -246,7 +259,8 @@ export default async function SupplierDetailPage({
               {formatMoney(outstanding, business.currency)}
             </div>
             <div className="mt-1 text-xs text-black/55">
-              {outstanding > 0 ? `${activePurchaseInvoiceCount} unpaid purchase invoice${activePurchaseInvoiceCount === 1 ? '' : 's'} need attention.` : outstanding < 0 ? 'Supplier credit balance — review excess payments.' : 'This supplier account is up to date.'}
+              {outstanding > 0 ? `${activePurchaseInvoiceCount} unpaid purchase invoice${activePurchaseInvoiceCount === 1 ? '' : 's'} need attention.` : outstanding < 0 ? 'Unused supplier credit is due to your business.' : 'This supplier account is up to date.'}
+              {refundsReceived > 0 ? ` Supplier refunds received: ${formatMoney(refundsReceived, business.currency)}. Original payments are shown separately.` : ''}
               <p className="mt-1">All purchase dates · all recorded payments. History filters do not change this balance.</p>
             </div>
           </div>
@@ -440,7 +454,7 @@ export default async function SupplierDetailPage({
 
                   <div className="mt-3">
                     <RemainingBalance
-                      amountPence={invoice.totalPence - invoice.returnCreditPence}
+                      amountPence={invoice.totalPence - invoice.returnCreditPence + invoice.creditSettledPence - invoice.creditAppliedPence}
                       paidPence={invoice.paid}
                       currency={business.currency}
                     />
@@ -517,7 +531,7 @@ export default async function SupplierDetailPage({
                       </td>
                       <td className="px-3 py-3 text-sm font-semibold">
                         <RemainingBalance
-                          amountPence={invoice.totalPence - invoice.returnCreditPence}
+                          amountPence={invoice.totalPence - invoice.returnCreditPence + invoice.creditSettledPence - invoice.creditAppliedPence}
                           paidPence={invoice.paid}
                           currency={business.currency}
                         />

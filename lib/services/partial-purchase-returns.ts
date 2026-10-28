@@ -36,6 +36,7 @@ export async function createPartialPurchaseReturn(input: PartialPurchaseReturnIn
       return previousRequest;
     }
     if (!invoice.supplierId) throw new UserError('Link the supplier before creating a supplier credit.');
+    if (!await tx.supplier.findFirst({ where: { id: invoice.supplierId, businessId: input.businessId }, select: { id: true } })) throw new UserError('The supplier does not belong to this business.');
     if (invoice.purchaseReturn || ['RETURNED','VOID'].includes(invoice.paymentStatus)) throw new UserError('This purchase was already fully reversed.');
     if (invoice.lines.some(line => (line.allocatedCostPence ?? 0) !== 0)) throw new UserError('Returns with capitalised delivery costs require a cost allocation review and are not enabled in this preview pilot.');
     const prior = invoice.returnCredits.flatMap(credit => JSON.parse(credit.linesJson) as PurchaseCreditLine[]);
@@ -65,8 +66,8 @@ export async function createPartialPurchaseReturn(input: PartialPurchaseReturnIn
     const credit = await tx.purchaseReturnCredit.create({ data: { purchaseInvoiceId: invoice.id, businessId: input.businessId, storeId: invoice.storeId, userId: actor.id, requestKey: input.requestKey, payloadHash: hash, creditPence, reason: input.reason.trim(), kind: input.kind, linesJson: JSON.stringify(lines) } });
     await tx.stockMovement.createMany({ data: lines.map(line => ({ storeId: invoice.storeId, productId: line.productId, qtyBase: -line.qtyBase, valuePence: -line.netPence, costBasis: INVENTORY_VALUE_V1, type: 'PURCHASE_RETURN', referenceType: 'PURCHASE_RETURN_CREDIT', referenceId: credit.id, userId: actor.id })) });
     const totalCredit = invoice.returnCreditPence + creditPence;
-    const netCharge = invoice.totalPence - totalCredit;
-    const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+    const netCharge = invoice.totalPence - totalCredit + invoice.creditSettledPence;
+    const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0) + invoice.creditAppliedPence;
     // Preserve PAID for a creditor position; the signed supplier balance exposes the credit.
     const status = paid >= netCharge ? 'PAID' : paid > 0 ? 'PART_PAID' : 'UNPAID';
     await tx.purchaseInvoice.update({ where: { id: invoice.id }, data: { returnCreditPence: totalCredit, paymentStatus: status } });

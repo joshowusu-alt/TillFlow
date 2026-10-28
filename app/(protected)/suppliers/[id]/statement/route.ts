@@ -15,7 +15,7 @@ const csvEscape = (value: string | number | null | undefined) => {
   return text;
 };
 
-const formatPence = (pence: number) => (pence / 100).toFixed(2);
+  const formatPence = (pence: number | null | undefined) => ((pence ?? 0) / 100).toFixed(2);
 
 export async function GET(
   request: Request,
@@ -61,7 +61,7 @@ export async function GET(
   const invoices = supplier.purchaseInvoices.map((invoice) => {
     const document = payableDocumentBalance({
       paymentStatus: invoice.paymentStatus,
-      totalPence: invoice.totalPence, returnCreditPence: invoice.returnCreditPence,
+      totalPence: invoice.totalPence, returnCreditPence: invoice.returnCreditPence, creditSettledPence: invoice.creditSettledPence, creditAppliedPence: invoice.creditAppliedPence,
       payments: invoice.payments,
     });
     const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
@@ -69,7 +69,7 @@ export async function GET(
   });
 
   const activeInvoices = invoices.filter((invoice) => !invoice.isClosed);
-  const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence - invoice.returnCreditPence, 0);
+  const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence - (invoice.returnCreditPence ?? 0), 0);
   const totalPaid = activeInvoices.reduce((sum, invoice) => sum + invoice.paid, 0);
   const outstanding = summarizeOpenPayables(supplier.purchaseInvoices).outstandingPence;
 
@@ -78,10 +78,11 @@ export async function GET(
   rows.push(`Generated,${csvEscape(new Date().toISOString())}`);
   rows.push(`Period,${csvEscape(from ?? '')},${csvEscape(to ?? '')}`);
   rows.push(`Account balance (all purchase dates),${formatPence(balances.account.outstandingPence)}`);
+  rows.push(`Supplier refunds received (all purchase dates),${formatPence(balances.account.creditSettlementNetPence)}`);
   rows.push(`Balance on selected purchases,${formatPence(outstanding)}`);
   rows.push('Basis,Purchase-date selection includes all recorded payments against those purchases; not a historical end-date balance');
   rows.push('');
-  rows.push('Invoice,Date,Status,Original total,Return credits,Revised charge,Paid,Balance');
+  rows.push('Invoice,Date,Status,Original total,Return credits,Revised charge,Payments recorded,Credit refunded or transferred out,Credit applied from another invoice,Balance');
   for (const invoice of invoices) {
     rows.push(
       [
@@ -90,8 +91,10 @@ export async function GET(
         csvEscape(invoice.paymentStatus),
         csvEscape(formatPence(invoice.totalPence)),
         csvEscape(formatPence(invoice.returnCreditPence)),
-        csvEscape(formatPence(invoice.totalPence - invoice.returnCreditPence)),
+        csvEscape(formatPence(invoice.totalPence - (invoice.returnCreditPence ?? 0))),
         csvEscape(formatPence(invoice.paid)),
+        csvEscape(formatPence(invoice.creditSettledPence)),
+        csvEscape(formatPence(invoice.creditAppliedPence)),
         csvEscape(formatPence(invoice.balance))
       ].join(',')
     );
