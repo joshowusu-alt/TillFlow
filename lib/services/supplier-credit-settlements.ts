@@ -15,8 +15,7 @@ export type SupplierCreditSettlementInput = {
 
 /** Explicit settlement: an offset moves no money; a refund records money actually received. */
 export async function settleSupplierCredit(input: SupplierCreditSettlementInput) {
-  if (process.env.VERCEL_ENV === 'production') throw new UserError('Supplier credit settlement is awaiting preview verification.');
-  if (!await prisma.business.findFirst({ where: { id: input.businessId, isDemo: true }, select: { id: true } })) throw new UserError('This preview pilot is limited to demo businesses.');
+  if (!await prisma.business.findFirst({ where: { id: input.businessId }, select: { id: true } })) throw new UserError('Business not found.');
   if (!['OFFSET', 'REFUND_BANK', 'REFUND_CASH'].includes(input.kind) || !Number.isSafeInteger(input.amountPence) || input.amountPence <= 0) throw new UserError('Enter a positive settlement amount.');
   if (!input.reference.trim() || input.reference.length > 500 || !input.requestKey || input.requestKey.length > 120) throw new UserError('A settlement reference and request key are required.');
   if (input.kind === 'OFFSET' && (!input.targetInvoiceId || input.targetInvoiceId === input.sourceInvoiceId)) throw new UserError('Choose another invoice for this supplier.');

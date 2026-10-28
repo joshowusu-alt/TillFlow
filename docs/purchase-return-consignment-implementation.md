@@ -1,6 +1,6 @@
 # Partial returns and consignment implementation contract
 
-Status: selected-item purchase returns and explicit supplier credit settlements are implemented and verified on the isolated preview branch. Production activation remains a separate release step. Consignment remains unimplemented.
+Status: selected-item purchase returns and explicit supplier credit settlements are implemented and verified. Production activation was authorised on 28 October 2026; the release configuration enables ordinary businesses after the release gates pass. Consignment remains unimplemented.
 
 ## Current implementation evidence
 
@@ -14,7 +14,9 @@ Status: selected-item purchase returns and explicit supplier credit settlements 
 - The browser check exposed a missing supplier-refund line in the shift card and close breakdown, despite the correct expected-cash total. Both now show Supplier refunds received with a dedicated drill-down. All 20 shift UI tests pass, including a zero-sales GH₵4 refund regression; the VAT and cash-drawer suites also pass (42 tests in that run).
 - The stable preview browser check confirmed the GH₵4 refund in the shift card, close breakdown and cash-drawer report. Full CI subsequently exposed an over-broad pilot redirect: ordinary local/non-demo purchases were being routed into the demo partial-return screen. The redirect and invoice link are now restricted to preview demo businesses; a five-case regression covers ordinary preview/local/production businesses, preview demos and production demos. Partial-return pages reject non-demo businesses. Updated cash-column and supplier-credit wording assertions pass; the targeted rerun passed 26 tests, lint and TypeScript.
 - The public supplier-stock example is a simulation and is not evidence that financial writes work. No production migration or data change was performed. The demo shift SHF-000371 remains open with GH₵4 expected cash as verification evidence; closing it requires the reviewer’s manager PIN or owner password.
-- Pilot writes are disabled in production and limited to demo businesses. Capitalised delivery-cost returns are blocked pending allocation review. Missing goods expected later and cash refunds are not automatically credited or paid by this workflow.
+- The release configuration removes production/demo restrictions from the verified services and pages and offers selected-item returns on active purchases. The existing whole-invoice return path remains available and cannot reverse purchases that already have partial credits or settlements. Authenticated owner/manager, business, branch, supplier, stock, duplicate-request and credit-limit checks remain in force.
+- The isolated settlement harness now uses an ordinary (non-demo) synthetic business with the production runtime switch enabled, after validating its isolated database target. The local release-mode workflow passed stock, VAT, AP, cashflow, balance-sheet, bank refund, cash refund and offset assertions. Four production-page tests cover ordinary businesses and foreign-branch denial; the targeted activation run passed 27 tests, lint and TypeScript.
+- Capitalised delivery-cost returns remain blocked pending allocation review. Missing goods expected later and cash refunds are not automatically credited or paid by this workflow.
 
 ## Purchase corrections
 

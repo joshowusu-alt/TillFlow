@@ -15,10 +15,9 @@ export type PartialPurchaseReturnInput = {
   lines: { lineId: string; qtyBase: number }[];
 };
 
-/** Preview pilot: no automatic cash refund, no invoice/line/payment history rewriting. */
+/** Immutable purchase credits; refunds are recorded separately when actually received. */
 export async function createPartialPurchaseReturn(input: PartialPurchaseReturnInput) {
-  if (process.env.VERCEL_ENV === 'production') throw new UserError('Partial purchase returns are awaiting preview verification.');
-  if (!await prisma.business.findFirst({ where: { id: input.businessId, isDemo: true }, select: { id: true } })) throw new UserError('This preview pilot is limited to demo businesses.');
+  if (!await prisma.business.findFirst({ where: { id: input.businessId }, select: { id: true } })) throw new UserError('Business not found.');
   if (!input.requestKey || input.requestKey.length > 120 || !input.reason.trim() || input.reason.length > 500) throw new UserError('A request key and return reason are required.');
   if (!['RETURN', 'SHORT_DELIVERY_CREDIT'].includes(input.kind) || !input.lines.length || input.lines.length > 200) throw new UserError('Choose the return type and at least one line.');
   if (new Set(input.lines.map(line => line.lineId)).size !== input.lines.length) throw new UserError('Duplicate source lines are not allowed.');
@@ -38,7 +37,7 @@ export async function createPartialPurchaseReturn(input: PartialPurchaseReturnIn
     if (!invoice.supplierId) throw new UserError('Link the supplier before creating a supplier credit.');
     if (!await tx.supplier.findFirst({ where: { id: invoice.supplierId, businessId: input.businessId }, select: { id: true } })) throw new UserError('The supplier does not belong to this business.');
     if (invoice.purchaseReturn || ['RETURNED','VOID'].includes(invoice.paymentStatus)) throw new UserError('This purchase was already fully reversed.');
-    if (invoice.lines.some(line => (line.allocatedCostPence ?? 0) !== 0)) throw new UserError('Returns with capitalised delivery costs require a cost allocation review and are not enabled in this preview pilot.');
+    if (invoice.lines.some(line => (line.allocatedCostPence ?? 0) !== 0)) throw new UserError('Returns with capitalised delivery costs require a cost allocation review and are not supported.');
     const prior = invoice.returnCredits.flatMap(credit => JSON.parse(credit.linesJson) as PurchaseCreditLine[]);
     const lines: PurchaseCreditLine[] = input.lines.map(request => {
       const source = invoice.lines.find(line => line.id === request.lineId);

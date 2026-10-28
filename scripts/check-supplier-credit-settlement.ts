@@ -18,8 +18,11 @@ async function main() {
   const host = process.env.PARTIAL_RETURN_EXPECTED_HOST;
   if (url !== 'file:./partial-return-unit.db' && (!host || !host.startsWith('ep-crimson-lake-za8q4axv') || new URL(url).hostname !== host)) throw new Error('Explicit isolated target required');
   if (process.env.VERCEL_ENV !== 'preview') throw new Error('Preview environment required');
+  // After the isolated target guard, exercise release behaviour in this subprocess.
+  // This never changes the database target or runs verification on production data.
+  process.env.VERCEL_ENV = 'production';
   const run = randomUUID();
-  const business = await prisma.business.create({ data: { name: `Settlement QA ${run}`, isDemo: true, vatEnabled: true } });
+  const business = await prisma.business.create({ data: { name: `Settlement QA ${run}`, isDemo: false, vatEnabled: true } });
   const store = await prisma.store.create({ data: { businessId: business.id, name: 'QA branch' } });
   const user = await prisma.user.create({ data: { businessId: business.id, name: 'QA owner', email: `${run}@example.invalid`, passwordHash: 'NO-LOGIN', role: 'OWNER' } });
   const supplier = await prisma.supplier.create({ data: { businessId: business.id, name: 'QA supplier' } });
@@ -89,7 +92,7 @@ async function main() {
   assert.ok(laterVat.includes('Net VAT Payable,,,"0.00"'));
   assert.ok(!laterVat.includes('Purchase Credits)'));
   assert.equal(await buildVatReportCsv(business.id, { from: creditPeriod.from, to: laterSettlementPeriod.from }), creditVatBeforeSettlement.replace('2100-01-01', '2090-01-01'));
-  console.log(JSON.stringify({ check: 'VAT_CREDIT_EXPORT_VERIFIED', checks: ['earlier invoice period unchanged', 'posted credit period reversal', 'offset VAT unchanged', 'bank refund VAT unchanged', 'cash refund VAT unchanged', 'later settlement period zero VAT', 'half-open posting boundaries', 'business isolation'] }));
+  console.log(JSON.stringify({ check: 'VAT_CREDIT_EXPORT_VERIFIED', checks: ['earlier invoice period unchanged', 'posted credit period reversal', 'offset VAT unchanged', 'bank refund VAT unchanged', 'cash refund VAT unchanged', 'later settlement period zero VAT', 'half-open posting boundaries', 'business isolation', 'production runtime ordinary business activation'] }));
   assert.equal(payableDocumentBalance(await reload()).balancePence, 0);
   await assert.rejects(settleSupplierCredit({ ...cashInput, requestKey: randomUUID(), amountPence: 1 }));
   assert.equal((await prisma.shift.findUniqueOrThrow({ where: { id: shift.id } })).expectedCashPence, 1800);
