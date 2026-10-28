@@ -95,8 +95,9 @@ describe('purchases page polish', () => {
     expect(pageSrc).toContain('motion-reduce:active:scale-100');
   });
 
-  it('return route remains available', () => {
-    expect(pageSrc).toContain('/purchases/return/');
+  it('return actions open item selection rather than whole-invoice reversal', () => {
+    expect(pageSrc).toContain('/purchases/partial-return/');
+    expect(pageSrc).not.toContain('/purchases/return/');
   });
 
   it('delete action remains available', () => {

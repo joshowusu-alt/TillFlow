@@ -11,7 +11,6 @@ vi.mock('@/lib/auth', () => ({ requireBusinessAndOptionalStore: mocks.auth }));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 vi.mock('@/app/actions/returns', () => ({ createPurchaseReturnAction: '/unused' }));
 vi.mock('@/components/SubmitButton', () => ({ default: ({ children }: { children: ReactNode }) => <button>{children}</button> }));
-vi.mock('@/components/PageHeader', () => ({ default: () => <h1>Return Purchase</h1> }));
 import PurchaseReturnPage from './page';
 
 beforeEach(() => {
@@ -22,6 +21,23 @@ beforeEach(() => {
   mocks.db.shift.findMany.mockResolvedValue([]);
 });
 afterEach(() => vi.unstubAllEnvs());
+
+it('distinguishes full reversal and offers item selection on the legacy screen', async () => {
+  vi.stubEnv('VERCEL_ENV', 'production');
+  const html = renderToStaticMarkup(await PurchaseReturnPage({ params: { id: 'invoice' } }));
+  expect(html).toContain('Return full purchase');
+  expect(html).toContain('This screen reverses the entire purchase.');
+  expect(html).toContain('href="/purchases/partial-return/invoice"');
+  expect(html).toContain('Return selected items');
+});
+
+it('opens credit-aware history instead of a second whole-invoice reversal when credits exist', async () => {
+  vi.stubEnv('VERCEL_ENV', 'production');
+  const invoice = await mocks.db.purchaseInvoice.findFirst();
+  mocks.db.purchaseInvoice.findFirst.mockResolvedValue({ ...invoice, returnCreditPence: 1800 });
+  await expect(PurchaseReturnPage({ params: { id: 'invoice' } })).rejects.toThrow('PILOT_REDIRECT');
+  expect(mocks.redirect).toHaveBeenCalledWith('/purchases/partial-return/invoice');
+});
 
 it.each(['preview', 'production', 'development'])('preserves whole-invoice returns for ordinary businesses in %s', async environment => {
   vi.stubEnv('VERCEL_ENV', environment);
