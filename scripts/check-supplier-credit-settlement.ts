@@ -11,6 +11,7 @@ import { getSupplierAccountSummary } from '../lib/services/supplier-account-summ
 import { expectedCashPenceFromEntries } from '../lib/reports/expected-cash';
 import { getBalanceSheet, getIncomeStatement } from '../lib/reports/financials';
 import { recordSupplierPayment } from '../lib/services/payments';
+import { buildVatReportCsv } from '../lib/exports/csv-writers';
 
 async function main() {
   const url = process.env.POSTGRES_PRISMA_URL ?? '';
@@ -36,9 +37,19 @@ async function main() {
   // Target represented as a second receipt; use a separate product to keep the returned product's stock assertion exact.
   await postJournalEntry({ businessId: business.id, referenceType: 'PURCHASE_INVOICE', referenceId: target.id, description: 'QA target receipt', lines: [{ accountCode: ACCOUNT_CODES.inventory, debitPence: 5000 }, { accountCode: ACCOUNT_CODES.ap, creditPence: 5000 }] });
   const base = { businessId: business.id, storeId: store.id, userId: user.id, sourceInvoiceId: source.id };
+  // Source invoices belong to an earlier reporting period than the credit.
+  await prisma.purchaseInvoice.updateMany({ where: { businessId: business.id }, data: { createdAt: new Date('2020-06-01Z') } });
+  const invoicePeriod = { from: new Date('2020-01-01Z'), to: new Date('2021-01-01Z') };
+  const creditPeriod = { from: invoicePeriod.to, to: new Date('2100-01-01Z') };
+  const invoiceVatBefore = await buildVatReportCsv(business.id, invoicePeriod);
+  assert.ok(invoiceVatBefore.includes('Input Tax (Purchases),2,150.00,20.00'));
   await createPartialPurchaseReturn({ businessId: business.id, storeId: store.id, userId: user.id, invoiceId: source.id, requestKey: randomUUID(), reason: 'QA VAT-bearing partial return', kind: 'RETURN', lines: [{ lineId: source.lines[0].id, qtyBase: 4 }] });
   const reload = () => prisma.purchaseInvoice.findUniqueOrThrow({ where: { id: source.id }, include: { payments: true, lines: true } });
   assert.equal(payableDocumentBalance(await reload()).balancePence, -4800);
+  const creditVatBeforeSettlement = await buildVatReportCsv(business.id, creditPeriod);
+  assert.ok(creditVatBeforeSettlement.includes('Input Tax Reversals (Purchase Credits),1,-40.00,-8.00'));
+  assert.ok(creditVatBeforeSettlement.includes('Net VAT Payable,,,"8.00"'));
+  assert.equal(await buildVatReportCsv(business.id, invoicePeriod), invoiceVatBefore);
   const inventoryBefore = await prisma.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId: store.id, productId: product.id } } });
   const offsetInput = { ...base, kind: 'OFFSET' as const, targetInvoiceId: target.id, amountPence: 1000, reference: 'QA supplier agreed offset', requestKey: randomUUID() };
   const offset = await settleSupplierCredit(offsetInput);
@@ -46,7 +57,9 @@ async function main() {
   assert.equal(payableDocumentBalance(await reload()).balancePence, -3800);
   assert.equal(payableDocumentBalance(await prisma.purchaseInvoice.findUniqueOrThrow({ where: { id: target.id }, include: { payments: true } })).balancePence, 4000);
   assert.equal(await prisma.journalEntry.count({ where: { businessId: business.id, referenceId: offset.id } }), 0);
+  assert.equal(await buildVatReportCsv(business.id, creditPeriod), creditVatBeforeSettlement);
   const bank = await settleSupplierCredit({ ...base, kind: 'REFUND_BANK', amountPence: 2000, reference: 'QA bank receipt', requestKey: randomUUID() });
+  assert.equal(await buildVatReportCsv(business.id, creditPeriod), creditVatBeforeSettlement);
   await assert.rejects(settleSupplierCredit({ ...base, kind: 'REFUND_BANK', amountPence: 2000, reference: 'QA over settlement', requestKey: randomUUID() }));
   await assert.rejects(settleSupplierCredit({ ...base, kind: 'REFUND_CASH', amountPence: 100, reference: 'QA no till', requestKey: randomUUID() }));
   await assert.rejects(settleSupplierCredit({ ...offsetInput, amountPence: 1 }));
@@ -56,11 +69,27 @@ async function main() {
   await assert.rejects(settleSupplierCredit({ ...offsetInput, targetInvoiceId: foreignInvoice.id, requestKey: randomUUID() }));
   // Remove the unused foreign fixture from financial assertions by treating it as a closed zero-impact document.
   await prisma.purchaseInvoice.update({ where: { id: foreignInvoice.id }, data: { paymentStatus: 'VOID' } });
+  await prisma.purchaseInvoice.update({ where: { id: foreignInvoice.id }, data: { createdAt: new Date('2020-06-01Z') } });
   const till = await prisma.till.create({ data: { storeId: store.id, name: 'QA receiving till' } });
   const shift = await prisma.shift.create({ data: { tillId: till.id, userId: user.id, status: 'OPEN' } });
   const cashInput = { ...base, kind: 'REFUND_CASH' as const, tillId: till.id, amountPence: 1800, reference: 'QA cash received', requestKey: randomUUID() };
   const cash = await settleSupplierCredit(cashInput);
   assert.equal((await settleSupplierCredit(cashInput)).id, cash.id);
+  assert.equal(await buildVatReportCsv(business.id, creditPeriod), creditVatBeforeSettlement);
+  // The half-open posting window includes a credit at the start and excludes it at the end.
+  const posted = await prisma.journalEntry.findFirstOrThrow({ where: { businessId: business.id, referenceType: 'PURCHASE_RETURN_CREDIT' } });
+  assert.ok((await buildVatReportCsv(business.id, { from: posted.entryDate, to: creditPeriod.to })).includes('Purchase Credits),1,-40.00,-8.00'));
+  assert.ok(!(await buildVatReportCsv(business.id, { from: creditPeriod.from, to: posted.entryDate })).includes('Purchase Credits)'));
+  // Another business cannot leak into the report.
+  assert.ok(!(await buildVatReportCsv(`absent-${run}`, creditPeriod)).includes('Purchase Credits)'));
+  const laterSettlementPeriod = { from: new Date('2090-01-01Z'), to: new Date('2091-01-01Z') };
+  await prisma.supplierCreditSettlement.updateMany({ where: { businessId: business.id }, data: { createdAt: laterSettlementPeriod.from } });
+  await prisma.journalEntry.updateMany({ where: { businessId: business.id, referenceType: 'SUPPLIER_CREDIT_REFUND' }, data: { entryDate: laterSettlementPeriod.from } });
+  const laterVat = await buildVatReportCsv(business.id, laterSettlementPeriod);
+  assert.ok(laterVat.includes('Net VAT Payable,,,"0.00"'));
+  assert.ok(!laterVat.includes('Purchase Credits)'));
+  assert.equal(await buildVatReportCsv(business.id, { from: creditPeriod.from, to: laterSettlementPeriod.from }), creditVatBeforeSettlement.replace('2100-01-01', '2090-01-01'));
+  console.log(JSON.stringify({ check: 'VAT_CREDIT_EXPORT_VERIFIED', checks: ['earlier invoice period unchanged', 'posted credit period reversal', 'offset VAT unchanged', 'bank refund VAT unchanged', 'cash refund VAT unchanged', 'later settlement period zero VAT', 'half-open posting boundaries', 'business isolation'] }));
   assert.equal(payableDocumentBalance(await reload()).balancePence, 0);
   await assert.rejects(settleSupplierCredit({ ...cashInput, requestKey: randomUUID(), amountPence: 1 }));
   assert.equal((await prisma.shift.findUniqueOrThrow({ where: { id: shift.id } })).expectedCashPence, 1800);
