@@ -1,6 +1,6 @@
 # Partial returns and consignment implementation contract
 
-Status: selected-item purchase returns and explicit supplier credit settlements are implemented on the isolated preview branch. Production release remains gated on authenticated browser verification. Consignment remains unimplemented.
+Status: selected-item purchase returns and explicit supplier credit settlements are implemented and verified on the isolated preview branch. Production activation remains a separate release step. Consignment remains unimplemented.
 
 ## Current implementation evidence
 
@@ -10,7 +10,9 @@ Status: selected-item purchase returns and explicit supplier credit settlements 
 - Local disposable SQLite checks passed for unpaid, part-paid and fully paid purchases, repeat returns, replay, insufficient remaining quantities and foreign branches. Focused regression: 102 tests passed; TypeScript and changed-file lint passed.
 - Explicit invoice offsets, bank refunds and open-till cash refunds preserve original invoice payments and inventory. Checks reconcile supplier balances to AP, cashflow, balance sheet and income statement. The prior hosted preview passed the settlement checks, including competing concurrent refunds, on isolated Postgres branch br-dark-breeze-zayhdifo.
 - VAT CSV now includes posted sales and purchase return reversals, including partial purchase credits, by journal entry date. Original invoice VAT stays in its invoice period; an offset or later cash/bank refund does not reverse VAT again. The hosted VAT check passed for commit f1f18079793e57d2d848dfc8e0bf6ecdbf565163, including half-open date boundaries and business isolation.
-- Authenticated browser verification of the actual saved return and settlement forms remains pending preview sign-in. The public supplier-stock example is a simulation and is not evidence that financial writes work. No production migration or data change was performed.
+- Authenticated browser verification passed on the demo business: returning four books reduced branch stock 55→51 and created GH₵18 credit while preserving the GH₵507 original invoice/payment. A GH₵8 offset reduced invoice PUR-000101 from GH₵493.50 to GH₵485.50; GH₵6 bank and GH₵4 cash refunds consumed the remaining credit. Till expected cash was GH₵4. Excess return and settlement quantities were blocked. The tested return/settlement forms are unchanged from commit d3eb1942 through the VAT correction.
+- The browser check exposed a missing supplier-refund line in the shift card and close breakdown, despite the correct expected-cash total. Both now show Supplier refunds received with a dedicated drill-down. All 20 shift UI tests pass, including a zero-sales GH₵4 refund regression; the VAT and cash-drawer suites also pass (42 tests in that run).
+- The public supplier-stock example is a simulation and is not evidence that financial writes work. No production migration or data change was performed. The demo shift SHF-000371 remains open with GH₵4 expected cash as verification evidence; closing it requires the reviewer’s manager PIN or owner password.
 - Pilot writes are disabled in production and limited to demo businesses. Capitalised delivery-cost returns are blocked pending allocation review. Missing goods expected later and cash refunds are not automatically credited or paid by this workflow.
 
 ## Purchase corrections
