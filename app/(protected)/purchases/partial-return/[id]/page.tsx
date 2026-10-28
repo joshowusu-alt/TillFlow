@@ -11,6 +11,7 @@ export default async function PartialPurchaseReturnPage({ params, searchParams }
   if (process.env.VERCEL_ENV === 'production') notFound();
   const { business, store } = await requireBusinessAndOptionalStore(['OWNER','MANAGER']);
   if (!business || !store) return <div className="card p-5">Select the purchase’s branch first.</div>;
+  if (!business.isDemo) notFound();
   const invoice = await prisma.purchaseInvoice.findFirst({ where: { id: params.id, businessId: business.id, storeId: store.id }, include: { supplier: true, lines: { include: { product: true, unit: true } }, payments: true, returnCredits: { orderBy: { createdAt: 'desc' } }, purchaseReturn: true } });
   if (!invoice) notFound();
   const stock = await prisma.inventoryBalance.findMany({ where: { storeId: store.id, productId: { in: invoice.lines.map(line => line.productId) } } });

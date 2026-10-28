@@ -27,7 +27,7 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
   });
 
   if (!invoice) return <div className="card p-6">Purchase not found.</div>;
-  if (process.env.VERCEL_ENV !== 'production') redirect(`/purchases/partial-return/${encodeURIComponent(invoice.id)}`);
+  if (process.env.VERCEL_ENV === 'preview' && business.isDemo) redirect(`/purchases/partial-return/${encodeURIComponent(invoice.id)}`);
   if (invoice.purchaseReturn) {
     return <div className="card p-6">This purchase has already been returned.</div>;
   }
