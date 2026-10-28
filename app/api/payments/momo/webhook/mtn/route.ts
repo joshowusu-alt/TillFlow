@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { manualPaymentsOnly } from '@/lib/payments/pilot-policy';
 import { handleMobileMoneyWebhook } from '@/lib/services/mobile-money';
 
 function headersToObject(request: NextRequest): Record<string, string> {
@@ -21,6 +22,9 @@ function verifyWebhookSecret(headers: Record<string, string>): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  if (manualPaymentsOnly()) {
+    return NextResponse.json({ error: 'Automated collections are disabled for this pilot.' }, { status: 503 });
+  }
   const headers = headersToObject(request);
   if (!verifyWebhookSecret(headers)) {
     return NextResponse.json({ error: 'Unauthorized webhook request.' }, { status: 401 });

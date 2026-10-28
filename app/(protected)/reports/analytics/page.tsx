@@ -24,11 +24,12 @@ function resolvePeriodDays(period: string | undefined) {
     : 7;
 }
 
-export default async function AnalyticsPage({
-  searchParams,
-}: {
-  searchParams?: { period?: string };
-}) {
+export default async function AnalyticsPage(
+  props: {
+    searchParams?: Promise<{ period?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const periodDays = resolvePeriodDays(searchParams?.period);
   const opened = await openLiveReport({
     surfaceId: 'sales_analytics',

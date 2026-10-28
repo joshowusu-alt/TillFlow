@@ -26,7 +26,8 @@ function InventoryEmptyState({ q }: { q: string }) {
   );
 }
 
-export default async function InventoryPage({ searchParams }: { searchParams?: { q?: string; page?: string } }) {
+export default async function InventoryPage(props: { searchParams?: Promise<{ q?: string; page?: string }> }) {
+  const searchParams = await props.searchParams;
   const { business, store, stores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) {
     return <div className="card p-6">Seed data missing.</div>;
@@ -309,7 +310,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
             </tbody>
           </table>
         </div>
-        <Pagination currentPage={page} totalPages={totalPages} basePath="/inventory" searchParams={{ q: q || undefined }} />
+        <Pagination documentNavigation currentPage={page} totalPages={totalPages} basePath="/inventory" searchParams={{ q: q || undefined }} />
       </div>
     </div>
   );

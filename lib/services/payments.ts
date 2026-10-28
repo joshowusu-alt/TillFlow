@@ -37,6 +37,19 @@ import {
   sumAmountPence,
 } from './money-idempotency';
 
+/** Runtime validation is required: server-action FormData is not protected by TS unions. */
+function assertValidPaymentInputs(payments: PaymentInput[]) {
+  for (const payment of payments) {
+    if (!['CASH', 'CARD', 'TRANSFER', 'MOBILE_MONEY'].includes(payment.method)) {
+      throw new UserError('Choose a valid payment method.');
+    }
+    // Zero split-tender fields are supported and filtered below; invalid money is never ignored.
+    if (!Number.isSafeInteger(payment.amountPence) || payment.amountPence < 0) {
+      throw new UserError('Payment amounts must be non-negative whole minor units.');
+    }
+  }
+}
+
 const SUPPLIER_PAYMENT_ROLES: readonly Role[] = ['OWNER', 'MANAGER'];
 
 export const SUPPLIER_PAYMENT_ERROR = {
@@ -211,6 +224,7 @@ async function recordCustomerPaymentImpl(
   actorUserId?: string,
   options?: RecordCustomerPaymentOptions,
 ) {
+  assertValidPaymentInputs(payments);
   const idempotencyKey = normalizeMoneyIdempotencyKey(options?.idempotencyKey);
   const newPayments = filterPositivePayments(payments).map(payment => ({ ...payment }));
   if (newPayments.length === 0) {
@@ -275,6 +289,9 @@ async function recordCustomerPaymentImpl(
         include: { payments: true },
       });
       if (!invoice) throw new Error('Invoice not found');
+      if (['RETURNED', 'VOID'].includes(invoice.paymentStatus)) {
+        throw new UserError('Cannot record payments against a returned or voided invoice.');
+      }
 
       const previouslyPaid = sumAmountPence(invoice.payments);
       const newPaid = sumAmountPence(newPayments);
@@ -434,6 +451,7 @@ async function recordSupplierPaymentImpl(
 ): Promise<RecordSupplierPaymentResult> {
   assertSupplierPaymentWritesEnabled();
   assertCanRecordSupplierPayment(options.actorRole);
+  assertValidPaymentInputs(payments);
   const idempotencyKey = normalizeIdempotencyKey(options.idempotencyKey);
   const recordedByUserId = options.recordedByUserId;
   if (!recordedByUserId) {
@@ -521,6 +539,10 @@ async function recordSupplierPaymentImpl(
       });
       if (!invoice) {
         throw new SupplierPaymentError(SUPPLIER_PAYMENT_ERROR.NOT_FOUND, 'Invoice not found');
+      }
+
+      if (['RETURNED', 'VOID'].includes(invoice.paymentStatus)) {
+        throw new UserError('Cannot record payments against a returned or voided invoice.');
       }
 
       const previouslyPaid = sumAmountPence(invoice.payments);
@@ -627,6 +649,7 @@ async function recordSupplierPaymentImpl(
       await postJournalEntry({
         businessId,
         description: `Supplier payment ${invoice.id}`,
+        entryDate: paidAt,
         referenceType: 'SUPPLIER_PAYMENT',
         referenceId: invoice.id,
         lines: [

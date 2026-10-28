@@ -178,7 +178,7 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
     const fulfilled = [a, b].filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<
       Awaited<ReturnType<typeof createPurchase>>
     >[];
-    expect(fulfilled.length).toBeGreaterThanOrEqual(1);
+    expect(fulfilled.length).toBe(2);
     const invoiceId = fulfilled[0]!.value.id;
     fulfilled.forEach((row) => expect(row.value.id).toBe(invoiceId));
     expect(await prisma.purchaseInvoice.count({ where: { businessId, id: invoiceId } })).toBe(1);
@@ -231,6 +231,28 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
     ).rejects.toMatchObject({ code: MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_CONFLICT });
   }, 60000);
 
+  it('rejects a parallel same-key changed payment without a second invoice, payment or stock movement', async () => {
+    const key = `po-parallel-conflict-${suffix}`;
+    const beforeInvoices = await prisma.purchaseInvoice.count({ where: { businessId } });
+    const beforePayments = await prisma.purchasePayment.count({ where: { businessId } });
+    const opts = { businessId, storeId, supplierId, userId, tillId, lines: line(), idempotencyKey: key };
+    const results = await Promise.allSettled([
+      createPurchase({ ...opts, sourceDocuments: [purchaseDocumentFixture()], paymentStatus: 'PAID', payments: [{ method: 'CASH', amountPence: 1000 }] }),
+      createPurchase({ ...opts, sourceDocuments: [purchaseDocumentFixture()], paymentStatus: 'PART_PAID', payments: [{ method: 'CASH', amountPence: 500 }] }),
+    ]);
+    const accepted = results.filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof createPurchase>>> => r.status === 'fulfilled');
+    const denied = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    expect(accepted).toHaveLength(1);
+    expect(denied).toHaveLength(1);
+    expect(denied[0].reason).toMatchObject({ code: MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_CONFLICT });
+    expect(await prisma.purchaseInvoice.count({ where: { businessId } })).toBe(beforeInvoices + 1);
+    expect(await prisma.purchasePayment.count({ where: { businessId } })).toBe(beforePayments + 1);
+    const invoiceId = accepted[0].value.id;
+    expect(await prisma.stockMovement.count({ where: { storeId, referenceId: invoiceId } })).toBe(1);
+    expect(await prisma.moneyIdempotency.count({ where: { businessId, key } })).toBe(1);
+    expect(await prisma.journalEntry.count({ where: { businessId, referenceType: 'PURCHASE_INVOICE', referenceId: invoiceId } })).toBe(1);
+  }, 60000);
+
   it('does not reserve a money key when the paid transaction fails', async () => {
     const key = `po-fail-${suffix}`;
     const beforeInvoices = await prisma.purchaseInvoice.count({ where: { businessId } });
@@ -267,7 +289,7 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
     const fulfilled = [a, b].filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<
       Awaited<ReturnType<typeof createPurchase>>
     >[];
-    expect(fulfilled.length).toBeGreaterThanOrEqual(1);
+    expect(fulfilled.length).toBe(2);
     const invoiceId = fulfilled[0]!.value.id;
     fulfilled.forEach((row) => expect(row.value.id).toBe(invoiceId));
     expect(await prisma.purchaseInvoice.count({ where: { businessId, id: invoiceId } })).toBe(1);

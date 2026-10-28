@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers';
+import { cookies, type UnsafeUnwrappedCookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import {
   ALL_BRANCHES_NOT_OPERATIONAL_MSG,
@@ -79,7 +79,10 @@ export async function assertAuthoritativeMutationStore(
 
 export function readOperationalStoreCookie(): string | null {
   try {
-    return cookies().get(OPERATIONAL_STORE_COOKIE)?.value?.trim() || null;
+    // Next 15 explicitly supports this temporary synchronous adapter. Keep this
+    // guard synchronous until all mutation callers can migrate together; never
+    // replace a missing/foreign cookie with a store inferred from the request.
+    return (cookies() as unknown as UnsafeUnwrappedCookies).get(OPERATIONAL_STORE_COOKIE)?.value?.trim() || null;
   } catch {
     return null;
   }

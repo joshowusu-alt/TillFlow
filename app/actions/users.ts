@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { hashApprovalPin } from '@/lib/security/pin';
@@ -42,6 +43,7 @@ export async function createUserAction(formData: FormData): Promise<void> {
 
     audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_CREATE', entity: 'User', entityId: created.id, details: { name, email, role } }).catch((e) => console.error('[audit]', e));
 
+    revalidatePath('/users');
     redirect('/users?success=created');
   }, '/users');
 }
@@ -90,6 +92,7 @@ export async function updateUserAction(formData: FormData): Promise<void> {
 
     audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_UPDATE', entity: 'User', entityId: targetUser.id, details: { name, email, role, active } }).catch((e) => console.error('[audit]', e));
 
+    revalidatePath('/users');
     redirect('/users?success=updated');
   }, '/users');
 }
@@ -100,6 +103,9 @@ export async function toggleUserActiveAction(formData: FormData): Promise<void> 
 
     const userId = formString(formData, 'userId');
 
+    const requestedActive = formString(formData, 'active');
+    if (requestedActive !== 'true' && requestedActive !== 'false') return err('Choose whether to activate or deactivate this user.');
+
     const target = await prisma.user.findFirst({
       where: { id: userId, businessId },
       select: { id: true, name: true, active: true },
@@ -107,7 +113,9 @@ export async function toggleUserActiveAction(formData: FormData): Promise<void> 
     if (!target) return err('User not found.');
     if (target.id === owner.id) return err('You cannot deactivate your own account.');
 
-    const nowActive = !target.active;
+    // An explicit desired state keeps retries/double taps from reactivating a
+    // deactivated account. Never invert the latest database value on replay.
+    const nowActive = requestedActive === 'true';
     await prisma.user.update({ where: { id: target.id }, data: { active: nowActive } });
 
     if (!nowActive) {
@@ -116,6 +124,7 @@ export async function toggleUserActiveAction(formData: FormData): Promise<void> 
 
     audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: nowActive ? 'USER_UPDATE' : 'USER_DEACTIVATE', entity: 'User', entityId: target.id, details: { name: target.name, active: nowActive } }).catch((e) => console.error('[audit]', e));
 
+    revalidatePath('/users');
     redirect('/users');
   }, '/users');
 }

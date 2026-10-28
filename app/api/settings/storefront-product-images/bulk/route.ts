@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { isRedirectError } from 'next/dist/client/components/redirect';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { saveProductImageFile } from '@/lib/services/storage';

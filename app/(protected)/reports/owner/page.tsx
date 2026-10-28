@@ -10,11 +10,12 @@ import OwnerDashboardBody from './OwnerDashboardBody';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OwnerIntelligencePage({
-  searchParams,
-}: {
-  searchParams?: { storeId?: string; businessId?: string };
-}) {
+export default async function OwnerIntelligencePage(
+  props: {
+    searchParams?: Promise<{ storeId?: string; businessId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'owner_brief',
     search: searchParams,

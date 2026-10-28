@@ -57,13 +57,14 @@ function AccountStatCard({ label, value, helper }: { label: string; value: React
   );
 }
 
-export default async function SupplierDetailPage({
-  params,
-  searchParams
-}: {
-  params: { id: string };
-  searchParams?: { from?: string; to?: string; historyPage?: string };
-}) {
+export default async function SupplierDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<{ from?: string; to?: string; historyPage?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 

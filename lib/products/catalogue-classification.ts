@@ -27,6 +27,9 @@ export function catalogueHref(context: Record<string, string | undefined>, selec
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(context)) if (value && !['category', 'division', 'group', 'page'].includes(key)) params.set(key, value);
   for (const key of ['category', 'division', 'group'] as const) if (selection[key]) params.set(key, selection[key]!);
+  // An explicit clear is not a bare list revisit. Otherwise the document
+  // navigation's first-mount state restore can reinstate the old selection.
+  if (!params.get('q') && !selection.category && !selection.division && !selection.group) params.set('resetClassification', '1');
   const query = params.toString();
   return `/products${query ? `?${query}` : ''}`;
 }

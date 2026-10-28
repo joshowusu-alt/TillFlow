@@ -7,7 +7,8 @@ import { formatMoney, formatDateTime } from '@/lib/format';
 import { createPurchaseReturnAction } from '@/app/actions/returns';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 
-export default async function PurchaseReturnPage({ params }: { params: { id: string } }) {
+export default async function PurchaseReturnPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { business, store: operationalStore } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 

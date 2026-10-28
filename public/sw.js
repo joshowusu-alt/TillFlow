@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pos-cache-v19';
+const CACHE_NAME = 'pos-cache-v20';
 const OFFLINE_URL = '/offline';
 const SHOP_OFFLINE_URL = '/shop/offline';
 const MAX_CACHE_ITEMS = 100; // LRU eviction when exceeded
@@ -260,14 +260,25 @@ async function moveToDead(payload, statusCode, errorMessage) {
 
 function openOfflineDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('pos-offline-db', 3);
+    const req = indexedDB.open('pos-offline-db', 4);
     req.onerror = () => reject(req.error);
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => { req.result.onversionchange = () => req.result.close(); resolve(req.result); };
     // If DB hasn't been created by client yet, create stores so we don't crash
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains('salesQueue')) db.createObjectStore('salesQueue', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('products')) db.createObjectStore('products', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('products')) {
+        db.createObjectStore('products', { keyPath: ['businessId', 'storeId', 'id'] });
+      } else if (e.oldVersion < 4) {
+        const rows = req.transaction.objectStore('products').getAll();
+        rows.onsuccess = () => {
+          db.deleteObjectStore('products');
+          const products = db.createObjectStore('products', { keyPath: ['businessId', 'storeId', 'id'] });
+          for (const row of rows.result) {
+            if (row.businessId && row.storeId && row.id) products.put(row);
+          }
+        };
+      }
       if (!db.objectStoreNames.contains('business')) db.createObjectStore('business', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('store')) db.createObjectStore('store', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('customers')) db.createObjectStore('customers', { keyPath: 'id' });
@@ -288,18 +299,21 @@ function getActiveBusinessIdFromDB(db) {
 }
 
 function getPendingSalesFromDB(db) {
-  return new Promise(async (resolve, reject) => {
-    const tx = db.transaction('salesQueue', 'readonly');
-    const store = tx.objectStore('salesQueue');
-    const req = store.getAll();
-    const activeBusinessId = await getActiveBusinessIdFromDB(db).catch(() => null);
-    req.onsuccess = () => resolve((req.result || []).filter((s) => {
-      if (s.synced) return false;
-      if (activeBusinessId && s.businessId !== activeBusinessId) return false;
-      const status = s.status || 'pending';
-      return status === 'pending';
-    }));
-    req.onerror = () => reject(req.error);
+  // Read scope before starting the queue request: awaiting between getAll() and
+  // attaching onsuccess can lose IndexedDB's completion event. Missing metadata
+  // must never turn a scoped background sync into a scan across every business.
+  return getActiveBusinessIdFromDB(db).catch(() => null).then((activeBusinessId) => {
+    if (!activeBusinessId) return [];
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('salesQueue', 'readonly');
+      const store = tx.objectStore('salesQueue');
+      const req = store.getAll();
+      req.onsuccess = () => resolve((req.result || []).filter((s) => {
+        if (s.synced || s.businessId !== activeBusinessId) return false;
+        return (s.status || 'pending') === 'pending';
+      }));
+      req.onerror = () => reject(req.error);
+    });
   });
 }
 
@@ -323,6 +337,7 @@ function markSaleSyncedInDB(db, id) {
 async function syncSalesDirectly() {
   const db = await openOfflineDB();
   const pending = await getPendingSalesFromDB(db);
+  let transientFailure = false;
   for (const sale of pending) {
     try {
       const res = await fetch('/api/offline/sync-sale', {
@@ -330,9 +345,19 @@ async function syncSalesDirectly() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sale),
       });
+      // A logged-out/expired session must not reclassify retained sales as rejected.
+      // Keep the durable queue until authentication is restored, just as for transport failures.
+      if (res.status === 401 || res.status === 403 || res.status === 408 || res.status === 429) {
+        throw new Error(`Sync temporarily unavailable: HTTP ${res.status}`);
+      }
       if (res.status >= 400 && res.status < 500) {
         const body = await res.json().catch(() => ({}));
         const syncStatus = body && body.status;
+        // The browser may have switched accounts since the SW cached its scope.
+        // Keep another business's sale untouched until its correct session returns.
+        if (body.reason === 'tenant_mismatch') {
+          throw new Error('Offline sale belongs to a different active business.');
+        }
         // needs_review stays in the queue for Recovery centre — do not recreate.
         if (syncStatus === 'needs_review') {
           continue;
@@ -346,10 +371,12 @@ async function syncSalesDirectly() {
       }
       if (res.ok) await markSaleSyncedInDB(db, sale.id);
     } catch (_) {
-      // Network still down — the sync event will be retried by the browser
+      // Keep this sale pending and reject the event after processing other rows.
+      transientFailure = true;
     }
   }
   db.close();
+  if (transientFailure) throw new Error('Offline sales remain pending after a transient sync failure.');
 }
 
 // Background sync for offline sales (if browser supports it)

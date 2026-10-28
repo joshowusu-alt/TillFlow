@@ -9,7 +9,8 @@ import { getBulkPricingReceipt } from '@/lib/services/bulk-pricing';
 
 export const dynamic = 'force-dynamic';
 
-export default async function BulkPricingPage({ searchParams = {} }: { searchParams?: { batch?: string } }) {
+export default async function BulkPricingPage(props: { searchParams?: Promise<{ batch?: string }> }) {
+  const searchParams = (await props.searchParams) ?? {};
   const { business } = await requireBusiness(['OWNER', 'MANAGER']);
   const features = getFeatures((business.plan ?? business.mode) as BusinessPlan | BusinessMode, business.storeMode as StoreMode);
   if (!features.advancedOps) return <div className="card space-y-3 p-6"><h1 className="text-xl font-semibold">Bulk pricing</h1><p>Bulk pricing is available on Growth and Pro.</p><Link href="/products" className="btn-secondary">Back to products</Link></div>;

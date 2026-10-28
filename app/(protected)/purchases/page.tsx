@@ -27,19 +27,20 @@ import {
   parseImproveRecordsIssue,
 } from '@/lib/improve-records-issues';
 
-export default async function PurchasesPage({
-  searchParams,
-}: {
-  searchParams?: {
-    error?: string;
-    page?: string;
-    storeId?: string;
-    created?: string;
-    supplierId?: string;
-    issue?: string;
-    awaitingInvoice?: string;
-  };
-}) {
+export default async function PurchasesPage(
+  props: {
+    searchParams?: Promise<{
+      error?: string;
+      page?: string;
+      storeId?: string;
+      created?: string;
+      supplierId?: string;
+      issue?: string;
+      awaitingInvoice?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business, store: operationalStore, stores: authorisedStores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) {
     return (

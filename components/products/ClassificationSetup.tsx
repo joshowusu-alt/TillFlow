@@ -1,7 +1,9 @@
 'use client';
+/* eslint-disable @next/next/no-html-link-for-pages -- Catalogue query navigation deliberately uses a full server render; report links still use App Router. */
 
 import Link from 'next/link';
-import { useId, useRef, useState, useTransition } from 'react';
+import { useId, useRef, useState } from 'react';
+import { classificationSaveFailure } from '@/lib/products/classification-save-failure';
 import { saveClassificationSetupAction } from '@/app/actions/product-classification';
 import type { ClassificationDivision } from './ProductCategoryField';
 import ClassificationList from './ClassificationList';
@@ -30,8 +32,7 @@ export default function ClassificationSetup({ categories, divisions, initialCate
   const [kind, setKind] = useState<Kind | null>(initialAdd === 'category' || (initialAdd === 'division' && firstCategory) || (initialAdd === 'group' && firstDivision) ? initialAdd as Kind : null);
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
-  const [transitionPending, startTransition] = useTransition();
-  const busy = saving || transitionPending;
+  const busy = saving;
   const savingRef = useRef(false);
   const [message, setMessage] = useState(saved === 'category' && firstCategory ? 'Category saved. Add a division here, or use this category on its own.' : saved === 'division' && firstDivision ? 'Division saved. Next, add a group under this division.' : saved === 'group' && firstDivision?.groups.some(g => g.id === initialGroupId) ? 'Group saved. Choose this group for a product; its division and category follow automatically.' : '');
   const [error, setError] = useState('');
@@ -55,14 +56,14 @@ export default function ClassificationSetup({ categories, divisions, initialCate
   function editor(forKind: Kind) {
     if (kind !== forKind) return null;
     const parentId = forKind === 'division' ? category?.id : division?.id;
-    return <form aria-label={`Add ${forKind}`} className="space-y-3 rounded-xl border border-accent/20 bg-white p-3" onSubmit={event => {
+    return <form aria-label={`Add ${forKind}`} className="space-y-3 rounded-xl border border-accent/20 bg-white p-3" onSubmit={async event => {
       event.preventDefault(); if (savingRef.current || !name.trim() || (forKind !== 'category' && !parentId)) return;
       savingRef.current = true; setSaving(true); setError(''); setMessage('');
-      startTransition(() => { void (async () => {
         try {
           const result = await saveClassificationSetupAction(forKind, parentId ?? '', name);
           if (!result) return; // Successful saves navigate to the persisted parent and next step.
           if (!result.success) { setError(result.error); return; }
+          if (result.redirectTo) { window.location.assign(result.redirectTo); return; }
           if (forKind === 'category') {
             setCreatedCategories(rows => [...rows.filter(row => row.id !== result.data.id), result.data]);
             setCategoryId(result.data.id); setDivisionId(''); setGroupId(''); setKind('division');
@@ -77,9 +78,8 @@ export default function ClassificationSetup({ categories, divisions, initialCate
             setMessage(`Group “${result.data.name}” saved. Choose this group when adding or editing a product; its division and category follow automatically.`);
           }
           setName(''); nameInput.current?.focus();
-        } catch { setError('Could not save. Please try again.'); }
+        } catch (failure) { setError(classificationSaveFailure(failure)); }
         finally { savingRef.current = false; setSaving(false); }
-      })(); });
     }}>
       <label className="block text-sm font-medium" htmlFor={`${id}-${forKind}-name`}>{titles[forKind]} name</label>
       <input ref={nameInput} id={`${id}-${forKind}-name`} className="input" autoFocus required maxLength={100} value={name} disabled={busy} onChange={event => setName(event.target.value)} />
@@ -116,7 +116,7 @@ export default function ClassificationSetup({ categories, divisions, initialCate
       </section>
     </div>
     {category && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/15 bg-accentSoft/30 p-3"><div className="min-w-0"><p className="text-xs font-semibold text-ink/60">Selected classification</p><p className="break-words text-sm font-semibold [overflow-wrap:anywhere]">{path}</p></div>
-      <Link className="btn-secondary text-sm" href={browse(group ? 'group' : division ? 'division' : 'category')}>View products in this {group ? 'group' : division ? 'division' : 'category'}</Link></div>}
+      <a className="btn-secondary text-sm" href={browse(group ? 'group' : division ? 'division' : 'category')}>View products in this {group ? 'group' : division ? 'division' : 'category'}</a></div>}
     {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
     {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
   </section>;

@@ -3,11 +3,12 @@ import SubmitButton from '@/components/SubmitButton';
 import { Logo } from '@/components/Logo';
 import Link from 'next/link';
 
-export default function ForgotPasswordPage({
-  searchParams,
-}: {
-  searchParams: { error?: string; success?: string };
-}) {
+export default async function ForgotPasswordPage(
+  props: {
+    searchParams: Promise<{ error?: string; success?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { error, success } = searchParams;
 
   return (

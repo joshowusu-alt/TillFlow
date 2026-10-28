@@ -110,7 +110,7 @@ describe('TillFlow brand logo system', () => {
     expect(sw).toContain('/brand/tillflow-logo-blue.png');
     expect(sw).toContain('/brand/tillflow-symbol-blue.png');
     expect(sw).toContain('/apple-touch-icon.png');
-    expect(sw).toContain("pos-cache-v19");
+    expect(sw).toContain("pos-cache-v20");
     expect(sw).toContain('/launch');
   });
 

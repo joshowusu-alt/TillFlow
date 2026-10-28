@@ -3,7 +3,6 @@ import type { PrismaClient } from '@prisma/client';
 import {
   bindPrismaPostgresUrls,
   canRunLivePostgres,
-  isIsolatedPreviewIdentity,
   openBoundPrismaClient,
   postgresUrlIdentity,
   resolveBoundPostgresUrl,
@@ -18,8 +17,10 @@ import { approveAndCompleteStockTransfer, requestStockTransfer } from '@/lib/ser
 
 const databaseUrl = resolveBoundPostgresUrl();
 const identity = canRunLivePostgres(databaseUrl) ? postgresUrlIdentity(databaseUrl) : null;
-// Same rule as `assertIsolatedPreviewHost` (TILLFLOW_REQUIRE_ISOLATED_PREVIEW): one source of truth.
-const isolated = isIsolatedPreviewIdentity(identity);
+// resolveBoundPostgresUrl already applies the central production-deny/allowlist guard.
+// Local CI PostgreSQL and explicitly allowlisted disposable branches must execute this
+// gate too; historical endpoint-name matching silently skipped them.
+const isolated = canRunLivePostgres(databaseUrl);
 if (isolated) bindPrismaPostgresUrls(databaseUrl);
 const describeIsolated = isolated ? describe : describe.skip;
 

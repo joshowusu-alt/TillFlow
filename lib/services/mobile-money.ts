@@ -1,6 +1,7 @@
 import { syncOnlineOrderPaymentStatus } from './online-order-payment-sync';
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { assertAutomatedPaymentsAllowed } from '@/lib/payments/pilot-policy';
 import { getMobileMoneyProvider, resolveBusinessProvider } from '@/lib/payments/providers';
 import type {
   CheckStatusResult,
@@ -240,6 +241,7 @@ export type InitiateMobileMoneyCollectionInput = {
 };
 
 export async function initiateMobileMoneyCollection(input: InitiateMobileMoneyCollectionInput) {
+  assertAutomatedPaymentsAllowed();
   return measureServerOperation(
     'action.mobile-money.initiate',
     () => initiateMobileMoneyCollectionImpl(input),
@@ -363,6 +365,7 @@ export async function checkMobileMoneyCollectionStatus(input: {
   collectionId: string;
   force?: boolean;
 }) {
+  assertAutomatedPaymentsAllowed();
   return measureServerOperation(
     'action.mobile-money.status',
     () => checkMobileMoneyCollectionStatusImpl(input),
@@ -438,6 +441,7 @@ export async function handleMobileMoneyWebhook(input: {
   body: unknown;
   headers: Record<string, string>;
 }) {
+  assertAutomatedPaymentsAllowed();
   const provider = getMobileMoneyProvider(input.providerKey);
   const events = await provider.handleWebhook({ body: input.body, headers: input.headers });
 
@@ -512,6 +516,7 @@ export async function reconcileMobileMoneyCollections(input: {
   statuses?: CollectionStatus[];
   limit?: number;
 }) {
+  assertAutomatedPaymentsAllowed();
   return measureServerOperation(
     'action.mobile-money.reconcile',
     () => reconcileMobileMoneyCollectionsImpl(input),
@@ -604,6 +609,7 @@ export async function reinitiateMobileMoneyCollection(input: {
   initiatedByUserId?: string | null;
   idempotencyKey?: string;
 }) {
+  assertAutomatedPaymentsAllowed();
   return measureServerOperation(
     'action.mobile-money.reinitiate',
     () => reinitiateMobileMoneyCollectionImpl(input),

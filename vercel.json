@@ -2,7 +2,9 @@
   "buildCommand": "npm run build:vercel",
   "git": {
     "deploymentEnabled": {
-      "ci/p0b-prisma-migration-lock": false
+      "ci/p0b-prisma-migration-lock": false,
+      "audit/commercial-readiness-20261024": false,
+      "remediation/*": false
     }
   },
   "regions": [
@@ -24,6 +26,10 @@
     {
       "path": "/api/cron/retry-online-order-sales",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/subscription-reminders",
+      "schedule": "0 8 * * *"
     }
   ],
   "functions": {

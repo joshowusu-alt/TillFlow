@@ -1,6 +1,7 @@
 'use server';
 import { validateCreditBackup } from '@/lib/purchases/credit-backup';
 
+import { completeRecoveryBarcodes, validateRecoverySnapshot } from '@/lib/backup-restore-contract';
 import {serializePurchaseDocument,restorePurchaseDocument} from '@/lib/purchases/document-backup';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
@@ -8,7 +9,7 @@ import { isPostgresRuntimeEnv } from '@/lib/database-runtime';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
-import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, safeAction, ok, err, UserError, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import { ACTIVE_BUSINESS_COOKIE, SESSION_COOKIE_PREFIX } from '@/lib/business-scope';
 import { parseOptionalReceiptOrigin } from '@/lib/payments/receipt-origin';
@@ -48,6 +49,20 @@ export interface BackupData {
     stockAdjustments: any[];
     tills: any[];
     shifts: any[];
+    cashDrawerEntries?: any[];
+    moneyIdempotencies?: any[];
+    businessSequences?: any[];
+    syncEvents?: any[];
+    mobileMoneyCollections?: any[];
+    mobileMoneyStatusLogs?: any[];
+    cashVarianceInvestigations?: any[];
+    stockTransfers?: any[];
+    stockTransferLines?: any[];
+    productBarcodes?: any[];
+    paymentReconciliations?: any[];
+    dayClosures?: any[];
+    openingBalances?: any[];
+
 }
 
 export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> {
@@ -91,7 +106,20 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             stockMovements,
             stockAdjustments,
             tills,
-            shifts
+            shifts,
+            cashDrawerEntries,
+            moneyIdempotencies,
+            businessSequences,
+            syncEvents,
+            mobileMoneyCollections,
+            mobileMoneyStatusLogs,
+            cashVarianceInvestigations,
+            stockTransfers,
+            stockTransferLines,
+            productBarcodes,
+            paymentReconciliations,
+            dayClosures,
+            openingBalances
         ] = await Promise.all([
             tx.store.findMany({ where: { businessId } }),
             tx.user.findMany({ where: { businessId }, select: { id: true, businessId: true, name: true, email: true, role: true, active: true, createdAt: true } }),
@@ -123,7 +151,20 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             tx.stockMovement.findMany({ where: { store: { businessId } } }),
             tx.stockAdjustment.findMany({ where: { store: { businessId } } }),
             tx.till.findMany({ where: { store: { businessId } } }),
-            tx.shift.findMany({ where: { till: { store: { businessId } } } })
+            tx.shift.findMany({ where: { till: { store: { businessId } } } }),
+            tx.cashDrawerEntry.findMany({ where: { businessId } }),
+            tx.moneyIdempotency.findMany({ where: { businessId } }),
+            tx.businessSequence.findMany({ where: { businessId } }),
+            tx.syncEvent.findMany({ where: { businessId } }),
+            tx.mobileMoneyCollection.findMany({ where: { businessId } }),
+            tx.mobileMoneyStatusLog.findMany({ where: { collection: { businessId } } }),
+            tx.cashVarianceInvestigation.findMany({ where: { businessId } }),
+            tx.stockTransfer.findMany({ where: { businessId } }),
+            tx.stockTransferLine.findMany({ where: { stockTransfer: { businessId } } }),
+            tx.productBarcode.findMany({ where: { businessId } }),
+            tx.paymentReconciliation.findMany({ where: { businessId } }),
+            tx.dayClosure.findMany({ where: { businessId } }),
+            tx.openingBalance.findMany({ where: { businessId } })
         ]);
 
         return {
@@ -160,7 +201,20 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             stockMovements,
             stockAdjustments,
             tills,
-            shifts
+            shifts,
+            cashDrawerEntries,
+            moneyIdempotencies,
+            businessSequences,
+            syncEvents,
+            mobileMoneyCollections,
+            mobileMoneyStatusLogs,
+            cashVarianceInvestigations,
+            stockTransfers,
+            stockTransferLines,
+            productBarcodes: completeRecoveryBarcodes(businessId, products, productBarcodes),
+            paymentReconciliations,
+            dayClosures,
+            openingBalances
         } satisfies BackupData;
     }, { isolationLevel: (isPostgresRuntimeEnv() ? 'RepeatableRead' : 'Serializable') as Prisma.TransactionIsolationLevel, maxWait: 10000, timeout: 120000 });
     if (!backupData) return err('No business set up yet. Please complete onboarding first.');
@@ -191,6 +245,14 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       return err('The backup file is not in the right format. Please use a file exported from TillFlow.');
     }
 
+    try {
+      validateRecoverySnapshot(backup, businessId, user.id);
+      backup = { ...backup, productBarcodes: completeRecoveryBarcodes(businessId, backup.products, backup.productBarcodes ?? []) };
+    }
+    catch (error) { return err(error instanceof Error ? error.message : 'Invalid recovery snapshot.'); }
+    const currentOwner = await prisma.user.findFirst({ where: { id: user.id, businessId, role: 'OWNER', active: true }, select: { passwordHash: true, twoFactorEnabled: true, twoFactorSecret: true, twoFactorTempSecret: true, approvalPinHash: true } });
+    if (!backup.users.some(restored => restored.id === user.id && restored.email === user.email && restored.active !== false)) return err('The backup must retain the restoring owner email and active status.');
+    if (!currentOwner) return err('An active owner account is required for recovery.');
     const users = Array.isArray(backup.users) ? backup.users : [];
     const hasOwner = users.some((u) => String(u?.role || '').toUpperCase() === 'OWNER');
     if (!hasOwner) {
@@ -210,13 +272,33 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
 
     // Pre-compute bcrypt hashes for users before opening the transaction (CPU-only, no DB).
     const userHashes = new Map<string, string>();
-    for (const user of users) {
-      userHashes.set(user.id, await bcrypt.hash(randomBytes(32).toString('hex'), 10));
+    for (const restoredUser of users) {
+      userHashes.set(restoredUser.id, restoredUser.id === user.id ? currentOwner.passwordHash : await bcrypt.hash(randomBytes(32).toString('hex'), 10));
     }
 
     // Atomic restore: wipe + re-insert in one transaction so a partial failure rolls back fully.
     await prisma.$transaction(async (tx) => {
+      // Do not destroy unsupported workflows that this core-trading snapshot cannot restore.
+      const unsupported = await Promise.all([
+        tx.onlineOrder.count({ where: { businessId } }),
+        tx.migrationPackage.count({ where: { businessId } }),
+        tx.productImport.count({ where: { businessId } }),
+        tx.stocktake.count({ where: { store: { businessId } } }),
+        tx.device.count({ where: { businessId } }),
+        tx.branch.count({ where: { businessId } }),
+        tx.organization.count({ where: { businessId } }),
+      tx.riskAlert.count({ where: { businessId } }),
+      ]);
+      if (unsupported.some(Boolean)) throw new UserError('This business has records outside this trading snapshot requiring an operator-assisted full recovery. No records were changed.');
+      // Audit history is authoritative server-side evidence, never backup
+      // input. Keep it; optional user links are restored after users return.
+      const auditLinks = await tx.auditLog.findMany({ where: { businessId }, select: { id: true, userId: true } });
       // Clear only this business data (multi-tenant safe) in FK-safe order.
+      await tx.moneyIdempotency.deleteMany({ where: { businessId } });
+      await tx.businessSequence.deleteMany({ where: { businessId } });
+      await tx.cashVarianceInvestigation.deleteMany({ where: { businessId } });
+      await tx.paymentReconciliation.deleteMany({ where: { businessId } });
+      await tx.openingBalance.deleteMany({ where: { businessId } });
       await tx.syncEvent.deleteMany({ where: { businessId } });
       await tx.dayClosure.deleteMany({ where: { businessId } });
       await tx.riskAlert.deleteMany({ where: { businessId } });
@@ -255,7 +337,6 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       await tx.customer.deleteMany({ where: { businessId } });
       await tx.supplier.deleteMany({ where: { businessId } });
       await tx.account.deleteMany({ where: { businessId } });
-      await tx.auditLog.deleteMany({ where: { businessId } });
       await tx.device.deleteMany({ where: { businessId } });
       await tx.branch.deleteMany({ where: { businessId } });
       await tx.organization.deleteMany({ where: { businessId } });
@@ -269,18 +350,6 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       data: {
         name: backup.business.name ?? 'Restored Business',
         currency: backup.business.currency ?? 'GHS',
-        plan:
-          backup.business.plan ??
-          (backup.business.mode === 'ADVANCED'
-            ? backup.business.storeMode === 'MULTI_STORE'
-              ? 'PRO'
-              : 'GROWTH'
-            : 'STARTER'),
-        planStatus: backup.business.planStatus ?? 'ACTIVE',
-        trialEndsAt: backup.business.trialEndsAt ? new Date(backup.business.trialEndsAt) : null,
-        planSetAt: backup.business.planSetAt ? new Date(backup.business.planSetAt) : new Date(),
-        planChangedByUserId: backup.business.planChangedByUserId ?? null,
-        billingNotes: backup.business.billingNotes ?? null,
         vatEnabled: !!backup.business.vatEnabled,
         vatNumber: backup.business.vatNumber ?? null,
         mode: backup.business.mode ?? 'SIMPLE',
@@ -323,11 +392,7 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       for (const unit of list(backup.units)) {
         await tx.unit.upsert({
         where: { id: unit.id },
-        update: {
-          name: unit.name,
-          pluralName: unit.pluralName,
-          symbol: unit.symbol ?? null,
-        },
+        update: {},
         create: {
           id: unit.id,
           name: unit.name,
@@ -341,15 +406,21 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
         await tx.store.create({ data: { ...store, businessId } });
       }
 
-      for (const user of users) {
-        const safeHash = userHashes.get(user.id)!;
+      for (const restoredUser of users) {
+        const safeHash = userHashes.get(restoredUser.id)!;
         await tx.user.create({
           data: {
-            ...user,
+            ...restoredUser,
             businessId,
-            passwordHash: safeHash
+            passwordHash: safeHash,
+            // Never export MFA/PIN secrets; retain restoring owner's server-side factors.
+            ...(restoredUser.id === user.id ? currentOwner : {}),
           }
         });
+      }
+      const restoredUserIds = new Set(users.map(row => row.id));
+      for (const row of auditLinks) {
+        if (row.userId && restoredUserIds.has(row.userId)) await tx.auditLog.update({ where: { id: row.id }, data: { userId: row.userId } });
       }
 
       for (const customer of list(backup.customers)) {
@@ -379,7 +450,10 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       for (const product of list(backup.products)) {
         if (product.groupId && !groupIds.has(product.groupId)) throw new Error('A product group is missing from this backup.');
         // Classification parents are restored before their product links.
-        await tx.product.create({ data: { ...product, businessId } });
+        // PostgreSQL registers a primary barcode via an INSERT trigger. Restore
+        // the registry explicitly first, then set primaries, so it is inserted
+        // exactly once on both PostgreSQL and SQLite.
+        await tx.product.create({ data: { ...product, businessId, barcode: null } });
       }
 
       for (const pu of list(backup.productUnits)) {
@@ -410,9 +484,11 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
         await tx.salesInvoiceLine.create({ data: line });
       }
 
+      for (const collection of list(backup.mobileMoneyCollections)) await tx.mobileMoneyCollection.create({ data: { ...collection, businessId } });
+      for (const log of list(backup.mobileMoneyStatusLogs)) await tx.mobileMoneyStatusLog.create({ data: log });
+
       for (const payment of list(backup.salesPayments)) {
-        // collectionId refs MobileMoneyCollection which is not included in the backup export,
-        // so null it out to avoid FK constraint violation on restore.
+        // Version 1.4 restores collection evidence before linking payment rows.
         // receiptOrigin: preserve valid new-format values; missing/empty → NULL (legacy unclassified).
         // Invalid values fail the restore rather than fabricating origin.
         const { collectionId: _ignoredCollectionId, receiptOrigin: rawOrigin, ...rest } = payment as Record<
@@ -423,7 +499,7 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
         await tx.salesPayment.create({
           data: {
             ...rest,
-            collectionId: null,
+            collectionId: payment.collectionId ?? null,
             ...(receiptOrigin != null ? { receiptOrigin } : { receiptOrigin: null }),
           } as any,
         });
@@ -487,10 +563,25 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       for (const line of list(backup.journalLines)) {
         await tx.journalLine.create({ data: line });
       }
-    }, { timeout: 60000, maxWait: 10000 });
+      for (const row of list(backup.cashDrawerEntries)) await tx.cashDrawerEntry.create({ data: row });
+      for (const row of list(backup.moneyIdempotencies)) await tx.moneyIdempotency.create({ data: row });
+      for (const row of list(backup.businessSequences)) await tx.businessSequence.create({ data: row });
+      for (const row of list(backup.syncEvents)) await tx.syncEvent.create({ data: row });
+      for (const row of list(backup.cashVarianceInvestigations)) await tx.cashVarianceInvestigation.create({ data: row });
+      for (const row of list(backup.stockTransfers)) await tx.stockTransfer.create({ data: row });
+      for (const row of list(backup.stockTransferLines)) await tx.stockTransferLine.create({ data: row });
+      for (const row of list(backup.productBarcodes)) await tx.productBarcode.create({ data: row });
+      for (const product of list(backup.products)) {
+        if (product.barcode != null) await tx.product.update({ where: { id: product.id }, data: { barcode: product.barcode, updatedAt: product.updatedAt } });
+      }
+      for (const row of list(backup.paymentReconciliations)) await tx.paymentReconciliation.create({ data: row });
+      for (const row of list(backup.dayClosures)) await tx.dayClosure.create({ data: row });
+      for (const row of list(backup.openingBalances)) await tx.openingBalance.create({ data: row });
+
+    }, { timeout: 60000, maxWait: 10000, isolationLevel: 'Serializable' });
 
     // Imported users have random temporary passwords and sessions were cleared.
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     cookieStore.getAll()
       .filter((cookie) => cookie.name.startsWith(SESSION_COOKIE_PREFIX))
       .forEach((cookie) => cookieStore.delete(cookie.name));
@@ -512,7 +603,7 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
     }).catch(() => {});
 
     return ok({
-      message: `Restored backup from ${exportDate.toLocaleString()}. Users will need to reset their passwords and sign in again.`
+      message: `Restored backup from ${exportDate.toLocaleString()}. The restoring owner can sign in with the existing password; other users need password resets.`
     });
   });
 }

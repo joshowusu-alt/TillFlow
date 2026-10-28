@@ -404,6 +404,64 @@ describe('createPurchaseReturn cash drawer', () => {
     mockRecordCashDrawerEntryTx.mockResolvedValue(undefined);
   });
 
+  it.each([0, 1000, 6000, -1, 0.5, Infinity, NaN])(
+    'rejects an invalid or partial purchase refund of %s before mutation', async refundAmountPence => {
+      await expect(createPurchaseReturn({ businessId: 'biz-1', purchaseInvoiceId: 'pinv-1',
+        userId: 'user-1', type: 'RETURN', refundMethod: 'CARD', refundAmountPence }))
+        .rejects.toThrow('A full purchase return must refund recorded payments in full.');
+      expect(prismaMock.purchaseReturn.create).not.toHaveBeenCalled();
+      expect(prismaMock.purchaseInvoice.update).not.toHaveBeenCalled();
+      expect(prismaMock.stockMovement.createMany).not.toHaveBeenCalled();
+      expect(mockUpsertInventoryBalance).not.toHaveBeenCalled();
+      expect(mockPostJournalEntry).not.toHaveBeenCalled();
+      expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects a paid purchase void before mutation and directs the operator to a return', async () => {
+    await expect(createPurchaseReturn({ businessId: 'biz-1', purchaseInvoiceId: 'pinv-1',
+      userId: 'user-1', type: 'VOID' }))
+      .rejects.toThrow('This purchase has payments. Use a purchase return and record the supplier refund instead.');
+    expect(prismaMock.purchaseReturn.create).not.toHaveBeenCalled();
+    expect(prismaMock.purchaseInvoice.update).not.toHaveBeenCalled();
+    expect(mockPostJournalEntry).not.toHaveBeenCalled();
+    expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
+  });
+
+  it('reverses captured purchase VAT after VAT is disabled and balances the journal', async () => {
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({ id: 'pinv-1', businessId: 'biz-1',
+      storeId: 'store-1', totalPence: 5500, vatPence: 500, business: { vatEnabled: false }, store: {},
+      paymentStatus: 'PAID', payments: [{ method: 'CARD', amountPence: 5500 }],
+      lines: [{ productId: 'prod-1', qtyBase: 1, lineSubtotalPence: 5000, product: { defaultCostBasePence: 1000 } }] });
+    await createPurchaseReturn({ businessId: 'biz-1', purchaseInvoiceId: 'pinv-1', userId: 'user-1',
+      type: 'RETURN', refundMethod: 'CARD', refundAmountPence: 5500 });
+    const { lines } = mockPostJournalEntry.mock.calls[0][0];
+    expect(lines).toContainEqual({ accountCode: '1300', creditPence: 500 });
+    expect(lines.reduce((sum: number, line: { debitPence?: number; creditPence?: number }) =>
+      sum + (line.debitPence ?? 0) - (line.creditPence ?? 0), 0)).toBe(0);
+  });
+
+  it('uses the locked invoice payment snapshot when a payment arrives before the void', async () => {
+    const purchase = await prismaMock.purchaseInvoice.findFirst();
+    prismaMock.purchaseInvoice.findFirst
+      .mockResolvedValueOnce({ ...purchase, payments: [], paymentStatus: 'UNPAID' })
+      .mockResolvedValueOnce({ ...purchase, paymentStatus: 'PAID' });
+    await expect(createPurchaseReturn({ businessId: 'biz-1', purchaseInvoiceId: 'pinv-1',
+      userId: 'user-1', type: 'VOID' })).rejects.toThrow('This purchase has payments.');
+    expect(prismaMock.purchaseReturn.create).not.toHaveBeenCalled();
+  });
+
+  it('allows an unpaid purchase void with a balanced AP reversal', async () => {
+    const purchase = await prismaMock.purchaseInvoice.findFirst();
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({ ...purchase, payments: [], paymentStatus: 'UNPAID' });
+    await createPurchaseReturn({ businessId: 'biz-1', purchaseInvoiceId: 'pinv-1', userId: 'user-1', type: 'VOID' });
+    const { lines } = mockPostJournalEntry.mock.calls[0][0];
+    expect(lines).toContainEqual({ accountCode: '2000', debitPence: 5000 });
+    expect(lines.reduce((sum: number, line: { debitPence?: number; creditPence?: number }) =>
+      sum + (line.debitPence ?? 0) - (line.creditPence ?? 0), 0)).toBe(0);
+    expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
+  });
+
   it('records a cash drawer inflow for a cash purchase return', async () => {
     await createPurchaseReturn({
       businessId: 'biz-1',

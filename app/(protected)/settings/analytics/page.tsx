@@ -11,11 +11,12 @@ export const dynamic = 'force-dynamic';
 
 const WINDOW_DAYS = 30;
 
-export default async function AnalyticsSettingsPage({
-  searchParams,
-}: {
-  searchParams?: { storeId?: string; businessId?: string };
-}) {
+export default async function AnalyticsSettingsPage(
+  props: {
+    searchParams?: Promise<{ storeId?: string; businessId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'storefront_analytics',
     search: searchParams,

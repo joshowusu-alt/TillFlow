@@ -22,7 +22,7 @@ export async function confirmMomoPaymentAction(input: {
     const { user, businessId } = await withBusinessContext(['OWNER', 'MANAGER']);
     const { stores } = await getBusinessStores(businessId);
 
-    const hdrs = headers();
+    const hdrs = await headers();
     const ip =
       hdrs.get('x-forwarded-for')?.split(',')[0]?.trim() ??
       hdrs.get('x-real-ip') ??

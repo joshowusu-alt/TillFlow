@@ -4,10 +4,8 @@ import { getPublicOnlineOrder } from '@/lib/services/online-orders';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const body = await request.json();
     const slug = String(body?.slug ?? '');
