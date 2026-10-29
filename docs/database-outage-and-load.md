@@ -12,6 +12,7 @@ Retry in a client error boundary uses Next.js reset. The layout's recovery scree
 
 - The attention banner was mounted only for an entitled business already, via `getFeatures(...).onlineStorefront` in the layout; its endpoint independently enforces entitlement. Keep both checks. Healthy visible polling remains 15 seconds. The endpoint already projects just the required fields and bounds the oldest-order list at five; no extra cache delays order visibility.
 - A shared serial scheduler stops timers while hidden/offline, resumes on focus/visibility/online, deduplicates event bursts, and exponentially backs off rejected tasks. Attention errors go 30s → 60s → 120s, capped at 120s, returning to 15s after success. A request already in flight can complete; no new polling request starts while inactive. Component cleanup stops future scheduling and aborts the attention fetch. Router refresh has no awaitable failure result: do not pretend it has measurable exponential failure backoff.
+- The final timer inventory also found pending MoMo collection checks (5 seconds), customer refund checks (15 seconds), and customer order-status fallback (20 seconds). These now use the same pause/serial/backoff scheduler. Pending MoMo failures cap at 30 seconds; customer status failures cap at 120 seconds. The customer status SSE connection closes while hidden/offline and reconnects on resume, preventing background listener/reconnect traffic. No payment is initiated by resume; it checks the existing collection/order. Cosmetic countdowns/animations and hourly service-worker update checks do not read the database and are unchanged.
 - Owner dashboard and command centre refresh every 3 minutes, system health every 2 minutes, Trading every 5 minutes. Manual controls remain. Resume recovery is prompt and shared with the scheduler; surfaces without interval refresh keep the existing visibility hook with an added offline guard. Reports can therefore show older data while continuously visible; use Refresh for an immediate snapshot.
 - OwnerStatusStrip and NetworkStatus were **local IndexedDB reads**, not Neon calls. Pause their periodic work when inactive too. A local queue-change event updates counts immediately after a successful queue write even while offline, avoiding a frozen pending-sales count. Explicit sync/reconnect/service-worker events remain intact.
 - There are **three**, not two, five-minute crons. Expiry already has a narrow, bounded due-order query and does no transaction on an empty result. Paid-order retry already reads at most three IDs and does no posting work on an empty result. Preserve these cheap paths.
@@ -31,6 +32,8 @@ Steady-state rates exclude initial render, manual actions, navigation and resume
 | Attention, hidden or device offline | Up to 240/hour plus focus events | 0 new polling requests/hour |
 | Attention, prolonged failure while visible | 240/hour | Approximately 30/hour at capped backoff |
 | Attention, no entitlement | 0 (already gated) | 0; server gate retained |
+| Pending MoMo collection, visible | 720 checks/hour while pending | Same healthy cadence; 0 while hidden/offline, failure backoff capped at 30s |
+| Customer order-status fallback / refund polling | 180 / 240 requests/hour while applicable | Same healthy cadence; 0 while hidden/offline, failure backoff capped at 120s |
 | Owner dashboard / command centre | 60 RSC refresh requests/hour each | 20/hour each (67% fewer) |
 | System health page | 120 RSC refresh requests/hour | 30/hour (75% fewer) |
 | Trading report | 30 RSC refresh requests/hour | 12/hour (60% fewer) |
@@ -57,3 +60,5 @@ Real headless Chromium renders of `UnavailableScreen` with the application's com
 ## Validation
 
 See the PR description for final command outcomes. Local tests use the repository's guarded SQLite unit-test target. The build uses a new empty SQLite database under `/tmp`, with Google font responses mapped to existing local font assets because external font fetching is unavailable. No production credentials or production data are needed. PostgreSQL integration suites require a separately authorized isolated database and are excluded by the repository's default unit-test command.
+
+Neon's [scale-to-zero guide](https://neon.com/docs/guides/scale-to-zero-guide) explains that suspension depends on an inactivity interval and plan/configuration. No assumption about the production project's current timeout is required for these estimates.
