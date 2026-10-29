@@ -231,4 +231,7 @@ jobs:
             docs/loading/GATE_F_POS_STABILITY.md
             tmp/ui-programme-evidence/**
             .ci-server.log
+            .playwright-mcp/offline-smoke-*
+            .playwright-mcp/pos-not-ready.png
           if-no-files-found: ignore
+          include-hidden-files: true

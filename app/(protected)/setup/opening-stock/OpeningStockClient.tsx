@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
-import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared';
+import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared/product-unit-pricing';
 import { createOpeningStockAction } from '@/app/actions/opening-stock';
 import type { OpeningStockResult } from '@/app/actions/opening-stock';
 

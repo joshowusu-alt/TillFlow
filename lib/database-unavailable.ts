@@ -18,6 +18,10 @@ export function isDatabaseUnavailable(error: unknown, databaseContext = false): 
     seen.add(current);
     const e = current as { code?: string; name?: string; message?: string; status?: number; statusCode?: number; cause?: unknown };
     if (e instanceof DatabaseUnavailableError) return true;
+    // Normal Prisma query/constraint errors are never quota refusals, even when
+    // their text (or a nested cause) contains a field/value such as quota or 402.
+    // P2024 is the explicit connection-pool timeout exception.
+    if (/^P2\d{3}$/.test(e.code ?? '') && e.code !== 'P2024') return false;
     fromDatabase ||= /^PrismaClient/.test(e.name ?? '') || /\bneon\b/i.test(e.message ?? '');
     if (['P1001', 'P1002', 'P1008', 'P1017', 'P2024'].includes(e.code ?? '') ||
         e.name === 'PrismaClientInitializationError') return true;

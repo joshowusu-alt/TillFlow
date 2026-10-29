@@ -31,3 +31,10 @@ it('preserves validation errors and Prisma retry codes at the database adapter',
     await expect(runDatabaseOperation(async () => { throw error; })).rejects.toBe(error);
   }
 });
+
+it.each(['P2002', 'P2010', 'P2021', 'P2022'])('preserves %s despite quota/402 text and causes', async code => {
+  const error = { name: 'PrismaClientKnownRequestError', code, message: 'query for quota value 402 failed', status: 402, cause: { message: 'Neon quota exceeded' } };
+  expect(isDatabaseUnavailable(error)).toBe(false);
+  expect(isDatabaseUnavailable(error, true)).toBe(false);
+  await expect(runDatabaseOperation(async () => { throw error; })).rejects.toBe(error);
+});

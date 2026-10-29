@@ -22,7 +22,7 @@ import {
 } from '@/lib/offline/dead-letter';
 import { getClientActiveBusinessId } from '@/lib/business-scope';
 import { formatMoney } from '@/lib/format';
-import { resolveEffectiveSellingPricePence } from '@/lib/services/shared';
+import { resolveEffectiveSellingPricePence } from '@/lib/services/shared/product-unit-pricing';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
