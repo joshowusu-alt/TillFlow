@@ -515,7 +515,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
             <span className="min-w-0">
               <span className="block truncate text-sm font-semibold text-ink">{storefrontDisplayName}</span>
               <span className="block text-[11px] font-medium uppercase tracking-[0.16em] text-black/40">
-                Back to businessfront
+                Back to business
               </span>
             </span>
           </Link>

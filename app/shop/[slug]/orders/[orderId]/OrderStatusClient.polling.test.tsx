@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import OrderStatusClient from './OrderStatusClient';
 const order: ComponentProps<typeof OrderStatusClient>['order'] = { id: 'order', orderNumber: 'WEB-1', status: 'AWAITING_PAYMENT', paymentStatus: 'PENDING',
@@ -16,6 +16,8 @@ it('closes the status stream while hidden and reconnects only when online and vi
   const close = vi.fn(); const create = vi.fn();
   vi.stubGlobal('EventSource', class { constructor(url: string) { create(url); } close = close; addEventListener = vi.fn(); });
   render(<OrderStatusClient order={order} />);
+  expect(screen.queryByText('Back to businessfront')).toBeNull();
+  expect(screen.getAllByRole('link', { name: /Back to business/ }).length).toBeGreaterThan(0);
   expect(create).toHaveBeenCalledOnce();
   act(() => { visible = false; document.dispatchEvent(new Event('visibilitychange')); }); expect(close).toHaveBeenCalledOnce();
   act(() => { Object.defineProperty(navigator, 'onLine', { value: false }); visible = true; document.dispatchEvent(new Event('visibilitychange')); });

@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs';
 import UnavailableScreen from '@/components/UnavailableScreen';
 import { isDatabaseUnavailable } from '@/lib/database-unavailable';
 import { Suspense } from 'react';
@@ -261,6 +262,7 @@ export default async function ProtectedLayout(props: { children: React.ReactNode
     return await ProtectedLayoutContent(props);
   } catch (error) {
     if (!isDatabaseUnavailable(error)) throw error; // Preserve redirects and authorization failures.
+    Sentry.captureException(error, { tags: { failure: 'database-unavailable', surface: 'protected-layout' } });
     console.error('[protected-layout] Database unavailable', error);
     return <UnavailableScreen database />;
   }
