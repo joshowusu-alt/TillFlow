@@ -1,5 +1,8 @@
 'use client';
 
+import { startActivePolling } from '@/lib/active-polling';
+import { usePageActive } from '@/hooks/usePageActive';
+
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { formatDateTime, formatMoney, toTitleCase, formatGhanaPhoneForDisplay } from '@/lib/format';
@@ -259,11 +262,11 @@ function getStatusConfig(status: string): StatusConfig {
     case 'PREPARING':
       return { icon: 'gear', bg: 'bg-indigo-50', ring: 'ring-indigo-200/70', iconBg: 'bg-indigo-500 shadow-indigo-500/25', labelColor: 'text-indigo-700', label: 'Being prepared', title: 'Your order is being prepared', message: 'We\'ll update this page as soon as your order is ready.' };
     case 'READY_FOR_PICKUP':
-      return { icon: 'bag', bg: 'bg-emerald-50', ring: 'ring-emerald-200/70', iconBg: 'bg-emerald-500 shadow-emerald-500/25', labelColor: 'text-emerald-700', label: 'Ready for pickup', title: 'Your order is ready!', message: 'Come to the store to collect your order. Bring your order reference.' };
+      return { icon: 'bag', bg: 'bg-emerald-50', ring: 'ring-emerald-200/70', iconBg: 'bg-emerald-500 shadow-emerald-500/25', labelColor: 'text-emerald-700', label: 'Ready for pickup', title: 'Your order is ready!', message: 'Come to the business to collect your order. Bring your order reference.' };
     case 'COMPLETED':
       return { icon: 'check', bg: 'bg-emerald-50', ring: 'ring-emerald-200/70', iconBg: 'bg-emerald-500 shadow-emerald-500/25', labelColor: 'text-emerald-700', label: 'Collected', title: 'Order collected', message: 'Your order has been collected. Thank you for shopping with us!' };
     case 'CANCELLED':
-      return { icon: 'x', bg: 'bg-slate-50', ring: 'ring-slate-200/70', iconBg: 'bg-slate-500 shadow-slate-500/25', labelColor: 'text-slate-600', label: 'Cancelled', title: 'Order cancelled', message: 'This order is no longer active. Contact the store if you need help.' };
+      return { icon: 'x', bg: 'bg-slate-50', ring: 'ring-slate-200/70', iconBg: 'bg-slate-500 shadow-slate-500/25', labelColor: 'text-slate-600', label: 'Cancelled', title: 'Order cancelled', message: 'This order is no longer active. Contact the business if you need help.' };
     default:
       return { icon: 'clock', bg: 'bg-slate-50', ring: 'ring-slate-200/60', iconBg: 'bg-slate-500 shadow-slate-500/25', labelColor: 'text-slate-600', label: 'Order status', title: friendlyStatus(status), message: null };
   }
@@ -322,6 +325,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const terminal = isTerminalStatus(order.status);
+  const pageActive = usePageActive();
 
   const refreshStatus = useCallback(async () => {
     setRefreshing(true);
@@ -341,30 +345,34 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
       const payload = await response.json();
       if (!response.ok) {
         setRefreshError(payload.error ?? 'Unable to refresh order status right now.');
-        return;
+        return false;
       }
 
       setOrder(payload.order);
+      return true;
     } catch (error) {
-      setRefreshError(error instanceof Error ? error.message : 'Unable to refresh order status right now.');
+      setRefreshError('Unable to refresh order status right now. Please try again.');
+      return false;
     } finally {
       setRefreshing(false);
     }
   }, [order.id, order.storefrontSlug]);
 
   useEffect(() => {
+    if (!pageActive) return;
     if (order.status !== 'CANCELLED' || order.paymentStatus !== 'PAID' || order.refundStatus === 'REFUNDED') return;
-    const timer = window.setInterval(() => void refreshStatus(), 15_000);
-    return () => window.clearInterval(timer);
-  }, [order.status, order.paymentStatus, order.refundStatus, refreshStatus]);
+    return startActivePolling(async () => {
+      if (!await refreshStatus()) throw new Error('Order status unavailable');
+    }, 15_000, { maxMs: 120000 });
+  }, [order.status, order.paymentStatus, order.refundStatus, refreshStatus, pageActive]);
 
   useEffect(() => {
-    if (terminal) {
+    if (terminal || !pageActive) {
       return;
     }
 
     let eventSource: EventSource | null = null;
-    let pollingTimer: number | null = null;
+    let stopPolling: (() => void) | null = null;
     let fallbackTimer: number | null = null;
     let fallbackStarted = false;
     let hasConnected = false;
@@ -384,10 +392,9 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
       fallbackStarted = true;
       clearFallbackTimer();
       eventSource?.close();
-      void refreshStatus();
-      pollingTimer = window.setInterval(() => {
-        void refreshStatus();
-      }, 20_000);
+      stopPolling = startActivePolling(async () => {
+        if (!await refreshStatus()) throw new Error('Order status unavailable');
+      }, 20_000, { maxMs: 120000 });
     };
 
     const token = new URLSearchParams(window.location.search).get('token') ?? '';
@@ -395,9 +402,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
     if (typeof EventSource === 'undefined') {
       startPollingFallback();
       return () => {
-        if (pollingTimer) {
-          window.clearInterval(pollingTimer);
-        }
+        stopPolling?.();
       };
     }
 
@@ -448,11 +453,9 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
     return () => {
       eventSource?.close();
       clearFallbackTimer();
-      if (pollingTimer) {
-        window.clearInterval(pollingTimer);
-      }
+      stopPolling?.();
     };
-  }, [order.id, order.storefrontSlug, refreshStatus, terminal]);
+  }, [order.id, order.storefrontSlug, refreshStatus, terminal, pageActive]);
 
   const paid = isPaidStatus(order.status);
   const awaitingPayment = !paid && order.status !== 'CANCELLED';
@@ -488,8 +491,8 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
   const activeStep = isCancelled ? -1 : getActiveStep(order.status);
   const heroMessage: string | null = isCancelled && order.paymentStatus === 'PAID'
     ? order.refundStatus === 'REFUNDED'
-      ? 'The store has marked your refund as paid. Contact the store with your order reference if it has not arrived.'
-      : 'Your payment was received and a refund is outstanding. Contact the store with your order reference. Do not send another payment.'
+      ? 'The business has marked your refund as paid. Contact the business with your order reference if it has not arrived.'
+      : 'Your payment was received and a refund is outstanding. Contact the business with your order reference. Do not send another payment.'
     : statusConfig.message ?? (
     awaitingPayment && !paymentDetails.manual
       ? `Send exactly ${formatMoney(order.totalPence, order.currency)} using reference ${order.orderNumber} to confirm your order.`
@@ -512,7 +515,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
             <span className="min-w-0">
               <span className="block truncate text-sm font-semibold text-ink">{storefrontDisplayName}</span>
               <span className="block text-[11px] font-medium uppercase tracking-[0.16em] text-black/40">
-                Back to storefront
+                Back to business
               </span>
             </span>
           </Link>
@@ -590,7 +593,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
 
         <section aria-label="Pickup location" className="mt-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-black/5">
           <h2 className="text-sm font-semibold text-ink">{isCancelled ? 'Pickup branch: ' : 'Collect from '}{order.pickupStoreName || 'your selected branch'}</h2>
-          <p className="mt-1 text-xs text-black/60">{order.pickupStoreAddress || 'Pickup address has not been provided. Contact the store before travelling.'}</p>
+          <p className="mt-1 text-xs text-black/60">{order.pickupStoreAddress || 'Pickup address has not been provided. Contact the business before travelling.'}</p>
           {!isCancelled && order.pickupInstructions ? <p className="mt-1 text-xs text-black/60">{order.pickupInstructions}</p> : null}
         </section>
 
@@ -622,7 +625,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
             <div className="px-5 py-4 text-sm text-black/65">
               {order.paymentDeadlineAt ? <p className="mb-3 rounded-xl bg-amber-50 p-3 text-amber-950">
                 Payment must be confirmed by {formatDateTime(new Date(order.paymentDeadlineAt))}. Unconfirmed orders expire and reserved stock is released.
-                If you have sent payment, contact the store now using your order reference.
+                If you have sent payment, contact the business now using your order reference.
               </p> : null}
               {paymentConfig.mode === 'MERCHANT_SHORTCODE' ? (
                 <ol className="list-decimal space-y-2 pl-4">
@@ -638,7 +641,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
                   <li>Open your banking app or visit your branch.</li>
                   <li>Transfer <span className="font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</span>{order.bankAccountNumber ? <> to account <span className="font-mono font-bold text-ink">{order.bankAccountNumber}</span></> : null}{order.bankName ? ` (${order.bankName})` : ''}.</li>
                   <li>Use <span className="font-mono font-bold text-ink">{order.orderNumber}</span> as the narration / reference.</li>
-                  <li>Contact the store with your reference after paying. Your order updates after the store verifies receipt.</li>
+                  <li>Contact the business with your reference after paying. Your order updates after the business verifies receipt.</li>
                 </ol>
               ) : order.momoPayoutNumber ? (
                 <ol className="list-decimal space-y-2 pl-4">
@@ -649,7 +652,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
                 </ol>
               ) : (
                 <p className="text-sm leading-6 text-sky-800">
-                  The store will contact you on{' '}
+                  The business will contact you on{' '}
                   <span className="font-semibold">{formatGhanaPhoneForDisplay(order.customerPhone)}</span>{' '}
                   with payment details. Keep your reference{' '}
                   <span className="font-mono font-bold">{order.orderNumber}</span> handy.
@@ -751,7 +754,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
                 href={`/shop/${order.storefrontSlug}`}
                 className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-4 text-sm font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
               >
-                Back to store
+                Back to business
               </Link>
             </>
           ) : (
@@ -759,7 +762,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
               href={`/shop/${order.storefrontSlug}`}
               className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-4 text-sm font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
             >
-              Back to store
+              Back to business
             </Link>
           )}
         </div>

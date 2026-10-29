@@ -141,7 +141,7 @@ async function _getCashflowForecast(
       account: { businessId, code: ACCOUNT_CODES.cash },
       journalEntry: { entryDate: { lte: now } },
     },
-    include: { account: true },
+    select: { debitPence: true, creditPence: true, account: { select: { type: true } } },
   });
   const cashBalance = cashLines.reduce((sum, line) => {
     if (line.account.type === 'ASSET') return sum + line.debitPence - line.creditPence;

@@ -302,7 +302,7 @@ export default async function CommandCenterPage({
             {business.name} · {user.role === 'OWNER' ? 'Owner view' : 'Manager view'} · {branch.selected === 'ALL' ? 'Consolidated — all branches' : (branch.choices.find((store) => store.id === branch.selected)?.name ?? 'Selected branch')}
           </p>
         </div>
-        <RefreshIndicator fetchedAt={fetchedAt} autoRefreshMs={60_000} />
+        <RefreshIndicator fetchedAt={fetchedAt} autoRefreshMs={180_000} />
       </div>
 
       {/* ── Layer 1: Posture ────────────────────────────────────────── */}

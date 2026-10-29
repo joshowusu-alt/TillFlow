@@ -69,39 +69,29 @@ type LockedRow = {
 async function lockBatch(now: Date, runId: string): Promise<LockedRow[]> {
   const staleCutoff = new Date(now.getTime() - STALE_LOCK_MS);
 
-  // Two-phase: stamp `lastError` with the runId on the rows we want to grab,
-  // then fetch by that marker. updateMany is atomic per-row so two concurrent
-  // dispatchers won't double-grab the same id.
+  // Read only a bounded ID batch. Empty queues cost one narrow read and no writes.
+  const eligible = {
+    status: 'PENDING',
+    AND: [
+      { OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] },
+      { OR: [{ lockedAt: null }, { lockedAt: { lt: staleCutoff } }] },
+    ],
+  };
+  const candidates = await prisma.messageOutbox.findMany({
+    where: eligible, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: BATCH_SIZE, select: { id: true },
+  });
+  if (!candidates.length) return [];
   const lockedAt = now;
+  // Recheck eligibility atomically: another dispatcher may have claimed these IDs.
   await prisma.messageOutbox.updateMany({
-    where: {
-      status: 'PENDING',
-      AND: [
-        {
-          OR: [
-            { nextAttemptAt: null },
-            { nextAttemptAt: { lte: now } },
-          ],
-        },
-        {
-          OR: [
-            { lockedAt: null },
-            { lockedAt: { lt: staleCutoff } },
-          ],
-        },
-      ],
-      // Cap the batch via id list (Prisma has no LIMIT for updateMany on Postgres
-      // without raw SQL; we narrow with a pre-query).
-    },
-    data: {
-      lockedAt,
-      lastError: `LOCKED:${runId}`,
-    },
+    where: { ...eligible, id: { in: candidates.map(row => row.id) } },
+    data: { lockedAt, lastError: `LOCKED:${runId}` },
   });
 
-  // We over-locked; trim to the batch size by reading-then-releasing the rest.
   const allLocked = await prisma.messageOutbox.findMany({
-    where: { lockedAt, lastError: `LOCKED:${runId}` },
+    where: { id: { in: candidates.map(row => row.id) }, lockedAt, lastError: `LOCKED:${runId}` },
+    take: BATCH_SIZE,
     orderBy: { createdAt: 'asc' },
     select: {
       id: true,
@@ -114,17 +104,7 @@ async function lockBatch(now: Date, runId: string): Promise<LockedRow[]> {
     },
   });
 
-  if (allLocked.length <= BATCH_SIZE) {
-    return allLocked;
-  }
-
-  const overflow = allLocked.slice(BATCH_SIZE);
-  await prisma.messageOutbox.updateMany({
-    where: { id: { in: overflow.map((row) => row.id) } },
-    data: { lockedAt: null, lastError: null },
-  });
-
-  return allLocked.slice(0, BATCH_SIZE);
+  return allLocked;
 }
 
 async function countSentToday(businessId: string, now: Date): Promise<number> {

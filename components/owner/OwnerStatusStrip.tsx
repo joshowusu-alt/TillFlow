@@ -1,5 +1,7 @@
 'use client';
 
+import { OFFLINE_QUEUE_CHANGED } from '@/lib/offline/queue-events';
+import { startActivePolling } from '@/lib/active-polling';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -33,14 +35,16 @@ export default function OwnerStatusStrip({ businessName, scopeLabel, roleLabel, 
       }
     };
 
-    refreshMeta();
-    const interval = window.setInterval(refreshMeta, 30_000);
+    void refreshMeta();
+    const stop = startActivePolling(refreshMeta, 30_000, { immediate: false });
+    window.addEventListener(OFFLINE_QUEUE_CHANGED, refreshMeta);
     window.addEventListener('online', refreshMeta);
     window.addEventListener('offline', refreshMeta);
 
     return () => {
       mounted = false;
-      window.clearInterval(interval);
+      stop();
+      window.removeEventListener(OFFLINE_QUEUE_CHANGED, refreshMeta);
       window.removeEventListener('online', refreshMeta);
       window.removeEventListener('offline', refreshMeta);
     };

@@ -1,4 +1,6 @@
 'use client';
+import { OFFLINE_QUEUE_CHANGED } from '@/lib/offline/queue-events';
+import { startActivePolling } from '@/lib/active-polling';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePathname } from 'next/navigation';
@@ -100,6 +102,7 @@ export default function NetworkStatus() {
             toast('You\u2019re offline \u2014 sales will be saved locally', 'info');
         };
 
+        window.addEventListener(OFFLINE_QUEUE_CHANGED, checkPending);
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
 
@@ -126,7 +129,7 @@ export default function NetworkStatus() {
         );
 
         // Periodically check pending
-        const interval = setInterval(checkPending, 30000);
+        const stopPolling = startActivePolling(checkPending, 30000, { immediate: false });
 
         // Service worker broadcasts OFFLINE_SALE_FAILED when a sale is
         // permanently rejected (4xx) and moved to the dead-letter store.
@@ -145,11 +148,12 @@ export default function NetworkStatus() {
         swContainer?.addEventListener('message', handleServiceWorkerMessage);
 
         return () => {
+            window.removeEventListener(OFFLINE_QUEUE_CHANGED, checkPending);
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
             swContainer?.removeEventListener('message', handleServiceWorkerMessage);
             cleanup();
-            clearInterval(interval);
+            stopPolling();
         };
     }, [checkPending, isProtectedSurface, toast]);
 

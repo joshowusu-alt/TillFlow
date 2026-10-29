@@ -1,5 +1,6 @@
 'use client';
 
+import { startActivePolling } from '@/lib/active-polling';
 import { useCallback, useEffect, useState } from 'react';
 import {
   checkMomoCollectionStatusAction,
@@ -128,7 +129,8 @@ export function useMomoCollection({ storeId }: { storeId: string }) {
     let active = true;
     const poll = async () => {
       const result = await checkMomoCollectionStatusAction(momoCollectionId);
-      if (!active || !result.success) return;
+      if (!active) return;
+      if (!result.success) throw new Error('Collection status unavailable');
       applyMomoStatus({
         status: result.data.status,
         providerStatus: result.data.providerStatus,
@@ -138,14 +140,10 @@ export function useMomoCollection({ storeId }: { storeId: string }) {
       });
     };
 
-    const interval = window.setInterval(() => {
-      poll().catch(() => null);
-    }, 5000);
-
-    poll().catch(() => null);
+    const stop = startActivePolling(poll, 5000, { maxMs: 30000 });
     return () => {
       active = false;
-      window.clearInterval(interval);
+      stop();
     };
   }, [applyMomoStatus, momoCollectionId, momoCollectionStatus]);
 

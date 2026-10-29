@@ -7,6 +7,7 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:6200';
 const CASHIER_EMAIL = process.env.E2E_CASHIER_EMAIL || 'cashier@store.com';
 const CASHIER_PASSWORD = process.env.E2E_CASHIER_PASSWORD || 'Pass1234!';
 const prisma = new PrismaClient();
+const browserErrors = [];
 
 /** Current POS primary CTA: "Complete Cash Sale — …", "Complete Sale — …", credit/part-paid variants. */
 const COMPLETE_SALE_NAME = /Complete (?:Cash |Part-Paid |Credit )?Sale/i;
@@ -124,6 +125,7 @@ async function captureFailureArtifacts(page, stage, extra = {}) {
       cashTendered: await page.locator('#pos-cash-tendered').inputValue().catch(() => null),
       completeButtons,
       screenshot: shot,
+      browserErrors,
       ...extra,
     };
   } catch {
@@ -175,6 +177,10 @@ async function run() {
   // Desktop POS region: Complete Sale lives in checkout panel + sidebar (not phone sheet).
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await context.newPage();
+  page.on('pageerror', (error) => {
+    browserErrors.push(error.message);
+    console.error('[offline-smoke browser error]', error.stack || error.message);
+  });
 
   const report = {
     login: false,
