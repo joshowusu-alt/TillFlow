@@ -1,5 +1,6 @@
 'use client';
 
+import { startActivePolling } from '@/lib/active-polling';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useRouterRefreshOnVisibility } from '@/hooks/useRouterRefreshOnVisibility';
@@ -20,13 +21,12 @@ export default function RefreshIndicator({
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
-  useRouterRefreshOnVisibility(router);
+  useRouterRefreshOnVisibility(router, { enabled: !autoRefreshMs });
 
   // Auto-refresh
   useEffect(() => {
     if (!autoRefreshMs) return;
-    const id = setInterval(() => router.refresh(), autoRefreshMs);
-    return () => clearInterval(id);
+    return startActivePolling(() => router.refresh(), autoRefreshMs, { immediate: false });
   }, [autoRefreshMs, router]);
 
   const handleRefresh = () => {

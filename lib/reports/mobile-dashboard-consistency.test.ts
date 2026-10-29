@@ -98,7 +98,7 @@ describe('Mobile dashboard sales consistency', () => {
     const hook = read('hooks/useRouterRefreshOnVisibility.ts');
 
     expect(refreshIndicator).toContain('useRouterRefreshOnVisibility');
-    expect(refreshIndicator).toContain('setInterval(() => router.refresh()');
+    expect(refreshIndicator).toContain('startActivePolling(() => router.refresh()');
     expect(readiness).toContain('useRouterRefreshOnVisibility');
     expect(hook).toContain('visibilitychange');
     expect(hook).toContain("document.visibilityState === 'visible'");

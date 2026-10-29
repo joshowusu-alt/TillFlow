@@ -1,3 +1,5 @@
+import UnavailableScreen from '@/components/UnavailableScreen';
+import { isDatabaseUnavailable } from '@/lib/database-unavailable';
 import { Suspense } from 'react';
 import OnlineOrderAttentionBanner from '@/components/OnlineOrderAttentionBanner';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
@@ -129,7 +131,7 @@ async function OwnerSetupBanner({
   );
 }
 
-export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
+async function ProtectedLayoutContent({ children }: { children: React.ReactNode }) {
   const headersList = headers();
   const pathname = headersList.get('x-pathname') || '';
 
@@ -252,4 +254,14 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         <LaunchSessionCompletion />
     </div>
   );
+}
+
+export default async function ProtectedLayout(props: { children: React.ReactNode }) {
+  try {
+    return await ProtectedLayoutContent(props);
+  } catch (error) {
+    if (!isDatabaseUnavailable(error)) throw error; // Preserve redirects and authorization failures.
+    console.error('[protected-layout] Database unavailable', error);
+    return <UnavailableScreen database />;
+  }
 }
