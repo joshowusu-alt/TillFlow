@@ -37,6 +37,8 @@ const MOVEMENT_TYPE_LABELS: Record<string, string> = {
   STOCKTAKE: 'Stocktake',
   TRANSFER_OUT: 'Transfer out',
   TRANSFER_IN: 'Transfer in',
+  CONVERSION_IN: 'Conversion received',
+  CONVERSION_OUT: 'Conversion used',
   OPENING: 'Opening stock',
 };
 
@@ -52,13 +54,15 @@ const TYPE_BADGE: Record<string, string> = {
   STOCKTAKE: 'bg-purple-100 text-purple-700',
   TRANSFER_OUT: 'bg-pink-100 text-pink-700',
   TRANSFER_IN: 'bg-teal-100 text-teal-700',
+  CONVERSION_IN: 'bg-teal-100 text-teal-700',
+  CONVERSION_OUT: 'bg-pink-100 text-pink-700',
   OPENING: 'bg-indigo-100 text-indigo-700',
 };
 
 const MOVEMENT_TYPES = [
   'SALE', 'SALE_RETURN', 'PURCHASE', 'PURCHASE_RETURN',
   'ADJUSTMENT_INCREASE', 'ADJUSTMENT_DECREASE', 'ADJUSTMENT', 'ADJUSTMENT_REVERSAL',
-  'STOCKTAKE', 'TRANSFER_OUT', 'TRANSFER_IN', 'OPENING',
+  'STOCKTAKE', 'TRANSFER_OUT', 'TRANSFER_IN', 'CONVERSION_OUT', 'CONVERSION_IN', 'OPENING',
   'SALE_AMENDMENT', 'SALE_VOID', 'SALES_RETURN',
 ];
 

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
@@ -272,7 +273,8 @@ export default async function StockAdjustmentsPage({
       </div>
 
       <div className="card p-4 sm:p-6">
-        <StockAdjustmentClient
+        <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm">Opening a bag or carton into another product? <Link className="font-semibold underline" href="/inventory/conversions">Convert stock</Link> to move its cost with it.</div>
+      <StockAdjustmentClient
           storeId={store.id}
           storeName={store.name}
           currency={business.currency}

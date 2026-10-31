@@ -7,7 +7,7 @@ export function historyPage(raw?: string): number {
   return Number.isSafeInteger(page) && page > 0 ? Math.min(page, 100000) : 1;
 }
 export function movementLabel(type: string): string {
-  return ({ PURCHASE: 'Purchase receipt', OPENING: 'Opening stock', SALE: 'Sale', SALE_AMENDMENT: 'Sale amendment', SALES_RETURN: 'Sales return / void', PURCHASE_RETURN: 'Supplier return / void', TRANSFER_IN: 'Transfer in', TRANSFER_OUT: 'Transfer out', ADJUSTMENT: 'Stock adjustment', STOCKTAKE: 'Stocktake', ONLINE_ORDER_RESERVATION: 'Online order stock reservation', ONLINE_ORDER_RELEASE: 'Online order stock release' } as Record<string, string>)[type] ?? type.replace(/_/g, ' ').toLowerCase();
+  return ({ CONVERSION_IN: 'Stock conversion received', CONVERSION_OUT: 'Stock conversion used', PURCHASE: 'Purchase receipt', OPENING: 'Opening stock', SALE: 'Sale', SALE_AMENDMENT: 'Sale amendment', SALES_RETURN: 'Sales return / void', PURCHASE_RETURN: 'Supplier return / void', TRANSFER_IN: 'Transfer in', TRANSFER_OUT: 'Transfer out', ADJUSTMENT: 'Stock adjustment', STOCKTAKE: 'Stocktake', ONLINE_ORDER_RESERVATION: 'Online order stock reservation', ONLINE_ORDER_RELEASE: 'Online order stock release' } as Record<string, string>)[type] ?? type.replace(/_/g, ' ').toLowerCase();
 }
 export function verifiedMovementValue(movement: { valuePence: number | null; costBasis: string | null }) {
   return movement.costBasis === INVENTORY_VALUE_V1 ? movement.valuePence : null;
@@ -63,6 +63,7 @@ export async function getProductHistory(input: { businessId: string; storeId: st
     transferIds.length ? prisma.stockTransfer.findMany({ where: { id: { in: transferIds }, businessId, lines: { some: { productId } }, OR: [{ fromStoreId: storeId }, { toStoreId: storeId }] }, select: { id: true, reason: true, fromStore: { select: { name: true } }, toStore: { select: { name: true } } } }) : [],
   ]);
   const sources = new Map<string, { label: string; href?: string; detail?: string }>();
+  ids(['STOCK_CONVERSION']).forEach(id => sources.set(`STOCK_CONVERSION:${id}`, { label: id, href: '/inventory/conversions', detail: 'Linked conversion; source cost transferred without income or expense' }));
   const creditIds = ids(['PURCHASE_RETURN_CREDIT']);
   const credits = creditIds.length ? await prisma.purchaseReturnCredit.findMany({ where: { id: { in: creditIds }, businessId, storeId, purchaseInvoice: { lines: { some: { productId } } } }, select: { id: true, reason: true, purchaseInvoice: { select: { id: true, transactionNumber: true } } } }) : [];
   credits.forEach(credit => sources.set(`PURCHASE_RETURN_CREDIT:${credit.id}`, { label: credit.purchaseInvoice.transactionNumber ?? credit.purchaseInvoice.id, href: `/purchases/partial-return/${encodeURIComponent(credit.purchaseInvoice.id)}`, detail: credit.reason }));
