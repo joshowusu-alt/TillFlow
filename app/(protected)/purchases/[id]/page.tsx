@@ -129,8 +129,17 @@ export default async function PurchaseInvoicePage(
       <PageHeader
         title={displayDocumentNumber('purchase', invoice.transactionNumber, invoice.id)}
         subtitle={invoice.supplier ? `Supplier: ${invoice.supplier.name}` : 'No supplier linked'}
+        primaryCta={isClosed ? undefined : { label: 'Return selected items', href: `/purchases/partial-return/${invoice.id}` }}
         secondaryCta={{ label: '← Back to purchases', href: '/purchases' }}
       />
+
+      {invoice.returnCreditPence > 0 || invoice.creditAppliedPence > 0 || invoice.creditSettledPence > 0 ? (
+        <section className="card space-y-3 border-blue-200 p-4">
+          <h2 className="font-semibold">Return credits and settlements</h2>
+          <p className="text-sm">Original invoice: {formatMoney(invoice.totalPence, business.currency)} · Return credits: {formatMoney(invoice.returnCreditPence, business.currency)} · Revised supplier charge: {formatMoney(invoice.totalPence - invoice.returnCreditPence, business.currency)}. Original lines and payments remain unchanged.</p>
+          <Link className="btn-secondary inline-block" href={`/purchases/credit-settlement/${invoice.id}`}>View credits, refunds and offsets →</Link>
+        </section>
+      ) : null}
 
       <FormError error={searchParams?.error} />
 
@@ -210,7 +219,7 @@ export default async function PurchaseInvoicePage(
         </div>
         <div className="space-y-1 sm:col-span-2">
           <RemainingBalance
-            amountPence={invoice.totalPence}
+            amountPence={invoice.totalPence - invoice.returnCreditPence + invoice.creditSettledPence - invoice.creditAppliedPence}
             paidPence={totalPaid}
             currency={business.currency}
           />

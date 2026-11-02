@@ -123,7 +123,7 @@ export default async function PurchasesPage(
         invoiceReceivedAt: true,
         createdAt: true,
         paymentStatus: true,
-        totalPence: true,
+        totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
         supplier: { select: { name: true } },
         purchaseReturn: { select: { id: true } },
         payments: { select: { amountPence: true } },
@@ -432,8 +432,8 @@ export default async function PurchasesPage(
                     </div>
                     <div className="col-span-2">
                       <RemainingBalance
-                        amountPence={purchase.totalPence}
-                        paidPence={purchase.totalPence - outstandingPence}
+                        amountPence={purchase.totalPence - purchase.returnCreditPence + purchase.creditSettledPence - purchase.creditAppliedPence}
+                        paidPence={purchase.payments.reduce((sum, payment) => sum + payment.amountPence, 0)}
                         currency={business.currency}
                       />
                     </div>
@@ -468,8 +468,8 @@ export default async function PurchasesPage(
                               storeId={purchase.storeId}
                             />
                           )}
-                          <Link className="btn-ghost text-xs" href={`/purchases/return/${purchase.id}`}>
-                            Return
+                          <Link className="btn-ghost text-xs" href={`/purchases/partial-return/${purchase.id}`}>
+                            Return selected items
                           </Link>
                           <DeletePurchaseButton purchaseId={purchase.id} />
                         </>
@@ -527,8 +527,8 @@ export default async function PurchasesPage(
                       </td>
                       <td className="px-3 py-3 text-sm font-semibold">
                         <RemainingBalance
-                          amountPence={purchase.totalPence}
-                          paidPence={purchase.totalPence - outstandingPence}
+                          amountPence={purchase.totalPence - purchase.returnCreditPence + purchase.creditSettledPence - purchase.creditAppliedPence}
+                          paidPence={purchase.payments.reduce((sum, payment) => sum + payment.amountPence, 0)}
                           currency={business.currency}
                         />
                       </td>
@@ -562,8 +562,8 @@ export default async function PurchasesPage(
                                     storeId={purchase.storeId}
                                   />
                                 )}
-                                <Link className="btn-ghost text-xs" href={`/purchases/return/${purchase.id}`}>
-                                  Return
+                                <Link className="btn-ghost text-xs" href={`/purchases/partial-return/${purchase.id}`}>
+                                  Return selected items
                                 </Link>
                                 <DeletePurchaseButton purchaseId={purchase.id} />
                               </>

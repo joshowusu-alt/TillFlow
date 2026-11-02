@@ -55,7 +55,7 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
           })).map(j => j.referenceId).filter((id): id is string => !!id),
         },
       },
-      select: { supplierId: true, totalPence: true, supplier: { select: { name: true } } },
+      select: { supplierId: true, totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true, supplier: { select: { name: true } } },
     }),
     store
       ? prisma.till.findMany({

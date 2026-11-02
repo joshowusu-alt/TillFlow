@@ -331,7 +331,7 @@ async function getTodayKPIsSqlite(
     }),
     prisma.purchaseInvoice.findMany({
       where: { businessId, ...storeFilter, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
-      select: { paymentStatus: true, totalPence: true, payments: { select: { amountPence: true } } },
+      select: { paymentStatus: true, totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true, payments: { select: { amountPence: true } } },
     }),
     prisma.riskAlert.findMany({
       where: { businessId, ...enforced, severity: 'HIGH', status: 'OPEN', occurredAt: { gte: sevenDaysAgo, lt: todayEnd } },
@@ -608,7 +608,7 @@ async function _getTodayKPIs(
         businessId, ...storeFilter,
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
-      select: { paymentStatus: true, totalPence: true, payments: { select: { amountPence: true } } },
+      select: { paymentStatus: true, totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true, payments: { select: { amountPence: true } } },
     }),
     // Open HIGH risk alerts
     prisma.riskAlert.count({

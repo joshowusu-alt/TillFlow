@@ -48,6 +48,7 @@ describe('cash drawer summaries', () => {
       'PAID_OUT_SUPPLIER',
       'PAID_OUT_EXPENSE',
       'CASH_REFUND',
+      'SUPPLIER_REFUND_RECEIVED',
       'CASH_ADJUSTMENT',
     ]);
     expect(CASH_DRAWER_ENTRY_LABELS.PAID_OUT_SUPPLIER).toBe('Supplier payments');

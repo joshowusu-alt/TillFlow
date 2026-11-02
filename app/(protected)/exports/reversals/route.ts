@@ -88,6 +88,21 @@ export async function GET(request: Request) {
     })),
   ].sort((a, b) => b.sortTimestamp.localeCompare(a.sortTimestamp));
 
+  const purchaseCredits = await prisma.purchaseReturnCredit.findMany({
+    where: { businessId: user.businessId, createdAt: { gte: dateRange.start, lt: dateRange.end } },
+    include: { purchaseInvoice: { include: { supplier: true, store: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  const creditRows = purchaseCredits.map(item => ({
+    category: 'Purchases', type: 'Selected-item return credit',
+    reversalDate: item.createdAt.toISOString().slice(0, 10), originalDate: item.purchaseInvoice.createdAt.toISOString().slice(0, 10),
+    store: item.purchaseInvoice.store.name, reference: item.purchaseInvoice.transactionNumber ?? item.purchaseInvoiceId,
+    counterparty: item.purchaseInvoice.supplier?.name ?? 'Supplier not set', refundMethod: '', refundAmount: formatPence(0),
+    reasonCode: item.kind, reason: item.reason, recordedBy: item.userId, approvedBy: '', sortTimestamp: item.createdAt.toISOString(),
+    supplierCredit: formatPence(item.creditPence), returnedQuantity: (JSON.parse(item.linesJson) as {qtyBase:number}[]).reduce((sum,line)=>sum+line.qtyBase,0),
+  }));
+  const exportRows = [...rows.map(row=>({...row,supplierCredit:'',returnedQuantity:'' as string|number})), ...creditRows].sort((a,b)=>b.sortTimestamp.localeCompare(a.sortTimestamp));
+
   const columns = [
     { header: 'Category', key: 'category', width: 12 },
     { header: 'Type', key: 'type', width: 18 },
@@ -98,6 +113,8 @@ export async function GET(request: Request) {
     { header: 'Counterparty', key: 'counterparty', width: 22 },
     { header: 'Refund Method', key: 'refundMethod', width: 14 },
     { header: 'Refund Amount', key: 'refundAmount', width: 14 },
+    { header: 'Supplier Credit', key: 'supplierCredit', width: 14 },
+    { header: 'Returned Base Units', key: 'returnedQuantity', width: 18 },
     { header: 'Reason Code', key: 'reasonCode', width: 16 },
     { header: 'Reason', key: 'reason', width: 28 },
     { header: 'Recorded By', key: 'recordedBy', width: 18 },
@@ -105,7 +122,7 @@ export async function GET(request: Request) {
   ];
 
   const csvHeader = columns.map((column) => column.header).join(',');
-  const csvRows = rows.map((row) => columns.map((column) => csvEscape(row[column.key as keyof typeof row] ?? '')).join(',')).join('\n');
+  const csvRows = exportRows.map((row) => columns.map((column) => csvEscape(row[column.key as keyof typeof row] ?? '')).join(',')).join('\n');
   const csv = `${csvHeader}\n${csvRows}`;
 
   return respondWithExport({
@@ -118,7 +135,7 @@ export async function GET(request: Request) {
       dateRange: { from: dateRange.start, to: dateRange.end },
       currency: business?.currency ?? 'GHS',
       columns,
-      rows,
+      rows: exportRows,
     },
   });
 }

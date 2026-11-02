@@ -63,6 +63,9 @@ export async function getProductHistory(input: { businessId: string; storeId: st
     transferIds.length ? prisma.stockTransfer.findMany({ where: { id: { in: transferIds }, businessId, lines: { some: { productId } }, OR: [{ fromStoreId: storeId }, { toStoreId: storeId }] }, select: { id: true, reason: true, fromStore: { select: { name: true } }, toStore: { select: { name: true } } } }) : [],
   ]);
   const sources = new Map<string, { label: string; href?: string; detail?: string }>();
+  const creditIds = ids(['PURCHASE_RETURN_CREDIT']);
+  const credits = creditIds.length ? await prisma.purchaseReturnCredit.findMany({ where: { id: { in: creditIds }, businessId, storeId, purchaseInvoice: { lines: { some: { productId } } } }, select: { id: true, reason: true, purchaseInvoice: { select: { id: true, transactionNumber: true } } } }) : [];
+  credits.forEach(credit => sources.set(`PURCHASE_RETURN_CREDIT:${credit.id}`, { label: credit.purchaseInvoice.transactionNumber ?? credit.purchaseInvoice.id, href: `/purchases/partial-return/${encodeURIComponent(credit.purchaseInvoice.id)}`, detail: credit.reason }));
   purchases.forEach(row => sources.set(`PURCHASE_INVOICE:${row.id}`, { label: row.transactionNumber ?? row.id, href: `/purchases/${encodeURIComponent(row.id)}`, detail: row.supplier?.name ?? 'No supplier recorded' }));
   purchases.forEach(row => sources.set(`OPENING_STOCK:${row.id}`, { label: row.transactionNumber ?? row.id, href: `/purchases/${encodeURIComponent(row.id)}`, detail: row.supplier?.name ?? 'Opening stock purchase' }));
   sales.forEach(row => sources.set(`SALES_INVOICE:${row.id}`, { label: row.transactionNumber ?? row.id, href: `/sales/${encodeURIComponent(row.id)}` }));

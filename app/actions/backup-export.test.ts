@@ -31,6 +31,8 @@ it('exports every table through one repeatable-read transaction, including the b
   expect(tx.salesInvoice.findMany).toHaveBeenCalled();
   expect(tx.stockMovement.findMany).toHaveBeenCalled();
   expect(tx.inventoryBalance.findMany).toHaveBeenCalled();
+  expect(tx.purchaseReturnCredit.findMany).toHaveBeenCalledWith({ where: { businessId: 'business' } });
+  expect(tx.supplierCreditSettlement.findMany).toHaveBeenCalledWith({ where: { businessId: 'business' } });
 });
 it('uses SQLite serializable snapshots for local exports', async () => {
   mocks.postgres.mockReturnValue(false);

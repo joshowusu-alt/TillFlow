@@ -24,6 +24,7 @@ vi.mock('@/lib/prisma', () => ({
 	prisma: {
 		salesReturn: { findMany: salesReturnFindManyMock },
 		purchaseReturn: { findMany: purchaseReturnFindManyMock },
+		purchaseReturnCredit: { findMany: vi.fn().mockResolvedValue([]) },
 		business: { findUnique: businessFindUniqueMock },
 	},
 }));

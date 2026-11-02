@@ -98,7 +98,7 @@ export default async function SuppliersPage(
             where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
             select: {
               paymentStatus: true,
-              totalPence: true,
+              totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
               createdAt: true,
               payments: {
                 select: { amountPence: true, paidAt: true },

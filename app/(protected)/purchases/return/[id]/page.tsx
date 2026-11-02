@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import { redirect } from 'next/navigation';
 import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
@@ -16,7 +17,7 @@ export default async function PurchaseReturnPage(props: { params: Promise<{ id: 
     select: {
       id: true,
       createdAt: true,
-      totalPence: true,
+      totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
       paymentStatus: true,
       storeId: true,
       store: { select: { name: true } },
@@ -27,6 +28,8 @@ export default async function PurchaseReturnPage(props: { params: Promise<{ id: 
   });
 
   if (!invoice) return <div className="card p-6">Purchase not found.</div>;
+  if (invoice.returnCreditPence > 0 || invoice.creditSettledPence > 0 || invoice.creditAppliedPence > 0) redirect(`/purchases/partial-return/${encodeURIComponent(invoice.id)}`);
+  if (process.env.VERCEL_ENV === 'preview' && business.isDemo) redirect(`/purchases/partial-return/${encodeURIComponent(invoice.id)}`);
   if (invoice.purchaseReturn) {
     return <div className="card p-6">This purchase has already been returned.</div>;
   }
@@ -54,7 +57,7 @@ export default async function PurchaseReturnPage(props: { params: Promise<{ id: 
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Return Purchase" subtitle="Process a full purchase return or void an unpaid invoice." secondaryCta={{ label: '← Back to purchases', href: '/purchases' }} />
+      <PageHeader title="Return full purchase" subtitle="This screen reverses the entire purchase. To return only some items or quantities, choose Return selected items." primaryCta={{ label: 'Return selected items', href: `/purchases/partial-return/${invoice.id}` }} secondaryCta={{ label: '← Back to purchases', href: '/purchases' }} />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">
