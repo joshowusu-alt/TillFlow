@@ -1,0 +1,42 @@
+name: Local Archive Reference Reader
+on:
+  push:
+    branches: ['remediation/recovery-archive-r2-20261102']
+permissions:
+  contents: read
+jobs:
+  fictional-archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: fictional
+          POSTGRES_DB: fictional_reference
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fictional_reference"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create strictly fictional archive
+        run: |
+          docker exec -i ${{ job.services.postgres.id }} psql -U postgres -d fictional_reference -v ON_ERROR_STOP=1 < scripts/recovery-reference-fixture.sql
+          docker exec ${{ job.services.postgres.id }} pg_dump -U postgres -d fictional_reference --format=custom --no-owner --no-acl > fictional-reference.dump
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fictional-reference-only
+          path: fictional-reference.dump
+          retention-days: 1
+  windows-archive-reader:
+    needs: fictional-archive
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: fictional-reference-only
+      - name: Verify shipped R2 reader with real Windows PostgreSQL client
+        shell: powershell
+        run: ./scripts/recovery-reference-regression.ps1
