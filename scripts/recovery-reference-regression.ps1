@@ -1,7 +1,23 @@
-# Only fictional CI data. These functions match the owner R2 archive reader exactly.
+# Only fictional CI data. These functions match the owner R3 archive reader exactly.
 $ErrorActionPreference='Stop'
 [Console]::InputEncoding=New-Object Text.UTF8Encoding($false)
+function New-LegacyProcess($exe, $arguments, $inputRedirect, $outputRedirect) {
+  $p = New-Object System.Diagnostics.Process
+  $p.StartInfo.FileName = $exe
+  $p.StartInfo.Arguments = $arguments
+  $p.StartInfo.UseShellExecute = $false
+  $p.StartInfo.CreateNoWindow = $true
+  $p.StartInfo.RedirectStandardInput = $inputRedirect
+  if ($inputRedirect -and $p.StartInfo.PSObject.Properties['StandardInputEncoding']) { $p.StartInfo.StandardInputEncoding = New-Object System.Text.UTF8Encoding($false) }
+  $p.StartInfo.RedirectStandardOutput = $outputRedirect
+  $p.StartInfo.RedirectStandardError = $true
+  return $p
+}
 function New-Process($exe, $arguments, $inputRedirect, $outputRedirect) {
+  if ($inputRedirect) {
+    [Console]::InputEncoding = New-Object Text.UTF8Encoding($false)
+    if ([Console]::InputEncoding.GetPreamble().Length -ne 0) { throw 'Binary input encoding guard failed' }
+  }
   $p = New-Object System.Diagnostics.Process
   $p.StartInfo.FileName = $exe
   $p.StartInfo.Arguments = $arguments
@@ -71,6 +87,7 @@ function Get-ArchiveReferences($archiveMemory,[string]$pgrestore) {
   $p.StartInfo.StandardOutputEncoding=New-Object Text.UTF8Encoding($false)
   try {
     [void]$p.Start();$err=$p.StandardError.ReadToEndAsync();$result=$p.StandardOutput.ReadToEndAsync()
+    if ($p.StandardInput.Encoding.GetPreamble().Length -ne 0) { throw 'Reader input encoding guard failed' }
     try { $archiveMemory.CopyTo($p.StandardInput.BaseStream) } finally { $p.StandardInput.Close() }
     $p.WaitForExit();[void]$err.Result
     if ($p.ExitCode -ne 0) { throw 'Archive reference reader failed' }
@@ -85,6 +102,19 @@ if(!$pgrestore){throw 'Runner PostgreSQL client missing'}
 $archiveMemory=New-Object IO.MemoryStream
 $archiveBytes=[IO.File]::ReadAllBytes((Join-Path (Get-Location) 'fictional-reference.dump'))
 $archiveMemory.Write($archiveBytes,0,$archiveBytes.Length);$archiveMemory.Position=0
+[Console]::InputEncoding=New-Object Text.UTF8Encoding($true)
+$baseline=New-LegacyProcess $pgrestore '--data-only --no-owner --no-acl --file=- --table=Product' $true $true
+[void]$baseline.Start();$be=$baseline.StandardError.ReadToEndAsync();$bo=$baseline.StandardOutput.ReadToEndAsync()
+$baselineFailure=$false;$baselineType='none'
+try{$archiveMemory.CopyTo($baseline.StandardInput.BaseStream)}catch{$baselineFailure=$true;$baselineType=$_.Exception.GetType().Name}finally{$baseline.StandardInput.Close()}
+$baseline.WaitForExit();$baselineError=$be.Result;[void]$bo.Result
+if($baseline.ExitCode -ne 0){$baselineFailure=$true}
+if(!$baselineFailure){throw 'Expected encoding failure did not reproduce'}
+if($baselineError -notmatch 'valid tar archive|valid archive|did not find magic string|input file is too short|unsupported version|corrupt'){throw 'Baseline failed for another reason'}
+Write-Host ('LEGACY PIPE FAILURE REPRODUCED: '+$baselineType+'; pg_restore exit '+$baseline.ExitCode)
+$baseline.Dispose();$archiveMemory.Position=0
+# Fixed helper must work even when the global encoding is deliberately BOM-enabled.
+[Console]::InputEncoding=New-Object Text.UTF8Encoding($true)
 $refs=@(Get-ArchiveReferences $archiveMemory $pgrestore)
 if($refs.Count -ne 3){throw 'Incorrect archive references count'}
 if(($refs | Where-Object {$_.t -eq 'Product'}).u -cne 'https://mk8jj77w2uohrpv1.public.blob.vercel-storage.com/fictional.png'){throw 'Product mapping changed'}
