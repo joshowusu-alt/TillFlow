@@ -42,10 +42,11 @@ function Encrypt-Bytes([byte[]]$bytes, [string]$destination) {
 if ($PSVersionTable.PSVersion.Major -ne 5) { throw 'Windows PowerShell 5.1 required' }
 $env:GNUPGHOME=Join-Path $env:RUNNER_TEMP ('fictional-gpg-'+[Guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $env:GNUPGHOME)
-$gpg=(Get-Command gpg.exe -ErrorAction SilentlyContinue).Source
-if (!$gpg) { $gpg='C:\Program Files\Git\usr\bin\gpg.exe' }
-if (!(Test-Path -LiteralPath $gpg)) { throw 'GPG unavailable' }
-& $gpg --batch --pinentry-mode loopback --passphrase '' --quick-generate-key 'Fictional recovery regression' rsa2048 encr 1d
+$gpg=@('C:\Program Files (x86)\GnuPG\bin\gpg.exe','C:\Program Files\GnuPG\bin\gpg.exe') | Where-Object {Test-Path -LiteralPath $_} | Select-Object -First 1
+if (!$gpg) { throw 'Native Gpg4win unavailable; MSYS Git GPG is not this test target' }
+$passfile=Join-Path $env:GNUPGHOME 'empty-passphrase.txt'
+[IO.File]::WriteAllText($passfile,'')
+& $gpg --batch --pinentry-mode loopback --passphrase-file $passfile --quick-generate-key 'Fictional recovery regression' rsa2048 encr 1d
 if ($LASTEXITCODE -ne 0) { throw 'Fixture key creation failed' }
 $keys=& $gpg --batch --with-colons --list-keys
 $recipient=(($keys | Where-Object {$_ -match '^fpr:'} | Select-Object -First 1) -split ':')[9]
