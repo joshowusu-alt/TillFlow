@@ -9,5 +9,6 @@ INSERT INTO "Product" VALUES('p1',E'Fictional café\trow','https://mk8jj77w2uohr
 INSERT INTO "OnlineOrderLine" VALUES('o1','https://www.nestle-cwa.com/fictional');
 INSERT INTO "Business" VALUES('b1',NULL,NULL,'data:image/png;base64,AA==',NULL,NULL);
 
--- Approximately 20MB of synthetic text, compressed to a production-sized archive.
-INSERT INTO "Product" SELECT 'filler-'||i, (SELECT string_agg(md5(i::text||'/'||j::text),'') FROM generate_series(1,400) j), NULL FROM generate_series(1,1500) i;
+-- A large UNSELECTED trailing table reproduces the owner's real archive topology.
+CREATE TABLE "ZZZ_UnselectedPayload" (id text, payload text);
+INSERT INTO "ZZZ_UnselectedPayload" SELECT 'filler-'||i, (SELECT string_agg(md5(i::text||'/'||j::text),'') FROM generate_series(1,400) j) FROM generate_series(1,1500) i;

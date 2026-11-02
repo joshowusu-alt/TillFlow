@@ -88,10 +88,22 @@ function Get-ArchiveReferences($archiveMemory,[string]$pgrestore) {
   try {
     [void]$p.Start();$err=$p.StandardError.ReadToEndAsync();$result=$p.StandardOutput.ReadToEndAsync()
     if ($p.StandardInput.Encoding.GetPreamble().Length -ne 0) { throw 'Reader input encoding guard failed' }
-    try { $archiveMemory.CopyTo($p.StandardInput.BaseStream) } finally { $p.StandardInput.Close() }
+    $writeError=$null
+    try { $archiveMemory.CopyTo($p.StandardInput.BaseStream) } catch { $writeError=$_.Exception }
+    finally { try { $p.StandardInput.Close() } catch { if (!$writeError) { $writeError=$_.Exception } } }
     $p.WaitForExit();[void]$err.Result
     if ($p.ExitCode -ne 0) { throw 'Archive reference reader failed' }
-    return Get-ReferencesFromCopySql $result.Result
+    # A selective pg_restore can finish and close stdin before the unselected
+    # tail is consumed. Only accept that I/O close after a successful exit and
+    # complete, validated COPY sections for every required table. GPG has already
+    # verified the ENTIRE encrypted archive before any of this is attempted.
+    $refs=@(Get-ReferencesFromCopySql $result.Result)
+    if ($writeError) {
+      $io=$writeError;$isIo=$false
+      while ($io) { if ($io -is [IO.IOException]) { $isIo=$true };$io=$io.InnerException }
+      if (!$isIo) { throw $writeError }
+    }
+    return $refs
   } finally { if (!$p.HasExited) { $p.Kill() };$p.Dispose() }
 }
 
@@ -102,18 +114,19 @@ if(!$pgrestore){throw 'Runner PostgreSQL client missing'}
 $archiveMemory=New-Object IO.MemoryStream
 $archiveBytes=[IO.File]::ReadAllBytes((Join-Path (Get-Location) 'fictional-reference.dump'))
 $archiveMemory.Write($archiveBytes,0,$archiveBytes.Length);$archiveMemory.Position=0
-[Console]::InputEncoding=New-Object Text.UTF8Encoding($true)
-$baseline=New-LegacyProcess $pgrestore '--data-only --no-owner --no-acl --file=- --table=Product' $true $true
+# Reproduce the old writer failure on valid bytes, without a BOM: the reader
+# succeeds and exits once the selected sections are complete, before a large
+# unselected trailing table. The archive is fully valid and all references exist.
+[Console]::InputEncoding=New-Object Text.UTF8Encoding($false)
+$baseline=New-Process $pgrestore '--data-only --no-owner --no-acl --file=- --table=Product --table=Category --table=OnlineOrderLine --table=Business --table=Expense --table=CashVarianceInvestigation --table=ControlSupportIssue' $true $true
 [void]$baseline.Start();$be=$baseline.StandardError.ReadToEndAsync();$bo=$baseline.StandardOutput.ReadToEndAsync()
 $baselineFailure=$false;$baselineType='none'
-try{$archiveMemory.CopyTo($baseline.StandardInput.BaseStream)}catch{$baselineFailure=$true;$baselineType=$_.Exception.GetType().Name}finally{$baseline.StandardInput.Close()}
-$baseline.WaitForExit();$baselineError=$be.Result;[void]$bo.Result
-if($baseline.ExitCode -ne 0){$baselineFailure=$true}
-if(!$baselineFailure){throw 'Expected encoding failure did not reproduce'}
-if($baselineError -notmatch 'valid tar archive|valid archive|did not find magic string|input file is too short|unsupported version|corrupt'){throw 'Baseline failed for another reason'}
-Write-Host ('LEGACY PIPE FAILURE REPRODUCED: '+$baselineType+'; pg_restore exit '+$baseline.ExitCode)
+try{$archiveMemory.CopyTo($baseline.StandardInput.BaseStream)}catch{$baselineFailure=$true;$baselineType=$_.Exception.GetType().Name}finally{try{$baseline.StandardInput.Close()}catch{$baselineFailure=$true}}
+$baseline.WaitForExit();[void]$be.Result;$baselineRefs=@(Get-ReferencesFromCopySql $bo.Result)
+if(!$baselineFailure -or $baseline.ExitCode -ne 0 -or $baselineRefs.Count -ne 3){throw 'The specific early-close failure did not reproduce'}
+Write-Host ('LEGACY SELECTIVE PIPE FAILURE REPRODUCED: '+$baselineType+'; pg_restore exit 0; all selected reference sections complete')
 $baseline.Dispose();$archiveMemory.Position=0
-# Fixed helper must work even when the global encoding is deliberately BOM-enabled.
+# Also protect against any native tool changing the global console encoding.
 [Console]::InputEncoding=New-Object Text.UTF8Encoding($true)
 $refs=@(Get-ArchiveReferences $archiveMemory $pgrestore)
 if($refs.Count -ne 3){throw 'Incorrect archive references count'}
