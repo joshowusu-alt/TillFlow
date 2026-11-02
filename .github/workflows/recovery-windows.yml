@@ -12,9 +12,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Install native Gpg4win matching the owner tool family
-        shell: powershell
-        run: choco install gpg4win --yes --no-progress
       - name: Real GPG encryption and recovery on Windows PowerShell 5.1
         shell: powershell
         run: ./scripts/recovery-binary-input-regression.ps1
