@@ -24,7 +24,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 it('distinguishes full reversal and offers item selection on the legacy screen', async () => {
   vi.stubEnv('VERCEL_ENV', 'production');
-  const html = renderToStaticMarkup(await PurchaseReturnPage({ params: { id: 'invoice' } }));
+  const html = renderToStaticMarkup(await PurchaseReturnPage({ params: Promise.resolve({ id: 'invoice' }) }));
   expect(html).toContain('Return full purchase');
   expect(html).toContain('This screen reverses the entire purchase.');
   expect(html).toContain('href="/purchases/partial-return/invoice"');
@@ -35,13 +35,13 @@ it('opens credit-aware history instead of a second whole-invoice reversal when c
   vi.stubEnv('VERCEL_ENV', 'production');
   const invoice = await mocks.db.purchaseInvoice.findFirst();
   mocks.db.purchaseInvoice.findFirst.mockResolvedValue({ ...invoice, returnCreditPence: 1800 });
-  await expect(PurchaseReturnPage({ params: { id: 'invoice' } })).rejects.toThrow('PILOT_REDIRECT');
+  await expect(PurchaseReturnPage({ params: Promise.resolve({ id: 'invoice' }) })).rejects.toThrow('PILOT_REDIRECT');
   expect(mocks.redirect).toHaveBeenCalledWith('/purchases/partial-return/invoice');
 });
 
 it.each(['preview', 'production', 'development'])('preserves whole-invoice returns for ordinary businesses in %s', async environment => {
   vi.stubEnv('VERCEL_ENV', environment);
-  const html = renderToStaticMarkup(await PurchaseReturnPage({ params: { id: 'invoice' } }));
+  const html = renderToStaticMarkup(await PurchaseReturnPage({ params: Promise.resolve({ id: 'invoice' }) }));
   expect(html).toContain('Void Purchase');
   expect(mocks.redirect).not.toHaveBeenCalled();
 });
@@ -49,13 +49,13 @@ it.each(['preview', 'production', 'development'])('preserves whole-invoice retur
 it('routes only preview demo purchases into the partial-return pilot', async () => {
   vi.stubEnv('VERCEL_ENV', 'preview');
   mocks.auth.mockResolvedValue({ business: { id: 'biz', currency: 'GHS', isDemo: true }, store: { id: 'store' } });
-  await expect(PurchaseReturnPage({ params: { id: 'invoice' } })).rejects.toThrow('PILOT_REDIRECT');
+  await expect(PurchaseReturnPage({ params: Promise.resolve({ id: 'invoice' }) })).rejects.toThrow('PILOT_REDIRECT');
   expect(mocks.redirect).toHaveBeenCalledWith('/purchases/partial-return/invoice');
 });
 
 it('keeps production demo businesses on the existing full-return form', async () => {
   vi.stubEnv('VERCEL_ENV', 'production');
   mocks.auth.mockResolvedValue({ business: { id: 'biz', currency: 'GHS', isDemo: true }, store: { id: 'store' } });
-  expect(renderToStaticMarkup(await PurchaseReturnPage({ params: { id: 'invoice' } }))).toContain('Void Purchase');
+  expect(renderToStaticMarkup(await PurchaseReturnPage({ params: Promise.resolve({ id: 'invoice' }) }))).toContain('Void Purchase');
   expect(mocks.redirect).not.toHaveBeenCalled();
 });
