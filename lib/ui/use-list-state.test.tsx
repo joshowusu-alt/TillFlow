@@ -1,9 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
-}));
+const navigation = vi.hoisted(() => ({ replace: vi.fn() }));
+vi.mock('./list-navigation', () => ({ replaceListDocument: navigation.replace }));
 
 import { readListState, writeListState } from './list-state';
 import { isOnListRoute, leavesListRoute, useListState } from './use-list-state';
@@ -23,6 +22,7 @@ async function flushFrames() {
 describe('useListState scroll persistence', () => {
   beforeEach(() => {
     window.sessionStorage.clear();
+    navigation.replace.mockClear();
     window.history.replaceState(null, '', '/products?q=Rice');
     setScrollY(0);
     Object.defineProperty(document.documentElement, 'scrollHeight', { configurable: true, value: 3000 });
@@ -35,6 +35,31 @@ describe('useListState scroll persistence', () => {
     expect(isOnListRoute('/products')).toBe(true);
     window.history.replaceState(null, '', '/products/labels');
     expect(isOnListRoute('/products')).toBe(false);
+  });
+
+  it('honours explicit GET navigation instead of restoring a stale query', () => {
+    writeListState('/products', { q: 'Old query', page: 2 });
+    window.history.replaceState(null, '', '/products?resetList=1');
+    renderHook(() => useListState('/products', { q: '', page: 1, restoreOnBareRoute: true }));
+    expect(navigation.replace).not.toHaveBeenCalled();
+  });
+
+  it('still restores the last query on an ordinary bare-route revisit', () => {
+    writeListState('/products', { q: 'Old query', page: 2 });
+    window.history.replaceState(null, '', '/products');
+    renderHook(() => useListState('/products', { q: '', page: 1, restoreOnBareRoute: true }));
+    expect(navigation.replace).toHaveBeenCalledWith('/products?q=Old+query&page=2');
+    expect(readListState('/products')?.q).toBe('Old query');
+  });
+
+  it('retains changed filters when a later scroll persists the same search/page', async () => {
+    const { rerender } = renderHook(({ category }) => useListState('/products', { q: 'Rice', page: 1, filters: { category } }), { initialProps: { category: 'old' } });
+    await flushFrames();
+    rerender({ category: 'new' });
+    setScrollY(300);
+    act(() => { window.dispatchEvent(new Event('scroll')); });
+    await flushFrames();
+    expect(readListState('/products')?.filters?.category).toBe('new');
   });
 
   it('keeps the list offset when the window scrolls to the top of a record page', async () => {

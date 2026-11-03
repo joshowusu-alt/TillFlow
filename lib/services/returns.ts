@@ -361,24 +361,31 @@ async function createPurchaseReturnImpl(input: {
   });
   if (existingReturn) throw new Error('Purchase already returned');
 
-  const paidByMethod = summarisePayments(invoice.payments);
-
-  const totalPaid = paidByMethod.total;
-  const refundAmount =
-    input.type === 'VOID'
-      ? 0
-      : Math.min(input.refundAmountPence ?? totalPaid, totalPaid);
-
-  if (input.type === 'RETURN' && refundAmount > totalPaid) {
-    throw new Error('Refund amount exceeds total paid');
-  }
-
-  const apReversal = Math.max(invoice.totalPence - totalPaid, 0);
-  const refundMethod = input.type === 'RETURN' ? input.refundMethod ?? 'CASH' : null;
-
-  const qtyByProduct = buildQtyByProductMap(invoice.lines);
-
+  const invoiceId = invoice.id;
   const result = await prisma.$transaction(async (tx) => {
+    await lockPurchaseInvoiceForUpdate(tx as any, input.businessId, invoiceId);
+    const invoice = await tx.purchaseInvoice.findFirst({
+      where: { id: invoiceId, businessId: input.businessId },
+      include: { business: true, store: true, payments: true, lines: { include: { product: true } } },
+    });
+    if (!invoice) throw new UserError('Purchase not found');
+    if (['RETURNED', 'VOID'].includes(invoice.paymentStatus)) {
+      throw new UserError('Purchase already returned or voided');
+    }
+    const totalPaid = summarisePayments(invoice.payments).total;
+    if (input.type === 'VOID' && totalPaid > 0) {
+      throw new UserError('This purchase has payments. Use a purchase return and record the supplier refund instead.');
+    }
+    const refundAmount = input.type === 'VOID' ? 0 : input.refundAmountPence ?? totalPaid;
+    if (input.type === 'RETURN' && (
+      !Number.isSafeInteger(refundAmount) || refundAmount < 0 || refundAmount !== totalPaid
+    )) {
+      throw new UserError('A full purchase return must refund recorded payments in full. Partial refunds require separate reconciliation.');
+    }
+    const apReversal = Math.max(invoice.totalPence - totalPaid, 0);
+    const refundMethod = input.type === 'RETURN' ? input.refundMethod ?? 'CASH' : null;
+    const qtyByProduct = buildQtyByProductMap(invoice.lines);
+
     // Re-read inventory inside transaction to prevent TOCTOU race
     await lockPurchaseInvoiceForUpdate(tx as unknown as Parameters<typeof lockPurchaseInvoiceForUpdate>[0], input.businessId, input.purchaseInvoiceId);
     const freshPurchase = await tx.purchaseInvoice.findFirst({ where: { id: invoice.id, businessId: input.businessId }, select: { returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true } });
@@ -474,7 +481,7 @@ async function createPurchaseReturnImpl(input: {
 
     const journalLines: JournalLine[] = [
       { accountCode: ACCOUNT_CODES.inventory, creditPence: inventoryCreditTotal },
-      invoice.business.vatEnabled && invoice.vatPence > 0
+      invoice.vatPence > 0
         ? { accountCode: ACCOUNT_CODES.vatReceivable, creditPence: invoice.vatPence }
         : null,
       refundAmount > 0

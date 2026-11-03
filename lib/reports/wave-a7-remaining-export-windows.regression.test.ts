@@ -114,7 +114,7 @@ describe('A7 cash drawer and risk windows follow the stored timezone', () => {
   });
 
   it('uses the Nairobi half-open day on the cash drawer screen and both exports', async () => {
-    await CashDrawerReportPage({ searchParams: { from: '2026-07-01', to: '2026-07-01' } });
+    await CashDrawerReportPage({ searchParams: Promise.resolve({ from: '2026-07-01', to: '2026-07-01' }) });
     await getEodCsv(request('/exports/eod-csv'));
     await getEodPdf(request('/exports/eod-pdf'));
 
@@ -132,7 +132,7 @@ describe('A7 cash drawer and risk windows follow the stored timezone', () => {
   });
 
   it('uses the same Nairobi exclusive end for risk alerts and discounted sales', async () => {
-    await RiskMonitorPage({ searchParams: { from: '2026-07-01', to: '2026-07-01' } });
+    await RiskMonitorPage({ searchParams: Promise.resolve({ from: '2026-07-01', to: '2026-07-01' }) });
     await getRiskExport(request('/exports/risk-summary'));
 
     const alertWindows = riskAlertFindManyMock.mock.calls.map((call) => bounds(call[0]?.where?.occurredAt));

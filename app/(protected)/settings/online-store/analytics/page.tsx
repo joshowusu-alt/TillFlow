@@ -49,11 +49,12 @@ function FunnelBar({ label, count, max }: { label: string; count: number; max: n
   );
 }
 
-export default async function StorefrontAnalyticsPage({
-  searchParams,
-}: {
-  searchParams?: { storeId?: string; businessId?: string };
-}) {
+export default async function StorefrontAnalyticsPage(
+  props: {
+    searchParams?: Promise<{ storeId?: string; businessId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'storefront_analytics',
     search: searchParams,

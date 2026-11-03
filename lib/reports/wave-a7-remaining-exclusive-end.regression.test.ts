@@ -156,8 +156,8 @@ describe('A7 Money Received and MoMo keep the exclusive end unchanged', () => {
     expect(next.end.toISOString()).toBe(FOLLOWING_MIDNIGHT);
 
     const params = { from: '2026-07-01', to: '2026-07-01' };
-    await MoneyReceivedReportPage({ searchParams: params });
-    await MomoConfirmationReviewPage({ searchParams: params });
+    await MoneyReceivedReportPage({ searchParams: Promise.resolve(params) });
+    await MomoConfirmationReviewPage({ searchParams: Promise.resolve(params) });
     const moneyExport = await getMoneyReceivedExport(new Request('http://localhost/exports/money-received?from=2026-07-01&to=2026-07-01'));
     const momoExport = await getMomoExport(new Request('http://localhost/exports/momo-confirmation?from=2026-07-01&to=2026-07-01'));
     expect(moneyExport.status).toBeLessThan(400);

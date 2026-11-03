@@ -22,11 +22,12 @@ import Link from 'next/link';
 // Without this, Vercel enforces a 10 s default and kills the action mid-import.
 export const maxDuration = 60;
 
-export default async function ImportStockPage({
-  searchParams,
-}: {
-  searchParams?: { mode?: string; issue?: string; count?: string };
-}) {
+export default async function ImportStockPage(
+  props: {
+    searchParams?: Promise<{ mode?: string; issue?: string; count?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 

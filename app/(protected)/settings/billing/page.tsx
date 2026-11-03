@@ -161,16 +161,12 @@ function parseBillingHistory(notes: string | null | undefined): BillingHistoryEn
     .reverse();
 }
 
-export default async function BillingPage({
-  searchParams,
-}: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
-}) {
-  const resolvedSearchParams = (
-    searchParams && typeof (searchParams as Promise<Record<string, string | string[] | undefined>>).then === 'function'
-      ? await searchParams
-      : (searchParams ?? {})
-  ) as Record<string, string | string[] | undefined>;
+export default async function BillingPage(
+  props: {
+    searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  }
+) {
+  const resolvedSearchParams = (await props.searchParams) ?? {};
   const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
   const effectivePlan = features.plan;

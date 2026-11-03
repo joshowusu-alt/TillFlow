@@ -30,10 +30,8 @@ const CONTENT_TYPES: Record<string, string> = {
  *   On Vercel deployments where Vercel Blob is configured, uploads
  *   bypass this route entirely (URLs go to *.public.blob.vercel-storage.com).
  */
-export async function GET(
-  _request: Request,
-  { params }: { params: { path: string[] } },
-) {
+export async function GET(_request: Request, props: { params: Promise<{ path: string[] }> }) {
+  const params = await props.params;
   const segments = params.path ?? [];
   if (segments.length === 0) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });

@@ -36,7 +36,10 @@ it('exports every table through one repeatable-read transaction, including the b
 });
 it('uses SQLite serializable snapshots for local exports', async () => {
   mocks.postgres.mockReturnValue(false);
-  await exportDatabaseAction();
+  tx.product.findMany.mockResolvedValue([{ id: 'p', businessId: 'business', barcode: 'PRIMARY' }]);
+  const result = await exportDatabaseAction();
+  if (!result.success) throw new Error('Export failed');
+  expect(result.data.productBarcodes).toEqual([{ businessId: 'business', productId: 'p', code: 'PRIMARY' }]);
   expect(mocks.transaction.mock.calls[0][1].isolationLevel).toBe('Serializable');
 });
 it('does not return a partial backup or report success when stock evidence cannot be read', async () => {

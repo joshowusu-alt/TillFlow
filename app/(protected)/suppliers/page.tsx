@@ -68,7 +68,10 @@ function SuppliersEmptyState({ q, amountOwed }: { q: string; amountOwed: boolean
   );
 }
 
-export default async function SuppliersPage({ searchParams }: { searchParams?: { error?: string; q?: string; page?: string; amountOwed?: string } }) {
+export default async function SuppliersPage(
+  props: { searchParams?: Promise<{ error?: string; q?: string; page?: string; amountOwed?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
@@ -399,6 +402,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
         </div>
         <ShowingRange page={page} pageSize={DEFAULT_PAGE_SIZE} total={totalCount} noun="suppliers" />
         <Pagination
+          documentNavigation
           currentPage={page}
           totalPages={totalPages}
           basePath="/suppliers"

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { replaceListDocument } from './list-navigation';
 import {
   buildListHref,
   isBareListState,
@@ -67,7 +67,6 @@ export type UseListStateOptions = {
  *   filtered list, not the bare one).
  */
 export function useListState(route: string, options: UseListStateOptions = {}): ListStateSnapshot {
-  const router = useRouter();
   const restoredRef = useRef(false);
   const awaitingRedirectRef = useRef(false);
   const scrollLockedRef = useRef(true);
@@ -86,6 +85,7 @@ export function useListState(route: string, options: UseListStateOptions = {}): 
     const stored = readListState(route);
     if (
       options.restoreOnBareRoute &&
+      new URLSearchParams(window.location.search).get('resetList') !== '1' &&
       isBareListState(snapshot, options.bareDefaults) &&
       stored &&
       !isBareListState(stored, options.bareDefaults)
@@ -93,7 +93,7 @@ export function useListState(route: string, options: UseListStateOptions = {}): 
       // Keep the stored snapshot intact (including scrollY); restore once the
       // redirected query has rendered.
       awaitingRedirectRef.current = true;
-      router.replace(buildListHref(route, stored), { scroll: false });
+      replaceListDocument(buildListHref(route, stored));
       return;
     }
 
@@ -106,6 +106,9 @@ export function useListState(route: string, options: UseListStateOptions = {}): 
   }, [route]);
 
   useEffect(() => {
+    // Do not overwrite the stored query/offset with the bare page while its
+    // explicit restoration request is leaving this document.
+    if (awaitingRedirectRef.current && isBareListState(snapshot, options.bareDefaults)) return;
     const stored = readListState(route);
     writeListState(route, { ...stored, ...snapshot, extra: options.extra ?? stored?.extra });
     if (awaitingRedirectRef.current && !isBareListState(snapshot, options.bareDefaults)) {
@@ -163,7 +166,7 @@ export function useListState(route: string, options: UseListStateOptions = {}): 
       if (frame) window.cancelAnimationFrame(frame);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route, options.persistScroll, options.q, options.page, options.tab]);
+  }, [route, options.persistScroll, options.q, options.page, options.tab, JSON.stringify(options.filters), JSON.stringify(options.extra)]);
 
   return snapshot;
 }

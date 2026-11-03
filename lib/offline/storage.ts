@@ -123,7 +123,7 @@ type SyncMetaRecord = {
 };
 
 const DB_NAME = 'pos-offline-db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE_NAMES = ['products', 'business', 'store', 'customers', 'tills', 'salesQueue', 'syncMeta'] as const;
 const LOCAL_SEQUENCE_META_PREFIX = 'localSequence:';
 
@@ -182,9 +182,10 @@ export function getDB(): Promise<IDBPDatabase> {
 
     if (!dbPromise) {
         dbPromise = openDB(DB_NAME, DB_VERSION, {
+            blocking() { void dbPromise?.then((db) => db.close()); dbPromise = null; },
             async upgrade(db, oldVersion, _newVersion, tx) {
                 if (!db.objectStoreNames.contains('products')) {
-                    db.createObjectStore('products', { keyPath: 'id' });
+                    db.createObjectStore('products', { keyPath: ['businessId', 'storeId', 'id'] });
                 }
 
                 if (!db.objectStoreNames.contains('business')) {
@@ -220,6 +221,16 @@ export function getDB(): Promise<IDBPDatabase> {
                     }
                 }
 
+                // Preserve v3 product snapshots while making each store's stock independent.
+                if (oldVersion >= 1 && oldVersion < 4 && db.objectStoreNames.contains('products')) {
+                    const rows = await tx.objectStore('products').getAll();
+                    db.deleteObjectStore('products');
+                    const products = db.createObjectStore('products', { keyPath: ['businessId', 'storeId', 'id'] });
+                    for (const row of rows) {
+                        if (row.businessId && row.storeId && row.id) await products.put(row);
+                    }
+                }
+
                 if (oldVersion < 3 && db.objectStoreNames.contains('salesQueue')) {
                     const salesStore = tx.objectStore('salesQueue');
                     const rows = (await salesStore.getAll()) as Array<Partial<OfflineSale>>;
@@ -251,7 +262,10 @@ async function clearScopedRecords<T extends { id: string }>(
     const all = await tx.store.getAll() as T[];
     for (const record of all) {
         if (matches(record)) {
-            await tx.store.delete(record.id);
+            const key = storeName === 'products'
+                ? [(record as unknown as OfflineProduct).businessId, (record as unknown as OfflineProduct).storeId, record.id]
+                : record.id;
+            await tx.store.delete(key);
         }
     }
     await tx.done;
@@ -288,6 +302,7 @@ export async function getCachedProducts(
 ): Promise<OfflineProduct[]> {
     const db = await getDB();
     const resolvedBusinessId = resolveBusinessId(businessId);
+    if (!resolvedBusinessId) return [];
     const all = await db.getAll('products') as OfflineProduct[];
     return all.filter((product) => {
         if (resolvedBusinessId && product.businessId !== resolvedBusinessId) return false;
@@ -308,8 +323,7 @@ export async function getCachedBusiness(businessId?: string): Promise<OfflineBus
     if (resolvedBusinessId) {
         return db.get('business', resolvedBusinessId);
     }
-    const all = await db.getAll('business');
-    return all[0];
+    return undefined;
 }
 
 export async function cacheStore(store: OfflineStore): Promise<void> {
@@ -321,6 +335,7 @@ export async function cacheStore(store: OfflineStore): Promise<void> {
 export async function getCachedStore(businessId?: string, storeId?: string): Promise<OfflineStore | undefined> {
     const db = await getDB();
     const resolvedBusinessId = resolveBusinessId(businessId);
+    if (!resolvedBusinessId) return undefined;
     if (storeId) {
         const store = await db.get('store', storeId) as OfflineStore | undefined;
         if (!store) return undefined;
@@ -358,6 +373,7 @@ export async function cacheCustomers(businessId: string, customers: OfflineCusto
 export async function getCachedCustomers(businessId?: string): Promise<OfflineCustomer[]> {
     const db = await getDB();
     const resolvedBusinessId = resolveBusinessId(businessId);
+    if (!resolvedBusinessId) return [];
     const all = await db.getAll('customers') as OfflineCustomer[];
     return resolvedBusinessId
         ? all.filter((customer) => customer.businessId === resolvedBusinessId)
@@ -388,6 +404,7 @@ export async function getCachedTills(
 ): Promise<OfflineTill[]> {
     const db = await getDB();
     const resolvedBusinessId = resolveBusinessId(businessId);
+    if (!resolvedBusinessId) return [];
     const all = await db.getAll('tills') as OfflineTill[];
     return all.filter((till) => {
         if (resolvedBusinessId && till.businessId !== resolvedBusinessId) return false;
@@ -454,9 +471,10 @@ export async function queueOfflineSale(
 export async function getPendingSales(businessId?: string): Promise<OfflineSale[]> {
     const db = await getDB();
     const resolvedBusinessId = resolveBusinessId(businessId);
+    if (!resolvedBusinessId) return [];
     const all = (await db.getAll('salesQueue') as Array<Partial<OfflineSale>>).map(migrateQueuedSaleRecord);
     return all.filter((sale) => {
-        if (resolvedBusinessId && sale.businessId !== resolvedBusinessId) return false;
+        if (!resolvedBusinessId || sale.businessId !== resolvedBusinessId) return false;
         if (sale.synced) return false;
         const status = sale.status ?? 'pending';
         return status === 'pending';
@@ -466,9 +484,10 @@ export async function getPendingSales(businessId?: string): Promise<OfflineSale[
 export async function getReviewSales(businessId?: string): Promise<OfflineSale[]> {
     const db = await getDB();
     const resolvedBusinessId = resolveBusinessId(businessId);
+    if (!resolvedBusinessId) return [];
     const all = (await db.getAll('salesQueue') as Array<Partial<OfflineSale>>).map(migrateQueuedSaleRecord);
     return all.filter((sale) => {
-        if (resolvedBusinessId && sale.businessId !== resolvedBusinessId) return false;
+        if (!resolvedBusinessId || sale.businessId !== resolvedBusinessId) return false;
         return sale.status === 'needs_review' || sale.status === 'rejected';
     });
 }
@@ -480,7 +499,7 @@ export async function getOfflineSale(id: string, businessId?: string): Promise<O
 
     const sale = migrateQueuedSaleRecord(raw);
     const resolvedBusinessId = resolveBusinessId(businessId);
-    if (resolvedBusinessId && sale.businessId !== resolvedBusinessId) {
+    if (!resolvedBusinessId || sale.businessId !== resolvedBusinessId) {
         return undefined;
     }
 
@@ -488,6 +507,7 @@ export async function getOfflineSale(id: string, businessId?: string): Promise<O
 }
 
 export async function updateOfflineSale(sale: OfflineSale): Promise<void> {
+    if (getClientActiveBusinessId() !== sale.businessId) return;
     const db = await getDB();
     await db.put('salesQueue', sale);
 }
@@ -498,7 +518,7 @@ export async function markSaleSynced(id: string, businessId?: string): Promise<v
     if (!sale) return;
 
     const resolvedBusinessId = resolveBusinessId(businessId);
-    if (resolvedBusinessId && sale.businessId !== resolvedBusinessId) {
+    if (!resolvedBusinessId || sale.businessId !== resolvedBusinessId) {
         return;
     }
 
@@ -519,7 +539,7 @@ export async function markSaleQueueStatus(
 
     const sale = migrateQueuedSaleRecord(raw);
     const resolvedBusinessId = resolveBusinessId(businessId);
-    if (resolvedBusinessId && sale.businessId !== resolvedBusinessId) {
+    if (!resolvedBusinessId || sale.businessId !== resolvedBusinessId) {
         return;
     }
 
@@ -532,6 +552,7 @@ export async function markSaleQueueStatus(
 export async function removeSyncedSales(businessId?: string): Promise<number> {
     const db = await getDB();
     const resolvedBusinessId = resolveBusinessId(businessId);
+    if (!resolvedBusinessId) return 0;
     const all = await db.getAll('salesQueue') as OfflineSale[];
     const synced = all.filter((sale) => sale.synced && (!resolvedBusinessId || sale.businessId === resolvedBusinessId));
 
@@ -576,14 +597,7 @@ export async function clearOfflineData(businessId?: string): Promise<void> {
     const db = await getDB();
     const resolvedBusinessId = resolveBusinessId(businessId);
 
-    if (!resolvedBusinessId) {
-        for (const storeName of STORE_NAMES) {
-            const tx = db.transaction(storeName, 'readwrite');
-            await tx.store.clear();
-            await tx.done;
-        }
-        return;
-    }
+    if (!resolvedBusinessId) return;
 
     await Promise.all([
         clearScopedRecords<OfflineProduct>('products', (record) => record.businessId === resolvedBusinessId),

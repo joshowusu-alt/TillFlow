@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/auth';
 import { toPublicMigrationError } from '@/lib/services/migration/errors';
 import { validateMigrationPackage } from '@/lib/services/migration/validate';
-import { isRedirectError } from 'next/dist/client/components/redirect';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 
 export const runtime = 'nodejs';
 
@@ -12,11 +12,11 @@ export const runtime = 'nodejs';
  */
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ packageId: string }> | { packageId: string } },
+  context: { params: Promise<{ packageId: string }> },
 ) {
   try {
     const user = await requireRole(['OWNER', 'MANAGER']);
-    const params = await Promise.resolve(context.params);
+    const params = await Promise.resolve((await context.params));
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const result = await validateMigrationPackage(
       {

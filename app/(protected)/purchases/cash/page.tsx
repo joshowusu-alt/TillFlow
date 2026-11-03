@@ -5,7 +5,8 @@ import { accountBalance, holdingCode, ownerCode } from '@/lib/services/purchase-
 import { formatMoney, formatDateTime } from '@/lib/format';
 import CashTransferForm from './CashTransferForm';
 
-export default async function PurchaseCashPage({ searchParams }: { searchParams?: { storeId?: string } }) {
+export default async function PurchaseCashPage(props: { searchParams?: Promise<{ storeId?: string }> }) {
+  const searchParams = await props.searchParams;
   const { businessId, storeId: selectedStoreId } = await requireSelectedStoreContext(['OWNER', 'MANAGER'], searchParams?.storeId ?? '');
   const [business, people, shifts, entries] = await Promise.all([
     prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { currency: true } }),

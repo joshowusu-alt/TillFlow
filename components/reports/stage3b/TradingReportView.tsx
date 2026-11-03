@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import FinancialAmount from '@/components/reports/FinancialAmount';
 import { paymentMixPresentation } from '@/lib/reports/today/method-share';
 import { ReportDisclosure, ReportMetric, ReportSalesHero, ReportSection, ReportValueBars, REPORT_LINK } from './ReportPrimitives';
@@ -49,7 +50,7 @@ export default function TradingReportView({ data }: { data: TradingViewData }) {
         helper={data.allBranches ? 'Profit after expenses.' : 'Branch gross profit minus whole-business expenses. This is not branch net profit.'} />
       <ReportMetric label="Credit sales (unpaid)" pence={data.creditUnpaid} currency={c} helper="Unpaid portion of sales in this period. Not counted as money received." />
     </div>
-    {unusualMargin ? <p role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">Gross margin looks unusual ({data.grossProfitPercent}%). Review product cost prices and units before relying on this profit figure. <a href="/products" className="font-semibold underline">Review products</a>.</p> : null}
+    {unusualMargin ? <p role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">Gross margin looks unusual ({data.grossProfitPercent}%). Review product cost prices and units before relying on this profit figure. <Link href="/products" className="font-semibold underline">Review products</Link>.</p> : null}
 
     <div className="grid min-w-0 gap-4 lg:grid-cols-2">
       <ReportSection title="Receipt methods" description="Confirmed payment amounts. Tap a method to inspect its records.">
@@ -107,7 +108,7 @@ export default function TradingReportView({ data }: { data: TradingViewData }) {
           { label: 'What customers owe', pence: data.outstandingAR },
         ]} currency={c} /><p className="mt-2 text-sm text-slate-600">Excess payments remain visible. They have not been reassigned to other invoices or age buckets.</p></div> : null}
       </ReportSection>
-      <ReportSection title="Largest customer balances" action={<a href="/payments/customer-receipts" className={REPORT_LINK}>Receive payments →</a>}>
+      <ReportSection title="Largest customer balances" action={<Link href="/payments/customer-receipts" className={REPORT_LINK}>Receive payments →</Link>}>
         <ReportValueBars rows={data.debtors.map(row => ({ label: row.name, pence: row.balance, href: `/customers/${encodeURIComponent(row.id)}` }))} currency={c} empty="No outstanding customer debts." />
       </ReportSection>
       <ReportSection title="Stock needing attention" description="Current stock position." action={<a href={data.reorderHref} className={REPORT_LINK}>Review stock →</a>}>

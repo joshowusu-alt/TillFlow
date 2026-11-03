@@ -17,10 +17,8 @@ const csvEscape = (value: string | number | null | undefined) => {
 
   const formatPence = (pence: number | null | undefined) => ((pence ?? 0) / 100).toFixed(2);
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await getUser();
   if (!user || !['MANAGER', 'OWNER'].includes(user.role)) {
     return NextResponse.redirect(new URL('/login', request.url));

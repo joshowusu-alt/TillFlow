@@ -7,7 +7,9 @@ import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import SupplierCreditSettlementForm from '@/components/purchases/SupplierCreditSettlementForm';
 
-export default async function SupplierCreditSettlementPage({ params, searchParams }: { params: { id: string }; searchParams?: { saved?: string; error?: string } }) {
+export default async function SupplierCreditSettlementPage(props: { params: Promise<{ id: string }>; searchParams?: Promise<{ saved?: string; error?: string }> }) {
+  const params = await props.params;
+  const searchParams = await props.searchParams;
   const { business, store } = await requireBusinessAndOptionalStore(['OWNER', 'MANAGER']);
   if (!business || !store) notFound();
   const source = await prisma.purchaseInvoice.findFirst({ where: { id: params.id, businessId: business.id, storeId: store.id }, include: { payments: true, supplier: true, creditSettlements: { orderBy: { createdAt: 'desc' } }, appliedCreditSettlements: { orderBy: { createdAt: 'desc' } } } });

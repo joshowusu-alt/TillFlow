@@ -8,9 +8,12 @@ import { getCashflow } from '@/lib/reports/financials';
 import { cashflowStatementRows } from '@/lib/reports/cashflow-statement';
 import { formatMoney } from '@/lib/format';
 
-export default async function CashflowPage({ searchParams }: {
-  searchParams?: { from?: string; to?: string; storeId?: string; businessId?: string };
-}) {
+export default async function CashflowPage(
+  props: {
+    searchParams?: Promise<{ from?: string; to?: string; storeId?: string; businessId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const now = new Date();
   const opened = await openLiveReport({ surfaceId: 'cash_flow_statement', search: searchParams,
     range: ({ timezone }) => {

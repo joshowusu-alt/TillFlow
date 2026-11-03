@@ -14,13 +14,13 @@ beforeEach(() => {
   mocks.load.mockResolvedValue(null);
 });
 it('requires an owner or manager and uses the authenticated branch for history', async () => {
-  await expect(ProductHistoryPage({ params: { id: 'book' }, searchParams: { page: '2', from: '2026-10-01', to: '2026-10-31' } })).rejects.toThrow('NOT_FOUND');
+  await expect(ProductHistoryPage({ params: Promise.resolve({ id: 'book' }), searchParams: Promise.resolve({ page: '2', from: '2026-10-01', to: '2026-10-31' }) })).rejects.toThrow('NOT_FOUND');
   expect(mocks.auth).toHaveBeenCalledWith(['OWNER', 'MANAGER']);
   expect(mocks.load).toHaveBeenCalledWith({ businessId: 'business', storeId: 'authorised-store', productId: 'book', page: 2, receiptsPage: 1, start: new Date('2026-10-01T00:00:00Z'), endExclusive: new Date('2026-11-01T00:00:00Z') });
 });
 it('rejects reversed or invalid dates instead of silently querying all history', async () => {
-  await ProductHistoryPage({ params: { id: 'book' }, searchParams: { from: '2026-11-01', to: '2026-10-01' } });
+  await ProductHistoryPage({ params: Promise.resolve({ id: 'book' }), searchParams: Promise.resolve({ from: '2026-11-01', to: '2026-10-01' }) });
   expect(mocks.load).not.toHaveBeenCalled();
-  await ProductHistoryPage({ params: { id: 'book' }, searchParams: { from: 'bad-date' } });
+  await ProductHistoryPage({ params: Promise.resolve({ id: 'book' }), searchParams: Promise.resolve({ from: 'bad-date' }) });
   expect(mocks.load).not.toHaveBeenCalled();
 });

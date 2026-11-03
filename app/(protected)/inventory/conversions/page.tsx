@@ -8,12 +8,13 @@ import StockConversionClient from './StockConversionClient';
 
 export const dynamic = 'force-dynamic';
 
-export default async function StockConversionsPage({ searchParams }: { searchParams?: { conversion?: string | string[] } }) {
+export default async function StockConversionsPage({ searchParams }: { searchParams?: Promise<{ conversion?: string | string[] }> }) {
   const { user, business, store, stores } = await requireBusinessAndOptionalStore(['OWNER', 'MANAGER']);
   if (!store) return <SelectOperationalStoreNotice stores={stores} canSwitch={user.role === 'OWNER' || user.role === 'MANAGER'} title="Select a branch before converting stock" />;
   // Durable confirmation is resolved from an actual movement in the current tenant and branch.
   // Never trust a query-string amount or a transient client state across action revalidation.
-  const receiptId = typeof searchParams?.conversion === 'string' && /^[0-9a-f-]{36}$/i.test(searchParams.conversion) ? searchParams.conversion : null;
+  const query = await searchParams;
+  const receiptId = typeof query?.conversion === 'string' && /^[0-9a-f-]{36}$/i.test(query.conversion) ? query.conversion : null;
   const [receipt, recentMovements] = await Promise.all([
     receiptId ? prisma.stockMovement.findFirst({
       where: { storeId: store.id, store: { businessId: business.id }, type: 'CONVERSION_OUT', referenceType: 'STOCK_CONVERSION', referenceId: receiptId },

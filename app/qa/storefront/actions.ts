@@ -1,7 +1,7 @@
 'use server';
 import { randomUUID } from 'crypto';
 import { redirect, notFound } from 'next/navigation';
-import { isRedirectError } from 'next/dist/client/components/redirect';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { prisma } from '@/lib/prisma';
 import { storefrontPreviewOwner, QA_BUSINESS, QA_STORE } from '@/lib/services/storefront-preview-guard';
 import { createOnlineCheckout } from '@/lib/services/online-orders';

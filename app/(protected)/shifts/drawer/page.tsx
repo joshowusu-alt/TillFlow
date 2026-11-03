@@ -23,18 +23,19 @@ function hrefWith(params: Record<string, string | undefined>) {
   return qs ? `/shifts/drawer?${qs}` : '/shifts/drawer';
 }
 
-export default async function CashDrawerDrilldownPage({
-  searchParams,
-}: {
-  searchParams?: {
-    type?: string;
-    from?: string;
-    to?: string;
-    tillId?: string;
-    shiftId?: string;
-    storeId?: string;
-  };
-}) {
+export default async function CashDrawerDrilldownPage(
+  props: {
+    searchParams?: Promise<{
+      type?: string;
+      from?: string;
+      to?: string;
+      tillId?: string;
+      shiftId?: string;
+      storeId?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business, store, stores, user } = await requireBusinessAndOptionalStore();
   if (!store) {
     return (

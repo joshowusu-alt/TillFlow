@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+/* eslint-disable @next/next/no-html-link-for-pages -- Document navigation commits server catalogue scope without suspended query-only transitions. */
 import { useEffect, useId, useRef, useState } from 'react';
 import { catalogueCount, catalogueHref, catalogueSelection, type CatalogueCategory, type CatalogueDivision,
   type CatalogueCount, type CatalogueSelection } from '@/lib/products/catalogue-classification';
@@ -74,14 +74,14 @@ function ClassificationFilters({ categories, divisions, counts, selection, conte
         onChange={event => { setQuery(event.target.value); setLimit(INITIAL_LIMIT); }} />
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink/65">
         <p aria-live="polite">Showing {Math.min(limit, matches.length)} of {matches.length} {search ? 'matches' : plurals[open]}</p>
-        <Link href={catalogueHref(context, resetScope)} scroll={false} onClick={() => setOpen(null)} className="min-h-8 py-1.5 font-semibold text-accent underline">{open === 'category' ? 'All categories' : open === 'division' ? 'All divisions' : 'All groups'}</Link>
+        <a href={catalogueHref(context, resetScope)} onClick={() => setOpen(null)} className="min-h-8 py-1.5 font-semibold text-accent underline">{open === 'category' ? 'All categories' : open === 'division' ? 'All divisions' : 'All groups'}</a>
       </div>
       <ul id={`${id}-choices`} aria-label={`${labels[open]} choices`} className="grid max-h-60 min-w-0 grid-cols-1 gap-2 overflow-y-auto overscroll-contain sm:grid-cols-2 lg:grid-cols-3">
-        {ordered.slice(0, limit).map(option => <li key={catalogueHref({}, option.scope)} className="min-w-0"><Link href={catalogueHref(context, option.scope)} scroll={false} onClick={() => setOpen(null)}
+        {ordered.slice(0, limit).map(option => <li key={catalogueHref({}, option.scope)} className="min-w-0"><a href={catalogueHref(context, option.scope)} onClick={() => setOpen(null)}
           aria-current={open && option.scope[open] === selectedId && current.valid ? 'page' : undefined}
           className={`flex min-h-11 min-w-0 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent ${open && option.scope[open] === selectedId && current.valid ? 'border-accent bg-accentSoft font-semibold text-accent' : 'border-slate-200 hover:bg-slate-50'}`}>
           <span className="break-words [overflow-wrap:anywhere]">{option.name}</span><span className="shrink-0 text-xs tabular-nums text-ink/65" aria-label={`${total(option.scope)} products`}>{total(option.scope).toLocaleString()}</span>
-        </Link></li>)}
+        </a></li>)}
       </ul>
       {!matches.length && <p className="text-sm text-ink/65">No matching {plurals[open]}. Try another name.</p>}
       {matches.length > limit && <button type="button" className="btn-secondary text-xs" onClick={() => setLimit(value => value + INITIAL_LIMIT)}>Show more {plurals[open]} ({matches.length - limit} remaining)</button>}
@@ -89,7 +89,7 @@ function ClassificationFilters({ categories, divisions, counts, selection, conte
     <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-2 text-xs text-ink/65">
       <p className="min-w-0 break-words [overflow-wrap:anywhere]" aria-live="polite">{current.valid ? path || 'Browse all products, or choose a classification above.'
         : 'This classification combination is unavailable.'}</p>
-      {hasSelection && <Link href={catalogueHref(context, {})} scroll={false} className="min-h-8 py-1.5 font-semibold text-accent underline">Clear classification filters</Link>}
+      {hasSelection && <a href={catalogueHref(context, {})} className="min-h-8 py-1.5 font-semibold text-accent underline">Clear classification filters</a>}
     </div>
     {current.valid && categoryId && !children.length && <p className="text-xs text-ink/65">Category-only products · no divisions set up</p>}
   </nav>;

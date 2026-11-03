@@ -20,7 +20,7 @@ describe('switchOperationalStoreAction contract', () => {
   });
 
   it('persists the cookie and revalidates the shell', () => {
-    expect(source).toContain("cookies().set(OPERATIONAL_STORE_COOKIE");
+    expect(source).toContain("(await cookies()).set(OPERATIONAL_STORE_COOKIE");
     expect(source).toContain("revalidatePath('/', 'layout')");
     expect(MULTI_TAB_OPERATIONAL_STORE_CONTRACT).toContain('last-write-wins');
   });

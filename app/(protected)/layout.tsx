@@ -130,7 +130,7 @@ async function OwnerSetupBanner({
 }
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const headersList = headers();
+  const headersList = await headers();
   const pathname = headersList.get('x-pathname') || '';
 
   const { user, business, store, stores = [] } = await measureServerOperation(

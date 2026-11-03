@@ -72,7 +72,7 @@ export default function BackupClient() {
         if (!previewData) return;
 
         const confirmed = window.confirm(
-            'WARNING: This will replace ALL current data with the backup. This action cannot be undone. Continue?'
+            'WARNING: This will replace supported trading records with this snapshot. Businesses with unsupported operational history require assisted recovery. Export current data first. Continue?'
         );
         if (!confirmed) return;
 
@@ -176,7 +176,7 @@ export default function BackupClient() {
             <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">
                     <div className="text-xs uppercase tracking-[0.2em] text-black/40">Export format</div>
-                    <div className="mt-1 text-base font-display font-semibold text-ink">JSON backup</div>
+                    <div className="mt-1 text-base font-display font-semibold text-ink">Trading snapshot (JSON)</div>
                 </div>
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                     <div className="text-xs uppercase tracking-[0.2em] text-emerald-700/70">Use case</div>
@@ -204,10 +204,10 @@ export default function BackupClient() {
                 <div className="card p-4 sm:p-6">
                     <h2 className="text-lg font-display font-semibold">Export Backup</h2>
                     <p className="mt-2 text-sm text-black/60">
-                        Download a complete backup of your database as a JSON file. Store this file safely for disaster recovery.
+                        Export the active business’s supported trading records. This is not a full database backup. Businesses with online orders, stocktakes or other operational history may need assisted recovery.
                     </p>
                     <div className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
-                        <strong>Note:</strong> Passwords are not included in backups for security. Users will need to reset their passwords after a restore.
+                        <strong>Note:</strong> Passwords are omitted. The restoring owner keeps their current sign-in; other users need password resets after a restore.
                     </div>
                     <div className="mt-3 rounded-xl border border-black/5 bg-black/[0.02] p-3 text-sm text-black/60">
                         Includes business settings, catalog, inventory, sales, purchases, accounting data, tills, and shifts for the active business.
@@ -240,10 +240,10 @@ export default function BackupClient() {
                 <div className="card p-4 sm:p-6">
                     <h2 className="text-lg font-display font-semibold">Restore Backup</h2>
                     <p className="mt-2 text-sm text-black/60">
-                        Restore your database from a previously exported backup file.
+                        Restore supported trading records from a previously exported snapshot. Full recovery of other operational history requires operator assistance.
                     </p>
                     <div className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">
-                        <strong>Warning:</strong> Restoring will replace ALL current data. Make sure to export a backup first.
+                        <strong>Warning:</strong> Restoring replaces current supported trading records. Export current data first. Unsupported history is refused rather than deleted.
                     </div>
 
                     {!previewData ? (

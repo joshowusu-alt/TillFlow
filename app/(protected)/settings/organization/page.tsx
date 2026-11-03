@@ -11,11 +11,12 @@ import { getFeatures, getPlanSummary } from '@/lib/features';
 import { formatDateTime } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
 
-export default async function OrganizationSettingsPage({
-  searchParams,
-}: {
-  searchParams?: { error?: string };
-}) {
+export default async function OrganizationSettingsPage(
+  props: {
+    searchParams?: Promise<{ error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   const [organization, brandingSnapshot] = await Promise.all([
     ensureOrganizationAndBranches({

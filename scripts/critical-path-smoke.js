@@ -294,7 +294,7 @@ async function run() {
     const welcomePage = await context.newPage();
     const welcomeMessages = attachConsoleTracker(welcomePage, 'welcome', report);
     await welcomePage.goto(`${BASE_URL}/welcome`, { waitUntil: 'networkidle' });
-    await welcomePage.getByText(/TillFlow/i).first().waitFor({ timeout: 15000 });
+    await welcomePage.getByRole('heading', { level: 1 }).waitFor({ state: 'visible', timeout: 15000 });
     assertNoConsoleProblems(welcomeMessages, '/welcome');
     report.welcome = true;
     await welcomePage.close();

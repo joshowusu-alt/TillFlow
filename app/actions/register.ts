@@ -166,7 +166,7 @@ export async function register(formData: FormData) {
   // read-only fixture under /demo and does not write seeded demo data here.
 
   // Session was committed atomically with the new business.
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.set(getBusinessSessionCookieName(result.business.id), token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

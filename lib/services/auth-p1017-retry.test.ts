@@ -53,7 +53,7 @@ async function loadAuthWithSessionMock(findUnique: ReturnType<typeof vi.fn>) {
   const deleteMock = vi.fn();
   vi.doMock('react', () => ({ cache: (fn: unknown) => fn }));
   vi.doMock('next/headers', () => ({
-    cookies: () => ({
+    cookies: async () => ({
       getAll: () => [{ name: 'pos_session_biz-1', value: 'secret-session-token' }],
       get: (name: string) =>
         name === 'active_business_id'
@@ -63,7 +63,7 @@ async function loadAuthWithSessionMock(findUnique: ReturnType<typeof vi.fn>) {
             : undefined,
       delete: deleteMock,
     }),
-    headers: () => new Map([['user-agent', 'Mozilla/5.0 Chrome/120.0 Windows']]),
+    headers: async () => new Map([['user-agent', 'Mozilla/5.0 Chrome/120.0 Windows']]),
   }));
   vi.doMock('next/navigation', () => ({ redirect: vi.fn() }));
   vi.doMock('@/lib/prisma', () => ({
@@ -171,6 +171,19 @@ describe('Phase C8: auth P1017 session lookup retry', () => {
     expect(warnSpy).not.toHaveBeenCalled();
     expect(infoSpy).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it('clears a stale session only after awaiting the asynchronous cookie jar', async () => {
+    const { auth, deleteMock } = await loadAuthWithSessionMock(vi.fn().mockResolvedValue(null));
+    await expect(auth.getUser()).resolves.toBeNull();
+    expect(deleteMock).toHaveBeenCalledWith('pos_session_biz-1');
+  });
+
+  it('rejects an expired session with asynchronous request APIs', async () => {
+    const session = { ...makeSession(), expiresAt: new Date(Date.now() - 60_000) };
+    const { auth, deleteMock } = await loadAuthWithSessionMock(vi.fn().mockResolvedValue(session));
+    await expect(auth.getUser()).resolves.toBeNull();
+    expect(deleteMock).toHaveBeenCalledWith('pos_session_biz-1');
   });
 
   it('keeps P1017 retry scoped to auth reads in lib/auth only', () => {

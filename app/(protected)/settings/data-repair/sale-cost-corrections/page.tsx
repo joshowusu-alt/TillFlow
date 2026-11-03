@@ -27,20 +27,21 @@ function resolveStatus(value: string | undefined) {
   return value === 'all' ? 'all' : 'below-cost';
 }
 
-export default async function SaleCostCorrectionsPage({
-  searchParams,
-}: {
-  searchParams?: {
-    q?: string;
-    status?: string;
-    period?: string;
-    from?: string;
-    to?: string;
-    error?: string;
-    updated?: string;
-    invoices?: string;
-  };
-}) {
+export default async function SaleCostCorrectionsPage(
+  props: {
+    searchParams?: Promise<{
+      q?: string;
+      status?: string;
+      period?: string;
+      from?: string;
+      to?: string;
+      error?: string;
+      updated?: string;
+      invoices?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business } = await requireBusiness(['OWNER']);
   if (!business) return <div className="card p-6">Business not found.</div>;
 

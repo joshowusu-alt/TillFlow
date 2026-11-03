@@ -1,4 +1,4 @@
-﻿const { withSentryConfig } = require('@sentry/nextjs');
+const { withSentryConfig } = require('@sentry/nextjs');
 
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV === 'development';
@@ -20,8 +20,8 @@ const nextConfig = {
     // ESLint errors must be fixed before deploying — do not silence them.
     ignoreDuringBuilds: false,
   },
+  serverExternalPackages: ['better-sqlite3', 'pg'],
   experimental: {
-    serverComponentsExternalPackages: ['better-sqlite3', 'pg'],
     // Large imports (1000+ products) produce ~2-3 MB in the server-action request body.
     // Next.js 14.1+ supports bodySizeLimit via the nested serverActions object.
     serverActions: {

@@ -335,18 +335,18 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   if (!['INVOICE', 'DELIVERY_NOTE'].includes(receiptDocumentType)) throw new UserError('Choose an invoice or delivery note.');
 
   // ── SINGLE BATCH: fire all validation lookups in parallel ──
-  // Business and store checks are stable reads; productUnits MUST use the
-  // active transaction (if any) so newly-created products/units are visible
-  // before the outer tx commits.
+  // Every read must use a supplied transaction. Imports/opening stock can hold
+  // all pool slots in outer transactions; asking the root client for a second
+  // connection here would make those transactions wait on their own pool.
   const dbClient = (db ?? prisma) as typeof prisma;
   const [business, store, supplier, productUnits] = await Promise.all([
-    prisma.business.findUnique({ where: { id: input.businessId } }),
-    prisma.store.findFirst({
+    dbClient.business.findUnique({ where: { id: input.businessId } }),
+    dbClient.store.findFirst({
       where: { id: input.storeId, businessId: input.businessId },
       select: { id: true },
     }),
     input.supplierId
-      ? prisma.supplier.findFirst({
+      ? dbClient.supplier.findFirst({
           where: { id: input.supplierId, businessId: input.businessId },
           select: { id: true, name: true },
         })
@@ -521,18 +521,21 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       })
     : null;
 
-  if (idempotencyKey && payloadHash) {
-    const existing = await findMoneyIdempotency((db ?? prisma) as any, input.businessId, idempotencyKey);
-    if (existing) {
-      replayOrConflict(existing, { payloadHash, commandKind: 'PURCHASE_CREATE' });
-      const parsed = parseIdempotencyResult<{ invoiceId: string }>(existing.resultJson);
-      const replayed = await (db ?? prisma).purchaseInvoice.findFirst({
-        where: { id: parsed.invoiceId, businessId: input.businessId },
-      });
-      if (!replayed) throw new Error('Purchase invoice not found');
-      return replayed;
-    }
-  }
+  const loadCommittedReplay = async (client: any) => {
+    if (!idempotencyKey || !payloadHash) return null;
+    const existing = await findMoneyIdempotency(client, input.businessId, idempotencyKey);
+    if (!existing) return null;
+    replayOrConflict(existing, { payloadHash, commandKind: 'PURCHASE_CREATE' });
+    const parsed = parseIdempotencyResult<{ invoiceId: string }>(existing.resultJson);
+    const replayed = await client.purchaseInvoice.findFirst({
+      where: { id: parsed.invoiceId, businessId: input.businessId },
+    });
+    if (!replayed) throw new Error('Purchase invoice not found');
+    return replayed;
+  };
+
+  const existingInvoice = await loadCommittedReplay(db ?? prisma);
+  if (existingInvoice) return existingInvoice;
 
   const journalLines: JournalLine[] = [
     { accountCode: ACCOUNT_CODES.inventory, debitPence: subtotal + (costTreatment === 'INVENTORY' ? additionalCost : 0) },
@@ -548,13 +551,13 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   // because it issues multiple writes and only one write is allowed at a time —
   // running it inside the tx causes SQLITE_BUSY which becomes the generic error.
   const glAccountCodes = [...journalLines.map((l) => l.accountCode), ...(additionalCost && costTreatment === 'EXPENSE' ? ['6000', '2000'] : [])];
-  let glAccountRows = await prisma.account.findMany({
+  let glAccountRows = await dbClient.account.findMany({
     where: { businessId: input.businessId, code: { in: glAccountCodes } },
     select: { id: true, code: true },
   });
   if (glAccountRows.length < glAccountCodes.filter((c, i, a) => a.indexOf(c) === i).length) {
-    await ensureChartOfAccounts(input.businessId);
-    glAccountRows = await prisma.account.findMany({
+    await ensureChartOfAccounts(input.businessId, dbClient);
+    glAccountRows = await dbClient.account.findMany({
       where: { businessId: input.businessId, code: { in: glAccountCodes } },
       select: { id: true, code: true },
     });
@@ -730,26 +733,13 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     // Stock locks must precede shared journal/document counters, matching sales.
     // Taking them after posting the purchase journal can deadlock a concurrent sale.
     await lockInventoryValues(client, store.id, Array.from(productTotals.keys()));
-    try {
-      return { created: await _doInvoice(client), replayed: false };
-    } catch (error) {
-      if (idempotencyKey && payloadHash && isPrismaUniqueConstraintOn(error, ['businessId', 'key'])) {
-        const winner = await findMoneyIdempotency(client, input.businessId, idempotencyKey);
-        if (winner) {
-          replayOrConflict(winner, { payloadHash, commandKind: 'PURCHASE_CREATE' });
-          const parsed = parseIdempotencyResult<{ invoiceId: string }>(winner.resultJson);
-          const replayedInvoice = await client.purchaseInvoice.findFirst({
-            where: { id: parsed.invoiceId, businessId: input.businessId },
-          });
-          if (replayedInvoice) return { created: replayedInvoice, replayed: true };
-        }
-        throw new MoneyIdempotencyError(
-          MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_CONFLICT,
-          'This payment request conflicts with a previous submission.',
-        );
-      }
-      throw error;
-    }
+    // A competing identical receipt may have committed while we waited for stock.
+    // Read its durable result before producing any invoice/payment/journal writes.
+    const replayedInvoice = await loadCommittedReplay(client);
+    if (replayedInvoice) return { created: replayedInvoice, replayed: true };
+    // Never query after a unique violation inside PostgreSQL: the transaction is
+    // aborted and every subsequent statement would fail until the outer rollback.
+    return { created: await _doInvoice(client), replayed: false };
   };
 
   let invoice: Awaited<ReturnType<typeof _doInvoice>>;
@@ -766,6 +756,16 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         return finishInvoice(created, tx);
       }, { maxWait: 10000, timeout: 30000 });
     } catch (error) {
+      if (idempotencyKey && payloadHash && isPrismaUniqueConstraintOn(error, ['businessId', 'key'])) {
+        // $transaction has completed rollback here. Resolve only the persisted
+        // winner through a fresh connection; never rerun money/stock writes.
+        const replayedInvoice = await loadCommittedReplay(prisma);
+        if (replayedInvoice) return replayedInvoice;
+        throw new MoneyIdempotencyError(
+          MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_CONFLICT,
+          'This payment request conflicts with a previous submission.',
+        );
+      }
       // A receipt writes documents, ledger, payments and stock in ONE commit.
       // Prisma's implicit 5-second budget expired on real supplier receipts.
       // Keep the budget bounded and never retry money/stock writes blindly.

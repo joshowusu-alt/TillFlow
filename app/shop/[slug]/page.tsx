@@ -9,23 +9,24 @@ import { getAppBaseUrl } from '@/lib/storefront-url';
 export const dynamic = 'force-dynamic';
 
 type StorefrontPageProps = {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
-function getRequestOrigin() {
-  const requestHeaders = headers();
+async function getRequestOrigin() {
+  const requestHeaders = await headers();
   const host = requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host');
   const protocol = requestHeaders.get('x-forwarded-proto') ?? 'https';
   return host ? `${protocol}://${host}` : null;
 }
 
-export async function generateMetadata({ params }: StorefrontPageProps): Promise<Metadata> {
+export async function generateMetadata(props: StorefrontPageProps): Promise<Metadata> {
+  const params = await props.params;
   const storefront = await getPublicStorefrontBySlug(params.slug);
   if (!storefront) {
     return { title: 'Store not found' };
   }
 
-  const baseUrl = getAppBaseUrl(getRequestOrigin());
+  const baseUrl = getAppBaseUrl(await getRequestOrigin());
   const title = `${storefront.name} — Online Shop`;
   const description =
     storefront.branding.tagline ??
@@ -57,14 +58,15 @@ export async function generateMetadata({ params }: StorefrontPageProps): Promise
   };
 }
 
-export default async function StorefrontPage({ params }: StorefrontPageProps) {
+export default async function StorefrontPage(props: StorefrontPageProps) {
+  const params = await props.params;
   const storefront = await getPublicStorefrontBySlug(params.slug);
   if (!storefront) {
     notFound();
   }
 
   const customer = await getStorefrontSessionCustomer(params.slug);
-  const baseUrl = getAppBaseUrl(getRequestOrigin());
+  const baseUrl = getAppBaseUrl(await getRequestOrigin());
 
   const jsonLd = {
     '@context': 'https://schema.org',

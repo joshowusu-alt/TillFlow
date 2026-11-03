@@ -7,7 +7,11 @@ import { getProductHistory, historyPage } from '@/lib/services/product-history';
 import { localDateInstant } from '@/lib/reports/reporting-clock';
 
 export const dynamic = 'force-dynamic';
-export default async function ProductHistoryPage({ params, searchParams }: { params: { id: string }; searchParams?: { from?: string; to?: string; page?: string; receiptsPage?: string } }) {
+export default async function ProductHistoryPage(
+  props: { params: Promise<{ id: string }>; searchParams?: Promise<{ from?: string; to?: string; page?: string; receiptsPage?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const { business, store } = await requireBusinessStore(['OWNER', 'MANAGER']);
   if (!business || !store) notFound();
   const start = localDateInstant(searchParams?.from, 'start', business.timezone);

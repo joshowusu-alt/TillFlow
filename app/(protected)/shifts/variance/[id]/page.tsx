@@ -10,13 +10,13 @@ import { VARIANCE_REVIEWER_ROLES } from '@/lib/services/cash-variance';
 import { invalidLegacyCloseNote } from '@/lib/reliability/invalid-preview-shift-closures';
 import VarianceWorkflowClient from '../VarianceWorkflowClient';
 
-export default async function CashVarianceDetailPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: { storeId?: string };
-}) {
+export default async function CashVarianceDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<{ storeId?: string }>;
+  }
+) {
+  const params = await props.params;
   const { user, business, store, stores } = await requireBusinessAndOptionalStore();
   if (!store) {
     return (

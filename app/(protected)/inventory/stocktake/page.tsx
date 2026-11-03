@@ -14,11 +14,12 @@ import Link from 'next/link';
 import StocktakeClient from './StocktakeClient';
 import { isStaleInProgressStocktake } from './stocktake-state';
 
-export default async function StocktakePage({
-  searchParams,
-}: {
-  searchParams?: { storeId?: string };
-}) {
+export default async function StocktakePage(
+  props: {
+    searchParams?: Promise<{ storeId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user, business, store: operationalStore, stores: authorisedStores } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) {
     return <div className="card p-6">Seed data missing.</div>;

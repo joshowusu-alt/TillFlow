@@ -10,6 +10,12 @@ it('counts product rows at each level, including category-only and uncategorised
   expect(catalogueCount(counts, divisions, { category: 'literature', division: 'bibles', group: 'general' })).toBe(3);
   expect(catalogueCount(counts, divisions, { division: 'missing' })).toBe(0);
 });
+it('marks an empty-search clear so a document reload cannot restore the old classification', () => {
+  const href = new URL(catalogueHref({ tab: 'products' }, {}), 'https://example.com');
+  expect(href.searchParams.get('resetClassification')).toBe('1');
+  expect(href.searchParams.has('category')).toBe(false);
+  expect(new URL(catalogueHref({ q: 'Bible' }, {}), 'https://example.com').searchParams.has('resetClassification')).toBe(false);
+});
 it('recognises direct child links and derives their full ancestry for display', () => {
   const result = catalogueSelection(categories, divisions, { group: 'general' });
   expect(result).toMatchObject({ valid: true, category: { id: 'literature' }, division: { id: 'bibles' }, group: { id: 'general' } });
