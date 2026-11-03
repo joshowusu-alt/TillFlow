@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { unstable_cache } from 'next/cache';
+import { coalesceInFlightRead } from '@/lib/reliability/in-flight-read';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 import { getAccountBalance } from './financials';
 import {
@@ -846,7 +847,10 @@ export function getCommandCenterKpis(businessId: string, scope: CommandCenterKpi
 export function getTodayKPIs(businessId: string, storeId?: string): Promise<TodayKPIs> {
   return measureServerOperation(
     'report.today-kpis.snapshot',
-    () => cachedTodayKPIs(businessId, storeId ?? ''),
+    () => coalesceInFlightRead(
+      JSON.stringify(['today-kpis', businessId, storeId ?? '']),
+      () => cachedTodayKPIs(businessId, storeId ?? ''),
+    ),
     {
       businessId,
       storeId: storeId ?? 'ALL',

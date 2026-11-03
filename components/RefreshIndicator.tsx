@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useMemo, useTransition } from 'react';
 import { useRouterRefreshOnVisibility } from '@/hooks/useRouterRefreshOnVisibility';
 
 /**
@@ -18,23 +18,14 @@ export default function RefreshIndicator({
   autoRefreshMs?: number;
 }) {
   const router = useRouter();
-  const [refreshing, setRefreshing] = useState(false);
-
-  useRouterRefreshOnVisibility(router);
-
-  // Auto-refresh
-  useEffect(() => {
-    if (!autoRefreshMs) return;
-    const id = setInterval(() => router.refresh(), autoRefreshMs);
-    return () => clearInterval(id);
-  }, [autoRefreshMs, router]);
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    router.refresh();
-    // Reset after a short delay (server component re-render triggers new fetchedAt)
-    setTimeout(() => setRefreshing(false), 1200);
-  };
+  const [refreshing, startTransition] = useTransition();
+  const handleRefresh = useCallback(() => startTransition(() => router.refresh()), [router]);
+  const refreshRouter = useMemo(() => ({ refresh: handleRefresh }), [handleRefresh]);
+  useRouterRefreshOnVisibility(refreshRouter, {
+    intervalMs: autoRefreshMs,
+    staleThresholdMs: 20_000,
+    pending: refreshing,
+  });
 
   const time = new Date(fetchedAt).toLocaleTimeString([], {
     hour: '2-digit',
