@@ -67,14 +67,14 @@ function gateCsvFile() {
   return file;
 }
 
-describe('settings Import Stock destination', () => {
-  it('is the href of the settings Import Stock control', () => {
+describe('settings Import data destination', () => {
+  it('keeps Import data linked to the existing import route', () => {
     const settings = readFileSync(
       join(process.cwd(), 'app/(protected)/settings/page.tsx'),
       'utf8',
     );
     expect(settings).toContain('href="/settings/import-stock"');
-    expect(settings).toContain('>Import Stock</Link>');
+    expect(settings).toContain('>Import data</Link>');
   });
 });
 

@@ -37,7 +37,7 @@ describe('Owner-facing business language', () => {
   });
 
   it('uses business wording in settings and category labels', () => {
-    expect(settingsPage).toContain('day-to-day business use');
+    expect(settingsPage).toContain('Manage your business, printing, payments, and day-to-day controls.');
     expect(settingsPage).toContain('Provisions business');
     expect(settingsPage).not.toContain('live shop use');
     expect(categoryPicker).toContain("PROVISION: 'Provisions business'");
