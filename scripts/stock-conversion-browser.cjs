@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { chromium } = require('playwright');
 const bcrypt = require('bcryptjs');
+const { mkdirSync } = require('node:fs');
 const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
 
 (async () => {
@@ -45,6 +46,8 @@ const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
         await page.getByRole('heading', { name: 'Convert stock', exact: true }).waitFor().catch(async () => {
           throw new Error(`Conversion page unavailable: ${new URL(page.url()).pathname}; headings: ${await page.getByRole('heading').allTextContents()}`);
         });
+        mkdirSync('tmp/ui-programme-evidence/stock-conversion', { recursive: true });
+        await page.screenshot({ path: `tmp/ui-programme-evidence/stock-conversion/empty-${width}.png`, fullPage: true });
         await page.locator('#source-search').fill(source.barcode);
         await page.getByRole('button', { name: source.name, exact: true }).click();
         await page.locator('#destination-search').fill(alternateBarcode);
@@ -59,6 +62,7 @@ const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
         assert.equal(await page.locator('input[name=expectedCostPence]').inputValue(), '50000');
         const overflows = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: innerWidth }));
         assert.ok(overflows.document <= overflows.viewport + 1, JSON.stringify(overflows));
+        await page.screenshot({ path: `tmp/ui-programme-evidence/stock-conversion/review-${width}.png`, fullPage: true });
         await page.locator('input[name=confirmed]').check();
         await page.getByRole('button', { name: 'Save conversion', exact: true }).click();
         await Promise.all([page.waitForURL(url => Boolean(url.searchParams.get('conversion'))), page.getByText('Conversion saved.', { exact: false }).waitFor()]).catch(async () => {
@@ -72,6 +76,7 @@ const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
         await page.getByText('Conversion saved.', { exact: false }).waitFor();
         await page.getByRole('heading', { name: 'Recent conversions in Conversion QA branch' }).waitFor();
         await page.getByText(`Opened one complete bag; counted 95 cups at ${width}px`, { exact: true }).waitFor();
+        await page.screenshot({ path: `tmp/ui-programme-evidence/stock-conversion/saved-${width}.png`, fullPage: true });
         const from = await db.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId, productId: source.id } } });
         const to = await db.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId, productId: destination.id } } });
         assert.equal(from.qtyOnHandBase, 9 - index); assert.equal(to.qtyOnHandBase, 95 * (index + 1));
