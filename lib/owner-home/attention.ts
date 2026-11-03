@@ -5,7 +5,7 @@
  */
 import { prisma } from '@/lib/prisma';
 import { businessDayWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
-import { getTodayKPIs } from '@/lib/reports/today-kpis';
+import { getHomeIssueFlags } from '@/lib/reports/today-kpis';
 import { countCommandCenterIssueFlags } from '@/lib/reports/home-issue-count';
 import { measureHomePerf } from '@/lib/performance/home-perf-instrumentation';
 import { assertHomeLoaderAllowed } from '@/lib/owner-home/force-fail';
@@ -67,7 +67,7 @@ export async function getOwnerHomeAttentionData(
         },
       }),
       // Deferred — not on useful-Home critical path. Same source as Command Center.
-      getTodayKPIs(businessId).catch(() => null),
+      getHomeIssueFlags(businessId).catch(() => null),
     ]);
 
     return {

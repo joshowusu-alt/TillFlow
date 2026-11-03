@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { unstable_cache } from 'next/cache';
 import { coalesceInFlightRead } from '@/lib/reliability/in-flight-read';
+import type { HomeIssueFlagSource } from '@/lib/reports/home-issue-count';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 import { getAccountBalance } from './financials';
 import {
@@ -508,6 +509,7 @@ async function _getTodayKPIs(
   businessId: string,
   storeId?: string,
   scope?: CommandCenterKpiScope,
+  issuesOnly = false,
 ): Promise<TodayKPIs> {
   const authorisedStores = scope ? requireAuthorisedStoreIds(scope.storeIds) : null;
   if (scope && !(scope.startInclusive < scope.endExclusive)) {
@@ -570,8 +572,8 @@ async function _getTodayKPIs(
     todayLinesForGP,
     cashOnHandEstimatePence,
   ] = await Promise.all([
-    // Today's sales — aggregate at DB level
-    prisma.salesInvoice.aggregate({
+    // Home only consumes issue flags, never these financial totals.
+    issuesOnly ? Promise.resolve({ _sum: { totalPence: 0 }, _count: { id: 0 } }) : prisma.salesInvoice.aggregate({
       where: {
         businessId, ...storeFilter,
         createdAt: { gte: todayStart, lt: todayEnd },
@@ -581,7 +583,7 @@ async function _getTodayKPIs(
       _count: { id: true },
     }),
     // Today's payments — canonical Money Received (CONFIRMED; no parent RETURNED/VOID)
-    aggregateMoneyReceivedByMethod(
+    issuesOnly ? Promise.resolve([]) : aggregateMoneyReceivedByMethod(
       prisma,
       resolveMoneyReceivedScope({
         businessId,
@@ -632,19 +634,19 @@ async function _getTodayKPIs(
       },
     }),
     // 30-day expenses — skipped when that start is outside the authorised envelope
-    includeThirty
+    !issuesOnly && includeThirty
       ? prisma.expense.aggregate({
         where: { businessId, ...enforced, createdAt: { gte: thirtyDaysAgoNatural, lt: todayEnd }, paymentStatus: 'PAID' },
         _sum: { amountPence: true },
       })
       : Promise.resolve({ _sum: { amountPence: null as number | null } }),
     // This week expenses — aggregate at DB level
-    prisma.expense.aggregate({
+    issuesOnly ? Promise.resolve({ _sum: { amountPence: 0 } }) : prisma.expense.aggregate({
       where: { businessId, ...enforced, createdAt: { gte: sevenDaysAgo, lt: todayEnd }, paymentStatus: 'PAID' },
       _sum: { amountPence: true },
     }),
     // 4-week expenses are a 35-date read. Command Center does not issue them unless the authorised envelope covers that start.
-    includeFourWeek
+    !issuesOnly && includeFourWeek
       ? prisma.expense.aggregate({
         where: { businessId, ...enforced, createdAt: { gte: thirtyFiveDaysAgoNatural, lt: sevenDaysAgoNatural }, paymentStatus: 'PAID' },
         _sum: { amountPence: true },
@@ -702,7 +704,7 @@ async function _getTodayKPIs(
       take: 10000,
     }),
     // Today's sale lines for GP computation
-    prisma.salesInvoiceLine.findMany({
+    issuesOnly ? Promise.resolve([]) : prisma.salesInvoiceLine.findMany({
       where: {
         salesInvoice: {
           businessId,
@@ -722,7 +724,7 @@ async function _getTodayKPIs(
         salesInvoice: { select: { paymentStatus: true, discountPence: true } },
       },
     }),
-    authorisedStores
+    issuesOnly ? Promise.resolve(0) : authorisedStores
       ? getOperationalLiquidAssetsEstimatePence(businessId, todayEnd, undefined, authorisedStores)
       : getLiquidAssetsPence(businessId, todayEnd, storeId),
   ]);
@@ -809,7 +811,7 @@ async function _getTodayKPIs(
     paymentSplit,
     avgDailyExpensesPence,
     cashOnHandEstimatePence: Math.max(0, cashOnHandEstimatePence ?? 0),
-    openExpectedCashPence: await openExpectedCashFromEntries(businessId, storeId, authorisedStores ?? undefined),
+    openExpectedCashPence: issuesOnly ? null : await openExpectedCashFromEntries(businessId, storeId, authorisedStores ?? undefined),
     todayReceiptsPence,
     negativeMarginProductCount,
     momoPendingCount: momoPending,
@@ -830,6 +832,33 @@ const cachedTodayKPIs = unstable_cache(
   // (cron jobs, webhooks) that don't know to bust the tag.
   { revalidate: 30, tags: ['reports'] }
 );
+
+const cachedHomeIssueFlags = unstable_cache(
+  async (businessId: string): Promise<HomeIssueFlagSource> => {
+    const kpis = await _getTodayKPIs(businessId, undefined, undefined, true);
+    // Do not expose placeholder financial totals from the reduced internal read.
+    return {
+      stockoutImminentCount: kpis.stockoutImminentCount,
+      urgentReorderCount: kpis.urgentReorderCount,
+      arOver60Pence: kpis.arOver60Pence,
+      outstandingAPPence: kpis.outstandingAPPence,
+      cashVarianceTotalPence: kpis.cashVarianceTotalPence,
+      momoPendingCount: kpis.momoPendingCount,
+      negativeMarginProductCount: kpis.negativeMarginProductCount,
+      discountOverrideCount: kpis.discountOverrideCount,
+      openHighAlerts: kpis.openHighAlerts,
+    };
+  },
+  ['home-issue-flags'],
+  { revalidate: 30, tags: ['reports'] },
+);
+
+export function getHomeIssueFlags(businessId: string): Promise<HomeIssueFlagSource> {
+  return measureServerOperation('home.issue-flags', () => coalesceInFlightRead(
+    JSON.stringify(['home-issue-flags', businessId]),
+    () => cachedHomeIssueFlags(businessId),
+  ), { route: '/onboarding', cacheState: 'cached-wrapper' }, { thresholdMs: 1500, operationType: 'report' });
+}
 
 /** Command Center only. Requires the authorised store list and half-open window before any query. */
 export function getCommandCenterKpis(businessId: string, scope: CommandCenterKpiScope): Promise<TodayKPIs> {
