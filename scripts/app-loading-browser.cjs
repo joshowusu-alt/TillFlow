@@ -15,7 +15,7 @@ async function main() {
     await page.goto('/login');
     await page.locator('input[name=email]').waitFor();
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
-    await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), { timeout: 15_000 });
+    await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 15_000 });
     assert.equal(documents.length, 1, 'First service-worker claim must not reload login');
     await page.locator('input[name=email]').fill(process.env.E2E_OWNER_EMAIL || 'owner@store.com');
     await page.locator('input[name=password]').fill(process.env.E2E_OWNER_PASSWORD || 'Pass1234!');
@@ -27,8 +27,11 @@ async function main() {
       { group: 'Stock', href: '/products' },
       { group: 'Stock', href: '/inventory' },
       { group: 'Stock', href: '/purchases' },
+      { group: 'Money', href: '/payments/customer-receipts' },
+      { group: 'Money', href: '/payments/supplier-payments' },
       { group: 'People', href: '/customers' },
       { group: null, href: '/reports' },
+      { group: 'Admin', href: '/settings' },
     ];
     for (const route of destinations) {
       if (route.group) await page.getByRole('button', { name: route.group, exact: true }).click();
