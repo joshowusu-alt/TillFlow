@@ -2,6 +2,10 @@
 # Real GPG byte encryption is covered by the separate Windows Recovery Binary Gate.
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Net.Http
+try {
+  @(@{u='https://example.invalid/a'},@{u='https://example.invalid/a'}) | Select-Object -ExpandProperty u -Unique | Out-Null
+  Write-Host 'LEGACY DICTIONARY FILTER: no exception on this runner'
+} catch { Write-Host ('LEGACY DICTIONARY FILTER REPRODUCED: '+$_.Exception.GetType().Name) }
 $fixtureRoot=Join-Path $env:RUNNER_TEMP ('external-entrypoint-'+[Guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $fixtureRoot)
 $bin=Join-Path $fixtureRoot 'bin';[void](New-Item -ItemType Directory -Path $bin)

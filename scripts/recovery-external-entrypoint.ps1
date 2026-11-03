@@ -178,8 +178,8 @@ try {
   $refs=@(Get-ArchiveReferences $archiveMemory $pgrestore)
   [Array]::Clear($archiveMemory.GetBuffer(),0,[int]$archiveMemory.Length);$archiveMemory.Dispose();$archiveMemory=$null;$bytes=$null
   Write-Host ('LOCAL ARCHIVE FILE REFERENCES: PASS ('+$refs.Count+' references)')
-  $web=@($refs | Where-Object { $_.u -match '^https://mk8jj77w2uohrpv1[.]public[.]blob[.]vercel-storage[.]com/' } | ForEach-Object { $_.u } | Sort-Object -Unique)
-  $thirdParty=@($refs | Where-Object { $_.u -match '^https://' -and $_.u -notmatch '^https://mk8jj77w2uohrpv1[.]public[.]blob[.]vercel-storage[.]com/' } | ForEach-Object { $_.u } | Sort-Object -Unique)
+  $web=@($refs | Where-Object { $_.u -match '^https://mk8jj77w2uohrpv1[.]public[.]blob[.]vercel-storage[.]com/' } | ForEach-Object { $_.u } | Sort-Object -Unique -CaseSensitive)
+  $thirdParty=@($refs | Where-Object { $_.u -match '^https://' -and $_.u -notmatch '^https://mk8jj77w2uohrpv1[.]public[.]blob[.]vercel-storage[.]com/' } | ForEach-Object { $_.u } | Sort-Object -Unique -CaseSensitive)
   foreach ($link in $thirdParty) { if (([Uri]$link).Host -ne 'www.nestle-cwa.com') { throw 'Unreviewed third-party reference' } }
   if ($web.Count -eq 0) { throw 'No external files discovered; refusing an empty success' }
   foreach ($ref in $refs) {
