@@ -397,7 +397,7 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
             <div className="mt-1 text-xs text-black/50">Displayed on receipts for customer payments.</div>
           </div>
           </section>
-          <div className="sticky bottom-3 z-10 flex flex-col gap-3 rounded-xl border border-border bg-white p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between">
+          <div className="lg:sticky lg:bottom-3 z-10 flex flex-col gap-3 rounded-xl border border-border bg-white p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm text-black/55">
               Saves the preferences above. Opening balances and tills have their own save actions.
             </div>
