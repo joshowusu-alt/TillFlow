@@ -96,4 +96,10 @@ const stock = (productId: string) => db.inventoryBalance.findUniqueOrThrow({ whe
     await expect(createStockConversion(input('unit', { destinationUnitId: 'foreign' }))).rejects.toThrow(/valid unit/);
     await expect(createStockConversion(input('same', { destinationProductId: source }))).rejects.toThrow(/different products/);
   });
+  it('saves repeated conversions into an already valued destination', async () => {
+    await createStockConversion(input('next-one'));
+    await createStockConversion(input('next-two'));
+    expect(await stock(source)).toMatchObject({ qtyOnHandBase: 7, knownValuePence: 350000 });
+    expect(await stock(destination)).toMatchObject({ qtyOnHandBase: 285, knownValuePence: 150000 });
+  });
 });

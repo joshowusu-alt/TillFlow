@@ -53,7 +53,7 @@ function ProductPicker({ title, storeId, selection, onChange }: { title: string;
   </fieldset>;
 }
 
-export default function StockConversionClient({ storeId, currency }: { storeId: string; currency: string }) {
+export default function StockConversionClient({ storeId, currency, savedReceipt }: { storeId: string; currency: string; savedReceipt: { id: string; costPence: number } | null }) {
   const router = useRouter();
   const [source, setSource] = useState<Selection>(empty);
   const [destination, setDestination] = useState<Selection>(empty);
@@ -61,9 +61,9 @@ export default function StockConversionClient({ storeId, currency }: { storeId: 
   const [confirmed, setConfirmed] = useState(false);
   const [key, setKey] = useState('');
   const [error, setError] = useState('');
-  const [receipt, setReceipt] = useState<{ id: string; costPence: number } | null>(null);
+  const [receipt, setReceipt] = useState<{ id: string; costPence: number } | null>(savedReceipt);
   useEffect(() => { setKey(crypto.randomUUID()); }, []);
-  function edited() { setConfirmed(false); setError(''); setKey(crypto.randomUUID()); }
+  function edited() { setReceipt(null); setConfirmed(false); setError(''); setKey(crypto.randomUUID()); }
   let preview: ReturnType<typeof planStockConversion> | null = null;
   let explanation = 'Select the stock used and enter the actual quantity produced.';
   if (source.product && destination.product && source.quantity && destination.quantity) {
@@ -82,7 +82,7 @@ export default function StockConversionClient({ storeId, currency }: { storeId: 
       try {
         const result = await createStockConversionAction(form);
         if (!result.success) { setError(result.error); return; }
-        setReceipt(result.data); setSource(empty()); setDestination(empty()); setNote(''); setConfirmed(false); setKey(crypto.randomUUID()); router.refresh();
+        setReceipt(result.data); setSource(empty()); setDestination(empty()); setNote(''); setConfirmed(false); setKey(crypto.randomUUID()); router.replace(`/inventory/conversions?conversion=${encodeURIComponent(result.data.id)}`);
       } catch { setError('Could not confirm the result. Keep this form and retry; the same conversion will not be posted twice.'); }
     }}>
       <FormLock>
@@ -91,8 +91,8 @@ export default function StockConversionClient({ storeId, currency }: { storeId: 
       <input type="hidden" name="expectedSourceQtyBase" value={preview ? (source.product?.stock?.qtyOnHandBase ?? 0) - preview.sourceAfter.qtyOnHandBase : ''} />
       <input type="hidden" name="expectedDestinationQtyBase" value={preview ? preview.destinationAfter.qtyOnHandBase - (destination.product?.stock?.qtyOnHandBase ?? 0) : ''} />
       <div className="grid gap-4 md:grid-cols-2">
-        <ProductPicker key={`source-${receipt?.id ?? ''}`} title="Use stock" storeId={storeId} selection={source} onChange={v => { setSource(v); edited(); }} />
-        <ProductPicker key={`destination-${receipt?.id ?? ''}`} title="Produce stock" storeId={storeId} selection={destination} onChange={v => { setDestination(v); edited(); }} />
+        <ProductPicker title="Use stock" storeId={storeId} selection={source} onChange={v => { setSource(v); edited(); }} />
+        <ProductPicker title="Produce stock" storeId={storeId} selection={destination} onChange={v => { setDestination(v); edited(); }} />
       </div>
       <label className="block text-sm">Conversion note<textarea name="note" className="input mt-1 w-full" maxLength={500} required value={note} placeholder="For example: opened a sugar bag and counted the cups produced" onChange={e => { setNote(e.target.value); edited(); }} /></label>
       <div className="rounded-xl border bg-slate-50 p-4 text-sm" aria-live="polite">{preview ? <>
