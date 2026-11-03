@@ -26,7 +26,7 @@ export default function OnlineOrderAttentionBanner({ scopeKey }: { scopeKey: str
     let inFlight = false;
     let controller: AbortController | null = null;
     async function refresh() {
-      if (inFlight) return;
+      if (inFlight || disposed || document.visibilityState !== 'visible' || navigator.onLine === false) return;
       inFlight = true;
       controller = new AbortController();
       const timeout = window.setTimeout(() => controller?.abort(), 10000);

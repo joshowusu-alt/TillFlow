@@ -534,9 +534,11 @@ export const REPORT_PAGE_SURFACES: Record<string, SurfaceId> = {
 
 export async function visibleReportHrefs(now?: Date): Promise<Set<string>> {
   const allowed = new Set<string>();
+  // Every link uses the same trusted session, business, store scope and clock.
+  // Prepare once, then apply the unchanged surface decision to each link.
+  const prepared = await prepareLiveReport({ surfaceId: 'reports_hub', action: 'VIEW', now });
   for (const [href, surfaceId] of Object.entries(REPORT_PAGE_SURFACES)) {
-    const prepared = await prepareLiveReport({ surfaceId, action: 'VIEW', now });
-    const page = requireSurface(prepared.accessInput);
+    const page = requireSurface({ ...prepared.accessInput, surfaceId });
     if (page.outcome === 'allow') allowed.add(href);
   }
   return allowed;

@@ -31,6 +31,9 @@ on:
       - 'lib/reports/money-received-unknown-method.pg.test.ts'
       - 'lib/reports/money-received-store-scope.pg.test.ts'
       - 'lib/reports/reporting-scope.ts'
+      - 'lib/reports/today-kpis.ts'
+      - 'lib/reports/home-issue-flags*'
+      - 'lib/services/commercial-audit.pg.test.ts'
       - 'lib/reports/monthly-balance-review*'
       - 'lib/reports/recorded-money*'
       - 'lib/reports/cashflow-statement*'
@@ -173,6 +176,7 @@ jobs:
           set -euo pipefail
           files=(
             lib/services/inventory-valuation.pg.test.ts
+            lib/services/commercial-audit.pg.test.ts
             lib/services/stock-conversion.pg.test.ts
             lib/services/stocktake-completion-concurrency.pg.test.ts
             lib/services/inventory-reversal-concurrency.pg.test.ts

@@ -197,6 +197,9 @@ jobs:
           cat .ci-server.log || true
           exit 1
 
+      - name: Fresh service worker, owner sign-in and app navigation
+        run: node scripts/app-loading-browser.cjs
+
       - name: Stock conversion workflow (320px, 390px and desktop)
         run: node scripts/stock-conversion-browser.cjs
 
