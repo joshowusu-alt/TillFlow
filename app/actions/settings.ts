@@ -76,7 +76,12 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const varianceReasonRequired = formData.get('varianceReasonRequired') === 'on';
     const discountApprovalThresholdBps = Math.max(
       0,
-      Math.min(10_000, parseInt(String(formData.get('discountApprovalThresholdBps') || '1500'), 10) || 0)
+      Math.min(
+        10_000,
+        formData.has('discountApprovalThresholdPercent')
+          ? Math.round(Number(formData.get('discountApprovalThresholdPercent')) * 100) || 0
+          : parseInt(String(formData.get('discountApprovalThresholdBps') || '1500'), 10) || 0
+      )
     );
     const minimumMarginThresholdBps = Math.max(
       0,
@@ -88,7 +93,9 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     );
     const cashVarianceRiskThresholdPence = Math.max(
       0,
-      parseInt(String(formData.get('cashVarianceRiskThresholdPence') || '2000'), 10) || 2000
+      formData.has('cashVarianceRiskThresholdAmount')
+        ? toPence(formData.get('cashVarianceRiskThresholdAmount'))
+        : parseInt(String(formData.get('cashVarianceRiskThresholdPence') || '2000'), 10) || 2000
     );
     // Opening Capital is entered in whole currency units by the user (e.g. 5000 = GHS 5,000)
     const openingCapitalPence = Math.max(0, toPence(formData.get('openingCapitalPence')));
@@ -120,7 +127,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         momoEnabled,
         momoProvider,
         momoNumber,
-        openingCapitalPence,
+        ...(formData.has('openingCapitalPence') ? { openingCapitalPence } : {}),
         varianceReasonRequired,
         discountApprovalThresholdBps,
         minimumMarginThresholdBps,
@@ -140,7 +147,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     revalidatePath('/onboarding');
     revalidatePath('/settings');
 
-    redirect('/settings');
+    redirect('/settings?saved=1');
   }, '/settings');
 }
 

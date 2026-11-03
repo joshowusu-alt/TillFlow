@@ -5,9 +5,9 @@ export default async function SettingsLayout({ children }: { children: React.Rea
   const { user } = await requireBusiness(['MANAGER', 'OWNER']);
 
   return (
-    <div>
+    <div className="grid min-w-0 gap-6 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-8">
       <SettingsTabs role={user.role as 'MANAGER' | 'OWNER'} />
-      {children}
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
