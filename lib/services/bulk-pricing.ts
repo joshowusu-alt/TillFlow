@@ -50,7 +50,7 @@ async function loadProducts(db: Db, businessId: string, input: BulkPricingInput)
   const products = await db.product.findMany({ where: {
     businessId, active: true,
     ...(input.categoryId ? { categoryId: input.categoryId } : {}),
-    ...(input.divisionId ? { group: { divisionId: input.divisionId } } : {}),
+    ...(input.divisionId ? { AND: [{ OR: [{ divisionId: input.divisionId }, { group: { divisionId: input.divisionId } }] }] } : {}),
     ...(input.groupId ? { groupId: input.groupId } : {}),
     ...(input.search ? { OR: [
       { name: textSearch }, { publisher: textSearch }, { edition: textSearch },

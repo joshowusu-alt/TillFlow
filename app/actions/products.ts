@@ -93,9 +93,6 @@ async function resolveProductImageUrl(formData: FormData): Promise<string | null
 }
 
 async function parseProductFields(formData: FormData): Promise<ProductCoreInput> {
-  if (formOptionalString(formData, 'divisionId')?.trim() && !formOptionalString(formData, 'groupId')?.trim()) {
-    throw new UserError('Choose a group under this division, or choose “Use category only”.');
-  }
   const unitConfigs = parseUnitConfigs(formData);
   const baseUnit = unitConfigs?.find((config) => config.isBaseUnit);
   const firstNonBaseUnit = unitConfigs?.find((config) => !config.isBaseUnit);
@@ -113,6 +110,7 @@ async function parseProductFields(formData: FormData): Promise<ProductCoreInput>
     sku: formString(formData, 'sku') || null,
     barcode: formString(formData, 'barcode') || null,
     categoryId: formOptionalString(formData, 'categoryId') || null,
+    divisionId: formData.has('divisionId') ? formOptionalString(formData, 'divisionId') || null : undefined,
     groupId: formData.has('groupId') ? formOptionalString(formData, 'groupId') || null : undefined,
     preferredSupplierId: formOptionalString(formData, 'preferredSupplierId') || null,
     imageUrl: await resolveProductImageUrl(formData),

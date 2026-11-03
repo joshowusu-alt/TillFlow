@@ -68,7 +68,7 @@ export default async function ProductDetailPage(
   ]);
 
   if (!product) return <div className="card p-6">Product not found.</div>;
-  const assignedDivision = divisions.find(division => division.groups.some(group => group.id === product.groupId));
+  const assignedDivision = divisions.find(division => division.id === product.divisionId || division.groups.some(group => group.id === product.groupId));
   const assignedGroup = assignedDivision?.groups.find(group => group.id === product.groupId);
   const isManager = user.role !== 'CASHIER';
   const businessMarginThresholdBps = business.minimumMarginThresholdBps ?? 1500;
@@ -207,7 +207,7 @@ export default async function ProductDetailPage(
             </div>
             <div>
               <ProductIdentityFields attributesJson={product.attributesJson} publisher={product.publisher} edition={product.edition} barcodes={product.barcodes.filter(b => b.code !== product.barcode).map(b => b.code)} />
-              <ProductCategoryField categories={categories} divisions={divisions} defaultValue={product.categoryId ?? ''} defaultGroupId={product.groupId ?? ''} />
+              <ProductCategoryField categories={categories} divisions={divisions} defaultValue={product.categoryId ?? ''} defaultGroupId={product.groupId ?? ''} defaultDivisionId={product.divisionId ?? ''} />
             </div>
             <div>
               <label className="label">Preferred supplier</label>

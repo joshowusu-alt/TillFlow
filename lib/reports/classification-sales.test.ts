@@ -44,3 +44,10 @@ describe('classification performance', () => {
     expect(db.salesInvoice.findMany).not.toHaveBeenCalled();
   });
 });
+
+it('rolls division-only products into the correct division without inventing a group',()=>{
+  const rows=buildClassificationSales(categories,[{...products[1],divisionId:'fairytale'}],[{...sale,discountPence:0,lines:[sale.lines[1]]}]);
+  expect(rows.find(row=>row.key==='division:fairytale')).toMatchObject({productCount:1,netSalesPence:1000});
+  expect(rows.find(row=>row.key==='product:soap')).toMatchObject({divisionId:'fairytale',groupId:null,path:'Household / fairytale / Soap'});
+  expect(rows.find(row=>row.key==='group:division-only:fairytale')).toMatchObject({productCount:1,divisionId:'fairytale'});
+});

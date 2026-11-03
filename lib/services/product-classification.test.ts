@@ -5,12 +5,12 @@ import { classificationName, resolveProductClassification, createClassificationN
 
 describe('optional product classification', () => {
   it('preserves a category-only product without querying groups', async () => {
-    expect(await resolveProductClassification({}, 'business-a', 'category-a')).toEqual({categoryId:'category-a',groupId:null});
+    expect(await resolveProductClassification({}, 'business-a', 'category-a')).toEqual({categoryId:'category-a',groupId:null,divisionId:null});
   });
   it('derives the category from the selected group, ignoring a forged umbrella', async () => {
-    const findFirst=vi.fn().mockResolvedValue({id:'group-a',division:{categoryId:'category-a'}});
+    const findFirst=vi.fn().mockResolvedValue({id:'group-a',divisionId:'division-a',division:{categoryId:'category-a'}});
     expect(await resolveProductClassification({productGroup:{findFirst}},'business-a','forged-category','group-a'))
-      .toEqual({categoryId:'category-a',groupId:'group-a'});
+      .toEqual({categoryId:'category-a',groupId:'group-a',divisionId:'division-a'});
     expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({where:{id:'group-a',businessId:'business-a',division:{businessId:'business-a',category:{businessId:'business-a'}}}}));
   });
   it('rejects unavailable or foreign-business groups before a product can be written', async () => {
@@ -33,4 +33,12 @@ describe('optional product classification', () => {
     expect(await createClassificationNode('business-a','group','division-a',' study bibles ')).toEqual({id:'group-a',name:'Study Bibles'});
     expect(create).not.toHaveBeenCalled();
   });
+});
+
+it('derives the category for a division-only product and refuses foreign divisions',async()=>{
+  const findFirst=vi.fn().mockResolvedValue({id:'d',categoryId:'c'});
+  expect(await resolveProductClassification({productDivision:{findFirst}},'biz','forged',null,'d')).toEqual({categoryId:'c',divisionId:'d',groupId:null});
+  expect(findFirst).toHaveBeenCalledWith({where:{id:'d',businessId:'biz',category:{businessId:'biz'}},select:{id:true,categoryId:true}});
+  findFirst.mockResolvedValue(null);
+  await expect(resolveProductClassification({productDivision:{findFirst}},'biz','c',null,'foreign')).rejects.toThrow('unavailable');
 });

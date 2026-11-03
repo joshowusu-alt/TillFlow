@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 
 export type ImportCatalogContext = {
+  products?: import('@/lib/import/import-reliability').ImportMatchProduct[];
   productNames: string[];
   barcodes: string[];
   skus: string[];
@@ -19,7 +20,7 @@ export async function getImportCatalogContext(): Promise<ActionResult<ImportCata
     const [products, categories, suppliers] = await Promise.all([
       prisma.product.findMany({
         where: { businessId, active: true },
-        select: { name: true, barcode: true, sku: true, barcodes: { select: { code: true } } },
+        select: { id: true, name: true, barcode: true, sku: true, barcodes: { select: { code: true } } },
       }),
       prisma.category.findMany({
         where: { businessId },
@@ -34,6 +35,7 @@ export async function getImportCatalogContext(): Promise<ActionResult<ImportCata
     ]);
 
     return ok({
+      products,
       productNames: products.map((p) => p.name),
       barcodes: [...new Set(products.flatMap(p => [p.barcode, ...p.barcodes.map(b => b.code)]).filter((b): b is string => Boolean(b)))],
       skus: products.map((p) => p.sku).filter((s): s is string => Boolean(s)),

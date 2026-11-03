@@ -4,7 +4,7 @@ import { requireAuthorisedStoreIds } from '@/lib/reports/reporting-scope';
 
 export type ClassificationLevel = 'category' | 'division' | 'group' | 'product';
 export type ClassificationCategory = { id: string; name: string; divisions: { id: string; name: string; groups: { id: string; name: string }[] }[] };
-export type ClassifiedProduct = { id: string; name: string; categoryId: string | null; groupId: string | null };
+export type ClassifiedProduct = { id: string; name: string; categoryId: string | null; divisionId?: string | null; groupId: string | null };
 export type ClassificationSalesRow = {
   key: string; level: ClassificationLevel; name: string; path: string;
   categoryId: string | null; divisionId: string | null; groupId: string | null; productId: string | null;
@@ -20,6 +20,7 @@ export function buildClassificationSales(categories: ClassificationCategory[], p
   type Acc = Omit<ClassificationSalesRow, 'costPence' | 'profitPence' | 'marginPercent'> & { knownCost: number; incomplete: boolean };
   const rows = new Map<string, Acc>();
   const categoryMap = new Map(categories.map(category => [category.id, category]));
+  const divisions = new Map(categories.flatMap(category => category.divisions.map(division => [division.id, { category, division }] as const)));
   const groups = new Map(categories.flatMap(category => category.divisions.flatMap(division => division.groups.map(group => [group.id, { category, division, group }] as const))));
   const ensure = (level: ClassificationLevel, id: string, name: string, path: string, categoryId: string | null, divisionId: string | null = null, groupId: string | null = null, productId: string | null = null) => {
     const key = `${level}:${id}`;
@@ -37,16 +38,17 @@ export function buildClassificationSales(categories: ClassificationCategory[], p
   const productRows = new Map<string, Acc[]>();
   for (const product of products) {
     const assignment = product.groupId ? groups.get(product.groupId) : undefined;
-    const category = assignment?.category ?? (product.categoryId ? categoryMap.get(product.categoryId) : undefined);
+    const divisionAssignment = assignment ?? (product.divisionId ? divisions.get(product.divisionId) : undefined);
+    const category = divisionAssignment?.category ?? (product.categoryId ? categoryMap.get(product.categoryId) : undefined);
     const categoryId = category?.id ?? null, categoryName = category?.name ?? 'Uncategorised';
     const cat = ensure('category', categoryId ?? 'unassigned', categoryName, categoryName, categoryId);
-    const division = assignment
-      ? rows.get(`division:${assignment.division.id}`)!
+    const division = divisionAssignment
+      ? rows.get(`division:${divisionAssignment.division.id}`)!
       : ensure('division', `category-only:${categoryId ?? 'unassigned'}`, 'Category only', `${categoryName} / No division`, categoryId);
     const group = assignment
       ? rows.get(`group:${assignment.group.id}`)!
-      : ensure('group', `category-only:${categoryId ?? 'unassigned'}`, 'No group assigned', `${categoryName} / No division or group`, categoryId);
-    const item = ensure('product', product.id, product.name, `${assignment ? group.path : categoryName} / ${product.name}`, categoryId, assignment?.division.id ?? null, assignment?.group.id ?? null, product.id);
+      : ensure('group', divisionAssignment ? `division-only:${divisionAssignment.division.id}` : `category-only:${categoryId ?? 'unassigned'}`, 'No group assigned', `${divisionAssignment ? division.path : categoryName} / No group`, categoryId, divisionAssignment?.division.id ?? null);
+    const item = ensure('product', product.id, product.name, `${assignment ? group.path : divisionAssignment ? division.path : categoryName} / ${product.name}`, categoryId, divisionAssignment?.division.id ?? null, assignment?.group.id ?? null, product.id);
     const chain = [cat, division, group, item];
     chain.forEach(row => row.productCount++);
     productRows.set(product.id, chain);
@@ -77,7 +79,7 @@ export async function getClassificationSalesReport(businessId: string, options: 
     prisma.category.findMany({ where: { businessId }, select: { id: true, name: true, divisions: {
       where: { businessId }, select: { id: true, name: true, groups: { where: { businessId }, select: { id: true, name: true } } },
     } } }),
-    prisma.product.findMany({ where: { businessId }, select: { id: true, name: true, categoryId: true, groupId: true } }),
+    prisma.product.findMany({ where: { businessId }, select: { id: true, name: true, categoryId: true, divisionId: true, groupId: true } }),
     prisma.salesInvoice.findMany({ where: { businessId, storeId: { in: storeIds }, createdAt: { gte: options.start, lt: options.end }, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
       select: { paymentStatus: true, discountPence: true, salesReturn: { select: { type: true } }, lines: { select: { productId: true, qtyBase: true, qtyInUnit: true,
         lineSubtotalPence: true, lineDiscountPence: true, promoDiscountPence: true, lineCostPence: true, costBasis: true } } },

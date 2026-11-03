@@ -659,6 +659,7 @@ model ProductDivision {
   name String
   category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   groups ProductGroup[]
+  products Product[]
   @@unique([categoryId, name])
   @@index([businessId])
 }
@@ -696,6 +697,7 @@ model Product {
   businessId            String
   categoryId            String?
   groupId               String?
+  divisionId            String?
   publisher             String   @default("")
   edition               String   @default("")
   barcodes              ProductBarcode[]
@@ -727,6 +729,7 @@ model Product {
 
   business           Business              @relation(fields: [businessId], references: [id])
   category           Category?             @relation(fields: [categoryId], references: [id])
+  division           ProductDivision? @relation(fields: [divisionId], references: [id], onDelete: Restrict)
   group              ProductGroup?         @relation(fields: [groupId], references: [id], onDelete: Restrict)
   preferredSupplier  Supplier?             @relation("ProductPreferredSupplier", fields: [preferredSupplierId], references: [id])
   productUnits       ProductUnit[]
@@ -748,6 +751,7 @@ model Product {
   @@index([businessId, active, storefrontPublished])
   @@index([categoryId])
   @@index([groupId])
+  @@index([divisionId])
   @@index([preferredSupplierId])
 }
 

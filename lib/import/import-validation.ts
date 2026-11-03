@@ -1,4 +1,3 @@
-import { suggestImportCategoryName } from '@/lib/import/category-import';
 
 export type DuplicateKind = 'none' | 'barcode' | 'name_exact' | 'name_similar' | 'sku';
 
@@ -76,25 +75,25 @@ export function validateImportRow(
     errors.push('Product name is missing.');
   }
 
-  if (row.sellingPricePence < 0) {
+  if (!Number.isSafeInteger(row.sellingPricePence) || row.sellingPricePence < 0) {
     errors.push('Selling price must be a number.');
   } else if (row.sellingPricePence === 0) {
     errors.push('Selling price is missing or zero.');
   }
 
-  if (row.costPricePence < 0) {
+  if (!Number.isSafeInteger(row.costPricePence) || row.costPricePence < 0) {
     errors.push('Cost price must be a number.');
   }
 
-  if (row.quantity < 0 || !Number.isFinite(row.quantity)) {
-    errors.push('Opening stock must be a valid number.');
+  if (row.quantity < 0 || !Number.isSafeInteger(row.quantity)) {
+    errors.push('Stock quantity must be a non-negative whole number.');
   }
 
   if (!row.baseUnitName.trim()) {
     errors.push('Unit type is missing — enter the smallest unit you sell (e.g. Piece, Bottle, Tin).');
   }
 
-  if (row.packUnitName && row.packSize <= 1) {
+  if (row.packUnitName && (!Number.isSafeInteger(row.packSize) || row.packSize <= 1)) {
     errors.push('Pack or carton size must be at least 2 when a pack/carton unit is set.');
   }
 
@@ -122,9 +121,6 @@ export function validateImportRow(
     warnings.push('Selling price looks much higher than cost — double-check both prices.');
   }
 
-  if (!row.category.trim()) {
-    warnings.push('Category is missing — you can add one later.');
-  }
 
   if (!row.supplierName.trim()) {
     warnings.push('Supplier is missing — stock will still import.');
@@ -142,13 +138,7 @@ export function validateImportRow(
     warnings.push('Opening stock is zero — product will have no stock on hand yet.');
   }
 
-  const suggestedCategory = row.category.trim()
-    ? suggestImportCategoryName(row.category)
-    : '';
-
-  if (row.category.trim() && suggestedCategory && suggestedCategory !== row.category.trim()) {
-    warnings.push(`Category will be saved as "${suggestedCategory}".`);
-  }
+  const suggestedCategory = row.category.trim();
 
   const seenNames = options?.seenNamesInFile ?? new Set<string>();
   const seenBarcodes = options?.seenBarcodesInFile ?? new Set<string>();

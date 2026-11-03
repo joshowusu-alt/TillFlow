@@ -300,7 +300,7 @@ export default function ImportStockClient({
       const safeName = file.name.replace(/[^\w.-]/g, '_').slice(0, 40);
       setClientImportKey(`imp:${importMode}:${file.size}:${file.lastModified}:${safeName}`);
       try {
-        const detailed = await parseStockFileDetailed(file);
+        const detailed = await parseStockFileDetailed(file, importMode);
         if (!detailed.rows.length) {
           setParseError('The file had no product rows. Check the file and try again.');
           return;
@@ -308,6 +308,7 @@ export default function ImportStockClient({
         setLegacyPaymentStatusColumn(detailed.hasPaymentStatusColumn);
         setCatalogLoading(true);
         const catalogRes = await getImportCatalogContext();
+        if (!catalogRes.success) throw new Error('Could not load your catalogue. Please try uploading again before importing.');
         const enriched =
           catalogRes.success
             ? enrichRowsWithCatalog(detailed.rows, catalogRes.data)
@@ -385,11 +386,12 @@ export default function ImportStockClient({
         name: r.name,
         sku: r.sku,
         barcode: r.barcode,
-        category: r.division || r.group ? r.category : r.suggestedCategory || r.category,
+        category: r.category,
         division: r.division,
         group: r.group,
         sellingPricePence: r.sellingPricePence,
         costPricePence: r.costPricePence,
+        costPriceProvided: r.costPriceProvided,
         quantity: importMode === 'CATALOGUE' ? 0 : r.quantity,
         baseUnitId: r.resolvedBaseUnitId!,
         packUnitId: r.packUnitName ? r.resolvedPackUnitId : null,
@@ -398,8 +400,8 @@ export default function ImportStockClient({
         paymentStatus: importMode === 'PURCHASES' ? r.resolvedPaymentStatus : undefined,
         duplicateAction: r.duplicateAction,
         supplierName: r.supplierName,
-        reorderPointBase: r.reorderPoint,
-        storefrontPublished: r.storefrontPublished,
+        reorderPointBase: r.reorderPointProvided === false ? undefined : r.reorderPoint,
+        storefrontPublished: r.storefrontPublishedProvided === false ? undefined : r.storefrontPublished,
         imageUrl: r.imageUrl,
         notes: r.notes,
         confirmBelowCost: r.confirmBelowCost,
@@ -558,6 +560,10 @@ export default function ImportStockClient({
               <p className="text-xs text-black/50 mt-0.5">
                 Download our template, fill it in Excel or Google Sheets, then upload it here.
               </p>
+              <p className="mt-2 text-xs text-black/60">
+                Classification is optional. Leave category, division and group blank, or remove those columns.
+                You can use category only, category and division, or all three. Include parent names when using a division or group.
+              </p>
             </div>
             <button
               type="button"
@@ -681,7 +687,7 @@ export default function ImportStockClient({
             { label: 'Products imported', value: String(result.created) },
             { label: 'Products updated', value: String(result.updated) },
             {
-              label: result.stockUpdated > 0 ? 'Stock added (existing)' : 'Skipped',
+              label: 'Skipped',
               value: String(result.skipped),
             },
             { label: 'Opening stock units', value: String(result.openingStockUnits) },
@@ -799,26 +805,11 @@ export default function ImportStockClient({
         {result.skipped > 0 && (
           <details className="rounded-xl border border-black/10 p-4 text-sm">
             <summary className="cursor-pointer font-medium text-black/70">
-              {result.skipped} product{result.skipped !== 1 ? 's' : ''} already in catalogue
-              {result.stockUpdated > 0 && (
-                <span className="ml-2 text-emerald-700">
-                  — opening stock recorded for {result.stockUpdated} of them
-                  {result.stockUpdatedValuePence > 0 && ` (${formatMoney(result.stockUpdatedValuePence, currency)})`}
-                </span>
-              )}
+              {result.skipped} product{result.skipped !== 1 ? 's' : ''} skipped
             </summary>
-            {result.stockUpdated > 0 ? (
-              <p className="mt-2 text-xs text-black/50 mb-2">
-                The products already existed so no duplicates were created. Their opening stock
-                quantities and costs from the CSV have been recorded as purchase invoices and
-                posted to the balance sheet. To update prices or other details, edit them
-                individually under Products.
-              </p>
-            ) : (
-              <p className="mt-2 text-xs text-black/50 mb-2">
-                These products were not changed. To update them, edit them individually under Products.
-              </p>
-            )}
+            <p className="mt-2 text-xs text-black/50 mb-2">
+              These rows did not change product details or add stock. Choose Update existing when you want to apply a row.
+            </p>
             <ul className="mt-1 list-disc list-inside space-y-1 text-black/60">
               {result.skippedNames.map((n) => (
                 <li key={n}>{n}</li>

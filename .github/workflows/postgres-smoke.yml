@@ -16,6 +16,9 @@ on:
   pull_request:
     paths:
       - 'prisma/**'
+      - 'lib/import/**'
+      - 'app/actions/import-stock*'
+      - 'app/actions/import-catalog.ts'
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/migration-p1-schema-pg-test.cjs'
@@ -175,6 +178,7 @@ jobs:
         run: |
           set -euo pipefail
           files=(
+            app/actions/import-stock.pg.test.ts
             lib/services/inventory-valuation.pg.test.ts
             lib/services/commercial-audit.pg.test.ts
             lib/services/stock-conversion.pg.test.ts
