@@ -147,7 +147,7 @@ export default async function ProductsPage(
   const productWhere: Prisma.ProductWhereInput = {
     ...productScopeWhere,
     ...(searchParams?.category ? { categoryId: searchParams.category } : {}),
-    ...(searchParams?.division ? { group: { divisionId: searchParams.division } } : {}),
+    ...(searchParams?.division ? { AND: [{ OR: [{ divisionId: searchParams.division }, { group: { divisionId: searchParams.division } }] }] } : {}),
     ...(searchParams?.group ? { groupId: searchParams.group } : {}),
   };
 
@@ -175,6 +175,7 @@ export default async function ProductsPage(
             }
           },
           category: { select: { name: true, colour: true } },
+          division: { select: { name: true } },
           group: { select: { name: true, division: { select: { name: true } } } },
           preferredSupplier: { select: { id: true, name: true } }
         },
@@ -207,7 +208,7 @@ export default async function ProductsPage(
         },
       }),
       prisma.product.groupBy({
-        by: ['categoryId', 'groupId'],
+        by: ['categoryId', 'divisionId', 'groupId'],
         where: productScopeWhere,
         _count: { _all: true },
       }),
@@ -396,7 +397,7 @@ export default async function ProductsPage(
           )}
           {/* Product search and actions */}
           <CatalogueClassificationNav categories={categories} divisions={await divisionsPromise}
-            counts={classificationCounts.map(row => ({ categoryId: row.categoryId, groupId: row.groupId, count: row._count._all }))}
+            counts={classificationCounts.map(row => ({ categoryId: row.categoryId, divisionId: row.divisionId, groupId: row.groupId, count: row._count._all }))}
             selection={{ category: searchParams?.category, division: searchParams?.division, group: searchParams?.group }}
             context={{ q, tab: 'products', issue: issueQueryValue, missingCost: searchParams?.missingCost, stock: searchParams?.stock }} />
           <div className="operational-filter-row">
@@ -591,7 +592,7 @@ export default async function ProductsPage(
                           </Link>
                         </div>
                       }
-                      subtitle={<ProductClassificationLabel category={product.category} group={product.group} />}
+                      subtitle={<ProductClassificationLabel category={product.category} group={product.group} division={product.division} />}
                     />
                     <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                       <DataCardField label="Base price" value={<span className="font-semibold text-ink">{formatMoney(product.sellingPriceBasePence, business.currency)}</span>} />
@@ -711,7 +712,7 @@ export default async function ProductsPage(
                           </Link>
                         </td>
                         <td className="hidden sm:table-cell px-3 py-3">
-                          <ProductClassificationLabel category={product.category} group={product.group} />
+                          <ProductClassificationLabel category={product.category} group={product.group} division={product.division} />
                         </td>
                         <td className="px-3 py-3">{formatMoney(product.sellingPriceBasePence, business.currency)}</td>
                         {isManager ? <td className="hidden lg:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td> : null}

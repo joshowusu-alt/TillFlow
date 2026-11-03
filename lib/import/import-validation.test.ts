@@ -106,7 +106,7 @@ describe('import row validation', () => {
     expect(result.defaultDuplicateAction).toBe('skip');
   });
 
-  it('suggests cleaned category names', () => {
+  it('preserves the business category name', () => {
     const result = validateImportRow({
       rowNumber: 6,
       name: 'Oreo',
@@ -126,6 +126,6 @@ describe('import row validation', () => {
       imageUrl: '',
       notes: '',
     });
-    expect(result.suggestedCategory).toBe('Biscuits & snacks');
+    expect(result.suggestedCategory).toBe('biscuit');
   });
 });

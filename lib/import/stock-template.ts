@@ -34,7 +34,7 @@ const PURCHASE_EXAMPLES: string[][] = [
 function guideLines(mode: ImportMode): string[] {
   const common = [
     `# TillFlow ${mode.toLowerCase().replace('_', ' ')} import guide (delete these lines before upload)`,
-    '# Optional hierarchy: supply category, division and group together; leave division and group blank for simple categories.',
+    '# Classification is optional: leave all blank, use category only, category + division, or category + division + group. Include parent names for deeper levels.',
     '#',
     '# Unit types (base_unit): smallest unit you SELL — Piece, Bottle, Tin, Strip, Pack, kg',
     '# pack_unit + pack_size: optional larger box (e.g. Carton with 48 Tins per carton)',

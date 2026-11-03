@@ -18,6 +18,7 @@ export type ProductCoreInput = {
   additionalBarcodes?: string[];
   categoryId: string | null;
   groupId?: string | null;
+  divisionId?: string | null;
   preferredSupplierId?: string | null;
   imageUrl: string | null;
   sellingPriceBasePence: number;
@@ -414,7 +415,7 @@ async function createProductImpl(
   await assertSupplierBelongsToBusiness(businessId, normalized.preferredSupplierId);
   await assertAvailableBarcodes(db ?? prisma, businessId, normalized);
 
-  const classification = await resolveProductClassification(db ?? prisma, businessId, normalized.categoryId, normalized.groupId);
+  const classification = await resolveProductClassification(db ?? prisma, businessId, normalized.categoryId, normalized.groupId, normalized.divisionId);
 
   const product = await (db ?? prisma).product.create({
     data: {
@@ -486,7 +487,7 @@ async function updateProductImpl(
 
   const existing = await prisma.product.findFirst({
     where: { id, businessId },
-    select: { id: true, defaultCostBasePence: true, groupId: true },
+    select: { id: true, defaultCostBasePence: true, groupId: true, divisionId: true },
   });
   if (!existing) {
     throw new Error('Product not found. It may have been removed.');
@@ -499,7 +500,8 @@ async function updateProductImpl(
     // Legacy callers which do not expose classification preserve the current group.
     // Explicit null from the product form switches back to a simple category.
     const classification = await resolveProductClassification(tx, businessId, normalized.categoryId,
-      normalized.groupId === undefined ? existing.groupId : normalized.groupId);
+      normalized.groupId === undefined ? existing.groupId : normalized.groupId,
+      normalized.divisionId === undefined ? existing.divisionId : normalized.divisionId);
     await tx.product.update({
       where: { id: existing.id },
       data: {

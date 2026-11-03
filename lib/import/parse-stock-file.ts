@@ -3,8 +3,9 @@
  */
 
 import * as XLSX from 'xlsx';
+import { importClassificationErrors, matchImportProduct, type ImportMatchProduct } from '@/lib/import/import-reliability';
 import { normaliseHeaderKey } from '@/lib/import/import-columns';
-import { spreadsheetHasPaymentStatusColumn } from '@/lib/import/import-mode';
+import { type ImportMode, spreadsheetHasPaymentStatusColumn } from '@/lib/import/import-mode';
 import {
   validateImportRow,
   type DuplicateAction,
@@ -25,6 +26,9 @@ export type ParsedImportRow = {
   suggestedCategory: string;
   sellingPricePence: number;
   costPricePence: number;
+  costPriceProvided?: boolean;
+  storefrontPublishedProvided?: boolean;
+  reorderPointProvided?: boolean;
   quantity: number;
   baseUnitName: string;
   packUnitName: string;
@@ -36,6 +40,7 @@ export type ParsedImportRow = {
   imageUrl: string;
   notes: string;
   paymentStatus: PaymentStatus;
+  paymentStatusRaw?: string;
   duplicateKind: DuplicateKind;
   duplicateAction: DuplicateAction;
   confirmBelowCost: boolean;
@@ -44,29 +49,29 @@ export type ParsedImportRow = {
 };
 
 let _counter = 0;
-function hierarchyErrors(row: { category: string; division?: string; group?: string }) {
-  if (!row.division?.trim() && !row.group?.trim()) return [];
-  if (![row.category, row.division, row.group].every(value => value?.trim())) return ['Provide category, division and group together.'];
-  if ([row.category, row.division!, row.group!].some(value => value.trim().length > 100 || /[\x00-\x1f]/.test(value))) return ['Category, division and group names must be up to 100 characters.'];
-  return [];
-}
+const hierarchyErrors = importClassificationErrors;
 function uniqueId() {
   return `row-${++_counter}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+function parseNumber(raw: string, integer = false): number {
+  const value = raw.trim();
+  if (!value) return 0;
+  const pattern = integer ? /^(?:\d+|\d{1,3}(?:,\d{3})+)$/ : /^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/;
+  if (!pattern.test(value)) return -1;
+  const number = Number(value.replace(/,/g, ''));
+  return Number.isFinite(number) && number <= Number.MAX_SAFE_INTEGER ? number : -1;
+}
+
 function parsePence(raw: string): number {
-  const cleaned = raw.replace(/,/g, '').replace(/\s/g, '').trim();
-  if (!cleaned) return 0; // blank = unknown / zero (opening stock may omit cost)
-  const n = parseFloat(cleaned);
-  if (Number.isNaN(n)) return -1;
-  return Math.round(n * 100);
+  const number = parseNumber(raw);
+  return number < 0 || !Number.isSafeInteger(Math.round(number * 100)) ? -1 : Math.round(number * 100);
 }
 
 function parseQuantity(raw: string): number {
   const cleaned = raw.trim().toLowerCase();
   if (!cleaned || ['-', 'n/a', 'na', 'nil', 'none', 'oos', 'out'].includes(cleaned)) return 0;
-  const n = parseFloat(cleaned.replace(/,/g, ''));
-  return Number.isNaN(n) ? -1 : n;
+  return parseNumber(cleaned);
 }
 
 function normalisePaymentStatus(raw: string): PaymentStatus {
@@ -80,32 +85,30 @@ function parseBool(raw: string): boolean {
   return v === 'yes' || v === 'true' || v === '1' || v === 'y';
 }
 
-function splitCsvLine(line: string): string[] {
-  const fields: string[] = [];
-  let cur = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') {
-        cur += '"';
-        i++;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        cur += ch;
-      }
-    } else if (ch === '"') {
-      inQuotes = true;
-    } else if (ch === ',') {
-      fields.push(cur);
-      cur = '';
-    } else {
-      cur += ch;
+function csvMatrix(text: string): { matrix: string[][]; rowNumbers: number[] } {
+  const matrix: string[][] = [], rowNumbers: number[] = [];
+  let row: string[] = [], field = '', quoted = false, closed = false;
+  let line = 1, recordLine = 1;
+  const pushRow = () => { row.push(field); matrix.push(row); rowNumbers.push(recordLine); row = []; field = ''; closed = false; };
+  const source = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    if (quoted) {
+      if (ch === '"' && source[i + 1] === '"') { field += '"'; i++; }
+      else if (ch === '"') { quoted = false; closed = true; }
+      else { field += ch; if (ch === '\n') line++; }
+    } else if (ch === ',' || ch === '\n') {
+      if (ch === ',') { row.push(field); field = ''; closed = false; }
+      else { pushRow(); line++; recordLine = line; }
+    } else if (ch === '"' && field === '' && !closed) quoted = true;
+    else {
+      if (closed || ch === '"') throw new Error(`Invalid CSV quoting on row ${line}.`);
+      field += ch;
     }
   }
-  fields.push(cur);
-  return fields;
+  if (quoted) throw new Error(`Unclosed quoted cell on row ${recordLine}.`);
+  if (field || row.length) pushRow();
+  return { matrix, rowNumbers };
 }
 
 function buildRow(raw: Record<string, string>, rowNumber: number, seen: { names: Set<string>; barcodes: Set<string> }) {
@@ -120,12 +123,12 @@ function buildRow(raw: Record<string, string>, rowNumber: number, seen: { names:
   const quantity = parseQuantity(g('quantity'));
   const baseUnitName = g('base_unit');
   const packUnitName = g('pack_unit');
-  const packSizeRaw = parseInt(g('pack_size'), 10);
+  const packSizeRaw = parseNumber(g('pack_size'), true);
   const packSize = Number.isNaN(packSizeRaw) || packSizeRaw <= 1 ? 0 : packSizeRaw;
   const qtyInRaw = g('qty_in');
   const qtyInName = qtyInRaw || baseUnitName;
   const supplierName = g('supplier_name');
-  const reorderRaw = parseInt(g('reorder_point'), 10);
+  const reorderRaw = parseNumber(g('reorder_point'), true);
   const reorderPoint = Number.isNaN(reorderRaw) || reorderRaw < 0 ? 0 : reorderRaw;
   const storefrontPublished = parseBool(g('storefront_published'));
   const imageUrl = g('image_url');
@@ -158,6 +161,9 @@ function buildRow(raw: Record<string, string>, rowNumber: number, seen: { names:
 
   return {
     _id: uniqueId(),
+    costPriceProvided: g('cost_price') !== '',
+    storefrontPublishedProvided: g('storefront_published') !== '',
+    reorderPointProvided: g('reorder_point') !== '',
     rowNumber,
     name,
     sku,
@@ -179,16 +185,22 @@ function buildRow(raw: Record<string, string>, rowNumber: number, seen: { names:
     imageUrl,
     notes,
     paymentStatus,
+    paymentStatusRaw: g('payment_status'),
     duplicateKind: validation.duplicateKind,
     duplicateAction: validation.defaultDuplicateAction,
     confirmBelowCost: false,
-    errors: [...validation.errors, ...hierarchyErrors({ category, division:g('division'), group:g('group') })],
+    errors: [...validation.errors,
+      ...(packSizeRaw < 0 ? ['pack_size must be a whole number.'] : []),
+      ...(reorderRaw < 0 ? ['reorder_point must be a non-negative whole number.'] : []),
+      ...(g('storefront_published') && !['yes','true','1','y','no','false','0','n'].includes(g('storefront_published').toLowerCase()) ? ['storefront_published must be yes or no.'] : []),
+      ...hierarchyErrors({ category, division:g('division'), group:g('group') })],
     warnings: validation.warnings,
   } satisfies ParsedImportRow;
 }
 
-function parseMatrix(matrix: string[][]): { rows: ParsedImportRow[]; headers: string[] } {
-  const dataRows = matrix.filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''));
+function parseMatrix(matrix: string[][], rowNumbers = matrix.map((_, index) => index + 1)): { rows: ParsedImportRow[]; headers: string[] } {
+  const records = matrix.map((row, index) => ({ row, rowNumber: rowNumbers[index] })).filter(({ row }) => row.some((cell) => String(cell ?? '').trim() !== ''));
+  const dataRows = records.map(record => record.row);
   if (dataRows.length < 2) return { rows: [], headers: [] };
 
   let headerIdx = 0;
@@ -200,6 +212,11 @@ function parseMatrix(matrix: string[][]): { rows: ParsedImportRow[]; headers: st
   if (headerIdx >= dataRows.length - 1) return { rows: [], headers: [] };
 
   const headers = dataRows[headerIdx].map((h) => normaliseHeaderKey(String(h ?? '')));
+  const nonemptyHeaders = headers.filter(Boolean);
+  if (new Set(nonemptyHeaders).size !== nonemptyHeaders.length) throw new Error('Duplicate column names found. Keep only one column for each field.');
+  for (const required of ['name', 'selling_price', 'base_unit']) {
+    if (!headers.includes(required)) throw new Error(`Missing required column: ${required}.`);
+  }
   const seen = { names: new Set<string>(), barcodes: new Set<string>() };
 
   const rows = dataRows.slice(headerIdx + 1).map((row, index) => {
@@ -207,21 +224,23 @@ function parseMatrix(matrix: string[][]): { rows: ParsedImportRow[]; headers: st
     headers.forEach((h, i) => {
       raw[h] = String(row[i] ?? '');
     });
-    return buildRow(raw, headerIdx + index + 2, seen);
+    return buildRow(raw, records[headerIdx + index + 1].rowNumber, seen);
   });
   return { rows, headers };
 }
 
 async function parseCsv(file: File): Promise<{ rows: ParsedImportRow[]; headers: string[] }> {
   const text = await file.text();
-  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-  return parseMatrix(lines.map(splitCsvLine));
+  const { matrix, rowNumbers } = csvMatrix(text);
+  return parseMatrix(matrix, rowNumbers);
 }
 
 async function parseXlsx(file: File): Promise<{ rows: ParsedImportRow[]; headers: string[] }> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array' });
-  const sheetName = workbook.SheetNames[0];
+  const dataSheets = workbook.SheetNames.filter(name => !['instructions', 'guide', 'examples'].includes(name.toLowerCase()));
+  if (dataSheets.length > 1) throw new Error('This workbook has multiple data sheets. Upload a workbook with one data sheet.');
+  const sheetName = dataSheets[0];
   if (!sheetName) return { rows: [], headers: [] };
   const sheet = workbook.Sheets[sheetName];
   const matrix = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, raw: false, defval: '' });
@@ -234,12 +253,17 @@ export type ParseStockFileResult = {
   hasPaymentStatusColumn: boolean;
 };
 
-export async function parseStockFileDetailed(file: File): Promise<ParseStockFileResult> {
+export async function parseStockFileDetailed(file: File, mode?: ImportMode): Promise<ParseStockFileResult> {
   const ext = file.name.split('.').pop()?.toLowerCase();
   let parsed: { rows: ParsedImportRow[]; headers: string[] };
   if (ext === 'csv') parsed = await parseCsv(file);
   else if (ext === 'xlsx' || ext === 'xls') parsed = await parseXlsx(file);
   else throw new Error('Please upload a .csv or .xlsx file.');
+  if (mode === 'PURCHASES') {
+    for (const row of parsed.rows) {
+      if (!['paid', 'unpaid', 'yes', 'no'].includes((row.paymentStatusRaw ?? '').toLowerCase())) row.errors.push('payment_status is required: enter paid or unpaid.');
+    }
+  }
   return {
     ...parsed,
     hasPaymentStatusColumn: spreadsheetHasPaymentStatusColumn(parsed.headers),
@@ -257,6 +281,7 @@ export function enrichRowsWithCatalog(
     productNames: string[];
     barcodes: string[];
     skus: string[];
+    products?: ImportMatchProduct[];
   }
 ): ParsedImportRow[] {
   const ctx = {
@@ -300,14 +325,20 @@ export function enrichRowsWithCatalog(
     if (row.name.trim()) seen.names.add(row.name.trim().toLowerCase());
     if (row.barcode) seen.barcodes.add(row.barcode);
 
+    let matchErrors: string[] = [];
+    let matched = false;
+    if (catalog.products) {
+      try { matched = Boolean(matchImportProduct(row, catalog.products)); }
+      catch (error) { matchErrors = [error instanceof Error ? error.message : 'Product match failed.']; }
+    }
     return {
       ...row,
       suggestedCategory: validation.suggestedCategory || row.suggestedCategory,
       duplicateKind: validation.duplicateKind,
-      duplicateAction: row.duplicateAction === 'create' && validation.duplicateKind === 'barcode'
+      duplicateAction: matched ? 'update' : row.duplicateAction === 'create' && validation.duplicateKind === 'barcode'
         ? 'skip'
         : validation.defaultDuplicateAction,
-      errors: [...new Set([...row.errors, ...validation.errors, ...hierarchyErrors(row)])],
+      errors: [...new Set([...row.errors, ...validation.errors, ...matchErrors, ...hierarchyErrors(row)])],
       warnings: [...new Set([...row.warnings, ...validation.warnings])],
     };
   });

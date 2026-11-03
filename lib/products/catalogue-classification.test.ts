@@ -31,3 +31,7 @@ it('removes stale descendants and pagination while retaining search and issue co
   const group = new URL(catalogueHref(context, { category: 'literature', division: 'bibles', group: 'study' }), 'https://example.com');
   expect(group.searchParams.get('group')).toBe('study'); expect(group.searchParams.has('page')).toBe(false);
 });
+
+it('includes division-only products in division counts without including category-only rows',()=>{
+  expect(catalogueCount([...counts,{categoryId:'literature',divisionId:'bibles',groupId:null,count:3}],divisions,{category:'literature',division:'bibles'})).toBe(8);
+});

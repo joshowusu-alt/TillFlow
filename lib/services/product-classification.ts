@@ -20,15 +20,20 @@ export async function listProductDivisions(businessId: string) {
 
 /** Derive the umbrella from a group; never trust a submitted category/group pair. */
 export async function resolveProductClassification(
-  db: any, businessId: string, categoryId: string | null, groupId?: string | null,
+  db: any, businessId: string, categoryId: string | null, groupId?: string | null, divisionId?: string | null,
 ) {
-  if (!groupId?.trim()) return { categoryId, groupId: null };
+  if (!groupId?.trim()) {
+    if (!divisionId?.trim()) return { categoryId, groupId: null, divisionId: null };
+    const division = await db.productDivision.findFirst({ where: { id: divisionId.trim(), businessId, category: { businessId } }, select: { id: true, categoryId: true } });
+    if (!division) throw new Error('This product division is unavailable. Select a division from this business.');
+    return { categoryId: division.categoryId as string, divisionId: division.id as string, groupId: null };
+  }
   const group = await db.productGroup.findFirst({
     where: { id: groupId.trim(), businessId, division: { businessId, category: { businessId } } },
-    select: { id: true, division: { select: { categoryId: true } } },
+    select: { id: true, divisionId: true, division: { select: { categoryId: true } } },
   });
   if (!group) throw new Error('This product group is unavailable. Select a group from this business.');
-  return { categoryId: group.division.categoryId as string, groupId: group.id as string };
+  return { categoryId: group.division.categoryId as string, groupId: group.id as string, divisionId: group.divisionId as string };
 }
 
 export async function createClassificationNode(businessId: string, kind: 'division' | 'group', parentId: string, rawName: string) {

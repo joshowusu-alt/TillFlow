@@ -9,7 +9,7 @@ describe('optional hierarchy import',()=>{
   });
   it('rejects incomplete hierarchy paths while allowing category-only files',async()=>{
     const incomplete=await parseStockFileDetailed(csvFile('name,category,group,selling_price,cost_price,base_unit\nBook,Christian Literature,Books,50,25,Piece'));
-    expect(incomplete.rows[0].errors).toContain('Provide category, division and group together.');
+    expect(incomplete.rows[0].errors).toContain('Include the parent category and division when using a group.');
     const simple=await parseStockFileDetailed(csvFile('name,category,selling_price,cost_price,base_unit\nBook,Books,50,25,Piece'));
     expect(simple.rows[0].errors).toEqual([]);
   });

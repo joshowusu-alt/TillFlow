@@ -1,4 +1,5 @@
 ﻿'use server';
+import { createHash } from 'crypto';
 import {decodePurchaseDocuments,validatePurchaseDocuments} from '@/lib/purchases/source-documents';
 
 import { prisma } from '@/lib/prisma';
@@ -20,8 +21,8 @@ import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { buildProductUnitCreates } from '@/lib/services/products';
 import { ensureChartOfAccounts } from '@/lib/accounting';
 import { audit } from '@/lib/audit';
-import { suggestImportCategoryName } from '@/lib/import/category-import';
-import { classificationName, createClassificationNode } from '@/lib/services/product-classification';
+import { createClassificationNode } from '@/lib/services/product-classification';
+import { importClassificationErrors, importOptionalProductUpdates, matchImportProduct } from '@/lib/import/import-reliability';
 import type { DuplicateAction } from '@/lib/import/import-validation';
 import {
   isImportMode,
@@ -29,7 +30,6 @@ import {
   type OpeningStockFunding,
   type PurchasePaymentAccount,
 } from '@/lib/import/import-mode';
-import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
 import type { PaymentMethod } from '@/lib/services/shared/payment-utils';
 
 // ---------------------------------------------------------------------------
@@ -45,6 +45,7 @@ export type ConfirmedImportRow = {
   category: string;
   sellingPricePence: number;
   costPricePence: number;
+  costPriceProvided?: boolean;
   quantity: number;
   baseUnitId: string;
   packUnitId: string | null;
@@ -296,6 +297,9 @@ async function _runImport(
       return err('Choose an import purpose first: Product catalogue, Opening stock, or Purchases.');
     }
     const importMode = meta.importMode;
+    const normalizedClientImportKey = meta.clientImportKey?.trim() || '';
+    if ((importMode === 'PURCHASES' || importMode === 'OPENING_STOCK') && !normalizedClientImportKey) return err('This import form is out of date. Reload the file and try again so paid chunks can replay safely.');
+    const productIdForRow = (row: ConfirmedImportRow) => 'imp_' + createHash('sha256').update(JSON.stringify([authContext.businessId, normalizedClientImportKey, row.name.trim().toLowerCase()])).digest('hex').slice(0, 40);
     const sourceDocuments = importMode==='PURCHASES' ? decodePurchaseDocuments(meta.purchaseDocumentsJson??'') : [];
     if(importMode==='PURCHASES')validatePurchaseDocuments(sourceDocuments);
 
@@ -311,14 +315,22 @@ async function _runImport(
         ? rows.map((r) => ({ ...r, quantity: 0, paymentStatus: undefined, openingFunding: undefined }))
         : rows;
 
+    // Reject invalid submissions before making any changes.
     for (const row of incomingRows) {
-      if (row.division?.trim() || row.group?.trim()) {
-        if (!row.category?.trim() || !row.division?.trim() || !row.group?.trim()) throw new Error(`Provide category, division and group together for ${row.name}.`);
-        [row.category, row.division, row.group].forEach(name => classificationName(name!));
-      }
+      const errors = importClassificationErrors(row);
+      if (errors.length) throw new Error(`${row.name}: ${errors.join(' ')}`);
+      if (!row.name.trim() || !row.baseUnitId || !Number.isSafeInteger(row.sellingPricePence) || row.sellingPricePence <= 0 || !Number.isSafeInteger(row.costPricePence) || row.costPricePence < 0) throw new Error(`Invalid product name, unit or price for ${row.name}.`);
+      if (!Number.isSafeInteger(row.quantity) || row.quantity < 0) throw new Error(`Quantity must be a non-negative whole number for ${row.name}.`);
+      if (row.packUnitId && (!Number.isSafeInteger(row.packSize) || row.packSize < 2 || row.packUnitId === row.baseUnitId)) throw new Error(`Invalid pack configuration for ${row.name}.`);
+      if (row.qtyInUnitId !== row.baseUnitId && row.qtyInUnitId !== row.packUnitId) throw new Error(`Stock count unit must match the base or pack unit for ${row.name}.`);
+      if (row.reorderPointBase !== undefined && (!Number.isSafeInteger(row.reorderPointBase) || row.reorderPointBase < 0)) throw new Error(`Invalid reorder point for ${row.name}.`);
+      if (importMode === 'PURCHASES' && !['PAID', 'UNPAID'].includes(row.paymentStatus ?? '')) throw new Error(`Choose Paid or Unpaid for ${row.name}.`);
+      if (row.duplicateAction !== 'skip' && row.quantity > 0 && ((importMode === 'PURCHASES' && row.paymentStatus === 'UNPAID') || (importMode === 'OPENING_STOCK' && row.openingFunding === 'SUPPLIER_CREDIT')) && !row.supplierName?.trim()) throw new Error(`A named supplier is required for ${row.name}.`);
+      const baseQuantity = row.packUnitId && row.qtyInUnitId === row.packUnitId ? row.quantity * row.packSize : row.quantity;
+      if (!Number.isSafeInteger(baseQuantity) || baseQuantity > 2147483647 || row.sellingPricePence > 2147483647 || row.costPricePence > 2147483647 || row.reorderPointBase !== undefined && row.reorderPointBase > 2147483647) throw new Error(`Numeric value is too large for ${row.name}.`);
+      if (row.duplicateAction && !['create', 'update', 'skip'].includes(row.duplicateAction)) throw new Error('Invalid duplicate action.');
     }
-    const categoryForRow = (row: ConfirmedImportRow) => row.division?.trim() || row.group?.trim()
-      ? row.category.trim() : suggestImportCategoryName(row.category) || row.category;
+    const categoryForRow = (row: ConfirmedImportRow) => row.category.trim();
     const pathKey = (row: ConfirmedImportRow) => JSON.stringify([categoryForRow(row), row.division?.trim(), row.group?.trim()]).toLowerCase();
 
     // ── Resolve "new:UnitName" sentinels → create Unit records ──────────
@@ -326,20 +338,24 @@ async function _runImport(
     // when the owner chooses to create a previously unknown unit.
     const newUnitNames = new Set<string>();
     for (const row of incomingRows) {
+      if (row.duplicateAction === 'skip') continue;
       [row.baseUnitId, row.packUnitId, row.qtyInUnitId].forEach((v) => {
         if (v && v.startsWith('new:')) newUnitNames.add(v.slice(4).trim());
       });
     }
 
+    const availableUnits = newUnitNames.size ? await prisma.unit.findMany({ select: { id: true, name: true } }) : [];
     const createdUnitMap = new Map<string, string>(); // "new:Name" → real id
     for (const unitName of newUnitNames) {
-      const u = await prisma.unit.create({
+      const existingUnit = availableUnits.find(unit => unit.name.trim().toLowerCase() === unitName.toLowerCase());
+      const u = existingUnit ?? await prisma.unit.create({
         data: {
           name: unitName,
           pluralName: unitName + 's',
         },
         select: { id: true },
       });
+      if (!existingUnit) availableUnits.push({ id: u.id, name: unitName });
       createdUnitMap.set(`new:${unitName}`, u.id);
     }
 
@@ -368,48 +384,59 @@ async function _runImport(
     // ── Pre-check for duplicate names outside the transaction (read-only) ──
     // Fetch all current product names for this business and filter in-memory
     // (mode:'insensitive' is not supported on all Prisma adapters).
-    const existingProductNames = await prisma.product.findMany({
+    const existingProducts = await prisma.product.findMany({
       where: { businessId },
-      select: { id: true, name: true, barcode: true },
+      select: { id: true, name: true, categoryId: true, divisionId: true, groupId: true, barcode: true, sku: true, barcodes: { select: { code: true } } },
     });
-    const ambiguousNames = new Set(existingProductNames.filter((p, i, all) => all.some((other, j) => i !== j && other.name.toLowerCase() === p.name.toLowerCase())).map(p => p.name.toLowerCase()));
-    if (resolvedRows.some(row => ambiguousNames.has(row.name.toLowerCase()))) throw new Error("This import includes a title with multiple publisher versions. Receive or edit the exact product by barcode/SKU instead of matching by title.");
-    const existingNameSet = new Set(existingProductNames.map((p) => p.name.toLowerCase()));
-    // Build id map keyed by lowercase — reused in Step 3 so no second round-trip needed.
-    const existingNameToIdMap = new Map(
-      existingProductNames.map((p) => [p.name.toLowerCase(), p.id])
-    );
     const skippedNames: string[] = [];
     const rowsForCreate: ConfirmedImportRow[] = [];
     const rowsForUpdate: Array<{ row: ConfirmedImportRow; productId: string }> = [];
-    const seenNamesInBatch = new Set<string>();
-
+    const rowsForReplay: Array<{ row: ConfirmedImportRow; productId: string }> = [];
+    const seenProducts = new Set<string>();
+    const submittedBarcodes = new Set<string>();
+    const submittedSkus = new Set<string>();
+    const seenNewNames = new Set<string>();
     for (const row of resolvedRows) {
-      const key = row.name.toLowerCase();
-      const existingId = existingNameToIdMap.get(key);
-      const action: DuplicateAction = row.duplicateAction ?? (existingId ? 'skip' : 'create');
-
-      if (seenNamesInBatch.has(key) && !existingId) {
-        skippedNames.push(row.name);
+      if (row.duplicateAction === 'skip') { skippedNames.push(row.name); continue; }
+      if (row.barcode && submittedBarcodes.has(row.barcode)) throw new Error(`Barcode is duplicated in this file: ${row.barcode}.`);
+      if (row.sku && submittedSkus.has(row.sku.trim().toLowerCase())) throw new Error(`SKU is duplicated in this file: ${row.sku}.`);
+      if (row.barcode) submittedBarcodes.add(row.barcode);
+      if (row.sku) submittedSkus.add(row.sku.trim().toLowerCase());
+      const existingId = matchImportProduct(row, existingProducts);
+      if (existingId && normalizedClientImportKey && existingId === productIdForRow(row) && row.duplicateAction === 'create') {
+        rowsForReplay.push({ row, productId: existingId });
         continue;
       }
-      seenNamesInBatch.add(key);
-
-      if (action === 'update' && existingId) {
-        rowsForUpdate.push({ row, productId: existingId });
-        continue;
-      }
-
-      if (existingId || action === 'skip') {
-        if (existingId && row.quantity > 0) {
-          // handled in skippedWithStock below
-        } else {
-          skippedNames.push(row.name);
+      if (existingId) {
+        const existing = existingProducts.find(product => product.id === existingId)!;
+        if (row.category.trim() && !row.division?.trim() && (existing.groupId || existing.divisionId)) {
+          const category = existingCategories.find(item => item.id === existing.categoryId);
+          if (category?.name.toLowerCase() !== row.category.trim().toLowerCase()) throw new Error(`Classification differs for ${row.name}. Include its full classification path or leave classification blank to preserve it.`);
         }
-        continue;
+        if (row.duplicateAction !== 'update') throw new Error(`${row.name} already exists. Choose Update existing or Skip.`);
+        if (seenProducts.has(existingId)) throw new Error(`Multiple rows update the same product: ${row.name}. Combine them before importing.`);
+        seenProducts.add(existingId);
+        rowsForUpdate.push({ row, productId: existingId });
+      } else {
+        if (row.duplicateAction === 'update') throw new Error(`${row.name} no longer matches an existing product. Reload the file.`);
+        const key = row.name.trim().toLowerCase().replace(/\s+/g, ' ');
+        if (seenNewNames.has(key)) throw new Error(`Duplicate new product name: ${row.name}.`);
+        seenNewNames.add(key);
+        rowsForCreate.push(row);
       }
+    }
 
-      rowsForCreate.push(row);
+    // Skip never changes product details or stock. Validate saved unit conversions.
+    const existingProductBaseUnitMap = new Map<string, string>();
+    for (const { row, productId } of [...rowsForUpdate, ...rowsForReplay]) {
+      const units = await prisma.productUnit.findMany({ where: { productId }, select: { unitId: true, isBaseUnit: true, conversionToBase: true } });
+      const base = units.find(unit => unit.isBaseUnit);
+      if (!base || base.unitId !== row.baseUnitId) throw new Error(`Base unit differs for ${row.name}. Change units in the product editor before importing.`);
+      if (row.packUnitId) {
+        const pack = units.find(unit => unit.unitId === row.packUnitId);
+        if (!pack || pack.conversionToBase !== row.packSize) throw new Error(`Pack configuration differs for ${row.name}. Change packaging in the product editor before importing.`);
+      }
+      existingProductBaseUnitMap.set(productId, base.unitId);
     }
 
     const rowsAfterNameFilter = rowsForCreate;
@@ -473,11 +500,15 @@ async function _runImport(
     }
 
     const groupIds = new Map<string, string>();
+    const divisionIds = new Map<string, string>();
     for (const row of [...rowsToCreate, ...rowsForUpdate.map(item => item.row)]) {
-      if (!row.group?.trim() || groupIds.has(pathKey(row))) continue;
+      if (!row.division?.trim() || divisionIds.has(pathKey(row))) continue;
       const division = await createClassificationNode(businessId, 'division', categoryMap.get(categoryForRow(row).toLowerCase())!, row.division!);
-      const group = await createClassificationNode(businessId, 'group', division.id, row.group);
-      groupIds.set(pathKey(row), group.id);
+      divisionIds.set(pathKey(row), division.id);
+      if (row.group?.trim()) {
+        const group = await createClassificationNode(businessId, 'group', division.id, row.group);
+        groupIds.set(pathKey(row), group.id);
+      }
     }
     let updatedCount = 0;
     for (const { row, productId } of rowsForUpdate) {
@@ -487,7 +518,7 @@ async function _runImport(
       const categoryId = categoryName
         ? categoryMap.get(categoryName.toLowerCase()) ?? null
         : null;
-      let barcode = row.barcode || null;
+      const barcode = row.barcode || null;
       if (barcode) {
         const conflict = await prisma.product.findFirst({
           where: { businessId, OR: [{ barcode }, { barcodes: { some: { code: barcode } } }], id: { not: productId } },
@@ -499,24 +530,19 @@ async function _runImport(
       await prisma.product.update({
         where: { id: productId },
         data: {
-          ...(row.group?.trim() ? { categoryId, groupId: groupIds.get(pathKey(row))! } : {}),
+          ...(row.division?.trim() ? { categoryId, divisionId: divisionIds.get(pathKey(row))!, groupId: row.group?.trim() ? groupIds.get(pathKey(row))! : null } : {}),
           sellingPriceBasePence: row.sellingPricePence,
-          defaultCostBasePence: row.costPricePence,
+          ...importOptionalProductUpdates(row),
           ...(row.sku ? { sku: row.sku } : {}),
           ...(barcode ? { barcode } : {}),
-          ...(row.reorderPointBase && row.reorderPointBase > 0
-            ? { reorderPointBase: row.reorderPointBase }
-            : {}),
-          ...(row.storefrontPublished != null
-            ? { storefrontPublished: row.storefrontPublished }
-            : {}),
+
           ...(row.imageUrl ? { imageUrl: row.imageUrl } : {}),
         },
       });
       // A category-only CSV must not detach an existing group's umbrella.
       // Group assignments are managed explicitly in the product editor.
       if (categoryId && !row.group?.trim()) await prisma.product.updateMany({
-        where: { id: productId, businessId, groupId: null }, data: { categoryId },
+        where: { id: productId, businessId, groupId: null, divisionId: null }, data: { categoryId },
       });
       updatedCount++;
     }
@@ -541,7 +567,7 @@ async function _runImport(
     // products — and we still need purchase invoice calls after.
     // New approach: 1 createManyAndReturn for all products (1 RTT), then 1 productUnit
     // createMany for all unit records (1 RTT). Total: 2 RTTs regardless of row count.
-    const allCreatedItems: { row: ConfirmedImportRow; productId: string }[] = [];
+    const allCreatedItems: { row: ConfirmedImportRow; productId: string }[] = [...rowsForReplay];
 
     if (rowsToCreate.length > 0) {
       const productData = await Promise.all(
@@ -551,11 +577,13 @@ async function _runImport(
             : '';
           const supplierId = await resolveSupplierIdForRow(row);
           return {
+            ...(normalizedClientImportKey ? { id: productIdForRow(row) } : {}),
             businessId,
             name: row.name,
             sku: row.sku || null,
             barcode: row.barcode || null,
             groupId: row.group?.trim() ? groupIds.get(pathKey(row))! : null,
+            divisionId: row.division?.trim() ? divisionIds.get(pathKey(row))! : null,
             categoryId: categoryName
               ? categoryMap.get(categoryName.toLowerCase()) ?? null
               : null,
@@ -570,108 +598,42 @@ async function _runImport(
         })
       );
 
-      // createMany (skipDuplicates:true) + findMany — 2 RTTs, resilient to
-      // last-moment unique violations. createManyAndReturn has NO skipDuplicates
-      // support: a single barcode/name collision kills the entire 614-row batch.
-      // With skipDuplicates, any colliding row is silently skipped so the rest
-      // still commit. We then fetch back the IDs with a single findMany.
-      // skipDuplicates is Postgres-only. Local SQLite often still has POSTGRES_*
-      // env vars for deploy tooling, so gate on the active DATABASE_URL only.
-      const supportsSkipDuplicates = isPostgresDatabaseUrl(process.env.DATABASE_URL);
+      await prisma.$transaction(async tx => {
+        const createdProducts = await tx.product.createManyAndReturn({ data: productData, select: { id: true, name: true } });
 
-      const createManyArgs: { data: typeof productData; skipDuplicates?: boolean } = {
-        data: productData,
-      };
-      if (supportsSkipDuplicates) {
-        createManyArgs.skipDuplicates = true;
-      }
+        // Build a name→id map to pair returned IDs back to the input rows
+        const createdNameToId = new Map(createdProducts.map((p) => [p.name.toLowerCase(), p.id]));
 
-      await (prisma.product.createMany as unknown as (args: typeof createManyArgs) => Promise<unknown>)(createManyArgs);
-      const createdProducts = await prisma.product.findMany({
-        where: { businessId, name: { in: rowsToCreate.map((r) => r.name) } },
-        select: { id: true, name: true },
+        // Build all productUnit records — 1 createMany INSERT for the entire set
+        const productUnitData: {
+          productId: string; unitId: string; isBaseUnit: boolean; conversionToBase: number;
+        }[] = [];
+
+        for (const row of rowsToCreate) {
+          const productId = createdNameToId.get(row.name.toLowerCase());
+          if (!productId) {
+            console.error(`[import-stock] no returned ID for "${row.name}" — skipping`);
+            skippedNames.push(row.name);
+            continue;
+          }
+          allCreatedItems.push({ row, productId });
+          const units = buildProductUnitCreates(
+            row.baseUnitId,
+            row.packUnitId ?? '',
+            row.packSize > 1 ? row.packSize : 0
+          );
+          for (const u of units) {
+            productUnitData.push({ productId, ...u });
+          }
+        }
+
+        if (productUnitData.length > 0) {
+          await tx.productUnit.createMany({ data: productUnitData });
+        }
       });
-
-      // Build a name→id map to pair returned IDs back to the input rows
-      const createdNameToId = new Map(createdProducts.map((p) => [p.name.toLowerCase(), p.id]));
-
-      // Build all productUnit records — 1 createMany INSERT for the entire set
-      const productUnitData: {
-        productId: string; unitId: string; isBaseUnit: boolean; conversionToBase: number;
-      }[] = [];
-
-      for (const row of rowsToCreate) {
-        const productId = createdNameToId.get(row.name.toLowerCase());
-        if (!productId) {
-          console.error(`[import-stock] no returned ID for "${row.name}" — skipping`);
-          skippedNames.push(row.name);
-          continue;
-        }
-        allCreatedItems.push({ row, productId });
-        const units = buildProductUnitCreates(
-          row.baseUnitId,
-          row.packUnitId ?? '',
-          row.packSize > 1 ? row.packSize : 0
-        );
-        for (const u of units) {
-          productUnitData.push({ productId, ...u });
-        }
-      }
-
-      if (productUnitData.length > 0) {
-        await prisma.productUnit.createMany({ data: productUnitData });
-      }
     }
 
     const createdItems = allCreatedItems;
-
-    // -- Step 3: Record opening stock for EXISTING products in the import ----
-    // Products already in the catalogue were skipped above (no new record),
-    // but the CSV may specify opening quantity + cost for them.
-    // IMPORTANT: the unitId in the CSV row (row.baseUnitId) was resolved by
-    // the preview UI from the global Unit table by name. But the existing
-    // product's productUnit record was created in a prior session with whatever
-    // unit ID was current at that time — it should be the same ID but we
-    // must use the DB's actual record to avoid "Unit not configured for product".
-    // Fetch the actual base productUnit (conversionToBase = 1) for each
-    // existing product and use that unit ID in the purchase lines.
-    const skippedRowsWithStock = resolvedRows.filter((r) => {
-      const key = r.name.toLowerCase();
-      const action = r.duplicateAction ?? 'skip';
-      return existingNameSet.has(key) && r.quantity > 0 && action !== 'update';
-    });
-    // Build map: productId → actual base unitId from DB
-    const existingProductBaseUnitMap = new Map<string, string>();
-    const stockProductIds = [
-      ...skippedRowsWithStock
-        .map((r) => existingNameToIdMap.get(r.name.toLowerCase()))
-        .filter(Boolean),
-      ...rowsForUpdate.map((u) => u.productId),
-    ] as string[];
-    if (stockProductIds.length > 0) {
-      const existingUnits = await prisma.productUnit.findMany({
-        where: {
-          productId: { in: [...new Set(stockProductIds)] },
-          conversionToBase: 1,
-        },
-        select: { productId: true, unitId: true },
-      });
-      // If multiple units have conversionToBase=1 take the first encountered.
-      for (const pu of existingUnits) {
-        if (!existingProductBaseUnitMap.has(pu.productId)) {
-          existingProductBaseUnitMap.set(pu.productId, pu.unitId);
-        }
-      }
-    }
-    const skippedWithStockItems = skippedRowsWithStock
-      .map((row) => {
-        const productId = existingNameToIdMap.get(row.name.toLowerCase());
-        if (!productId) return null;
-        // Use the unit the DB actually has for this product, override CSV value.
-        const actualBaseUnitId = existingProductBaseUnitMap.get(productId) ?? row.baseUnitId;
-        return { row: { ...row, baseUnitId: actualBaseUnitId }, productId };
-      })
-      .filter(Boolean) as { row: ConfirmedImportRow; productId: string }[];
 
     // -- Step 4: Mode-specific stock / purchase posting --------------------
     const INVOICE_CHUNK = 500;
@@ -697,7 +659,7 @@ async function _runImport(
       )
     ).filter(Boolean) as { row: ConfirmedImportRow; productId: string }[];
 
-    const allItems = [...createdItems, ...skippedWithStockItems, ...updateWithStockItems];
+    const allItems = [...createdItems, ...updateWithStockItems];
     const stockItems = allItems.filter((c) => c.row.quantity > 0);
 
     const groupLinesBySupplier = async (
@@ -789,10 +751,6 @@ async function _runImport(
 
     // ProductImport must exist before chunk writes so importRunId is durable.
     // Prefer a stable clientImportKey (same submit retry); otherwise the row id.
-    const normalizedClientImportKey = meta.clientImportKey?.trim() || '';
-    if ((importMode === 'PURCHASES' || importMode === 'OPENING_STOCK') && !normalizedClientImportKey) {
-      return err('This import form is out of date. Reload the file and try again so paid chunks can replay safely.');
-    }
     const importRecord = await prisma.productImport.create({
       data: {
         businessId,
@@ -1015,7 +973,7 @@ async function _runImport(
     const stockUpdatedValuePence =
       importMode === 'CATALOGUE'
         ? 0
-        : [...skippedWithStockItems, ...updateWithStockItems].reduce(
+        : updateWithStockItems.reduce(
             (sum, { row }) => sum + rowToBaseCost(row),
             0
           );
@@ -1025,7 +983,7 @@ async function _runImport(
       created: createdItems.length,
       updated: updatedCount,
       skipped: skippedNames.length,
-      stockUpdated: importMode === 'CATALOGUE' ? 0 : skippedWithStockItems.length + updateWithStockItems.length,
+      stockUpdated: importMode === 'CATALOGUE' ? 0 : updateWithStockItems.length,
       paidCount,
       unpaidCount,
       openingEquityValuePence,
@@ -1084,7 +1042,7 @@ async function _runImport(
       unpaidCount,
       paidValuePence,
       unpaidValuePence,
-      stockUpdated: importMode === 'CATALOGUE' ? 0 : skippedWithStockItems.length + updateWithStockItems.length,
+      stockUpdated: importMode === 'CATALOGUE' ? 0 : updateWithStockItems.length,
       stockUpdatedValuePence,
       openingStockUnits,
       openingEquityValuePence,

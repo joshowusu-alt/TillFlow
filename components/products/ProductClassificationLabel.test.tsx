@@ -11,3 +11,10 @@ it('keeps category-only and uncategorised products understandable', () => {
   expect(screen.getByText('Gifts')).toBeVisible(); expect(screen.getByText('Category only')).toBeVisible();
   view.rerender(<ProductClassificationLabel category={null} group={null} />); expect(screen.getByText('Uncategorised')).toBeVisible();
 });
+
+it('shows a division-only product without a group',()=>{
+  render(<ProductClassificationLabel category={{name:'Books'}} division={{name:'Bibles'}} group={null}/>);
+  expect(screen.getByText('Bibles')).toBeVisible();
+  expect(screen.getByText('Books')).toBeVisible();
+  expect(screen.queryByText('Category only')).not.toBeInTheDocument();
+});

@@ -1,6 +1,6 @@
 export type CatalogueCategory = { id: string; name: string };
 export type CatalogueDivision = { id: string; name: string; categoryId: string; groups: { id: string; name: string }[] };
-export type CatalogueCount = { categoryId: string | null; groupId: string | null; count: number };
+export type CatalogueCount = { categoryId: string | null; divisionId?: string | null; groupId: string | null; count: number };
 export type CatalogueSelection = { category?: string; division?: string; group?: string };
 
 export function catalogueSelection(categories: CatalogueCategory[], divisions: CatalogueDivision[], raw: CatalogueSelection) {
@@ -18,7 +18,7 @@ export function catalogueCount(counts: CatalogueCount[], divisions: CatalogueDiv
   return counts.reduce((sum, row) => sum + (
     (!selection.category || row.categoryId === selection.category) &&
     (!selection.group || row.groupId === selection.group) &&
-    (!groupIds || (row.groupId !== null && groupIds.has(row.groupId))) ? row.count : 0
+    (!groupIds || row.divisionId === selection.division || (row.groupId !== null && groupIds.has(row.groupId))) ? row.count : 0
   ), 0);
 }
 
