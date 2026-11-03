@@ -9,7 +9,12 @@ async function main() {
   const context = await browser.newContext({ baseURL, serviceWorkers: 'allow' });
   const page = await context.newPage();
   const documents = [];
-  page.on('framenavigated', frame => { if (frame === page.mainFrame()) documents.push(frame.url()); });
+  // framenavigated also fires for Next's history.replaceState on hydration.
+  // Count document requests and document initialisations, not URL-state events.
+  page.on('request', request => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documents.push(request.url());
+  });
+  await page.addInitScript(() => sessionStorage.setItem('loading-audit-documents', String(Number(sessionStorage.getItem('loading-audit-documents') || 0) + 1)));
   const results = [];
   try {
     await page.goto('/login');
@@ -17,6 +22,7 @@ async function main() {
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
     await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 15_000 });
     assert.equal(documents.length, 1, 'First service-worker claim must not reload login');
+    assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('loading-audit-documents'))), 1, 'First worker claim must preserve the original document');
     await page.locator('input[name=email]').fill(process.env.E2E_OWNER_EMAIL || 'owner@store.com');
     await page.locator('input[name=password]').fill(process.env.E2E_OWNER_PASSWORD || 'Pass1234!');
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
