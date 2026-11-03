@@ -54,7 +54,12 @@ const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
         assert.ok(overflows.document <= overflows.viewport + 1, JSON.stringify(overflows));
         await page.locator('input[name=confirmed]').check();
         await page.getByRole('button', { name: 'Save conversion', exact: true }).click();
-        await page.getByText('Conversion saved.', { exact: false }).waitFor();
+        await page.getByText('Conversion saved.', { exact: false }).waitFor().catch(async () => {
+          const alerts = await page.getByRole('alert').allTextContents();
+          const from = await db.inventoryBalance.findUnique({ where: { storeId_productId: { storeId, productId: source.id } } });
+          const to = await db.inventoryBalance.findUnique({ where: { storeId_productId: { storeId, productId: destination.id } } });
+          throw new Error(`Save failed at ${width}px; alerts=${JSON.stringify(alerts)}; source=${JSON.stringify(from)}; destination=${JSON.stringify(to)}`);
+        });
         await page.reload();
         await page.getByRole('heading', { name: 'Recent conversions in Conversion QA branch' }).waitFor();
         await page.getByText(`Opened one complete bag; counted 95 cups at ${width}px`, { exact: true }).waitFor();
