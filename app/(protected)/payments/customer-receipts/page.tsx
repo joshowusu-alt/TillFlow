@@ -127,7 +127,10 @@ function CustomerPaymentList({
   );
 }
 
-export default async function CustomerReceiptsPage({ searchParams }: { searchParams?: { error?: string; customerId?: string; paid?: string } }) {
+export default async function CustomerReceiptsPage(
+  props: { searchParams?: Promise<{ error?: string; customerId?: string; paid?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const { business, store, stores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   if (!store) {

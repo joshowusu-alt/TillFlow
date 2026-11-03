@@ -35,11 +35,12 @@ type DeliveryLogEntry = {
   deliveredAt: string | null;
 };
 
-export default async function NotificationsSettingsPage({
-  searchParams,
-}: {
-  searchParams?: { error?: string; page?: string };
-}) {
+export default async function NotificationsSettingsPage(
+  props: {
+    searchParams?: Promise<{ error?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business } = await requireDailySummaryAccess(['OWNER']);
   if (!business) return <div className="card p-6">Owners only.</div>;
 

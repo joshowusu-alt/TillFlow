@@ -20,11 +20,12 @@ import TradingDashboardContent from './TradingDashboardContent';
 
 export const dynamic = 'force-dynamic';
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams?: { from?: string; to?: string; storeId?: string; period?: string };
-}) {
+export default async function DashboardPage(
+  props: {
+    searchParams?: Promise<{ from?: string; to?: string; storeId?: string; period?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'trading_report',
     search: searchParams,

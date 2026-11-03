@@ -35,7 +35,8 @@ const getCachedProducts = unstable_cache(
   { revalidate: 60, tags: ['pos-products'] }
 );
 
-export default async function AmendSalePage({ params }: { params: { id: string } }) {
+export default async function AmendSalePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {
     return (

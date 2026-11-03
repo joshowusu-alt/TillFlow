@@ -12,11 +12,12 @@ import {
   updateMyAccountAction
 } from '@/app/actions/account';
 
-export default async function AccountPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string; success?: string; twofactor?: string }>;
-}) {
+export default async function AccountPage(
+  props: {
+    searchParams: Promise<{ error?: string; success?: string; twofactor?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const [user, params] = await Promise.all([requireUser(), searchParams]);
   // twoFactorTempSecret is intentionally excluded from the general session user;
   // fetch it directly here as it's only needed on this specific page.

@@ -164,7 +164,7 @@ export default function OperationalStoreSwitcher({
       */}
       <select
         id="operational-store-switcher"
-        className="h-9 max-w-[13rem] truncate rounded-xl border border-slate-200/80 bg-white/90 px-2 text-xs font-semibold text-ink shadow-sm"
+        className="h-11 max-w-[13rem] truncate rounded-xl border border-slate-200/80 bg-white/90 px-2 text-xs font-semibold text-ink shadow-sm sm:h-9"
         value={selectedStoreId ?? ''}
         data-operational-store={selectedStoreId ?? ''}
         aria-busy={Boolean(pending) || !hydrated}

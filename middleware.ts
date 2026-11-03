@@ -12,6 +12,21 @@ import { isReportsStage3aAllowed, isReportsStage3aPath } from '@/lib/reviews/rep
  */
 export const PUBLIC_DEPLOY_SHA_PATH = '/api/qa/deploy-sha';
 
+// Bundled login fonts are public static assets, not authenticated page routes.
+// Keep this exact: a neighbouring route must not inherit an auth exemption.
+const PUBLIC_FONT_PATHS = new Set([
+  '/fonts/jakarta-latin.woff2',
+  '/fonts/jakarta-latin-ext.woff2',
+  '/fonts/jakarta-cyrillic-ext.woff2',
+  '/fonts/jakarta-vietnamese.woff2',
+  '/fonts/dm-sans-latin.woff2',
+  '/fonts/dm-sans-latin-ext.woff2',
+  '/fonts/plus-jakarta-sans-latin-wght-normal.woff2',
+  '/fonts/plus-jakarta-sans-latin-ext-wght-normal.woff2',
+  '/fonts/dm-sans-latin-wght-normal.woff2',
+  '/fonts/dm-sans-latin-ext-wght-normal.woff2',
+]);
+
 /** Routes that don't require authentication */
 const PUBLIC_PATHS = [
   '/login',
@@ -28,7 +43,6 @@ const PUBLIC_PATHS = [
   '/icon.png',
   '/icons',
   '/splash',
-  '/fonts/',
   '/apple-icon',
   '/apple-touch-icon.png',
   '/brand',
@@ -120,7 +134,7 @@ export function middleware(request: NextRequest) {
   }
 
   const isPublic =
-    pathname === PUBLIC_DEPLOY_SHA_PATH || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+    pathname === PUBLIC_DEPLOY_SHA_PATH || PUBLIC_PATHS.some((p) => pathname.startsWith(p)) || PUBLIC_FONT_PATHS.has(pathname);
   if (!sessionToken && !isPublic) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

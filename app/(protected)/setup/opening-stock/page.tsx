@@ -14,11 +14,12 @@ import {
 } from '@/lib/improve-records-issues';
 import type { Prisma } from '@prisma/client';
 
-export default async function OpeningStockPage({
-  searchParams,
-}: {
-  searchParams?: { issue?: string; productId?: string };
-}) {
+export default async function OpeningStockPage(
+  props: {
+    searchParams?: Promise<{ issue?: string; productId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
 
   if (!business) {

@@ -32,6 +32,7 @@ const {
     stockMovement: { createMany: vi.fn(), updateMany: vi.fn() },
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
+    $executeRaw: vi.fn(),
   },
   postJournalEntryMock: vi.fn(),
   fetchInventoryMapMock: vi.fn(),
@@ -84,7 +85,8 @@ vi.mock('@/lib/fraud/reason-codes', () => ({
   isDiscountReasonCode: vi.fn().mockReturnValue(true),
 }));
 
-vi.mock('./document-numbers', () => ({
+vi.mock('./document-numbers', async () => ({
+  ...await vi.importActual<typeof import('./document-numbers')>('./document-numbers'),
   reserveNextDocumentNumber: vi.fn().mockResolvedValue('RCPT-000001'),
 }));
 
@@ -251,7 +253,7 @@ beforeEach(() => {
   prismaMock.productUnit.findMany.mockResolvedValue([makeProductUnit()]);
   prismaMock.salesInvoice.findFirst.mockResolvedValue(null);
   prismaMock.businessSequence.create.mockResolvedValue({ nextVal: 1 });
-  prismaMock.businessSequence.update.mockResolvedValue({ nextVal: 1 });
+  prismaMock.businessSequence.update.mockReset().mockResolvedValue({ nextVal: 1 });
   prismaMock.businessSequence.upsert.mockResolvedValue({ nextVal: 1 });
   prismaMock.salesInvoice.aggregate.mockResolvedValue({ _sum: { totalPence: 0 } });
   prismaMock.salesInvoice.findMany.mockResolvedValue([]);
@@ -264,6 +266,7 @@ beforeEach(() => {
   });
   prismaMock.stockMovement.createMany.mockImplementation(async ({ data }) => ({ count: data.length }));
   prismaMock.$queryRaw.mockResolvedValue([{ id: 'cde-1' }]);
+  prismaMock.$executeRaw.mockReset().mockResolvedValue(1);
   // Additional tx models used inside the transaction
   (prismaMock as any).cashDrawerEntry = { create: vi.fn().mockResolvedValue({}) };
   (prismaMock as any).shift = {
@@ -1160,16 +1163,18 @@ describe('createSale — payments split & AR posting', () => {
       Object.assign(new Error('missing sequence'), { code: 'P2025' })
     );
     prismaMock.salesInvoice.findFirst.mockResolvedValue({ transactionNumber: 'INV-000123' });
-    prismaMock.businessSequence.create.mockResolvedValue({ nextVal: 124 });
+    prismaMock.businessSequence.upsert.mockResolvedValueOnce({ nextVal: 124 });
 
     await createSale(makeBaseInput());
 
-    expect(prismaMock.businessSequence.create).toHaveBeenCalledWith({
-      data: {
+    expect(prismaMock.businessSequence.upsert).toHaveBeenCalledWith({
+      where: { businessId_sequenceName: { businessId: BIZ_ID, sequenceName: 'invoice' } },
+      create: {
         businessId: BIZ_ID,
         sequenceName: 'invoice',
         nextVal: 124,
       },
+      update: { nextVal: { increment: 1 } },
       select: { nextVal: true },
     });
 

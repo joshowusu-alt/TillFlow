@@ -14,11 +14,12 @@ import ExpensePaymentForm from './ExpensePaymentForm';
 
 type OpenTillOption = { tillId: string; tillName: string; shiftId: string };
 
-export default async function ExpensePaymentsPage({
-  searchParams,
-}: {
-  searchParams?: { error?: string; expenseId?: string; paid?: string };
-}) {
+export default async function ExpensePaymentsPage(
+  props: {
+    searchParams?: Promise<{ error?: string; expenseId?: string; paid?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business, store, stores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   if (!store) {

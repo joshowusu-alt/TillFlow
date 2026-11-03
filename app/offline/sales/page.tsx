@@ -68,6 +68,10 @@ export default function OfflineSalesPage() {
   const refresh = useCallback(async () => {
     try {
       const activeBusinessId = getClientActiveBusinessId() ?? undefined;
+      if (!activeBusinessId) {
+        setSales([]); setProducts([]); setDeadLetters([]);
+        return;
+      }
       const [pending, review, cached, failed] = await Promise.all([
         getPendingSales(activeBusinessId),
         getReviewSales(activeBusinessId).catch(() => [] as OfflineSale[]),
@@ -319,6 +323,10 @@ export default function OfflineSalesPage() {
         </div>
       </div>
     );
+  }
+
+  if (!getClientActiveBusinessId()) {
+    return <div className="mx-auto max-w-lg p-6"><h1 className="text-xl font-bold">Sign in to review offline sales</h1><p className="mt-2">Your pending sales are retained on this device. Sign in to the business to recover them.</p><Link className="mt-4 inline-block underline" href="/login">Sign in</Link></div>;
   }
 
   /* ---- Amend view ---- */

@@ -31,22 +31,23 @@ export const dynamic = 'force-dynamic';
 
 const SALE_STATUS_OPTIONS = ['PAID', 'PART_PAID', 'UNPAID', 'RETURNED', 'VOID'] as const;
 
-export default async function MomoConfirmationReviewPage({
-  searchParams,
-}: {
-  searchParams?: {
-    from?: string;
-    to?: string;
-    storeId?: string;
-    businessId?: string;
-    status?: string;
-    saleStatus?: string;
-    cashierUserId?: string;
-    page?: string;
-    pageSize?: string;
-    queue?: string;
-  };
-}) {
+export default async function MomoConfirmationReviewPage(
+  props: {
+    searchParams?: Promise<{
+      from?: string;
+      to?: string;
+      storeId?: string;
+      businessId?: string;
+      status?: string;
+      saleStatus?: string;
+      cashierUserId?: string;
+      page?: string;
+      pageSize?: string;
+      queue?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'momo_confirmation',
     search: searchParams,

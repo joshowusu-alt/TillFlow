@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/nextjs';
-import { headers } from 'next/headers';
+import { headers, type UnsafeUnwrappedHeaders } from 'next/headers';
 
 type LogLevel = 'info' | 'warn' | 'error';
 
@@ -63,7 +63,9 @@ function serializeError(error: unknown) {
 
 export function getRequestId() {
   try {
-    return headers().get('x-request-id') ?? 'unknown';
+    // Next 15's supported sync compatibility path preserves synchronous logging.
+    // Do not upgrade to Next 16 until this request-context adapter is migrated.
+    return (headers() as unknown as UnsafeUnwrappedHeaders).get('x-request-id') ?? 'unknown';
   } catch {
     return 'unknown';
   }

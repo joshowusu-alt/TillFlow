@@ -12,11 +12,12 @@ import { assignOrphanPurchaseSupplierAction } from '@/app/actions/suppliers';
 export const metadata = { title: 'Purchases without a supplier' };
 export const dynamic = 'force-dynamic';
 
-export default async function SupplierOrphansPage({
-  searchParams,
-}: {
-  searchParams?: { error?: string; assigned?: string };
-}) {
+export default async function SupplierOrphansPage(
+  props: {
+    searchParams?: Promise<{ error?: string; assigned?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 

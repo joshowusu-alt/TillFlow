@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { isRedirectError } from 'next/dist/client/components/redirect';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { getProductPriceWarnings } from '@/lib/product-price-guards';
 
 type OpeningStockFieldsProps = {

@@ -26,7 +26,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 it('offers selected-item returns to an ordinary production business within its selected branch', async () => {
-  const html = renderToStaticMarkup(await PartialReturnPage({ params: { id: 'invoice' } }));
+  const html = renderToStaticMarkup(await PartialReturnPage({ params: Promise.resolve({ id: 'invoice' }) }));
   expect(html).toContain('Return form available');
   expect(html).not.toContain('Preview pilot');
   expect(mocks.auth).toHaveBeenCalledWith(['OWNER', 'MANAGER']);
@@ -34,7 +34,7 @@ it('offers selected-item returns to an ordinary production business within its s
 });
 
 it('offers explicit credit settlement to an ordinary production business', async () => {
-  const html = renderToStaticMarkup(await CreditSettlementPage({ params: { id: 'invoice' } }));
+  const html = renderToStaticMarkup(await CreditSettlementPage({ params: Promise.resolve({ id: 'invoice' }) }));
   expect(html).toContain('Settlement form available');
   expect(html).toContain('GH₵48.00');
   expect(html).not.toContain('Preview only');
@@ -44,5 +44,5 @@ it('offers explicit credit settlement to an ordinary production business', async
 
 it.each([PartialReturnPage, CreditSettlementPage])('does not expose a purchase outside the authorised business and branch', async page => {
   mocks.db.purchaseInvoice.findFirst.mockResolvedValue(null);
-  await expect(page({ params: { id: 'foreign' } })).rejects.toThrow('NOT_FOUND');
+  await expect(page({ params: Promise.resolve({ id: 'foreign' }) })).rejects.toThrow('NOT_FOUND');
 });

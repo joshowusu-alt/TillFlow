@@ -19,11 +19,12 @@ function formatPaymentLabel(method: string) {
   return method.replace(/_/g, ' ');
 }
 
-export default async function MySalesPage({
-  searchParams,
-}: {
-  searchParams?: { page?: string; from?: string; to?: string };
-}) {
+export default async function MySalesPage(
+  props: {
+    searchParams?: Promise<{ page?: string; from?: string; to?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
 
   if (user.role !== 'CASHIER') {

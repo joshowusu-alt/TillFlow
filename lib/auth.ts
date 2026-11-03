@@ -23,17 +23,17 @@ export type Role = 'CASHIER' | 'MANAGER' | 'OWNER';
  * Helper to delete the pos_session cookie so stale tokens
  * don't cause redirect loops between middleware and auth.
  */
-function deleteCookieSafe(name: string) {
+async function deleteCookieSafe(name: string) {
   try {
-    cookies().delete(name);
+    (await cookies()).delete(name);
   } catch {
     // cookies().delete can throw in certain rendering contexts
   }
 }
 
-function clearAllSessionCookies() {
+async function clearAllSessionCookies() {
   try {
-    const cs = cookies();
+    const cs = (await cookies());
     cs.getAll()
       .filter(c => c.name.startsWith(SESSION_COOKIE_PREFIX))
       .forEach(c => cs.delete(c.name));
@@ -43,15 +43,15 @@ function clearAllSessionCookies() {
   }
 }
 
-function clearResolvedSessionCookie(cookieName: string) {
-  deleteCookieSafe(cookieName);
+async function clearResolvedSessionCookie(cookieName: string) {
+  await deleteCookieSafe(cookieName);
   const businessId = extractBusinessIdFromSessionCookie(cookieName);
   if (!businessId) return;
 
   try {
-    const activeBusinessId = cookies().get(ACTIVE_BUSINESS_COOKIE)?.value;
+    const activeBusinessId = (await cookies()).get(ACTIVE_BUSINESS_COOKIE)?.value;
     if (activeBusinessId === businessId) {
-      cookies().delete(ACTIVE_BUSINESS_COOKIE);
+      (await cookies()).delete(ACTIVE_BUSINESS_COOKIE);
     }
   } catch {
     // cookies().delete can throw in certain rendering contexts
@@ -172,7 +172,7 @@ function browserFamily(ua: string | null): string | null {
 }
 
 export const getUser = cache(async () => {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const sessionCookies = cookieStore.getAll().filter(c => c.name.startsWith(SESSION_COOKIE_PREFIX));
   const activeBusinessId = cookieStore.get(ACTIVE_BUSINESS_COOKIE)?.value ?? null;
   const sessionCookie = activeBusinessId
@@ -223,17 +223,17 @@ export const getUser = cache(async () => {
 
   if (!session) {
     // Session token in cookie but not in DB — clear stale cookie
-    clearResolvedSessionCookie(sessionCookie.name);
+    await clearResolvedSessionCookie(sessionCookie.name);
     return null;
   }
 
   if (session.expiresAt < new Date()) {
     prisma.session.delete({ where: { id: session.id } }).catch(() => {});
-    clearResolvedSessionCookie(sessionCookie.name);
+    await clearResolvedSessionCookie(sessionCookie.name);
     return null;
   }
 
-  const headerStore = headers();
+  const headerStore = await headers();
   const currentUserAgent = (headerStore.get('user-agent') ?? '').slice(0, 255) || null;
 
   // Lenient UA check: only compare browser family + OS, not the full string.
@@ -244,7 +244,7 @@ export const getUser = cache(async () => {
   if (storedFamily && currentFamily && storedFamily !== currentFamily) {
     console.warn('[auth] Browser family mismatch', { storedFamily, currentFamily });
     prisma.session.delete({ where: { id: session.id } }).catch(() => {});
-    clearResolvedSessionCookie(sessionCookie.name);
+    await clearResolvedSessionCookie(sessionCookie.name);
     return null;
   }
 

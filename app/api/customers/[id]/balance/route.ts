@@ -10,10 +10,8 @@ export const dynamic = 'force-dynamic';
  * Used by the POS at customer-selection time to power the credit-limit
  * projection ("this sale will exceed the customer's credit limit").
  */
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function GET(_request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

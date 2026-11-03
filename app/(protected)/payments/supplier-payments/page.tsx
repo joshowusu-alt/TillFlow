@@ -23,7 +23,8 @@ const PAYMENT_LABEL: Record<string, string> = {
   MOBILE_MONEY: 'Mobile Money (MoMo)',
 };
 
-export default async function SupplierPaymentsPage({ searchParams }: { searchParams?: { error?: string; supplierId?: string } }) {
+export default async function SupplierPaymentsPage(props: { searchParams?: Promise<{ error?: string; supplierId?: string }> }) {
+  const searchParams = await props.searchParams;
   const { business, store, stores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   if (!store) {

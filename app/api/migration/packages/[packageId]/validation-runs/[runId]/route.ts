@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/auth';
 import { toPublicMigrationError } from '@/lib/services/migration/errors';
 import { getMigrationValidationRun } from '@/lib/services/migration/validate';
-import { isRedirectError } from 'next/dist/client/components/redirect';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 
 export const runtime = 'nodejs';
 
@@ -13,12 +13,12 @@ export const runtime = 'nodejs';
 export async function GET(
   _request: NextRequest,
   context: {
-    params: Promise<{ packageId: string; runId: string }> | { packageId: string; runId: string };
+    params: Promise<{ packageId: string; runId: string }>;
   },
 ) {
   try {
     const user = await requireRole(['OWNER', 'MANAGER']);
-    const params = await Promise.resolve(context.params);
+    const params = await Promise.resolve((await context.params));
     const result = await getMigrationValidationRun(
       {
         userId: user.id,

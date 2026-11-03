@@ -5,7 +5,10 @@ import { localDateInstant } from '@/lib/reports/reporting-clock';
 import { getBalanceSheetEntries } from '@/lib/reports/balance-sheet-entries';
 import { formatMoney } from '@/lib/format';
 
-export default async function BalanceSheetEntriesPage({searchParams}:{searchParams?:{asOf?:string;account?:string;cutoff?:string;page?:string;businessId?:string;storeId?:string}}){
+export default async function BalanceSheetEntriesPage(
+  props:{searchParams?: Promise<{asOf?:string;account?:string;cutoff?:string;page?:string;businessId?:string;storeId?:string}>}
+) {
+  const searchParams = await props.searchParams;
   const now=new Date();
   const opened=await openLiveReport({surfaceId:'balance_sheet',search:searchParams,range:({timezone})=>{const key=searchParams?.asOf?.trim()||formatBusinessLocalDateKey(now,timezone);return{fromLocalDate:key,toLocalDate:key,preset:'CUSTOM'};}});
   if(!opened.ok)return opened.denial;

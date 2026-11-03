@@ -272,7 +272,7 @@ describe('customer profile to POS integration', () => {
   const posClientSrc = readFileSync(join(process.cwd(), 'app/(protected)/pos/PosClient.tsx'), 'utf8');
 
   it('loads a customer requested by customerId even when not in the cached POS list', () => {
-    expect(posPageSrc).toContain('searchParams?: { customerId?: string }');
+    expect(posPageSrc).toContain('searchParams?: Promise<{ customerId?: string }>');
     expect(posPageSrc).toContain('requestedCustomerId');
     expect(posPageSrc).toContain('requestedCustomer');
     expect(posPageSrc).toContain('withRequested');

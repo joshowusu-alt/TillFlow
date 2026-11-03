@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { useSearchParams, usePathname, useRouter } from 'next/navigation';
+import { useSearchParams, usePathname } from 'next/navigation';
 
 type ToastType = 'success' | 'error' | 'info';
 interface Toast { id: number; message: string; type: ToastType }
@@ -34,7 +34,6 @@ const ToastIcon = ({ type }: { type: ToastType }) => {
 function UrlToastSync({ onToast }: { onToast: (message: string, type?: ToastType) => void }) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const router = useRouter();
   const successMsg = searchParams?.get('success') ?? '';
   const errorMsg = searchParams?.get('error') ?? '';
 
@@ -42,14 +41,17 @@ function UrlToastSync({ onToast }: { onToast: (message: string, type?: ToastType
     if (successMsg) onToast(successMsg, 'success');
     if (errorMsg && errorMsg !== 'locked' && errorMsg !== 'missing') onToast(errorMsg, 'error');
     if (successMsg || (errorMsg && errorMsg !== 'locked' && errorMsg !== 'missing')) {
-      const params = new URLSearchParams(searchParams?.toString() ?? '');
-      params.delete('success');
-      if (errorMsg !== 'locked' && errorMsg !== 'missing') params.delete('error');
-      const qs = params.toString();
-      router.replace(`${pathname ?? ''}${qs ? `?${qs}` : ''}`, { scroll: false });
+      const url = new URL(window.location.href);
+      if (url.pathname !== pathname) return;
+      // Consuming a notification must not start another route transition: that
+      // could erase feedback and cancel the user's next server action.
+      // Next's native History API integration preserves the current RSC tree.
+      if (successMsg && url.searchParams.get('success') === successMsg) url.searchParams.delete('success');
+      if (errorMsg !== 'locked' && errorMsg !== 'missing' && url.searchParams.get('error') === errorMsg) url.searchParams.delete('error');
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [successMsg, errorMsg, pathname, router, onToast]);
+  }, [successMsg, errorMsg, pathname, onToast]);
 
   return null;
 }

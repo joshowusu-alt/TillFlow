@@ -14,11 +14,12 @@ import {
 import { getBusinessDayBounds } from '@/lib/notifications/utils';
 import { addLocalDays, localDateInstant, localDateKey } from '@/lib/reports/reporting-clock';
 
-export default async function MomoReconciliationPage({
-  searchParams,
-}: {
-  searchParams?: { error?: string; from?: string; to?: string; storeId?: string };
-}) {
+export default async function MomoReconciliationPage(
+  props: {
+    searchParams?: Promise<{ error?: string; from?: string; to?: string; storeId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   const todayParts = getBusinessDayBounds(new Date(), business.timezone).localDate;
   const fromKey = searchParams?.from ?? localDateKey(addLocalDays(todayParts, -7));

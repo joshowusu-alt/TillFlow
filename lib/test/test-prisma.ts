@@ -77,7 +77,7 @@ export type OpenTestPrismaOptions = {
   /** Injected for the guard's own regression tests; production callers never set this. */
   construct?: (url: string) => PrismaClient;
   /** Records SQL from the guarded client. Used by disposable Postgres evidence tests. */
-  onQuery?: (event: { query: string; params: string }) => void;
+  onQuery?: (event: { query: string; params: string; durationMs: number }) => void;
   /** Skip the live round-trip (regression tests only). */
   skipLiveVerification?: boolean;
   log?: (line: string) => void;
@@ -130,7 +130,7 @@ export async function openTestPrismaClient(options: OpenTestPrismaOptions = {}):
       log: [{ emit: 'event', level: 'query' }],
     });
     client.$on('query', (event) => {
-      options.onQuery?.({ query: event.query, params: event.params });
+      options.onQuery?.({ query: event.query, params: event.params, durationMs: event.duration });
     });
     return client;
   });

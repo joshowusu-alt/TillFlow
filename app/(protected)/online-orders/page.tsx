@@ -147,11 +147,12 @@ function NextStepCTA({ order, canManage = true }: {
   );
 }
 
-export default async function OnlineOrdersPage({
-  searchParams,
-}: {
-  searchParams?: { status?: string; order?: string; q?: string; page?: string };
-}) {
+export default async function OnlineOrdersPage(
+  props: {
+    searchParams?: Promise<{ status?: string; order?: string; q?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user, business, store } = await requireBusinessAndOptionalStore(['CASHIER', 'MANAGER', 'OWNER']);
   const canManage = user.role !== 'CASHIER';
   if (!canManage && !store) return <p>Select a branch in the header to view online orders.</p>;

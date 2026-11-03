@@ -6,11 +6,12 @@ import LaunchSessionCompletion from '@/components/LaunchSessionCompletion';
 import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 
-export default async function PosPage({
-  searchParams,
-}: {
-  searchParams?: { customerId?: string };
-}) {
+export default async function PosPage(
+  props: {
+    searchParams?: Promise<{ customerId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // Auth/role gate stays blocking (cache-deduped from the protected layout) so
   // access control is never deferred behind the streamed POS skeleton.
   const { business, store, user, stores } = await requireBusinessAndOptionalStore();

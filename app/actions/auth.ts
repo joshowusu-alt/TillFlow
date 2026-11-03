@@ -1,8 +1,8 @@
-﻿'use server';
+'use server';
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { isRedirectError } from 'next/dist/client/components/redirect';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
@@ -19,8 +19,8 @@ import type { LoginFormState } from '@/lib/auth/login-form-state';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const MAX_ACTIVE_SESSIONS = 5;
 
-function getClientIpAddress() {
-  const headerStore = headers();
+async function getClientIpAddress() {
+  const headerStore = (await headers());
   const forwarded = headerStore.get('x-forwarded-for');
   if (forwarded) {
     const first = forwarded.split(',')[0]?.trim();
@@ -31,8 +31,8 @@ function getClientIpAddress() {
   return 'unknown';
 }
 
-function getClientUserAgent() {
-  const value = headers().get('user-agent') ?? '';
+async function getClientUserAgent() {
+  const value = (await headers()).get('user-agent') ?? '';
   return value.slice(0, 255) || null;
 }
 
@@ -45,8 +45,8 @@ export async function login(_prevState: LoginFormState, formData: FormData): Pro
     return { error: 'missing' };
   }
 
-  const ipAddress = getClientIpAddress();
-  const userAgent = getClientUserAgent();
+  const ipAddress = await getClientIpAddress();
+  const userAgent = await getClientUserAgent();
 
   try {
 
@@ -168,7 +168,7 @@ export async function login(_prevState: LoginFormState, formData: FormData): Pro
 
   // Keep business sessions isolated by cookie name and explicitly mark
   // the active business so the server never "falls into" another business.
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.set(getBusinessSessionCookieName(user.businessId), token, {
     httpOnly: true,
     secure: isSecure,
@@ -206,7 +206,7 @@ export async function login(_prevState: LoginFormState, formData: FormData): Pro
         select: { id: true },
       }),
     ]);
-    writeHomeLoadingKindCookie(
+    await writeHomeLoadingKindCookie(
       business?.onboardingCompletedAt || firstSale ? 'established' : 'checklist',
     );
     if (business?.guidedSetup) {
@@ -225,7 +225,7 @@ export async function login(_prevState: LoginFormState, formData: FormData): Pro
 }
 
 export async function logout() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const sessionCookies = cookieStore.getAll().filter(c => c.name.startsWith(SESSION_COOKIE_PREFIX));
   if (sessionCookies.length > 0) {
     const tokens = sessionCookies.map(c => c.value).filter(Boolean);

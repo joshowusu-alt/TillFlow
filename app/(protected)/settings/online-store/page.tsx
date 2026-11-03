@@ -21,11 +21,12 @@ import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
 import { resolvePrimaryBrandColor } from '@/lib/storefront-branding';
 import { normalizePublicCategoryName, suggestedPublicCategoryOptions } from '@/lib/storefront-taxonomy';
 
-export default async function OnlineStoreSettingsPage({
-  searchParams,
-}: {
-  searchParams?: { error?: string; saved?: string; field?: string };
-}) {
+export default async function OnlineStoreSettingsPage(
+  props: {
+    searchParams?: Promise<{ error?: string; saved?: string; field?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   const addonOnlineStorefront = (business as any).addonOnlineStorefront ?? false;
   const features = getFeatures(
@@ -211,7 +212,7 @@ export default async function OnlineStoreSettingsPage({
   const publicUrl = storefrontBusiness.storefrontSlug
     ? `/shop/${storefrontBusiness.storefrontSlug}`
     : null;
-  const requestHeaders = headers();
+  const requestHeaders = await headers();
   const requestHost = requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host');
   const requestProtocol = requestHeaders.get('x-forwarded-proto') ?? 'https';
   const requestOrigin = requestHost ? `${requestProtocol}://${requestHost}` : null;

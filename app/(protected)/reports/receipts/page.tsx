@@ -27,20 +27,21 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export default async function MoneyReceivedReceiptsPage({
-  searchParams,
-}: {
-  searchParams?: {
-    from?: string;
-    to?: string;
-    storeId?: string;
-    period?: string;
-    method?: string;
-    origin?: string;
-    page?: string;
-    pageSize?: string;
-  };
-}) {
+export default async function MoneyReceivedReceiptsPage(
+  props: {
+    searchParams?: Promise<{
+      from?: string;
+      to?: string;
+      storeId?: string;
+      period?: string;
+      method?: string;
+      origin?: string;
+      page?: string;
+      pageSize?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'receipt_transactions',
     search: searchParams,

@@ -33,11 +33,12 @@ const alertTypeLabels: Record<string, string> = {
   CASH_VARIANCE_FREQUENCY: 'Cash Variance Frequency',
 };
 
-export default async function RiskMonitorPage({
-  searchParams,
-}: {
-  searchParams?: { from?: string; to?: string; storeId?: string; status?: string };
-}) {
+export default async function RiskMonitorPage(
+  props: {
+    searchParams?: Promise<{ from?: string; to?: string; storeId?: string; status?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'risk_monitor',
     search: searchParams,

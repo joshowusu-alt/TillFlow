@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/auth';
 import { toPublicMigrationError } from '@/lib/services/migration/errors';
 import { finaliseMigrationUploadedObject } from '@/lib/services/migration/file-upload';
-import { isRedirectError } from 'next/dist/client/components/redirect';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 
 export const runtime = 'nodejs';
 

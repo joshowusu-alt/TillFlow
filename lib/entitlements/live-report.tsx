@@ -219,9 +219,9 @@ const loadStores = cache(async (businessId: string) =>
   }),
 );
 
-function clearSessionCookies() {
+async function clearSessionCookies() {
   try {
-    const jar = cookies();
+    const jar = (await cookies());
     for (const cookie of jar.getAll()) {
       if (cookie.name.startsWith(SESSION_COOKIE_PREFIX) || cookie.name === ACTIVE_BUSINESS_COOKIE) {
         jar.delete(cookie.name);
@@ -232,9 +232,9 @@ function clearSessionCookies() {
   }
 }
 
-function clearOperationalStoreCookie() {
+async function clearOperationalStoreCookie() {
   try {
-    cookies().delete(OPERATIONAL_STORE_COOKIE);
+    (await cookies()).delete(OPERATIONAL_STORE_COOKIE);
   } catch {
     // Same constraint as session cookies.
   }
@@ -242,7 +242,7 @@ function clearOperationalStoreCookie() {
 
 async function invalidateUserSessions(userId: string) {
   await prisma.session.deleteMany({ where: { userId } }).catch(() => {});
-  clearSessionCookies();
+  await clearSessionCookies();
 }
 
 type Prepared = {
@@ -370,7 +370,7 @@ async function enforcePageDecision(
   if (page.outcome === 'notFound') {
     if (page.reason === 'SCOPE_STORE_INVALID' && prepared.cookieStoreId) {
       const owned = new Set(prepared.stores.map((store) => store.id));
-      if (!owned.has(prepared.cookieStoreId)) clearOperationalStoreCookie();
+      if (!owned.has(prepared.cookieStoreId)) await clearOperationalStoreCookie();
     }
     notFound();
   }
@@ -419,7 +419,7 @@ export async function inspectLiveReport(input: {
   const page = requireSurface(prepared.accessInput);
   if (page.outcome === 'notFound' && page.reason === 'SCOPE_STORE_INVALID' && prepared.cookieStoreId) {
     const owned = new Set(prepared.stores.map((store) => store.id));
-    if (!owned.has(prepared.cookieStoreId)) clearOperationalStoreCookie();
+    if (!owned.has(prepared.cookieStoreId)) await clearOperationalStoreCookie();
   }
   return {
     page,
@@ -461,7 +461,7 @@ export async function guardLiveReport(input: {
     }
     if (route.body.reason === 'SCOPE_STORE_INVALID' && prepared.cookieStoreId) {
       const owned = new Set(prepared.stores.map((store) => store.id));
-      if (!owned.has(prepared.cookieStoreId)) clearOperationalStoreCookie();
+      if (!owned.has(prepared.cookieStoreId)) await clearOperationalStoreCookie();
     }
     return {
       ok: false,

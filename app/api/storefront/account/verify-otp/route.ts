@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
-  setStorefrontSessionCookie(slug, result.sessionToken, result.expiresAt);
+  await setStorefrontSessionCookie(slug, result.sessionToken, result.expiresAt);
 
   return NextResponse.json({
     ok: true,

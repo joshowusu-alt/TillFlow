@@ -85,7 +85,7 @@ export async function audit(opts: {
   const AUDIT_WRITE_TIMEOUT_MS = 3_000;
 
   try {
-    const hdrs = headers();
+    const hdrs = await headers();
     const ip =
       hdrs.get('x-forwarded-for')?.split(',')[0]?.trim() ??
       hdrs.get('x-real-ip') ??

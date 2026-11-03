@@ -58,11 +58,12 @@ function summarizeOpenShift(openShift: {
   };
 }
 
-export default async function ShiftsPage({
-  searchParams,
-}: {
-  searchParams?: { storeId?: string };
-}) {
+export default async function ShiftsPage(
+  props: {
+    searchParams?: Promise<{ storeId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user, business, store, stores, operational } = await requireBusinessAndOptionalStore();
   const urlResolution = resolveOperationalStore({
     stores,

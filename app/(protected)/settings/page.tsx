@@ -14,7 +14,8 @@ import Link from 'next/link';
 import HashScroll from '@/components/HashScroll';
 import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 
-export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string; storeId?: string } }) {
+export default async function SettingsPage(props: { searchParams?: Promise<{ error?: string; storeId?: string }> }) {
+  const searchParams = await props.searchParams;
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const currencySymbol = getCurrencySymbol(business.currency);

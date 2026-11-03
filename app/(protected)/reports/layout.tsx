@@ -13,7 +13,7 @@ export default async function ReportsLayout({ children }: { children: React.Reac
     await recordOwnerReportView();
   }
   const billing = String((business as { billingAccessState?: string }).billingAccessState ?? '');
-  const pathname = headers().get('x-pathname') || '';
+  const pathname = (await headers()).get('x-pathname') || '';
   const todayOwnsRestrictedCopy = pathname === '/reports';
   const body = (
     <>

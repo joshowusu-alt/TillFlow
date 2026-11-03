@@ -73,30 +73,32 @@ function catalogueUnitLabel(product: {
   });
 }
 
-export default async function ProductsPage({
-  searchParams,
-}: {
-  searchParams?: {
-    error?: string;
-    tab?: string;
-    setupCategory?: string;
-    setupDivision?: string;
-    setupGroup?: string;
-    setupAdd?: string;
-    setupSaved?: string;
-    q?: string;
-    page?: string;
-    created?: string;
-    stock?: string;
-    barcodesGenerated?: string;
-    barcodesFailed?: string;
-    missingCost?: string;
-    issue?: string;
-    category?: string;
-    division?: string;
-    group?: string;
-  };
-}) {
+export default async function ProductsPage(
+  props: {
+    searchParams?: Promise<{
+      error?: string;
+      tab?: string;
+      setupCategory?: string;
+      setupDivision?: string;
+      setupGroup?: string;
+      setupAdd?: string;
+      setupSaved?: string;
+      q?: string;
+      page?: string;
+      created?: string;
+      stock?: string;
+      barcodesGenerated?: string;
+      barcodesFailed?: string;
+      missingCost?: string;
+      issue?: string;
+      category?: string;
+      division?: string;
+      group?: string;
+      resetClassification?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const defaultMarginThresholdPercent = ((business.minimumMarginThresholdBps ?? 1500) / 100).toFixed(2);
@@ -261,6 +263,7 @@ export default async function ProductsPage({
         category={searchParams?.category}
         division={searchParams?.division}
         group={searchParams?.group}
+        resetClassification={searchParams?.resetClassification === '1'}
       />
       <PageHeader
         title={pageTitle}
@@ -398,7 +401,7 @@ export default async function ProductsPage({
             context={{ q, tab: 'products', issue: issueQueryValue, missingCost: searchParams?.missingCost, stock: searchParams?.stock }} />
           <div className="operational-filter-row">
             <div className="operational-search-shell">
-              <Suspense><SearchFilter placeholder={issueActive ? 'Search within affected products…' : 'Search products…'} /></Suspense>
+              <Suspense><SearchFilter placeholder={issueActive ? 'Search within affected products…' : 'Search products…'} documentNavigation /></Suspense>
             </div>
             {isManager && !issueActive ? (
               <div className="flex flex-wrap gap-2">
@@ -774,6 +777,7 @@ export default async function ProductsPage({
               </table>
             </div>
             <Pagination
+              documentNavigation
               currentPage={page}
               totalPages={totalProductPages}
               basePath="/products"

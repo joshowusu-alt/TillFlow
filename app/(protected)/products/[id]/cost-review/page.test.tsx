@@ -11,7 +11,7 @@ beforeEach(() => {
   mocks.load.mockResolvedValue(null);
 });
 it('requires owner or manager and resolves the exact product within that business', async () => {
-  await expect(ProductCostReviewPage({ params: { id: 'selected-product' }, searchParams: { page: '2' } })).rejects.toThrow('NOT_FOUND');
+  await expect(ProductCostReviewPage({ params: Promise.resolve({ id: 'selected-product' }), searchParams: Promise.resolve({ page: '2' }) })).rejects.toThrow('NOT_FOUND');
   expect(mocks.auth).toHaveBeenCalledWith(['OWNER', 'MANAGER']);
   expect(mocks.load).toHaveBeenCalledWith('authenticated-business', 'selected-product', 2);
 });

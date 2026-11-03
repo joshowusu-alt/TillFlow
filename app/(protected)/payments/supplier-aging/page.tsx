@@ -60,11 +60,12 @@ const BUCKET_TILE_VALUE: Record<AgingBucket, string> = {
   DUE_DATE_MISSING: 'text-violet-700',
 };
 
-export default async function SupplierAgingPage({
-  searchParams,
-}: {
-  searchParams?: { asOf?: string; bucket?: string };
-}) {
+export default async function SupplierAgingPage(
+  props: {
+    searchParams?: Promise<{ asOf?: string; bucket?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'supplier_ageing',
     search: searchParams,

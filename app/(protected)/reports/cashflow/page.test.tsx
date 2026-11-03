@@ -18,7 +18,7 @@ describe('cash-flow report and supporting detail', () => {
   });
   afterEach(() => vi.useRealTimers());
   it('shows indirect first, expandable direct detail and separate exports for the same period', async () => {
-    const html = renderToStaticMarkup(await Page({ searchParams: { from: '2026-03-01', to: '2026-03-31' } }));
+    const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ from: '2026-03-01', to: '2026-03-31' }) }));
     expect(html).toContain('Indirect method'); expect(html).toContain('<details');
     expect(html.indexOf('Net profit from posted entries')).toBeLessThan(html.indexOf('Money received and paid'));
     expect(html).toContain('Customers — money received'); expect(html).toContain('view=direct');
@@ -28,7 +28,7 @@ describe('cash-flow report and supporting detail', () => {
   });
   it('uses the permitted range and stops today at request time', async () => {
     mocks.open.mockResolvedValue({ ok: true, business: { id: 'biz', currency: 'GHS', timezone: 'Africa/Nairobi' }, decision: { appliedRange: { fromLocalDate: '2026-04-01', toLocalDate: '2026-04-02' } } });
-    await Page({ searchParams: { from: '2020-01-01', to: '2026-04-02' } });
+    await Page({ searchParams: Promise.resolve({ from: '2020-01-01', to: '2026-04-02' }) });
     expect(mocks.cashflow).toHaveBeenCalledWith('biz', new Date('2026-03-31T21:00:00Z'), new Date('2026-04-02T10:00:00Z'));
   });
   it('defaults to the new business-local month while UTC is still in the previous month', async () => {
@@ -55,7 +55,7 @@ describe('cash-flow report and supporting detail', () => {
     expect(mocks.cashflow).not.toHaveBeenCalled();
   });
   it.each([['2026-02-30', '2026-03-31'], ['2026-04-03', '2026-04-03'], ['2026-03-31', '2026-03-01']])('rejects invalid, future and reversed dates', async (from, to) => {
-    expect(renderToStaticMarkup(await Page({ searchParams: { from, to } }))).toContain('Choose a valid period');
+    expect(renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ from, to }) }))).toContain('Choose a valid period');
     expect(mocks.cashflow).not.toHaveBeenCalled();
   });
 });

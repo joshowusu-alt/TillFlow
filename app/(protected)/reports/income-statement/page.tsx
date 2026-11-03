@@ -14,11 +14,12 @@ import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, type IncomeStatem
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
-export default async function IncomeStatementPage({
-  searchParams
-}: {
-  searchParams?: { from?: string; to?: string };
-}) {
+export default async function IncomeStatementPage(
+  props: {
+    searchParams?: Promise<{ from?: string; to?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'income_statement',
     search: searchParams,

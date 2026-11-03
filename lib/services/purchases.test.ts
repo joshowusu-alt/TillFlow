@@ -9,7 +9,7 @@ const { prismaMock, postJournalEntryMock, ensureChartOfAccountsMock, recordCashD
     product: { findFirst: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
     productUnit: { findMany: vi.fn() },
     account: { findMany: vi.fn() },
-    purchaseInvoice: { create: vi.fn() },
+    purchaseInvoice: { create: vi.fn(), findFirst: vi.fn() },
     purchaseInvoiceLine: { createMany: vi.fn() },
     purchasePayment: { create: vi.fn() },
     shift: { findFirst: vi.fn() },
@@ -719,5 +719,37 @@ describe('purchase unit conversion', () => {
       }),
     ).rejects.toBeInstanceOf(MoneyIdempotencyError);
     expect(prismaMock.purchaseInvoice.create).not.toHaveBeenCalled();
+  });
+
+  it('resolves a unique-key winner outside the rolled-back transaction, never querying the aborted client', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([{
+      productId: 'prod-1', unitId: 'unit-piece', conversionToBase: 1,
+      product: { defaultCostBasePence: 100, vatRateBps: 0 }, unit: { name: 'Piece' },
+    }]);
+    let aborted = false;
+    let committedWinner: any = null;
+    let readsAfterAbort = 0;
+    const conflict = Object.assign(new Error('Key won by another transaction'), { code: 'P2002', meta: { target: ['businessId', 'key'] } });
+    const tx = { ...prismaMock, moneyIdempotency: {
+      findUnique: vi.fn(async () => {
+        if (aborted) { readsAfterAbort++; throw new Error('Postgres transaction is aborted'); }
+        return null;
+      }),
+      create: vi.fn(async ({ data }: any) => {
+        committedWinner = { ...data, resultJson: JSON.stringify({ invoiceId: 'committed-winner' }) };
+        aborted = true;
+        throw conflict;
+      }),
+    } };
+    prismaMock.moneyIdempotency.findUnique.mockImplementation(async () => committedWinner);
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({ id: 'committed-winner', totalPence: 100 });
+    prismaMock.$transaction.mockImplementation(async (callback: any) => callback(tx));
+    const result = await createPurchase({ sourceDocuments: [purchaseDocumentFixture()], businessId: bizId, storeId,
+      supplierId: 'supplier-a', paymentStatus: 'PAID', payments: [{ method: 'TRANSFER', amountPence: 100 }],
+      lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }], userId, idempotencyKey: 'parallel-winner',
+    });
+    expect(result.id).toBe('committed-winner');
+    expect(readsAfterAbort).toBe(0);
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
   });
 });

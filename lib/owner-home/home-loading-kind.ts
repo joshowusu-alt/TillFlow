@@ -6,9 +6,9 @@ import { prisma } from '@/lib/prisma';
 export const HOME_LOADING_KIND_COOKIE = 'tf_home_kind';
 export type OwnerHomeLoadingKind = 'checklist' | 'established';
 
-export function readHomeLoadingKindCookie(): OwnerHomeLoadingKind | null {
+export async function readHomeLoadingKindCookie(): Promise<OwnerHomeLoadingKind | null> {
   try {
-    const value = cookies().get(HOME_LOADING_KIND_COOKIE)?.value;
+    const value = (await cookies()).get(HOME_LOADING_KIND_COOKIE)?.value;
     if (value === 'checklist' || value === 'established') return value;
   } catch {
     // cookies() can throw outside a request context.
@@ -16,10 +16,10 @@ export function readHomeLoadingKindCookie(): OwnerHomeLoadingKind | null {
   return null;
 }
 
-export function writeHomeLoadingKindCookie(kind: OwnerHomeLoadingKind) {
+export async function writeHomeLoadingKindCookie(kind: OwnerHomeLoadingKind) {
   const isSecure = process.env.NODE_ENV === 'production' && !process.env.BASE_URL?.startsWith('http://');
   try {
-    cookies().set(HOME_LOADING_KIND_COOKIE, kind, {
+    (await cookies()).set(HOME_LOADING_KIND_COOKIE, kind, {
       httpOnly: true,
       secure: isSecure,
       sameSite: 'lax',
@@ -49,7 +49,7 @@ export const getOwnerHomeLoadingKind = cache(async (): Promise<OwnerHomeLoadingK
   if (user.role !== 'OWNER') return 'established';
   if (business.onboardingCompletedAt) return 'established';
 
-  const cookie = readHomeLoadingKindCookie();
+  const cookie = await readHomeLoadingKindCookie();
   if (cookie === 'established') return 'established';
 
   const firstSale = await prisma.salesInvoice.findFirst({

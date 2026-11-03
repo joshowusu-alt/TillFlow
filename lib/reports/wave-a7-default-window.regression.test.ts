@@ -313,7 +313,7 @@ describe('A7 default report ranges follow the tenant calendar', () => {
       { year: 2026, month: 7, day: 1 },
       NAIROBI,
     );
-    await CashDrawerReportPage({ searchParams: { from: '2026-07-01', to: '2026-07-01' } });
+    await CashDrawerReportPage({ searchParams: Promise.resolve({ from: '2026-07-01', to: '2026-07-01' }) });
     await getEodCsv(new Request('http://localhost/exports/eod-csv?from=2026-07-01&to=2026-07-01'));
     const screen = shiftCountMock.mock.calls.at(-1)?.[0]?.where?.openedAt;
     const csv = shiftFindManyMock.mock.calls.at(-1)?.[0]?.where?.openedAt;

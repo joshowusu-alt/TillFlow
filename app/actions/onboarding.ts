@@ -413,7 +413,7 @@ export async function markOnboardingCompleteAfterFirstSale(
     where: { id: businessId },
     data: { onboardingCompletedAt: new Date() },
   });
-  writeHomeLoadingKindCookie('established');
+  await writeHomeLoadingKindCookie('established');
   revalidateTag(`readiness-${businessId}`);
   revalidateTag('control-portfolio');
 }

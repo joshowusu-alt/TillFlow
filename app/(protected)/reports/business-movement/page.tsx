@@ -25,17 +25,18 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export default async function BusinessMovementReportPage({
-  searchParams,
-}: {
-  searchParams?: {
-    preset?: string;
-    currentFrom?: string;
-    currentTo?: string;
-    storeId?: string;
-    businessId?: string;
-  };
-}) {
+export default async function BusinessMovementReportPage(
+  props: {
+    searchParams?: Promise<{
+      preset?: string;
+      currentFrom?: string;
+      currentTo?: string;
+      storeId?: string;
+      businessId?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'business_movement',
     search: searchParams,

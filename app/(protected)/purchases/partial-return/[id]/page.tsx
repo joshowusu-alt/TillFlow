@@ -7,7 +7,9 @@ import { formatMoney, formatDateTime } from '@/lib/format';
 import PartialPurchaseReturnForm from '@/components/purchases/PartialPurchaseReturnForm';
 import type { PurchaseCreditLine } from '@/lib/services/partial-purchase-returns';
 
-export default async function PartialPurchaseReturnPage({ params, searchParams }: { params: { id: string }; searchParams?: { saved?: string; error?: string } }) {
+export default async function PartialPurchaseReturnPage(props: { params: Promise<{ id: string }>; searchParams?: Promise<{ saved?: string; error?: string }> }) {
+  const params = await props.params;
+  const searchParams = await props.searchParams;
   const { business, store } = await requireBusinessAndOptionalStore(['OWNER','MANAGER']);
   if (!business || !store) return <div className="card p-5">Select the purchase’s branch first.</div>;
   const invoice = await prisma.purchaseInvoice.findFirst({ where: { id: params.id, businessId: business.id, storeId: store.id }, include: { supplier: true, lines: { include: { product: true, unit: true } }, payments: true, returnCredits: { orderBy: { createdAt: 'desc' } }, purchaseReturn: true } });

@@ -103,11 +103,12 @@ function buildSaleCostCorrectionHref(row: MarginAnalysisRow, query: { period: st
   return `/settings/data-repair/sale-cost-corrections?${params.toString()}`;
 }
 
-export default async function MarginsPage({
-  searchParams,
-}: {
-  searchParams?: { period?: string; from?: string; to?: string; view?: string; page?: string; pageSize?: string };
-}) {
+export default async function MarginsPage(
+  props: {
+    searchParams?: Promise<{ period?: string; from?: string; to?: string; view?: string; page?: string; pageSize?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const opened = await openLiveReport({
     surfaceId: 'profit_margins',
     search: searchParams,

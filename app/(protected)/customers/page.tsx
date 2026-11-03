@@ -64,11 +64,12 @@ function CustomersEmptyState({ q, balanceDue }: { q: string; balanceDue: boolean
   );
 }
 
-export default async function CustomersPage({
-  searchParams,
-}: {
-  searchParams?: { error?: string; q?: string; page?: string; storeId?: string; balanceDue?: string };
-}) {
+export default async function CustomersPage(
+  props: {
+    searchParams?: Promise<{ error?: string; q?: string; page?: string; storeId?: string; balanceDue?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { business, store, stores, user } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   if (!store) {
@@ -361,6 +362,7 @@ export default async function CustomersPage({
           </table>
         </div>
         <Pagination
+          documentNavigation
           currentPage={page}
           totalPages={totalPages}
           basePath="/customers"

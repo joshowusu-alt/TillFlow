@@ -41,6 +41,7 @@ if (isSqliteRuntimeEnv(process.env)) {
   );
 }
 
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+// A warm serverless process can evaluate separate route bundles in the same
+// worker. Retain one client/pool there too, not only during development HMR.
+// Each worker still owns its own pool; this is not a cross-instance pool.
+globalForPrisma.prisma = prisma;

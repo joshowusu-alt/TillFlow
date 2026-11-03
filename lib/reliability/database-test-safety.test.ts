@@ -118,7 +118,6 @@ const BARE_CLIENT_SCRIPT_BASELINE = new Set([
   'scripts/discover-qa-tenant.mjs',
   'scripts/gate-e-stamp-fixture.cjs',
   'scripts/manual-e2e-check.js',
-  'scripts/manual-e2e-deep-check.js',
   'scripts/mobile-responsiveness-audit.js',
   'scripts/page-speed-check.js',
   'scripts/perf/catalogue-scale-bench.ts',
