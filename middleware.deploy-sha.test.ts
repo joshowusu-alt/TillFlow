@@ -106,3 +106,16 @@ describe('QA evidence Production deny', () => {
     expect(JSON.stringify(body)).not.toMatch(/businessId|userId|invoice|payment|session|password|token/i);
   });
 });
+
+
+describe('Bundled public fonts', () => {
+  it('allows signed-out font downloads while keeping nearby private paths protected', () => {
+    for (const path of ['/fonts/jakarta-latin.woff2', '/fonts/dm-sans-latin.woff2']) {
+      const response = middleware(unauthenticatedRequest(path));
+      expect(response.status, path).toBe(200);
+      expect(response.headers.get('location'), path).toBeNull();
+    }
+    expect(middleware(unauthenticatedRequest('/fonts-private/secret')).status).toBe(307);
+    expect(middleware(unauthenticatedRequest('/api/fonts/private')).status).toBe(401);
+  });
+});

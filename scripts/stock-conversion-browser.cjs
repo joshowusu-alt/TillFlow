@@ -8,6 +8,13 @@ const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
 (async () => {
   const base = new URL(process.env.BASE_URL || 'http://localhost:6200');
   if (base.protocol !== 'http:' || !['localhost', '127.0.0.1'].includes(base.hostname)) throw new Error('Conversion browser QA requires a local running app.');
+  for (const font of ['jakarta-latin', 'dm-sans-latin']) {
+    const response = await fetch(`${base.origin}/fonts/${font}.woff2`, { redirect: 'manual' });
+    assert.equal(response.status, 200, `Signed-out ${font} download must not redirect to login`);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    assert.equal(bytes.subarray(0, 4).toString(), 'wOF2', `${font} must return the font binary`);
+  }
+  console.log('[conversion-browser] signed-out font downloads return WOFF2 binaries');
   const { prisma: db } = await openGuardedPrismaClient();
   let browser, businessId, storeId, unitId;
   try {
