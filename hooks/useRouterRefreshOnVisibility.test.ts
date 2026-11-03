@@ -10,10 +10,47 @@ describe('useRouterRefreshOnVisibility', () => {
   beforeEach(() => {
     refresh.mockClear();
     vi.useFakeTimers();
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.useRealTimers();
+  });
+
+  it('does not reload fresh server content on ordinary pageshow', () => {
+    renderHook(() => useRouterRefreshOnVisibility(router));
+    act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false })));
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('pauses interval requests while hidden or offline, then refreshes on return', () => {
+    let visibility = 'hidden';
+    let online = true;
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
+    vi.stubGlobal('navigator', { get onLine() { return online; } });
+    const { unmount } = renderHook(() => useRouterRefreshOnVisibility(router, { intervalMs: 30_000 }));
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(refresh).not.toHaveBeenCalled();
+    visibility = 'visible';
+    online = false;
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(refresh).not.toHaveBeenCalled();
+    online = true;
+    act(() => window.dispatchEvent(new Event('online')));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    unmount();
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not overlap an in-flight refresh', () => {
+    const { rerender } = renderHook(({pending}) => useRouterRefreshOnVisibility(router, { intervalMs: 30_000, pending }), { initialProps: { pending: true } });
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(refresh).not.toHaveBeenCalled();
+    rerender({ pending: false });
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes when the document becomes visible', () => {

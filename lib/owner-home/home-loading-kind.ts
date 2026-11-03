@@ -45,12 +45,13 @@ export function homeLoadingKindFromFacts(input: {
  * `requireBusiness` and at most one sale-existence lookup — never product counts.
  */
 export const getOwnerHomeLoadingKind = cache(async (): Promise<OwnerHomeLoadingKind> => {
+  // A skeleton is only a visual hint. It must not wait for authentication and
+  // database reads that the actual protected page still performs independently.
+  const cookie = await readHomeLoadingKindCookie();
+  if (cookie) return cookie;
   const { user, business } = await requireBusiness();
   if (user.role !== 'OWNER') return 'established';
   if (business.onboardingCompletedAt) return 'established';
-
-  const cookie = await readHomeLoadingKindCookie();
-  if (cookie === 'established') return 'established';
 
   const firstSale = await prisma.salesInvoice.findFirst({
     where: {

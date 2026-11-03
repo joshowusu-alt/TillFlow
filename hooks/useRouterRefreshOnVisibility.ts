@@ -26,6 +26,8 @@ export function useRouterRefreshOnVisibility(
     enabled?: boolean;
     staleThresholdMs?: number;
     refreshOnMount?: boolean;
+    intervalMs?: number;
+    pending?: boolean;
   },
 ) {
   const lastRefreshAtRef = useRef(0);
@@ -35,6 +37,9 @@ export function useRouterRefreshOnVisibility(
   const staleThresholdMs = options?.staleThresholdMs ?? 0;
   const enabled = options?.enabled ?? true;
   const refreshOnMount = options?.refreshOnMount ?? false;
+  const intervalMs = options?.intervalMs;
+  const pendingRef = useRef(false);
+  pendingRef.current = options?.pending ?? false;
 
   useEffect(() => {
     if (!enabled) return;
@@ -46,6 +51,7 @@ export function useRouterRefreshOnVisibility(
     }
 
     const refresh = (force = false) => {
+      if (document.visibilityState !== 'visible' || navigator.onLine === false || pendingRef.current) return;
       const now = Date.now();
       if (!force && now - lastRefreshAtRef.current < throttleMs) return;
       if (!force && staleThresholdMs > 0 && now - lastRefreshAtRef.current < staleThresholdMs) {
@@ -73,19 +79,25 @@ export function useRouterRefreshOnVisibility(
       // bfcache restores always refresh; otherwise respect stale threshold.
       if (event.persisted) {
         resumeRefresh(true);
-        return;
       }
-      resumeRefresh(false);
+      // Normal pageshow already has fresh server data. It is not a resume.
     };
 
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('focus', onFocus);
     window.addEventListener('pageshow', onPageShow);
+    window.addEventListener('online', onFocus);
+    const interval = intervalMs && intervalMs > 0
+      ? window.setInterval(() => refresh(false), intervalMs)
+      : null;
+    if (refreshOnMount) refresh(true);
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('pageshow', onPageShow);
+      window.removeEventListener('online', onFocus);
+      if (interval !== null) window.clearInterval(interval);
     };
-  }, [enabled, refreshOnMount, router, staleThresholdMs, throttleMs]);
+  }, [enabled, refreshOnMount, router, staleThresholdMs, throttleMs, intervalMs]);
 }

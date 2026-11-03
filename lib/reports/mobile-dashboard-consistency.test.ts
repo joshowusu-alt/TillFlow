@@ -98,7 +98,9 @@ describe('Mobile dashboard sales consistency', () => {
     const hook = read('hooks/useRouterRefreshOnVisibility.ts');
 
     expect(refreshIndicator).toContain('useRouterRefreshOnVisibility');
-    expect(refreshIndicator).toContain('setInterval(() => router.refresh()');
+    // The shared hook owns scheduling so visibility/online/pending guards also
+    // apply to interval refreshes. Behaviour is covered by its hook tests.
+    expect(refreshIndicator).toContain('intervalMs: autoRefreshMs');
     expect(readiness).toContain('useRouterRefreshOnVisibility');
     expect(hook).toContain('visibilitychange');
     expect(hook).toContain("document.visibilityState === 'visible'");

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { deferServiceWorkerReload, isLoginSubmitting } from '@/lib/pwa/login-submit-guard';
+import { createControllerChangeHandler } from '@/lib/pwa/controller-change';
 import {
   deferPosServiceWorkerReload,
   isPosTransactionActive,
@@ -53,7 +54,9 @@ export default function ServiceWorkerRegistration() {
       window.location.reload();
     };
 
-    const handleControllerChange = () => {
+    const handleControllerChange = createControllerChangeHandler(
+      () => navigator.serviceWorker.controller,
+      () => {
       // Never hard-reload mid-login or mid-POS transaction: a remount regenerates
       // saleAttemptId and can turn an uncertain submission into a duplicate sale.
       if (isLoginSubmitting()) {
@@ -65,7 +68,8 @@ export default function ServiceWorkerRegistration() {
         return;
       }
       performReload();
-    };
+      },
+    );
 
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
 

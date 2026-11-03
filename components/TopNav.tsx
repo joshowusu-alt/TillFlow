@@ -355,6 +355,11 @@ export default function TopNav({
           <nav
             ref={navRef}
             aria-label="Main navigation"
+            onClickCapture={(event) => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              const href = (event.target as Element).closest('a[href]')?.getAttribute('href');
+              if (href?.startsWith('/') && !href.startsWith('//')) handleMobileNavigateStart(href.split('?')[0]);
+            }}
             className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex"
             data-desktop-nav={suppressDesktopNav ? 'deferred' : 'hydrated'}
             onKeyDown={(event) => {
@@ -680,7 +685,7 @@ export default function TopNav({
         </div>
         {pendingMobileHref ? (
         <div
-          className="h-1 overflow-hidden bg-blue-50 lg:hidden"
+          className="h-1 overflow-hidden bg-blue-50"
           role="status"
           aria-live="polite"
           aria-label="Loading selected section"

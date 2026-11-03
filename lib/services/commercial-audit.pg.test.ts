@@ -149,6 +149,15 @@ describePg('commercial audit: persisted trading day and terminal invoices', () =
       const purchase = await purchases.createPurchase({ sourceDocuments: [purchaseDocumentFixture()], businessId, storeId, supplierId, userId: owner.id,
         paymentStatus: 'UNPAID', payments: [], lines: [{ productId, unitId, qtyInUnit: 1, unitCostPence: 12000 }], acknowledgeHighCost: true,
         idempotencyKey: `commercial-purchase-${opened.id}` });
+      // Home's slim read must retain every full-report issue flag, including
+      // live credit and outstanding supplier balances, without calculating totals.
+      const { getTodayKPIs, getHomeIssueFlags } = await import('@/lib/reports/today-kpis');
+      const fullKpis = await getTodayKPIs(businessId);
+      const homeFlags = await getHomeIssueFlags(businessId);
+      expect(homeFlags.outstandingAPPence).toBeGreaterThan(0);
+      for (const key of Object.keys(homeFlags) as Array<keyof typeof homeFlags>) {
+        expect(homeFlags[key], key).toBe(fullKpis[key]);
+      }
       const supplierOptions = { recordedByUserId: owner.id, actorRole: 'OWNER', actorName: owner.name,
         tillId, shiftId: opened.id, idempotencyKey: `commercial-supplier-${opened.id}` };
       for (let retry = 0; retry < 2; retry++) await payments.recordSupplierPayment(businessId, purchase.id,
