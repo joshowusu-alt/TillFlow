@@ -40,3 +40,6 @@ jobs:
       - name: Verify shipped R2 reader with real Windows PostgreSQL client
         shell: powershell
         run: ./scripts/recovery-reference-regression.ps1
+      - name: Full external backup entrypoint using fictional data and controlled I/O
+        shell: powershell
+        run: ./scripts/recovery-external-entrypoint-regression.ps1
