@@ -19,6 +19,9 @@ describe('conversion action boundaries', () => {
     await searchStockConversionProducts('  sugar  ', 'branch');
     expect(mocks.context).toHaveBeenCalledWith(['OWNER','MANAGER'], 'branch');
     expect(mocks.products.mock.calls[0][0]).toMatchObject({ where: { businessId: 'tenant', active: true }, take: 20, select: { inventoryBalances: { where: { storeId: 'branch' } } } });
+    expect(mocks.products.mock.calls[0][0].where.OR).toEqual(expect.arrayContaining([
+      expect.objectContaining({ barcodes: { some: expect.objectContaining({ businessId: 'tenant', code: expect.objectContaining({ contains: 'sugar' }) }) } }),
+    ]));
     await searchStockConversionProducts('a', 'branch');
     expect(mocks.products).toHaveBeenCalledTimes(1);
   });

@@ -199,6 +199,9 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://localhost:6200
         run: npx playwright test --project=reports-money-layout-chromium
 
+      - name: Stock conversion workflow (320px, 390px and desktop)
+        run: node scripts/stock-conversion-browser.cjs
+
       - name: Offline sync smoke E2E
         run: npm run test:e2e:smoke
 

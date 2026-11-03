@@ -17,7 +17,7 @@ export async function searchStockConversionProducts(query: string, storeId: stri
     if (q.length < 2) return ok([] as ConversionProduct[]);
     const match = { contains: q, ...(isPostgresRuntimeEnv() ? { mode: 'insensitive' as const } : {}) };
     const products = await prisma.product.findMany({
-      where: { businessId: context.businessId, active: true, OR: [{ name: match }, { barcode: match }, { sku: match }] },
+      where: { businessId: context.businessId, active: true, OR: [{ name: match }, { barcode: match }, { sku: match }, { barcodes: { some: { businessId: context.businessId, code: match } } }] },
       orderBy: { name: 'asc' }, take: 20,
       select: { id: true, name: true, productUnits: { select: { unitId: true, conversionToBase: true, unit: { select: { name: true } } } },
         inventoryBalances: { where: { storeId: context.storeId }, select: { qtyOnHandBase: true, avgCostBasePence: true, knownValuePence: true, unvaluedQtyBase: true } } },
