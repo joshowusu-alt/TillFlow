@@ -285,7 +285,7 @@ function validateMarginThresholdBps(value: number | null) {
   }
 }
 
-const AUTHORITATIVE_INBOUND_COST_TYPES = ['PURCHASE', 'TRANSFER_IN', 'SALE_VOID', 'SALES_RETURN'] as const;
+const AUTHORITATIVE_INBOUND_COST_TYPES = ['PURCHASE', 'TRANSFER_IN', 'CONVERSION_IN', 'SALE_VOID', 'SALES_RETURN'] as const;
 
 type InventoryCostSyncResult = {
   syncedBalances: number;

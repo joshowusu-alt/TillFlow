@@ -194,6 +194,9 @@ jobs:
           cat .ci-server.log || true
           exit 1
 
+      - name: Stock conversion workflow (320px, 390px and desktop)
+        run: node scripts/stock-conversion-browser.cjs
+
       - name: Reports money layout (320px and 390px)
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:6200

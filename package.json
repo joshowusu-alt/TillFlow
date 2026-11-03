@@ -50,7 +50,8 @@
     "test:migration:slice2a:unit": "vitest run --reporter=dot lib/services/migration/file-policy.test.ts lib/services/migration/storage-vercel.test.ts lib/services/migration/slice2a-services.test.ts lib/services/migration/errors-public.test.ts lib/services/migration/cleanup-referenced-object.test.ts",
     "test:migration:slice2b:unit": "vitest run --reporter=dot lib/services/migration/slice2b-engine.test.ts lib/services/migration/slice2b-services.test.ts lib/migration/lifecycle.test.ts lib/services/migration/storage-vercel.test.ts",
     "test:migration:slice2b:scale": "vitest run --reporter=verbose lib/services/migration/slice2b-scale.test.ts",
-    "test:migration:slice2b:pg": "vitest run --reporter=dot lib/services/migration/slice2b-pg.integration.test.ts"
+    "test:migration:slice2b:pg": "vitest run --reporter=dot lib/services/migration/slice2b-pg.integration.test.ts",
+    "test:stock-conversion:sqlite": "node scripts/test-stock-conversion-sqlite.cjs"
   },
   "engines": {
     "node": ">=18 <24"
