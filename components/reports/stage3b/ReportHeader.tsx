@@ -9,5 +9,5 @@ export default function ReportHeader({ title, scopeLabel, periodLabel, actions }
   title: string; scopeLabel: string; periodLabel: string; actions?: ReactNode;
 }) {
   return <ReportsDestinationHead title={title} scopeLabel={scopeLabel} periodLabel={periodLabel} showRefresh={false}
-    actions={<><ReportKeyboardFocus /><ReportsRefresh compact fetchedAt={new Date().toISOString()} autoRefreshMs={title === 'Trading' ? 120_000 : undefined} />{actions ? <ReportMoreActions>{actions}</ReportMoreActions> : null}</>} />;
+    actions={<><ReportKeyboardFocus /><ReportsRefresh compact fetchedAt={new Date().toISOString()} autoRefreshMs={title === 'Trading' ? 300_000 : undefined} />{actions ? <ReportMoreActions>{actions}</ReportMoreActions> : null}</>} />;
 }

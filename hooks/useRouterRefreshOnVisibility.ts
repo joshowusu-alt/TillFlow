@@ -46,6 +46,7 @@ export function useRouterRefreshOnVisibility(
     }
 
     const refresh = (force = false) => {
+      if (document.visibilityState === 'hidden' || navigator.onLine === false) return;
       const now = Date.now();
       if (!force && now - lastRefreshAtRef.current < throttleMs) return;
       if (!force && staleThresholdMs > 0 && now - lastRefreshAtRef.current < staleThresholdMs) {
@@ -80,11 +81,13 @@ export function useRouterRefreshOnVisibility(
 
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('focus', onFocus);
+    window.addEventListener('online', onFocus);
     window.addEventListener('pageshow', onPageShow);
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('online', onFocus);
       window.removeEventListener('pageshow', onPageShow);
     };
   }, [enabled, refreshOnMount, router, staleThresholdMs, throttleMs]);

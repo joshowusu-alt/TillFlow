@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import OnlineOrderAttentionBanner from './OnlineOrderAttentionBanner';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 it('keeps a ready-for-pickup order visible, refreshes on focus and shows connection failure', async () => {
   const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ count: 1, newestId: 'order1', orders: [{
     id: 'order1', orderNumber: 'WEB-123', status: 'READY_FOR_PICKUP', paymentStatus: 'PAID',
@@ -15,10 +15,13 @@ it('keeps a ready-for-pickup order visible, refreshes on focus and shows connect
   expect(screen.getByText(/Ready for pickup/)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /dismiss|close/i })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'WEB-123' })).toHaveAttribute('href', '/online-orders?order=order1#order-order1');
+  // A real resume occurs after the initial focus/visibility event burst.
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 2000);
   fetcher.mockRejectedValue(new Error('offline'));
   fireEvent(window, new Event('focus'));
   expect(await screen.findByText(/Connection interrupted/)).toBeInTheDocument();
   expect(screen.getByText('1 online order outstanding')).toBeInTheDocument();
+  clock.mockReturnValue(Date.now() + 2000);
   fetcher.mockResolvedValue({ ok: true, json: async () => ({ count: 0, orders: [] }) });
   fireEvent(window, new Event('focus'));
   await waitFor(() => expect(screen.queryByRole('region')).not.toBeInTheDocument());

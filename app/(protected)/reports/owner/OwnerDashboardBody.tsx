@@ -73,7 +73,7 @@ export default async function OwnerDashboardBody({
         actions={
           <>
             <PlanFeatureBadge plan="PRO" />
-            <RefreshIndicator fetchedAt={snapshot.generatedAt} autoRefreshMs={60_000} />
+            <RefreshIndicator fetchedAt={snapshot.generatedAt} autoRefreshMs={180_000} />
             <a
               href="/reports/owner/export?format=html"
               target="_blank"

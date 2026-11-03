@@ -77,15 +77,6 @@ export async function GET() {
     checkRedis(),
   ]);
 
-  try {
-    // Exclude demo businesses from operator-facing health metrics.
-    const userCount = await prisma.user.count({ where: { business: { isDemo: false } } });
-    const businessCount = await prisma.business.count({ where: { isDemo: false } });
-    console.log(`[health] users=${userCount} businesses=${businessCount}`);
-  } catch (err: any) {
-    console.error('[health] Data count failed:', err?.message);
-  }
-
   const services = { database, redis };
   const databaseDown = database.status === 'down';
   const degraded = Object.values(services).some((service) => service.status === 'down');

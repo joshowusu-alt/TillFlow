@@ -1,5 +1,6 @@
 'use client';
 
+import { startActivePolling } from '@/lib/active-polling';
 import { useRouter } from 'next/navigation';
 import { useEffect, useTransition } from 'react';
 import { useRouterRefreshOnVisibility } from '@/hooks/useRouterRefreshOnVisibility';
@@ -8,11 +9,10 @@ import { useRouterRefreshOnVisibility } from '@/hooks/useRouterRefreshOnVisibili
 export default function ReportsRefresh({ fetchedAt, autoRefreshMs, compact = false }: { fetchedAt: string; autoRefreshMs?: number; compact?: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  useRouterRefreshOnVisibility(router);
+  useRouterRefreshOnVisibility(router, { enabled: !autoRefreshMs });
   useEffect(() => {
     if (!autoRefreshMs) return;
-    const interval = setInterval(() => router.refresh(), autoRefreshMs);
-    return () => clearInterval(interval);
+    return startActivePolling(() => router.refresh(), autoRefreshMs, { immediate: false });
   }, [router, autoRefreshMs]);
   const time = new Date(fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   return (

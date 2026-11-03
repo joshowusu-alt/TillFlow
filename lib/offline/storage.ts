@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyOfflineQueueChanged } from './queue-events';
+
 import { openDB, type IDBPDatabase } from 'idb';
 import {
     getClientActiveBusinessId,
@@ -448,6 +450,7 @@ export async function queueOfflineSale(
     }
 
     await db.put('salesQueue', offlineSale);
+    notifyOfflineQueueChanged();
     return id;
 }
 
@@ -490,6 +493,7 @@ export async function getOfflineSale(id: string, businessId?: string): Promise<O
 export async function updateOfflineSale(sale: OfflineSale): Promise<void> {
     const db = await getDB();
     await db.put('salesQueue', sale);
+    notifyOfflineQueueChanged();
 }
 
 export async function markSaleSynced(id: string, businessId?: string): Promise<void> {
@@ -505,6 +509,7 @@ export async function markSaleSynced(id: string, businessId?: string): Promise<v
     sale.synced = true;
     sale.status = 'synced';
     await db.put('salesQueue', migrateQueuedSaleRecord(sale));
+    notifyOfflineQueueChanged();
 }
 
 export async function markSaleQueueStatus(
@@ -527,6 +532,7 @@ export async function markSaleQueueStatus(
     sale.statusReason = reason;
     sale.synced = status === 'synced' || status === 'already_synced';
     await db.put('salesQueue', sale);
+    notifyOfflineQueueChanged();
 }
 
 export async function removeSyncedSales(businessId?: string): Promise<number> {

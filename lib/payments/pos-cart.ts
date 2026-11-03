@@ -3,7 +3,7 @@ import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import {
   resolveEffectiveSellingPricePence,
   resolveProductUnitBaseValuePence,
-} from '@/lib/services/shared';
+} from '@/lib/services/shared/product-unit-pricing';
 
 export type PosUnit = {
   id: string;

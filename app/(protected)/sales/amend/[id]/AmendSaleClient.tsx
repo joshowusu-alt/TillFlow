@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { formatMoney } from '@/lib/format';
 import { filterAmendSaleProductOptions } from '@/lib/amend-sale-product-options';
-import { resolveEffectiveSellingPricePence } from '@/lib/services/shared';
+import { resolveEffectiveSellingPricePence } from '@/lib/services/shared/product-unit-pricing';
 import { amendSaleAction } from '@/app/actions/sales';
 
 type LineItem = {

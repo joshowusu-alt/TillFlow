@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { startActivePolling } from '@/lib/active-polling';
 import { useEffect, useRef, useState } from 'react';
 import { formatMoney } from '@/lib/format';
 
@@ -54,15 +55,11 @@ export default function OnlineOrderAttentionBanner({ scopeKey }: { scopeKey: str
         setData(result); setStale(false);
       } catch {
         if (!disposed) setStale(true);
+        throw new Error('Attention unavailable');
       } finally { window.clearTimeout(timeout); inFlight = false; }
     }
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 15000);
-    const onFocus = () => void refresh();
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
-    return () => { disposed = true; controller?.abort(); window.clearInterval(timer);
-      window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus); };
+    const stop = startActivePolling(refresh, 15000, { maxMs: 120000 });
+    return () => { disposed = true; stop(); controller?.abort(); };
   }, [scopeKey, sound]);
 
   useEffect(() => () => { void audioRef.current?.close(); }, []);

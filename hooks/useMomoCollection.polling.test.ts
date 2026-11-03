@@ -1,0 +1,24 @@
+import { act, cleanup, renderHook } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+const check = vi.hoisted(() => vi.fn());
+vi.mock('@/app/actions/mobile-money', () => ({ checkMomoCollectionStatusAction: check, initiateMomoCollectionAction: vi.fn() }));
+import { useMomoCollection } from './useMomoCollection';
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); Object.defineProperty(navigator, 'onLine', { value: true }); });
+it('checks pending collections only while visible and online, and recovers the same collection', async () => {
+  vi.useFakeTimers();
+  let visible = false;
+  vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visible ? 'visible' : 'hidden');
+  check.mockResolvedValue({ success: true, data: { status: 'PENDING' } });
+  const { result } = renderHook(() => useMomoCollection({ storeId: 'business-location' }));
+  await act(async () => { result.current.setMomoCollectionId('original'); result.current.setMomoCollectionStatus('PENDING'); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(20000); }); expect(check).not.toHaveBeenCalled();
+  await act(async () => { visible = true; document.dispatchEvent(new Event('visibilitychange')); });
+  expect(check).toHaveBeenCalledWith('original');
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); }); expect(check).toHaveBeenCalledTimes(2);
+  await act(async () => { Object.defineProperty(navigator, 'onLine', { value: false }); window.dispatchEvent(new Event('offline')); await vi.advanceTimersByTimeAsync(20000); });
+  expect(check).toHaveBeenCalledTimes(2);
+  check.mockResolvedValue({ success: true, data: { status: 'CONFIRMED', providerReference: 'paid' } });
+  await act(async () => { Object.defineProperty(navigator, 'onLine', { value: true }); window.dispatchEvent(new Event('online')); });
+  expect(result.current.momoCollectionStatus).toBe('CONFIRMED'); expect(result.current.momoRef).toBe('paid');
+  await act(async () => { await vi.advanceTimersByTimeAsync(20000); }); expect(check).toHaveBeenCalledTimes(3);
+});

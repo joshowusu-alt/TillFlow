@@ -82,7 +82,7 @@ export default async function SystemHealthPage() {
       <PageHeader
         title="System Health"
         subtitle="Live operational metrics and scheduler status."
-        actions={<RefreshIndicator fetchedAt={now.toISOString()} autoRefreshMs={30_000} />}
+        actions={<RefreshIndicator fetchedAt={now.toISOString()} autoRefreshMs={120_000} />}
       />
 
       {/* Quick stats grid */}

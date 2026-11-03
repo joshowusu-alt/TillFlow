@@ -1,3 +1,4 @@
+import { runDatabaseOperation } from '@/lib/database-unavailable';
 import { PrismaClient } from '@prisma/client';
 import { isSqliteRuntimeEnv } from '@/lib/database-runtime';
 import { DatabaseTargetRefusedError, evaluateDatabaseTarget } from '@/lib/database-target-guard';
@@ -22,12 +23,14 @@ function testDatasourceOverride(): { db: { url: string } } | undefined {
 
 const prismaClientSingleton = () => {
   const datasources = testDatasourceOverride();
-  return new PrismaClient({
+  const client = new PrismaClient({
     ...(datasources ? { datasources } : {}),
     log: process.env.NODE_ENV === 'production' ? ['error'] : ['query', 'error', 'warn'],
     // No global transactionOptions.timeout — the 8 s default was killing
     // large import operations. Per-call options are set where needed.
   });
+  client.$use((params, next) => runDatabaseOperation(() => next(params)));
+  return client;
 };
 
 export const prisma = globalForPrisma.prisma ?? prismaClientSingleton();
