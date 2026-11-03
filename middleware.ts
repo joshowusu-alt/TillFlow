@@ -15,6 +15,12 @@ export const PUBLIC_DEPLOY_SHA_PATH = '/api/qa/deploy-sha';
 // Bundled login fonts are public static assets, not authenticated page routes.
 // Keep this exact: a neighbouring route must not inherit an auth exemption.
 const PUBLIC_FONT_PATHS = new Set([
+  '/fonts/jakarta-latin.woff2',
+  '/fonts/jakarta-latin-ext.woff2',
+  '/fonts/jakarta-cyrillic-ext.woff2',
+  '/fonts/jakarta-vietnamese.woff2',
+  '/fonts/dm-sans-latin.woff2',
+  '/fonts/dm-sans-latin-ext.woff2',
   '/fonts/plus-jakarta-sans-latin-wght-normal.woff2',
   '/fonts/plus-jakarta-sans-latin-ext-wght-normal.woff2',
   '/fonts/dm-sans-latin-wght-normal.woff2',

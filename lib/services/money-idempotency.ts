@@ -24,7 +24,8 @@ export type MoneyCommandKind =
   | 'EXPENSE_CREATE'
   | 'PURCHASE_CREATE'
   | 'IMPORT_CHUNK'
-  | 'OPENING_STOCK';
+  | 'OPENING_STOCK'
+  | 'STOCK_CONVERSION';
 
 export type MoneyIdempotencyRow = {
   id: string;

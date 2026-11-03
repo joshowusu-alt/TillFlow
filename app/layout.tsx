@@ -1,6 +1,6 @@
-﻿import './globals.css';
-import type { Metadata, Viewport } from 'next';
+import './globals.css';
 import './fonts.css';
+import type { Metadata, Viewport } from 'next';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import NetworkStatus from '@/components/NetworkStatus';
 import ToastProvider from '@/components/ToastProvider';
@@ -48,8 +48,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="scroll-smooth" style={{ backgroundColor: '#F8FBFF' }}>
       <head>
-        <link rel="preload" href="/fonts/plus-jakarta-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-        <link rel="preload" href="/fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/jakarta-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         {/* Critical background painted before any CSS or React loads — prevents black flash */}
         <style dangerouslySetInnerHTML={{ __html: `html,body{background-color:#F8FBFF}` }} />
         {/* Apple PWA startup images — shown by iOS immediately on cold launch, before the WebView

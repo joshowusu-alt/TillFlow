@@ -168,6 +168,9 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
           <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row lg:flex-shrink-0">
+          <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/inventory/conversions">
+            Convert stock
+          </Link>
           <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/inventory/stocktake">
             Stocktake
           </Link>
