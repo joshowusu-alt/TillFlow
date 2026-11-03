@@ -165,28 +165,24 @@ export const NAV_GROUPS: NavigationGroup[] = [
 ];
 
 export const SETTINGS_TAB_SECTIONS: SettingsTabSection[] = [
-  {
-    id: 'core',
-    label: 'Business setup',
-    items: [
-      { href: '/settings', label: 'Business', roles: ['MANAGER', 'OWNER'] },
-      { href: '/settings/organization', label: 'Organization', roles: ['MANAGER', 'OWNER'] },
-      { href: '/settings/billing', label: 'Billing', roles: ['MANAGER', 'OWNER'] },
-      { href: '/settings/online-store', label: 'Online Store', roles: ['MANAGER', 'OWNER'], minimumPlan: 'PRO' },
-      { href: '/settings/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'], minimumPlan: 'PRO' },
-      { href: '/settings/notifications', label: 'Notifications', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
-      { href: '/settings/loyalty', label: 'Loyalty', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
-      { href: '/settings/receipt-design', label: 'Receipt Design', roles: ['MANAGER', 'OWNER'] },
-      { href: '/settings/import-stock', label: 'Import Stock', roles: ['MANAGER', 'OWNER'] },
-    ],
-  },
-  {
-    id: 'advanced',
-    label: 'Owner & recovery',
-    items: [
-      { href: '/settings/system-health', label: 'System Health', roles: ['MANAGER', 'OWNER'] },
-      { href: '/settings/backup', label: 'Backup', roles: ['OWNER'] },
-      { href: '/settings/data-repair', label: 'Data Repair', roles: ['OWNER'] },
-    ],
-  },
+  { id: 'business', label: 'Business', items: [
+    { href: '/settings', label: 'Business preferences', roles: ['MANAGER', 'OWNER'] },
+    { href: '/settings/organization', label: 'Stores & organization', roles: ['MANAGER', 'OWNER'] },
+    { href: '/settings/billing', label: 'Plan & billing', roles: ['MANAGER', 'OWNER'] },
+  ] },
+  { id: 'selling', label: 'Selling & customers', items: [
+    { href: '/settings/receipt-design', label: 'Receipt design', roles: ['MANAGER', 'OWNER'] },
+    { href: '/settings/online-store', label: 'Online store', roles: ['MANAGER', 'OWNER'], minimumPlan: 'PRO' },
+    { href: '/settings/loyalty', label: 'Loyalty', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+  ] },
+  { id: 'data', label: 'Data & insights', items: [
+    { href: '/settings/import-stock', label: 'Import data', roles: ['MANAGER', 'OWNER'] },
+    { href: '/settings/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'], minimumPlan: 'PRO' },
+    { href: '/settings/notifications', label: 'Notifications', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+  ] },
+  { id: 'advanced', label: 'Administration', items: [
+    { href: '/settings/system-health', label: 'System health', roles: ['MANAGER', 'OWNER'] },
+    { href: '/settings/backup', label: 'Backup', roles: ['OWNER'] },
+    { href: '/settings/data-repair', label: 'Data repair', roles: ['OWNER'] },
+  ] },
 ];
