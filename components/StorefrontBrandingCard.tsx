@@ -26,7 +26,7 @@ export default function StorefrontBrandingCard({
   const [accent, setAccent] = useState(defaultAccentColor || '#3B82F6');
 
   return (
-    <div className="card p-6">
+    <div className="card min-w-0 p-4 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-display font-semibold">Storefront branding</h2>
@@ -43,8 +43,8 @@ export default function StorefrontBrandingCard({
       ) : (
         <div className="mt-4 grid gap-4">
           <div>
-            <label className="label">Storefront hero override (advanced)</label>
-            <input
+            <label className="label" htmlFor="field-storefrontLogoUrl">Storefront hero override (advanced)</label>
+            <input id="field-storefrontLogoUrl"
               className="input"
               type="url"
               name="storefrontLogoUrl"
@@ -64,21 +64,21 @@ export default function StorefrontBrandingCard({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="label">Primary colour</label>
+              <label className="label" htmlFor="storefront-primary-picker">Primary colour</label>
               <div className="flex items-center gap-3">
                 <input
                   type="color"
-                  name="storefrontPrimaryColor"
+                  id="storefront-primary-picker" name="storefrontPrimaryColor"
                   value={primary}
                   onChange={(event) => setPrimary(event.target.value)}
-                  className="h-10 w-14 cursor-pointer rounded-xl border border-black/10 bg-white"
+                  className="h-10 w-14 shrink-0 cursor-pointer rounded-xl border border-black/10 bg-white"
                   disabled={!basicBrandingEnabled}
                 />
                 <input
-                  type="text"
+                  aria-label="Primary colour hex code" type="text"
                   value={primary}
                   onChange={(event) => setPrimary(event.target.value)}
-                  className="input flex-1 font-mono text-sm"
+                  className="input min-w-0 flex-1 font-mono text-sm"
                   pattern="^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$"
                   disabled={!basicBrandingEnabled}
                 />
@@ -87,7 +87,7 @@ export default function StorefrontBrandingCard({
             </div>
 
             <div>
-              <label className="label flex items-center gap-2">
+              <label className="label flex items-center gap-2" htmlFor="storefront-accent-picker">
                 Accent colour
                 {!extendedBrandingEnabled ? (
                   <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent">
@@ -98,17 +98,17 @@ export default function StorefrontBrandingCard({
               <div className="flex items-center gap-3">
                 <input
                   type="color"
-                  name="storefrontAccentColor"
+                  id="storefront-accent-picker" name="storefrontAccentColor"
                   value={accent}
                   onChange={(event) => setAccent(event.target.value)}
-                  className="h-10 w-14 cursor-pointer rounded-xl border border-black/10 bg-white disabled:opacity-50"
+                  className="h-10 w-14 shrink-0 cursor-pointer rounded-xl border border-black/10 bg-white disabled:opacity-50"
                   disabled={!extendedBrandingEnabled}
                 />
                 <input
-                  type="text"
+                  aria-label="Accent colour hex code" type="text"
                   value={accent}
                   onChange={(event) => setAccent(event.target.value)}
-                  className="input flex-1 font-mono text-sm"
+                  className="input min-w-0 flex-1 font-mono text-sm"
                   pattern="^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$"
                   disabled={!extendedBrandingEnabled}
                 />
@@ -118,7 +118,7 @@ export default function StorefrontBrandingCard({
           </div>
 
           <div>
-            <label className="label flex items-center gap-2">
+            <label className="label flex items-center gap-2" htmlFor="storefront-tagline">
               Tagline
               {!extendedBrandingEnabled ? (
                 <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent">
@@ -128,7 +128,7 @@ export default function StorefrontBrandingCard({
             </label>
             <input
               className="input"
-              name="storefrontTagline"
+              id="storefront-tagline" name="storefrontTagline"
               defaultValue={defaultTagline}
               placeholder="e.g. Fresh groceries — ready when you are"
               maxLength={100}

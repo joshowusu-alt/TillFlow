@@ -1,13 +1,15 @@
 import CatalogueVisibilityFilter from '@/components/CatalogueVisibilityFilter';
 import Link from 'next/link';
 import FormError from '@/components/FormError';
+import SubmitButton from '@/components/SubmitButton';
+import StorefrontPickupHours from '@/components/StorefrontPickupHours';
 import PageHeader from '@/components/PageHeader';
 import StorefrontUpgradeNotice from '@/components/StorefrontUpgradeNotice';
 import { updateStorefrontSettingsAction, updateStorefrontHoursAction, bulkSetStorefrontPublishAction, updateStorefrontCategoryMappingsAction, hideOutOfStockStorefrontProductsAction } from '@/app/actions/online-storefront';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
-import { DAY_KEYS, DAY_LABELS, makeDefaultWeeklyHours, parseWeeklyHours } from '@/lib/business-hours';
+import { makeDefaultWeeklyHours, parseWeeklyHours } from '@/lib/business-hours';
 import { headers } from 'next/headers';
 import StorefrontPaymentModeCard from '@/components/StorefrontPaymentModeCard';
 import StorefrontAccessCard from '@/components/StorefrontAccessCard';
@@ -175,14 +177,14 @@ export default async function OnlineStoreSettingsPage(
   const categoryPublishSummaries =
     uncategorisedTotal > 0
       ? [
-          ...categorySummaries,
-          {
-            id: '__uncategorised__',
-            name: 'Uncategorised',
-            total: uncategorisedTotal,
-            published: uncategorisedPublished,
-          },
-        ]
+        ...categorySummaries,
+        {
+          id: '__uncategorised__',
+          name: 'Uncategorised',
+          total: uncategorisedTotal,
+          published: uncategorisedPublished,
+        },
+      ]
       : categorySummaries;
   const publishedOutOfStock =
     totalPublished -
@@ -242,12 +244,15 @@ export default async function OnlineStoreSettingsPage(
   });
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-6">
       <PageHeader
         title="Online Storefront"
         subtitle="Publish a public catalogue, accept mobile-money checkout, and manage pickup orders from TillFlow."
       />
 
+      <nav aria-label="Online store sections" className="flex flex-wrap gap-2">
+        {[["store-identity", "Identity"], ["store-checkout", "Payments"], ["store-pickup", "Pickup"], ["store-categories", "Categories"], ["store-images", "Images"], ["store-catalogue", "Products"], ["store-insights", "Insights"]].map(([id, label]) => <a key={id} href={'#' + id} className="btn-secondary min-h-11 text-sm">{label}</a>)}
+      </nav>
       <div className="grid gap-2.5 sm:grid-cols-3">
         <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm">
           <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Status</div>
@@ -266,24 +271,24 @@ export default async function OnlineStoreSettingsPage(
       <FormError error={pageError} />
 
       {searchParams?.saved === '1' ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+        <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
           Storefront settings saved.
         </div>
       ) : null}
       {searchParams?.saved === 'stock' ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+        <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
           Out-of-stock products hidden from the storefront.
         </div>
       ) : null}
       {searchParams?.saved === 'categories' ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+        <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
           Public category mappings saved.
         </div>
       ) : null}
 
       {storefrontBusiness.storefrontEnabled && absoluteStorefrontUrl ? (
         <SettingsSection
-          title="Storefront access"
+          id="store-access" title="Storefront access"
           description="Link, QR code, and printable poster customers can find you with."
           eyebrow="Share"
           defaultOpen
@@ -299,7 +304,7 @@ export default async function OnlineStoreSettingsPage(
       ) : null}
 
       {searchParams?.saved === 'hours' ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+        <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
           Pickup hours saved.
         </div>
       ) : null}
@@ -307,7 +312,7 @@ export default async function OnlineStoreSettingsPage(
       <form action={updateStorefrontSettingsAction} className="space-y-4">
         <SettingsSection
           keepMounted
-          title="Store identity & branding"
+          id="store-identity" title="Store identity & branding"
           description="Public name, headline, description, and brand colours."
           eyebrow="Identity"
           defaultOpen
@@ -342,8 +347,8 @@ export default async function OnlineStoreSettingsPage(
             </div>
 
             <div>
-              <label className="label">Storefront slug</label>
-              <input
+              <label className="label" htmlFor="store-storefrontSlug">Storefront slug</label>
+              <input id="store-storefrontSlug"
                 className="input"
                 name="storefrontSlug"
                 defaultValue={storefrontBusiness.storefrontSlug ?? storefrontBusiness.name}
@@ -353,7 +358,7 @@ export default async function OnlineStoreSettingsPage(
             </div>
 
             <div>
-              <label className="label">Public link</label>
+              <div className="label">Public link</div>
               <div className="input flex items-center bg-black/[0.03] text-sm text-black/60 overflow-hidden">
                 <span className="truncate">
                   {absoluteStorefrontUrl ?? publicUrl ?? 'Save a slug to generate the link'}
@@ -371,8 +376,8 @@ export default async function OnlineStoreSettingsPage(
             </div>
 
             <div className="lg:col-span-2">
-              <label className="label">Headline</label>
-              <input
+              <label className="label" htmlFor="store-storefrontHeadline">Headline</label>
+              <input id="store-storefrontHeadline"
                 className="input"
                 name="storefrontHeadline"
                 defaultValue={storefrontBusiness.storefrontHeadline ?? ''}
@@ -381,8 +386,8 @@ export default async function OnlineStoreSettingsPage(
             </div>
 
             <div className="lg:col-span-2">
-              <label className="label">Description</label>
-              <textarea
+              <label className="label" htmlFor="store-storefrontDescription">Description</label>
+              <textarea id="store-storefrontDescription"
                 className="input min-h-24"
                 name="storefrontDescription"
                 defaultValue={storefrontBusiness.storefrontDescription ?? ''}
@@ -396,14 +401,14 @@ export default async function OnlineStoreSettingsPage(
             defaultPrimaryColor={storefrontPrimaryColor}
             defaultAccentColor={storefrontBusiness.storefrontAccentColor ?? ''}
             defaultTagline={storefrontBusiness.storefrontTagline ?? ''}
-          basicBrandingEnabled={basicBrandingEnabled}
-          extendedBrandingEnabled={extendedBrandingEnabled}
-        />
+            basicBrandingEnabled={basicBrandingEnabled}
+            extendedBrandingEnabled={extendedBrandingEnabled}
+          />
         </SettingsSection>
 
         <SettingsSection
           keepMounted
-          title="Ordering & payment"
+          id="store-checkout" title="Ordering & payment"
           description="Choose how customers place orders and see payment instructions."
           eyebrow="Checkout"
           defaultOpen
@@ -428,13 +433,13 @@ export default async function OnlineStoreSettingsPage(
             ? 'Hubtel' : process.env.ARKESEL_API_KEY ? 'Arkesel' : null}
         />
 
-        <button type="submit" className="btn-primary">
+        <SubmitButton className="btn-primary min-h-11 w-full sm:w-auto" loadingText="Saving…">
           Save storefront settings
-        </button>
+        </SubmitButton>
       </form>
 
       <SettingsSection
-        title="Pickup settings"
+        id="store-pickup" title="Pickup settings"
         description="Opening hours and preparation time shown on the public storefront."
         eyebrow="Operations"
         defaultOpen={false}
@@ -450,84 +455,49 @@ export default async function OnlineStoreSettingsPage(
                 When set, customers see a green &ldquo;Open now · Ready in ~X min&rdquo; badge — or &ldquo;Closed · Opens at HH:MM&rdquo; outside hours.
               </p>
               <form action={updateStorefrontHoursAction} className="space-y-4">
-              <div>
-                <label className="label">Pickup instructions</label>
-                <textarea
-                  className="input min-h-24"
-                  name="storefrontPickupInstructions"
-                  defaultValue={storefrontBusiness.storefrontPickupInstructions ?? ''}
-                  placeholder="Example: Pick up at the main counter after confirming your order number."
-                />
-                <div className="mt-1 text-xs text-black/50">
-                  Shown to customers after checkout and on their order status page.
+                <div>
+                  <label className="label" htmlFor="store-storefrontPickupInstructions">Pickup instructions</label>
+                  <textarea id="store-storefrontPickupInstructions"
+                    className="input min-h-24"
+                    name="storefrontPickupInstructions"
+                    defaultValue={storefrontBusiness.storefrontPickupInstructions ?? ''}
+                    placeholder="Example: Pick up at the main counter after confirming your order number."
+                  />
+                  <div className="mt-1 text-xs text-black/50">
+                    Shown to customers after checkout and on their order status page.
+                  </div>
                 </div>
-              </div>
 
-              <label className="flex items-center gap-3 rounded-2xl border border-black/5 bg-black/[0.03] px-4 py-3">
-                <input
-                  type="checkbox"
-                  name="hoursEnabled"
-                  defaultChecked={hoursEnabled}
-                  className="h-4 w-4"
-                />
-                <span className="text-sm font-medium text-ink">Show pickup hours on the public storefront</span>
-              </label>
+                <label className="flex items-center gap-3 rounded-2xl border border-black/5 bg-black/[0.03] px-4 py-3">
+                  <input
+                    type="checkbox"
+                    name="hoursEnabled"
+                    defaultChecked={hoursEnabled}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-sm font-medium text-ink">Show pickup hours on the public storefront</span>
+                </label>
 
-              <div className="grid gap-3">
-                {DAY_KEYS.map((day) => {
-                  const config = hours[day];
-                  return (
-                    <div
-                      key={day}
-                      className="grid grid-cols-[72px_minmax(94px,1fr)_minmax(94px,1fr)] items-center gap-2 rounded-2xl border border-black/5 bg-white px-3 py-3 sm:grid-cols-[120px_minmax(104px,1fr)_minmax(104px,1fr)_auto] sm:gap-3 sm:px-4"
-                    >
-                      <div className="text-sm font-medium text-ink">{DAY_LABELS[day]}</div>
-                      <input
-                        className="input min-w-[94px] px-2 text-sm"
-                        type="time"
-                        name={`${day}_open`}
-                        defaultValue={config.open}
-                        disabled={config.closed}
-                      />
-                      <input
-                        className="input min-w-[94px] px-2 text-sm"
-                        type="time"
-                        name={`${day}_close`}
-                        defaultValue={config.close}
-                        disabled={config.closed}
-                      />
-                      <label className="col-span-3 flex items-center gap-2 text-xs text-black/65 sm:col-span-1">
-                        <input
-                          type="checkbox"
-                          name={`${day}_closed`}
-                          defaultChecked={config.closed}
-                          className="h-4 w-4"
-                        />
-                        Closed
-                      </label>
-                    </div>
-                  );
-                })}
-              </div>
+                <StorefrontPickupHours initialHours={hours} />
 
-              <div>
-                <label className="label">Pickup preparation time (minutes)</label>
-                <input
-                  className="input max-w-xs"
-                  type="number"
-                  name="pickupPrepMinutes"
-                  min={0}
-                  max={1440}
-                  defaultValue={prepMinutes}
-                />
-                <div className="mt-1 text-xs text-black/50">
-                  Used to render the "Ready in ~X min" line on the storefront when open. Set to 0 to hide it.
+                <div>
+                  <label className="label" htmlFor="store-pickupPrepMinutes">Pickup preparation time (minutes)</label>
+                  <input id="store-pickupPrepMinutes"
+                    className="input max-w-xs"
+                    type="number"
+                    name="pickupPrepMinutes"
+                    min={0}
+                    max={1440}
+                    defaultValue={prepMinutes}
+                  />
+                  <div className="mt-1 text-xs text-black/50">
+                    Used to render the "Ready in ~X min" line on the storefront when open. Set to 0 to hide it.
+                  </div>
                 </div>
-              </div>
 
-              <button type="submit" className="btn-primary">
-                Save pickup hours
-              </button>
+                <SubmitButton className="btn-primary min-h-11 w-full sm:w-auto" loadingText="Saving…">
+                  Save pickup hours
+                </SubmitButton>
               </form>
             </div>
           );
@@ -535,7 +505,7 @@ export default async function OnlineStoreSettingsPage(
       </SettingsSection>
 
       <SettingsSection
-        title="Public category cleanup"
+        id="store-categories" title="Public category cleanup"
         description="Merge messy imported categories into customer-friendly shopping sections."
         eyebrow="Merchandising"
         defaultOpen={false}
@@ -558,7 +528,7 @@ export default async function OnlineStoreSettingsPage(
               const publicName = existing?.publicCategoryName ?? suggested.name;
               const priority = existing?.priority ?? suggested.priority;
               return (
-                <div key={category.id} className="grid gap-3 px-3 py-3 sm:grid-cols-[1.15fr_1fr_5rem_auto] sm:items-center">
+                <div key={category.id} className="grid gap-3 px-3 py-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_5rem_auto] sm:items-center">
                   <input type="hidden" name="rawCategoryName" value={category.name} />
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold text-ink">{category.name}</div>
@@ -568,10 +538,10 @@ export default async function OnlineStoreSettingsPage(
                     </div>
                   </div>
                   <div>
-                    <label className="label sm:hidden">Public category</label>
+                    <label className="label" htmlFor={'public-category-' + category.id}>Public category</label>
                     <input
                       className="input h-11"
-                      name={`publicCategoryName:${category.name}`}
+                      id={'public-category-' + category.id} aria-label={'Public category for ' + category.name} name={`publicCategoryName:${category.name}`}
                       defaultValue={publicName}
                       list="storefront-public-category-options"
                     />
@@ -580,8 +550,8 @@ export default async function OnlineStoreSettingsPage(
                     </div>
                   </div>
                   <div>
-                    <label className="label sm:hidden">Order</label>
-                    <input className="input h-11" name={`priority:${category.name}`} type="number" min={0} max={999} defaultValue={priority} />
+                    <label className="label" htmlFor={'category-order-' + category.id}>Order</label>
+                    <input className="input h-11" id={'category-order-' + category.id} aria-label={'Category order for ' + category.name} name={`priority:${category.name}`} type="number" min={0} max={999} defaultValue={priority} />
                   </div>
                   <label className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-black/60">
                     <input type="checkbox" name={`hidden:${category.name}`} defaultChecked={Boolean(existing?.hidden)} />
@@ -596,14 +566,14 @@ export default async function OnlineStoreSettingsPage(
               <option key={option.name} value={option.name} />
             ))}
           </datalist>
-          <button type="submit" className="btn-primary">
+          <SubmitButton className="btn-primary min-h-11 w-full sm:w-auto" loadingText="Saving…">
             Save public categories
-          </button>
+          </SubmitButton>
         </form>
       </SettingsSection>
 
       <SettingsSection
-        title="Storefront image readiness"
+        id="store-images" title="Storefront image readiness"
         description={`${imageReadinessPercent}% of live products have a product or category image`}
         badge={`${imageReadyCount}/${totalPublished}`}
         eyebrow="Images"
@@ -650,7 +620,7 @@ export default async function OnlineStoreSettingsPage(
       </SettingsSection>
 
       <SettingsSection
-        title="Catalogue visibility"
+        id="store-catalogue" title="Catalogue visibility"
         description={`${totalPublished} of ${totalProducts} products visible online`}
         badge={`${totalPublished}/${totalProducts}`}
         eyebrow="Products"
@@ -681,80 +651,80 @@ export default async function OnlineStoreSettingsPage(
               ? `${publishedOutOfStock} published product${publishedOutOfStock === 1 ? '' : 's'} currently show as out of stock. Hide them now to keep the storefront cleaner for customers.`
               : 'No published products are currently out of stock.'}
           </div>
-        {categoryPublishSummaries.length > 1 ? (
-          <div className="mt-4 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/55">Publish by category</div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {categoryPublishSummaries.map((category) => {
-                const allPublished = category.published === category.total;
-                const nonePublished = category.published === 0;
-                return (
-                  <div
-                    key={category.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-black/5 bg-white px-3 py-2"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-ink">{category.name}</div>
-                      <div className="text-xs text-black/55">{category.published} of {category.total} published</div>
+          {categoryPublishSummaries.length > 1 ? (
+            <div className="mt-4 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/55">Publish by category</div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {categoryPublishSummaries.map((category) => {
+                  const allPublished = category.published === category.total;
+                  const nonePublished = category.published === 0;
+                  return (
+                    <div
+                      key={category.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-black/5 bg-white px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-ink">{category.name}</div>
+                        <div className="text-xs text-black/55">{category.published} of {category.total} published</div>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <form action={bulkSetStorefrontPublishAction}>
+                          <input type="hidden" name="publish" value="1" />
+                          <input type="hidden" name="categoryId" value={category.id === '__uncategorised__' ? '' : category.id} />
+                          <button
+                            type="submit"
+                            className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-semibold text-accent transition hover:bg-accent/20 disabled:opacity-40"
+                            disabled={allPublished || category.id === '__uncategorised__'}
+                            title={category.id === '__uncategorised__' ? 'Assign these to a category first' : ''}
+                          >
+                            Publish
+                          </button>
+                        </form>
+                        <form action={bulkSetStorefrontPublishAction}>
+                          <input type="hidden" name="publish" value="0" />
+                          <input type="hidden" name="categoryId" value={category.id === '__uncategorised__' ? '' : category.id} />
+                          <button
+                            type="submit"
+                            className="rounded-full border border-black/10 bg-white px-3 py-1 text-[11px] font-semibold text-black/65 transition hover:border-black/20 disabled:opacity-40"
+                            disabled={nonePublished || category.id === '__uncategorised__'}
+                            title={category.id === '__uncategorised__' ? 'Assign these to a category first' : ''}
+                          >
+                            Hide
+                          </button>
+                        </form>
+                      </div>
                     </div>
-                    <div className="flex shrink-0 gap-2">
-                      <form action={bulkSetStorefrontPublishAction}>
-                        <input type="hidden" name="publish" value="1" />
-                        <input type="hidden" name="categoryId" value={category.id === '__uncategorised__' ? '' : category.id} />
-                        <button
-                          type="submit"
-                          className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-semibold text-accent transition hover:bg-accent/20 disabled:opacity-40"
-                          disabled={allPublished || category.id === '__uncategorised__'}
-                          title={category.id === '__uncategorised__' ? 'Assign these to a category first' : ''}
-                        >
-                          Publish
-                        </button>
-                      </form>
-                      <form action={bulkSetStorefrontPublishAction}>
-                        <input type="hidden" name="publish" value="0" />
-                        <input type="hidden" name="categoryId" value={category.id === '__uncategorised__' ? '' : category.id} />
-                        <button
-                          type="submit"
-                          className="rounded-full border border-black/10 bg-white px-3 py-1 text-[11px] font-semibold text-black/65 transition hover:border-black/20 disabled:opacity-40"
-                          disabled={nonePublished || category.id === '__uncategorised__'}
-                          title={category.id === '__uncategorised__' ? 'Assign these to a category first' : ''}
-                        >
-                          Hide
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        <div className="mt-5 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-base font-display font-semibold">Published products</h3>
-            <p className="mt-1 text-sm text-black/55">
-              Only products marked as published appear in the public storefront.
-            </p>
+          <div className="mt-5 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-base font-display font-semibold">Published products</h3>
+              <p className="mt-1 text-sm text-black/55">
+                Only products marked as published appear in the public storefront.
+              </p>
+            </div>
+            <Link href="/products" className="btn-secondary justify-center text-sm">
+              Open products
+            </Link>
           </div>
-          <Link href="/products" className="btn-secondary justify-center text-sm">
-            Open products
-          </Link>
-        </div>
 
-        <div className="mt-5">
-          <CatalogueVisibilityFilter initialTotal={totalProducts} />
-        </div>
+          <div className="mt-5">
+            <CatalogueVisibilityFilter initialTotal={totalProducts} />
+          </div>
         </div>
       </SettingsSection>
       <SettingsSection
-        title="Storefront analytics"
+        id="store-insights" title="Storefront analytics"
         description="Last 30 days of customer activity from the public storefront."
         eyebrow="Insights"
         defaultOpen={false}
       >
         <div className="space-y-4">
-          <div className="grid gap-2 sm:grid-cols-5">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
             {[
               ['Visits', visits],
               ['Add to cart', addToCart],

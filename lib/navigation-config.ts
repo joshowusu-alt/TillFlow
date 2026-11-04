@@ -178,7 +178,7 @@ export const SETTINGS_TAB_SECTIONS: SettingsTabSection[] = [
   { id: 'data', label: 'Data & insights', items: [
     { href: '/settings/import-stock', label: 'Import data', roles: ['MANAGER', 'OWNER'] },
     { href: '/settings/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'], minimumPlan: 'PRO' },
-    { href: '/settings/notifications', label: 'Notifications', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+    { href: '/settings/notifications', label: 'Notifications', roles: ['OWNER'], minimumPlan: 'GROWTH' },
   ] },
   { id: 'advanced', label: 'Administration', items: [
     { href: '/settings/system-health', label: 'System health', roles: ['MANAGER', 'OWNER'] },
