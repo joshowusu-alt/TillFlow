@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useId, useState } from 'react';
 import {
   saveCashBankOpeningBalances,
   saveOpeningAR,
@@ -42,6 +42,12 @@ function toPence(val: string | number): number {
   return Math.round(n * 100);
 }
 
+function validAmount(value: string): boolean {
+  if (!value.trim()) return false;
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount >= 0 && Number.isSafeInteger(Math.round(amount * 100));
+}
+
 function fromPence(pence: number): string {
   return (pence / 100).toFixed(2);
 }
@@ -74,7 +80,13 @@ export default function OpeningBalancesForm({
   );
   const [apMsg, setApMsg] = useState('');
 
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setPending] = useState(false);
+  const fieldId = useId();
+  const runSave = async (save: () => Promise<void>, feedback: (message: string) => void) => {
+    if (isPending) return;
+    setPending(true);
+    try { await save(); } catch { feedback('Could not save opening balances. Please try again.'); } finally { setPending(false); }
+  };
 
   // Computed totals
   const totalAR = arRows.reduce((sum, r) => sum + toPence(r.amount), 0);
@@ -85,13 +97,17 @@ export default function OpeningBalancesForm({
   // ---- Cash & Bank ----
   function handleSaveCashBank() {
     setCashBankMsg('');
-    startTransition(async () => {
+    if (!validAmount(cashOnHand) || !validAmount(bankBalance)) {
+      setCashBankMsg('Enter valid cash and bank balances. Use 0 for an empty balance.');
+      return;
+    }
+    void runSave(async () => {
       const result = await saveCashBankOpeningBalances({
         cashOnHandPence: toPence(cashOnHand),
         bankBalancePence: toPence(bankBalance),
       });
       setCashBankMsg(result.success ? 'Saved ✓' : result.error);
-    });
+    }, setCashBankMsg);
   }
 
   // ---- AR ----
@@ -103,13 +119,17 @@ export default function OpeningBalancesForm({
   }
   function handleSaveAR() {
     setArMsg('');
+    if (arRows.some(row => (row.customerId || row.amount.trim()) && (!row.customerId || !validAmount(row.amount)))) {
+      setArMsg('Choose a customer and enter a valid amount for each debt, or remove the unused row.');
+      return;
+    }
     const entries = arRows
       .filter(r => r.customerId && toPence(r.amount) > 0)
       .map(r => ({ customerId: r.customerId, amountPence: toPence(r.amount) }));
-    startTransition(async () => {
+    void runSave(async () => {
       const result = await saveOpeningAR(entries);
       setArMsg(result.success ? 'Saved ✓' : result.error);
-    });
+    }, setArMsg);
   }
 
   // ---- AP ----
@@ -121,17 +141,21 @@ export default function OpeningBalancesForm({
   }
   function handleSaveAP() {
     setApMsg('');
+    if (apRows.some(row => (row.supplierId || row.amount.trim()) && (!row.supplierId || !validAmount(row.amount)))) {
+      setApMsg('Choose a supplier and enter a valid amount for each debt, or remove the unused row.');
+      return;
+    }
     const entries = apRows
       .filter(r => r.supplierId && toPence(r.amount) > 0)
       .map(r => ({ supplierId: r.supplierId, amountPence: toPence(r.amount) }));
-    startTransition(async () => {
+    void runSave(async () => {
       const result = await saveOpeningAP(entries);
       setApMsg(result.success ? 'Saved ✓' : result.error);
-    });
+    }, setApMsg);
   }
 
   return (
-    <div className="space-y-6">
+    <fieldset disabled={isPending} className="min-w-0 space-y-6">
       <div className="rounded-3xl border border-accent/10 bg-[linear-gradient(135deg,rgba(37,99,235,0.08),rgba(255,255,255,0.96))] p-5 shadow-[0_18px_48px_rgba(37,99,235,0.08)]">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -153,22 +177,22 @@ export default function OpeningBalancesForm({
             {
               account: 'Cash on Hand',
               method: 'Simple amount field',
-              result: 'Saves an OpeningBalance record and posts a journal entry: debit cash, credit equity.',
+              result: 'Records the cash you held when you started and includes it in opening capital.',
             },
             {
               account: 'Bank Balance',
               method: 'Simple amount field',
-              result: 'Saves an OpeningBalance record and posts a journal entry: debit bank, credit equity.',
+              result: 'Records your bank balance when you started and includes it in opening capital.',
             },
             {
               account: 'AR (Customer Debts)',
               method: 'Per-customer rows',
-              result: 'Creates real unpaid SalesInvoices that can later be collected through customer receipt flows.',
+              result: 'Creates unpaid customer invoices that you can collect through Customer Receipts.',
             },
             {
               account: 'AP (Supplier Debts)',
               method: 'Per-supplier rows',
-              result: 'Creates real unpaid PurchaseInvoices that can later be settled through supplier payment flows.',
+              result: 'Creates unpaid supplier invoices that you can settle through Supplier Payments.',
             },
             {
               account: 'Inventory',
@@ -178,7 +202,7 @@ export default function OpeningBalancesForm({
             {
               account: "Owner's Capital",
               method: 'Auto-calculated summary',
-              result: 'Shown below as assets minus liabilities based on the opening balances saved in this screen.',
+              result: 'Shown below as assets minus liabilities based on the amounts entered below. Save each section to apply your changes.',
             },
           ].map((item) => (
             <div
@@ -205,23 +229,25 @@ export default function OpeningBalancesForm({
         </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="label">Cash on Hand ({currencySymbol})</label>
+            <label className="label" htmlFor={fieldId + '-cash'}>Cash on Hand ({currencySymbol})</label>
             <input
               className="input"
               type="number"
               min="0"
               step="0.01"
+              id={fieldId + '-cash'}
               value={cashOnHand}
               onChange={e => setCashOnHand(e.target.value)}
             />
           </div>
           <div>
-            <label className="label">Bank Balance ({currencySymbol})</label>
+            <label className="label" htmlFor={fieldId + '-bank'}>Bank Balance ({currencySymbol})</label>
             <input
               className="input"
               type="number"
               min="0"
               step="0.01"
+              id={fieldId + '-bank'}
               value={bankBalance}
               onChange={e => setBankBalance(e.target.value)}
             />
@@ -237,7 +263,7 @@ export default function OpeningBalancesForm({
             {isPending ? 'Saving…' : 'Save Cash & Bank'}
           </button>
           {cashBankMsg && (
-            <span className={`text-xs ${cashBankMsg.includes('✓') ? 'text-green-600' : 'text-red-600'}`}>
+            <span role={cashBankMsg.includes('✓') ? 'status' : 'alert'} className={`text-xs ${cashBankMsg.includes('✓') ? 'text-green-600' : 'text-red-600'}`}>
               {cashBankMsg}
             </span>
           )}
@@ -258,6 +284,7 @@ export default function OpeningBalancesForm({
                 {idx === 0 && <label className="label">Customer</label>}
                 <select
                   className="input"
+                  aria-label={`Customer for opening debt ${idx + 1}`}
                   value={row.customerId}
                   onChange={e => {
                     const next = [...arRows];
@@ -278,6 +305,7 @@ export default function OpeningBalancesForm({
                   type="number"
                   min="0"
                   step="0.01"
+                  aria-label={`Customer opening debt ${idx + 1} amount (${currencySymbol})`}
                   value={row.amount}
                   onChange={e => {
                     const next = [...arRows];
@@ -288,7 +316,8 @@ export default function OpeningBalancesForm({
               </div>
               <button
                 type="button"
-                className="self-end text-lg leading-none text-red-500 hover:text-red-700 sm:mb-0.5"
+                className="min-h-11 min-w-11 self-end text-lg leading-none text-red-500 hover:text-red-700"
+                aria-label={`Remove customer opening debt ${idx + 1}`}
                 onClick={() => removeArRow(idx)}
                 title="Remove"
               >
@@ -314,7 +343,7 @@ export default function OpeningBalancesForm({
             {isPending ? 'Saving…' : 'Save Customer Debts'}
           </button>
           {arMsg && (
-            <span className={`text-xs ${arMsg.includes('✓') ? 'text-green-600' : 'text-red-600'}`}>
+            <span role={arMsg.includes('✓') ? 'status' : 'alert'} className={`text-xs ${arMsg.includes('✓') ? 'text-green-600' : 'text-red-600'}`}>
               {arMsg}
             </span>
           )}
@@ -335,6 +364,7 @@ export default function OpeningBalancesForm({
                 {idx === 0 && <label className="label">Supplier</label>}
                 <select
                   className="input"
+                  aria-label={`Supplier for opening debt ${idx + 1}`}
                   value={row.supplierId}
                   onChange={e => {
                     const next = [...apRows];
@@ -355,6 +385,7 @@ export default function OpeningBalancesForm({
                   type="number"
                   min="0"
                   step="0.01"
+                  aria-label={`Supplier opening debt ${idx + 1} amount (${currencySymbol})`}
                   value={row.amount}
                   onChange={e => {
                     const next = [...apRows];
@@ -365,7 +396,8 @@ export default function OpeningBalancesForm({
               </div>
               <button
                 type="button"
-                className="self-end text-lg leading-none text-red-500 hover:text-red-700 sm:mb-0.5"
+                className="min-h-11 min-w-11 self-end text-lg leading-none text-red-500 hover:text-red-700"
+                aria-label={`Remove supplier opening debt ${idx + 1}`}
                 onClick={() => removeApRow(idx)}
                 title="Remove"
               >
@@ -391,7 +423,7 @@ export default function OpeningBalancesForm({
             {isPending ? 'Saving…' : 'Save Supplier Debts'}
           </button>
           {apMsg && (
-            <span className={`text-xs ${apMsg.includes('✓') ? 'text-green-600' : 'text-red-600'}`}>
+            <span role={apMsg.includes('✓') ? 'status' : 'alert'} className={`text-xs ${apMsg.includes('✓') ? 'text-green-600' : 'text-red-600'}`}>
               {apMsg}
             </span>
           )}
@@ -443,6 +475,6 @@ export default function OpeningBalancesForm({
           </div>
         </div>
       </div>
-    </div>
+    </fieldset>
   );
 }

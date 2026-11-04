@@ -185,16 +185,19 @@ function FundingPill({
 function UnitSelector({
   value,
   unitName,
+  label,
   units,
   onChange,
 }: {
   value: string | null;
   unitName: string;
+  label: string;
   units: UnitOption[];
   onChange: (v: string) => void;
 }) {
   return (
     <select
+      aria-label={label}
       className="input py-0.5 text-xs"
       value={value ?? ''}
       onChange={(e) => onChange(e.target.value)}
@@ -234,15 +237,18 @@ function ImportSteps({ steps, activeIndex }: { steps: readonly string[]; activeI
 function DuplicateActionSelect({
   value,
   kind,
+  label,
   onChange,
 }: {
   value: DuplicateAction;
   kind: ParsedImportRow['duplicateKind'];
+  label: string;
   onChange: (v: DuplicateAction) => void;
 }) {
   if (kind === 'none') return null;
   return (
     <select
+      aria-label={label}
       className="input py-0.5 text-xs max-w-[140px]"
       value={value}
       onChange={(e) => onChange(e.target.value as DuplicateAction)}
@@ -941,8 +947,8 @@ export default function ImportStockClient({
         <p className="text-xs text-black/55">
           <span data-testid="import-stock-ready-count">Ready {readyCount}</span>
           {' · '}qty rows {previewRows.filter((r) => r.quantity > 0).length} · known cost{' '}
-          {previewRows.filter((r) => r.quantity > 0 && r.costPricePence > 0).length} · missing cost{' '}
-          {previewRows.filter((r) => r.quantity > 0 && r.costPricePence <= 0).length}
+          {previewRows.filter((r) => r.quantity > 0 && r.costPriceProvided).length} · cost to confirm{' '}
+          {previewRows.filter((r) => r.quantity > 0 && !r.costPriceProvided).length}
         </p>
       </div>
       {/* Header controls */}
@@ -1094,7 +1100,7 @@ export default function ImportStockClient({
           const needsBaseUnit = !row.resolvedBaseUnitId;
           const needsPackUnit = !!row.packUnitName && !row.resolvedPackUnitId;
           const needsPackSize = !!row.packUnitName && row.resolvedPackSize <= 1;
-          const lineTotal = row.costPricePence > 0 && row.quantity > 0
+          const lineTotal = row.costPriceProvided && row.quantity > 0
             ? (() => {
                 const cf =
                   row.packUnitName &&
@@ -1158,7 +1164,7 @@ export default function ImportStockClient({
                 </div>
                 <div>
                   <div className="text-xs uppercase tracking-[0.16em] text-black/40">Cost</div>
-                  <div className="mt-1">{row.costPricePence > 0 ? moneyCell(row.costPricePence, currency) : <span className="text-red-500 text-xs">missing</span>}</div>
+                  <div className="mt-1">{row.costPriceProvided ? moneyCell(row.costPricePence, currency) : <span className="text-black/50 text-xs">Not provided</span>}</div>
                 </div>
                 <div>
                   <div className="text-xs uppercase tracking-[0.16em] text-black/40">Qty</div>
@@ -1176,6 +1182,7 @@ export default function ImportStockClient({
                         <div className="text-xs font-medium text-amber-700">Base: "{row.baseUnitName}" unknown</div>
                         <UnitSelector
                           value={row.resolvedBaseUnitId}
+                          label={`Base unit for ${row.name || 'this row'}`}
                           unitName={row.baseUnitName}
                           units={units}
                           onChange={(v) => updateRow(row._id, { resolvedBaseUnitId: v })}
@@ -1187,6 +1194,7 @@ export default function ImportStockClient({
                         <div className="text-xs font-medium text-amber-700">Pack: "{row.packUnitName}" unknown</div>
                         <UnitSelector
                           value={row.resolvedPackUnitId}
+                          label={`Pack unit for ${row.name || 'this row'}`}
                           unitName={row.packUnitName}
                           units={units}
                           onChange={(v) => updateRow(row._id, { resolvedPackUnitId: v })}
@@ -1203,7 +1211,8 @@ export default function ImportStockClient({
                             type="number"
                             min={2}
                             className="input w-20 py-0.5 text-xs"
-                            placeholder="size"
+                            aria-label={`Pack size for ${row.name || 'this row'}`}
+                                  placeholder="size"
                             value={row.resolvedPackSize > 0 ? row.resolvedPackSize : ''}
                             onChange={(e) =>
                               updateRow(row._id, {
@@ -1225,7 +1234,7 @@ export default function ImportStockClient({
         })}
       </div>
 
-      <div className="card hidden overflow-hidden p-0 md:block">
+      <div className="card hidden overflow-hidden p-0 lg:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b border-black/10 bg-black/[0.02] text-xs text-black/50">
@@ -1288,12 +1297,12 @@ export default function ImportStockClient({
                         : <span className="text-red-500 text-xs">missing</span>}
                     </td>
                     <td className="px-3 py-2 text-right">
-                      {row.costPricePence > 0 ? (
+                      {row.costPriceProvided ? (
                         <>
                           {moneyCell(row.costPricePence, currency)}
                           <div className="text-xs text-black/40">/{row.baseUnitName || '…'}</div>
                         </>
-                      ) : <span className="text-red-500 text-xs">missing</span>}
+                      ) : <span className="text-black/50 text-xs">Not provided</span>}
                     </td>
                     <td className="px-3 py-2 text-right">
                       {row.quantity > 0 ? (
@@ -1310,7 +1319,8 @@ export default function ImportStockClient({
                           <div className="text-xs text-amber-700 font-medium">Base: "{row.baseUnitName}" unknown</div>
                           <UnitSelector
                             value={row.resolvedBaseUnitId}
-                            unitName={row.baseUnitName}
+                            label={`Base unit for ${row.name || 'this row'}`}
+                          unitName={row.baseUnitName}
                             units={units}
                             onChange={(v) => updateRow(row._id, { resolvedBaseUnitId: v })}
                           />
@@ -1324,7 +1334,8 @@ export default function ImportStockClient({
                               <div className="text-xs text-amber-700 font-medium">Pack: "{row.packUnitName}" unknown</div>
                               <UnitSelector
                                 value={row.resolvedPackUnitId}
-                                unitName={row.packUnitName}
+                                label={`Pack unit for ${row.name || 'this row'}`}
+                          unitName={row.packUnitName}
                                 units={units}
                                 onChange={(v) => updateRow(row._id, { resolvedPackUnitId: v })}
                               />
@@ -1341,6 +1352,7 @@ export default function ImportStockClient({
                                   type="number"
                                   min={2}
                                   className="input w-16 py-0.5 text-xs"
+                                  aria-label={`Pack size for ${row.name || 'this row'}`}
                                   placeholder="size"
                                   value={row.resolvedPackSize > 0 ? row.resolvedPackSize : ''}
                                   onChange={(e) =>
@@ -1386,6 +1398,7 @@ export default function ImportStockClient({
                     </td>
                     <td className="px-3 py-2">
                       <DuplicateActionSelect
+                        label={`Duplicate handling for ${row.name || 'this row'}`}
                         kind={row.duplicateKind}
                         value={row.duplicateAction}
                         onChange={(duplicateAction) => updateRow(row._id, { duplicateAction })}
@@ -1415,7 +1428,7 @@ export default function ImportStockClient({
       </div>
 
       {/* Sticky summary + confirm */}
-      <div className="card sticky bottom-4 p-4 shadow-lg">
+      <div className="card p-4 shadow-lg lg:sticky lg:bottom-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:gap-4">
             {importMode === 'PURCHASES' ? (

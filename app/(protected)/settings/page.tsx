@@ -1,3 +1,4 @@
+import HashScroll from '@/components/HashScroll';
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
@@ -11,10 +12,9 @@ import { isQzSigningConfigured } from '@/lib/qz-signing.server';
 import { prisma } from '@/lib/prisma';
 import HelpRequestCard from '@/components/help/HelpRequestCard';
 import Link from 'next/link';
-import HashScroll from '@/components/HashScroll';
 import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 
-export default async function SettingsPage(props: { searchParams?: Promise<{ error?: string; storeId?: string; saved?: string }> }) {
+export default async function SettingsPage(props: { searchParams?: Promise<{ error?: string; storeId?: string; saved?: string; tillSaved?: string }> }) {
   const searchParams = await props.searchParams;
   const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
@@ -87,7 +87,7 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
 
   return (
     <div className="space-y-6">
-      <HashScroll />
+      {['created', 'deactivated'].includes(searchParams?.tillSaved ?? '') && <HashScroll key={searchParams?.tillSaved} offset={144} targetId="tills" />}
       <PageHeader title="Business Settings" subtitle="Manage your business, printing, payments, and day-to-day controls." />
       <div className="card p-4 sm:p-6">
         <FormError error={searchParams?.error} />
@@ -425,7 +425,8 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
             </div>
           </div>
 
-      <div id="tills" className="scroll-mt-24" />
+      <div id="tills" className="scroll-mt-36" />
+      {['created', 'deactivated'].includes(searchParams?.tillSaved ?? '') && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{searchParams?.tillSaved === 'created' ? 'Till added.' : 'Till deactivated.'}</p>}
       <CashDrawerSetup businessId={business.id} />
       {stores.length > 1 ? (
         <form className="card p-4" method="GET">

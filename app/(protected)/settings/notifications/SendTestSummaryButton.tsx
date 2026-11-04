@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 
 import { sendEodSummaryAction } from '@/app/actions/notifications';
 
@@ -19,7 +19,7 @@ type SendTestSummaryButtonProps = {
 export default function SendTestSummaryButton({
   whatsappAutomationConnected,
 }: SendTestSummaryButtonProps) {
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setPending] = useState(false);
   const [result, setResult] = useState<SendState>(null);
 
   return (
@@ -28,9 +28,11 @@ export default function SendTestSummaryButton({
         type="button"
         className="btn-secondary text-center sm:min-w-[12rem]"
         disabled={isPending}
-        onClick={() => {
+        aria-busy={isPending}
+        onClick={async () => {
+          if (isPending) return;
+          setPending(true);
           setResult(null);
-          startTransition(async () => {
             try {
               const response = await sendEodSummaryAction();
 
@@ -85,8 +87,9 @@ export default function SendTestSummaryButton({
                 buttonLabel: 'Send Test Summary',
                 message: error instanceof Error ? error.message : 'Unable to send the test summary right now.',
               });
+            } finally {
+              setPending(false);
             }
-          });
         }}
       >
         {isPending ? 'Sending...' : result?.buttonLabel ?? 'Send Test Summary'}
@@ -94,6 +97,7 @@ export default function SendTestSummaryButton({
 
       {result ? (
         <div
+          role="status"
           className={`rounded-xl border px-3 py-2 text-xs ${
             result.tone === 'success'
               ? 'border-emerald-200 bg-emerald-50 text-emerald-700'

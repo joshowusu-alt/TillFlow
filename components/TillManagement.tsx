@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useId, useRef, useState } from 'react';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { createTillAction, deactivateTillAction } from '@/app/actions/settings';
 
 interface Till {
@@ -16,30 +17,36 @@ interface Till {
 export default function TillManagement({ tills, storeId }: { tills: Till[]; storeId: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState('');
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setPending] = useState(false);
+  const nameId = useId();
+  const [message, setMessage] = useState('');
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
 
-  const handleCreate = (formData: FormData) => {
-    setError('');
-    startTransition(async () => {
+  const handleCreate = async (formData: FormData) => {
+    if (isPending) return;
+    setError(''); setMessage(''); setPending(true);
+    try {
       const result = await createTillAction(formData);
-      if (result && !result.success) {
-        setError(result.error ?? 'Failed to create till.');
-      } else {
-        formRef.current?.reset();
-      }
-    });
+      if (result && !result.success) setError(result.error ?? 'Failed to create till.');
+      else { formRef.current?.reset(); setMessage('Till added.'); }
+    } catch (error) {
+      if (isRedirectError(error)) throw error;
+      setError('Could not add the till. Please try again.');
+    }
+    finally { setPending(false); }
   };
-
-  const handleDeactivate = (tillId: string) => {
-    setDeactivatingId(tillId);
-    startTransition(async () => {
+  const handleDeactivate = async (tillId: string) => {
+    if (isPending) return;
+    setError(''); setMessage(''); setPending(true); setDeactivatingId(tillId);
+    try {
       const result = await deactivateTillAction(tillId);
-      setDeactivatingId(null);
-      if (result && !result.success) {
-        setError(result.error ?? 'Failed to deactivate till.');
-      }
-    });
+      if (result && !result.success) setError(result.error ?? 'Failed to deactivate till.');
+      else setMessage('Till deactivated.');
+    } catch (error) {
+      if (isRedirectError(error)) throw error;
+      setError('Could not deactivate the till. Please try again.');
+    }
+    finally { setPending(false); setDeactivatingId(null); }
   };
 
   return (
@@ -53,8 +60,8 @@ export default function TillManagement({ tills, storeId }: { tills: Till[]; stor
       {tills.length > 0 && (
         <ul className="mt-3 divide-y divide-black/5">
           {tills.map((till) => (
-            <li key={till.id} className="flex items-center justify-between py-2 text-sm">
-              <div>
+            <li key={till.id} className="flex flex-col gap-2 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 break-words">
                 <span>{till.name}</span>
                 {till.openShift ? (
                   <div className="text-[11px] text-black/45">
@@ -69,7 +76,9 @@ export default function TillManagement({ tills, storeId }: { tills: Till[]; stor
               <button
                 type="button"
                 className="btn-ghost text-xs text-red-600 hover:text-red-700 disabled:opacity-40"
-                disabled={isPending && deactivatingId === till.id}
+                disabled={isPending}
+                aria-label={`Deactivate ${till.name}`}
+                aria-busy={isPending && deactivatingId === till.id}
                 onClick={() => handleDeactivate(till.id)}
               >
                 {isPending && deactivatingId === till.id ? 'Removing…' : 'Deactivate'}
@@ -79,10 +88,14 @@ export default function TillManagement({ tills, storeId }: { tills: Till[]; stor
         </ul>
       )}
 
-      <form ref={formRef} action={handleCreate} className="mt-3 flex items-center gap-2">
+      <form ref={formRef} action={handleCreate} className="mt-3 space-y-2">
         <input type="hidden" name="storeId" value={storeId} />
+        <label className="label" htmlFor={nameId}>New till name</label>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
-          className="input flex-1 text-sm"
+          id={nameId}
+          disabled={isPending}
+          className="input min-w-0 flex-1 text-sm"
           name="name"
           placeholder="New till name e.g. Till 3"
           maxLength={50}
@@ -91,9 +104,11 @@ export default function TillManagement({ tills, storeId }: { tills: Till[]; stor
         <button type="submit" className="btn-secondary text-xs" disabled={isPending}>
           {isPending && !deactivatingId ? 'Adding…' : 'Add till'}
         </button>
+        </div>
       </form>
 
-      {error && <div className="mt-2 text-xs text-red-600">{error}</div>}
+      {message && <p role="status" className="mt-2 text-xs text-emerald-700">{message}</p>}
+      {error && <div role="alert" className="mt-2 text-xs text-red-600">{error}</div>}
     </div>
   );
 }

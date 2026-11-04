@@ -482,6 +482,7 @@ export default function CatalogueVisibilityFilter({
           <input
             type="search"
             className="input pl-9"
+            aria-label="Search storefront products by name or category"
             placeholder="Search by name or category…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}

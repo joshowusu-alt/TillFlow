@@ -381,7 +381,7 @@ export async function createTillAction(formData: FormData): Promise<ActionResult
     details: { source: 'till-management', action: 'create', name },
   }).catch((e) => console.error('[audit]', e));
 
-  redirect('/settings?section=tills');
+  redirect(`/settings?storeId=${encodeURIComponent(storeId)}&tillSaved=created#tills`);
 }
 
 export async function deactivateTillAction(tillId: string): Promise<ActionResult> {
@@ -414,5 +414,5 @@ export async function deactivateTillAction(tillId: string): Promise<ActionResult
     details: { source: 'till-management', action: 'deactivate', name: till.name },
   }).catch((e) => console.error('[audit]', e));
 
-  redirect('/settings?section=tills');
+  redirect(`/settings?storeId=${encodeURIComponent(storeId)}&tillSaved=deactivated#tills`);
 }

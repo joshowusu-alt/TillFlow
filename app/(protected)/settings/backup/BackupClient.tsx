@@ -71,7 +71,7 @@ export default function BackupClient() {
                 }
                 setPreviewData(data as BackupData);
             } catch (error) {
-                setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not read this backup.' });
+                setMessage({ type: 'error', text: error instanceof SyntaxError ? 'This file is not valid JSON. Choose a TillFlow backup (.json) and try again.' : error instanceof Error ? error.message : 'Could not read this backup.' });
                 if (fileInputRef.current) fileInputRef.current.value = '';
             } finally {
                 setReading(false);
