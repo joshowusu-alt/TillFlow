@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import SubmitButton from '@/components/SubmitButton';
 import PageHeader from '@/components/PageHeader';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
@@ -187,13 +188,13 @@ export default async function SaleCostCorrectionsPage(
       />
 
       {searchParams?.error ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {searchParams.error}
         </div>
       ) : null}
 
       {searchParams?.updated ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           Corrected {searchParams.updated} sale line{searchParams.updated === '1' ? '' : 's'} across {searchParams.invoices ?? '0'} invoice{searchParams.invoices === '1' ? '' : 's'}. Refresh any open report tabs to see the updated margin history.
         </div>
       ) : null}
@@ -310,6 +311,7 @@ export default async function SaleCostCorrectionsPage(
                     <input
                       className="mt-1 h-4 w-4 rounded border-slate-300 text-accent focus:ring-accent disabled:opacity-40"
                       disabled={!line.needsCorrection}
+                      aria-label={`Select ${line.productName}, receipt ${line.transactionNumber ?? line.salesInvoiceId}`}
                       name="lineIds"
                       type="checkbox"
                       value={line.id}
@@ -360,9 +362,10 @@ export default async function SaleCostCorrectionsPage(
           </div>
 
           <div>
-            <label className="label">Correction reason</label>
+            <label className="label" htmlFor="correction-reason">Correction reason</label>
             <textarea
               className="input min-h-[110px]"
+              id="correction-reason"
               name="reason"
               placeholder="Example: Product base cost was configured wrongly for these sales, but the receipt totals charged to customers were correct."
               required
@@ -380,9 +383,9 @@ export default async function SaleCostCorrectionsPage(
             <p className="text-xs text-black/50">
               Tip: keep your selection narrow — one product, one receipt batch, or one verified date window at a time.
             </p>
-            <button className="btn-primary justify-center" type="submit">
+            <SubmitButton className="btn-primary justify-center" loadingText="Correcting selected lines…">
               Correct selected sale lines
-            </button>
+            </SubmitButton>
           </div>
         </div>
       </form>

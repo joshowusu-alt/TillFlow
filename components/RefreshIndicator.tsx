@@ -33,7 +33,7 @@ export default function RefreshIndicator({
   });
 
   return (
-    <div className="flex items-center gap-2 text-xs text-black/40">
+    <div className="flex flex-wrap items-center gap-2 text-xs text-black/40">
       <span suppressHydrationWarning>Updated {time}</span>
       <button
         type="button"
@@ -41,6 +41,7 @@ export default function RefreshIndicator({
         disabled={refreshing}
         className="rounded-lg p-1.5 hover:bg-black/5 transition disabled:opacity-50"
         title="Refresh data"
+        aria-label="Refresh data"
       >
         <svg
           className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`}
@@ -57,7 +58,7 @@ export default function RefreshIndicator({
         </svg>
       </button>
       {autoRefreshMs ? (
-        <span className="text-[10px] text-black/30">auto-refreshes every {Math.round(autoRefreshMs / 60000)} min</span>
+        <span className="text-[10px] text-black/30">auto-refreshes every {autoRefreshMs < 60_000 ? `${Math.round(autoRefreshMs / 1000)} sec` : `${Math.round(autoRefreshMs / 60000)} min`}</span>
       ) : null}
     </div>
   );

@@ -92,7 +92,7 @@ describe('ImportStockClient real purpose tiles', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Select a purpose to continue.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Download\s+template/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Download\s+template \(.xlsx\)/i })).toBeDisabled();
   });
 
   it('does not treat template download as import success', async () => {
