@@ -3,7 +3,7 @@ import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
 import Pagination from '@/components/Pagination';
 import PlanFeatureBadge from '@/components/PlanFeatureBadge';
-import { requireDailySummaryAccess } from '@/lib/notifications/daily-summary-access';
+import { requireBusiness } from '@/lib/auth';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { getFeatures } from '@/lib/features';
 import {
@@ -37,11 +37,11 @@ type DeliveryLogEntry = {
 
 export default async function NotificationsSettingsPage(
   props: {
-    searchParams?: Promise<{ error?: string; page?: string }>;
+    searchParams?: Promise<{ error?: string; page?: string; saved?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
-  const { business } = await requireDailySummaryAccess(['OWNER']);
+  const { business } = await requireBusiness(['OWNER']);
   if (!business) return <div className="card p-6">Owners only.</div>;
 
   const features = getFeatures(
@@ -241,7 +241,11 @@ export default async function NotificationsSettingsPage(
         actions={<PlanFeatureBadge plan="GROWTH" />}
       />
 
-      <div className="card p-4 sm:p-6">
+      <nav aria-label="Notification sections" className="flex flex-wrap gap-2">
+        {[["summary-preferences", "Summary settings"], ["delivery-status", "Delivery status"], ["today-summary", "Today's summary"], ["delivery-history", "History"]].map(([id, label]) => <a key={id} href={'#' + id} className="btn-secondary min-h-11 text-sm">{label}</a>)}
+      </nav>
+      {searchParams?.saved === '1' && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">Notification settings saved.</p>}
+      <div id="delivery-status" className="card scroll-mt-6 p-4 sm:p-6">
         <h2 className="text-base font-semibold">Delivery status</h2>
         <p className="mt-1 text-sm text-black/55">
           SMS is the scheduled delivery channel. WhatsApp preview and manual follow-up stay available when you need them.
@@ -278,7 +282,7 @@ export default async function NotificationsSettingsPage(
         summaryStatus={summaryStatus}
       />
 
-      <div className="card p-4 sm:p-6">
+      <div id="today-summary" className="card scroll-mt-6 p-4 sm:p-6">
         <h2 className="text-base font-semibold">SMS daily summary status</h2>
         <p className="mt-1 text-sm text-black/55">
           Whether today&apos;s scheduled SMS summary was created and delivered via the SMS channel.
@@ -386,73 +390,75 @@ export default async function NotificationsSettingsPage(
         </div>
       ) : null}
 
-      {recentLogs.length > 0 ? (
-        <div className="card p-4 sm:p-6">
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="text-base font-semibold">Recent delivery history</h2>
-              <p className="mt-1 text-sm text-black/55">
-                Showing {recentLogs.length} of {totalLogs} recent summaries.
-              </p>
-            </div>
-          </div>
-          <div className="space-y-3 text-sm">
-            {recentLogs.map((entry) => (
-              <div
-                key={entry.id}
-                className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white px-4 py-4 lg:flex-row lg:items-start lg:justify-between"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone="neutral">{entry.channel}</Badge>
-                    <Badge tone={entry.friendlyStatus.tone}>{entry.friendlyStatus.label}</Badge>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-black/45">
-                    <span>{new Date(entry.sentAt).toLocaleString()}</span>
-                    <span>{maskOwnerPhone(entry.recipient)}</span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-start gap-2 lg:items-end">
-                  {entry.deepLink ? (
-                    <a
-                      href={entry.deepLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-medium text-emerald-600 hover:underline"
-                    >
-                      Open in WhatsApp
-                    </a>
-                  ) : null}
-                  {entry.messageLogId ? (
-                    <MessageLogActions
-                      messageLogId={entry.messageLogId}
-                      status={entry.rawStatus}
-                      providerStatus={entry.providerStatus}
-                      deepLink={entry.deepLink}
-                      deliveredAt={entry.deliveredAt}
-                    />
-                  ) : null}
-                </div>
+      <section id="delivery-history" aria-label="Delivery history" className="scroll-mt-6">
+        {recentLogs.length > 0 ? (
+          <div className="card p-4 sm:p-6">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-base font-semibold">Recent delivery history</h2>
+                <p className="mt-1 text-sm text-black/55">
+                  Showing {recentLogs.length} of {totalLogs} recent summaries.
+                </p>
               </div>
-            ))}
+            </div>
+            <div className="space-y-3 text-sm">
+              {recentLogs.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white px-4 py-4 lg:flex-row lg:items-start lg:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone="neutral">{entry.channel}</Badge>
+                      <Badge tone={entry.friendlyStatus.tone}>{entry.friendlyStatus.label}</Badge>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-black/45">
+                      <span>{new Date(entry.sentAt).toLocaleString()}</span>
+                      <span>{maskOwnerPhone(entry.recipient)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-start gap-2 lg:items-end">
+                    {entry.deepLink ? (
+                      <a
+                        href={entry.deepLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-emerald-600 hover:underline"
+                      >
+                        Open in WhatsApp
+                      </a>
+                    ) : null}
+                    {entry.messageLogId ? (
+                      <MessageLogActions
+                        messageLogId={entry.messageLogId}
+                        status={entry.rawStatus}
+                        providerStatus={entry.providerStatus}
+                        deepLink={entry.deepLink}
+                        deliveredAt={entry.deliveredAt}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {totalPages > 1 ? (
+              <Pagination
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                basePath="/settings/notifications"
+                searchParams={{ error: searchParams?.error }}
+              />
+            ) : null}
           </div>
-          {totalPages > 1 ? (
-            <Pagination
-              currentPage={safeCurrentPage}
-              totalPages={totalPages}
-              basePath="/settings/notifications"
-              searchParams={{ error: searchParams?.error }}
-            />
-          ) : null}
-        </div>
-      ) : (
-        <EmptyState
-          icon="alert"
-          title="No delivery history yet"
-          subtitle="When TillFlow sends scheduled SMS summaries or you preview or test a summary, recent activity will appear here."
-        />
-      )}
+        ) : (
+          <EmptyState
+            icon="alert"
+            title="No delivery history yet"
+            subtitle="When TillFlow sends scheduled SMS summaries or you preview or test a summary, recent activity will appear here."
+          />
+        )}
+      </section>
     </div>
   );
 }

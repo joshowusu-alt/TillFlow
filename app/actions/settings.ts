@@ -328,7 +328,9 @@ export async function updateLoyaltySettingsAction(formData: FormData): Promise<v
 
     const loyaltyEnabled = formData.get('loyaltyEnabled') === 'on';
     const loyaltyPointsPerGhsPence = Math.max(1, parseInt(String(formData.get('loyaltyPointsPerGhsPence') || '100'), 10) || 100);
-    const loyaltyGhsPerHundredPoints = Math.max(1, parseInt(String(formData.get('loyaltyGhsPerHundredPoints') || '100'), 10) || 100);
+    const loyaltyGhsPerHundredPoints = formData.has('loyaltyRedemptionAmount')
+      ? Math.max(1, toPence(formData.get('loyaltyRedemptionAmount')))
+      : Math.max(1, parseInt(String(formData.get('loyaltyGhsPerHundredPoints') || '100'), 10) || 100);
 
     await prisma.business.update({
       where: { id: businessId },
@@ -348,7 +350,7 @@ export async function updateLoyaltySettingsAction(formData: FormData): Promise<v
 
     revalidateTag(checkoutContextTag(businessId));
 
-    redirect('/settings/loyalty');
+    redirect('/settings/loyalty?saved=1');
   }, '/settings/loyalty');
 }
 

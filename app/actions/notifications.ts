@@ -687,4 +687,5 @@ export async function updateWhatsappSettingsAction(formData: FormData): Promise<
   });
 
   await revalidateNotificationsSettingsPage();
+  redirect('/settings/notifications?saved=1');
 }

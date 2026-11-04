@@ -49,8 +49,8 @@ export default function StorefrontPaymentModeCard(props: Props) {
       </p>
 
       <div className="mt-3">
-        <label className="label">Payment collection method</label>
-        <select
+        <label className="label" htmlFor="field-storefrontPaymentMode">Payment collection method</label>
+        <select id="field-storefrontPaymentMode"
           className="input"
           name="storefrontPaymentMode"
           value={mode}
@@ -70,8 +70,8 @@ export default function StorefrontPaymentModeCard(props: Props) {
       {mode === 'MOMO_NUMBER' ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px]">
           <div>
-            <label className="label">MoMo number</label>
-            <input
+            <label className="label" htmlFor="field-storefrontMomoNumber">MoMo number</label>
+            <input id="field-storefrontMomoNumber"
               className="input"
               name="storefrontMomoNumber"
               defaultValue={props.defaultMomoNumber}
@@ -79,8 +79,8 @@ export default function StorefrontPaymentModeCard(props: Props) {
             />
           </div>
           <div>
-            <label className="label">Network</label>
-            <select className="input" name="storefrontMomoNetwork" defaultValue={props.defaultMomoNetwork}>
+            <label className="label" htmlFor="field-storefrontMomoNetwork">Network</label>
+            <select id="field-storefrontMomoNetwork" className="input" name="storefrontMomoNetwork" defaultValue={props.defaultMomoNetwork}>
               <option value="">Not set</option>
               <option value="MTN">MTN</option>
               <option value="TELECEL">Telecel</option>
@@ -93,8 +93,8 @@ export default function StorefrontPaymentModeCard(props: Props) {
       {mode === 'MERCHANT_SHORTCODE' ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px]">
           <div>
-            <label className="label">Merchant number / shortcode</label>
-            <input
+            <label className="label" htmlFor="field-storefrontMerchantShortcode">Merchant number / shortcode</label>
+            <input id="field-storefrontMerchantShortcode"
               className="input"
               name="storefrontMerchantShortcode"
               defaultValue={props.defaultMerchantShortcode}
@@ -102,8 +102,8 @@ export default function StorefrontPaymentModeCard(props: Props) {
             />
           </div>
           <div>
-            <label className="label">Network</label>
-            <select className="input" name="storefrontMomoNetwork" defaultValue={props.defaultMomoNetwork}>
+            <label className="label" htmlFor="field-storefrontMomoNetwork">Network</label>
+            <select id="field-storefrontMomoNetwork" className="input" name="storefrontMomoNetwork" defaultValue={props.defaultMomoNetwork}>
               <option value="">Not set</option>
               <option value="MTN">MTN</option>
               <option value="TELECEL">Telecel</option>
@@ -116,8 +116,8 @@ export default function StorefrontPaymentModeCard(props: Props) {
       {mode === 'BANK_TRANSFER' ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-1">
-            <label className="label">Bank name</label>
-            <input
+            <label className="label" htmlFor="field-storefrontBankName">Bank name</label>
+            <input id="field-storefrontBankName"
               className="input"
               name="storefrontBankName"
               defaultValue={props.defaultBankName}
@@ -125,8 +125,8 @@ export default function StorefrontPaymentModeCard(props: Props) {
             />
           </div>
           <div className="sm:col-span-1">
-            <label className="label">Account name</label>
-            <input
+            <label className="label" htmlFor="field-storefrontBankAccountName">Account name</label>
+            <input id="field-storefrontBankAccountName"
               className="input"
               name="storefrontBankAccountName"
               defaultValue={props.defaultBankAccountName}
@@ -134,8 +134,8 @@ export default function StorefrontPaymentModeCard(props: Props) {
             />
           </div>
           <div className="sm:col-span-1">
-            <label className="label">Account number</label>
-            <input
+            <label className="label" htmlFor="field-storefrontBankAccountNumber">Account number</label>
+            <input id="field-storefrontBankAccountNumber"
               className="input"
               name="storefrontBankAccountNumber"
               defaultValue={props.defaultBankAccountNumber}
@@ -143,8 +143,8 @@ export default function StorefrontPaymentModeCard(props: Props) {
             />
           </div>
           <div className="sm:col-span-1">
-            <label className="label">Branch (optional)</label>
-            <input
+            <label className="label" htmlFor="field-storefrontBankBranch">Branch (optional)</label>
+            <input id="field-storefrontBankBranch"
               className="input"
               name="storefrontBankBranch"
               defaultValue={props.defaultBankBranch}
@@ -155,8 +155,8 @@ export default function StorefrontPaymentModeCard(props: Props) {
       ) : null}
 
       <div className="mt-4">
-        <label className="label">Customer message (optional)</label>
-        <textarea
+        <label className="label" htmlFor="field-storefrontPaymentNote">Customer message (optional)</label>
+        <textarea id="field-storefrontPaymentNote"
           className="input min-h-20"
           name="storefrontPaymentNote"
           defaultValue={props.defaultPaymentNote}

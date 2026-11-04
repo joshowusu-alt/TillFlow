@@ -3,6 +3,7 @@
 import { useId, useState } from 'react';
 
 interface SettingsSectionProps {
+  id?: string;
   title: string;
   description?: string;
   badge?: string;
@@ -14,6 +15,7 @@ interface SettingsSectionProps {
 }
 
 export default function SettingsSection({
+  id,
   title,
   description,
   badge,
@@ -26,7 +28,7 @@ export default function SettingsSection({
   const contentId = useId();
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
+    <div id={id} className="min-w-0 scroll-mt-6 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
       <button
         type="button"
         aria-expanded={open}
@@ -38,7 +40,7 @@ export default function SettingsSection({
           {eyebrow ? (
             <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.2em] text-black/35">{eyebrow}</div>
           ) : null}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-ink">{title}</span>
             {badge && (
               <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent">
