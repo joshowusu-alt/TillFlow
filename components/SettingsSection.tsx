@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 interface SettingsSectionProps {
   id?: string;
@@ -26,6 +26,29 @@ export default function SettingsSection({
 }: SettingsSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
   const contentId = useId();
+  useEffect(() => {
+    if (!id) return;
+    const reveal = (hash: string) => {
+      let targetId: string;
+      try { targetId = decodeURIComponent(hash.replace(/^#/, '')); } catch { return; }
+      const section = document.getElementById(id);
+      const target = document.getElementById(targetId);
+      if (targetId === id || (target && section?.contains(target))) setOpen(true);
+    };
+    const onHash = () => reveal(window.location.hash);
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target instanceof Element ? event.target.closest('a[href^="#"]') : null;
+      if (link) reveal(link.getAttribute('href') ?? '');
+    };
+    onHash();
+    window.addEventListener('hashchange', onHash);
+    document.addEventListener('click', onClick);
+    return () => {
+      window.removeEventListener('hashchange', onHash);
+      document.removeEventListener('click', onClick);
+    };
+  }, [id]);
 
   return (
     <div id={id} className="min-w-0 scroll-mt-6 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
@@ -63,11 +86,9 @@ export default function SettingsSection({
         </svg>
       </button>
 
-      {(open || keepMounted) && (
-        <div id={contentId} hidden={!open} className="border-t border-black/5 px-4 pb-5 pt-4 sm:px-5 sm:pb-6 sm:pt-5">
-          {children}
-        </div>
-      )}
+      <div id={contentId} hidden={!open} className="border-t border-black/5 px-4 pb-5 pt-4 sm:px-5 sm:pb-6 sm:pt-5">
+          {(open || keepMounted) ? children : null}
+      </div>
     </div>
   );
 }

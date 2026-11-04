@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 
 import {
   markNotificationSentAction,
@@ -35,7 +35,7 @@ export default function MessageLogActions({
   deliveredAt,
 }: MessageLogActionsProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<ActionFeedback>(null);
 
   const canRetry = status === 'FAILED' || status === 'REVIEW_REQUIRED' || hasReviewProviderStatus(providerStatus);
@@ -54,9 +54,12 @@ export default function MessageLogActions({
             type="button"
             className="btn-secondary px-3 py-2 text-xs"
             disabled={isPending}
-            onClick={() => {
+            aria-busy={isPending}
+            onClick={async () => {
+              if (isPending) return;
+              setPending(true);
               setFeedback(null);
-              startTransition(async () => {
+              try {
                 const result = await retryNotificationAction(messageLogId);
                 setFeedback(
                   result.ok
@@ -75,7 +78,9 @@ export default function MessageLogActions({
                         },
                 );
                 router.refresh();
-              });
+              } catch {
+                setFeedback({ tone: 'danger', message: 'Could not complete this action. Please try again.' });
+              } finally { setPending(false); }
             }}
           >
             {isPending ? 'Working...' : 'Retry'}
@@ -87,9 +92,12 @@ export default function MessageLogActions({
             type="button"
             className="btn-ghost px-3 py-2 text-xs"
             disabled={isPending}
-            onClick={() => {
+            aria-busy={isPending}
+            onClick={async () => {
+              if (isPending) return;
+              setPending(true);
               setFeedback(null);
-              startTransition(async () => {
+              try {
                 const result = await markNotificationSentAction(messageLogId);
                 setFeedback(
                   result.ok
@@ -103,7 +111,9 @@ export default function MessageLogActions({
                       }
                 );
                 router.refresh();
-              });
+              } catch {
+                setFeedback({ tone: 'danger', message: 'Could not complete this action. Please try again.' });
+              } finally { setPending(false); }
             }}
           >
             {isPending ? 'Working...' : 'Mark as Sent'}
@@ -113,6 +123,7 @@ export default function MessageLogActions({
 
       {feedback ? (
         <div
+          role={feedback.tone === 'danger' ? 'alert' : 'status'}
           className={`rounded-lg border px-3 py-2 text-[11px] ${
             feedback.tone === 'success'
               ? 'border-emerald-200 bg-emerald-50 text-emerald-700'

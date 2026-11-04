@@ -168,3 +168,30 @@ describe('import row explanations', () => {
     expect(reasons[0].closest('details')?.querySelector('summary')).toHaveTextContent('Fix required');
   });
 });
+
+describe('import preview optional costs and accessible unit controls', () => {
+  it('shows an omitted cost neutrally and displays explicit zero as a known cost', async () => {
+    renderImporter();
+    fireEvent.click(screen.getByTestId('import-mode-OPENING_STOCK'));
+    const contents = 'name,sku,selling_price,cost_price,quantity,base_unit\nUnknown cost,UNKNOWN,10,,2,Piece\nZero cost,ZERO,10,0,2,Piece\n';
+    const file = new File([contents], 'costs.csv', { type: 'text/csv' });
+    Object.defineProperty(file, 'text', { value: async () => contents });
+    await act(async () => { fireEvent.change(screen.getByTestId('import-stock-file-input'), { target: { files: [file] } }); });
+    const unknown = screen.getAllByText('Unknown cost').map(el => el.closest('tr')).find(Boolean)!;
+    const zero = screen.getAllByText('Zero cost').map(el => el.closest('tr')).find(Boolean)!;
+    expect(unknown).toHaveTextContent('Not provided');
+    expect(zero).toHaveTextContent('0.00');
+    expect(zero).not.toHaveTextContent(/Not provided|missing/);
+    expect(screen.getByTestId('import-stock-ready-count')).toHaveTextContent('Ready 2');
+    expect(screen.getByTestId('import-stock-ready-count').parentElement).toHaveTextContent('known cost 1 · cost to confirm 1');
+  });
+  it('names unknown-unit selectors for the product being resolved', async () => {
+    renderImporter();
+    fireEvent.click(screen.getByTestId('import-mode-CATALOGUE'));
+    const contents = 'name,sku,selling_price,base_unit\nBottle product,BOTTLE,10,Bottle\n';
+    const file = new File([contents], 'units.csv', { type: 'text/csv' });
+    Object.defineProperty(file, 'text', { value: async () => contents });
+    await act(async () => { fireEvent.change(screen.getByTestId('import-stock-file-input'), { target: { files: [file] } }); });
+    expect(screen.getAllByLabelText('Base unit for Bottle product').length).toBeGreaterThan(0);
+  });
+});

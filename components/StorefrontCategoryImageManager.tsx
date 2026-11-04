@@ -185,6 +185,7 @@ export default function StorefrontCategoryImageManager({
                 <input
                   type="url"
                   className="input h-10 flex-1 text-xs"
+                  aria-label={`Image URL for ${category.name}`}
                   placeholder="Paste direct image URL"
                   value={urlInputs[category.id] ?? ''}
                   onChange={(event) =>
@@ -201,7 +202,7 @@ export default function StorefrontCategoryImageManager({
                 </button>
               </div>
               {errorByCategoryId[category.id] ? (
-                <div className="mt-2 text-xs text-rose-600">{errorByCategoryId[category.id]}</div>
+                <div role="alert" className="mt-2 text-xs text-rose-600">{errorByCategoryId[category.id]}</div>
               ) : null}
             </div>
           );

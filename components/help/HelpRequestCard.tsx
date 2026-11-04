@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { submitMerchantHelpRequestAction } from '@/app/actions/help-request';
 import { getSetupHelpHref } from '@/lib/activation-display';
 
@@ -21,19 +21,25 @@ export default function HelpRequestCard({ relatedRoute }: { relatedRoute?: strin
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const whatsappHref = getSetupHelpHref();
+  const fieldId = useId();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus('sending');
     setError(null);
-    const res = await submitMerchantHelpRequestAction(issueType, message, relatedRoute);
-    if (!res.success) {
+    try {
+      const res = await submitMerchantHelpRequestAction(issueType, message, relatedRoute);
+      if (!res.success) {
+        setStatus('error');
+        setError(res.error ?? 'Could not send. Try WhatsApp instead.');
+        return;
+      }
+      setStatus('sent');
+      setMessage('');
+    } catch {
       setStatus('error');
-      setError(res.error ?? 'Could not send. Try WhatsApp instead.');
-      return;
+      setError('Could not send your request. Please try again or use WhatsApp.');
     }
-    setStatus('sent');
-    setMessage('');
   }
 
   return (
@@ -49,12 +55,15 @@ export default function HelpRequestCard({ relatedRoute }: { relatedRoute?: strin
       </div>
 
       {status === 'sent' ? (
-        <p className="text-sm text-success font-medium">
+        <p role="status" className="text-sm text-success font-medium">
           Thanks — we received your message. Tish Group will follow up soon.
         </p>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-3">
+          <label className="label" htmlFor={fieldId + '-type'}>What do you need help with?</label>
           <select
+            id={fieldId + '-type'}
+            disabled={status === 'sending'}
             value={issueType}
             onChange={(e) => setIssueType(e.target.value)}
             className="input text-sm w-full"
@@ -65,7 +74,10 @@ export default function HelpRequestCard({ relatedRoute }: { relatedRoute?: strin
               </option>
             ))}
           </select>
+          <label className="label" htmlFor={fieldId + '-message'}>Your message</label>
           <textarea
+            id={fieldId + '-message'}
+            disabled={status === 'sending'}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={3}
@@ -74,7 +86,7 @@ export default function HelpRequestCard({ relatedRoute }: { relatedRoute?: strin
             className="input text-sm w-full"
             placeholder="Describe what you need help with…"
           />
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {error ? <p role="alert" className="text-sm text-red-600">{error}</p> : null}
           <div className="flex flex-wrap gap-2">
             <button type="submit" className="btn-primary text-sm" disabled={status === 'sending'}>
               {status === 'sending' ? 'Sending…' : 'Send to Tish Group'}
