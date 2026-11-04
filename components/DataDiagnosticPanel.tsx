@@ -77,7 +77,7 @@ export default function DataDiagnosticPanel() {
   return (
     <div className="space-y-4">
       {message && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+        <div role="status" className="break-words rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
           {message}
         </div>
       )}
@@ -100,8 +100,8 @@ export default function DataDiagnosticPanel() {
           <div className="rounded-xl border border-black/10 bg-black/5 p-4 space-y-1">
             <div className="font-semibold mb-2">Sales by Date</div>
             {diagResult.salesByDate.length === 0 && <div className="text-black/50">No sales found</div>}
-            {diagResult.salesByDate.map((row: any, i: number) => (
-              <div key={i} className="flex gap-3">
+            {diagResult.salesByDate.map((row, i: number) => (
+              <div key={i} className="flex flex-wrap gap-3 break-words">
                 <span className="font-mono">{row.date}</span>
                 <span>{row.count} sale{row.count !== 1 ? 's' : ''}</span>
                 <span className={`text-xs px-1.5 py-0.5 rounded ${row.qaTag ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
@@ -113,8 +113,8 @@ export default function DataDiagnosticPanel() {
 
           <div className="rounded-xl border border-black/10 bg-black/5 p-4 space-y-1">
             <div className="font-semibold mb-2">Journal Entries by Type</div>
-            {diagResult.journalEntriesByRef.map((row: any, i: number) => (
-              <div key={i} className="flex gap-3">
+            {diagResult.journalEntriesByRef.map((row, i: number) => (
+              <div key={i} className="flex flex-wrap gap-3 break-words">
                 <span className="font-mono">{row.referenceType}</span>
                 <span>{row.count} entries</span>
               </div>
@@ -129,15 +129,18 @@ export default function DataDiagnosticPanel() {
         </div>
       )}
 
-      <div className="border-t border-black/10 pt-4">
-        <div className="font-semibold text-sm mb-2">Void a Sale (Owner Override)</div>
+      <details className="border-t border-black/10 pt-4">
+        <summary className="cursor-pointer text-sm font-semibold text-rose-700">Void a sale — owner override</summary>
+        <div className="mt-3">
         <p className="text-xs text-black/50 mb-2">
           Enter the sale ID or receipt number to void it. This bypasses manager PIN — owner only.
           You can paste the receipt number shown to cashiers, like INV-000042, or the internal sale ID from the receipt link.
         </p>
-        <div className="flex gap-2">
+        <label className="label" htmlFor="repair-sale-id">Receipt number or sale ID</label>
+        <div className="flex flex-col gap-2 sm:flex-row">
           <input
-            className="input flex-1"
+            id="repair-sale-id"
+            className="input min-w-0 flex-1"
             placeholder="Receipt no. or sale ID (e.g. INV-000042)"
             value={voidId}
             onChange={(e) => setVoidId(e.target.value)}
@@ -146,7 +149,8 @@ export default function DataDiagnosticPanel() {
             {voidLoading ? 'Voiding...' : 'Void Sale'}
           </button>
         </div>
-      </div>
+        </div>
+      </details>
     </div>
   );
 }

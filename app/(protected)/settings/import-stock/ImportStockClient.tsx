@@ -558,21 +558,25 @@ export default function ImportStockClient({
             <div>
               <h3 className="font-semibold text-sm">Don't have a file yet?</h3>
               <p className="text-xs text-black/50 mt-0.5">
-                Download our template, fill it in Excel or Google Sheets, then upload it here.
+                Excel is recommended: full barcode digits, readable columns and separate instructions. Fill the empty Import sheet; the Examples sheet is reference only.
               </p>
               <p className="mt-2 text-xs text-black/60">
                 Classification is optional. Leave category, division and group blank, or remove those columns.
                 You can use category only, category and division, or all three. Include parent names when using a division or group.
               </p>
             </div>
+            <div className="flex shrink-0 flex-col gap-2 sm:max-w-64">
             <button
               type="button"
-              className="btn-ghost border border-black/10 shrink-0 text-sm w-full sm:w-auto disabled:opacity-40"
+              className="btn-primary justify-center text-sm w-full disabled:opacity-40"
               disabled={!importMode}
               onClick={() => importMode && downloadTemplateForMode(importMode)}
             >
-              ↓ Download {importMode ? importModeLabel(importMode) : ''} template
+              Download {importMode ? importModeLabel(importMode) : ''} template (.xlsx)
             </button>
+            <button type="button" disabled={!importMode} onClick={() => importMode && downloadTemplateForMode(importMode, 'csv')} className="btn-secondary justify-center text-sm disabled:opacity-40">Download CSV template</button>
+            <p className="text-xs text-black/50">CSV cannot retain Excel formatting. Import barcode and SKU columns as Text in Excel to preserve leading zeros.</p>
+            </div>
           </div>
 
           {/* Column glossary */}

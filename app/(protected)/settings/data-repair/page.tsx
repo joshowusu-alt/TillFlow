@@ -1,3 +1,4 @@
+import SettingsSection from '@/components/SettingsSection';
 import PageHeader from '@/components/PageHeader';
 import Link from 'next/link';
 import { requireBusiness } from '@/lib/auth';
@@ -21,6 +22,12 @@ export default async function DataRepairPage() {
         secondaryCta={{ label: '← Settings', href: '/settings' }}
       />
 
+      <nav aria-label="Data repair sections" className="flex flex-wrap gap-2">
+        <a href="#diagnostics" className="btn-secondary text-xs">Diagnose first</a>
+        <a href="#records" className="btn-secondary text-xs">Products & accounting</a>
+        <a href="#costs" className="btn-secondary text-xs">Inventory & sale costs</a>
+        <a href="#payments" className="btn-secondary text-xs">Payment statuses</a>
+      </nav>
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
         <div className="font-semibold">Use these tools only after normal recovery steps</div>
         <p className="mt-1 text-amber-800">
@@ -37,7 +44,7 @@ export default async function DataRepairPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="card p-6">
+        <div className="card min-w-0 p-4 sm:p-6">
           <h3 className="mb-3 font-semibold">Which repair should I use?</h3>
           <div className="space-y-3 text-sm text-black/65">
             <div>
@@ -50,12 +57,12 @@ export default async function DataRepairPage() {
             </div>
             <div>
               <div className="font-medium text-ink">Only a few specific receipts were costed wrongly</div>
-              <p>Use <strong>Targeted Sale Cost Corrections</strong> for a surgical fix without touching unaffected sales.</p>
+              <p>Use <strong>Targeted Sale Cost Corrections</strong> for a focused correction without touching unaffected sales.</p>
             </div>
           </div>
         </div>
 
-        <div className="card p-6">
+        <div className="card min-w-0 p-4 sm:p-6">
           <h3 className="mb-3 font-semibold">Safe order of operations</h3>
           <ol className="space-y-2 text-sm text-black/65">
             <li>1. Confirm the current product setup is correct.</li>
@@ -65,43 +72,38 @@ export default async function DataRepairPage() {
         </div>
       </div>
 
-      <div className="card p-6">
-        <h3 className="font-semibold mb-1">Data Diagnostic &amp; Repair</h3>
+      <SettingsSection id="diagnostics" title="Data Diagnostic & Repair" description="Read-only checks first; review any changes before applying them." defaultOpen keepMounted>
         <p className="text-sm text-black/50 mb-4">
           Diagnose data issues, clean up orphaned journal entries from deleted sales,
           and void test/setup sales without needing a manager PIN.
         </p>
         <DataDiagnosticPanel />
-      </div>
+      </SettingsSection>
 
-      <div className="card p-6">
-        <h3 className="font-semibold mb-1">Restore Deleted Products</h3>
+      <SettingsSection id="records" title="Restore Deleted Products" description="Recover product references used by historical sales." keepMounted>
         <p className="text-sm text-black/50 mb-4">
           If sales are missing from the sales list after clearing sample data,
           use this to restore products that were accidentally removed. Safe to run multiple times.
         </p>
         <RestoreOrphanedProductsButton />
-      </div>
+      </SettingsSection>
 
-      <div className="card p-6">
-        <h3 className="font-semibold mb-1">Repair Accounting Entries</h3>
+      <SettingsSection id="accounting" title="Repair Accounting Entries" description="Create missing entries for recorded purchases and sales." keepMounted>
         <p className="text-sm text-black/50 mb-4">
-          If your Balance Sheet shows GHS 0 for assets despite having recorded purchases,
+          If your Balance Sheet shows zero for assets despite having recorded purchases,
           use this to create any missing journal entries. Safe to run multiple times.
         </p>
         <RepairJournalEntriesButton />
-      </div>
+      </SettingsSection>
 
-      <div className="card p-6">
-        <h3 className="font-semibold mb-1">Repair Inventory Average Costs</h3>
+      <SettingsSection id="costs" title="Repair Inventory Average Costs" description="Review product setup before changing stored inventory costs." keepMounted>
         <p className="text-sm text-black/50 mb-4">
           Sync stale inventory average costs to the current product default cost only where the stock has no authoritative inbound cost trail yet. Use this when the product setup now shows the right base-unit cost, but inventory and gross profit still reflect an older value.
         </p>
         <RepairInventoryAverageCostsButton />
-      </div>
+      </SettingsSection>
 
-      <div className="card p-6">
-        <h3 className="font-semibold mb-1">Repair Payment Status Drift</h3>
+      <SettingsSection id="payments" title="Repair Payment Status Drift" description="Compare invoice statuses with recorded payments." keepMounted>
         <p className="text-sm text-black/50 mb-3">
           Finds invoices where payment rows and status disagree. The repair only updates safe cases, such as a part-paid invoice whose payments now cover the full total.
         </p>
@@ -117,26 +119,25 @@ export default async function DataRepairPage() {
           </div>
         </div>
         <RepairPaymentStatusButton />
-      </div>
+      </SettingsSection>
 
-      <div className="card p-6">
-        <h3 className="font-semibold mb-1">Backfill Line Costs</h3>
+      <SettingsSection id="backfill" title="Backfill Line Costs" description="Fill missing costs on historical sale lines." keepMounted>
         <p className="text-sm text-black/50 mb-4">
           Populates historical cost data on existing sales so profit margin reports
           use the cost at time of sale rather than the current product cost. Run this after inventory cost drift is repaired when the issue affects many older sales. Safe to run multiple times.
         </p>
         <BackfillLineCostButton />
-      </div>
+      </SettingsSection>
 
-      <div className="card p-6">
-        <h3 className="font-semibold mb-1">Targeted Sale Cost Corrections</h3>
+      <SettingsSection id="targeted" title="Targeted Sale Cost Corrections" description="Review specific receipts before correcting their cost history." keepMounted>
         <p className="text-sm text-black/50 mb-4">
-          Correct only the specific historical sale lines affected by the old product setup. This is best when the receipt totals were correct, but the stored cost and gross profit trail need surgical repair.
+          Correct only the specific historical sale lines affected by the old product setup. This is best when the receipt totals were correct, but the stored cost and gross profit trail need correction.
         </p>
         <Link href="/settings/data-repair/sale-cost-corrections" className="btn-secondary inline-flex justify-center text-sm">
           Open targeted corrections
         </Link>
-      </div>
+      </SettingsSection>
+
     </div>
   );
 }

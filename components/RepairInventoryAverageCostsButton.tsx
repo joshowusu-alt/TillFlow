@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { repairInventoryAverageCostsAction } from '@/app/actions/repair';
 
 export default function RepairInventoryAverageCostsButton() {
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setPending] = useState(false);
   const [result, setResult] = useState<{
     success: boolean;
     affectedProducts?: number;
@@ -14,7 +14,8 @@ export default function RepairInventoryAverageCostsButton() {
     error?: string;
   } | null>(null);
 
-  const handleRepair = () => {
+  const handleRepair = async () => {
+    if (isPending) return;
     if (!confirm(
       'This will repair stale inventory average cost by syncing it to the current product default cost only for stores that do not have authoritative inbound stock-cost history.\n\n' +
       'Balances created from purchases, transfer-ins, sale voids, or sales returns are preserved.\n\n' +
@@ -23,26 +24,29 @@ export default function RepairInventoryAverageCostsButton() {
       return;
     }
 
-    startTransition(async () => {
-      try {
-        const res = await repairInventoryAverageCostsAction();
-        if (res.success) {
-          setResult({
-            success: true,
-            ...(res.data as {
-              affectedProducts: number;
-              syncedBalances: number;
-              skippedAuthoritativeBalances: number;
-              repairedPackageCostBalances: number;
-            }),
-          });
-        } else {
-          setResult({ success: false, error: res.error ?? 'Inventory cost repair failed.' });
-        }
-      } catch {
-        setResult({ success: false, error: 'Unexpected error during inventory cost repair.' });
+    setPending(true);
+    setResult(null);
+    try {
+      const res = await repairInventoryAverageCostsAction();
+      if (res.success) {
+        setResult({
+          success: true,
+          ...(res.data as {
+            affectedProducts: number;
+            syncedBalances: number;
+            skippedAuthoritativeBalances: number;
+            repairedPackageCostBalances: number;
+          }),
+        });
+      } else {
+        setResult({ success: false, error: res.error ?? 'Inventory cost repair failed.' });
       }
-    });
+    } catch {
+      setResult({ success: false, error: 'Unexpected error during inventory cost repair.' });
+    }
+    finally {
+      setPending(false);
+    }
   };
 
   const formatSuccess = () => {
@@ -66,13 +70,14 @@ export default function RepairInventoryAverageCostsButton() {
       <button
         onClick={handleRepair}
         disabled={isPending}
+        aria-busy={isPending}
         className="rounded-lg border border-accent/30 bg-accent/5 px-4 py-2 text-sm font-medium text-accent transition hover:bg-accent/10 disabled:opacity-50"
       >
         {isPending ? 'Repairing…' : 'Repair inventory average costs'}
       </button>
 
       {result && (
-        <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${result.success ? 'border-success/30 bg-success/5 text-success' : 'border-rose/30 bg-rose/5 text-rose'}`}>
+        <div role={result.success ? 'status' : 'alert'} className={`mt-3 rounded-lg border px-3 py-2 text-xs ${result.success ? 'border-success/30 bg-success/5 text-success' : 'border-rose/30 bg-rose/5 text-rose'}`}>
           {result.success ? formatSuccess() : (result.error ?? 'Inventory cost repair failed. Please try again.')}
         </div>
       )}

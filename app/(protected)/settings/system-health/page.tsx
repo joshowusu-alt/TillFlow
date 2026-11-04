@@ -1,3 +1,4 @@
+import SettingsSection from '@/components/SettingsSection';
 import PageHeader from '@/components/PageHeader';
 import RefreshIndicator from '@/components/RefreshIndicator';
 import { requireBusiness } from '@/lib/auth';
@@ -9,7 +10,7 @@ import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 
 export default async function SystemHealthPage() {
-  const { business } = await requireBusiness(['OWNER', 'MANAGER']);
+  const { business, user } = await requireBusiness(['OWNER', 'MANAGER']);
   if (!business) return <div className="card p-6">Unauthorized.</div>;
 
   const now = new Date();
@@ -22,7 +23,7 @@ export default async function SystemHealthPage() {
     errorAuditCount,
     recentJobs,
     messageLogs24h,
-    lastBackup,
+    lastClosure,
     openRiskAlerts,
     totalMessageLogs,
     catalogSanity,
@@ -57,12 +58,6 @@ export default async function SystemHealthPage() {
     getCatalogSanitySnapshot(businessId),
   ]);
 
-  const statusChip = (ok: boolean) => (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-      {ok ? 'OK' : 'Alert'}
-    </span>
-  );
-
   const jobStatusChip = (status: string) => {
     const colours: Record<string, string> = {
       SUCCESS: 'bg-emerald-100 text-emerald-700',
@@ -81,24 +76,31 @@ export default async function SystemHealthPage() {
     <div className="space-y-6">
       <PageHeader
         title="System Health"
-        subtitle="Live operational metrics and scheduler status."
+        subtitle="Review sync activity, product data and background jobs. Counts cover the last 24 hours unless stated otherwise."
         actions={<RefreshIndicator fetchedAt={now.toISOString()} autoRefreshMs={30_000} />}
       />
 
+      <nav aria-label="System health sections" className="flex flex-wrap gap-2">
+        <a href="#activity" className="btn-secondary text-xs">Recent activity</a>
+        <a href="#catalogue" className="btn-secondary text-xs">Product checks</a>
+        <a href="#jobs" className="btn-secondary text-xs">Background jobs</a>
+        <a href="#technical" className="btn-secondary text-xs">Technical details</a>
+      </nav>
       {/* Quick stats grid */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {[
-          { label: 'Sync Events (24h)', value: syncEvents24h, ok: syncEvents24h < 1000 },
-          { label: 'Risk Alerts (open)', value: openRiskAlerts, ok: openRiskAlerts === 0 },
-          { label: 'Audit Flags (24h)', value: errorAuditCount, ok: errorAuditCount < 20 },
-          { label: 'Message Logs (24h)', value: messageLogs24h, ok: true },
+          { label: 'Sync events (24h)', value: syncEvents24h, helper: 'Activity count, not a failure count.' },
+          { label: 'Open risk alerts', value: openRiskAlerts, helper: 'Review open alerts in Risk Monitor.' },
+          { label: 'Audit events to review (24h)', value: errorAuditCount, helper: 'Includes errors, alerts, voids and returns.' },
+          { label: 'Messages logged (24h)', value: messageLogs24h, helper: 'Logged messages may not be delivered.' },
         ].map((m) => (
           <div key={m.label} className="card p-4">
             <div className="mb-1 text-xs text-black/40">{m.label}</div>
             <div className="flex items-end justify-between">
               <span className="text-2xl font-bold">{m.value}</span>
-              {statusChip(m.ok)}
+
             </div>
+            <p className="mt-2 text-xs text-black/50">{m.helper}</p>
           </div>
         ))}
       </div>
@@ -113,31 +115,31 @@ export default async function SystemHealthPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href="/offline/sales" className="btn-secondary text-xs">Pending Offline Sales</Link>
-            <Link href="/settings/backup" className="btn-secondary text-xs">Backup & Restore</Link>
-            <Link href="/settings/data-repair" className="btn-secondary text-xs">Advanced Recovery</Link>
+            {user.role === 'OWNER' && <Link href="/settings/backup" className="btn-secondary text-xs">Backup & Restore</Link>}
+            {user.role === 'OWNER' && <Link href="/settings/data-repair" className="btn-secondary text-xs">Data Repair</Link>}
             <Link href="/reports/risk-monitor" className="btn-secondary text-xs">Risk Monitor</Link>
           </div>
         </div>
       </div>
 
       {/* Details row */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div id="activity" className="scroll-mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div className="card p-4 sm:p-5">
-          <h3 className="mb-3 font-semibold text-sm">Observability</h3>
+          <h3 className="mb-3 font-semibold text-sm">Recent activity</h3>
           <div className="space-y-3 text-sm">
             <div className="rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3">
               <div className="text-xs uppercase tracking-[0.16em] text-black/40">Last sync event</div>
               <div className="mt-1 font-medium text-ink">
                 {lastSyncEvent
-                  ? `${lastSyncEvent.eventType} · ${new Date(lastSyncEvent.appliedAt).toLocaleString()}`
+                  ? `${lastSyncEvent.eventType} · ${new Date(lastSyncEvent.appliedAt).toLocaleString('en-GB', { timeZone: business.timezone })}`
                   : '—'}
               </div>
             </div>
             <div className="rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3">
               <div className="text-xs uppercase tracking-[0.16em] text-black/40">Last day closure</div>
               <div className="mt-1 font-medium text-ink">
-                {lastBackup
-                  ? new Date(lastBackup.closureDate).toLocaleDateString()
+                {lastClosure
+                  ? new Date(lastClosure.closureDate).toLocaleDateString()
                   : <span className="text-amber-600">No closure on record</span>}
               </div>
             </div>
@@ -158,8 +160,7 @@ export default async function SystemHealthPage() {
           </div>
         </div>
 
-        <div className="card p-4 sm:p-5">
-          <h3 className="mb-3 font-semibold text-sm">API Endpoints</h3>
+        <SettingsSection id="technical" title="Technical details" description="Endpoint references for your technical support team.">
           <div className="space-y-2 text-sm">
             {[
               { label: 'Basic Health', url: '/api/health', hint: 'DB ping' },
@@ -172,17 +173,17 @@ export default async function SystemHealthPage() {
                   <span className="font-medium">{ep.label}</span>
                   <span className="ml-2 text-xs text-black/40">{ep.hint}</span>
                 </div>
-                <code className="text-xs text-black/50 font-mono">{ep.url}</code>
+                <code className="break-all text-xs text-black/50 font-mono">{ep.url}</code>
               </div>
             ))}
           </div>
-        </div>
+        </SettingsSection>
       </div>
 
-      <div className="card p-4 sm:p-6">
+      <div id="catalogue" className="card min-w-0 scroll-mt-6 p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h3 className="font-semibold text-sm">Catalog Trust Checks</h3>
+            <h3 className="font-semibold text-sm">Product data checks</h3>
             <p className="mt-1 text-sm text-black/50">
               Catch suspicious supermarket product data before it breaks cashier confidence.
             </p>
@@ -197,13 +198,13 @@ export default async function SystemHealthPage() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {catalogSanity.checks.map((check) => (
             <div key={check.key} className="rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="text-xs uppercase tracking-[0.16em] text-black/40">{check.label}</div>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${check.severity === 'blocking' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                  {check.severity}
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${check.count === 0 ? 'bg-slate-100 text-slate-600' : check.severity === 'blocking' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                  {check.count === 0 ? 'Clear' : check.severity}
                 </span>
               </div>
               <div className="mt-2 text-2xl font-bold text-ink">{check.count}</div>
@@ -214,11 +215,11 @@ export default async function SystemHealthPage() {
 
         <div className="mt-5 flex flex-wrap gap-2">
           <Link href="/products" className="btn-secondary text-xs">Review Products</Link>
-          <Link href="/settings/data-repair" className="btn-secondary text-xs">Open Data Repair</Link>
+          {user.role === 'OWNER' && <Link href="/settings/data-repair" className="btn-secondary text-xs">Open Data Repair</Link>}
         </div>
 
         {catalogSanity.rows.length > 0 ? (
-          <div className="mt-5 overflow-x-auto">
+          <div role="region" aria-label="Products needing review" tabIndex={0} className="mt-5 overflow-x-auto">
             <table className="table w-full border-separate border-spacing-y-2">
               <thead>
                 <tr>
@@ -262,25 +263,26 @@ export default async function SystemHealthPage() {
       </div>
 
       {/* Scheduler job history */}
-      <div className="card p-4 sm:p-6">
-        <h3 className="mb-4 font-semibold text-sm">Scheduler Job History</h3>
+      <div id="jobs" className="card min-w-0 scroll-mt-6 p-4 sm:p-6">
+        <h3 className="mb-1 font-semibold text-sm">Background job history</h3>
+        <p className="mb-4 text-xs text-black/50">The 10 most recent recorded jobs. No history means no recorded runs, not a confirmed failure.</p>
         {recentJobs.length === 0 ? (
           <p className="text-sm text-black/40">No scheduler jobs recorded yet.</p>
         ) : (
           <div className="space-y-2">
             {recentJobs.map((job) => (
               <div key={job.id} className="flex flex-col gap-3 rounded-xl border border-black/5 px-4 py-3 hover:bg-black/[0.02] sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-3">
                   {jobStatusChip(job.status)}
                   <div>
                     <div className="text-sm font-medium">{job.jobName.replace(/_/g, ' ')}</div>
                     <div className="text-xs text-black/40">via {job.triggeredBy}</div>
                   </div>
                 </div>
-                <div className="text-right text-xs text-black/40">
-                  <div>{new Date(job.startedAt).toLocaleString()}</div>
+                <div className="min-w-0 text-xs text-black/40 sm:text-right">
+                  <div>{new Date(job.startedAt).toLocaleString('en-GB', { timeZone: business.timezone })}</div>
                   {job.durationMs != null && <div>{job.durationMs}ms</div>}
-                  {job.errorMessage && <div className="text-rose-500 truncate max-w-xs">{job.errorMessage}</div>}
+                  {job.errorMessage && <div className="break-words text-rose-500">{job.errorMessage}</div>}
                 </div>
               </div>
             ))}

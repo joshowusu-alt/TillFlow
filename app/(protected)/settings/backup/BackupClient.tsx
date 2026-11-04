@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import SettingsSection from '@/components/SettingsSection';
 import PageHeader from '@/components/PageHeader';
 import { exportDatabaseAction, importDatabaseAction, resetAllDataAction, type BackupData } from '@/app/actions/backup';
 
@@ -12,6 +13,12 @@ export default function BackupClient() {
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [previewData, setPreviewData] = useState<BackupData | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const selection = useRef(0);
+    const [reading, setReading] = useState(false);
+    const [ready, setReady] = useState(false);
+    useEffect(() => setReady(true), []);
+    const busy = exporting || importing || resetting || reading || !ready;
 
     const handleExport = async () => {
         setExporting(true);
@@ -45,25 +52,35 @@ export default function BackupClient() {
     };
 
     const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const token = ++selection.current;
         const file = event.target.files?.[0];
+        setPreviewData(null);
+        setMessage(null);
         if (!file) return;
-
+        setReading(true);
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = () => {
+            if (token !== selection.current) return;
             try {
-                const data = JSON.parse(e.target?.result as string) as BackupData;
-
-                // Basic validation
-                if (!data.version || !data.business || !data.exportedAt) {
-                    setMessage({ type: 'error', text: 'Invalid backup file format' });
-                    return;
+                const data = JSON.parse(String(reader.result));
+                if (!data || typeof data !== 'object' || data.version !== '1.4' ||
+                    typeof data.business?.name !== 'string' || !data.business.name.trim() ||
+                    typeof data.exportedAt !== 'string' || !Number.isFinite(Date.parse(data.exportedAt)) ||
+                    ['products', 'customers', 'salesInvoices', 'purchaseInvoices'].some(key => !Array.isArray(data[key]))) {
+                    throw new Error('Choose a version 1.4 TillFlow backup with a valid business, export date and record lists.');
                 }
-
-                setPreviewData(data);
-                setMessage(null);
-            } catch {
-                setMessage({ type: 'error', text: 'Failed to parse backup file' });
+                setPreviewData(data as BackupData);
+            } catch (error) {
+                setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not read this backup.' });
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            } finally {
+                setReading(false);
             }
+        };
+        reader.onerror = () => {
+            if (token !== selection.current) return;
+            setReading(false);
+            setMessage({ type: 'error', text: 'Could not read this file. Choose it again.' });
         };
         reader.readAsText(file);
     };
@@ -99,6 +116,8 @@ export default function BackupClient() {
     };
 
     const cancelImport = () => {
+        ++selection.current;
+        setReading(false);
         setPreviewData(null);
         setMessage(null);
         if (fileInputRef.current) {
@@ -140,26 +159,18 @@ export default function BackupClient() {
     return (
         <div className="space-y-6">
             <PageHeader
-                title="Data Backup"
+                title="Backup & Restore"
                 subtitle="Recovery tools for exporting, restoring, and safely resetting business data."
             />
 
+            <nav aria-label="Backup sections" className="flex flex-wrap gap-2">
+                <a href="#export-backup" className="btn-secondary text-xs">Export backup</a>
+                <a href="#restore-backup" className="btn-secondary text-xs">Restore backup</a>
+                <a href="#reset-data" className="btn-secondary text-xs">Reset data</a>
+            </nav>
             <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-blue-700/70">Recovery workflow</div>
-                <div className="mt-2 grid gap-3 md:grid-cols-3">
-                    <div className="rounded-xl bg-white/80 px-4 py-3">
-                        <div className="text-sm font-semibold text-ink">1. Export regularly</div>
-                        <p className="mt-1 text-xs text-black/60">Download a clean JSON backup before major imports, resets, or reconciliation work.</p>
-                    </div>
-                    <div className="rounded-xl bg-white/80 px-4 py-3">
-                        <div className="text-sm font-semibold text-ink">2. Check live issues</div>
-                        <p className="mt-1 text-xs text-black/60">Use System Health and pending offline sales to understand whether the problem is sync, data, or operator flow.</p>
-                    </div>
-                    <div className="rounded-xl bg-white/80 px-4 py-3">
-                        <div className="text-sm font-semibold text-ink">3. Restore only when needed</div>
-                        <p className="mt-1 text-xs text-black/60">Restores replace current business data. Prefer diagnostics and targeted recovery before using a full restore.</p>
-                    </div>
-                </div>
+                <h2 className="text-sm font-semibold text-blue-900">Export before making recovery changes</h2>
+                <p className="mt-1 text-sm text-blue-800">Check sync activity and data diagnostics first. Use a restore only when a supported trading snapshot is needed.</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                     <Link href="/settings/system-health" className="btn-secondary text-xs">
                         Open System Health
@@ -173,24 +184,10 @@ export default function BackupClient() {
                 </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">
-                    <div className="text-xs uppercase tracking-[0.2em] text-black/40">Export format</div>
-                    <div className="mt-1 text-base font-display font-semibold text-ink">Trading snapshot (JSON)</div>
-                </div>
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                    <div className="text-xs uppercase tracking-[0.2em] text-emerald-700/70">Use case</div>
-                    <div className="mt-1 text-base font-display font-semibold text-emerald-700">Backup, restore, reset</div>
-                </div>
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
-                    <div className="text-xs uppercase tracking-[0.2em] text-rose-700/70">Danger zone</div>
-                    <div className="mt-1 text-base font-display font-semibold text-rose-700">Reset all data</div>
-                </div>
-            </div>
-
             {message && (
                 <div
-                    className={`rounded-xl p-4 ${message.type === 'success'
+                    role={message.type === 'error' ? 'alert' : 'status'}
+                    className={`break-words rounded-xl p-4 ${message.type === 'success'
                             ? 'bg-emerald-50 text-emerald-800'
                             : 'bg-rose-50 text-rose-800'
                         }`}
@@ -201,7 +198,7 @@ export default function BackupClient() {
 
             <div className="grid gap-6 lg:grid-cols-2">
                 {/* Export Section */}
-                <div className="card p-4 sm:p-6">
+                <div id="export-backup" className="card min-w-0 scroll-mt-6 p-4 sm:p-6">
                     <h2 className="text-lg font-display font-semibold">Export Backup</h2>
                     <p className="mt-2 text-sm text-black/60">
                         Export the active business’s supported trading records. This is not a full database backup. Businesses with online orders, stocktakes or other operational history may need assisted recovery.
@@ -214,7 +211,7 @@ export default function BackupClient() {
                     </div>
                     <button
                         onClick={handleExport}
-                        disabled={exporting}
+                        disabled={busy}
                         className="btn-primary mt-4 w-full sm:w-auto"
                     >
                         {exporting ? (
@@ -237,7 +234,7 @@ export default function BackupClient() {
                 </div>
 
                 {/* Import Section */}
-                <div className="card p-4 sm:p-6">
+                <div id="restore-backup" className="card min-w-0 scroll-mt-6 p-4 sm:p-6">
                     <h2 className="text-lg font-display font-semibold">Restore Backup</h2>
                     <p className="mt-2 text-sm text-black/60">
                         Restore supported trading records from a previously exported snapshot. Full recovery of other operational history requires operator assistance.
@@ -248,13 +245,19 @@ export default function BackupClient() {
 
                     {!previewData ? (
                         <div className="mt-4">
+                            <label className="label" htmlFor="backup-file">Choose a TillFlow backup (.json)</label>
+                            <p id="backup-file-help" className="mb-3 text-xs text-black/50">Selecting a file only shows a preview. Nothing is restored until you confirm.</p>
                             <input
+                                id="backup-file"
+                                aria-describedby="backup-file-help"
+                                disabled={busy}
                                 ref={fileInputRef}
                                 type="file"
                                 accept=".json"
                                 onChange={handleFileSelect}
                                 className="block w-full text-sm text-black/60 file:mr-4 file:rounded-xl file:border-0 file:bg-black/5 file:px-4 file:py-2 file:text-sm file:font-semibold hover:file:bg-black/10"
                             />
+                            {reading && <p role="status" className="mt-2 text-sm">Reading backup…</p>}
                         </div>
                     ) : (
                         <div className="mt-4 space-y-4">
@@ -267,7 +270,7 @@ export default function BackupClient() {
                                     </div>
                                     <div>
                                         <div className="text-xs uppercase tracking-[0.16em] text-black/40">Business</div>
-                                        <div className="mt-1">{previewData.business.name}</div>
+                                        <div className="mt-1 break-words">{previewData.business.name}</div>
                                     </div>
                                     <div>
                                         <div className="text-xs uppercase tracking-[0.16em] text-black/40">Products</div>
@@ -293,14 +296,14 @@ export default function BackupClient() {
                             <div className="flex flex-col gap-2 sm:flex-row">
                                 <button
                                     onClick={handleImport}
-                                    disabled={importing}
+                                    disabled={busy}
                                     className="btn bg-rose-600 text-white hover:bg-rose-700 w-full sm:w-auto"
                                 >
                                     {importing ? 'Restoring...' : 'Restore Backup'}
                                 </button>
                                 <button
                                     onClick={cancelImport}
-                                    disabled={importing}
+                                    disabled={busy}
                                     className="btn-ghost w-full sm:w-auto"
                                 >
                                     Cancel
@@ -312,8 +315,7 @@ export default function BackupClient() {
             </div>
 
             {/* Reset Section */}
-            <div className="card border-2 border-rose-200 p-4 sm:p-6">
-                <h2 className="text-lg font-display font-semibold text-rose-700">Start Fresh</h2>
+            <SettingsSection id="reset-data" title="Reset business data" description="Permanent removal of trading records. Export a backup first." badge="Destructive action">
                 <p className="mt-2 text-sm text-black/60">
                     Delete all products, inventory, sales, purchases, expenses, customers, and suppliers.
                     Your business settings, user accounts, and tills are kept so you can start entering real data immediately.
@@ -323,7 +325,7 @@ export default function BackupClient() {
                 </div>
                 <button
                     onClick={handleReset}
-                    disabled={resetting}
+                    disabled={busy}
                     className="btn mt-4 bg-rose-600 text-white hover:bg-rose-700 w-full sm:w-auto"
                 >
                     {resetting ? (
@@ -343,7 +345,7 @@ export default function BackupClient() {
                         </>
                     )}
                 </button>
-            </div>
+            </SettingsSection>
 
             {/* Best Practices */}
             <div className="card p-4 sm:p-6">
@@ -365,7 +367,7 @@ export default function BackupClient() {
                         <svg className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
-                        Test restoring from backup periodically to ensure files are valid
+                        Test restores in a separate test environment before relying on a backup
                     </li>
                     <li className="flex items-start gap-2">
                         <svg className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
