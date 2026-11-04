@@ -3,6 +3,7 @@ import {
 } from '@/app/actions/settings';
 import Link from 'next/link';
 import FormError from '@/components/FormError';
+import SubmitButton from '@/components/SubmitButton';
 import PageHeader from '@/components/PageHeader';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures, getPlanSummary, hasPlanAccess, type BusinessPlan } from '@/lib/features';
@@ -80,7 +81,7 @@ function formatCedi(value: number) {
 }
 
 function formatCediFromPence(value: number) {
-  return formatCedi(Math.round(value / 100));
+  return formatCedi(value / 100);
 }
 
 function readSearchParam(value: string | string[] | undefined) {
@@ -167,7 +168,7 @@ export default async function BillingPage(
   }
 ) {
   const resolvedSearchParams = (await props.searchParams) ?? {};
-  const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
   const effectivePlan = features.plan;
   const purchasedPlan = ((business as any).purchasedPlan as BusinessPlan | undefined) ?? effectivePlan;
@@ -226,20 +227,20 @@ export default async function BillingPage(
     <div className="space-y-6">
       <PageHeader
         title="Billing & Plans"
-        subtitle="Review purchased access, payment windows, and what each tier unlocks for this business."
+        subtitle="Review your subscription, payment status, and plan options."
       />
 
       <FormError error={error} />
 
       {!billingSchemaReady ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-          Billing access is running in compatibility mode because the latest database migration is not deployed yet. The app will keep using legacy access rules until the billing schema is available.
+          Some billing details are temporarily unavailable. Your current access is still shown below. Contact Tishgroup if you need help.
         </div>
       ) : null}
 
       {requested ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
-          Upgrade request logged{desiredPlan ? ` for ${PLAN_DETAILS[desiredPlan].name}` : ''}. The request is now visible in billing notes for follow-up.
+        <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+          Upgrade request logged{desiredPlan ? ` for ${PLAN_DETAILS[desiredPlan].name}` : ''}. Tishgroup can now follow up with you. Your plan stays the same until the change is confirmed.
         </div>
       ) : null}
 
@@ -251,13 +252,12 @@ export default async function BillingPage(
       ) : null}
 
       {billingPrimaryBanner ? (
-        <div className={`rounded-2xl border px-4 py-4 text-sm ${
-          billingIsRestricted
+        <div className={`rounded-2xl border px-4 py-4 text-sm ${billingIsRestricted
             ? 'border-rose-200 bg-rose-50 text-rose-900'
             : billingIsOverdue
               ? 'border-amber-200 bg-amber-50 text-amber-900'
               : 'border-blue-200 bg-blue-50 text-blue-900'
-        }`}>
+          }`}>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p>{billingPrimaryBanner}</p>
             <Link href={billingNextActionHref} className="font-semibold underline underline-offset-4">
@@ -267,145 +267,13 @@ export default async function BillingPage(
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        {PLAN_ORDER.map((plan) => {
-          const details = PLAN_DETAILS[plan];
-          const isCurrent = plan === effectivePlan;
-          const isPurchased = billingIsPaid && plan === purchasedPlan;
-          const monthlyPrice = PLAN_MONTHLY_PRICES[plan];
-          const annualPrice = getAnnualPlanPrice(monthlyPrice);
-          const annualSavings = getAnnualPlanSavings(monthlyPrice);
-
-          return (
-            <div key={plan} className={`card space-y-4 p-6 ${details.tone}`}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.18em] text-black/45">Plan</div>
-                  <h2 className="mt-1 text-xl font-display font-semibold text-ink">{details.name}</h2>
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  {details.featured ? (
-                    <span className="rounded-full bg-accentSoft px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
-                      Most popular
-                    </span>
-                  ) : null}
-                  {isPurchased ? (
-                    <span className="rounded-full bg-black/[0.06] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-black/60">
-                      Purchased
-                    </span>
-                  ) : null}
-                  {isCurrent ? (
-                    <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white">
-                      Access today
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-black/5 bg-white/80 px-3 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/40">Monthly</div>
-                  <div className="mt-1 text-2xl font-display font-bold text-ink">{formatCedi(monthlyPrice)}</div>
-                  <div className="text-xs text-black/50">per month</div>
-                </div>
-                <div className="rounded-xl border border-black/5 bg-white/80 px-3 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/40">Annual</div>
-                  <div className="mt-1 text-2xl font-display font-bold text-ink">{formatCedi(annualPrice)}</div>
-                  <div className="text-xs text-black/50">per year</div>
-                </div>
-              </div>
-              <div className="rounded-xl border border-black/5 bg-white/70 px-3 py-2 text-xs font-medium text-black/55">
-                Annual billing saves {formatCedi(annualSavings)} compared with paying month by month.
-              </div>
-              <ul className="space-y-2 text-sm text-black/65">
-                {details.highlights.map((item) => (
-                  <li key={item} className="rounded-xl border border-black/5 bg-white/70 px-3 py-2">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="card overflow-hidden p-0">
-        <div className="border-b border-black/5 px-6 py-4">
-          <h2 className="text-lg font-display font-semibold text-ink">Plan comparison</h2>
-          <p className="mt-1 text-sm text-black/60">A compact view of which operational surfaces open up at each tier.</p>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full border-separate border-spacing-0 text-sm">
-            <thead>
-              <tr className="bg-black/[0.02] text-left text-black/55">
-                <th className="border-b border-black/5 px-6 py-4 font-semibold">Feature area</th>
-                {PLAN_ORDER.map((plan) => (
-                  <th key={plan} className="border-b border-black/5 px-4 py-4 text-center font-semibold">
-                    <div className="text-ink">{PLAN_DETAILS[plan].name}</div>
-                    <div className="mt-1 text-xs font-medium text-black/45">{formatCedi(PLAN_MONTHLY_PRICES[plan])}/mo</div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {PLAN_COMPARISON_ROWS.map((row) => (
-                <tr key={row.feature}>
-                  <td className="border-b border-black/5 px-6 py-4 text-black/70">{row.feature}</td>
-                  {PLAN_ORDER.map((plan) => {
-                    const included = row.includedIn.includes(plan);
-
-                    return (
-                      <td key={plan} className="border-b border-black/5 px-4 py-4 text-center">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${
-                            included
-                              ? plan === 'PRO'
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : plan === 'GROWTH'
-                                  ? 'bg-blue-50 text-blue-700'
-                                  : 'bg-slate-100 text-slate-700'
-                              : 'bg-black/[0.05] text-black/40'
-                          }`}
-                        >
-                          {included ? 'Included' : 'Not included'}
-                        </span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card p-6">
-        <h2 className="text-lg font-display font-semibold">Available add-ons</h2>
-        <p className="mt-1 text-sm text-black/55">
-          Add-ons extend a plan with optional capabilities. They are activated by Tishgroup and billed separately.
-        </p>
-        <div className="mt-4 flex flex-col gap-4 sm:flex-row">
-          <div className="flex-1 rounded-2xl border border-blue-200 bg-blue-50/60 px-5 py-4">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="font-semibold text-ink">Online Storefront</div>
-                <div className="mt-0.5 text-xs font-medium text-blue-700">Growth plan · +GH₵200/mo</div>
-              </div>
-              <span className="shrink-0 rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-700">
-                Pro: included
-              </span>
-            </div>
-            <p className="mt-2 text-sm text-black/65">
-              Publish a customer-facing catalogue, accept mobile-money checkout, and manage pickup orders — without upgrading to Pro. Contact Tishgroup to activate.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-        <div className="card space-y-4 p-6">
+      <nav aria-label="Billing sections" className="flex flex-wrap gap-2">
+        {[["subscription", "Your subscription"], ["payment-instructions", "Payment help"], ["plans", "Compare plans"], ["add-ons", "Add-ons"]].map(([id, label]) => <a key={id} href={'#' + id} className="btn-secondary min-h-11 text-sm">{label}</a>)}
+      </nav>
+      <section id="subscription" aria-label="Your subscription" className="grid min-w-0 scroll-mt-6 items-start gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+        <div className="card min-w-0 space-y-4 p-4 sm:p-6">
           <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-black/40">Current access</div>
+            <h2 className="text-lg font-display font-semibold text-ink">Your subscription</h2>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-accentSoft px-3 py-1 text-sm font-semibold text-accent">
                 {effectivePlanSummary.name}
@@ -420,27 +288,7 @@ export default async function BillingPage(
             <p className="mt-3 max-w-3xl text-sm text-black/60">{billingMerchantMessage}</p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Business</div>
-              <div className="mt-1 text-base font-semibold text-ink">{business.name}</div>
-            </div>
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Plan</div>
-              <div className="mt-1 text-base font-semibold text-ink">{purchasedPlanSummary.name}</div>
-            </div>
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Billing status</div>
-              <div className="mt-1 text-base font-semibold text-ink">{billingDisplayStatus}</div>
-            </div>
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Subscription start</div>
-              <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(subscriptionStartAt, 'Not recorded')}</div>
-            </div>
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Billing cadence</div>
-              <div className="mt-1 text-base font-semibold text-ink">{billingCadenceLabel}</div>
-            </div>
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
               <div className="text-xs uppercase tracking-[0.16em] text-black/40">Next payment due</div>
               <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(nextBillingDate, 'Not scheduled')}</div>
@@ -454,14 +302,6 @@ export default async function BillingPage(
               <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(lastPaymentAt, 'Not recorded')}</div>
             </div>
             <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">First payment</div>
-              <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(firstPaymentAt, 'Not yet')}</div>
-            </div>
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Current period</div>
-              <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(currentPeriodStartedAt, 'Not started')} - {formatDateLabel(currentPeriodEndsAt, 'Not set')}</div>
-            </div>
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
               <div className="text-xs uppercase tracking-[0.16em] text-black/40">Countdown</div>
               <div className="mt-1 text-base font-semibold text-ink">
                 {daysRemaining == null
@@ -471,23 +311,56 @@ export default async function BillingPage(
                     : `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? '' : 's'} ${daysRemaining > 0 ? 'left' : 'overdue'}`}
               </div>
             </div>
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Grace ends</div>
-              <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(graceEndsAt, 'Not applicable')}</div>
-            </div>
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Starter fallback ends</div>
-              <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(starterFallbackEndsAt, 'Not applicable')}</div>
-            </div>
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Read-only starts</div>
-              <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(readOnlyAt, 'Not scheduled')}</div>
-            </div>
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-3 sm:col-span-2 xl:col-span-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Trial end</div>
-              <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(trialEndsAt, 'Not applicable')}</div>
-            </div>
           </div>
+          <details className="rounded-xl border border-border p-4">
+            <summary className="min-h-11 cursor-pointer font-semibold">Subscription details & dates</summary>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-black/40">Business</div>
+                <div className="mt-1 text-base font-semibold text-ink">{business.name}</div>
+              </div>
+              <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-black/40">Plan</div>
+                <div className="mt-1 text-base font-semibold text-ink">{purchasedPlanSummary.name}</div>
+              </div>
+              <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-black/40">Billing status</div>
+                <div className="mt-1 text-base font-semibold text-ink">{billingDisplayStatus}</div>
+              </div>
+              <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-black/40">Subscription start</div>
+                <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(subscriptionStartAt, 'Not recorded')}</div>
+              </div>
+              <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-black/40">Billing cadence</div>
+                <div className="mt-1 text-base font-semibold text-ink">{billingCadenceLabel}</div>
+              </div>
+              <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-black/40">First payment</div>
+                <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(firstPaymentAt, 'Not yet')}</div>
+              </div>
+              <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-black/40">Current period</div>
+                <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(currentPeriodStartedAt, 'Not started')} - {formatDateLabel(currentPeriodEndsAt, 'Not set')}</div>
+              </div>
+              <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-black/40">Grace ends</div>
+                <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(graceEndsAt, 'Not applicable')}</div>
+              </div>
+              <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-black/40">Starter fallback ends</div>
+                <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(starterFallbackEndsAt, 'Not applicable')}</div>
+              </div>
+              <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-black/40">Read-only starts</div>
+                <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(readOnlyAt, 'Not scheduled')}</div>
+              </div>
+              <div className="rounded-xl border border-black/10 bg-white px-4 py-3 sm:col-span-2">
+                <div className="text-xs uppercase tracking-[0.16em] text-black/40">Trial end</div>
+                <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(trialEndsAt, 'Not applicable')}</div>
+              </div>
+            </div>
+          </details>
 
           <details className="rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-4 text-sm text-black/65">
             <summary className="cursor-pointer text-xs uppercase tracking-[0.18em] text-black/40">Billing history</summary>
@@ -531,45 +404,35 @@ export default async function BillingPage(
         </div>
 
         <div className="space-y-4">
-          <div id="payment-instructions" className="card space-y-4 p-6 scroll-mt-24">
+          <div id="payment-instructions" className="card space-y-4 p-4 sm:p-6 scroll-mt-6">
             <h2 className="text-lg font-display font-semibold">Payment instructions</h2>
+            <Link href="/help" className="btn-secondary min-h-11 w-full sm:w-auto">Get billing help</Link>
             <div className="space-y-3 text-sm text-black/60">
               <p>
                 New businesses receive a 7-day free trial on the selected plan. After the trial, payment must be confirmed by Tishgroup before full usage continues beyond the grace window.
               </p>
               <p>
-                Pay the monthly amount due and contact Tishgroup with your business name, phone number, amount, and payment reference. Once confirmed, your monthly billing cycle starts from the payment date.
+                Pay the amount due for your billing period and contact Tishgroup with your business name, phone number, amount, and payment reference. Once confirmed, your billing cycle starts from the payment date.
               </p>
               <p>
                 While restricted, billing, support, account settings, and read-only dashboard access remain available. New sales, purchases, stock adjustments, online store publishing, exports, advanced reports, staff expansion, and premium features are paused.
               </p>
               <p>
-                Plan upgrades and downgrades are handled by Tishgroup Control. A self-service change flow will appear here once it is ready.
+                Contact Tishgroup to confirm a payment, correct a due date, or change your plan.
               </p>
             </div>
 
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-              Multi-branch workflows only activate on Pro. Growth unlocks richer reporting and control surfaces, while fallback access uses Starter entitlements only.
-            </div>
-          </div>
-
-          <div className="card space-y-4 p-6">
-            <h2 className="text-lg font-display font-semibold">Commercial changes are handled by Tishgroup</h2>
-            <p className="text-sm text-black/60">
-              This page shows your plan and payment status. Billing changes are handled by Tish Group so your subscription, payment history, and access stay aligned.
-            </p>
-
-            <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-900">
-              If payment has been made or your next due date is wrong, contact Tishgroup. Once Tishgroup updates the control plane, Tillflow access will refresh from that commercial record.
+              Multi-branch workflows only activate on Pro. Growth unlocks richer reporting and business tools, while fallback access uses Starter entitlements only.
             </div>
           </div>
 
           {upgradeOptions.length > 0 && billingSchemaReady ? (
-            <form action={requestPlanUpgradeAction} className="card space-y-3 p-6">
+            <form action={requestPlanUpgradeAction} id="upgrade-request" className="card min-w-0 scroll-mt-6 space-y-4 p-4 sm:p-6">
               <div>
                 <h3 className="text-sm font-semibold text-ink">Request a plan upgrade</h3>
                 <p className="mt-1 text-sm text-black/60">
-                  Submit an internal request so the desired commercial change is captured alongside this business record.
+                  Tell Tishgroup which plan you need. Submitting a request does not change your plan or charge you.
                 </p>
               </div>
 
@@ -600,13 +463,151 @@ export default async function BillingPage(
                 />
               </label>
 
-              <button type="submit" className="btn-primary w-full justify-center sm:w-fit">
+              <SubmitButton className="btn-primary min-h-11 w-full justify-center sm:w-fit" loadingText="Sending request…">
                 Submit upgrade request
-              </button>
+              </SubmitButton>
             </form>
           ) : null}
         </div>
-      </div>
+      </section>
+
+      <section id="plans" aria-labelledby="plans-heading" className="scroll-mt-6 space-y-4">
+        <div><h2 id="plans-heading" className="text-xl font-display font-semibold">Choose the right plan</h2><p className="mt-1 text-sm text-muted">Compare monthly and annual prices. Request an upgrade above when you are ready.</p></div>
+        <div className="grid gap-4 xl:grid-cols-3">
+          {PLAN_ORDER.map((plan) => {
+            const details = PLAN_DETAILS[plan];
+            const isCurrent = plan === effectivePlan;
+            const isPurchased = billingIsPaid && plan === purchasedPlan;
+            const monthlyPrice = PLAN_MONTHLY_PRICES[plan];
+            const annualPrice = getAnnualPlanPrice(monthlyPrice);
+            const annualSavings = getAnnualPlanSavings(monthlyPrice);
+
+            return (
+              <div key={plan} className={`card min-w-0 space-y-4 p-4 sm:p-6 ${details.tone}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-black/45">Plan</div>
+                    <h2 className="mt-1 text-xl font-display font-semibold text-ink">{details.name}</h2>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {details.featured ? (
+                      <span className="rounded-full bg-accentSoft px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+                        Most popular
+                      </span>
+                    ) : null}
+                    {isPurchased ? (
+                      <span className="rounded-full bg-black/[0.06] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-black/60">
+                        Purchased
+                      </span>
+                    ) : null}
+                    {isCurrent ? (
+                      <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white">
+                        Access today
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-black/5 bg-white/80 px-3 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/40">Monthly</div>
+                    <div className="mt-1 break-words text-2xl font-display font-bold text-ink">{formatCedi(monthlyPrice)}</div>
+                    <div className="text-xs text-black/50">per month</div>
+                  </div>
+                  <div className="rounded-xl border border-black/5 bg-white/80 px-3 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/40">Annual</div>
+                    <div className="mt-1 text-2xl font-display font-bold text-ink">{formatCedi(annualPrice)}</div>
+                    <div className="text-xs text-black/50">per year</div>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-black/5 bg-white/70 px-3 py-2 text-xs font-medium text-black/55">
+                  Annual billing saves {formatCedi(annualSavings)} compared with paying month by month.
+                </div>
+                <ul className="space-y-2 text-sm text-black/65">
+                  {details.highlights.map((item) => (
+                    <li key={item} className="rounded-xl border border-black/5 bg-white/70 px-3 py-2">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+
+      </section>
+
+      <details className="card overflow-hidden p-0">
+        <summary className="min-h-11 cursor-pointer px-4 py-4 text-lg font-display font-semibold sm:px-6">Compare all plan features</summary>
+        <p className="px-4 pb-4 text-sm text-muted sm:px-6">Features included with each plan. The Growth online store add-on is available separately.</p>
+        <ul className="space-y-3 px-4 pb-4 md:hidden">{PLAN_COMPARISON_ROWS.map(row => <li key={row.feature} className="rounded-xl border border-border p-3"><div className="text-sm font-semibold">{row.feature}</div><p className="mt-2 text-sm text-muted">Included: {row.includedIn.map(plan => PLAN_DETAILS[plan].name).join(', ')}</p></li>)}</ul>
+
+        <div className="hidden overflow-x-auto md:block">
+          <table className="min-w-full border-separate border-spacing-0 text-sm">
+            <thead>
+              <tr className="bg-black/[0.02] text-left text-black/55">
+                <th className="border-b border-black/5 px-6 py-4 font-semibold">Feature area</th>
+                {PLAN_ORDER.map((plan) => (
+                  <th key={plan} className="border-b border-black/5 px-4 py-4 text-center font-semibold">
+                    <div className="text-ink">{PLAN_DETAILS[plan].name}</div>
+                    <div className="mt-1 text-xs font-medium text-black/45">{formatCedi(PLAN_MONTHLY_PRICES[plan])}/mo</div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {PLAN_COMPARISON_ROWS.map((row) => (
+                <tr key={row.feature}>
+                  <td className="border-b border-black/5 px-6 py-4 text-black/70">{row.feature}</td>
+                  {PLAN_ORDER.map((plan) => {
+                    const included = row.includedIn.includes(plan);
+
+                    return (
+                      <td key={plan} className="border-b border-black/5 px-4 py-4 text-center">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${included
+                              ? plan === 'PRO'
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : plan === 'GROWTH'
+                                  ? 'bg-blue-50 text-blue-700'
+                                  : 'bg-slate-100 text-slate-700'
+                              : 'bg-black/[0.05] text-black/40'
+                            }`}
+                        >
+                          {included ? 'Included' : 'Not included'}
+                        </span>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <section id="add-ons" aria-labelledby="add-ons-heading" className="card scroll-mt-6 p-4 sm:p-6">
+        <h2 id="add-ons-heading" className="text-lg font-display font-semibold">Available add-ons</h2>
+        <p className="mt-1 text-sm text-black/55">
+          Add-ons extend a plan with optional capabilities. They are activated by Tishgroup and billed separately.
+        </p>
+        <div className="mt-4 flex flex-col gap-4 sm:flex-row">
+          <div className="flex-1 rounded-2xl border border-blue-200 bg-blue-50/60 px-5 py-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="font-semibold text-ink">Online Storefront</div>
+                <div className="mt-0.5 text-xs font-medium text-blue-700">Growth plan · +GH₵200/mo</div>
+              </div>
+              <span className="shrink-0 rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-700">
+                Pro: included
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-black/65">
+              Publish a customer-facing catalogue, accept mobile-money checkout, and manage pickup orders — without upgrading to Pro. Contact Tishgroup to activate.
+            </p>
+          </div>
+        </div>
+      </section>
+
     </div>
   );
 }

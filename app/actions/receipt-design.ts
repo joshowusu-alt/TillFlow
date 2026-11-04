@@ -1,9 +1,10 @@
 'use server';
 
+import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { formOptionalString } from '@/lib/form-helpers';
-import { withBusinessContext, formAction, ok, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, formAction } from '@/lib/action-utils';
 
 export async function updateReceiptDesignAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -26,6 +27,7 @@ export async function updateReceiptDesignAction(formData: FormData): Promise<voi
 
     revalidatePath('/settings/receipt-design');
     revalidatePath('/receipts');
-    return ok();
+    revalidatePath('/settings');
+    redirect('/settings/receipt-design?saved=1');
   }, '/settings/receipt-design');
 }

@@ -184,7 +184,7 @@ export async function updateOrganizationSettingsAction(formData: FormData): Prom
 
     revalidateTag(checkoutContextTag(businessId));
 
-    redirect('/settings/organization');
+    redirect('/settings/organization?saved=organization');
   }, '/settings/organization');
 }
 
@@ -237,7 +237,7 @@ export async function updateBrandIdentityAction(formData: FormData): Promise<voi
       await invalidateStorefrontBusinessCache(business.storefrontSlug);
       revalidatePath(`/shop/${business.storefrontSlug}`);
     }
-    redirect('/settings/organization');
+    redirect('/settings/organization?saved=brand');
   }, '/settings/organization');
 }
 

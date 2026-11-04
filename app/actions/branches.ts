@@ -30,7 +30,7 @@ export async function syncOrganizationModelAction(): Promise<void> {
       businessName: business.name,
     });
 
-    redirect('/settings/organization');
+    redirect('/settings/organization?saved=sync');
   }, '/settings/organization');
 }
 
@@ -65,6 +65,6 @@ export async function registerDeviceAction(formData: FormData): Promise<void> {
       },
     });
 
-    redirect('/settings/organization');
+    redirect('/settings/organization?saved=device');
   }, '/settings/organization');
 }
