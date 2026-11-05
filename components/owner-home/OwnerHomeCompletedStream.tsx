@@ -5,6 +5,8 @@ import { getOwnerHomeAttentionData } from '@/lib/owner-home/attention';
 import { getOwnerHomeExtrasData } from '@/lib/owner-home/extras';
 import { getOwnerHomeImproveRecords } from '@/lib/owner-home/improve-records';
 import { getHomePerformanceSummary } from '@/lib/reports/home-performance-kpis';
+import { cashDrawerLinkPlan, type HomeExpectedCashScope } from '@/lib/reports/home-expected-cash-link';
+import { readOperationalStoreCookie } from '@/lib/reliability/operational-store-cookie';
 import { HomeActionCard, HomeIcon } from '@/components/owner-home/home-chrome';
 import HomePerformanceSlot from '@/components/owner-home/HomePerformanceSlot';
 import HomeStatusPillSlot from '@/components/owner-home/HomeStatusPillSlot';
@@ -40,6 +42,7 @@ export default function OwnerHomeCompletedStream({ shell }: { shell: OwnerHomeCr
   const firstName = shell.userName ? shell.userName.split(' ')[0] : null;
 
   const performancePromise = getHomePerformanceSummary(shell.businessId);
+  const cashDrawerScopePromise = loadHomeExpectedCashScope(shell.businessId);
   const attentionPromise = getOwnerHomeAttentionData(shell.businessId);
   const improvePromise = getOwnerHomeImproveRecords(shell.businessId, shell.saleCount);
   const extrasPromise = prisma.business
@@ -110,6 +113,7 @@ export default function OwnerHomeCompletedStream({ shell }: { shell: OwnerHomeCr
                 <Suspense fallback={<HomeKpiSkeleton />}>
                   <HomePerformanceSlot
                     performancePromise={performancePromise}
+                    cashDrawerScopePromise={cashDrawerScopePromise}
                     currency={shell.currency}
                     saleCount={shell.saleCount}
                   />
@@ -160,4 +164,27 @@ export default function OwnerHomeCompletedStream({ shell }: { shell: OwnerHomeCr
       </div>
     </div>
   );
+}
+
+function loadHomeExpectedCashScope(businessId: string): Promise<HomeExpectedCashScope> {
+  const operationalStoreId = readOperationalStoreCookie();
+  return Promise.all([
+    prisma.business.findUnique({
+      where: { id: businessId },
+      select: { plan: true, mode: true, storeMode: true },
+    }),
+    prisma.store.findMany({
+      where: { businessId },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ]).then(([business, stores]) => ({
+    plan: cashDrawerLinkPlan({
+      plan: business?.plan,
+      mode: business?.mode,
+      storeMode: business?.storeMode,
+    }),
+    ownedStoreIds: stores.map((store) => store.id),
+    operationalStoreId,
+  }));
 }
