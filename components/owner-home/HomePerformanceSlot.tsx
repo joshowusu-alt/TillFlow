@@ -3,28 +3,34 @@ import { formatMoney } from '@/lib/format';
 import type { HomePerformanceSummary } from '@/lib/reports/home-performance-kpis';
 import { getStatValueSize } from '@/lib/owner-home/stat-value-size';
 import { HomePerformanceUnavailable } from '@/components/owner-home/section-errors';
-import { buildReportingScopeSearchParams } from '@/lib/reports/reporting-scope';
 import { formatExpectedCashFooter } from '@/lib/home-attention-presentation';
+import {
+  homeExpectedCashHref,
+  type HomeExpectedCashScope,
+} from '@/lib/reports/home-expected-cash-link';
 
 export default async function HomePerformanceSlot({
   performancePromise,
+  cashDrawerScopePromise,
   currency,
   saleCount,
 }: {
   performancePromise: Promise<HomePerformanceSummary>;
+  cashDrawerScopePromise: Promise<HomeExpectedCashScope>;
   currency: string;
   saleCount: number;
 }) {
   let data: HomePerformanceSummary;
+  let cashDrawerScope: HomeExpectedCashScope;
   try {
-    data = await performancePromise;
+    [data, cashDrawerScope] = await Promise.all([performancePromise, cashDrawerScopePromise]);
   } catch (error) {
     console.error('[home.performance] failed to load today\'s figures', error);
     return <HomePerformanceUnavailable />;
   }
 
   const formatCurrency = (pence: number) => formatMoney(pence, currency);
-  const cashDrawerHref = `/reports/cash-drawer?${buildReportingScopeSearchParams(data.todayScope).toString()}`;
+  const cashDrawerHref = homeExpectedCashHref(data.todayScope, cashDrawerScope);
   const salesTodayHref = `/sales?from=${encodeURIComponent(data.todayScope.fromInputValue)}&to=${encodeURIComponent(data.todayScope.toInputValue)}&storeId=ALL`;
 
   const todayVsYesterdayText =

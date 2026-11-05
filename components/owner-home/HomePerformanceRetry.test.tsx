@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import HomePerformanceSlot from '@/components/owner-home/HomePerformanceSlot';
 import { HomePerformanceUnavailable } from '@/components/owner-home/section-errors';
 import { formatMoney } from '@/lib/format';
+import type { HomeExpectedCashScope } from '@/lib/reports/home-expected-cash-link';
 import type { HomePerformanceSummary } from '@/lib/reports/home-performance-kpis';
 
 // next/link → plain anchor so the success path renders in jsdom.
@@ -71,6 +72,30 @@ const dataSummary: HomePerformanceSummary = {
   tradingReportHref: '/reports/dashboard?period=today&from=2026-08-07&to=2026-08-07&storeId=ALL',
 };
 
+const growthBranch: HomeExpectedCashScope = {
+  plan: 'GROWTH',
+  ownedStoreIds: ['store-akwaaba'],
+  operationalStoreId: 'store-akwaaba',
+};
+
+function renderSlot(
+  summary: HomePerformanceSummary,
+  saleCount: number,
+  scope: HomeExpectedCashScope = growthBranch,
+) {
+  return HomePerformanceSlot({
+    performancePromise: Promise.resolve(summary),
+    cashDrawerScopePromise: Promise.resolve(scope),
+    currency: 'GHS',
+    saleCount,
+  });
+}
+
+function linkedStoreId(name: RegExp): string | null {
+  const href = screen.getByRole('link', { name }).getAttribute('href');
+  return new URL(href ?? '', 'http://localhost').searchParams.get('storeId');
+}
+
 afterEach(() => {
   vi.clearAllMocks();
   mockPending = false;
@@ -137,6 +162,7 @@ describe('HomePerformanceSlot — failure / recovery / genuine-zero contract', (
   it('failure → renders the recoverable failure state (not real figures, not a fake zero)', async () => {
     const jsx = await HomePerformanceSlot({
       performancePromise: Promise.reject(new Error('db unavailable')),
+      cashDrawerScopePromise: Promise.resolve(growthBranch),
       currency: 'GHS',
       saleCount: 5,
     });
@@ -150,11 +176,7 @@ describe('HomePerformanceSlot — failure / recovery / genuine-zero contract', (
   });
 
   it('success (recovery) → replaces the error with real figures', async () => {
-    const jsx = await HomePerformanceSlot({
-      performancePromise: Promise.resolve(dataSummary),
-      currency: 'GHS',
-      saleCount: 37,
-    });
+    const jsx = await renderSlot(dataSummary, 37);
     render(jsx);
     expect(screen.queryByText(/could not load today's figures/i)).toBeNull();
     expect(screen.getByText(formatMoney(dataSummary.todayRevenuePence, 'GHS'))).toBeTruthy();
@@ -162,11 +184,7 @@ describe('HomePerformanceSlot — failure / recovery / genuine-zero contract', (
   });
 
   it('genuine zero-sales day → shows a truthful zero value, distinct from a failure', async () => {
-    const jsx = await HomePerformanceSlot({
-      performancePromise: Promise.resolve(zeroSummary),
-      currency: 'GHS',
-      saleCount: 0,
-    });
+    const jsx = await renderSlot(zeroSummary, 0);
     render(jsx);
     // No error UI.
     expect(screen.queryByText(/could not load today's figures/i)).toBeNull();
@@ -174,5 +192,41 @@ describe('HomePerformanceSlot — failure / recovery / genuine-zero contract', (
     expect(screen.getAllByText(formatMoney(0, 'GHS')).length).toBeGreaterThan(0);
     // Product count is shown (zero-sales layout), proving this is the live path.
     expect(screen.getByText(zeroSummary.productCount.toLocaleString())).toBeTruthy();
+  });
+
+  it('Growth Expected Cash opens the branch cash drawer, not all branches', async () => {
+    const jsx = await renderSlot(dataSummary, 37, {
+      plan: 'GROWTH',
+      ownedStoreIds: ['store-akwaaba'],
+      operationalStoreId: null,
+    });
+    render(jsx);
+
+    const href = screen.getByRole('link', { name: /Expected Cash/i }).getAttribute('href') ?? '';
+    expect(href.startsWith('/reports/cash-drawer?')).toBe(true);
+    expect(linkedStoreId(/Expected Cash/i)).toBe('store-akwaaba');
+    expect(href).not.toContain('storeId=ALL');
+    expect(href).toContain('period=today');
+    expect(href).toContain('from=2026-08-07');
+    expect(screen.getByRole('link', { name: /Today's Sales Revenue/i }).getAttribute('href')).toContain('storeId=ALL');
+  });
+
+  it('Growth with several branches uses the selected store, and Pro keeps all branches', async () => {
+    const growth = await renderSlot(dataSummary, 37, {
+      plan: 'GROWTH',
+      ownedStoreIds: ['store-a', 'store-b'],
+      operationalStoreId: 'store-b',
+    });
+    const { unmount } = render(growth);
+    expect(linkedStoreId(/Expected Cash/i)).toBe('store-b');
+    unmount();
+
+    const pro = await renderSlot(dataSummary, 37, {
+      plan: 'PRO',
+      ownedStoreIds: ['store-a', 'store-b'],
+      operationalStoreId: 'store-a',
+    });
+    render(pro);
+    expect(linkedStoreId(/Expected Cash/i)).toBe('ALL');
   });
 });
