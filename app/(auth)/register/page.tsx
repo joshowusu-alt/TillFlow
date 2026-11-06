@@ -1,3 +1,4 @@
+import '@/app/commercial-public.css';
 import { getUser } from '@/lib/auth';
 import RegisterForm from '@/components/RegisterForm';
 import { buildTillflowPublicMetadata } from '@/lib/marketing/site';
@@ -20,7 +21,7 @@ export default async function RegisterPage(props: { searchParams: Promise<{ erro
   const error = searchParams?.error;
 
   return (
-    <div>
+    <div className="commercial-public">
       <RegisterForm error={error} initialPlan={searchParams.plan === 'GROWTH' || searchParams.plan === 'PRO' ? searchParams.plan : 'STARTER'} initialBillingInterval={searchParams.billing === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY'} />
     </div>
   );

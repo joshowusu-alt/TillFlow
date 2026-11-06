@@ -197,6 +197,9 @@ jobs:
           cat .ci-server.log || true
           exit 1
 
+      - name: Persisted commercial registration and first-product onboarding
+        run: node scripts/commercial-registration-e2e.cjs
+
       - name: Fresh service worker, owner sign-in and app navigation
         run: node scripts/app-loading-browser.cjs
 
@@ -205,6 +208,9 @@ jobs:
 
       - name: Offline sync smoke E2E
         run: npm run test:e2e:smoke
+
+      - name: Native offline queue reconnection and persisted duplicate safety
+        run: node scripts/commercial-offline-persisted-e2e.cjs
 
       # Route-speed remains a running-app latency regression check (not a substitute
       # for POS financial assertions). Kept in pos-safety because it requires BASE_URL.
@@ -239,5 +245,6 @@ jobs:
             docs/loading/GATE_E_LABORATORY_BENCHMARK.md
             docs/loading/GATE_F_POS_STABILITY.md
             tmp/ui-programme-evidence/**
+            tmp/commercial-release/**
             .ci-server.log
           if-no-files-found: ignore

@@ -100,7 +100,7 @@ export default function DemoReportsPage() {
       {/* Top Products */}
       <div className="card overflow-x-auto">
         <SectionHeader title="Top 10 Products by Revenue" />
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Reports table">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-black/5 text-left text-muted">
@@ -135,7 +135,7 @@ export default function DemoReportsPage() {
       {/* Category Performance */}
       <div className="card overflow-x-auto">
         <SectionHeader title="Category Performance" />
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Reports table">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-black/5 text-left text-muted">
@@ -175,7 +175,7 @@ export default function DemoReportsPage() {
         {lowStock.length === 0 ? (
           <p className="px-5 py-6 text-sm text-muted">All products are above reorder levels.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Reports table">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-black/5 text-left text-muted">
@@ -205,7 +205,7 @@ export default function DemoReportsPage() {
         <div className="card p-5"><p className="text-sm text-muted">Customer credits / overpayments</p><p className="text-xl font-bold">{fmt(snapshot.totals.customerCreditPence)}</p></div>
       </div>
       {/* Debtor Balances */}
-      <div className="card overflow-x-auto">
+      <div className="card overflow-x-auto" tabIndex={0} role="region" aria-label="Customer balances">
         <SectionHeader title="Customer balances" subtitle="Positive: customer owes the shop. Negative: customer credit, shown separately from receivables." />
         {debtors.length === 0 ? (
           <p className="px-5 py-6 text-sm text-muted">No outstanding debtor balances.</p>
@@ -234,7 +234,7 @@ export default function DemoReportsPage() {
       </div>
 
       {/* Supplier Payables */}
-      <div className="card overflow-x-auto">
+      <div className="card overflow-x-auto" tabIndex={0} role="region" aria-label="Supplier Payables (Accounts Payable)">
         <SectionHeader title="Supplier Payables (Accounts Payable)" />
         {payables.length === 0 ? (
           <p className="px-5 py-6 text-sm text-muted">No outstanding supplier balances.</p>
@@ -267,7 +267,7 @@ export default function DemoReportsPage() {
       {/* Stock movement summary */}
       <div className="card overflow-x-auto">
         <SectionHeader title="Stock Movement Summary" subtitle="All 100 SKUs · opening + purchased − sold = ending" />
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Reports table">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-black/5 text-left text-muted">

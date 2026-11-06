@@ -1,3 +1,4 @@
+import '@/app/commercial-public.css';
 import { buildTillflowPublicMetadata } from '@/lib/marketing/site';
 
 export const metadata = buildTillflowPublicMetadata({
@@ -5,5 +6,5 @@ export const metadata = buildTillflowPublicMetadata({
 });
 
 export default function WelcomeLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <div className="commercial-public">{children}</div>;
 }

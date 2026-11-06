@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildDemoLedger } from './build-demo-ledger';
 import { getCashFlow, getDashboardKPIs, getDebtorBalances, getIncomeStatement, getSalesByDay, getPaymentSplit } from './reports';
+import { getDemoOnlineOrders } from './online-orders';
 import { DEMO_PERIOD_DAYS } from '@/lib/demo-sandbox/constants';
 
 describe('fictional demo ledger reconciliation (no database)', () => {
@@ -43,4 +44,14 @@ describe('fictional demo ledger reconciliation (no database)', () => {
     expect(t.apBalancePence).toBe(s.purchaseInvoices.reduce((sum, p) => sum + p.totalPence - p.paidPence, 0));
     expect(t.endingInventoryValuePence).toBe(t.openingInventoryValuePence + t.totalPurchasesPence - t.totalCOGSPence);
   });
+  it('reuses ledger invoices for pickup examples without inventing additional sales', () => {
+    for (const order of getDemoOnlineOrders(s)) {
+      const invoice = s.salesInvoices.find(i => order.id === `WEB-${i.id}`)!;
+      expect(invoice).toBeDefined();
+      expect(order.totalPence).toBe(invoice.subtotalPence);
+      expect(order.placedAt).toBe(invoice.date.toISOString());
+      expect(order.paymentRef !== null).toBe(invoice.paymentMethod === 'MOMO');
+    }
+  });
+
 });

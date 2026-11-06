@@ -1,0 +1,12 @@
+{
+  "registration": true,
+  "planPersisted": "PRO",
+  "intervalPersisted": "ANNUAL",
+  "billingAmountPence": 699000,
+  "store": true,
+  "till": true,
+  "chartOfAccounts": true,
+  "firstProduct": true,
+  "onboarding": true,
+  "isolatedDatabase": "file:./release-176-isolated.db"
+}
