@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { IBM_Plex_Sans, Space_Grotesk } from 'next/font/google';
+import localFont from 'next/font/local';
 import { Suspense } from 'react';
 import '@/app/globals.css';
 import ControlShell from '@/components/control-shell';
@@ -12,15 +12,16 @@ import { getPortfolioSummaryFor, getCollectionQueuesFor } from '@/lib/control-me
 
 export const dynamic = 'force-dynamic';
 
-const bodyFont = IBM_Plex_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+const bodyFont = localFont({
+  src: '../public/fonts/ibm-plex-sans-latin-wght-normal.woff2',
+  weight: '100 700',
+  display: 'swap',
   variable: '--font-body',
 });
-
-const displayFont = Space_Grotesk({
-  subsets: ['latin'],
-  weight: ['500', '600', '700'],
+const displayFont = localFont({
+  src: '../public/fonts/space-grotesk-latin-wght-normal.woff2',
+  weight: '300 700',
+  display: 'swap',
   variable: '--font-display',
 });
 

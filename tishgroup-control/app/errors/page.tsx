@@ -53,7 +53,20 @@ export default async function ErrorsPage() {
       ) : (
         <div className="space-y-3">
           <SectionHeading eyebrow="Errors" title="Recent errors" description="System errors from payment writes, subscription updates, SMS enqueue, and login failures." />
-          <div className="overflow-hidden rounded-2xl border border-black/8 bg-white shadow-sm">
+          <ul className="space-y-3 md:hidden" aria-label="Recent system errors">
+            {errors.map((entry) => (
+              <li key={entry.id} className="mobile-card space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-rose-800">{CONTEXT_LABELS[entry.context] ?? entry.context}</span>
+                  <span className="text-xs text-black/65">{relativeTime(entry.createdAt)}</span>
+                </div>
+                <p className="text-sm leading-6 text-control-ink">{entry.message}</p>
+                <p className="text-xs text-black/65">{entry.staffEmail}</p>
+                {entry.businessId ? <Link href={`/businesses/${entry.businessId}`} className="inline-flex min-h-11 items-center text-sm font-semibold text-control-teal underline">View account</Link> : null}
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto rounded-2xl border border-black/8 bg-white shadow-sm md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-black/6 bg-control-cloud text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-control-ink/55">
@@ -76,7 +89,7 @@ export default async function ErrorsPage() {
                       </span>
                     </td>
                     <td className="max-w-[340px] px-4 py-3 text-control-ink/80">
-                      <span className="block truncate">{entry.message}</span>
+                      <span title={entry.message} className="block truncate">{entry.message}</span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-control-ink/60">{entry.staffEmail}</td>
                     <td className="whitespace-nowrap px-4 py-3">

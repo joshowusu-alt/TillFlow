@@ -63,7 +63,8 @@ export default async function BusinessDetailPage({
   });
   const storefrontSummary = storefrontPricingSummary(subscriptionPricing, business.storefrontEnabled, billingPlan);
   const error = readSearchParam(resolvedSearchParams.error);
-  const tab = readSearchParam(resolvedSearchParams.tab) ?? 'timeline';
+  const requestedTab = readSearchParam(resolvedSearchParams.tab);
+  const tab = requestedTab && ['timeline', 'overview', 'billing', 'notes'].includes(requestedTab) ? requestedTab : 'timeline';
   const canEditSubscription = canManageSubscriptions(staff.role);
   const canTakePayments = canRecordPayments(staff.role);
   const canAddNotes = canWriteNotes(staff.role);
@@ -76,13 +77,14 @@ export default async function BusinessDetailPage({
       { id: 'notes', label: 'Notes' },
     ];
     return (
-      <div className="panel overflow-x-auto">
-        <div className="mobile-nav-strip flex">
+      <nav aria-label="Account sections" className="panel overflow-x-auto">
+        <div className="grid grid-cols-4">
           {tabs.map((t) => (
             <Link
               key={t.id}
               href={`/businesses/${businessId}?tab=${t.id}`}
-              className={`shrink-0 border-b-2 px-5 pb-3 pt-3 text-sm font-medium transition ${
+              aria-current={tab === t.id ? 'page' : undefined}
+              className={`min-h-12 border-b-2 px-2 py-3 text-center text-sm font-medium transition ${
                 tab === t.id
                   ? 'border-control-ink text-control-ink'
                   : 'border-transparent text-black/52 hover:text-control-ink'
@@ -92,12 +94,13 @@ export default async function BusinessDetailPage({
             </Link>
           ))}
         </div>
-      </div>
+      </nav>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      <Link href="/businesses" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-control-ink">← All businesses</Link>
       {error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">
           {error}
@@ -107,45 +110,25 @@ export default async function BusinessDetailPage({
       <ControlPageHeader
         eyebrow="Business detail"
         title={business.name}
-        description="This account view combines commercial state, owner context, payment history, and the exact next operational action so any TG operator can pick up the business without backtracking."
+        description={`${business.ownerName} · ${business.assignedManager}`}
         chips={[
           { label: 'Call owner', href: toPhoneHref(business.ownerPhone), tone: 'dark' },
           ...(business.ownerEmail !== 'Email not recorded' ? [{ label: 'Email owner', href: `mailto:${business.ownerEmail}` }] : []),
-          { label: 'Timeline', href: `/businesses/${businessId}?tab=timeline` },
-          { label: 'Billing', href: `/businesses/${businessId}?tab=billing` },
+
         ]}
         stats={[
           { label: 'Outstanding', value: formatCedi(business.outstandingAmount), hint: 'Current amount exposed to renewal follow-up or recovery.' },
           { label: 'Next due', value: business.nextDueAt, hint: 'The billing date driving the next collections move.' },
-          { label: 'Assigned manager', value: business.assignedManager, hint: 'Current owner responsible for relationship continuity.' },
-          { label: 'Review status', value: business.needsReview ? 'Pending review' : 'Reviewed', hint: 'Whether the account still needs first commercial review.' },
         ]}
-        aside={(
-          <div className="space-y-5">
-            <div className="flex flex-wrap gap-2">
-              <PlanPill plan={business.plan} />
-              <StatePill state={business.state} />
-              <SlaFlags flags={getSlaFlags(business)} />
-            </div>
-            <div>
-              <div className="eyebrow">Today's move</div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight">What the next operator should do</h2>
-            </div>
-            <ol className="space-y-3 text-sm leading-6">
-              {checklist.slice(0, 3).map((item, index) => (
-                <li key={item} className="control-priority-item control-priority-item-tonal">
-                  <div className="flex items-start gap-3">
-                    <span className="control-sequence-step">{index + 1}</span>
-                    <span>{item}</span>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
+
       />
 
+      <div className="flex flex-wrap gap-2" aria-label="Account status"><PlanPill plan={business.plan} /><StatePill state={business.state} /><SlaFlags flags={getSlaFlags(business)} /></div>
       <TabStrip />
+      <details className="panel p-4 sm:p-5">
+        <summary className="cursor-pointer text-sm font-semibold">Recommended next steps ({checklist.slice(0, 3).length})</summary>
+        <ol className="mt-3 space-y-2 text-sm leading-6 text-black/70">{checklist.slice(0, 3).map((item, index) => <li key={item}>{index + 1}. {item}</li>)}</ol>
+      </details>
 
       {tab === 'timeline' ? (
         <BusinessTimeline
@@ -580,7 +563,7 @@ export default async function BusinessDetailPage({
               </div>
             )}
             {canTakePayments ? (
-              <PaymentForm business={business} recommendedAmount={subscriptionPricing.totalDueGhs} />
+              <div id="record-payment"><PaymentForm business={business} recommendedAmount={subscriptionPricing.totalDueGhs} /></div>
             ) : (
               <div className="rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/56">
                 Your role can view payment history but cannot record payments.
@@ -659,7 +642,7 @@ export default async function BusinessDetailPage({
         </div>
       ) : null}
 
-      <div className="sticky bottom-0 z-20 flex gap-3 border-t border-black/8 bg-white/95 px-4 py-4 backdrop-blur-sm lg:hidden">
+      <div className="sticky bottom-0 z-20 flex gap-3 border-t border-black/8 bg-white/95 px-4 pb-[calc(var(--safe-bottom)+0.75rem)] pt-3 backdrop-blur-sm lg:hidden">
         <a
           href={toPhoneHref(business.ownerPhone)}
           className="flex-1 inline-flex items-center justify-center rounded-2xl bg-control-dark py-3 text-sm font-semibold text-white"
@@ -668,7 +651,7 @@ export default async function BusinessDetailPage({
         </a>
         {canTakePayments ? (
           <Link
-            href={`/businesses/${businessId}?tab=billing`}
+            href={`/businesses/${businessId}?tab=billing#record-payment`}
             className="flex-1 inline-flex items-center justify-center rounded-2xl border border-black/12 bg-white py-3 text-sm font-semibold text-control-ink"
           >
             Record payment

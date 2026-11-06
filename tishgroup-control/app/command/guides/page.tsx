@@ -21,7 +21,7 @@ export default async function CommandGuidesPage() {
 
       {agentGuide ? (
         <div className="rounded-2xl border border-control-line bg-white p-2">
-          <GuideView guide={agentGuide} backHref="/command/guides" />
+          <GuideView guide={agentGuide} />
         </div>
       ) : null}
 
@@ -45,7 +45,7 @@ export default async function CommandGuidesPage() {
         <Link href="/command/templates" className="font-semibold text-control-accent hover:underline">
           WhatsApp templates →
         </Link>
-        <Link href="/demo" className="font-semibold text-control-accent hover:underline" target="_blank">
+        <Link href="https://www.tillflow.app/demo" className="font-semibold text-control-accent hover:underline" target="_blank">
           Public demo →
         </Link>
       </div>

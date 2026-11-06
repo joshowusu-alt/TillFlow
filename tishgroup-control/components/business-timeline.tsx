@@ -169,7 +169,7 @@ export default function BusinessTimeline({
               {group.items.map((entry) => (
                 <li key={entry.id} className={`flex items-start gap-3 rounded-2xl border px-3.5 py-3 sm:px-4 sm:py-3.5 ${TONE_BORDER[entry.tone]}`}>
                   <span className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${TONE_DOT[entry.tone]}`} aria-hidden="true" />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-black/48">
                       <span>{KIND_LABEL[entry.kind]}</span>
                       {entry.category ? <span className="text-black/35">· {entry.category}</span> : null}

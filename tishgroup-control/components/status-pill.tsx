@@ -49,8 +49,15 @@ function healthTone(health: BusinessHealth): PillTone {
   }
 }
 
+const stateLabels: Partial<Record<ManagedState, string>> = {
+  PAYMENT_OVERDUE_GRACE: 'Overdue · grace',
+  TRIAL_EXPIRED_GRACE: 'Trial ended · grace',
+  RENEWAL_DUE_SOON: 'Renewal due soon',
+  PAYMENT_DUE_TODAY: 'Payment due today',
+};
+
 export function StatePill({ state }: { state: ManagedState }) {
-  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${tones[stateTone(state)]}`}>{state.replace(/_/g, ' ')}</span>;
+  return <span title={state.replace(/_/g, ' ')} className={`inline-flex max-w-full rounded-full border px-2.5 py-1 text-[11px] font-semibold ${tones[stateTone(state)]}`}>{stateLabels[state] ?? state.toLowerCase().replace(/_/g, ' ').replace(/^./, (character) => character.toUpperCase())}</span>;
 }
 
 export function PlanPill({ plan }: { plan: ManagedPlan }) {

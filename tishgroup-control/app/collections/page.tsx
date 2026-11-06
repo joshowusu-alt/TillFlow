@@ -211,8 +211,8 @@ export default async function CollectionsPage({
             <form action="/collections" method="get" className="flex items-center gap-2">
               {view === 'all' ? <input type="hidden" name="view" value="all" /> : null}
               {sort !== 'overdue' ? <input type="hidden" name="sort" value={sort} /> : null}
-              <label className="sr-only">Cards per queue</label>
-              <select name="preview" defaultValue={String(previewSize)} className="control-field min-w-[150px]">
+              <label htmlFor="queue-preview-size" className="sr-only">Cards per queue</label>
+              <select id="queue-preview-size" name="preview" defaultValue={String(previewSize)} className="control-field min-w-[150px]">
                 <option value="25">Show 25 per queue</option>
                 <option value="50">Show 50 per queue</option>
                 <option value="100">Show 100 per queue</option>

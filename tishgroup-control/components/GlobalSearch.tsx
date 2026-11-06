@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export type SearchBusiness = {
@@ -32,6 +32,8 @@ export default function GlobalSearch({
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<SearchBusiness[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const resultsId = useId();
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,6 +42,9 @@ export default function GlobalSearch({
   // Debounced fetch from /api/search; aborts on input change so we don't race.
   useEffect(() => {
     const trimmed = query.trim();
+    setError(false);
+    setResults([]);
+    setActiveIndex(0);
     if (trimmed.length < 2) {
       setResults([]);
       setLoading(false);
@@ -54,20 +59,20 @@ export default function GlobalSearch({
           signal: controller.signal,
         });
         if (!res.ok) {
-          setResults([]);
+          setError(true);
           return;
         }
         const data = (await res.json()) as { ok: boolean; results?: SearchBusiness[] };
         if (data.ok && data.results) {
           setResults(data.results);
         } else {
-          setResults([]);
+          setError(true);
         }
       } catch (error) {
         if ((error as Error).name === 'AbortError') return;
-        setResults([]);
+        setError(true);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }, 180);
 
@@ -78,27 +83,25 @@ export default function GlobalSearch({
   }, [query]);
 
   useEffect(() => {
-    setActiveIndex(0);
-  }, [results.length]);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
+    function handleClick(e: PointerEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('pointerdown', handleClick);
+    return () => document.removeEventListener('pointerdown', handleClick);
   }, []);
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'ArrowDown' && results.length > 0) {
+      setOpen(true);
       e.preventDefault();
       setActiveIndex((i) => Math.min(i + 1, results.length - 1));
-    } else if (e.key === 'ArrowUp') {
+    } else if (e.key === 'ArrowUp' && results.length > 0) {
+      setOpen(true);
       e.preventDefault();
       setActiveIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter' && results[activeIndex]) {
+    } else if (e.key === 'Enter' && open && results[activeIndex]) {
       e.preventDefault();
       router.push(`/businesses/${results[activeIndex].id}`);
       setQuery('');
@@ -106,14 +109,14 @@ export default function GlobalSearch({
     } else if (e.key === 'Escape') {
       setQuery('');
       setOpen(false);
-      inputRef.current?.blur();
+      inputRef.current?.focus();
     }
   }
 
   const isDark = variant === 'dark';
   const inputClass = isDark
-    ? 'w-full rounded-[16px] border border-white/12 bg-white/8 py-2.5 pl-9 pr-8 text-sm text-white placeholder-white/40 outline-none transition focus:border-white/30 focus:bg-white/14'
-    : 'w-full rounded-[16px] border border-black/10 bg-black/[0.03] py-2.5 pl-9 pr-8 text-sm text-control-ink placeholder-black/38 outline-none transition focus:border-control-teal focus:bg-white';
+    ? 'w-full rounded-[16px] border border-white/12 bg-white/8 min-h-11 py-2.5 pl-9 pr-11 text-base sm:text-sm text-white placeholder-white/40 outline-none transition focus:border-white/30 focus:bg-white/14'
+    : 'w-full rounded-[16px] border border-black/10 bg-black/[0.03] min-h-11 py-2.5 pl-9 pr-11 text-base sm:text-sm text-control-ink placeholder-black/38 outline-none transition focus:border-control-teal focus:bg-white';
   const iconClass = isDark ? 'text-white/40' : 'text-black/36';
 
   return (
@@ -131,7 +134,13 @@ export default function GlobalSearch({
         </svg>
         <input
           ref={inputRef}
-          type="text"
+          type="search"
+          role="combobox"
+          aria-label="Search businesses"
+          aria-autocomplete="list"
+          aria-expanded={open && query.trim().length >= 2}
+          aria-controls={open && results.length > 0 ? resultsId : undefined}
+          aria-activedescendant={open && results[activeIndex] ? `${resultsId}-${activeIndex}` : undefined}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -148,8 +157,8 @@ export default function GlobalSearch({
         {query.length > 0 ? (
           <button
             type="button"
-            onClick={() => { setQuery(''); setOpen(false); }}
-            className={`absolute right-3 top-1/2 -translate-y-1/2 ${isDark ? 'text-white/40 hover:text-white/70' : 'text-black/36 hover:text-black/60'} transition`}
+            onClick={() => { setQuery(''); setOpen(false); inputRef.current?.focus(); }}
+            className={`absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center ${isDark ? 'text-white/40 hover:text-white/70' : 'text-black/36 hover:text-black/60'} transition`}
             aria-label="Clear search"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -160,10 +169,13 @@ export default function GlobalSearch({
       </div>
 
       {open && results.length > 0 ? (
-        <ul className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-[18px] border border-black/10 bg-white shadow-xl">
+        <ul id={resultsId} role="listbox" aria-label="Business matches" className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-[min(50dvh,24rem)] overflow-y-auto overscroll-contain rounded-[18px] border border-black/10 bg-white shadow-xl">
           {results.map((biz, index) => (
-            <li key={biz.id}>
+            <li key={biz.id} role="presentation">
               <Link
+                id={`${resultsId}-${index}`}
+                role="option"
+                aria-selected={index === activeIndex}
                 href={`/businesses/${biz.id}`}
                 onClick={() => {
                   setQuery('');
@@ -187,8 +199,8 @@ export default function GlobalSearch({
           ))}
         </ul>
       ) : open && query.trim().length >= 2 ? (
-         <div className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-[18px] border border-black/10 bg-white px-3.5 py-3 text-sm text-black/50 shadow-xl">
-          {loading ? 'Searching…' : `No match for "${query}"`}
+         <div role="status" aria-live="polite" className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-[18px] border border-black/10 bg-white px-3.5 py-3 text-sm text-black/50 shadow-xl">
+          {loading ? 'Searching…' : error ? 'Search is unavailable. Try again or open Businesses.' : `No match for "${query}"`}
         </div>
       ) : null}
     </div>
