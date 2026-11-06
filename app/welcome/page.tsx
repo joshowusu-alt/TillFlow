@@ -189,6 +189,8 @@ export default function WelcomePage() {
               <a href="#pricing" className="inline-flex min-h-11 items-center">Plans and pricing</a>
               <Link href="/register" className="inline-flex min-h-11 items-center">Get started</Link>
               <a href="tel:+233547016160" className="inline-flex min-h-11 items-center">+233 54 701 6160</a>
+              <a href="https://www.facebook.com/share/1F2NDE5Zp2/?mibextid=wwXIfr" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center">Facebook</a>
+              <a href="https://www.tiktok.com/@tillflowapp" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center">TikTok</a>
             </nav>
             <p className="mt-2 text-[11px] text-muted">© 2026 TillFlow. A Tish Group product.</p>
           </div>
