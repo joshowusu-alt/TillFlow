@@ -121,8 +121,8 @@ export default function DemoInventoryPage() {
                   <div className="font-mono text-xs text-muted/70">{r.product.sku}</div>
                 </div>
                 <span
-                  className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold text-white"
-                  style={{ background: r.category.colour }}
+                  className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold text-slate-800"
+                  style={{ background: `${r.category.colour}20` }}
                 >
                   {r.category.name}
                 </span>
@@ -186,8 +186,8 @@ export default function DemoInventoryPage() {
                   <td className="max-w-[180px] truncate px-4 py-2 font-medium text-ink">{r.product.name}</td>
                   <td className="px-4 py-2">
                     <span
-                      className="rounded-full px-2 py-0.5 text-xs font-semibold text-white"
-                      style={{ background: r.category.colour }}
+                      className="rounded-full px-2 py-0.5 text-xs font-semibold text-slate-800"
+                      style={{ background: `${r.category.colour}20` }}
                     >
                       {r.category.name}
                     </span>

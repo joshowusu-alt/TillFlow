@@ -27,8 +27,8 @@ export const CONTROL_LANGUAGE = {
 /** Compact early trust — verified EL-SHADDAI facts only. */
 export const EARLY_NAMED_PROOF = {
   eyebrow: 'Trusted by EL-SHADDAI Supermarket',
-  line: 'Runs daily sales, staff shifts, stock tracking and cash control across 1,000+ products.',
-  hook: 'They can see the cash expected — even when the network drops.',
+  line: 'Uses TillFlow for sales, barcode scanning, receipts, offline POS and stock management.',
+  hook: 'An operational customer receiving complimentary Pro access.',
 } as const;
 
 /** Stage 3 — control promises that product proof later evidences. */
@@ -151,47 +151,12 @@ export type BusinessStory = {
   featured?: boolean;
 };
 
-export const BUSINESS_STORIES: BusinessStory[] = [
-  {
-    id: 'el-shaddai',
-    business: 'EL-SHADDAI Supermarket',
-    person: 'Akosua Otchere',
-    focus: 'Closing confidence · expected cash · staff shifts',
-    hook: 'They can see expected cash and keep selling when the network drops.',
-    before: 'Closing meant hoping the till felt right after cash, MoMo and staff shifts.',
-    problem:
-      'With 1,000+ products, expected cash, variances and which products made money were hard to see clearly.',
-    turningPoint:
-      'They put daily sales, staff shifts, stock and cash control on TillFlow — including days when the network went off.',
-    lifeNow:
-      'They see expected cash, close shifts with owner-visible comments, and keep selling when the network drops. Everything syncs when it returns.',
-    featured: true,
-  },
-  {
-    id: 'fenibed',
-    business: 'FENIBED Enterprise',
-    person: 'Owner',
-    focus: 'Weekend calculations · stock checks · daily clarity',
-    hook: 'They see the whole week in one click — instead of spending the weekend calculating it.',
-    before: 'Weekends disappeared into calculating sales and checking stock by hand.',
-    problem: 'By the time the numbers were finished, the trading week was already gone.',
-    turningPoint: 'They moved the daily picture into TillFlow instead of rebuilding it on paper every weekend.',
-    lifeNow:
-      'They open TillFlow and see what happened — sales, stock and the shape of the week — without the weekend calculation marathon.',
-  },
-  {
-    id: 'aseda',
-    business: 'ASEDA Enterprise',
-    person: 'Owner',
-    focus: 'Pricing accuracy · product selection · mistake prevention',
-    hook: 'They stopped typing known prices by hand — and removed a whole class of till mistakes.',
-    before: 'Prices were sometimes entered by hand at the counter.',
-    problem:
-      'A manual pricing error charged GH₵2,000 instead of GH₵3,000. The mistake was not discovered until much later.',
-    turningPoint: 'They stopped typing amounts for known products and selected products in TillFlow instead.',
-    lifeNow: 'That class of mistake is gone — the price comes with the product, not from memory under pressure.',
-  },
-] as const;
+export const BUSINESS_STORIES: BusinessStory[] = [{
+  id: 'el-shaddai', business: 'EL-SHADDAI Supermarket', person: '',
+  focus: 'Operational customer · complimentary Pro access',
+  hook: 'Uses TillFlow for daily retail operations.',
+  before: '', problem: '', turningPoint: '', lifeNow: '', featured: true,
+}];
 
 /** Compatibility aliases for older imports. */
 export const TRUST_PROOF = {

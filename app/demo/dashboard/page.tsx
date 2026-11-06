@@ -81,7 +81,7 @@ export default function DemoDashboardPage() {
             label="Avg Daily Sales"
             value={fmt(kpis.avgDailySalesPence)}
             tone="default"
-            helper="Over the 14-day period"
+            helper={`Over the ${DEMO_PERIOD_DAYS}-day period`}
           />
         </div>
       </div>
@@ -91,7 +91,7 @@ export default function DemoDashboardPage() {
         <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted">Current Balances</p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Cash on Hand"   value={fmt(kpis.cashPositionPence)}  tone="accent"   helper="Closing cash position" />
-          <StatCard label="MoMo Collected" value={fmt(kpis.momoPositionPence)}  tone="success"  helper="Mobile money received" />
+          <StatCard label="MoMo Collected" value={fmt(kpis.momoPositionPence)}  tone="success"  helper="MoMo sales + MoMo debt collections" />
           <StatCard label="Debtor Balance" value={fmt(kpis.arBalancePence)}     tone={kpis.arBalancePence > 0 ? 'warn' : 'default'} helper="Outstanding customer credit" />
           <StatCard label="Supplier Payable" value={fmt(kpis.apBalancePence)}   tone={kpis.apBalancePence > 0 ? 'warn' : 'default'} helper="Owed to suppliers" />
         </div>

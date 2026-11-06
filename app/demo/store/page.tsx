@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { buildDemoLedger } from '@/lib/demo-fixtures';
-import { ADOM_RETAIL_DEMO_SLUG } from '@/lib/demo-sandbox/constants';
 import { formatMoney } from '@/lib/format';
 
 export default function DemoStorePage() {
@@ -26,10 +25,10 @@ export default function DemoStorePage() {
         <p className="mt-2 text-sm opacity-90">Order online · Pay with MoMo · Pick up at the shop</p>
         <div className="mt-4 flex flex-wrap gap-3">
           <Link
-            href={`/shop/${ADOM_RETAIL_DEMO_SLUG}`}
+            href="/demo/try-sale"
             className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-accent"
           >
-            Open live storefront preview
+            Try a fictional checkout
           </Link>
           <Link href="/demo/orders" className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold">
             View sample orders

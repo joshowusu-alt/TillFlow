@@ -8,7 +8,7 @@ export function getDashboardKPIs(s: DemoSnapshot) {
 
   // "Today" KPIs – last day of the demo window
   const todayStart = new Date(period.end);
-  todayStart.setHours(0, 0, 0, 0);
+  todayStart.setUTCHours(0, 0, 0, 0);
   const todayInvoices = salesInvoices.filter(i => i.date >= todayStart);
 
   const todaySalesPence = todayInvoices.reduce((acc, i) => acc + i.subtotalPence, 0);
@@ -53,6 +53,11 @@ export function getDashboardKPIs(s: DemoSnapshot) {
 
 export function getSalesByDay(s: DemoSnapshot) {
   const map = new Map<string, { pence: number; count: number; cogs: number }>();
+
+  for (let day = 0; day < DEMO_PERIOD_DAYS; day++) {
+    const key = new Date(s.period.start.getTime() + day * 86400000).toISOString().slice(0, 10);
+    map.set(key, { pence: 0, count: 0, cogs: 0 });
+  }
 
   for (const inv of s.salesInvoices) {
     const key = inv.date.toISOString().slice(0, 10);
@@ -193,7 +198,7 @@ export function getDebtorBalances(s: DemoSnapshot) {
       collectedPence: collected.get(c.id) ?? 0,
       balancePence:   (invoiced.get(c.id) ?? 0) - (collected.get(c.id) ?? 0),
     }))
-    .filter(r => r.invoicedPence > 0)
+    .filter(r => r.invoicedPence > 0 || r.collectedPence > 0)
     .sort((a, b) => b.balancePence - a.balancePence);
 }
 
@@ -237,12 +242,14 @@ export function getCashFlow(s: DemoSnapshot) {
     openingCashPence:      totals.openingCashPence,
     cashSalesPence:        totals.cashSalesPence,
     momoSalesPence:        totals.momoSalesPence,
-    creditCollectedPence:  totals.creditCollectedPence,
+    creditCollectedPence:  totals.cashCollectedPence,
     purchasesPaidPence:    totals.purchasesPaidPence,
     expensesPaidPence:     totals.totalExpensesPence,
     endingCashPence:       totals.endingCashPence,
     endingMomoPence:       totals.endingMomoPence,
-    totalLiquidPence:      totals.endingCashPence + totals.endingMomoPence,
+    endingCardPence: totals.endingCardPence,
+    momoCollectedPence: totals.momoCollectedPence,
+    totalLiquidPence:      totals.endingCashPence + totals.endingMomoPence + totals.endingCardPence,
   };
 }
 

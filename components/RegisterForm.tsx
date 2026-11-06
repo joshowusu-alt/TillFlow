@@ -34,17 +34,19 @@ const CURRENCIES = [
 
 interface RegisterFormProps {
   error?: string;
+  initialPlan?: BusinessPlan;
+  initialBillingInterval?: 'MONTHLY' | 'ANNUAL';
 }
 
-export default function RegisterForm({ error }: RegisterFormProps) {
+export default function RegisterForm({ error, initialPlan = 'STARTER', initialBillingInterval = 'MONTHLY' }: RegisterFormProps) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [businessName, setBusinessName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedPlan, setSelectedPlan] = useState<BusinessPlan>('STARTER');
+  const [selectedPlan, setSelectedPlan] = useState<BusinessPlan>(initialPlan);
   const [addonOnlineStorefront, setAddonOnlineStorefront] = useState(false);
-  const [billingInterval, setBillingInterval] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY');
+  const [billingInterval, setBillingInterval] = useState<'MONTHLY' | 'ANNUAL'>(initialBillingInterval);
   const [currency, setCurrency] = useState('GHS');
   const [referralSource, setReferralSource] = useState('');
   const [referredByName, setReferredByName] = useState('');
