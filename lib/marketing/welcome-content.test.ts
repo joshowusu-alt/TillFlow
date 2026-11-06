@@ -65,46 +65,20 @@ describe('welcome marketing content', () => {
     expect(Object.keys(MICRO_PRIMES)).toHaveLength(3);
   });
 
-  it('includes early named EL-SHADDAI proof without inventing claims', () => {
+  it('publishes only confirmed customer facts and discloses complimentary access', () => {
     expect(EARLY_NAMED_PROOF.eyebrow).toContain('EL-SHADDAI Supermarket');
-    expect(EARLY_NAMED_PROOF.line).toContain('1,000+ products');
-    expect(EARLY_NAMED_PROOF.hook.toLowerCase()).toContain('cash expected');
-    expect(EARLY_NAMED_PROOF.hook.toLowerCase()).toContain('network');
+    expect(EARLY_NAMED_PROOF.hook).toContain('complimentary Pro');
+    expect(JSON.stringify(BUSINESS_STORIES)).not.toMatch(/FENIBED|ASEDA|Akosua|1,000/);
+    expect(BUSINESS_STORIES).toHaveLength(1);
   });
 
-  it('includes EL-SHADDAI, FENIBED and ASEDA business stories with transformation hooks', () => {
-    expect(BUSINESS_STORIES).toHaveLength(3);
-    expect(BUSINESS_STORIES.map((s) => s.business)).toEqual([
-      'EL-SHADDAI Supermarket',
-      'FENIBED Enterprise',
-      'ASEDA Enterprise',
-    ]);
-    expect(BUSINESS_STORIES[0].person).toBe('Akosua Otchere');
-    for (const story of BUSINESS_STORIES) {
-      expect(story.hook.length).toBeGreaterThan(20);
-      expect(story.before.length).toBeGreaterThan(20);
-      expect(story.problem.length).toBeGreaterThan(20);
-      expect(story.turningPoint.length).toBeGreaterThan(20);
-      expect(story.lifeNow.length).toBeGreaterThan(20);
-    }
-    expect(BUSINESS_STORIES[2].problem).toContain('GH₵2,000');
-    expect(BUSINESS_STORIES[2].problem).toContain('GH₵3,000');
-  });
 });
 
 describe('welcome homepage structure', () => {
-  it('renders business stories with before/problem/turning point/life now and leads with hook', () => {
+  it('discloses the customer relationship without attributed testimony', () => {
     const trust = readSource('components/marketing/TrustProofSection.tsx');
-    expect(trust).toContain('BUSINESS_STORIES');
-    expect(trust).toContain('story.hook');
-    expect(trust).toContain('Business transformations');
-    expect(trust).toContain('aria-pressed={index === activeIndex}');
-    expect(trust).toContain('Before');
-    expect(trust).toContain('Problem');
-    expect(trust).toContain('Turning point');
-    expect(trust).toContain('Life now');
-    expect(trust).not.toContain('Name withheld at their request');
-    expect(trust).not.toContain('Testimonials');
+    expect(trust).toContain('complimentary Pro access');
+    expect(trust).not.toMatch(/FENIBED|ASEDA|Akosua|setInterval/);
   });
 
   it('uses contain-fit screenshots and coded stock/purchase visuals', () => {

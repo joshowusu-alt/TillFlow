@@ -1,3 +1,4 @@
+import DemoJourneys from '@/components/marketing/DemoJourneys';
 import DemoNavTabs from './_components/DemoNavTabs';
 import BookDemoActions from '@/components/marketing/BookDemoActions';
 import { buildTillflowPublicMetadata } from '@/lib/marketing/site';
@@ -16,7 +17,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
     <div className="min-h-screen bg-slate-50">
       {/* Demo banner — safe-area aware */}
       <div
-        className="sticky top-0 z-50 flex items-center justify-between bg-accent px-4 text-sm font-semibold text-white shadow"
+        className="relative z-50 flex items-center justify-between bg-accent px-4 text-sm font-semibold text-white shadow"
         style={{ paddingTop: 'max(14px, env(safe-area-inset-top, 0px))', paddingBottom: '10px' }}
       >
         <div className="flex items-center gap-3">
@@ -42,7 +43,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
       {/* Tab navigation — offsets below the banner */}
       <div
         className="sticky z-40 border-b border-black/8 bg-white shadow-sm"
-        style={{ top: 'calc(46px + max(14px, env(safe-area-inset-top, 0px)))' }}
+        style={{ top: 0 }}
       >
         <div className="mx-auto max-w-7xl">
           <DemoNavTabs />
@@ -52,6 +53,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
       {/* Page content */}
       <main className="mx-auto max-w-7xl px-4 py-6">
         {children}
+        <div className="mt-8"><DemoJourneys /></div>
       </main>
     </div>
   );

@@ -1,3 +1,4 @@
+import { DEMO_PERIOD_DAYS } from '@/lib/demo-sandbox/constants';
 import {
   buildDemoLedger,
   getIncomeStatement,
@@ -47,8 +48,8 @@ export default function DemoReportsPage() {
       </div>
 
       {/* Income Statement */}
-      <div className="card overflow-hidden">
-        <SectionHeader title="Income Statement" subtitle="14-day operating period" />
+      <div className="card overflow-x-auto">
+        <SectionHeader title="Income Statement" subtitle={`${DEMO_PERIOD_DAYS}-day operating period`} />
         <div className="p-5">
           <div className="max-w-sm space-y-2 text-sm">
             {[
@@ -70,19 +71,22 @@ export default function DemoReportsPage() {
       </div>
 
       {/* Cash Flow */}
-      <div className="card overflow-hidden">
-        <SectionHeader title="Cash Position" subtitle="Cash + MoMo reconciliation" />
+      <div className="card overflow-x-auto">
+        <SectionHeader title="Cash Position" subtitle="Purchases and expenses paid in cash; card receipts assumed settled with no fees in this fictional example" />
         <div className="p-5">
           <div className="max-w-sm space-y-2 text-sm">
             {[
               { label: 'Opening cash',          value: fmt(cashFlow.openingCashPence),     cls: '' },
               { label: '+ Cash sales',          value: fmt(cashFlow.cashSalesPence),       cls: 'text-success' },
-              { label: '+ Credit collected',    value: fmt(cashFlow.creditCollectedPence), cls: 'text-success' },
+              { label: '+ Credit collected in cash',    value: fmt(cashFlow.creditCollectedPence), cls: 'text-success' },
               { label: '− Purchases paid',      value: `(${fmt(cashFlow.purchasesPaidPence)})`, cls: 'text-muted' },
               { label: '− Expenses paid',       value: `(${fmt(cashFlow.expensesPaidPence)})`, cls: 'text-muted' },
               { label: 'Closing cash',          value: fmt(cashFlow.endingCashPence),      cls: 'font-bold text-ink border-t border-black/10 pt-2 mt-1' },
-              { label: 'MoMo collected',        value: fmt(cashFlow.momoSalesPence),       cls: 'text-amber-600' },
-              { label: 'Total liquid (cash+momo)', value: fmt(cashFlow.totalLiquidPence),  cls: 'font-bold text-accent border-t border-black/10 pt-2 mt-1' },
+              { label: 'MoMo sales', value: fmt(cashFlow.momoSalesPence), cls: '' },
+              { label: '+ Debt collected via MoMo', value: fmt(cashFlow.momoCollectedPence), cls: '' },
+              { label: 'MoMo balance',        value: fmt(cashFlow.endingMomoPence),       cls: 'text-amber-600' },
+              { label: 'Card receipts', value: fmt(cashFlow.endingCardPence), cls: '' },
+              { label: 'Total liquid (cash + MoMo + card)', value: fmt(cashFlow.totalLiquidPence),  cls: 'font-bold text-accent border-t border-black/10 pt-2 mt-1' },
             ].map(r => (
               <div key={r.label} className={`flex justify-between ${r.cls}`}>
                 <span>{r.label}</span>
@@ -94,7 +98,7 @@ export default function DemoReportsPage() {
       </div>
 
       {/* Top Products */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-x-auto">
         <SectionHeader title="Top 10 Products by Revenue" />
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -129,7 +133,7 @@ export default function DemoReportsPage() {
       </div>
 
       {/* Category Performance */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-x-auto">
         <SectionHeader title="Category Performance" />
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -163,7 +167,7 @@ export default function DemoReportsPage() {
       </div>
 
       {/* Low Stock / Reorder */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-x-auto">
         <SectionHeader
           title={`Reorder List — ${lowStock.length} SKUs`}
           subtitle="Products at or below reorder point"
@@ -196,9 +200,13 @@ export default function DemoReportsPage() {
         )}
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="card p-5"><p className="text-sm text-muted">Customers owe the shop</p><p className="text-xl font-bold">{fmt(snapshot.totals.arBalancePence)}</p></div>
+        <div className="card p-5"><p className="text-sm text-muted">Customer credits / overpayments</p><p className="text-xl font-bold">{fmt(snapshot.totals.customerCreditPence)}</p></div>
+      </div>
       {/* Debtor Balances */}
-      <div className="card overflow-hidden">
-        <SectionHeader title="Debtor Balances (Accounts Receivable)" />
+      <div className="card overflow-x-auto">
+        <SectionHeader title="Customer balances" subtitle="Positive: customer owes the shop. Negative: customer credit, shown separately from receivables." />
         {debtors.length === 0 ? (
           <p className="px-5 py-6 text-sm text-muted">No outstanding debtor balances.</p>
         ) : (
@@ -226,7 +234,7 @@ export default function DemoReportsPage() {
       </div>
 
       {/* Supplier Payables */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-x-auto">
         <SectionHeader title="Supplier Payables (Accounts Payable)" />
         {payables.length === 0 ? (
           <p className="px-5 py-6 text-sm text-muted">No outstanding supplier balances.</p>
@@ -257,7 +265,7 @@ export default function DemoReportsPage() {
       </div>
 
       {/* Stock movement summary */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-x-auto">
         <SectionHeader title="Stock Movement Summary" subtitle="All 100 SKUs · opening + purchased − sold = ending" />
         <div className="overflow-x-auto">
           <table className="w-full text-xs">

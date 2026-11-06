@@ -1,0 +1,20 @@
+import { fireEvent, render, screen, cleanup } from '@testing-library/react';
+import { afterEach, expect, it } from 'vitest';
+import DemoTrySale from './DemoTrySale';
+import { buildDemoLedger } from '@/lib/demo-fixtures';
+afterEach(cleanup);
+it('blocks underpayment and prints exact cash change without writing a tenant', () => {
+  const s = buildDemoLedger();
+  const product = s.products.find(p => (s.inventoryBalances.get(p.id)?.endingQty ?? 0) > 0)!;
+  render(<DemoTrySale />);
+  fireEvent.change(screen.getByRole('textbox', {name: /search products/i}), {target: {value: product.barcode}});
+  fireEvent.keyDown(screen.getByRole('textbox', {name: /search products/i}), {key:'Enter'});
+  const complete = screen.getByRole('button', {name: 'Complete sample sale'});
+  expect(complete).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Cash received (GH₵)'), {target:{value: ((product.sellingPricePence + 1050)/100).toFixed(2)}});
+  expect(complete).toBeEnabled();
+  expect(screen.getByText(/Change: .*10.50/)).toBeInTheDocument();
+  fireEvent.click(complete);
+  expect(screen.getByText('Sale complete (sample)')).toBeInTheDocument();
+  expect(screen.getByText(/Cash received: .*Change: .*10.50/)).toBeInTheDocument();
+});

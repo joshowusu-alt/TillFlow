@@ -10,7 +10,7 @@ export const metadata = buildTillflowPublicMetadata({
   canonicalPath: '/register',
 });
 
-export default async function RegisterPage(props: { searchParams: Promise<{ error?: string; mode?: string }> }) {
+export default async function RegisterPage(props: { searchParams: Promise<{ error?: string; mode?: string; plan?: string; billing?: string }> }) {
   const searchParams = await props.searchParams;
   // If the user already has a valid session, send them to POS
   const user = await getUser();
@@ -21,7 +21,7 @@ export default async function RegisterPage(props: { searchParams: Promise<{ erro
 
   return (
     <div>
-      <RegisterForm error={error} />
+      <RegisterForm error={error} initialPlan={searchParams.plan === 'GROWTH' || searchParams.plan === 'PRO' ? searchParams.plan : 'STARTER'} initialBillingInterval={searchParams.billing === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY'} />
     </div>
   );
 }
