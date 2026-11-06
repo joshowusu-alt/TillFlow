@@ -1,0 +1,38 @@
+name: Tish Group mobile UI
+on:
+  pull_request:
+    paths:
+      - 'tishgroup-control/**'
+      - '.github/workflows/tishgroup-mobile-ui.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'tishgroup-control/**'
+      - '.github/workflows/tishgroup-mobile-ui.yml'
+permissions:
+  contents: read
+jobs:
+  mobile-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tishgroup-control
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tishgroup-control/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/check-mobile-ui.mjs
+        env:
+          UI_TEST_OUTPUT: test-results/mobile-ui
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tishgroup-mobile-ui
+          path: tishgroup-control/test-results/mobile-ui
+          if-no-files-found: ignore

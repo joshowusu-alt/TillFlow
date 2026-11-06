@@ -121,7 +121,7 @@ export default function SupportCockpitView({
         <form action={createSupportIssueAction} className="card space-y-3 p-4">
           <input type="hidden" name="returnPath" value={returnPath} />
           <h3 className="font-display font-bold text-control-ink">New support issue</h3>
-          <select name="businessId" required className="input text-sm w-full">
+          <select aria-label="Business" name="businessId" required className="input text-sm w-full">
             <option value="">Select business</option>
             {businessOptions.map((b) => (
               <option key={b.id} value={b.id}>
@@ -129,23 +129,23 @@ export default function SupportCockpitView({
               </option>
             ))}
           </select>
-          <input name="title" required className="input text-sm w-full" placeholder="Short issue title" />
+          <input aria-label="Short issue title" name="title" required className="input text-sm w-full" placeholder="Short issue title" />
           <div className="grid gap-2 sm:grid-cols-3">
-            <select name="issueType" className="input text-sm">
+            <select aria-label="Issue type" name="issueType" className="input text-sm">
               {SUPPORT_ISSUE_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {t.replace(/_/g, ' ')}
                 </option>
               ))}
             </select>
-            <select name="priority" className="input text-sm">
+            <select aria-label="Issue priority" name="priority" className="input text-sm">
               {SUPPORT_PRIORITIES.map((p) => (
                 <option key={p} value={p}>
                   {p}
                 </option>
               ))}
             </select>
-            <select name="source" className="input text-sm">
+            <select aria-label="Contact source" name="source" className="input text-sm">
               {SUPPORT_SOURCES.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -153,9 +153,9 @@ export default function SupportCockpitView({
               ))}
             </select>
           </div>
-          <textarea name="description" rows={2} className="input text-sm w-full" placeholder="What happened?" />
-          <input name="nextAction" className="input text-sm w-full" placeholder="Next action for Tish Group" />
-          <input name="assignedAgentName" className="input text-sm w-full" placeholder="Assigned to" list="support-agents" />
+          <textarea aria-label="What happened?" name="description" rows={2} className="input text-sm w-full" placeholder="What happened?" />
+          <input aria-label="Next action for Tish Group" name="nextAction" className="input text-sm w-full" placeholder="Next action for Tish Group" />
+          <input aria-label="Assigned to" name="assignedAgentName" className="input text-sm w-full" placeholder="Assigned to" list="support-agents" />
           <datalist id="support-agents">
             {staffOptions.map((s) => (
               <option key={s.id} value={s.name} />
@@ -179,13 +179,13 @@ export default function SupportCockpitView({
             <p className="text-xs text-control-muted">{filtered.length} shown</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <input
+            <input aria-label="Search businesses"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search business, phone, issue…"
               className="input text-sm w-full sm:w-56"
             />
-            <select value={filter} onChange={(e) => setFilter(e.target.value)} className="input text-sm w-full sm:w-44">
+            <select aria-label="Filter businesses" value={filter} onChange={(e) => setFilter(e.target.value)} className="input text-sm w-full sm:w-44">
               {FILTERS.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.label}
@@ -259,22 +259,22 @@ export default function SupportCockpitView({
           <form action={updateSupportIssueAction} className="grid gap-2 sm:grid-cols-2">
             <input type="hidden" name="returnPath" value={returnPath} />
             <input type="hidden" name="issueId" value={selected.id} />
-            <select name="status" defaultValue={selected.status} className="input text-sm">
+            <select aria-label="Issue status" name="status" defaultValue={selected.status} className="input text-sm">
               {SUPPORT_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {s.replace(/_/g, ' ')}
                 </option>
               ))}
             </select>
-            <select name="priority" defaultValue={selected.priority} className="input text-sm">
+            <select aria-label="Issue priority" name="priority" defaultValue={selected.priority} className="input text-sm">
               {SUPPORT_PRIORITIES.map((p) => (
                 <option key={p} value={p}>
                   {p}
                 </option>
               ))}
             </select>
-            <input name="nextAction" defaultValue={selected.nextAction ?? ''} className="input text-sm sm:col-span-2" placeholder="Next action" />
-            <input name="assignedAgentName" defaultValue={selected.assignedAgentName ?? ''} className="input text-sm sm:col-span-2" placeholder="Assigned to" />
+            <input aria-label="Next action" name="nextAction" defaultValue={selected.nextAction ?? ''} className="input text-sm sm:col-span-2" placeholder="Next action" />
+            <input aria-label="Assigned to" name="assignedAgentName" defaultValue={selected.assignedAgentName ?? ''} className="input text-sm sm:col-span-2" placeholder="Assigned to" />
             <button type="submit" className="btn-secondary text-sm sm:col-span-2">
               Save changes
             </button>
@@ -282,7 +282,7 @@ export default function SupportCockpitView({
           <form action={addSupportIssueNoteAction} className="space-y-2">
             <input type="hidden" name="issueId" value={selected.id} />
             <input type="hidden" name="returnPath" value={returnPath} />
-            <textarea name="note" rows={2} className="input text-sm w-full" placeholder="Add a note" />
+            <textarea aria-label="Add a note" name="note" rows={2} className="input text-sm w-full" placeholder="Add a note" />
             <button type="submit" className="btn-ghost border border-control-line text-sm w-full">
               Add note
             </button>

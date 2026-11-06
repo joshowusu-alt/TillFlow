@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import ModalPanel from '@/components/modal-panel';
 import { useMemo, useState } from 'react';
 import type { ScaleBusinessRecord, ScaleCockpitData } from '@/lib/scale-cockpit/types';
 import { portfolioHealthTone } from '@/lib/business-health';
@@ -121,18 +122,17 @@ function BusinessDetailPanel({
   const wa = whatsappHref(record.ownerPhone, `Hi ${record.ownerName}, this is Tish Group about your TillFlow setup.`);
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/30 p-0 sm:p-4">
-      <div className="flex h-full w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl sm:rounded-2xl">
+    <ModalPanel label={`Business details: ${record.businessName}`} onClose={onClose}>
         <div className="flex items-start justify-between border-b border-control-line px-4 py-4">
           <div>
             <h2 className="text-lg font-display font-bold text-control-ink">{record.businessName}</h2>
             <p className="text-sm text-control-muted">{record.ownerName}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg px-2 py-1 text-sm text-control-muted hover:bg-black/5">
+          <button type="button" onClick={onClose} className="min-h-11 shrink-0 rounded-lg px-3 py-2 text-sm text-control-muted hover:bg-black/5">
             Close
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 text-sm">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 space-y-4 text-sm">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-xs text-control-muted">Setup</p>
@@ -234,11 +234,11 @@ function BusinessDetailPanel({
             <Link href={`/businesses/${record.businessId}`} className="btn-secondary text-xs py-2">
               View business
             </Link>
-            <Link href={`/businesses/${record.businessId}#payment-history`} className="btn-ghost text-xs py-2 border border-control-line">
+            <Link href={`/businesses/${record.businessId}?tab=overview#payment-history`} className="btn-ghost text-xs py-2 border border-control-line">
               Usage & payments
             </Link>
             {canRecordPayments ? (
-              <Link href={`/businesses/${record.businessId}#payment-history`} className="btn-primary text-xs py-2">
+              <Link href={`/businesses/${record.businessId}?tab=billing#record-payment`} className="btn-primary text-xs py-2">
                 Confirm payment
               </Link>
             ) : null}
@@ -260,7 +260,7 @@ function BusinessDetailPanel({
                 <input type="hidden" name="businessId" value={record.businessId} />
                 <input type="hidden" name="returnPath" value={returnPath} />
                 <label className="text-xs font-semibold">Assign agent</label>
-                <input name="assignedAgentName" defaultValue={record.assignedAgent} className="input w-full text-sm" list="scale-agents" />
+                <input aria-label="Assigned agent name" name="assignedAgentName" defaultValue={record.assignedAgent} className="input w-full text-sm" list="scale-agents" />
                 <datalist id="scale-agents">
                   {staffOptions.map((s) => (
                     <option key={s.id} value={s.name} />
@@ -275,7 +275,7 @@ function BusinessDetailPanel({
                 <input type="hidden" name="businessId" value={record.businessId} />
                 <input type="hidden" name="returnPath" value={returnPath} />
                 <label className="text-xs font-semibold">Support note</label>
-                <textarea name="note" rows={2} className="input w-full text-sm" placeholder="What happened? Next step?" />
+                <textarea aria-label="What happened? Next step?" name="note" rows={2} className="input w-full text-sm" placeholder="What happened? Next step?" />
                 <button type="submit" className="btn-secondary w-full text-xs py-2">
                   Add note
                 </button>
@@ -321,7 +321,7 @@ function BusinessDetailPanel({
                 <form action={updateScaleReferralAction} className="space-y-2">
                   <input type="hidden" name="businessId" value={record.businessId} />
                   <input type="hidden" name="returnPath" value={returnPath} />
-                  <select name="referralSource" className="input w-full text-sm" defaultValue={record.referralSource ?? ''}>
+                  <select aria-label="Referral source" name="referralSource" className="input w-full text-sm" defaultValue={record.referralSource ?? ''}>
                     <option value="">Source…</option>
                     {REFERRAL_SOURCES.map((s) => (
                       <option key={s} value={s}>
@@ -329,7 +329,7 @@ function BusinessDetailPanel({
                       </option>
                     ))}
                   </select>
-                  <select name="sourceChannel" className="input w-full text-sm" defaultValue={record.sourceChannel ?? ''}>
+                  <select aria-label="Source channel" name="sourceChannel" className="input w-full text-sm" defaultValue={record.sourceChannel ?? ''}>
                     <option value="">Channel…</option>
                     {SOURCE_CHANNELS.map((s) => (
                       <option key={s} value={s}>
@@ -337,9 +337,9 @@ function BusinessDetailPanel({
                       </option>
                     ))}
                   </select>
-                  <input name="referredByName" defaultValue={record.referredByName ?? ''} className="input w-full text-sm" placeholder="Referred by name" />
-                  <input name="referredByPhone" defaultValue={record.referredByPhone ?? ''} className="input w-full text-sm" placeholder="Referrer phone" />
-                  <select name="referralStatus" className="input w-full text-sm" defaultValue={record.referralStatus ?? ''}>
+                  <input aria-label="Referred by name" name="referredByName" defaultValue={record.referredByName ?? ''} className="input w-full text-sm" placeholder="Referred by name" />
+                  <input aria-label="Referrer phone" name="referredByPhone" defaultValue={record.referredByPhone ?? ''} className="input w-full text-sm" placeholder="Referrer phone" />
+                  <select aria-label="Referral status" name="referralStatus" className="input w-full text-sm" defaultValue={record.referralStatus ?? ''}>
                     <option value="">Status…</option>
                     {REFERRAL_STATUSES.map((s) => (
                       <option key={s} value={s}>
@@ -347,13 +347,13 @@ function BusinessDetailPanel({
                       </option>
                     ))}
                   </select>
-                  <input
+                  <input aria-label="Referral follow-up date"
                     name="referralNextFollowUpAt"
                     type="date"
                     className="input w-full text-sm"
                     defaultValue={record.referralNextFollowUpAt?.slice(0, 10) ?? ''}
                   />
-                  <textarea
+                  <textarea aria-label="Referral notes"
                     name="referralNotes"
                     defaultValue={record.referralNotes ?? ''}
                     className="input w-full text-sm min-h-[60px]"
@@ -404,15 +404,15 @@ function BusinessDetailPanel({
               <form action={createSupportIssueAction} className="space-y-2">
                 <input type="hidden" name="businessId" value={record.businessId} />
                 <input type="hidden" name="returnPath" value={supportReturnPath} />
-                <input name="title" className="input w-full text-sm" placeholder="New issue title" required />
-                <select name="issueType" className="input w-full text-sm" defaultValue="OTHER">
+                <input aria-label="New issue title" name="title" className="input w-full text-sm" placeholder="New issue title" required />
+                <select aria-label="Issue type" name="issueType" className="input w-full text-sm" defaultValue="OTHER">
                   <option value="PRODUCT_SETUP">Product setup</option>
                   <option value="IMPORT_STOCK">Import stock</option>
                   <option value="POS_ISSUE">POS issue</option>
                   <option value="BILLING_ISSUE">Billing</option>
                   <option value="OTHER">Other</option>
                 </select>
-                <select name="priority" className="input w-full text-sm" defaultValue="NORMAL">
+                <select aria-label="Issue priority" name="priority" className="input w-full text-sm" defaultValue="NORMAL">
                   <option value="CRITICAL">Critical</option>
                   <option value="HIGH">High</option>
                   <option value="NORMAL">Normal</option>
@@ -448,15 +448,14 @@ function BusinessDetailPanel({
               <input type="hidden" name="businessId" value={record.businessId} />
               <input type="hidden" name="returnPath" value={returnPath} />
               <label className="text-xs font-semibold">Extend trial/grace (hours)</label>
-              <input name="hours" type="number" defaultValue={48} min={24} max={168} className="input w-full text-sm" />
+              <input aria-label="Grace extension in hours" name="hours" type="number" defaultValue={48} min={24} max={168} className="input w-full text-sm" />
               <button type="submit" className="btn-primary w-full text-xs py-2">
                 Extend grace
               </button>
             </form>
           ) : null}
         </div>
-      </div>
-    </div>
+    </ModalPanel>
   );
 }
 
@@ -609,7 +608,7 @@ export default function ScaleCockpitView({
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input
+            <input aria-label="Search businesses"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -618,7 +617,7 @@ export default function ScaleCockpitView({
               placeholder="Search name, phone, agent…"
               className="input text-sm w-full sm:w-56"
             />
-            <select
+            <select aria-label="Filter businesses"
               value={filter}
               onChange={(e) => {
                 setFilter(e.target.value);

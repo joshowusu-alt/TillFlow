@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import GlobalSearch from '@/components/GlobalSearch';
 
 type ControlShellStaff = {
@@ -43,20 +43,41 @@ const navGroups = [
   { title: 'Administration', routes: ['/staff', '/errors'] },
 ];
 
-function GroupedNavigation({ pathname, staffRole, navCounts }: { pathname: string; staffRole: string; navCounts?: { urgent: number; collections: number; unreviewed: number } }) {
-  return <nav aria-label="Main navigation" className="space-y-5">{navGroups.map(group => <div key={group.title}>
-    <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50">{group.title}</p>
-    <div className="space-y-1">{group.routes.flatMap(href => {
-      const item = navigation.find(entry => entry.href === href);
-      if (!item || (item.requiresAdmin && staffRole !== 'CONTROL_ADMIN')) return [];
-      const active = isActivePath(pathname, href);
-      const count = getNavCount(href, navCounts);
-      return [<Link key={href} href={href} prefetch={false} aria-current={active ? 'page' : undefined} className={`flex min-h-11 items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition ${active ? 'bg-white text-control-ink shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white'}`}>
-        <span className="flex min-w-0 items-center gap-3"><NavigationIcon icon={item.icon} active={active} /><span>{item.label}</span></span>
-        {count > 0 ? <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${active ? 'bg-control-teal/10 text-control-ink' : 'bg-white/10 text-white'}`}>{count}</span> : null}
-      </Link>];
-    })}</div>
-  </div>)}</nav>;
+function GroupedNavigation({ pathname, staffRole, navCounts, onNavigate }: {
+  pathname: string;
+  staffRole: string;
+  navCounts?: { urgent: number; collections: number; unreviewed: number };
+  onNavigate?: () => void;
+}) {
+  return (
+    <nav aria-label="Main navigation" className="space-y-5">
+      {navGroups.map((group) => (
+        <div key={group.title}>
+          <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50">{group.title}</p>
+          <div className="space-y-1">
+            {group.routes.map((href) => {
+              const item = navigation.find((entry) => entry.href === href);
+              if (!item || (item.requiresAdmin && staffRole !== 'CONTROL_ADMIN')) return null;
+              const active = isActivePath(pathname, href);
+              const count = getNavCount(href, navCounts);
+              return (
+                <Link key={href} href={href} onClick={onNavigate} prefetch={false} aria-current={active ? 'page' : undefined}
+                  className={`flex min-h-11 items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition ${active ? 'bg-white text-control-ink shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white'}`}>
+                  <span className="flex min-w-0 items-center gap-3">
+                    <NavigationIcon icon={item.icon} active={active} />
+                    <span>{item.label}</span>
+                  </span>
+                  {count > 0 ? (
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${active ? 'bg-control-teal/10 text-control-ink' : 'bg-white/10 text-white'}`}>{count}</span>
+                  ) : null}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
 }
 
 function isActivePath(pathname: string, href: string) {
@@ -152,11 +173,10 @@ export default function ControlShell({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuToggleRef = useRef<HTMLButtonElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
 
-  const currentSection = useMemo(
-    () => navigation.find((item) => isActivePath(pathname, item.href)) ?? navigation[0],
-    [pathname]
-  );
+  const currentSection = navigation.find((item) => isActivePath(pathname, item.href)) ?? navigation[0];
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -169,6 +189,11 @@ export default function ControlShell({
     const menuToggle = menuToggleRef.current;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    const background = [contentRef.current, sidebarRef.current];
+    background.forEach(element => element?.setAttribute('inert', ''));
+    const breakpoint = window.matchMedia('(min-width: 1024px)');
+    const closeOnDesktop = () => { if (breakpoint.matches) setMobileMenuOpen(false); };
+    breakpoint.addEventListener('change', closeOnDesktop);
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Tab') {
@@ -188,13 +213,15 @@ export default function ControlShell({
 
     return () => {
       document.body.style.overflow = previousOverflow;
+      background.forEach(element => element?.removeAttribute('inert'));
+      breakpoint.removeEventListener('change', closeOnDesktop);
       menuToggle?.focus();
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [mobileMenuOpen]);
 
   return (
-    <div className="mx-auto flex min-h-[100dvh] w-full max-w-[1640px] gap-4 px-2.5 pb-[calc(var(--safe-bottom)+1rem)] pt-[calc(var(--safe-top)+0.35rem)] sm:gap-5 sm:px-4 sm:pb-5 lg:px-6 lg:pb-6 lg:pt-4">
+    <div className="mx-auto flex min-h-[100dvh] w-full max-w-[1640px] gap-4 px-2.5 pb-4 pt-1.5 sm:gap-5 sm:px-4 sm:pb-5 lg:px-6 lg:pb-6 lg:pt-4">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-white focus:p-3">Skip to content</a>
       {mobileMenuOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -205,7 +232,7 @@ export default function ControlShell({
             className="absolute inset-0 bg-control-dark/45 backdrop-blur-[2px]"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div ref={menuRef} role="dialog" aria-modal="true" aria-label="Navigation" className="absolute inset-y-0 right-0 flex w-full max-w-[20rem] flex-col overflow-y-auto border-l border-black/10 bg-control-dark px-4 pb-[calc(var(--safe-bottom)+1rem)] pt-[calc(var(--safe-top)+0.85rem)] text-white shadow-2xl">
+          <div ref={menuRef} role="dialog" aria-modal="true" aria-label="Navigation" id="mobile-navigation" className="absolute inset-y-0 right-0 flex w-full max-w-[20rem] flex-col overflow-y-auto border-l border-black/10 bg-control-dark px-4 pb-[calc(var(--safe-bottom)+1rem)] pt-[calc(var(--safe-top)+0.85rem)] text-white shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">Internal only</div>
@@ -216,7 +243,7 @@ export default function ControlShell({
                 type="button"
                 aria-label="Close menu"
                 onClick={() => setMobileMenuOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-[18px] border border-white/12 bg-white/8 text-white transition hover:bg-white/12"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-[18px] border border-white/12 bg-white/8 text-white transition hover:bg-white/12"
               >
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
@@ -224,7 +251,7 @@ export default function ControlShell({
               </button>
             </div>
 
-            <div className="my-6"><GroupedNavigation pathname={pathname} staffRole={staff.role} navCounts={navCounts} /></div>
+            <div className="my-6"><GroupedNavigation pathname={pathname} staffRole={staff.role} navCounts={navCounts} onNavigate={() => setMobileMenuOpen(false)} /></div>
 
             <div className="mt-auto space-y-3 rounded-[20px] border border-white/10 bg-white/5 p-4 text-sm text-white/75">
               <div>
@@ -248,7 +275,7 @@ export default function ControlShell({
         </div>
       ) : null}
 
-      <aside className="sticky top-4 hidden max-h-[calc(100dvh-2rem)] w-[248px] shrink-0 flex-col justify-between gap-6 overflow-y-auto self-start rounded-[26px] border border-black/10 bg-control-dark px-4 py-4 text-white shadow-dashboard lg:flex">
+      <aside ref={sidebarRef} className="sticky top-4 hidden max-h-[calc(100dvh-2rem)] w-[248px] shrink-0 flex-col justify-between gap-6 overflow-y-auto self-start rounded-[26px] border border-black/10 bg-control-dark px-4 py-4 text-white shadow-dashboard lg:flex">
         <div className="space-y-5">
           <div className="space-y-2">
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">Internal only</div>
@@ -273,8 +300,6 @@ export default function ControlShell({
             </div>
           </div>
 
-
-
           <Link
             href="/logout"
             className="inline-flex w-full items-center justify-center rounded-[18px] border border-white/12 bg-white/8 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/12"
@@ -284,22 +309,18 @@ export default function ControlShell({
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-3 lg:gap-4">
-        <div className="sticky top-0 z-40 lg:hidden">
+      <div ref={contentRef} className="flex min-w-0 flex-1 flex-col gap-3 lg:gap-4">
+        <div className="sticky top-[var(--safe-top)] z-40 lg:hidden">
           <div className="bg-[linear-gradient(180deg,rgba(244,248,249,0.97)_0%,rgba(244,248,249,0.93)_78%,rgba(244,248,249,0)_100%)] pb-2 pt-1.5 backdrop-blur">
             <div className="rounded-[22px] border border-black/8 bg-white/92 px-3 py-3 shadow-[0_8px_24px_rgba(13,27,30,0.08)]">
               <div className="flex items-start gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-black/42">
                     <span>Tish Group Control</span>
-                    <span className="text-black/24">•</span>
-                    <span>{staff.name}</span>
                   </div>
                   <div className="mt-1 flex items-center gap-2">
                     <div className="min-w-0 truncate text-lg font-semibold tracking-tight text-control-ink">{currentSection.label}</div>
-                    <span className="inline-flex shrink-0 rounded-full border border-black/8 bg-black/[0.03] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-black/48">
-                      {staff.role.replace(/_/g, ' ')}
-                    </span>
+
                   </div>
                 </div>
                 <button
@@ -307,8 +328,9 @@ export default function ControlShell({
                   ref={menuToggleRef}
                   aria-label="Open navigation"
                   aria-expanded={mobileMenuOpen}
+                  aria-controls="mobile-navigation"
                   onClick={() => setMobileMenuOpen(true)}
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[16px] border border-black/8 bg-white text-control-ink transition hover:bg-black/[0.03]"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border border-black/8 bg-white text-control-ink transition hover:bg-black/[0.03]"
                 >
                   <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
@@ -320,36 +342,12 @@ export default function ControlShell({
                 <GlobalSearch variant="light" />
               </div>
 
-              <div className="mobile-nav-strip mt-3 flex gap-2 overflow-x-auto pb-0.5">
-                {navigation.filter(item => !item.requiresAdmin || staff.role === 'CONTROL_ADMIN').filter(item => ['/', '/businesses', '/collections', '/command/support'].includes(item.href) || isActivePath(pathname, item.href)).map((item) => {
-                  const active = isActivePath(pathname, item.href);
-                  const count = getNavCount(item.href, navCounts);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      prefetch={false}
-                      className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-[12px] font-semibold transition ${
-                        active
-                          ? 'border-control-dark bg-control-dark text-white'
-                          : 'border-black/8 bg-black/[0.03] text-black/56'
-                      }`}
-                    >
-                      <span>{item.shortLabel}</span>
-                      {count > 0 ? (
-                        <span className={`inline-flex min-w-[1.15rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold ${active ? 'bg-white/18 text-white' : 'bg-white text-control-ink'}`}>
-                          {count}
-                        </span>
-                      ) : null}
-                    </Link>
-                  );
-                })}
-              </div>
+
             </div>
           </div>
         </div>
 
-        <main id="main-content" className="min-w-0">{children}</main>
+        <main id="main-content" tabIndex={-1} className="min-w-0">{children}</main>
       </div>
     </div>
   );

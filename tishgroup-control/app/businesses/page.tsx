@@ -8,7 +8,7 @@ import SlaFlags from '@/components/sla-flags';
 import BulkRosterClient from '@/components/bulk-roster-client';
 import { canManageSubscriptions, canWriteNotes, listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
 import { listManagedBusinessesPage } from '@/lib/control-service';
-import { formatCedi } from '@/lib/control-metrics';
+import { formatCedi, getCollectionQueuesFor } from '@/lib/control-metrics';
 import { getSlaFlags } from '@/lib/sla';
 import { readSearchParam, resolveSearchParams, type ControlSearchParams } from '@/lib/search-params';
 
@@ -89,29 +89,8 @@ export default async function BusinessesPage({
   const clearSearchHref = buildBusinessesHref({ filter, search: '', pageSize: roster.pageSize });
   const canEditSubscription = canManageSubscriptions(staff.role);
   const canBulkReview = canWriteNotes(staff.role);
-  const atRiskOnPage = pageBusinesses.filter((business) => ['GRACE', 'GRACE_PERIOD', 'OVERDUE', 'SUSPENDED', 'STARTER_FALLBACK', 'READ_ONLY'].includes(business.state)).length;
-  const headerStats = [
-    {
-      label: 'In this view',
-      value: String(roster.total),
-      hint: 'Businesses matching the current filter and search.',
-    },
-    {
-      label: 'Unreviewed',
-      value: String(roster.unreviewedCount),
-      hint: 'Accounts still waiting for first commercial review.',
-    },
-    {
-      label: 'At risk on page',
-      value: String(atRiskOnPage),
-      hint: 'Current page items already in grace, fallback, or read-only.',
-    },
-    {
-      label: 'Page size',
-      value: String(roster.pageSize),
-      hint: 'Scoped views keep the roster fast on large portfolios.',
-    },
-  ];
+  const pageQueues = getCollectionQueuesFor(pageBusinesses);
+  const atRiskOnPage = pageQueues.overdue.length + pageQueues.locked.length;
 
   return (
     <div className="space-y-4 lg:space-y-5">
@@ -141,13 +120,6 @@ export default async function BusinessesPage({
         eyebrow="Managed businesses"
         title="Businesses"
         description="Search by business or owner, check account status and open the details you need."
-        chips={[
-          { label: 'Find a business', href: '#roster-tools' },
-          ...(canEditSubscription ? [{ label: 'Quick billing setup', href: '#billing-setup', tone: 'dark' as const }] : []),
-          ...(canBulkReview && filter === 'unreviewed' && pageBusinesses.length > 0 ? [{ label: 'Bulk review', href: '#bulk-review' }] : []),
-          { label: 'Roster', href: '#business-roster' },
-        ]}
-        stats={headerStats}
       />
 
       <section className="control-toolbar">
@@ -166,10 +138,10 @@ export default async function BusinessesPage({
           </Link>
         </div>
 
-        <form id="roster-tools" action="/businesses" className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_150px_auto_auto] lg:items-end">
+        <form id="roster-tools" action="/businesses" className="mt-4 grid grid-cols-2 items-end gap-3 lg:grid-cols-[minmax(0,1fr)_150px_auto_auto]">
           {filter === 'unreviewed' ? <input type="hidden" name="filter" value="unreviewed" /> : null}
 
-          <label className="block space-y-1 text-sm">
+          <label className="col-span-2 block space-y-1 text-sm lg:col-span-1">
             <span className="font-medium text-control-ink">Find a business</span>
             <input
               type="search"
@@ -193,18 +165,20 @@ export default async function BusinessesPage({
             Apply view
           </button>
 
-          <Link href={clearSearchHref} className="inline-flex h-[42px] items-center justify-center rounded-[18px] border border-black/10 bg-white px-4 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
-            Clear
-          </Link>
+          {search ? <Link href={clearSearchHref} className="inline-flex h-[42px] items-center justify-center rounded-[18px] border border-black/10 bg-white px-4 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
+            Clear search
+          </Link> : null}
         </form>
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-black/62">
           <span>{listSummary}</span>
-          <span>Page {roster.page} of {roster.totalPages}</span>
+          <span>Page {roster.page} of {roster.totalPages} · {atRiskOnPage} at risk on this page</span>
         </div>
       </section>
 
-      <section id="billing-setup" className="panel p-4 sm:p-5">
+      <details id="billing-setup" className="panel billing-disclosure p-4 sm:p-5">
+        <summary className="cursor-pointer text-base font-semibold text-control-ink">Quick billing setup<span className="mt-1 block text-sm font-normal text-black/65">Expand to change a plan or billing dates.</span></summary>
+        <div className="mt-4">
         <SectionHeading
           eyebrow="Billing setup"
           title="Quick billing setup"
@@ -265,7 +239,8 @@ export default async function BusinessesPage({
             Narrow the roster with search or switch pages before saving billing setup. There are no businesses in the current view yet.
           </div>
         )}
-      </section>
+        </div>
+      </details>
 
       <BulkRosterClient
         rosterId="businesses"
@@ -278,22 +253,25 @@ export default async function BusinessesPage({
       >
 
       <section id="business-roster" className="panel overflow-hidden p-0">
+        <div className="border-b border-black/10 px-4 py-3"><h2 className="text-base font-semibold">Business accounts</h2><p className="mt-1 text-sm text-black/65">{listSummary}</p></div>
         <div className="space-y-3 p-4 md:hidden">
           {pageBusinesses.length > 0 ? pageBusinesses.map((business) => {
             const slaFlags = getSlaFlags(business);
             return (
             <div key={business.id} className="mobile-card">
               <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-2.5">
+                <div className="flex min-w-0 flex-1 items-start gap-2.5">
                   {canBulkReview ? (
+                    <label className="-ml-2 -mt-2 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center">
                     <input
                       type="checkbox"
                       name="selectedId"
                       value={business.id}
                       data-roster-id="businesses"
                       aria-label={`Select ${business.name}`}
-                      className="mt-1 h-4 w-4 flex-shrink-0 rounded border-black/20 accent-control-dark"
+                      className="h-5 w-5 flex-shrink-0 rounded border-black/20 accent-control-dark"
                     />
+                    </label>
                   ) : null}
                   <div className="min-w-0">
                     <Link href={`/businesses/${business.id}`} className="font-semibold text-control-ink underline-offset-4 hover:underline">
@@ -333,12 +311,12 @@ export default async function BusinessesPage({
               {business.needsReview ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-control-ember">Needs review</div> : null}
 
               <Link href={`/businesses/${business.id}`} className="mt-3 inline-flex w-full items-center justify-center rounded-[18px] border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
-                Open billing
+                View account
               </Link>
             </div>
             );
           }) : (
-            <div className="control-inline-note">No businesses match this view.</div>
+            <div className="control-inline-note">No businesses match this view. <Link href="/businesses" className="font-semibold underline">Show all businesses</Link></div>
           )}
         </div>
 
@@ -399,7 +377,7 @@ export default async function BusinessesPage({
                   <td><SlaFlags flags={getSlaFlags(business)} compact /></td>
                   <td>
                     <Link href={`/businesses/${business.id}`} className="inline-flex rounded-full border border-black/10 bg-white px-3 py-1.5 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
-                      Open billing
+                      View account
                     </Link>
                   </td>
                 </tr>

@@ -23,12 +23,14 @@
     "react-dom": "18.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.11.30",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
     "@vitest/coverage-v8": "^4.1.6",
     "autoprefixer": "^10.4.19",
+    "axe-core": "^4.14.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.35",
     "postcss": "^8.4.38",

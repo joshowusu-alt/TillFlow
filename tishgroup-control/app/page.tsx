@@ -5,7 +5,7 @@ import SectionHeading from '@/components/section-heading';
 import { HealthPill, PlanPill, StatePill } from '@/components/status-pill';
 import { requireControlStaff } from '@/lib/control-auth';
 import { listManagedBusinesses } from '@/lib/control-service';
-import { formatCedi, getPortfolioSummaryFor, getRevenueByPlanFor } from '@/lib/control-metrics';
+import { formatCedi, getCollectionQueuesFor, getPortfolioSummaryFor, getRevenueByPlanFor } from '@/lib/control-metrics';
 import { getPortfolioSlaCounts } from '@/lib/sla';
 import { getCollectionsRhythm } from '@/lib/collections-trend';
 import Sparkline from '@/components/sparkline';
@@ -19,7 +19,8 @@ export default async function PortfolioPage() {
   const revenueByPlan = getRevenueByPlanFor(businesses);
   const slaCounts = getPortfolioSlaCounts(businesses);
   const rhythm = await getCollectionsRhythm();
-  const urgentBusinesses = businesses.filter((business) => ['GRACE', 'STARTER_FALLBACK', 'READ_ONLY'].includes(business.state)).slice(0, 5);
+  const queues = getCollectionQueuesFor(businesses);
+  const urgentBusinesses = [...queues.locked, ...queues.overdue].slice(0, 5);
   const unreviewedCount = businesses.filter((business) => business.needsReview).length;
   const unreviewedBusinesses = businesses.filter((business) => business.needsReview).slice(0, 6);
   const workboardCards = [
@@ -74,12 +75,6 @@ export default async function PortfolioPage() {
         eyebrow="Tish Group Control"
         title="Business overview"
         description="Find accounts that need attention, follow up on payments and open a business to investigate."
-        chips={[
-          { label: 'Next move', href: '#today-workboard', tone: 'dark' },
-          { label: 'New accounts', href: '#new-accounts' },
-          { label: 'Urgent queue', href: '#urgent-queue' },
-          { label: 'Plan mix', href: '#plan-mix' },
-        ]}
         stats={headerStats}
       />
 
@@ -92,19 +87,19 @@ export default async function PortfolioPage() {
 
         <div className="mt-4 control-action-strip">
           {workboardCards.map((card) => (
-            <Link key={card.title} href={card.href} className="control-action-strip-link">
+            <Link key={card.title} href={card.href} className="control-action-strip-link control-overview-action">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="eyebrow">Action needed</div>
+                  <div className="eyebrow hidden md:block">Action needed</div>
                   <div className="mt-1.5 text-base font-semibold tracking-tight text-control-ink">{card.title}</div>
                 </div>
-                <span className="rounded-full border border-black/8 bg-black/[0.03] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-black/50">
+                <span className="hidden rounded-full border border-black/8 bg-black/[0.03] px-2 py-1 text-[10px] md:inline-flex font-semibold uppercase tracking-[0.16em] text-black/50">
                   {card.meta}
                 </span>
               </div>
               <div className="mt-3 text-2xl font-semibold tracking-tight text-control-ink">{card.value}</div>
-              <p className="mt-2 text-sm leading-5 text-black/58">{card.note}</p>
-              <div className="mt-3 inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-control-ink/70">
+              <p className="mt-2 hidden text-sm leading-5 text-black/58 md:block">{card.note}</p>
+              <div className="mt-3 hidden items-center gap-2 text-[11px] md:inline-flex font-bold uppercase tracking-[0.18em] text-control-ink/70">
                 Open
                 <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-6-6 6 6-6 6" />

@@ -30,7 +30,7 @@ export default function ControlPageHeader({
 }) {
   return (
     <section className="space-y-3">
-      <div className="panel p-4 sm:p-5 lg:p-6">
+      <div className="control-header-intro panel p-4 sm:p-5 lg:p-6">
         <div className={`grid gap-3 ${aside ? 'xl:grid-cols-[minmax(0,1.5fr)_minmax(260px,0.7fr)] lg:items-start' : ''}`}>
           <div className="space-y-3">
             <div className="space-y-2">
@@ -40,7 +40,7 @@ export default function ControlPageHeader({
             </div>
 
             {chips && chips.length > 0 ? (
-              <div className="mobile-nav-strip -mx-1 flex gap-2 overflow-x-auto pb-1">
+              <div className="flex flex-wrap gap-2">
                 {chips.map((chip) => {
                   const className = `control-chip ${
                     chip.tone === 'dark'
@@ -64,14 +64,14 @@ export default function ControlPageHeader({
             ) : null}
           </div>
 
-          {aside ? <div className="control-page-hero-aside">{aside}</div> : null}
+          {aside ? <div className="control-page-hero-aside min-w-0">{aside}</div> : null}
         </div>
       </div>
 
       {stats && stats.length > 0 ? (
         <div className="control-kpi-band grid-cols-2 xl:grid-cols-4">
           {stats.map((stat) => (
-            <div key={stat.label} className="control-kpi-compact">
+            <div key={stat.label} className="control-kpi-compact min-w-0">
               <div className="control-kpi-compact-label">{stat.label}</div>
               <div className="control-kpi-compact-value">{stat.value}</div>
               <p className="control-kpi-compact-hint">{stat.hint}</p>
