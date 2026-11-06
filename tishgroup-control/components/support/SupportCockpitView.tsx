@@ -81,16 +81,21 @@ export default function SupportCockpitView({
 
   return (
     <div className="space-y-6 pb-10">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <OverviewCard label="Open issues" value={String(overview.openIssues)} />
         <OverviewCard label="Critical" value={String(overview.criticalIssues)} hint="Needs action today" />
         <OverviewCard label="High priority" value={String(overview.highPriorityIssues)} />
         <OverviewCard label="Waiting on customer" value={String(overview.waitingOnCustomer)} />
-        <OverviewCard label="Resolved this week" value={String(overview.resolvedThisWeek)} />
-        <OverviewCard label="Avg open age" value={`${overview.averageOpenAgeHours}h`} />
-        <OverviewCard label="Businesses affected" value={String(overview.businessesWithOpenIssues)} />
-        <OverviewCard label="SLA attention" value={String(overview.slaAttentionCount)} hint="Stale or overdue follow-up" />
       </div>
+      <details className="panel p-4">
+        <summary className="min-h-11 cursor-pointer text-sm font-semibold">More support metrics</summary>
+        <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <OverviewCard label="Resolved this week" value={String(overview.resolvedThisWeek)} />
+          <OverviewCard label="Avg open age" value={`${overview.averageOpenAgeHours}h`} />
+          <OverviewCard label="Businesses affected" value={String(overview.businessesWithOpenIssues)} />
+          <OverviewCard label="SLA attention" value={String(overview.slaAttentionCount)} hint="Stale or overdue follow-up" />
+        </div>
+      </details>
 
       {(overview.criticalIssues > 0 || overview.highPriorityIssues > 0) && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">

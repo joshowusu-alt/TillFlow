@@ -43,7 +43,8 @@ try {
     }
   }
   await page.setViewportSize({width:390,height:844});
-  await page.goto(base+'/command/scale');await page.getByRole('button',{name:'View details',exact:true}).first().click();await page.getByRole('dialog').waitFor();await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),0);assert.equal(await page.getByRole('button',{name:'View details',exact:true}).first().evaluate(el=>el===document.activeElement),true);
+  await page.goto(base+'/command/scale');await page.getByText('More portfolio metrics',{exact:true}).click();await page.getByText('Expected MRR',{exact:true}).waitFor({state:'visible'});await page.getByText('More portfolio metrics',{exact:true}).click();await page.getByRole('button',{name:'View details',exact:true}).first().click();await page.getByRole('dialog').waitFor();await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),0);assert.equal(await page.getByRole('button',{name:'View details',exact:true}).first().evaluate(el=>el===document.activeElement),true);
+  await page.goto(base+'/command/support');await page.getByText('More support metrics',{exact:true}).click();await page.getByText('Avg open age',{exact:true}).waitFor({state:'visible'});await page.getByText('More support metrics',{exact:true}).click();
   await page.goto(base+'/businesses');
   assert.equal(await page.locator('#billing-setup').getAttribute('open'),null);
   await page.locator('#billing-setup summary').click();await page.getByRole('button',{name:'Save billing setup',exact:true}).waitFor({state:'visible'});
@@ -66,7 +67,7 @@ try {
   await page.route('**/api/search?**',r=>r.fulfill({status:503,body:'unavailable'}));await search.fill('Failed query');await page.getByRole('status').filter({hasText:'Search is unavailable'}).waitFor();await page.unroute('**/api/search?**');await search.fill('');
   await context.addCookies([{name:'fixture-role',value:'SUPPORT_AGENT',url:base}]);await page.reload();await page.getByRole('button',{name:'Open navigation'}).click();assert.equal(await page.getByRole('dialog').getByRole('link',{name:'Error Log',exact:true}).count(),0);
   assert.deepEqual(errors,[],'Browser runtime errors');
-  await writeFile(`${output}/report.json`,JSON.stringify({viewports:viewports.length,pages:routes.length,geometryChecks:results.length,interactions:['growth modal Escape/focus restoration','same-route menu close','bulk selection on resize','billing disclosure','bulk selection/cancel','menu focus trap','Escape/focus restoration','desktop resize','search API/results/navigation','no results','search failure','account tabs','role-sensitive navigation'],accessibility:'WCAG 2 A/AA and 2.1 AA: no serious or critical automated violations on every tested phone view',runtimeErrors:errors,results},null,2));
+  await writeFile(`${output}/report.json`,JSON.stringify({viewports:viewports.length,pages:routes.length,geometryChecks:results.length,interactions:['growth metrics disclosure','support metrics disclosure','growth modal Escape/focus restoration','same-route menu close','bulk selection on resize','billing disclosure','bulk selection/cancel','menu focus trap','Escape/focus restoration','desktop resize','search API/results/navigation','no results','search failure','account tabs','role-sensitive navigation'],accessibility:'WCAG 2 A/AA and 2.1 AA: no serious or critical automated violations on every tested phone view',runtimeErrors:errors,results},null,2));
   console.log(`PASS: ${results.length} page/viewport checks and interaction flows; no browser runtime errors. Screenshots: ${output}`);
 } catch(error){console.error(error);console.error(logs.slice(-7000));process.exitCode=1}
 finally{await browser?.close();server.kill('SIGTERM')}

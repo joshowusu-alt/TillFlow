@@ -503,30 +503,36 @@ export default function ScaleCockpitView({
         </span>
       </Link>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <OverviewCard label="Total businesses" value={String(overview.totalBusinesses)} />
-        <OverviewCard label="New this week" value={String(overview.newSignupsThisWeek)} />
         <OverviewCard label="In setup" value={String(overview.inSetup)} hint="Getting started or stuck" />
-        <OverviewCard label="Active" value={String(overview.activeBusinesses)} />
-        <OverviewCard label="In trial" value={String(overview.inTrial)} />
-        <OverviewCard label="Paid" value={String(overview.paidBusinesses)} />
         <OverviewCard label="Overdue" value={String(overview.overdueBusinesses)} />
-        <OverviewCard label="Restricted" value={String(overview.restrictedBusinesses)} />
-        <OverviewCard label="Need setup help" value={String(overview.needSetupHelp)} />
         <OverviewCard label="Open support" value={String(overview.openSupportIssues)} />
-        <OverviewCard label="Expected MRR" value={`GH₵ ${overview.expectedMrr.toLocaleString('en-GH')}`} />
-        <OverviewCard
-          label="Collections this week"
-          value={`GH₵ ${overview.expectedCollectionsThisWeek.toLocaleString('en-GH')}`}
-        />
-        <OverviewCard label="Critical" value={String(overview.healthCritical)} hint="Act today" />
-        <OverviewCard label="At risk" value={String(overview.healthAtRisk)} />
-        <OverviewCard label="Needs attention" value={String(overview.healthNeedsAttention)} />
-        <OverviewCard label="Healthy" value={String(overview.healthHealthy)} />
       </div>
 
-      <section className="rounded-2xl border border-control-line bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-display font-bold text-control-ink">Onboarding pipeline</h2>
+      <details className="panel p-4">
+        <summary className="min-h-11 cursor-pointer text-sm font-semibold">More portfolio metrics</summary>
+        <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <OverviewCard label="New this week" value={String(overview.newSignupsThisWeek)} />
+          <OverviewCard label="Active" value={String(overview.activeBusinesses)} />
+          <OverviewCard label="In trial" value={String(overview.inTrial)} />
+          <OverviewCard label="Paid" value={String(overview.paidBusinesses)} />
+          <OverviewCard label="Restricted" value={String(overview.restrictedBusinesses)} />
+          <OverviewCard label="Need setup help" value={String(overview.needSetupHelp)} />
+          <OverviewCard label="Expected MRR" value={`GH₵ ${overview.expectedMrr.toLocaleString('en-GH')}`} />
+          <OverviewCard
+            label="Collections this week"
+            value={`GH₵ ${overview.expectedCollectionsThisWeek.toLocaleString('en-GH')}`}
+          />
+          <OverviewCard label="Critical" value={String(overview.healthCritical)} hint="Act today" />
+          <OverviewCard label="At risk" value={String(overview.healthAtRisk)} />
+          <OverviewCard label="Needs attention" value={String(overview.healthNeedsAttention)} />
+          <OverviewCard label="Healthy" value={String(overview.healthHealthy)} />
+        </div>
+      </details>
+
+      <details className="rounded-2xl border border-control-line bg-white p-4 shadow-sm">
+        <summary className="min-h-11 cursor-pointer text-sm font-semibold">Onboarding pipeline</summary>
         <p className="mt-1 text-xs text-control-muted">Where businesses are in setup — same rules as merchant “Start properly”.</p>
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {pipeline.map((stage) => (
@@ -553,7 +559,7 @@ export default function ScaleCockpitView({
             </div>
           ))}
         </div>
-      </section>
+      </details>
 
       <section className="rounded-2xl border border-amber-200/80 bg-amber-50/50 p-4">
         <h2 className="text-sm font-display font-bold text-control-ink">Needs action today</h2>
