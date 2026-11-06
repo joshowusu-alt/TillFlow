@@ -3,12 +3,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const {build} = require('esbuild');
 const {chromium} = require('playwright');
-const {PrismaClient} = require('@prisma/client');
+const {openGuardedPrismaClient} = require('./lib/guarded-prisma.cjs');
 const base = process.env.BASE_URL || 'http://127.0.0.1:6200';
 assert.ok(['localhost','127.0.0.1'].includes(new URL(base).hostname));
 assert.match(process.env.DATABASE_URL || '', /^file:\.\/(ci-pos-safety|release-176-isolated)\.db$/, 'Disposable SQLite only');
-const prisma = new PrismaClient();
+let prisma;
 async function main(){
+ ({prisma}=await openGuardedPrismaClient({url:process.env.DATABASE_URL}));
  const bundle = await build({stdin:{contents:"import * as storage from './lib/offline/storage'; import * as sync from './lib/offline/sync'; window.releaseOffline = {storage,sync};",resolveDir:process.cwd(),loader:'ts'},bundle:true,write:false,platform:'browser',format:'iife',alias:{'@':process.cwd()},external:['crypto']});
  const browser = await chromium.launch({headless:true});
  try {

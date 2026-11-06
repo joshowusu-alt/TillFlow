@@ -2,13 +2,14 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { chromium } = require('playwright');
-const { PrismaClient } = require('@prisma/client');
+const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
 const base = process.env.BASE_URL || 'http://127.0.0.1:6200';
 const url = new URL(base);
 assert.ok(['localhost','127.0.0.1'].includes(url.hostname), 'Refusing non-loopback app');
 assert.match(process.env.DATABASE_URL || '', /^file:\.\/(ci-pos-safety|release-176-isolated)\.db$/, 'Refusing non-disposable database');
-const prisma = new PrismaClient();
+let prisma;
 async function main() {
+  ({ prisma } = await openGuardedPrismaClient({ url: process.env.DATABASE_URL }));
   const browser = await chromium.launch({headless:true});
   try {
     const context = await browser.newContext({viewport:{width:390,height:844}});
