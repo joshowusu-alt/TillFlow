@@ -11,6 +11,7 @@ const FILES = [
   'activation-display.ts',
   'activation-readiness.ts',
   'activation-steps.ts',
+  'onboarding-journey.ts',
   'subscription-lifecycle.ts',
   'plan-pricing.ts',
   'features.ts',
