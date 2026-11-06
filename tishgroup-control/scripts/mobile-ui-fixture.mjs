@@ -1,5 +1,5 @@
 /** Isolated UI fixture: real Next pages/components; synthetic data; no database or mutations. */
-import { cp, mkdtemp, writeFile, symlink, readFile } from 'node:fs/promises';
+import { cp, mkdtemp, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,12 +34,11 @@ await writeActions('control-auth.ts',['loginControlStaffAction','setStaffPasswor
 await writeActions('control-scale.ts',['assignScaleAgentAction','addScaleSupportNoteAction','extendScaleTrialGraceAction','markScaleFirstSaleAction','markScalePaymentFollowUpAction','markScaleSetupCallAction','markReferralStatusAction','updateScaleReferralAction']);
 await writeActions('control-support.ts',['addSupportIssueNoteAction','closeSupportIssueAction','createSupportIssueAction','resolveSupportIssueAction','updateSupportIssueAction']);
 await writeFile(join(fixture,'lib/prisma.ts'), `export const prisma={business:{findMany:async()=>[{id:'fixture-0',name:'Test Business With A Long Name'}]}};`);
-const scaleSource=await readFile(join(source,'lib/scale-cockpit/service.ts'),'utf8');
 await writeFile(join(fixture,'lib/scale-cockpit/service.ts'), `import {matchesScaleFilter,formatBusinessType} from './labels';
 import type {ScaleBusinessRecord} from './types';
 import {listManagedBusinesses} from '../control-service';
 export async function getScaleCockpitData(){const records=(await listManagedBusinesses()).map(b=>({...b,businessId:b.id,businessName:b.name,branchCount:1,billingAccessState:'PAID_ACTIVE',activationStatus:'ACTIVE_BUSINESS',activationStatusLabel:'Active business',setupProgressPercent:100,nextAction:'Follow up with the owner',controlMessage:'Account ready',onboardingStage:'ACTIVE',onboardingStageLabel:'Active',productCount:100,staffCount:3,purchaseCount:4,saleCount:90,salesLast7Days:14,assignedAgent:b.assignedManager,healthLabel:'Healthy',portfolioHealth:'Healthy',portfolioHealthReasons:[],completedSteps:['Products','Stock'],missingSteps:[],openSupportIssueCount:0,referralSource:'AGENT',referralStatus:'PAID',isActivated:true,isHealthy:true,monthlyValue:349,outstandingAmount:349,pricingLabel:'Growth monthly',annualEquivalentGhs:3490,intervalCharge:349}));return {businesses:records,pipeline:[],actionItems:[],supportByBusiness:{},overview:{totalBusinesses:14,newSignupsThisWeek:2,inSetup:2,activeBusinesses:12,inTrial:2,paidBusinesses:12,overdueBusinesses:1,restrictedBusinesses:1,needSetupHelp:2,openSupportIssues:1,expectedMrr:4980,expectedCollectionsThisWeek:3490,healthCritical:0,healthAtRisk:1,healthNeedsAttention:1,healthHealthy:12}}};
-`+scaleSource.slice(scaleSource.indexOf('export function filterScaleBusinesses')));
+`+"export { filterScaleBusinesses, paginateScaleBusinesses } from './filters';");
 await writeFile(join(fixture,'lib/support-issues/service.ts'), `import {OPEN_SUPPORT_STATUSES} from './types';import type {SupportIssueRow} from './types';
 export async function getSupportCockpitData(){return {overview:{openIssues:1,criticalIssues:1,highPriorityIssues:0,waitingOnCustomer:0,resolvedThisWeek:0,averageOpenAgeHours:8,businessesWithOpenIssues:1,slaAttentionCount:0},issues:[{id:'fixture-issue',businessId:'fixture-0',businessName:'Test Business With A Very Long Name',ownerName:'Test Owner',ownerPhone:'+233201234567',issueType:'TRAINING_NEEDED',priority:'CRITICAL',status:'OPEN',title:'Support issue with a detailed title for a narrow screen',description:'Synthetic support issue',source:'PHONE',nextAction:'Call the owner',assignedAgentName:'Test Agent',createdAt:'2026-11-01',lastUpdatedAt:'2026-11-06',isStale:false,openAgeHours:8}]}};
 `+"export { filterSupportIssues } from './filters';");

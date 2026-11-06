@@ -8,7 +8,7 @@ import { portfolioHealthTone } from '@/lib/business-health';
 import {
   filterScaleBusinesses,
   paginateScaleBusinesses,
-} from '@/lib/scale-cockpit/service';
+} from '@/lib/scale-cockpit/filters';
 import { formatBusinessType, whatsappHref } from '@/lib/scale-cockpit/labels';
 import { StatePill } from '@/components/status-pill';
 import type { AuditLogEntry } from '@/lib/audit';

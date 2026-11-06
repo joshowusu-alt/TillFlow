@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import type { SupportCockpitData, SupportIssueRow } from '@/lib/support-issues/types';
-import { filterSupportIssues } from '@/lib/support-issues/service';
+import { filterSupportIssues } from '@/lib/support-issues/filters';
 import {
   addSupportIssueNoteAction,
   closeSupportIssueAction,
