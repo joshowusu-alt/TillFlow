@@ -1,0 +1,28 @@
+{
+  "checkedAt": "2026-11-06T12:12:00Z",
+  "project": {
+    "id": "prj_Ndxzi9vvY6R5MMDPZYGe3GwkNcli",
+    "name": "supermarket-pos",
+    "framework": "nextjs"
+  },
+  "priorProduction": {
+    "id": "dpl_ESTwt1BkViSTvGBCRj6TNH16vXBm",
+    "sha": "5ad596eb38cb9449542669c210639a38179146cf",
+    "state": "READY",
+    "aliases": [
+      "www.tillflow.app",
+      "supermarket-pos-five.vercel.app",
+      "tillflow.app",
+      "supermarket-pos-git-5ad596eb38cb9-20b9cc-joshua-owusus-projects.vercel.app"
+    ]
+  },
+  "fallback": {
+    "id": "dpl_ESTwt1BkViSTvGBCRj6TNH16vXBm",
+    "rollbackEligible": true
+  },
+  "approvedSha": "56fe0019771546cb509e2ba964f05e0622e6efc9",
+  "newDeploymentId": "dpl_9noviyEPnDbQeJCTpxH262yLGkdC",
+  "productionMigrations": 0,
+  "secretChanges": 0,
+  "liveFinancialWrites": 0
+}

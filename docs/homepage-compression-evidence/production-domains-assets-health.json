@@ -1,0 +1,74 @@
+[
+  {
+    "base": "https://www.tillflow.app",
+    "finalUrl": "https://www.tillflow.app/welcome",
+    "homepageStatus": 200,
+    "sections": 6,
+    "proof": "IN EVERYDAY USE\n\nUsed at EL-SHADDAI Supermarket.\n\nTillFlow supports its daily sales, barcode scanning, receipt printing, offline POS, stock and financial management.",
+    "assets": [
+      {
+        "path": "/api/health",
+        "status": 200,
+        "finalUrl": "https://www.tillflow.app/api/health",
+        "health": "healthy",
+        "database": "up"
+      },
+      {
+        "path": "/marketing/challenges-poster.webp",
+        "status": 200,
+        "finalUrl": "https://www.tillflow.app/marketing/challenges-poster.webp"
+      },
+      {
+        "path": "/marketing/retail-challenges.mp4",
+        "status": 200,
+        "finalUrl": "https://www.tillflow.app/marketing/retail-challenges.mp4"
+      },
+      {
+        "path": "/marketing/retail-challenges.en.vtt",
+        "status": 200,
+        "finalUrl": "https://www.tillflow.app/marketing/retail-challenges.en.vtt"
+      },
+      {
+        "path": "/fonts/jakarta-latin.woff2",
+        "status": 200,
+        "finalUrl": "https://www.tillflow.app/fonts/jakarta-latin.woff2"
+      }
+    ]
+  },
+  {
+    "base": "https://tillflow.app",
+    "finalUrl": "https://www.tillflow.app/welcome",
+    "homepageStatus": 200,
+    "sections": 6,
+    "proof": "IN EVERYDAY USE\n\nUsed at EL-SHADDAI Supermarket.\n\nTillFlow supports its daily sales, barcode scanning, receipt printing, offline POS, stock and financial management.",
+    "assets": [
+      {
+        "path": "/api/health",
+        "status": 200,
+        "finalUrl": "https://www.tillflow.app/api/health",
+        "health": "healthy",
+        "database": "up"
+      },
+      {
+        "path": "/marketing/challenges-poster.webp",
+        "status": 200,
+        "finalUrl": "https://www.tillflow.app/marketing/challenges-poster.webp"
+      },
+      {
+        "path": "/marketing/retail-challenges.mp4",
+        "status": 200,
+        "finalUrl": "https://www.tillflow.app/marketing/retail-challenges.mp4"
+      },
+      {
+        "path": "/marketing/retail-challenges.en.vtt",
+        "status": 200,
+        "finalUrl": "https://www.tillflow.app/marketing/retail-challenges.en.vtt"
+      },
+      {
+        "path": "/fonts/jakarta-latin.woff2",
+        "status": 200,
+        "finalUrl": "https://www.tillflow.app/fonts/jakarta-latin.woff2"
+      }
+    ]
+  }
+]

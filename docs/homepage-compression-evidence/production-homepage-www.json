@@ -1,0 +1,812 @@
+[
+  {
+    "viewport": 320,
+    "height": 4992,
+    "width": 320,
+    "sections": [
+      {
+        "id": "",
+        "label": null,
+        "heading": "Complete control over your business.",
+        "top": 114,
+        "height": 941,
+        "text": "For owners tired of guessing\n\nSee what is happening while the day is still running.\n\nComplete control over your business.\n\nWhere did today's money go? Why does the till not match? Why do problems only appear after closing?\n\nKnow before you count.\n\nBook demo on WhatsApp\nSee live demo\n\nSee how it would work in your business. WhatsApp first — no setup needed for the walkthrough.\n\nOWNER VIEW\nMain Branch\n\nTODAY'S SALES\n\nGH₵8,420\nGH₵8,420\n\nEXPECTED CASH\n\nGH₵3,185\nGH₵3,185\n\nRECEIPTS\n\n126\n126\n\nLOW STOCK\n\n14\n14\n\nSelling now\nLive\n\nIndomie Chicken Flavour Pack\n\n2 items · GH₵57.00\n\nTillFlow demo · example data"
+      },
+      {
+        "id": "stories",
+        "label": null,
+        "heading": "Used at EL-SHADDAI Supermarket.",
+        "top": 1055,
+        "height": 294,
+        "text": "IN EVERYDAY USE\n\nUsed at EL-SHADDAI Supermarket.\n\nTillFlow supports its daily sales, barcode scanning, receipt printing, offline POS, stock and financial management."
+      },
+      {
+        "id": "product-proof",
+        "label": null,
+        "heading": "See TillFlow in action.",
+        "top": 1349,
+        "height": 828,
+        "text": "See TillFlow in action.\n\nTry the working demo with fictional data. No account needed.\n\nRecord every sale\n\nFind a product, take cash or MoMo, and issue a receipt.\n\nTry a sale →\nControl your stock\n\nSee stock levels, low-stock alerts and supplier balances.\n\nExplore stock →\nUnderstand your money\n\nFollow expected cash, sales, product costs and profit.\n\nSee reports →\nWatch the 28-second introduction"
+      },
+      {
+        "id": "pricing",
+        "label": null,
+        "heading": "A plan for your next stage.",
+        "top": 2177,
+        "height": 1592,
+        "text": "PRICING\n\nA plan for your next stage.\nSwitch to yearly and get 2 months off.\nMonthly\nYearly\nGETTING ORGANISED\nStarter\nGH₵199\n/month\nFor a single shop getting organised.\nSell and record every transaction\nProducts, customers and basic stock\nOffline-ready selling\nTry Starter\nOWNER VISIBILITY\nGrowth\nRECOMMENDED\nGH₵349\n/month\nFor owners who need a clearer view of their money.\nExpected cash and shift closing\nMargins, reorder support and Owner View\nFinancial and advanced reports\nADD-ON\n+GH₵200/mo\nAdd online store\nPublic online storefront with mobile-money checkout for pickup orders. Speak to TillFlow to enable.\nStart Growth trial\nCOMPLETE BUSINESS CONTROL\nPro\nGH₵699\n/month\nFor businesses running multiple branches.\nMulti-branch stock transfers\nAudit log and cashflow forecast\nOnline storefront included\nTry Pro\nCompare what’s included\nSee which plan fits your business"
+      },
+      {
+        "id": "getting-started",
+        "label": "Common questions",
+        "heading": "Before you start",
+        "top": 3769,
+        "height": 572,
+        "text": "Before you start\n\nChoose a plan, add your products and opening stock, then check your first sale with TillFlow’s help.\n\nCan I sell when the internet drops?\nDoes money received mean profit?\nDo I need barcodes on every product?\nWhich plan includes an online shop?"
+      },
+      {
+        "id": "",
+        "label": null,
+        "heading": "Know before you count.",
+        "top": 4341,
+        "height": 322,
+        "text": "Know before you count.\n\nA 15-minute walkthrough. No setup needed.\n\nBook demo on WhatsApp\nSee live demo"
+      }
+    ],
+    "links": [
+      {
+        "text": "Customer",
+        "href": "#stories"
+      },
+      {
+        "text": "Demo",
+        "href": "#product-proof"
+      },
+      {
+        "text": "Pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Sign in",
+        "href": "/login"
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "Customer",
+        "href": "#stories"
+      },
+      {
+        "text": "Demo",
+        "href": "#product-proof"
+      },
+      {
+        "text": "Pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "See live demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Try a sale →",
+        "href": "/demo/try-sale"
+      },
+      {
+        "text": "Explore stock →",
+        "href": "/demo/inventory"
+      },
+      {
+        "text": "See reports →",
+        "href": "/demo/reports"
+      },
+      {
+        "text": "Download the introduction",
+        "href": "/marketing/retail-challenges.mp4"
+      },
+      {
+        "text": "Try Starter",
+        "href": "/register?plan=STARTER&billing=MONTHLY"
+      },
+      {
+        "text": "Start Growth trial",
+        "href": "/register?plan=GROWTH&billing=MONTHLY"
+      },
+      {
+        "text": "Try Pro",
+        "href": "/register?plan=PRO&billing=MONTHLY"
+      },
+      {
+        "text": "See which plan fits your business",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20help%20choosing%20the%20right%20TillFlow%20plan%20for%20my%20business."
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "See live demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Explore demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Plans and pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Get started",
+        "href": "/register"
+      },
+      {
+        "text": "+233 54 701 6160",
+        "href": "tel:+233547016160"
+      },
+      {
+        "text": "Facebook",
+        "href": "https://www.facebook.com/share/1F2NDE5Zp2/?mibextid=wwXIfr"
+      },
+      {
+        "text": "TikTok",
+        "href": "https://www.tiktok.com/@tillflowapp"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "viewport": 360,
+    "height": 4735,
+    "width": 360,
+    "sections": [
+      {
+        "id": "",
+        "label": null,
+        "heading": "Complete control over your business.",
+        "top": 114,
+        "height": 883,
+        "text": "For owners tired of guessing\n\nSee what is happening while the day is still running.\n\nComplete control over your business.\n\nWhere did today's money go? Why does the till not match? Why do problems only appear after closing?\n\nKnow before you count.\n\nBook demo on WhatsApp\nSee live demo\n\nSee how it would work in your business. WhatsApp first — no setup needed for the walkthrough.\n\nOWNER VIEW\nMain Branch\n\nTODAY'S SALES\n\nGH₵8,420\nGH₵8,420\n\nEXPECTED CASH\n\nGH₵3,185\nGH₵3,185\n\nRECEIPTS\n\n126\n126\n\nLOW STOCK\n\n14\n14\n\nSelling now\nLive\n\nIndomie Chicken Flavour Pack\n\n2 items · GH₵57.00\n\nTillFlow demo · example data"
+      },
+      {
+        "id": "stories",
+        "label": null,
+        "heading": "Used at EL-SHADDAI Supermarket.",
+        "top": 997,
+        "height": 294,
+        "text": "IN EVERYDAY USE\n\nUsed at EL-SHADDAI Supermarket.\n\nTillFlow supports its daily sales, barcode scanning, receipt printing, offline POS, stock and financial management."
+      },
+      {
+        "id": "product-proof",
+        "label": null,
+        "heading": "See TillFlow in action.",
+        "top": 1291,
+        "height": 788,
+        "text": "See TillFlow in action.\n\nTry the working demo with fictional data. No account needed.\n\nRecord every sale\n\nFind a product, take cash or MoMo, and issue a receipt.\n\nTry a sale →\nControl your stock\n\nSee stock levels, low-stock alerts and supplier balances.\n\nExplore stock →\nUnderstand your money\n\nFollow expected cash, sales, product costs and profit.\n\nSee reports →\nWatch the 28-second introduction"
+      },
+      {
+        "id": "pricing",
+        "label": null,
+        "heading": "A plan for your next stage.",
+        "top": 2079,
+        "height": 1521,
+        "text": "PRICING\n\nA plan for your next stage.\nSwitch to yearly and get 2 months off.\nMonthly\nYearly\nGETTING ORGANISED\nStarter\nGH₵199\n/month\nFor a single shop getting organised.\nSell and record every transaction\nProducts, customers and basic stock\nOffline-ready selling\nTry Starter\nOWNER VISIBILITY\nGrowth\nRECOMMENDED\nGH₵349\n/month\nFor owners who need a clearer view of their money.\nExpected cash and shift closing\nMargins, reorder support and Owner View\nFinancial and advanced reports\nADD-ON\n+GH₵200/mo\nAdd online store\nPublic online storefront with mobile-money checkout for pickup orders. Speak to TillFlow to enable.\nStart Growth trial\nCOMPLETE BUSINESS CONTROL\nPro\nGH₵699\n/month\nFor businesses running multiple branches.\nMulti-branch stock transfers\nAudit log and cashflow forecast\nOnline storefront included\nTry Pro\nCompare what’s included\nSee which plan fits your business"
+      },
+      {
+        "id": "getting-started",
+        "label": "Common questions",
+        "heading": "Before you start",
+        "top": 3600,
+        "height": 560,
+        "text": "Before you start\n\nChoose a plan, add your products and opening stock, then check your first sale with TillFlow’s help.\n\nCan I sell when the internet drops?\nDoes money received mean profit?\nDo I need barcodes on every product?\nWhich plan includes an online shop?"
+      },
+      {
+        "id": "",
+        "label": null,
+        "heading": "Know before you count.",
+        "top": 4160,
+        "height": 298,
+        "text": "Know before you count.\n\nA 15-minute walkthrough. No setup needed.\n\nBook demo on WhatsApp\nSee live demo"
+      }
+    ],
+    "links": [
+      {
+        "text": "Customer",
+        "href": "#stories"
+      },
+      {
+        "text": "Demo",
+        "href": "#product-proof"
+      },
+      {
+        "text": "Pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Sign in",
+        "href": "/login"
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "Customer",
+        "href": "#stories"
+      },
+      {
+        "text": "Demo",
+        "href": "#product-proof"
+      },
+      {
+        "text": "Pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "See live demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Try a sale →",
+        "href": "/demo/try-sale"
+      },
+      {
+        "text": "Explore stock →",
+        "href": "/demo/inventory"
+      },
+      {
+        "text": "See reports →",
+        "href": "/demo/reports"
+      },
+      {
+        "text": "Download the introduction",
+        "href": "/marketing/retail-challenges.mp4"
+      },
+      {
+        "text": "Try Starter",
+        "href": "/register?plan=STARTER&billing=MONTHLY"
+      },
+      {
+        "text": "Start Growth trial",
+        "href": "/register?plan=GROWTH&billing=MONTHLY"
+      },
+      {
+        "text": "Try Pro",
+        "href": "/register?plan=PRO&billing=MONTHLY"
+      },
+      {
+        "text": "See which plan fits your business",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20help%20choosing%20the%20right%20TillFlow%20plan%20for%20my%20business."
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "See live demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Explore demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Plans and pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Get started",
+        "href": "/register"
+      },
+      {
+        "text": "+233 54 701 6160",
+        "href": "tel:+233547016160"
+      },
+      {
+        "text": "Facebook",
+        "href": "https://www.facebook.com/share/1F2NDE5Zp2/?mibextid=wwXIfr"
+      },
+      {
+        "text": "TikTok",
+        "href": "https://www.tiktok.com/@tillflowapp"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "viewport": 390,
+    "height": 4587,
+    "width": 390,
+    "sections": [
+      {
+        "id": "",
+        "label": null,
+        "heading": "Complete control over your business.",
+        "top": 114,
+        "height": 863,
+        "text": "For owners tired of guessing\n\nSee what is happening while the day is still running.\n\nComplete control over your business.\n\nWhere did today's money go? Why does the till not match? Why do problems only appear after closing?\n\nKnow before you count.\n\nBook demo on WhatsApp\nSee live demo\n\nSee how it would work in your business. WhatsApp first — no setup needed for the walkthrough.\n\nOWNER VIEW\nMain Branch\n\nTODAY'S SALES\n\nGH₵8,420\nGH₵8,420\n\nEXPECTED CASH\n\nGH₵3,185\nGH₵3,185\n\nRECEIPTS\n\n126\n126\n\nLOW STOCK\n\n14\n14\n\nSelling now\nLive\n\nIndomie Chicken Flavour Pack\n\n2 items · GH₵57.00\n\nTillFlow demo · example data"
+      },
+      {
+        "id": "stories",
+        "label": null,
+        "heading": "Used at EL-SHADDAI Supermarket.",
+        "top": 977,
+        "height": 266,
+        "text": "IN EVERYDAY USE\n\nUsed at EL-SHADDAI Supermarket.\n\nTillFlow supports its daily sales, barcode scanning, receipt printing, offline POS, stock and financial management."
+      },
+      {
+        "id": "product-proof",
+        "label": null,
+        "heading": "See TillFlow in action.",
+        "top": 1243,
+        "height": 788,
+        "text": "See TillFlow in action.\n\nTry the working demo with fictional data. No account needed.\n\nRecord every sale\n\nFind a product, take cash or MoMo, and issue a receipt.\n\nTry a sale →\nControl your stock\n\nSee stock levels, low-stock alerts and supplier balances.\n\nExplore stock →\nUnderstand your money\n\nFollow expected cash, sales, product costs and profit.\n\nSee reports →\nWatch the 28-second introduction"
+      },
+      {
+        "id": "pricing",
+        "label": null,
+        "heading": "A plan for your next stage.",
+        "top": 2031,
+        "height": 1505,
+        "text": "PRICING\n\nA plan for your next stage.\nSwitch to yearly and get 2 months off.\nMonthly\nYearly\nGETTING ORGANISED\nStarter\nGH₵199\n/month\nFor a single shop getting organised.\nSell and record every transaction\nProducts, customers and basic stock\nOffline-ready selling\nTry Starter\nOWNER VISIBILITY\nGrowth\nRECOMMENDED\nGH₵349\n/month\nFor owners who need a clearer view of their money.\nExpected cash and shift closing\nMargins, reorder support and Owner View\nFinancial and advanced reports\nADD-ON\n+GH₵200/mo\nAdd online store\nPublic online storefront with mobile-money checkout for pickup orders. Speak to TillFlow to enable.\nStart Growth trial\nCOMPLETE BUSINESS CONTROL\nPro\nGH₵699\n/month\nFor businesses running multiple branches.\nMulti-branch stock transfers\nAudit log and cashflow forecast\nOnline storefront included\nTry Pro\nCompare what’s included\nSee which plan fits your business"
+      },
+      {
+        "id": "getting-started",
+        "label": "Common questions",
+        "heading": "Before you start",
+        "top": 3536,
+        "height": 532,
+        "text": "Before you start\n\nChoose a plan, add your products and opening stock, then check your first sale with TillFlow’s help.\n\nCan I sell when the internet drops?\nDoes money received mean profit?\nDo I need barcodes on every product?\nWhich plan includes an online shop?"
+      },
+      {
+        "id": "",
+        "label": null,
+        "heading": "Know before you count.",
+        "top": 4068,
+        "height": 262,
+        "text": "Know before you count.\n\nA 15-minute walkthrough. No setup needed.\n\nBook demo on WhatsApp\nSee live demo"
+      }
+    ],
+    "links": [
+      {
+        "text": "Customer",
+        "href": "#stories"
+      },
+      {
+        "text": "Demo",
+        "href": "#product-proof"
+      },
+      {
+        "text": "Pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Sign in",
+        "href": "/login"
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "Customer",
+        "href": "#stories"
+      },
+      {
+        "text": "Demo",
+        "href": "#product-proof"
+      },
+      {
+        "text": "Pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "See live demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Try a sale →",
+        "href": "/demo/try-sale"
+      },
+      {
+        "text": "Explore stock →",
+        "href": "/demo/inventory"
+      },
+      {
+        "text": "See reports →",
+        "href": "/demo/reports"
+      },
+      {
+        "text": "Download the introduction",
+        "href": "/marketing/retail-challenges.mp4"
+      },
+      {
+        "text": "Try Starter",
+        "href": "/register?plan=STARTER&billing=MONTHLY"
+      },
+      {
+        "text": "Start Growth trial",
+        "href": "/register?plan=GROWTH&billing=MONTHLY"
+      },
+      {
+        "text": "Try Pro",
+        "href": "/register?plan=PRO&billing=MONTHLY"
+      },
+      {
+        "text": "See which plan fits your business",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20help%20choosing%20the%20right%20TillFlow%20plan%20for%20my%20business."
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "See live demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Explore demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Plans and pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Get started",
+        "href": "/register"
+      },
+      {
+        "text": "+233 54 701 6160",
+        "href": "tel:+233547016160"
+      },
+      {
+        "text": "Facebook",
+        "href": "https://www.facebook.com/share/1F2NDE5Zp2/?mibextid=wwXIfr"
+      },
+      {
+        "text": "TikTok",
+        "href": "https://www.tiktok.com/@tillflowapp"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "viewport": 768,
+    "height": 3826,
+    "width": 768,
+    "sections": [
+      {
+        "id": "",
+        "label": null,
+        "heading": "Complete control over your business.",
+        "top": 69,
+        "height": 835,
+        "text": "For owners tired of guessing\n\nSee what is happening while the day is still running.\n\nComplete control over your business.\n\nWhere did today's money go? Why does the till not match? Why do problems only appear after closing?\n\nKnow before you count.\n\nBook demo on WhatsApp\nSee live demo\n\nSee how it would work in your business. WhatsApp first — no setup needed for the walkthrough.\n\nOWNER VIEW\nMain Branch\n\nTODAY'S SALES\n\nGH₵8,420\nGH₵8,420\n\nEXPECTED CASH\n\nGH₵3,185\nGH₵3,185\n\nRECEIPTS\n\n126\n126\n\nLOW STOCK\n\n14\n14\n\nSelling now\nLive\n\nIndomie Chicken Flavour Pack\n\n2 items · GH₵57.00\n\nTillFlow demo · example data"
+      },
+      {
+        "id": "stories",
+        "label": null,
+        "heading": "Used at EL-SHADDAI Supermarket.",
+        "top": 904,
+        "height": 182,
+        "text": "IN EVERYDAY USE\n\nUsed at EL-SHADDAI Supermarket.\n\nTillFlow supports its daily sales, barcode scanning, receipt printing, offline POS, stock and financial management."
+      },
+      {
+        "id": "product-proof",
+        "label": null,
+        "heading": "See TillFlow in action.",
+        "top": 1086,
+        "height": 456,
+        "text": "See TillFlow in action.\n\nTry the working demo with fictional data. No account needed.\n\nRecord every sale\n\nFind a product, take cash or MoMo, and issue a receipt.\n\nTry a sale →\nControl your stock\n\nSee stock levels, low-stock alerts and supplier balances.\n\nExplore stock →\nUnderstand your money\n\nFollow expected cash, sales, product costs and profit.\n\nSee reports →\nWatch the 28-second introduction"
+      },
+      {
+        "id": "pricing",
+        "label": null,
+        "heading": "A plan for your next stage.",
+        "top": 1542,
+        "height": 1441,
+        "text": "PRICING\n\nA plan for your next stage.\nSwitch to yearly and get 2 months off.\nMonthly\nYearly\nGETTING ORGANISED\nStarter\nGH₵199\n/month\nFor a single shop getting organised.\nSell and record every transaction\nProducts, customers and basic stock\nOffline-ready selling\nTry Starter\nOWNER VISIBILITY\nGrowth\nRECOMMENDED\nGH₵349\n/month\nFor owners who need a clearer view of their money.\nExpected cash and shift closing\nMargins, reorder support and Owner View\nFinancial and advanced reports\nADD-ON\n+GH₵200/mo\nAdd online store\nPublic online storefront with mobile-money checkout for pickup orders. Speak to TillFlow to enable.\nStart Growth trial\nCOMPLETE BUSINESS CONTROL\nPro\nGH₵699\n/month\nFor businesses running multiple branches.\nMulti-branch stock transfers\nAudit log and cashflow forecast\nOnline storefront included\nTry Pro\nCompare what’s included\nSee which plan fits your business"
+      },
+      {
+        "id": "getting-started",
+        "label": "Common questions",
+        "heading": "Before you start",
+        "top": 2983,
+        "height": 332,
+        "text": "Before you start\n\nChoose a plan, add your products and opening stock, then check your first sale with TillFlow’s help.\n\nCan I sell when the internet drops?\nDoes money received mean profit?\nDo I need barcodes on every product?\nWhich plan includes an online shop?"
+      },
+      {
+        "id": "",
+        "label": null,
+        "heading": "Know before you count.",
+        "top": 3315,
+        "height": 306,
+        "text": "Know before you count.\n\nA 15-minute walkthrough. No setup needed.\n\nBook demo on WhatsApp\nSee live demo"
+      }
+    ],
+    "links": [
+      {
+        "text": "Customer",
+        "href": "#stories"
+      },
+      {
+        "text": "Demo",
+        "href": "#product-proof"
+      },
+      {
+        "text": "Pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Sign in",
+        "href": "/login"
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "Customer",
+        "href": "#stories"
+      },
+      {
+        "text": "Demo",
+        "href": "#product-proof"
+      },
+      {
+        "text": "Pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "See live demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Try a sale →",
+        "href": "/demo/try-sale"
+      },
+      {
+        "text": "Explore stock →",
+        "href": "/demo/inventory"
+      },
+      {
+        "text": "See reports →",
+        "href": "/demo/reports"
+      },
+      {
+        "text": "Download the introduction",
+        "href": "/marketing/retail-challenges.mp4"
+      },
+      {
+        "text": "Try Starter",
+        "href": "/register?plan=STARTER&billing=MONTHLY"
+      },
+      {
+        "text": "Start Growth trial",
+        "href": "/register?plan=GROWTH&billing=MONTHLY"
+      },
+      {
+        "text": "Try Pro",
+        "href": "/register?plan=PRO&billing=MONTHLY"
+      },
+      {
+        "text": "See which plan fits your business",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20help%20choosing%20the%20right%20TillFlow%20plan%20for%20my%20business."
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "See live demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Explore demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Plans and pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Get started",
+        "href": "/register"
+      },
+      {
+        "text": "+233 54 701 6160",
+        "href": "tel:+233547016160"
+      },
+      {
+        "text": "Facebook",
+        "href": "https://www.facebook.com/share/1F2NDE5Zp2/?mibextid=wwXIfr"
+      },
+      {
+        "text": "TikTok",
+        "href": "https://www.tiktok.com/@tillflowapp"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "viewport": 1440,
+    "height": 3083,
+    "width": 1440,
+    "sections": [
+      {
+        "id": "",
+        "label": null,
+        "heading": "Complete control over your business.",
+        "top": 69,
+        "height": 730,
+        "text": "For owners tired of guessing\n\nSee what is happening while the day is still running.\n\nComplete control over your business.\n\nWhere did today's money go? Why does the till not match? Why do problems only appear after closing?\n\nKnow before you count.\n\nBook demo on WhatsApp\nSee live demo\n\nSee how it would work in your business. WhatsApp first — no setup needed for the walkthrough.\n\nOWNER VIEW\nToday's focus\nMain Branch\n\nTillFlow demo · example data\n\nTODAY'S SALES\n\nGH₵8,420\nGH₵8,420\n\nGross sales today\n\nGROSS MARGIN\n\n24.8%\n24.8%\n\nAfter cost of goods\n\nTODAY'S RECEIPTS\n\n126\n126\n\nCompleted transactions\n\nOUTSTANDING DEBTORS\n\nGH₵960\nGH₵960\n\nCustomer credit due\n\nOPEN ISSUES\n\n3\n3\n\nRequiring attention\n\nEXPECTED CASH\nGH₵3,185\nGH₵3,185\nCash that should be in the till now\n\nLow stock items\n\nWARNING\n\n14 products need reorder attention today.\n\nSELLING NOW\nLive\n\nIndomie Chicken Flavour Pack\n\nScanning next item…\n\n2 items so far\nGH₵57.00\nSHIFT CLOSE\n\nLast close variance\n\n−GH₵15\n\nCaught and explained at close — not weeks later\n\nProduct preview built from TillFlow app screens"
+      },
+      {
+        "id": "stories",
+        "label": null,
+        "heading": "Used at EL-SHADDAI Supermarket.",
+        "top": 799,
+        "height": 150,
+        "text": "IN EVERYDAY USE\n\nUsed at EL-SHADDAI Supermarket.\n\nTillFlow supports its daily sales, barcode scanning, receipt printing, offline POS, stock and financial management."
+      },
+      {
+        "id": "product-proof",
+        "label": null,
+        "heading": "See TillFlow in action.",
+        "top": 949,
+        "height": 428,
+        "text": "See TillFlow in action.\n\nTry the working demo with fictional data. No account needed.\n\nRecord every sale\n\nFind a product, take cash or MoMo, and issue a receipt.\n\nTry a sale →\nControl your stock\n\nSee stock levels, low-stock alerts and supplier balances.\n\nExplore stock →\nUnderstand your money\n\nFollow expected cash, sales, product costs and profit.\n\nSee reports →\nWatch the 28-second introduction"
+      },
+      {
+        "id": "pricing",
+        "label": null,
+        "heading": "A plan for your next stage.",
+        "top": 1377,
+        "height": 863,
+        "text": "PRICING\n\nA plan for your next stage.\nSwitch to yearly and get 2 months off.\nMonthly\nYearly\nGETTING ORGANISED\nStarter\nGH₵199\n/month\nFor a single shop getting organised.\nSell and record every transaction\nProducts, customers and basic stock\nOffline-ready selling\nTry Starter\nOWNER VISIBILITY\nGrowth\nRECOMMENDED\nGH₵349\n/month\nFor owners who need a clearer view of their money.\nExpected cash and shift closing\nMargins, reorder support and Owner View\nFinancial and advanced reports\nADD-ON\n+GH₵200/mo\nAdd online store\nPublic online storefront with mobile-money checkout for pickup orders. Speak to TillFlow to enable.\nStart Growth trial\nCOMPLETE BUSINESS CONTROL\nPro\nGH₵699\n/month\nFor businesses running multiple branches.\nMulti-branch stock transfers\nAudit log and cashflow forecast\nOnline storefront included\nTry Pro\nCompare what’s included\nSee which plan fits your business"
+      },
+      {
+        "id": "getting-started",
+        "label": "Common questions",
+        "heading": "Before you start",
+        "top": 2240,
+        "height": 332,
+        "text": "Before you start\n\nChoose a plan, add your products and opening stock, then check your first sale with TillFlow’s help.\n\nCan I sell when the internet drops?\nDoes money received mean profit?\nDo I need barcodes on every product?\nWhich plan includes an online shop?"
+      },
+      {
+        "id": "",
+        "label": null,
+        "heading": "Know before you count.",
+        "top": 2572,
+        "height": 306,
+        "text": "Know before you count.\n\nA 15-minute walkthrough. No setup needed.\n\nBook demo on WhatsApp\nSee live demo"
+      }
+    ],
+    "links": [
+      {
+        "text": "Customer",
+        "href": "#stories"
+      },
+      {
+        "text": "Demo",
+        "href": "#product-proof"
+      },
+      {
+        "text": "Pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Sign in",
+        "href": "/login"
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "Customer",
+        "href": "#stories"
+      },
+      {
+        "text": "Demo",
+        "href": "#product-proof"
+      },
+      {
+        "text": "Pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "See live demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Try a sale →",
+        "href": "/demo/try-sale"
+      },
+      {
+        "text": "Explore stock →",
+        "href": "/demo/inventory"
+      },
+      {
+        "text": "See reports →",
+        "href": "/demo/reports"
+      },
+      {
+        "text": "Download the introduction",
+        "href": "/marketing/retail-challenges.mp4"
+      },
+      {
+        "text": "Try Starter",
+        "href": "/register?plan=STARTER&billing=MONTHLY"
+      },
+      {
+        "text": "Start Growth trial",
+        "href": "/register?plan=GROWTH&billing=MONTHLY"
+      },
+      {
+        "text": "Try Pro",
+        "href": "/register?plan=PRO&billing=MONTHLY"
+      },
+      {
+        "text": "See which plan fits your business",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20help%20choosing%20the%20right%20TillFlow%20plan%20for%20my%20business."
+      },
+      {
+        "text": "Book demo on WhatsApp",
+        "href": "https://wa.me/233547016160?text=Hello%2C%20I'd%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      },
+      {
+        "text": "See live demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Explore demo",
+        "href": "/demo"
+      },
+      {
+        "text": "Plans and pricing",
+        "href": "#pricing"
+      },
+      {
+        "text": "Get started",
+        "href": "/register"
+      },
+      {
+        "text": "+233 54 701 6160",
+        "href": "tel:+233547016160"
+      },
+      {
+        "text": "Facebook",
+        "href": "https://www.facebook.com/share/1F2NDE5Zp2/?mibextid=wwXIfr"
+      },
+      {
+        "text": "TikTok",
+        "href": "https://www.tiktok.com/@tillflowapp"
+      }
+    ],
+    "errors": []
+  }
+]

@@ -1,5 +1,7 @@
 # TillFlow homepage compression review
 
+**Release update:** LIVE AND VERIFIED at the approved SHA. The homepage workstream is closed. See [production release results](production-release.md). The review below records the pre-release assessment.
+
 The homepage has been shortened from 14 rendered section elements to 6, preserving the original hero, real operational proof, working demo, pricing and an obvious next step. The revised page presents the decision sooner instead of repeatedly describing cash, MoMo, stock and profit.
 
 ## Release identity and scope

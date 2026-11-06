@@ -1,0 +1,87 @@
+{
+  "verifiedAt": "2026-11-06T12:19:24.134Z",
+  "production": {
+    "id": "dpl_9noviyEPnDbQeJCTpxH262yLGkdC",
+    "name": "supermarket-pos",
+    "url": "supermarket-43f8grhlp-joshua-owusus-projects.vercel.app",
+    "type": "LAMBDAS",
+    "state": "READY",
+    "createdAt": 1793967132964,
+    "creator": {
+      "uid": "bLXw5sMdn63cVvytxekCM3N7",
+      "username": "joshowusu-4222"
+    },
+    "project": {
+      "id": "prj_Ndxzi9vvY6R5MMDPZYGe3GwkNcli",
+      "name": "supermarket-pos",
+      "framework": "nextjs"
+    },
+    "meta": {
+      "githubCommitRef": "56fe0019771546cb509e2ba964f05e0622e6efc9",
+      "githubCommitSha": "56fe0019771546cb509e2ba964f05e0622e6efc9",
+      "githubCommitMessage": "Add founder-supplied Facebook and TikTok footer links",
+      "githubRepo": "TillFlow",
+      "githubOrg": "joshowusu-alt"
+    },
+    "alias": [
+      "www.tillflow.app",
+      "supermarket-pos-five.vercel.app",
+      "tillflow.app",
+      "supermarket-pos-git-56fe001977154-5abc62-joshua-owusus-projects.vercel.app"
+    ],
+    "target": "production",
+    "regions": [
+      "lhr1"
+    ],
+    "buildingAt": 1793967134185,
+    "ready": 1793967320485,
+    "readyState": "READY",
+    "aliasError": null
+  },
+  "errorFatalScan": "## Runtime Logs\n\n**Project:** prj_Ndxzi9vvY6R5MMDPZYGe3GwkNcli\n**Deployment:** dpl_9noviyEPnDbQeJCTpxH262yLGkdC\n**Time range:** 2026-11-06T12:12:12.964Z → 2026-11-06T12:18:58.979Z\n\nNo logs found for the specified criteria.",
+  "logCounts": "## Runtime Log Counts\n\n**Project:** prj_Ndxzi9vvY6R5MMDPZYGe3GwkNcli\n**Grouped by:** level\n**Showing:** Top 25 groups by log count; this may omit other groups.\n\n| level | count |\n|---|---|\n| info | 2 |",
+  "rollbackRecords": [
+    {
+      "id": "dpl_9noviyEPnDbQeJCTpxH262yLGkdC",
+      "name": "supermarket-pos",
+      "url": "supermarket-43f8grhlp-joshua-owusus-projects.vercel.app",
+      "created": 1793967132964,
+      "state": "READY",
+      "target": "production",
+      "creator": {
+        "uid": "bLXw5sMdn63cVvytxekCM3N7",
+        "username": "joshowusu-4222"
+      },
+      "meta": {
+        "githubCommitRef": "56fe0019771546cb509e2ba964f05e0622e6efc9",
+        "githubCommitSha": "56fe0019771546cb509e2ba964f05e0622e6efc9",
+        "githubCommitMessage": "Add founder-supplied Facebook and TikTok footer links",
+        "githubRepo": "TillFlow",
+        "githubOrg": "joshowusu-alt"
+      },
+      "inspectorUrl": "https://vercel.com/joshua-owusus-projects/supermarket-pos/9noviyEPnDbQeJCTpxH262yLGkdC",
+      "isRollbackCandidate": true
+    },
+    {
+      "id": "dpl_ESTwt1BkViSTvGBCRj6TNH16vXBm",
+      "name": "supermarket-pos",
+      "url": "supermarket-n62cl4trd-joshua-owusus-projects.vercel.app",
+      "created": 1793963659522,
+      "state": "READY",
+      "target": "production",
+      "creator": {
+        "uid": "bLXw5sMdn63cVvytxekCM3N7",
+        "username": "joshowusu-4222"
+      },
+      "meta": {
+        "githubCommitRef": "5ad596eb38cb9449542669c210639a38179146cf",
+        "githubCommitSha": "5ad596eb38cb9449542669c210639a38179146cf",
+        "githubCommitMessage": "Use central guarded database clients in release E2E and pin safe Vercel install lifecycle",
+        "githubRepo": "TillFlow",
+        "githubOrg": "joshowusu-alt"
+      },
+      "inspectorUrl": "https://vercel.com/joshua-owusus-projects/supermarket-pos/ESTwt1BkViSTvGBCRj6TNH16vXBm",
+      "isRollbackCandidate": true
+    }
+  ]
+}
