@@ -75,9 +75,10 @@ describe('welcome marketing content', () => {
 });
 
 describe('welcome homepage structure', () => {
-  it('discloses the customer relationship without attributed testimony', () => {
+  it('uses confirmed operational proof without invented testimony or commercial claims', () => {
     const trust = readSource('components/marketing/TrustProofSection.tsx');
-    expect(trust).toContain('complimentary Pro access');
+    expect(trust).toContain('Used at EL-SHADDAI Supermarket.');
+    expect(trust).not.toMatch(/complimentary|paying customer|paid customer/);
     expect(trust).not.toMatch(/FENIBED|ASEDA|Akosua|setInterval/);
   });
 

@@ -9,7 +9,6 @@ export default function TrustProofSection() {
         </div>
         <div className="space-y-3 text-base leading-7 text-slate-600">
           <p>TillFlow supports its daily sales, barcode scanning, receipt printing, offline POS, stock and financial management.</p>
-          <p className="text-sm">EL-SHADDAI receives complimentary Pro access.</p>
         </div>
       </div>
     </section>

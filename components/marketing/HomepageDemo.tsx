@@ -11,7 +11,7 @@ export default function HomepageDemo() {
   return (
     <section id="product-proof" className="scroll-mt-32 px-4 py-6 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-6xl">
-        <h2 className="text-3xl font-bold font-display text-ink sm:text-4xl">See TillFlow in action.</h2>
+        <h2 id="control" className="scroll-mt-32 text-3xl font-bold font-display text-ink sm:text-4xl">See TillFlow in action.</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">Try the working demo with fictional data. No account needed.</p>
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           {previews.map(preview => (

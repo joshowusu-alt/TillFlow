@@ -8,7 +8,6 @@ import TrustProofSection from '@/components/marketing/TrustProofSection';
 import RevealOnScroll from '@/components/marketing/RevealOnScroll';
 import {
   HeroCTAGroup,
-  LiveDemoButton,
   PricingPrimaryCTA,
   WhatsAppDemoButton,
   hasTillflowWhatsApp,
@@ -170,10 +169,9 @@ export default function WelcomePage() {
                   Book a demo
                 </a>
               ) : null}
-              <LiveDemoButton
-                variant="text"
-                className="text-white hover:text-white focus-visible:ring-white focus-visible:ring-offset-accent"
-              />
+              <Link href="/demo" className="inline-flex min-h-11 items-center rounded-md text-sm font-semibold text-white underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-accent">
+                See live demo
+              </Link>
             </div>
           </div>
         </section>
