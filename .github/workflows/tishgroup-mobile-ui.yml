@@ -26,6 +26,11 @@ jobs:
           cache: npm
           cache-dependency-path: tishgroup-control/package-lock.json
       - run: npm ci
+      - name: Verify production compilation
+        run: npx next build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          NEXT_IGNORE_INCORRECT_LOCKFILE: '1'
       - run: npx playwright install --with-deps chromium
       - run: node scripts/check-mobile-ui.mjs
         env:

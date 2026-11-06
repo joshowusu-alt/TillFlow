@@ -15,3 +15,5 @@ The suite checks 19 views (including the growth detail modal) across all 14 navi
 For an existing compatible Chromium binary, set `CHROMIUM_EXECUTABLE_PATH`. `UI_TEST_PORT` defaults to 3192. To inspect the fixture manually, run `node scripts/mobile-ui-fixture.mjs` (default port 3191).
 
 These are browser-emulated viewport checks using synthetic records. They do not establish production uptime, a percentage reliability guarantee, physical iPhone/Safari behavior, or successful financial mutations. Release validation must keep those distinctions explicit.
+
+Production builds use the committed `lib/vendor` files so deployment does not replace the tested shared-code versions. Updating shared code is an explicit `npm run sync:vendor` operation, followed by tests and a commit; the sync list includes the onboarding journey dependency.
