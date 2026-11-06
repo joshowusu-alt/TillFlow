@@ -1,0 +1,641 @@
+{
+  "base": "https://supermarket-fkrp51ywx-joshua-owusus-projects.vercel.app",
+  "results": [
+    {
+      "route": "/welcome",
+      "width": 320,
+      "status": 200,
+      "scroll": 320,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo",
+      "width": 320,
+      "status": 200,
+      "scroll": 320,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/dashboard",
+      "width": 320,
+      "status": 200,
+      "scroll": 320,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/try-sale",
+      "width": 320,
+      "status": 200,
+      "scroll": 320,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/inventory",
+      "width": 320,
+      "status": 200,
+      "scroll": 320,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/reports",
+      "width": 320,
+      "status": 200,
+      "scroll": 320,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/customers",
+      "width": 320,
+      "status": 200,
+      "scroll": 320,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/store",
+      "width": 320,
+      "status": 200,
+      "scroll": 320,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/register?plan=PRO&billing=ANNUAL",
+      "width": 320,
+      "status": 200,
+      "scroll": 320,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/login",
+      "width": 320,
+      "status": 200,
+      "scroll": 320,
+      "errors": [],
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "targets": [
+            [
+              ".mt-2"
+            ],
+            [
+              ".text-black\\/50"
+            ],
+            [
+              ".transition"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "route": "/welcome",
+      "width": 360,
+      "status": 200,
+      "scroll": 360,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo",
+      "width": 360,
+      "status": 200,
+      "scroll": 360,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/dashboard",
+      "width": 360,
+      "status": 200,
+      "scroll": 360,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/try-sale",
+      "width": 360,
+      "status": 200,
+      "scroll": 360,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/inventory",
+      "width": 360,
+      "status": 200,
+      "scroll": 360,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/reports",
+      "width": 360,
+      "status": 200,
+      "scroll": 360,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/customers",
+      "width": 360,
+      "status": 200,
+      "scroll": 360,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/store",
+      "width": 360,
+      "status": 200,
+      "scroll": 360,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/register?plan=PRO&billing=ANNUAL",
+      "width": 360,
+      "status": 200,
+      "scroll": 360,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/login",
+      "width": 360,
+      "status": 200,
+      "scroll": 360,
+      "errors": [],
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "targets": [
+            [
+              ".mt-2"
+            ],
+            [
+              ".text-black\\/50"
+            ],
+            [
+              ".transition"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "route": "/welcome",
+      "width": 390,
+      "status": 200,
+      "scroll": 390,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo",
+      "width": 390,
+      "status": 200,
+      "scroll": 390,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/dashboard",
+      "width": 390,
+      "status": 200,
+      "scroll": 390,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/try-sale",
+      "width": 390,
+      "status": 200,
+      "scroll": 390,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/inventory",
+      "width": 390,
+      "status": 200,
+      "scroll": 390,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/reports",
+      "width": 390,
+      "status": 200,
+      "scroll": 390,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/customers",
+      "width": 390,
+      "status": 200,
+      "scroll": 390,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/store",
+      "width": 390,
+      "status": 200,
+      "scroll": 390,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/register?plan=PRO&billing=ANNUAL",
+      "width": 390,
+      "status": 200,
+      "scroll": 390,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/login",
+      "width": 390,
+      "status": 200,
+      "scroll": 390,
+      "errors": [],
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "targets": [
+            [
+              ".mt-2"
+            ],
+            [
+              ".text-black\\/50"
+            ],
+            [
+              ".transition"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "route": "/welcome",
+      "width": 768,
+      "status": 200,
+      "scroll": 768,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo",
+      "width": 768,
+      "status": 200,
+      "scroll": 768,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/dashboard",
+      "width": 768,
+      "status": 200,
+      "scroll": 768,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/try-sale",
+      "width": 768,
+      "status": 200,
+      "scroll": 768,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/inventory",
+      "width": 768,
+      "status": 200,
+      "scroll": 768,
+      "errors": [],
+      "violations": [
+        {
+          "id": "scrollable-region-focusable",
+          "impact": "serious",
+          "targets": [
+            [
+              ".hidden.overflow-x-auto.sm\\:block"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "route": "/demo/reports",
+      "width": 768,
+      "status": 200,
+      "scroll": 768,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/customers",
+      "width": 768,
+      "status": 200,
+      "scroll": 768,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/store",
+      "width": 768,
+      "status": 200,
+      "scroll": 768,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/register?plan=PRO&billing=ANNUAL",
+      "width": 768,
+      "status": 200,
+      "scroll": 768,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/login",
+      "width": 768,
+      "status": 200,
+      "scroll": 768,
+      "errors": [],
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "targets": [
+            [
+              ".mt-2"
+            ],
+            [
+              ".text-black\\/50"
+            ],
+            [
+              ".transition"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "route": "/welcome",
+      "width": 1440,
+      "status": 200,
+      "scroll": 1440,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo",
+      "width": 1440,
+      "status": 200,
+      "scroll": 1440,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/dashboard",
+      "width": 1440,
+      "status": 200,
+      "scroll": 1440,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/try-sale",
+      "width": 1440,
+      "status": 200,
+      "scroll": 1440,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/inventory",
+      "width": 1440,
+      "status": 200,
+      "scroll": 1440,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/reports",
+      "width": 1440,
+      "status": 200,
+      "scroll": 1440,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/customers",
+      "width": 1440,
+      "status": 200,
+      "scroll": 1440,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/demo/store",
+      "width": 1440,
+      "status": 200,
+      "scroll": 1440,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/register?plan=PRO&billing=ANNUAL",
+      "width": 1440,
+      "status": 200,
+      "scroll": 1440,
+      "errors": [],
+      "violations": []
+    },
+    {
+      "route": "/login",
+      "width": 1440,
+      "status": 200,
+      "scroll": 1440,
+      "errors": [],
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "targets": [
+            [
+              ".mt-2"
+            ],
+            [
+              ".text-black\\/50"
+            ],
+            [
+              ".transition"
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "controls": [
+    {
+      "width": 320,
+      "monthly": [
+        "/register?plan=STARTER&billing=MONTHLY",
+        "/register?plan=GROWTH&billing=MONTHLY",
+        "/register?plan=PRO&billing=MONTHLY"
+      ],
+      "annual": [
+        "/register?plan=STARTER&billing=ANNUAL",
+        "/register?plan=GROWTH&billing=ANNUAL",
+        "/register?plan=PRO&billing=ANNUAL"
+      ],
+      "yearlyPrices": [
+        "GH₵1,990",
+        "GH₵3,490",
+        "GH₵6,990"
+      ],
+      "expandedWidth": 320,
+      "expandedViolations": [],
+      "whatsapp": [
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20help%20choosing%20the%20right%20TillFlow%20plan%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      ]
+    },
+    {
+      "width": 360,
+      "monthly": [
+        "/register?plan=STARTER&billing=MONTHLY",
+        "/register?plan=GROWTH&billing=MONTHLY",
+        "/register?plan=PRO&billing=MONTHLY"
+      ],
+      "annual": [
+        "/register?plan=STARTER&billing=ANNUAL",
+        "/register?plan=GROWTH&billing=ANNUAL",
+        "/register?plan=PRO&billing=ANNUAL"
+      ],
+      "yearlyPrices": [
+        "GH₵1,990",
+        "GH₵3,490",
+        "GH₵6,990"
+      ],
+      "expandedWidth": 360,
+      "expandedViolations": [],
+      "whatsapp": [
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20help%20choosing%20the%20right%20TillFlow%20plan%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      ]
+    },
+    {
+      "width": 390,
+      "monthly": [
+        "/register?plan=STARTER&billing=MONTHLY",
+        "/register?plan=GROWTH&billing=MONTHLY",
+        "/register?plan=PRO&billing=MONTHLY"
+      ],
+      "annual": [
+        "/register?plan=STARTER&billing=ANNUAL",
+        "/register?plan=GROWTH&billing=ANNUAL",
+        "/register?plan=PRO&billing=ANNUAL"
+      ],
+      "yearlyPrices": [
+        "GH₵1,990",
+        "GH₵3,490",
+        "GH₵6,990"
+      ],
+      "expandedWidth": 390,
+      "expandedViolations": [],
+      "whatsapp": [
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20help%20choosing%20the%20right%20TillFlow%20plan%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      ]
+    },
+    {
+      "width": 768,
+      "monthly": [
+        "/register?plan=STARTER&billing=MONTHLY",
+        "/register?plan=GROWTH&billing=MONTHLY",
+        "/register?plan=PRO&billing=MONTHLY"
+      ],
+      "annual": [
+        "/register?plan=STARTER&billing=ANNUAL",
+        "/register?plan=GROWTH&billing=ANNUAL",
+        "/register?plan=PRO&billing=ANNUAL"
+      ],
+      "yearlyPrices": [
+        "GH₵1,990",
+        "GH₵3,490",
+        "GH₵6,990"
+      ],
+      "expandedWidth": 768,
+      "expandedViolations": [],
+      "whatsapp": [
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20help%20choosing%20the%20right%20TillFlow%20plan%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      ]
+    },
+    {
+      "width": 1440,
+      "monthly": [
+        "/register?plan=STARTER&billing=MONTHLY",
+        "/register?plan=GROWTH&billing=MONTHLY",
+        "/register?plan=PRO&billing=MONTHLY"
+      ],
+      "annual": [
+        "/register?plan=STARTER&billing=ANNUAL",
+        "/register?plan=GROWTH&billing=ANNUAL",
+        "/register?plan=PRO&billing=ANNUAL"
+      ],
+      "yearlyPrices": [
+        "GH₵1,990",
+        "GH₵3,490",
+        "GH₵6,990"
+      ],
+      "expandedWidth": 1440,
+      "expandedViolations": [],
+      "whatsapp": [
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20help%20choosing%20the%20right%20TillFlow%20plan%20for%20my%20business.",
+        "https://wa.me/233547016160?text=Hello%2C%20I%27d%20like%20to%20book%20a%20TillFlow%20demo%20for%20my%20business."
+      ]
+    }
+  ],
+  "protectedRoutes": [
+    {
+      "route": "/pos",
+      "url": "https://supermarket-fkrp51ywx-joshua-owusus-projects.vercel.app/login"
+    },
+    {
+      "route": "/onboarding",
+      "url": "https://supermarket-fkrp51ywx-joshua-owusus-projects.vercel.app/login"
+    },
+    {
+      "route": "/products",
+      "url": "https://supermarket-fkrp51ywx-joshua-owusus-projects.vercel.app/login"
+    }
+  ]
+}

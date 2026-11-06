@@ -1,0 +1,142 @@
+[
+  {
+    "route": "/login",
+    "width": 320,
+    "violations": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "targets": [
+          [
+            ".mt-2"
+          ],
+          [
+            ".text-black\\/50"
+          ],
+          [
+            ".transition"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "route": "/demo/inventory",
+    "width": 320,
+    "violations": []
+  },
+  {
+    "route": "/login",
+    "width": 360,
+    "violations": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "targets": [
+          [
+            ".mt-2"
+          ],
+          [
+            ".text-black\\/50"
+          ],
+          [
+            ".transition"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "route": "/demo/inventory",
+    "width": 360,
+    "violations": []
+  },
+  {
+    "route": "/login",
+    "width": 390,
+    "violations": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "targets": [
+          [
+            ".mt-2"
+          ],
+          [
+            ".text-black\\/50"
+          ],
+          [
+            ".transition"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "route": "/demo/inventory",
+    "width": 390,
+    "violations": []
+  },
+  {
+    "route": "/login",
+    "width": 768,
+    "violations": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "targets": [
+          [
+            ".mt-2"
+          ],
+          [
+            ".text-black\\/50"
+          ],
+          [
+            ".transition"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "route": "/demo/inventory",
+    "width": 768,
+    "violations": [
+      {
+        "id": "scrollable-region-focusable",
+        "impact": "serious",
+        "targets": [
+          [
+            ".hidden.overflow-x-auto.sm\\:block"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "route": "/login",
+    "width": 1440,
+    "violations": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "targets": [
+          [
+            ".mt-2"
+          ],
+          [
+            ".text-black\\/50"
+          ],
+          [
+            ".transition"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "route": "/demo/inventory",
+    "width": 1440,
+    "violations": []
+  }
+]

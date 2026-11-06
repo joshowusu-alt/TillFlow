@@ -1,0 +1,35 @@
+{
+  "date": "2026-11-06",
+  "candidate": "56fe0019771546cb509e2ba964f05e0622e6efc9",
+  "baseline": "5ad596eb38cb9449542669c210639a38179146cf",
+  "status": "reviewed-awaiting-production-approval",
+  "pr": "https://github.com/joshowusu-alt/TillFlow/pull/177",
+  "project": "supermarket-pos",
+  "projectId": "prj_Ndxzi9vvY6R5MMDPZYGe3GwkNcli",
+  "preview": "dpl_2cazEKQVKZie4NCMC4FszQdLb9Yh",
+  "previewState": "READY",
+  "production": "dpl_ESTwt1BkViSTvGBCRj6TNH16vXBm",
+  "productionUnchanged": true,
+  "preferredRollback": "dpl_ESTwt1BkViSTvGBCRj6TNH16vXBm",
+  "ci": "42213487889",
+  "postgres": "42213478177",
+  "unitPassed": 4235,
+  "unitExistingSkips": 28,
+  "browserChecks": 50,
+  "homepageAccessibilityViolations": 0,
+  "newAccessibilityRegressions": 0,
+  "existingAccessibilityFindings": [
+    "login: three contrast nodes, all five widths",
+    "demo inventory: keyboard-scrollability at 768px"
+  ],
+  "dependencyAudit": {
+    "highOrCritical": 0,
+    "moderate": 6
+  },
+  "localBuildWithoutDatabaseURLs": "passed",
+  "productionDataWrites": 0,
+  "productionMigrations": 0,
+  "productionDeployments": 0,
+  "merges": 0,
+  "secretChanges": 0
+}

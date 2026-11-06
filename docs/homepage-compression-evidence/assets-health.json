@@ -1,0 +1,24 @@
+[
+  {
+    "path": "/marketing/challenges-poster.webp",
+    "status": 200
+  },
+  {
+    "path": "/marketing/retail-challenges.mp4",
+    "status": 200
+  },
+  {
+    "path": "/marketing/retail-challenges.en.vtt",
+    "status": 200
+  },
+  {
+    "path": "/fonts/jakarta-latin.woff2",
+    "status": 200
+  },
+  {
+    "path": "/api/health",
+    "status": 200,
+    "health": "healthy",
+    "database": "up"
+  }
+]
