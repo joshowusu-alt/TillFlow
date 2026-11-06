@@ -139,26 +139,15 @@ export default async function BusinessesPage({
 
       <ControlPageHeader
         eyebrow="Managed businesses"
-        title="Commercial roster and billing control."
-        description="Keep the roster fast, make billing edits without scroll fatigue, and keep every business tied to a clear owner, plan, and next action."
+        title="Businesses"
+        description="Search by business or owner, check account status and open the details you need."
         chips={[
-          { label: 'Roster control', href: '#roster-tools' },
+          { label: 'Find a business', href: '#roster-tools' },
           ...(canEditSubscription ? [{ label: 'Quick billing setup', href: '#billing-setup', tone: 'dark' as const }] : []),
           ...(canBulkReview && filter === 'unreviewed' && pageBusinesses.length > 0 ? [{ label: 'Bulk review', href: '#bulk-review' }] : []),
           { label: 'Roster', href: '#business-roster' },
         ]}
         stats={headerStats}
-        aside={(
-          <div className="space-y-4">
-            <div>
-              <div className="eyebrow">Roster discipline</div>
-              <h2 className="mt-1.5 text-xl font-semibold tracking-tight">Operate the current slice only</h2>
-            </div>
-            <div className="rounded-[18px] border border-white/10 bg-white/6 px-3.5 py-3 text-sm leading-6 text-white/74">
-              {listSummary} Current filter: <strong>{filter === 'unreviewed' ? 'Unreviewed only' : 'All businesses'}</strong>.
-            </div>
-          </div>
-        )}
       />
 
       <section className="control-toolbar">

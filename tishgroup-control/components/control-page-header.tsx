@@ -31,13 +31,12 @@ export default function ControlPageHeader({
   return (
     <section className="space-y-3">
       <div className="panel p-4 sm:p-5 lg:p-6">
-        <div className={`grid gap-3 ${aside ? 'lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)] lg:items-start' : ''}`}>
+        <div className={`grid gap-3 ${aside ? 'xl:grid-cols-[minmax(0,1.5fr)_minmax(260px,0.7fr)] lg:items-start' : ''}`}>
           <div className="space-y-3">
             <div className="space-y-2">
               <div className="eyebrow">{eyebrow}</div>
               <h1 className="page-title font-[var(--font-display)] text-control-ink">{title}</h1>
-              {/* Description is verbose context for first-time operators; it hides on mobile so repeat users get straight to the data. */}
-              <p className="hidden max-w-3xl text-sm leading-6 text-black/60 sm:block sm:text-[0.95rem]">{description}</p>
+              <p className="max-w-3xl text-sm leading-6 text-black/65 sm:text-[0.95rem]">{description}</p>
             </div>
 
             {chips && chips.length > 0 ? (
@@ -70,7 +69,7 @@ export default function ControlPageHeader({
       </div>
 
       {stats && stats.length > 0 ? (
-        <div className="control-kpi-band sm:grid-cols-2 xl:grid-cols-4">
+        <div className="control-kpi-band grid-cols-2 xl:grid-cols-4">
           {stats.map((stat) => (
             <div key={stat.label} className="control-kpi-compact">
               <div className="control-kpi-compact-label">{stat.label}</div>

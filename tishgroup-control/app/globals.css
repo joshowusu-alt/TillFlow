@@ -532,3 +532,17 @@ textarea::placeholder {
     font-size: 16px;
   }
 }
+
+/* Keep navigation and account investigation clear across input methods. */
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--teal);
+  outline-offset: 3px;
+}
+#main-content { scroll-margin-top: 7rem; }
+.page-title { line-height: 1.12; }
+.control-kpi-compact-value { font-variant-numeric: tabular-nums; }
+.data-table thead th { color: var(--ink); background: #f3f6f7; }
+.data-table tbody tr:hover { background: rgba(31, 138, 130, 0.035); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}

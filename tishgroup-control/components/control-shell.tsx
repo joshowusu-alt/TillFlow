@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import GlobalSearch from '@/components/GlobalSearch';
 
 type ControlShellStaff = {
@@ -20,12 +20,12 @@ function getNavCount(href: string, navCounts?: { urgent: number; collections: nu
 }
 
 const navigation = [
-  { href: '/', label: 'Portfolio', shortLabel: 'Home', icon: 'home' },
-  { href: '/command/scale', label: 'Scale Cockpit', shortLabel: 'Scale', icon: 'layers' },
-  { href: '/command/digest', label: 'Digest', shortLabel: 'Digest', icon: 'pulse' },
+  { href: '/', label: 'Overview', shortLabel: 'Home', icon: 'home' },
+  { href: '/command/scale', label: 'Growth overview', shortLabel: 'Scale', icon: 'layers' },
+  { href: '/command/digest', label: 'Daily digest', shortLabel: 'Digest', icon: 'pulse' },
   { href: '/command/support', label: 'Support', shortLabel: 'Support', icon: 'lifebuoy' },
   { href: '/command/referrals', label: 'Referrals', shortLabel: 'Referrals', icon: 'chart' },
-  { href: '/command/templates', label: 'Templates', shortLabel: 'Templates', icon: 'book' },
+  { href: '/command/templates', label: 'Message templates', shortLabel: 'Templates', icon: 'book' },
   { href: '/command/guides', label: 'Guides', shortLabel: 'Guides', icon: 'book' },
   { href: '/businesses', label: 'Businesses', shortLabel: 'Businesses', icon: 'grid' },
   { href: '/subscriptions', label: 'Subscriptions', shortLabel: 'Subs', icon: 'cycle' },
@@ -35,6 +35,29 @@ const navigation = [
   { href: '/staff', label: 'Staff', shortLabel: 'Staff', icon: 'users' },
   { href: '/errors', label: 'Error Log', shortLabel: 'Errors', icon: 'alert', requiresAdmin: true },
 ];
+
+const navGroups = [
+  { title: 'Daily work', routes: ['/', '/businesses', '/collections', '/subscriptions', '/revenue', '/command/support'] },
+  { title: 'Growth', routes: ['/command/scale', '/command/referrals'] },
+  { title: 'Resources', routes: ['/command/digest', '/command/templates', '/command/guides', '/playbooks'] },
+  { title: 'Administration', routes: ['/staff', '/errors'] },
+];
+
+function GroupedNavigation({ pathname, staffRole, navCounts }: { pathname: string; staffRole: string; navCounts?: { urgent: number; collections: number; unreviewed: number } }) {
+  return <nav aria-label="Main navigation" className="space-y-5">{navGroups.map(group => <div key={group.title}>
+    <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50">{group.title}</p>
+    <div className="space-y-1">{group.routes.flatMap(href => {
+      const item = navigation.find(entry => entry.href === href);
+      if (!item || (item.requiresAdmin && staffRole !== 'CONTROL_ADMIN')) return [];
+      const active = isActivePath(pathname, href);
+      const count = getNavCount(href, navCounts);
+      return [<Link key={href} href={href} prefetch={false} aria-current={active ? 'page' : undefined} className={`flex min-h-11 items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition ${active ? 'bg-white text-control-ink shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white'}`}>
+        <span className="flex min-w-0 items-center gap-3"><NavigationIcon icon={item.icon} active={active} /><span>{item.label}</span></span>
+        {count > 0 ? <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${active ? 'bg-control-teal/10 text-control-ink' : 'bg-white/10 text-white'}`}>{count}</span> : null}
+      </Link>];
+    })}</div>
+  </div>)}</nav>;
+}
 
 function isActivePath(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname.startsWith(href);
@@ -127,6 +150,8 @@ export default function ControlShell({
 }) {
   const pathname = usePathname() ?? '';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuToggleRef = useRef<HTMLButtonElement>(null);
 
   const currentSection = useMemo(
     () => navigation.find((item) => isActivePath(pathname, item.href)) ?? navigation[0],
@@ -140,10 +165,20 @@ export default function ControlShell({
   useEffect(() => {
     if (!mobileMenuOpen) return;
 
+    menuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    const menuToggle = menuToggleRef.current;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Tab') {
+        const items = menuRef.current?.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex="0"]');
+        if (items?.length) {
+          const first = items[0]; const last = items[items.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+      }
       if (event.key === 'Escape') {
         setMobileMenuOpen(false);
       }
@@ -153,21 +188,24 @@ export default function ControlShell({
 
     return () => {
       document.body.style.overflow = previousOverflow;
+      menuToggle?.focus();
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [mobileMenuOpen]);
 
   return (
     <div className="mx-auto flex min-h-[100dvh] w-full max-w-[1640px] gap-4 px-2.5 pb-[calc(var(--safe-bottom)+1rem)] pt-[calc(var(--safe-top)+0.35rem)] sm:gap-5 sm:px-4 sm:pb-5 lg:px-6 lg:pb-6 lg:pt-4">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-white focus:p-3">Skip to content</a>
       {mobileMenuOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
             aria-label="Close navigation"
+            tabIndex={-1}
             className="absolute inset-0 bg-control-dark/45 backdrop-blur-[2px]"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="absolute inset-y-0 right-0 flex w-full max-w-[20rem] flex-col border-l border-black/10 bg-control-dark px-4 pb-[calc(var(--safe-bottom)+1rem)] pt-[calc(var(--safe-top)+0.85rem)] text-white shadow-2xl">
+          <div ref={menuRef} role="dialog" aria-modal="true" aria-label="Navigation" className="absolute inset-y-0 right-0 flex w-full max-w-[20rem] flex-col overflow-y-auto border-l border-black/10 bg-control-dark px-4 pb-[calc(var(--safe-bottom)+1rem)] pt-[calc(var(--safe-top)+0.85rem)] text-white shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">Internal only</div>
@@ -186,32 +224,7 @@ export default function ControlShell({
               </button>
             </div>
 
-            <nav className="mt-6 space-y-1.5">
-              {navigation.filter((item) => !item.requiresAdmin || staff.role === 'CONTROL_ADMIN').map((item) => {
-                const active = isActivePath(pathname, item.href);
-                const count = getNavCount(item.href, navCounts);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    prefetch={false}
-                    className={`flex items-center justify-between rounded-[18px] px-3.5 py-3 text-sm font-medium transition ${
-                      active ? 'bg-white text-control-ink' : 'bg-white/5 text-white/78 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    <span className="flex items-center gap-3">
-                      <NavigationIcon icon={item.icon} active={active} />
-                      <span>{item.label}</span>
-                    </span>
-                    {count > 0 && (
-                      <span className="inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white tabular-nums">
-                        {count}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </nav>
+            <div className="my-6"><GroupedNavigation pathname={pathname} staffRole={staff.role} navCounts={navCounts} /></div>
 
             <div className="mt-auto space-y-3 rounded-[20px] border border-white/10 bg-white/5 p-4 text-sm text-white/75">
               <div>
@@ -221,7 +234,7 @@ export default function ControlShell({
               </div>
 
               <p className="leading-6">
-                Work the commercial layer: portfolio posture, renewals, restrictions, and assignment clarity.
+                Find a business or choose a workspace above.
               </p>
 
               <Link
@@ -235,44 +248,19 @@ export default function ControlShell({
         </div>
       ) : null}
 
-      <aside className="sticky top-4 hidden max-h-[calc(100dvh-2rem)] w-[272px] shrink-0 flex-col justify-between self-start rounded-[26px] border border-black/10 bg-control-dark px-4 py-4 text-white shadow-dashboard lg:flex">
+      <aside className="sticky top-4 hidden max-h-[calc(100dvh-2rem)] w-[248px] shrink-0 flex-col justify-between gap-6 overflow-y-auto self-start rounded-[26px] border border-black/10 bg-control-dark px-4 py-4 text-white shadow-dashboard lg:flex">
         <div className="space-y-5">
           <div className="space-y-2">
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">Internal only</div>
             <div className="text-[1.35rem] font-semibold tracking-tight">Tish Group Control</div>
             <p className="text-sm leading-6 text-white/68">
-              Commercial control surface for the Tillflow portfolio.
+              Your businesses, payments and team.
             </p>
           </div>
 
           <GlobalSearch variant="dark" />
 
-          <nav className="space-y-1.5">
-            {navigation.filter((item) => !item.requiresAdmin || staff.role === 'CONTROL_ADMIN').map((item) => {
-              const active = isActivePath(pathname, item.href);
-              const count = getNavCount(item.href, navCounts);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  prefetch={false}
-                  className={`flex items-center justify-between rounded-[18px] px-3.5 py-2.5 text-sm font-medium transition ${
-                    active ? 'bg-white text-control-ink' : 'bg-white/5 text-white/78 hover:bg-white/10 hover:text-white'
-                  }`}
-                >
-                  <span className="flex items-center gap-3">
-                    <NavigationIcon icon={item.icon} active={active} />
-                    <span>{item.label}</span>
-                  </span>
-                  {count > 0 && (
-                    <span className="inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white tabular-nums">
-                      {count}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
-          </nav>
+          <GroupedNavigation pathname={pathname} staffRole={staff.role} navCounts={navCounts} />
         </div>
 
         <div className="space-y-3 rounded-[20px] border border-white/10 bg-white/5 p-4 text-sm text-white/75">
@@ -285,12 +273,7 @@ export default function ControlShell({
             </div>
           </div>
 
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">Operating stance</div>
-            <p className="mt-2 leading-6">
-              Keep revenue posture, restriction handling, and account ownership explicit.
-            </p>
-          </div>
+
 
           <Link
             href="/logout"
@@ -321,6 +304,7 @@ export default function ControlShell({
                 </div>
                 <button
                   type="button"
+                  ref={menuToggleRef}
                   aria-label="Open navigation"
                   aria-expanded={mobileMenuOpen}
                   onClick={() => setMobileMenuOpen(true)}
@@ -337,7 +321,7 @@ export default function ControlShell({
               </div>
 
               <div className="mobile-nav-strip mt-3 flex gap-2 overflow-x-auto pb-0.5">
-                {navigation.map((item) => {
+                {navigation.filter(item => !item.requiresAdmin || staff.role === 'CONTROL_ADMIN').filter(item => ['/', '/businesses', '/collections', '/command/support'].includes(item.href) || isActivePath(pathname, item.href)).map((item) => {
                   const active = isActivePath(pathname, item.href);
                   const count = getNavCount(item.href, navCounts);
                   return (
@@ -351,7 +335,7 @@ export default function ControlShell({
                           : 'border-black/8 bg-black/[0.03] text-black/56'
                       }`}
                     >
-                      <span>{item.label}</span>
+                      <span>{item.shortLabel}</span>
                       {count > 0 ? (
                         <span className={`inline-flex min-w-[1.15rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold ${active ? 'bg-white/18 text-white' : 'bg-white text-control-ink'}`}>
                           {count}
@@ -365,7 +349,7 @@ export default function ControlShell({
           </div>
         </div>
 
-        {children}
+        <main id="main-content" className="min-w-0">{children}</main>
       </div>
     </div>
   );

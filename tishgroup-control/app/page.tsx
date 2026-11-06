@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import ControlPageHeader from '@/components/control-page-header';
 import ControlGreeting from '@/components/control-greeting';
-import KpiCard from '@/components/kpi-card';
 import SectionHeading from '@/components/section-heading';
 import { HealthPill, PlanPill, StatePill } from '@/components/status-pill';
 import { requireControlStaff } from '@/lib/control-auth';
@@ -21,14 +20,15 @@ export default async function PortfolioPage() {
   const slaCounts = getPortfolioSlaCounts(businesses);
   const rhythm = await getCollectionsRhythm();
   const urgentBusinesses = businesses.filter((business) => ['GRACE', 'STARTER_FALLBACK', 'READ_ONLY'].includes(business.state)).slice(0, 5);
+  const unreviewedCount = businesses.filter((business) => business.needsReview).length;
   const unreviewedBusinesses = businesses.filter((business) => business.needsReview).slice(0, 6);
   const workboardCards = [
     {
       title: 'Review new accounts',
-      value: String(unreviewedBusinesses.length),
+      value: String(unreviewedCount),
       href: '/businesses?filter=unreviewed',
       note: 'Confirm owner, sold plan, and assignment before the queue grows stale.',
-      meta: `${unreviewedBusinesses.length} pending`,
+      meta: `${unreviewedCount} pending`,
     },
     {
       title: 'Run collections',
@@ -67,33 +67,13 @@ export default async function PortfolioPage() {
       hint: 'Accounts ageing on the team\'s own queue (unreviewed or no contact).',
     },
   ];
-  const focusOrder = [
-    {
-      label: 'Review new accounts',
-      value: `${unreviewedBusinesses.length} pending`,
-      href: '/businesses?filter=unreviewed',
-    },
-    {
-      label: 'Run collections',
-      value: `${summary.dueSoon + summary.grace + summary.fallback + summary.readOnly} accounts`,
-      href: '/collections',
-    },
-    {
-      label: 'Watch revenue risk',
-      value: formatCedi(summary.expectedCollections),
-      href: '/revenue',
-    },
-  ];
-
-  const overdueCount = summary.grace + summary.fallback;
-
   return (
     <div className="space-y-4 lg:space-y-5">
       <ControlGreeting firstName={firstName} roleLabel={roleLabel} staffKey={staff.id} />
       <ControlPageHeader
-        eyebrow="Portfolio command"
-        title="Portfolio posture and next move."
-        description="See the portfolio state, route the team into the next queue, and keep revenue risk explicit from the first viewport."
+        eyebrow="Tish Group Control"
+        title="Business overview"
+        description="Find accounts that need attention, follow up on payments and open a business to investigate."
         chips={[
           { label: 'Next move', href: '#today-workboard', tone: 'dark' },
           { label: 'New accounts', href: '#new-accounts' },
@@ -101,92 +81,13 @@ export default async function PortfolioPage() {
           { label: 'Plan mix', href: '#plan-mix' },
         ]}
         stats={headerStats}
-        aside={(
-          <div className="space-y-4">
-            <div>
-              <div className="eyebrow">Next move</div>
-              <h2 className="mt-1.5 text-xl font-semibold tracking-tight">Work the portfolio in queue order</h2>
-            </div>
-
-            <div className="control-priority-list">
-              {focusOrder.map((item, index) => (
-                <Link key={item.label} href={item.href} className="control-priority-item control-priority-item-tonal block">
-                  <div className="flex items-start gap-3">
-                    <span className="control-sequence-step">{index + 1}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold">{item.label}</div>
-                      <div className="mt-1 text-sm text-white/68">{item.value}</div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-
-            <div className="rounded-[18px] border border-white/10 bg-white/6 px-3.5 py-3 text-sm leading-6 text-white/74">
-              Revenue at risk now: <strong>{formatCedi(summary.expectedCollections)}</strong>. Active paid base: <strong>{summary.activePaid}</strong>.
-            </div>
-
-            <div className="rounded-[18px] border border-white/10 bg-white/6 px-3.5 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="eyebrow text-white/55">Collections · 14d</div>
-                  <div className="mt-1 text-base font-semibold tracking-tight">{formatCedi(Math.round(rhythm.totalPence / 100))}</div>
-                  <div className="mt-0.5 text-xs text-white/60">Today {formatCedi(Math.round(rhythm.todayPence / 100))}</div>
-                </div>
-                <Sparkline values={rhythm.daily} tone="teal" width={88} height={32} ariaLabel="Daily collections trend" />
-              </div>
-            </div>
-          </div>
-        )}
       />
-
-      {/* Mobile urgency strip — tonal sprint view, hidden on desktop where the full header stats band is visible */}
-      <section className="grid grid-cols-2 gap-2 md:hidden">
-        <KpiCard
-          tone="teal"
-          label="Portfolio MRR"
-          value={formatCedi(summary.mrr)}
-          hint="Monthly recurring base across active paid businesses."
-          accent="MRR"
-        />
-        <KpiCard
-          tone="gold"
-          label="Due soon"
-          value={String(summary.dueSoon)}
-          hint="Send reminders before these tip into overdue."
-          accent="Reminder"
-        />
-        <KpiCard
-          tone="ember"
-          label="Overdue"
-          value={String(overdueCount)}
-          hint="Same-day follow-up required."
-          accent={overdueCount > 0 ? (
-            <span className="flex items-center gap-1">
-              <span className="pulse-dot bg-control-ember" />
-              Urgent
-            </span>
-          ) : 'Grace'}
-        />
-        <KpiCard
-          tone="ember"
-          label="Locked"
-          value={String(summary.readOnly)}
-          hint="Payment confirmation or commercial decision needed."
-          accent={summary.readOnly > 0 ? (
-            <span className="flex items-center gap-1">
-              <span className="pulse-dot bg-control-ember" />
-              Locked
-            </span>
-          ) : 'Locked'}
-        />
-      </section>
 
       <section id="today-workboard" className="panel p-4 sm:p-5">
         <SectionHeading
-          eyebrow="Next move"
-          title="Open the next queue"
-          description="Use the portfolio posture above, then move straight into the next operating surface."
+          eyebrow="Your work today"
+          title="Needs attention"
+          description="Choose a queue to review accounts or follow up on payments."
         />
 
         <div className="mt-4 control-action-strip">
@@ -194,7 +95,7 @@ export default async function PortfolioPage() {
             <Link key={card.title} href={card.href} className="control-action-strip-link">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="eyebrow">Next move</div>
+                  <div className="eyebrow">Action needed</div>
                   <div className="mt-1.5 text-base font-semibold tracking-tight text-control-ink">{card.title}</div>
                 </div>
                 <span className="rounded-full border border-black/8 bg-black/[0.03] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-black/50">
@@ -328,6 +229,14 @@ export default async function PortfolioPage() {
         </div>
 
         <div className="space-y-4">
+          <section className="panel flex items-center justify-between gap-4 p-4 sm:p-5" aria-label="Collections over the last 14 days">
+            <div>
+              <div className="eyebrow">Collected · last 14 days</div>
+              <div className="mt-2 text-2xl font-semibold tabular-nums">{formatCedi(Math.round(rhythm.totalPence / 100))}</div>
+              <p className="mt-1 text-sm text-black/60">Today: {formatCedi(Math.round(rhythm.todayPence / 100))}</p>
+            </div>
+            <Sparkline values={rhythm.daily} tone="teal" width={100} height={40} ariaLabel="Daily collections trend" />
+          </section>
           <div className="panel p-4 sm:p-5">
             <div id="plan-mix" />
             <SectionHeading
@@ -353,7 +262,7 @@ export default async function PortfolioPage() {
           <div className="panel p-4 sm:p-5">
             <SectionHeading
               eyebrow="Health watch"
-              title="Relationship posture"
+              title="Account health"
               description="Quick watchlist for accounts whose relationship quality needs a closer read."
             />
             <div className="mt-4 space-y-2.5">
@@ -361,7 +270,7 @@ export default async function PortfolioPage() {
                 <div key={business.id} className="control-list-row control-list-row-muted">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className="font-semibold text-control-ink">{business.name}</div>
+                      <Link href={`/businesses/${business.id}`} className="font-semibold text-control-ink underline-offset-4 hover:underline">{business.name}</Link>
                       <div className="mt-1 text-xs text-black/55">Last activity {business.lastActivityAt}</div>
                     </div>
                     <HealthPill health={business.health} />
