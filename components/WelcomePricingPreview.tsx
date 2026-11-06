@@ -40,14 +40,10 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
     <div className="mt-7 rounded-[1.75rem] border border-border bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted">Stages of control</div>
           <div className="mt-2 text-sm leading-6 text-ink/50">
             {billingCycle === 'yearly'
               ? "You're on yearly billing — 2 months free versus paying monthly."
               : 'Switch to yearly and get 2 months off.'}
-          </div>
-          <div className="mt-1 text-xs leading-5 text-muted">
-            Growth is Owner View — see what is happening without standing at the counter all day.
           </div>
         </div>
 

@@ -1,17 +1,13 @@
+import HomepageDemo from '@/components/marketing/HomepageDemo';
 import GettingStarted from '@/components/marketing/GettingStarted';
 import PlanComparison from '@/components/marketing/PlanComparison';
-import RetailCampaignSection from '@/components/marketing/RetailCampaignSection';
 import Link from 'next/link';
 import './welcome-marketing.css';
 import WelcomePricingPreview, { type WelcomePlanPreview } from '@/components/WelcomePricingPreview';
-import ProductProofSection from '@/components/marketing/ProductProofSection';
 import TrustProofSection from '@/components/marketing/TrustProofSection';
-import RetailRealityBelt from '@/components/marketing/RetailRealityBelt';
 import RevealOnScroll from '@/components/marketing/RevealOnScroll';
 import {
   HeroCTAGroup,
-  LiveDemoButton,
-  MidFunnelCTAGroup,
   PricingPrimaryCTA,
   WhatsAppDemoButton,
   hasTillflowWhatsApp,
@@ -20,18 +16,7 @@ import HeroProductComposition from '@/components/marketing/visuals/HeroProductCo
 import { Logo } from '@/components/Logo';
 import { PLAN_MONTHLY_PRICES, ADDON_ONLINE_STOREFRONT_MONTHLY } from '@/lib/plan-pricing';
 import {
-  CONTROL_POINTS,
-  CONTROL_SECTION,
-  EARLY_NAMED_PROOF,
   FINAL_CTA,
-  HOPE_STRIP,
-  MICRO_PRIMES,
-  MID_FUNNEL_CTA,
-  OBJECTION_PLAN_FIT_FALLBACK,
-  OBJECTION_PLAN_FIT_WHATSAPP,
-  OBJECTION_REASSURANCES_CORE,
-  OWNER_MOMENTS,
-  PRICING_SECTION,
   WELCOME_ANCHOR,
   WELCOME_CATEGORY_LINE,
   WELCOME_HEADLINE,
@@ -48,19 +33,19 @@ const planPreview: WelcomePlanPreview[] = [
     name: 'Starter',
     monthlyPrice: PLAN_MONTHLY_PRICES.STARTER,
     maturity: 'Getting organised',
-    note: 'For getting your business under control — clean records from day one.',
+    note: 'For a single shop getting organised.',
     bullets: ['Sell and record every transaction', 'Products, customers and basic stock', 'Offline-ready selling'],
   },
   {
     name: 'Growth',
     monthlyPrice: PLAN_MONTHLY_PRICES.GROWTH,
     maturity: 'Owner visibility',
-    note: 'For owners who want to see what is happening without standing at the counter all day.',
+    note: 'For owners who need a clearer view of their money.',
     featured: true,
     bullets: [
-      'Know before you count — expected cash and closing confidence',
+      'Expected cash and shift closing',
       'Margins, reorder support and Owner View',
-      'Best when money visibility matters',
+      'Financial and advanced reports',
     ],
     addon: {
       name: 'Add online store',
@@ -73,133 +58,16 @@ const planPreview: WelcomePlanPreview[] = [
     name: 'Pro',
     monthlyPrice: PLAN_MONTHLY_PRICES.PRO,
     maturity: 'Complete business control',
-    note: 'For larger businesses that need complete control across a multi-branch operation.',
+    note: 'For businesses running multiple branches.',
     bullets: ['Multi-branch stock transfers', 'Audit log and cashflow forecast', 'Online storefront included'],
   },
 ];
 
 const NAV_LINKS = [
-  { href: '#control', label: 'Control' },
-  { href: '#product-proof', label: 'Proof' },
-  { href: '#stories', label: 'Stories' },
+  { href: '#stories', label: 'Customer' },
+  { href: '#product-proof', label: 'Demo' },
   { href: '#pricing', label: 'Pricing' },
 ] as const;
-
-function MicroPrime({ children }: { children: string }) {
-  return (
-    <div className="px-4 py-3 sm:px-6 sm:py-4">
-      <p className="mx-auto max-w-2xl text-center text-sm font-medium leading-6 text-ink/70 sm:text-base sm:leading-7">
-        {children}
-      </p>
-    </div>
-  );
-}
-
-function HopeStrip() {
-  return (
-    <section className="px-4 pb-3 sm:px-6 sm:pb-4" aria-label="Retail recognition">
-      <div className="mx-auto max-w-6xl rounded-[1.4rem] border border-blue-100 bg-white p-4 shadow-card sm:p-5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">{HOPE_STRIP.eyebrow}</p>
-        <h2 className="mt-2 text-xl font-display font-bold text-ink sm:text-2xl">{HOPE_STRIP.headline}</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-ink/60 sm:text-base">{HOPE_STRIP.body}</p>
-      </div>
-    </section>
-  );
-}
-
-function OwnerMomentsStrip() {
-  return (
-    <section className="px-4 pb-4 sm:px-6 sm:pb-5" aria-label="Owner moments">
-      <div className="mx-auto max-w-6xl">
-        <p className="text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">A normal day</p>
-        <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {OWNER_MOMENTS.map((moment) => (
-            <li
-              key={moment}
-              className="rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 text-sm leading-5 text-ink/65 shadow-sm"
-            >
-              {moment}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-}
-
-function EarlyNamedProof() {
-  return (
-    <section className="px-4 pb-4 sm:px-6 sm:pb-5" aria-label="Named business proof">
-      <div className="mx-auto max-w-4xl border-l-2 border-accent/45 px-4 py-1 sm:px-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
-          {EARLY_NAMED_PROOF.eyebrow}
-        </p>
-        <p className="mt-1.5 text-sm leading-6 text-ink/65 sm:text-base">{EARLY_NAMED_PROOF.line}</p>
-        <p className="mt-1 text-sm font-semibold leading-6 text-ink sm:text-base">{EARLY_NAMED_PROOF.hook}</p>
-      </div>
-    </section>
-  );
-}
-
-function ControlSection() {
-  return (
-    <section id="control" className="scroll-mt-32 px-4 py-6 sm:px-6 sm:py-9">
-      <RevealOnScroll>
-        <div className="mx-auto max-w-6xl">
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">{CONTROL_SECTION.eyebrow}</p>
-            <h2 className="mt-3 text-3xl font-bold font-display text-ink sm:text-4xl">{CONTROL_SECTION.headline}</h2>
-            <p className="mt-3 text-base leading-7 text-ink/58">{CONTROL_SECTION.intro}</p>
-          </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {CONTROL_POINTS.map((point) => (
-              <div
-                key={point}
-                className="rounded-2xl border border-slate-200/80 bg-white px-4 py-4 text-left shadow-sm"
-              >
-                <p className="text-sm font-semibold leading-6 text-ink">{point}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </RevealOnScroll>
-    </section>
-  );
-}
-
-function MidFunnelBridge() {
-  const whatsappReady = hasTillflowWhatsApp();
-  return (
-    <section className="px-4 py-5 sm:px-6 sm:py-6" aria-label="Book a demo">
-      <div className="mx-auto max-w-xl rounded-[1.5rem] border border-accent/20 bg-white px-5 py-6 text-center shadow-card sm:px-8">
-        <h2 className="text-xl font-display font-bold text-ink sm:text-2xl">{MID_FUNNEL_CTA.headline}</h2>
-        <p className="mt-2 text-sm leading-6 text-ink/55">
-          {whatsappReady ? MID_FUNNEL_CTA.support : MID_FUNNEL_CTA.supportFallback}
-        </p>
-        <div className="mt-5">
-          <MidFunnelCTAGroup />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ObjectionStrip() {
-  return (
-    <section className="mt-5" aria-label="Quick reassurances">
-      <ul className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-2">
-        {OBJECTION_REASSURANCES_CORE.map((item) => (
-          <li
-            key={item}
-            className="rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-ink/60"
-          >
-            {item}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 export default function WelcomePage() {
   const whatsappReady = hasTillflowWhatsApp();
@@ -269,37 +137,18 @@ export default function WelcomePage() {
         description: 'POS, inventory and financial management for Ghanaian retailers.',
         offers: Object.entries(PLAN_MONTHLY_PRICES).map(([plan, price]) => ({ '@type': 'Offer', name: `${plan} monthly`, price, priceCurrency: 'GHS', url: `https://www.tillflow.app/register?plan=${plan}` })),
       }).replace(/</g, '\u003c') }} />
-      <EarlyNamedProof />
-      <RetailCampaignSection />
-      <HopeStrip />
-      <OwnerMomentsStrip />
-      <RetailRealityBelt />
-      <MicroPrime>{MICRO_PRIMES.beforeControl}</MicroPrime>
-      <ControlSection />
-      <MicroPrime>{MICRO_PRIMES.beforeProof}</MicroPrime>
-      <ProductProofSection />
-      <MidFunnelBridge />
       <TrustProofSection />
-      <MicroPrime>{MICRO_PRIMES.beforePricing}</MicroPrime>
+      <HomepageDemo />
 
       <section id="pricing" className="scroll-mt-32 px-4 py-8 sm:px-6 sm:py-10">
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">{PRICING_SECTION.eyebrow}</p>
-            <h2 className="mt-3 text-3xl font-bold font-display text-ink sm:text-4xl">{PRICING_SECTION.headline}</h2>
-          </div>
-          <div className="mt-6 flex flex-col items-center gap-2 text-center">
-            <PricingPrimaryCTA />
-            <p className="max-w-xl text-sm text-ink/55">
-              {whatsappReady ? PRICING_SECTION.support : PRICING_SECTION.supportFallback}
-            </p>
-            <p className="rounded-full border border-accent/20 bg-accentSoft/60 px-3 py-1.5 text-xs font-medium text-accent">
-              {whatsappReady ? OBJECTION_PLAN_FIT_WHATSAPP : OBJECTION_PLAN_FIT_FALLBACK}
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">Pricing</p>
+            <h2 className="mt-3 text-3xl font-bold font-display text-ink sm:text-4xl">A plan for your next stage.</h2>
           </div>
           <WelcomePricingPreview plans={planPreview} />
           <PlanComparison />
-          <ObjectionStrip />
+          <div className="mt-4 text-center"><PricingPrimaryCTA /></div>
         </div>
       </section>
 
@@ -309,8 +158,8 @@ export default function WelcomePage() {
         <section className="border-y border-accent/20 bg-accent px-4 py-8 text-white sm:px-6 sm:py-12">
           <div className="mx-auto max-w-3xl text-center">
             <h2 className="text-3xl font-bold font-display sm:text-4xl">{FINAL_CTA.headline}</h2>
-            <p className="mt-3 text-white/70">{FINAL_CTA.body}</p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-4">
+            <p className="mt-3 text-white/90">A 15-minute walkthrough. No setup needed.</p>
+            <div className="mt-5 flex flex-col items-center justify-center gap-3">
               {whatsappReady ? <WhatsAppDemoButton tone="onAccent" className="w-full max-w-sm sm:w-auto" /> : null}
               {!whatsappReady ? (
                 <a
@@ -320,10 +169,9 @@ export default function WelcomePage() {
                   Book a demo
                 </a>
               ) : null}
-              <LiveDemoButton
-                variant="text"
-                className="text-white/75 hover:text-white focus-visible:ring-white focus-visible:ring-offset-accent"
-              />
+              <Link href="/demo" className="inline-flex min-h-11 items-center rounded-md text-sm font-semibold text-white underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-accent">
+                See live demo
+              </Link>
             </div>
           </div>
         </section>
@@ -341,6 +189,8 @@ export default function WelcomePage() {
               <a href="#pricing" className="inline-flex min-h-11 items-center">Plans and pricing</a>
               <Link href="/register" className="inline-flex min-h-11 items-center">Get started</Link>
               <a href="tel:+233547016160" className="inline-flex min-h-11 items-center">+233 54 701 6160</a>
+              <a href="https://www.facebook.com/share/1F2NDE5Zp2/?mibextid=wwXIfr" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center">Facebook</a>
+              <a href="https://www.tiktok.com/@tillflowapp" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center">TikTok</a>
             </nav>
             <p className="mt-2 text-[11px] text-muted">© 2026 TillFlow. A Tish Group product.</p>
           </div>
