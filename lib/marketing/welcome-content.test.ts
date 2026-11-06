@@ -88,24 +88,11 @@ describe('welcome homepage structure', () => {
     expect(proof).toContain('ReportsAnalyticsPreview');
   });
 
-  it('follows compressed journey with early proof and one mid-funnel CTA after product proof', () => {
+  it('keeps one proof block and a direct hero, demo, pricing journey', () => {
     const page = readSource('app/welcome/page.tsx');
-    const earlyIdx = page.indexOf('<EarlyNamedProof');
-    const hopeIdx = page.indexOf('<HopeStrip');
-    const momentsIdx = page.indexOf('<OwnerMomentsStrip');
-    const controlIdx = page.indexOf('<ControlSection');
-    const proofIdx = page.indexOf('<ProductProofSection');
-    const midIdx = page.indexOf('<MidFunnelBridge');
-    const storiesIdx = page.indexOf('<TrustProofSection');
-    const pricingIdx = page.indexOf('id="pricing"');
-    expect(earlyIdx).toBeGreaterThan(-1);
-    expect(hopeIdx).toBeGreaterThan(earlyIdx);
-    expect(momentsIdx).toBeGreaterThan(hopeIdx);
-    expect(controlIdx).toBeGreaterThan(momentsIdx);
-    expect(proofIdx).toBeGreaterThan(controlIdx);
-    expect(midIdx).toBeGreaterThan(proofIdx);
-    expect(storiesIdx).toBeGreaterThan(midIdx);
-    expect(pricingIdx).toBeGreaterThan(storiesIdx);
+    expect(page.indexOf('<TrustProofSection')).toBeLessThan(page.indexOf('<HomepageDemo'));
+    expect(page.indexOf('<HomepageDemo')).toBeLessThan(page.indexOf('id="pricing"'));
+    expect(page).not.toMatch(/<EarlyNamedProof|<HopeStrip|<OwnerMomentsStrip|<ControlSection|<MidFunnelBridge|<RetailCampaignSection|<ProductProofSection/);
     expect(page).toContain('assertTillflowWhatsAppConfiguredForProduction');
     expect(page).toContain('PricingPrimaryCTA');
     expect(page).toContain('WELCOME_HEADLINE');
