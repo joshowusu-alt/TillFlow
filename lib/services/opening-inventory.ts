@@ -7,8 +7,8 @@
 
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, ensureChartOfAccounts, postJournalEntry } from '@/lib/accounting';
-import { fetchInventoryMap, lockInventoryValues, upsertInventoryBalance } from '@/lib/services/shared/inventory-utils';
-import { receiveStockValue, INVENTORY_VALUE_V1 } from '@/lib/inventory-value';
+import { batchUpsertInventoryBalances, fetchInventoryMap, lockInventoryValues } from '@/lib/services/shared/inventory-utils';
+import { receiveStockValue, INVENTORY_VALUE_V1, type StockValue } from '@/lib/inventory-value';
 
 export type OpeningInventoryLine = {
   productId: string;
@@ -151,12 +151,20 @@ export async function recordOpeningInventory(
     }, select: { id: true } });
     if (replay) return false;
     const inventoryMap = await fetchInventoryMap(input.storeId, productIds, tx);
+    const finals = new Map<string, StockValue>();
     for (const row of applied) {
       const value = receiveStockValue(inventoryMap.get(row.productId), row.qtyBase,
         row.lineValuePence > 0 ? row.lineValuePence : null);
-      await upsertInventoryBalance(tx, input.storeId, row.productId, value.qtyOnHandBase, value.avgCostBasePence, value);
       inventoryMap.set(row.productId, value);
+      finals.set(row.productId, value);
     }
+    await batchUpsertInventoryBalances(tx, input.storeId, [...finals.entries()].map(([productId, value]) => ({
+      productId,
+      qtyOnHandBase: value.qtyOnHandBase,
+      avgCostBasePence: value.avgCostBasePence,
+      knownValuePence: value.knownValuePence,
+      unvaluedQtyBase: value.unvaluedQtyBase,
+    })));
 
     if (applied.length > 0) {
       await tx.stockMovement.createMany({
@@ -191,7 +199,9 @@ export async function recordOpeningInventory(
     return true;
   };
 
-  const appliedOnce = db ? await applyOpening(client) : await prisma.$transaction(applyOpening);
+  const appliedOnce = db
+    ? await applyOpening(client)
+    : await prisma.$transaction(applyOpening, { maxWait: 10_000, timeout: 20_000 });
   if (!appliedOnce) return { valuedUnits: 0, unvaluedUnits: 0, valuedPence: 0,
     costReviewProductIds: [], journalPosted: false, referenceId: input.referenceId };
 

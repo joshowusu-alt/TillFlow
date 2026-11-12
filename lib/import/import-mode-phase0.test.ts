@@ -47,6 +47,7 @@ vi.mock('@/lib/services/shared/inventory-utils', () => ({
   fetchInventoryMap: vi.fn().mockResolvedValue(new Map()),
   incrementInventoryBalance: vi.fn().mockResolvedValue(undefined),
   upsertInventoryBalance: vi.fn().mockResolvedValue(undefined),
+  batchUpsertInventoryBalances: vi.fn().mockResolvedValue(undefined),
   lockInventoryValues: vi.fn().mockResolvedValue(undefined),
 }));
 

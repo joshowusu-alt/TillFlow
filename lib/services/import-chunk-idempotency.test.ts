@@ -25,13 +25,17 @@ describe('import-stock source: durable import-chunk idempotency', () => {
   // Purchase atomicity is exercised with real rollback and replay cases in
   // inventory-valuation.pg.test.ts and purchases-concurrency.test.ts.
 
-  it('opening equity inventory and MoneyIdempotency share one transaction', () => {
+  it('opening equity inventory and MoneyIdempotency share one transaction per chunk', () => {
     const onceStart = importStock.indexOf('async function recordOpeningInventoryOnce');
     expect(onceStart).toBeGreaterThan(-1);
     const onceFn = importStock.slice(onceStart, importStock.indexOf('export async function importStockAction'));
     expect(onceFn).toContain('return await prisma.$transaction(async (tx)');
     expect(onceFn).toContain('recordOpeningInventory(');
     expect(onceFn).toContain('insertMoneyIdempotency(tx as any');
+    expect(onceFn).toContain('chunkIndex: input.chunkIndex');
+    expect(onceFn).toContain('equity-${input.chunkIndex}');
+    expect(onceFn).toContain('IMPORT_INTERACTIVE_TX');
+    expect(importStock).toContain('OPENING_EQUITY_CHUNK_SIZE');
   });
 
   it('productImport.create (run id) occurs before paid createPurchase', () => {

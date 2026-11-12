@@ -10,6 +10,13 @@ import { createPurchase } from '@/lib/services/purchases';
 import type { SupplierProductLinkSummary, SupplierProductLinkSkippedProduct } from '@/lib/services/purchases';
 import { recordOpeningInventory, type RecordOpeningInventoryResult } from '@/lib/services/opening-inventory';
 import { buildImportChunkKey, buildImportChunkPayloadHash } from '@/lib/import/import-chunk-identity';
+import { userFacingImportFailure } from '@/lib/import/import-failure';
+import {
+  IMPORT_INTERACTIVE_TX,
+  OPENING_EQUITY_CHUNK_SIZE,
+  PRODUCT_CREATE_CHUNK_SIZE,
+  PRODUCT_UPDATE_CHUNK_SIZE,
+} from '@/lib/import/import-write-budget';
 import {
   findMoneyIdempotency,
   insertMoneyIdempotency,
@@ -141,6 +148,13 @@ function emptyImportSupplierLinkSummary(): ImportSupplierLinkSummary {
   };
 }
 
+async function runInChunks<T>(items: T[], size: number, worker: (item: T) => Promise<void>) {
+  const width = Math.max(1, size);
+  for (let index = 0; index < items.length; index += width) {
+    await Promise.all(items.slice(index, index + width).map((item) => worker(item)));
+  }
+}
+
 function paymentAccountToMethod(account: PurchasePaymentAccount | undefined): PaymentMethod {
   if (account === 'BANK') return 'TRANSFER';
   if (account === 'MOBILE_MONEY') return 'MOBILE_MONEY';
@@ -158,6 +172,7 @@ async function recordOpeningInventoryOnce(input: {
   userId?: string | null;
   importRunId: string;
   importMode: ImportMode;
+  chunkIndex: number;
   lines: Array<{ productId: string; unitId: string; qtyInUnit: number; unitCostBasePence?: number | null }>;
   description?: string;
 }): Promise<RecordOpeningInventoryResult> {
@@ -174,7 +189,7 @@ async function recordOpeningInventoryOnce(input: {
     mode: input.importMode,
     operation: 'opening-equity',
     supplierKey: 'equity',
-    chunkIndex: 0,
+    chunkIndex: input.chunkIndex,
   });
   const payloadHash = buildImportChunkPayloadHash({
     businessId: input.businessId,
@@ -183,7 +198,7 @@ async function recordOpeningInventoryOnce(input: {
     mode: input.importMode,
     operation: 'opening-equity',
     supplierKey: 'equity',
-    chunkIndex: 0,
+    chunkIndex: input.chunkIndex,
     lines: hashLines,
     amountPence,
     method: null,
@@ -202,7 +217,7 @@ async function recordOpeningInventoryOnce(input: {
           businessId: input.businessId,
           storeId: input.storeId,
           userId: input.userId,
-          referenceId: `${input.importRunId}-equity`,
+          referenceId: `${input.importRunId}-equity-${input.chunkIndex}`,
           description: input.description,
           lines: input.lines,
         },
@@ -218,16 +233,16 @@ async function recordOpeningInventoryOnce(input: {
       });
 
       return openingResult;
-    });
-  } catch (err) {
-    if (isPrismaUniqueConstraintOn(err, ['businessId', 'key'])) {
+    }, IMPORT_INTERACTIVE_TX);
+  } catch (error) {
+    if (isPrismaUniqueConstraintOn(error, ['businessId', 'key'])) {
       const winner = await findMoneyIdempotency(prisma as any, input.businessId, idempotencyKey);
       if (winner) {
         replayOrConflict(winner, { payloadHash, commandKind: 'IMPORT_CHUNK' });
         return parseIdempotencyResult<RecordOpeningInventoryResult>(winner.resultJson);
       }
     }
-    throw err;
+    throw error;
   }
 }
 
@@ -505,6 +520,61 @@ async function _runImport(
       supplierIdByName.set(key, supplierId);
       return supplierId;
     };
+    let importRecord: { id: string } | null = null;
+    let updatedCount = 0;
+    let openingChunksPosted = 0;
+    let importSettled = false;
+    const allCreatedItems: { row: ConfirmedImportRow; productId: string }[] = [...rowsForReplay];
+    const abandonImport = async (message: string, status: 'FAILED' | 'PARTIAL') => {
+      if (importRecord) {
+        await prisma.productImport.update({
+          where: { id: importRecord.id },
+          data: {
+            status,
+            rowsImported: allCreatedItems.length,
+            rowsUpdated: updatedCount,
+            rowsSkipped: skippedNames.length,
+            rowsErrors: Math.max(1, meta?.rowsErrors ?? 0),
+            rowsWarnings: meta?.rowsWarnings ?? 0,
+            summaryJson: JSON.stringify({
+              error: message,
+              openingChunksPosted,
+              created: allCreatedItems.length,
+              updated: updatedCount,
+            }),
+            errorReportJson: JSON.stringify({
+              failureMessage: message,
+              previewErrors: meta?.errorReportJson ?? null,
+            }),
+          },
+        }).catch((updateError) => console.error('[importStock] could not mark import', updateError));
+      }
+      return err(message);
+    };
+
+    try {
+    // ProductImport is opened before product writes so a later failure can be
+    // marked FAILED/PARTIAL instead of staying PROCESSING. importRunId stays
+    // the client key when the form sent one, so a retry replays the same chunks.
+    importRecord = await prisma.productImport.create({
+      data: {
+        businessId,
+        uploadedByUserId: user.id,
+        fileName: meta?.fileName ?? null,
+        status: 'PROCESSING',
+        rowsParsed: meta?.rowsParsed ?? incomingRows.length,
+        rowsImported: 0,
+        rowsUpdated: 0,
+        rowsSkipped: 0,
+        rowsErrors: 0,
+        rowsWarnings: meta?.rowsWarnings ?? 0,
+        summaryJson: null,
+        errorReportJson: meta?.errorReportJson ?? null,
+      },
+      select: { id: true },
+    });
+    const importRunId = normalizedClientImportKey || importRecord.id;
+
     let categoriesCreated = 0;
 
     const allCategoryNames = [
@@ -537,8 +607,7 @@ async function _runImport(
         groupIds.set(pathKey(row), group.id);
       }
     }
-    let updatedCount = 0;
-    for (const { row, productId } of rowsForUpdate) {
+    await runInChunks(rowsForUpdate, PRODUCT_UPDATE_CHUNK_SIZE, async ({ row, productId }) => {
       const categoryName = row.category
         ? categoryForRow(row)
         : '';
@@ -572,7 +641,7 @@ async function _runImport(
         where: { id: productId, businessId, groupId: null, divisionId: null }, data: { categoryId },
       });
       updatedCount++;
-    }
+    });
 
     // Helper shared by Step 2 and the result summary
     const rowToBaseCost = (row: ConfirmedImportRow): number => {
@@ -588,17 +657,13 @@ async function _runImport(
     };
 
 
-    // -- Step 2: Create products in 2 DB calls (createManyAndReturn + productUnit createMany) --
-    // Previous approach: 25-concurrent batches × ceil(N/25) sequential iterations.
-    // At 30ms Neon RTT that's still ceil(614/25)=25 iterations × ~1.5s = ~37s just for
-    // products — and we still need purchase invoice calls after.
-    // New approach: 1 createManyAndReturn for all products (1 RTT), then 1 productUnit
-    // createMany for all unit records (1 RTT). Total: 2 RTTs regardless of row count.
-    const allCreatedItems: { row: ConfirmedImportRow; productId: string }[] = [...rowsForReplay];
-
+    // Products and their units are created a few hundred rows at a time, each in its
+    // own transaction, so a large file is not one 5-second interactive transaction.
     if (rowsToCreate.length > 0) {
+      for (let offset = 0; offset < rowsToCreate.length; offset += PRODUCT_CREATE_CHUNK_SIZE) {
+      const slice = rowsToCreate.slice(offset, offset + PRODUCT_CREATE_CHUNK_SIZE);
       const productData = await Promise.all(
-        rowsToCreate.map(async (row) => {
+        slice.map(async (row) => {
           const categoryName = row.category
             ? categoryForRow(row)
             : '';
@@ -639,7 +704,7 @@ async function _runImport(
           productId: string; unitId: string; isBaseUnit: boolean; conversionToBase: number;
         }[] = [];
 
-        for (const row of rowsToCreate) {
+        for (const row of slice) {
           const explicitId = normalizedClientImportKey ? productIdForRow(row) : null;
           const productId = (explicitId ? createdById.get(explicitId) : undefined)
             ?? createdByIdentity.get(`${importNameKey(row.name)}\n${row.barcode.trim()}\n${row.sku.trim().toLowerCase()}`);
@@ -662,7 +727,8 @@ async function _runImport(
         if (productUnitData.length > 0) {
           await tx.productUnit.createMany({ data: productUnitData });
         }
-      });
+      }, IMPORT_INTERACTIVE_TX);
+      }
     }
 
     const createdItems = allCreatedItems;
@@ -769,38 +835,17 @@ async function _runImport(
     if (importMode === 'OPENING_STOCK' && stockItems.length > 0) {
       for (const item of stockItems.filter((i) => i.row.openingFunding === 'SUPPLIER_CREDIT')) {
         if (!(item.row.supplierName ?? '').trim()) {
-          return err(`Opening stock on supplier credit requires a named supplier (${item.row.name}).`);
+          return abandonImport(`Opening stock on supplier credit requires a named supplier (${item.row.name}).`, 'FAILED');
         }
       }
     }
     if (importMode === 'PURCHASES' && stockItems.length > 0) {
       for (const item of stockItems.filter((c) => (c.row.paymentStatus ?? 'UNPAID') !== 'PAID')) {
         if (!(item.row.supplierName ?? '').trim()) {
-          return err(`Unpaid purchases require a named supplier (${item.row.name}).`);
+          return abandonImport(`Unpaid purchases require a named supplier (${item.row.name}).`, 'FAILED');
         }
       }
     }
-
-    // ProductImport must exist before chunk writes so importRunId is durable.
-    // Prefer a stable clientImportKey (same submit retry); otherwise the row id.
-    const importRecord = await prisma.productImport.create({
-      data: {
-        businessId,
-        uploadedByUserId: user.id,
-        fileName: meta?.fileName ?? null,
-        status: 'PROCESSING',
-        rowsParsed: meta?.rowsParsed ?? incomingRows.length,
-        rowsImported: 0,
-        rowsUpdated: 0,
-        rowsSkipped: 0,
-        rowsErrors: 0,
-        rowsWarnings: meta?.rowsWarnings ?? 0,
-        summaryJson: null,
-        errorReportJson: meta?.errorReportJson ?? null,
-      },
-      select: { id: true },
-    });
-    const importRunId = normalizedClientImportKey || importRecord.id;
 
     if (importMode === 'CATALOGUE') {
       accountingEffectSummary.push('Catalogue only — no stock movements, journals, cash or supplier payables.');
@@ -811,37 +856,48 @@ async function _runImport(
       const creditItems = stockItems.filter((i) => i.row.openingFunding === 'SUPPLIER_CREDIT');
 
       if (equityItems.length > 0) {
-        const openingResult = await recordOpeningInventoryOnce({
-          businessId,
-          storeId: store.id,
-          userId: user.id,
-          importRunId,
-          importMode,
-          description: 'Opening stock import — Opening Balance Equity',
-          lines: equityItems.map(({ row, productId }) => {
-            const isPack =
-              !!row.packUnitId &&
-              row.qtyInUnitId === row.packUnitId &&
-              row.packSize > 1;
-            return {
-              productId,
-              unitId: row.baseUnitId,
-              qtyInUnit: isPack ? row.quantity * row.packSize : row.quantity,
-              unitCostBasePence: row.costPricePence > 0 ? row.costPricePence : 0,
-            };
-          }),
+        const equityLines = equityItems.map(({ row, productId }) => {
+          const isPack =
+            !!row.packUnitId &&
+            row.qtyInUnitId === row.packUnitId &&
+            row.packSize > 1;
+          return {
+            productId,
+            unitId: row.baseUnitId,
+            qtyInUnit: isPack ? row.quantity * row.packSize : row.quantity,
+            unitCostBasePence: row.costPricePence > 0 ? row.costPricePence : 0,
+          };
         });
-        openingEquityValuePence += openingResult.valuedPence;
-        openingStockUnits += openingResult.valuedUnits + openingResult.unvaluedUnits;
-        missingCostCount += openingResult.costReviewProductIds.length;
-        costReviewProductIds.push(...openingResult.costReviewProductIds);
-        if (openingResult.journalPosted) journalsPosted += 1;
+        let unvaluedUnits = 0;
+        for (let chunkIndex = 0; chunkIndex * OPENING_EQUITY_CHUNK_SIZE < equityLines.length; chunkIndex++) {
+          const lines = equityLines.slice(
+            chunkIndex * OPENING_EQUITY_CHUNK_SIZE,
+            (chunkIndex + 1) * OPENING_EQUITY_CHUNK_SIZE,
+          );
+          const openingResult = await recordOpeningInventoryOnce({
+            businessId,
+            storeId: store.id,
+            userId: user.id,
+            importRunId,
+            importMode,
+            chunkIndex,
+            description: 'Opening stock import — Opening Balance Equity',
+            lines,
+          });
+          openingChunksPosted += 1;
+          openingEquityValuePence += openingResult.valuedPence;
+          openingStockUnits += openingResult.valuedUnits + openingResult.unvaluedUnits;
+          unvaluedUnits += openingResult.unvaluedUnits;
+          missingCostCount += openingResult.costReviewProductIds.length;
+          costReviewProductIds.push(...openingResult.costReviewProductIds);
+          if (openingResult.journalPosted) journalsPosted += 1;
+        }
         accountingEffectSummary.push(
-          `Opening stock (owner-funded / equity): Dr Inventory / Cr Opening Balance Equity ${openingResult.valuedPence}p.`
+          `Opening stock (owner-funded / equity): Dr Inventory / Cr Opening Balance Equity ${openingEquityValuePence}p.`
         );
-        if (openingResult.unvaluedUnits > 0) {
+        if (unvaluedUnits > 0) {
           accountingEffectSummary.push(
-            `${openingResult.unvaluedUnits} unit(s) recorded without cost — stock value and profit remain incomplete.`
+            `${unvaluedUnits} unit(s) recorded without cost — stock value and profit remain incomplete.`
           );
         }
         if (meta.legacyPaymentStatusColumn) {
@@ -855,7 +911,7 @@ async function _runImport(
         const creditGroups = await groupLinesBySupplier(creditItems);
         for (const group of creditGroups) {
           if (!group.supplierId) {
-            return err('Opening stock on supplier credit requires a named supplier.');
+            return abandonImport('Opening stock on supplier credit requires a named supplier.', journalsPosted > 0 ? 'PARTIAL' : 'FAILED');
           }
           for (let i = 0; i < group.lines.length; i += INVOICE_CHUNK) {
             const chunk = group.lines.slice(i, i + INVOICE_CHUNK);
@@ -948,7 +1004,7 @@ async function _runImport(
 
       for (const group of unpaidLineGroups) {
         if (!group.supplierId) {
-          return err('Unpaid purchases require a named supplier.');
+          return abandonImport('Unpaid purchases require a named supplier.', journalsPosted > 0 ? 'PARTIAL' : 'FAILED');
         }
         for (let i = 0; i < group.lines.length; i += INVOICE_CHUNK) {
           const chunk = group.lines.slice(i, i + INVOICE_CHUNK);
@@ -995,7 +1051,10 @@ async function _runImport(
       }
     }
 
-    if (invoiceErrors.length > 0) {
+    const chunkFailure = invoiceErrors.length > 0
+      ? userFacingImportFailure(new Error(invoiceErrors.join('\n')))
+      : null;
+    if (chunkFailure) {
       console.error('[importStock] invoice chunk errors (products ARE created):', invoiceErrors);
     }
     supplierLinkSummary.supplierSummaries = [...supplierSummaryMap.values()].sort((a, b) =>
@@ -1029,19 +1088,23 @@ async function _runImport(
       accountingEffectSummary,
     };
 
+    if (!importRecord) throw new Error('Import record was not opened.');
     await prisma.productImport.update({
       where: { id: importRecord.id },
       data: {
-        status: invoiceErrors.length > 0 ? 'PARTIAL' : 'COMPLETED',
+        status: chunkFailure ? 'PARTIAL' : 'COMPLETED',
         rowsImported: createdItems.length,
         rowsUpdated: updatedCount,
         rowsSkipped: skippedNames.length,
-        rowsErrors: meta?.rowsErrors ?? 0,
+        rowsErrors: chunkFailure ? Math.max(1, meta?.rowsErrors ?? 0) : (meta?.rowsErrors ?? 0),
         rowsWarnings: meta?.rowsWarnings ?? 0,
-        summaryJson: JSON.stringify(summary),
-        errorReportJson: meta?.errorReportJson ?? null,
+        summaryJson: JSON.stringify(chunkFailure ? { ...summary, error: chunkFailure } : summary),
+        errorReportJson: chunkFailure
+          ? JSON.stringify({ failureMessage: chunkFailure, previewErrors: meta?.errorReportJson ?? null })
+          : (meta?.errorReportJson ?? null),
       },
     });
+    importSettled = true;
 
     audit({
       businessId,
@@ -1061,6 +1124,8 @@ async function _runImport(
     revalidateTag('scale-cockpit');
     const { revalidateImproveRecordsHome } = await import('@/lib/improve-records-revalidate');
     revalidateImproveRecordsHome();
+
+    if (chunkFailure) return err(chunkFailure);
 
     return ok<ImportStockResult>({
       importId: importRecord.id,
@@ -1089,5 +1154,13 @@ async function _runImport(
       accountingEffectSummary,
       supplierLinkSummary,
     });
+    } catch (error) {
+      console.error('[importStock] failed:', error);
+      if (importSettled) throw error;
+      return abandonImport(
+        userFacingImportFailure(error),
+        openingChunksPosted > 0 ? 'PARTIAL' : 'FAILED',
+      );
+    }
   });
 }
