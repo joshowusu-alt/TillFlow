@@ -11,6 +11,7 @@ import {
 } from '@/lib/reliability/manual-import-gate';
 import { parseStockFileDetailed } from '@/lib/import/parse-stock-file';
 import { downloadTemplateForMode } from '@/lib/import/stock-template';
+import { getImportCatalogContext } from '@/app/actions/import-catalog';
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
@@ -154,6 +155,38 @@ describe('REL-IMP-P104-01 CSV parse and import preview', () => {
   });
 });
 
+
+describe('same title with different barcodes', () => {
+  it('counts the matching barcode as an update and the other barcodes as new products', async () => {
+    vi.mocked(getImportCatalogContext).mockResolvedValueOnce({
+      success: true,
+      data: {
+        products: [{ id: 'canvas', name: 'PAINTING CANVAS', sku: null, barcode: '6615116820189', barcodes: [] }],
+        productNames: ['PAINTING CANVAS'],
+        barcodes: ['6615116820189'],
+        skus: [],
+        categories: [],
+        suppliers: [],
+      },
+    });
+    renderImporter();
+    fireEvent.click(screen.getByTestId('import-mode-OPENING_STOCK'));
+    const contents = [
+      'name,selling_price,base_unit,barcode',
+      'PAINTING CANVAS,24,Piece,6615116820189',
+      'PAINTING CANVAS,40,Piece,6615116820196',
+      'PAINTING CANVAS,48,Piece,6615116820257',
+    ].join('\n');
+    const file = new File([contents], 'opening.csv', { type: 'text/csv' });
+    Object.defineProperty(file, 'text', { value: async () => contents });
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('import-stock-file-input'), { target: { files: [file] } });
+    });
+    expect(await screen.findByText('1 already in catalogue · 1 will update · 2 will create · 0 will skip')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Confirm Import \(3 products\)/i })).toBeEnabled();
+    expect(screen.queryByText(/Multiple rows update the same product/)).not.toBeInTheDocument();
+  });
+});
 
 describe('import row explanations', () => {
   it('renders invalid quantity-unit reasons in a native disclosure rather than a title-only tooltip', async () => {

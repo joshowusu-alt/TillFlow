@@ -909,6 +909,7 @@ export default function ImportStockClient({
     existing: previewRows.filter((r) => r.duplicateKind !== 'none').length,
     skip: previewRows.filter((r) => r.duplicateAction === 'skip').length,
     update: previewRows.filter((r) => r.duplicateAction === 'update').length,
+    create: previewRows.filter((r) => r.duplicateAction === 'create').length,
   };
 
   return (
@@ -1079,8 +1080,9 @@ export default function ImportStockClient({
           </button>
           {duplicateSummary.existing > 0 ? (
             <span className="text-xs text-black/55">
-              {duplicateSummary.existing} already in catalogue · {duplicateSummary.update} will update ·{' '}
-              {duplicateSummary.skip} will skip
+              {`${duplicateSummary.existing} already in catalogue · ${duplicateSummary.update} will update${
+                duplicateSummary.create > 0 ? ` · ${duplicateSummary.create} will create` : ''
+              } · ${duplicateSummary.skip} will skip`}
             </span>
           ) : null}
         </div>
