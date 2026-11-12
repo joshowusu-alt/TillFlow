@@ -76,4 +76,77 @@ describe('consistent product matching', () => {
     const rows = enrichRowsWithCatalog(parsed.rows, { products, productNames: ['Book'], skus: ['A','B'], barcodes: ['001','002'] });
     expect(rows[0]).toMatchObject({ duplicateAction: 'update', errors: [] });
   });
+
+  it('treats a barcode or SKU that is not in the catalogue as a new product', () => {
+    const products = [
+      { id: 'a', name: 'PAINTING CANVAS', sku: 'OLD', barcode: '6615116820189', barcodes: [{ code: 'alias' }] },
+      { id: 'b', name: 'Notebook', sku: null, barcode: null, barcodes: [] },
+    ];
+    expect(matchImportProduct({ name: 'PAINTING CANVAS', sku: '', barcode: '6615116820189' }, products)).toBe('a');
+    expect(matchImportProduct({ name: 'Renamed', sku: '', barcode: 'alias' }, products)).toBe('a');
+    expect(matchImportProduct({ name: 'PAINTING CANVAS', sku: '', barcode: '6615116820196' }, products)).toBeNull();
+    expect(matchImportProduct({ name: 'PAINTING CANVAS', sku: '', barcode: '6615116820257' }, products)).toBeNull();
+    expect(matchImportProduct({ name: 'PAINTING CANVAS', sku: 'NEW', barcode: '' }, products)).toBeNull();
+    expect(matchImportProduct({ name: 'PAINTING CANVAS', sku: '', barcode: '' }, products)).toBe('a');
+    expect(matchImportProduct({ name: 'Notebook', sku: '', barcode: '' }, products)).toBe('b');
+    expect(() => matchImportProduct({ name: 'PAINTING CANVAS', sku: 'OLD', barcode: '6615116820196' }, products)).toThrow('different products');
+  });
+
+  it('keeps a clear error when a name-only row matches several products', () => {
+    const products = [
+      { id: 'a', name: 'PAINTING CANVAS', sku: '', barcode: '6615116820189' },
+      { id: 'b', name: 'PAINTING CANVAS', sku: '', barcode: '6615116820196' },
+    ];
+    expect(() => matchImportProduct({ name: 'PAINTING CANVAS', sku: '', barcode: '' }, products)).toThrow('Multiple products share the name PAINTING CANVAS');
+    expect(matchImportProduct({ name: 'PAINTING CANVAS', sku: '', barcode: '6615116820196' }, products)).toBe('b');
+  });
+
+  it('imports same titles with different barcodes and still skips a repeated name-only row', async () => {
+    const file = csv([
+      'name,selling_price,base_unit,barcode,sku',
+      'PAINTING CANVAS,24,Piece,6615116820189,',
+      'PAINTING CANVAS,40,Piece,6615116820196,',
+      'PAINTING CANVAS,48,Piece,6615116820257,',
+      'PAINTING CANVAS,30,Piece,,NEW-SKU',
+      'Zip Binder,10,Piece,,',
+      'Zip Binder,10,Piece,,',
+      'Widget,10,Piece,,',
+      'Widget,12,Piece,999,',
+    ].join('\n'));
+    const parsed = await parseStockFileDetailed(file);
+    const rows = enrichRowsWithCatalog(parsed.rows, {
+      products: [{ id: 'canvas', name: 'PAINTING CANVAS', sku: 'OLD', barcode: '6615116820189', barcodes: [] }],
+      productNames: ['PAINTING CANVAS'],
+      barcodes: ['6615116820189'],
+      skus: ['OLD'],
+    });
+    expect(rows.map((row) => ({
+      barcode: row.barcode,
+      sku: row.sku,
+      duplicateAction: row.duplicateAction,
+      duplicateKind: row.duplicateKind,
+    }))).toEqual([
+      { barcode: '6615116820189', sku: '', duplicateAction: 'update', duplicateKind: 'barcode' },
+      { barcode: '6615116820196', sku: '', duplicateAction: 'create', duplicateKind: 'none' },
+      { barcode: '6615116820257', sku: '', duplicateAction: 'create', duplicateKind: 'none' },
+      { barcode: '', sku: 'NEW-SKU', duplicateAction: 'create', duplicateKind: 'none' },
+      { barcode: '', sku: '', duplicateAction: 'create', duplicateKind: 'none' },
+      { barcode: '', sku: '', duplicateAction: 'skip', duplicateKind: 'name_exact' },
+      { barcode: '', sku: '', duplicateAction: 'create', duplicateKind: 'none' },
+      { barcode: '999', sku: '', duplicateAction: 'create', duplicateKind: 'none' },
+    ]);
+    expect(rows[1].errors).toEqual([]);
+    expect(rows[1].warnings.join(' ')).not.toMatch(/appears again|already exists|similar/);
+    expect(rows[2].warnings.join(' ')).not.toMatch(/appears again|already exists/);
+    expect(rows[5].warnings.join(' ')).toContain('appears again');
+    expect(rows[6].errors.join(' ')).toContain('Multiple products share the name Widget');
+    expect(rows[7].errors).toEqual([]);
+    const actions = {
+      existing: rows.filter((row) => row.duplicateKind !== 'none').length,
+      update: rows.filter((row) => row.duplicateAction === 'update').length,
+      create: rows.filter((row) => row.duplicateAction === 'create').length,
+      skip: rows.filter((row) => row.duplicateAction === 'skip').length,
+    };
+    expect(actions).toEqual({ existing: 2, update: 1, create: 6, skip: 1 });
+  });
 });

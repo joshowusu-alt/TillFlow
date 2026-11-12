@@ -299,7 +299,7 @@ async function _runImport(
     const importMode = meta.importMode;
     const normalizedClientImportKey = meta.clientImportKey?.trim() || '';
     if ((importMode === 'PURCHASES' || importMode === 'OPENING_STOCK') && !normalizedClientImportKey) return err('This import form is out of date. Reload the file and try again so paid chunks can replay safely.');
-    const productIdForRow = (row: ConfirmedImportRow) => 'imp_' + createHash('sha256').update(JSON.stringify([authContext.businessId, normalizedClientImportKey, row.name.trim().toLowerCase()])).digest('hex').slice(0, 40);
+    const importNameKey = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
     const sourceDocuments = importMode==='PURCHASES' ? decodePurchaseDocuments(meta.purchaseDocumentsJson??'') : [];
     if(importMode==='PURCHASES')validatePurchaseDocuments(sourceDocuments);
 
@@ -396,6 +396,24 @@ async function _runImport(
     const submittedBarcodes = new Set<string>();
     const submittedSkus = new Set<string>();
     const seenNewNames = new Set<string>();
+    const seenNewIdentifiedNames = new Set<string>();
+    const identitiesByName = new Map<string, Set<string>>();
+    for (const row of resolvedRows) {
+      if (row.duplicateAction === 'skip') continue;
+      const key = importNameKey(row.name);
+      const identities = identitiesByName.get(key) ?? new Set<string>();
+      identities.add(`${row.barcode.trim()}\n${row.sku.trim().toLowerCase()}`);
+      identitiesByName.set(key, identities);
+    }
+    const namesWithDistinctIdentifiers = new Set(
+      [...identitiesByName.entries()].filter(([, identities]) => identities.size > 1).map(([key]) => key),
+    );
+    const productIdForRow = (row: ConfirmedImportRow) => {
+      // Unique titles keep the name-only id so a retry of an earlier import still replays.
+      const parts: string[] = [authContext.businessId, normalizedClientImportKey, row.name.trim().toLowerCase()];
+      if (namesWithDistinctIdentifiers.has(importNameKey(row.name))) parts.push(row.barcode.trim(), row.sku.trim().toLowerCase());
+      return 'imp_' + createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 40);
+    };
     for (const row of resolvedRows) {
       if (row.duplicateAction === 'skip') { skippedNames.push(row.name); continue; }
       if (row.barcode && submittedBarcodes.has(row.barcode)) throw new Error(`Barcode is duplicated in this file: ${row.barcode}.`);
@@ -419,9 +437,18 @@ async function _runImport(
         rowsForUpdate.push({ row, productId: existingId });
       } else {
         if (row.duplicateAction === 'update') throw new Error(`${row.name} no longer matches an existing product. Reload the file.`);
-        const key = row.name.trim().toLowerCase().replace(/\s+/g, ' ');
-        if (seenNewNames.has(key)) throw new Error(`Duplicate new product name: ${row.name}.`);
-        seenNewNames.add(key);
+        const key = importNameKey(row.name);
+        const identified = Boolean(row.barcode.trim() || row.sku.trim());
+        if (identified) {
+          if (seenNewNames.has(key)) throw new Error(`Multiple products share the name ${row.name}. Supply the exact barcode or SKU.`);
+          seenNewIdentifiedNames.add(key);
+        } else if (seenNewNames.has(key)) {
+          throw new Error(`Duplicate new product name: ${row.name}.`);
+        } else if (seenNewIdentifiedNames.has(key)) {
+          throw new Error(`Multiple products share the name ${row.name}. Supply the exact barcode or SKU.`);
+        } else {
+          seenNewNames.add(key);
+        }
         rowsForCreate.push(row);
       }
     }
@@ -599,10 +626,13 @@ async function _runImport(
       );
 
       await prisma.$transaction(async tx => {
-        const createdProducts = await tx.product.createManyAndReturn({ data: productData, select: { id: true, name: true } });
+        const createdProducts = await tx.product.createManyAndReturn({ data: productData, select: { id: true, name: true, barcode: true, sku: true } });
 
-        // Build a name→id map to pair returned IDs back to the input rows
-        const createdNameToId = new Map(createdProducts.map((p) => [p.name.toLowerCase(), p.id]));
+        const createdById = new Map(createdProducts.map((p) => [p.id, p.id]));
+        const createdByIdentity = new Map(createdProducts.map((p) => [
+          `${importNameKey(p.name)}\n${p.barcode ?? ''}\n${(p.sku ?? '').trim().toLowerCase()}`,
+          p.id,
+        ]));
 
         // Build all productUnit records — 1 createMany INSERT for the entire set
         const productUnitData: {
@@ -610,7 +640,9 @@ async function _runImport(
         }[] = [];
 
         for (const row of rowsToCreate) {
-          const productId = createdNameToId.get(row.name.toLowerCase());
+          const explicitId = normalizedClientImportKey ? productIdForRow(row) : null;
+          const productId = (explicitId ? createdById.get(explicitId) : undefined)
+            ?? createdByIdentity.get(`${importNameKey(row.name)}\n${row.barcode.trim()}\n${row.sku.trim().toLowerCase()}`);
           if (!productId) {
             console.error(`[import-stock] no returned ID for "${row.name}" — skipping`);
             skippedNames.push(row.name);

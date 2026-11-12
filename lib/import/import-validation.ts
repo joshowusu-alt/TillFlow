@@ -143,35 +143,46 @@ export function validateImportRow(
   const seenNames = options?.seenNamesInFile ?? new Set<string>();
   const seenBarcodes = options?.seenBarcodesInFile ?? new Set<string>();
   const nameKey = normaliseName(row.name);
+  const barcode = row.barcode.trim();
+  const sku = row.sku.trim();
+  const hasIdentifier = Boolean(barcode || sku);
 
-  if (nameKey && seenNames.has(nameKey)) {
+  // Same title with a different barcode or SKU is a different product, so only a
+  // row with neither identifier is a repeated name.
+  if (!hasIdentifier && nameKey && seenNames.has(nameKey)) {
     duplicateKind = 'name_exact';
     defaultDuplicateAction = 'skip';
     warnings.push('This product name appears again in your file — only the first row will import.');
-  } else if (nameKey) {
-    seenNames.add(nameKey);
   }
+  if (nameKey) seenNames.add(nameKey);
 
-  if (row.barcode) {
-    if (seenBarcodes.has(row.barcode)) {
+  if (barcode) {
+    if (seenBarcodes.has(barcode)) {
       duplicateKind = 'barcode';
       defaultDuplicateAction = 'skip';
       errors.push('Barcode is duplicated in this file.');
     } else {
-      seenBarcodes.add(row.barcode);
+      seenBarcodes.add(barcode);
     }
   }
 
   if (catalog && row.name.trim()) {
-    if (row.barcode && catalog.barcodes.has(row.barcode)) {
+    const skuKey = sku.toLowerCase();
+    const barcodeInCatalogue = Boolean(barcode && catalog.barcodes.has(barcode));
+    const skuInCatalogue = Boolean(sku && catalog.skus.has(skuKey));
+    if (barcodeInCatalogue) {
       duplicateKind = 'barcode';
       defaultDuplicateAction = 'skip';
       warnings.push('Barcode already belongs to another product — choose Skip or Update.');
-    } else if (catalog.productNames.has(nameKey)) {
+    } else if (duplicateKind !== 'barcode' && !barcode && skuInCatalogue) {
+      duplicateKind = 'sku';
+      defaultDuplicateAction = 'update';
+      warnings.push('SKU already exists on another product.');
+    } else if (duplicateKind !== 'barcode' && !hasIdentifier && catalog.productNames.has(nameKey)) {
       duplicateKind = 'name_exact';
       defaultDuplicateAction = 'update';
       warnings.push('Product name already exists — choose Update to refresh prices/stock or Skip.');
-    } else {
+    } else if (duplicateKind !== 'barcode' && !hasIdentifier) {
       for (const existing of catalog.productNames) {
         if (nameSimilarity(row.name, existing) >= SIMILAR_NAME_THRESHOLD) {
           duplicateKind = 'name_similar';
@@ -182,7 +193,7 @@ export function validateImportRow(
       }
     }
 
-    if (row.sku && catalog.skus.has(row.sku.toLowerCase())) {
+    if (skuInCatalogue && barcode) {
       if (duplicateKind === 'none') duplicateKind = 'sku';
       warnings.push('SKU already exists on another product.');
     }

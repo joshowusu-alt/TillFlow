@@ -296,7 +296,7 @@ export function enrichRowsWithCatalog(
 
   const seen = { names: new Set<string>(), barcodes: new Set<string>() };
 
-  return rows.map((row) => {
+  const enriched = rows.map((row) => {
     const validation = validateImportRow(
       {
         rowNumber: row.rowNumber,
@@ -322,9 +322,6 @@ export function enrichRowsWithCatalog(
       { seenNamesInFile: seen.names, seenBarcodesInFile: seen.barcodes }
     );
 
-    if (row.name.trim()) seen.names.add(row.name.trim().toLowerCase());
-    if (row.barcode) seen.barcodes.add(row.barcode);
-
     let matchErrors: string[] = [];
     let matched = false;
     if (catalog.products) {
@@ -341,5 +338,17 @@ export function enrichRowsWithCatalog(
       errors: [...new Set([...row.errors, ...validation.errors, ...matchErrors, ...hierarchyErrors(row)])],
       warnings: [...new Set([...row.warnings, ...validation.warnings])],
     };
+  });
+
+  const nameKey = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
+  const identifiedNames = new Set(
+    enriched
+      .filter((row) => row.duplicateAction !== 'skip' && (row.barcode.trim() || row.sku.trim()))
+      .map((row) => nameKey(row.name)),
+  );
+  return enriched.map((row) => {
+    if (row.barcode.trim() || row.sku.trim() || row.duplicateAction !== 'create' || !identifiedNames.has(nameKey(row.name))) return row;
+    const message = `Multiple products share the name ${row.name}. Supply the exact barcode or SKU.`;
+    return row.errors.includes(message) ? row : { ...row, errors: [...row.errors, message] };
   });
 }

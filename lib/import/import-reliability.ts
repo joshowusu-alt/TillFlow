@@ -12,12 +12,18 @@ const nameKey = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' 
 export function matchImportProduct(
   row: { name: string; sku: string; barcode: string }, products: ImportMatchProduct[],
 ): string | null {
-  const barcodeMatches = row.barcode ? products.filter(p => p.barcode === row.barcode || p.barcodes?.some(b => b.code === row.barcode)) : [];
-  const skuMatches = row.sku ? products.filter(p => p.sku && nameKey(p.sku) === nameKey(row.sku)) : [];
+  const barcode = row.barcode.trim();
+  const sku = row.sku.trim();
+  const barcodeMatches = barcode ? products.filter(p => p.barcode === barcode || p.barcodes?.some(b => b.code === barcode)) : [];
+  const skuMatches = sku ? products.filter(p => p.sku && nameKey(p.sku) === nameKey(sku)) : [];
   if (barcodeMatches.length > 1 || skuMatches.length > 1) throw new Error(`Multiple products match the barcode/SKU for ${row.name}. Correct the identifiers before importing.`);
   if (barcodeMatches[0] && skuMatches[0] && barcodeMatches[0].id !== skuMatches[0].id) throw new Error(`Barcode and SKU match different products for ${row.name}.`);
-  const exact = barcodeMatches[0] ?? skuMatches[0];
-  if (exact) return exact.id;
+  // A barcode is the product. The same title with a different barcode is a different product.
+  if (barcode) {
+    if (!barcodeMatches[0] && skuMatches[0]) throw new Error(`Barcode and SKU match different products for ${row.name}.`);
+    return barcodeMatches[0]?.id ?? null;
+  }
+  if (sku) return skuMatches[0]?.id ?? null;
   const names = products.filter(p => nameKey(p.name) === nameKey(row.name));
   if (names.length > 1) throw new Error(`Multiple products share the name ${row.name}. Supply the exact barcode or SKU.`);
   return names[0]?.id ?? null;

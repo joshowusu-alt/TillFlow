@@ -1,8 +1,11 @@
+import { createHash } from 'crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   products: [] as any[], units: [] as any[],
   opening: vi.fn(), purchase: vi.fn(), classification: vi.fn(),
+  findMoneyIdempotency: vi.fn(),
+  insertMoneyIdempotency: vi.fn(),
   db: {
     product: { findMany: vi.fn(), findFirst: vi.fn(), createManyAndReturn: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     productUnit: { findMany: vi.fn(), findFirst: vi.fn(), createMany: vi.fn() },
@@ -33,7 +36,7 @@ vi.mock('@/lib/audit', () => ({ audit: vi.fn(async () => {}) }));
 vi.mock('@/lib/cache/pos-tags', () => ({ revalidatePosCatalog: vi.fn() }));
 vi.mock('@/lib/improve-records-revalidate', () => ({ revalidateImproveRecordsHome: vi.fn() }));
 vi.mock('@/lib/services/money-idempotency', () => ({
-  findMoneyIdempotency: vi.fn(async () => null), insertMoneyIdempotency: vi.fn(), isPrismaUniqueConstraintOn: vi.fn(() => false),
+  findMoneyIdempotency: mocks.findMoneyIdempotency, insertMoneyIdempotency: mocks.insertMoneyIdempotency, isPrismaUniqueConstraintOn: vi.fn(() => false),
   replayOrConflict: vi.fn(), parseIdempotencyResult: JSON.parse,
   hashCanonicalParts: (parts: unknown[]) => JSON.stringify(parts),
 }));
@@ -47,8 +50,12 @@ const row = (patch: Partial<ConfirmedImportRow> = {}): ConfirmedImportRow => ({
 });
 const meta = { importMode: 'CATALOGUE' as const, clientImportKey: 'run-1' };
 
+const legacyProductId = (name: string) => 'imp_' + createHash('sha256').update(JSON.stringify(['biz', 'run-1', name.trim().toLowerCase()])).digest('hex').slice(0, 40);
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.findMoneyIdempotency.mockImplementation(async () => null);
+  mocks.insertMoneyIdempotency.mockImplementation(async () => undefined);
   mocks.products = [{ id: 'book', name: 'Book', sku: '', barcode: null, barcodes: [] }];
   mocks.units = [{ productId: 'book', unitId: 'piece', isBaseUnit: true, conversionToBase: 1 }];
   mocks.db.product.findMany.mockImplementation(async () => mocks.products);
@@ -123,5 +130,75 @@ describe('import server reliability', () => {
     expect(second).toMatchObject({ success: true, data: { created: 1 } });
     expect(mocks.db.product.createManyAndReturn).toHaveBeenCalledTimes(1);
     expect(mocks.db.productUnit.createMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the name-only id when one barcoded title is unique', async () => {
+    mocks.products = []; mocks.units = [];
+    const input = row({ name: 'Unique Title', barcode: '111', duplicateAction: 'create' });
+    await importStockAction([input], meta);
+    await importStockAction([input], meta);
+    expect(mocks.db.product.createManyAndReturn).toHaveBeenCalledTimes(1);
+    expect(mocks.db.product.createManyAndReturn.mock.calls[0][0].data[0].id).toBe(legacyProductId('Unique Title'));
+  });
+
+  it('creates same-title products with different barcodes and posts each opening quantity once', async () => {
+    const stored = new Map<string, { resultJson: string }>();
+    mocks.findMoneyIdempotency.mockImplementation(async (_tx: unknown, _businessId: string, key: string) => stored.get(key) ?? null);
+    mocks.insertMoneyIdempotency.mockImplementation(async (_tx: unknown, record: { key: string; resultJson: string }) => {
+      stored.set(record.key, record);
+    });
+    mocks.products = [{ id: 'canvas', name: 'PAINTING CANVAS', sku: '', barcode: '6615116820189', barcodes: [], categoryId: null, divisionId: null, groupId: null }];
+    mocks.units = [{ productId: 'canvas', unitId: 'piece', isBaseUnit: true, conversionToBase: 1 }];
+    const input = [
+      row({ name: 'PAINTING CANVAS', barcode: '6615116820189', duplicateAction: 'update', quantity: 4, costPricePence: 1200, costPriceProvided: true }),
+      row({ name: 'PAINTING CANVAS', barcode: '6615116820196', duplicateAction: 'create', quantity: 2, costPricePence: 1350, costPriceProvided: true }),
+      row({ name: 'PAINTING CANVAS', barcode: '6615116820257', duplicateAction: 'create', quantity: 3, costPricePence: 2500, costPriceProvided: true }),
+    ];
+    const opening = { ...meta, importMode: 'OPENING_STOCK' as const };
+    const first = await importStockAction(input, opening);
+    expect(first).toMatchObject({ success: true, data: { created: 2, updated: 1, skipped: 0 } });
+    expect(mocks.db.product.update.mock.calls[0][0].where).toEqual({ id: 'canvas' });
+    const created = mocks.db.product.createManyAndReturn.mock.calls[0][0].data;
+    expect(created.map((product: { barcode: string }) => product.barcode).sort()).toEqual(['6615116820196', '6615116820257']);
+    expect(new Set(created.map((product: { id: string }) => product.id)).size).toBe(2);
+    expect(created.map((product: { id: string }) => product.id)).not.toContain(legacyProductId('PAINTING CANVAS'));
+    const lines = mocks.opening.mock.calls[0][0].lines as Array<{ productId: string; qtyInUnit: number }>;
+    expect(new Set(lines.map((line) => line.productId)).size).toBe(3);
+    expect(lines.find((line) => line.qtyInUnit === 4)?.productId).toBe('canvas');
+    expect(lines.filter((line) => line.productId !== 'canvas').map((line) => line.qtyInUnit).sort()).toEqual([2, 3]);
+
+    const second = await importStockAction(input, opening);
+    expect(second).toMatchObject({ success: true, data: { created: 2, updated: 1 } });
+    expect(mocks.db.product.createManyAndReturn).toHaveBeenCalledTimes(1);
+    expect(mocks.opening).toHaveBeenCalledTimes(1);
+  });
+
+  it('still rejects a repeated name with no barcode, and a name-only row mixed with a new barcode', async () => {
+    mocks.products = []; mocks.units = [];
+    const bare = await importStockAction([
+      row({ name: 'Notebook', duplicateAction: 'create' }),
+      row({ name: 'Notebook', duplicateAction: 'create' }),
+    ], meta);
+    expect(bare).toMatchObject({ success: false, error: 'Duplicate new product name: Notebook.' });
+
+    const mixed = await importStockAction([
+      row({ name: 'Canvas', barcode: '999', duplicateAction: 'create' }),
+      row({ name: 'Canvas', duplicateAction: 'create' }),
+    ], meta);
+    expect(mixed).toMatchObject({ success: false, error: 'Multiple products share the name Canvas. Supply the exact barcode or SKU.' });
+    expect(mocks.db.product.createManyAndReturn).not.toHaveBeenCalled();
+  });
+
+  it('updates a name-only row when exactly one product has that name, and creates a new SKU', async () => {
+    mocks.products = [{ id: 'canvas', name: 'PAINTING CANVAS', sku: 'OLD', barcode: '1', barcodes: [] }];
+    mocks.units = [{ productId: 'canvas', unitId: 'piece', isBaseUnit: true, conversionToBase: 1 }];
+    expect(await importStockAction([row({ name: 'PAINTING CANVAS', duplicateAction: 'update' })], meta)).toMatchObject({ success: true, data: { updated: 1, created: 0 } });
+    expect(mocks.db.product.update.mock.calls[0][0].where).toEqual({ id: 'canvas' });
+    mocks.db.product.update.mockClear();
+    expect(await importStockAction([row({ name: 'PAINTING CANVAS', sku: 'NEW', duplicateAction: 'create' })], meta)).toMatchObject({ success: true, data: { created: 1, updated: 0 } });
+    expect(mocks.db.product.update).not.toHaveBeenCalled();
+    mocks.products.push({ id: 'other', name: 'PAINTING CANVAS', sku: 'NEW', barcode: '2', barcodes: [] });
+    const ambiguous = await importStockAction([row({ name: 'PAINTING CANVAS', duplicateAction: 'update' })], meta);
+    expect(ambiguous).toMatchObject({ success: false, error: 'Multiple products share the name PAINTING CANVAS. Supply the exact barcode or SKU.' });
   });
 });
