@@ -18,6 +18,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol, DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { rowsForListPage } from '@/lib/pagination';
 import { formatCatalogueUnitLabel, getPrimaryPackagingUnit } from '@/lib/units';
 import { defaultBaseUnitId } from '@/lib/units/selectable-units';
 import { listSelectableUnits } from '@/lib/units/list-selectable-units';
@@ -151,38 +152,40 @@ export default async function ProductsPage(
     ...(searchParams?.group ? { groupId: searchParams.group } : {}),
   };
 
+  const loadProducts = (listPage: number) => prisma.product.findMany({
+    where: productWhere,
+    select: {
+      id: true,
+      active: true,
+      name: true,
+      imageUrl: true,
+      sellingPriceBasePence: true,
+      defaultCostBasePence: isManager,
+      publisher: true,
+      edition: true,
+      productUnits: {
+        select: {
+          isBaseUnit: true,
+          conversionToBase: true,
+          unit: { select: { name: true, pluralName: true } }
+        }
+      },
+      category: { select: { name: true, colour: true } },
+      division: { select: { name: true } },
+      group: { select: { name: true, division: { select: { name: true } } } },
+      preferredSupplier: { select: { id: true, name: true } }
+    },
+    orderBy: { name: 'asc' },
+    skip: (listPage - 1) * DEFAULT_PAGE_SIZE,
+    take: DEFAULT_PAGE_SIZE,
+  });
+
   // Run all data queries in parallel
-  const [totalProductCount, products, categories, units, suppliers, missingBarcodeCount, classificationCounts] = await measureServerOperation(
+  const [totalProductCount, firstProducts, categories, units, suppliers, missingBarcodeCount, classificationCounts] = await measureServerOperation(
     'page.products.load',
     () => Promise.all([
       prisma.product.count({ where: productWhere }),
-      prisma.product.findMany({
-        where: productWhere,
-        select: {
-          id: true,
-          active: true,
-          name: true,
-          imageUrl: true,
-          sellingPriceBasePence: true,
-          defaultCostBasePence: isManager,
-          publisher: true,
-          edition: true,
-          productUnits: {
-            select: {
-              isBaseUnit: true,
-              conversionToBase: true,
-              unit: { select: { name: true, pluralName: true } }
-            }
-          },
-          category: { select: { name: true, colour: true } },
-          division: { select: { name: true } },
-          group: { select: { name: true, division: { select: { name: true } } } },
-          preferredSupplier: { select: { id: true, name: true } }
-        },
-        orderBy: { name: 'asc' },
-        skip: (page - 1) * DEFAULT_PAGE_SIZE,
-        take: DEFAULT_PAGE_SIZE,
-      }),
+      loadProducts(page),
       prisma.category.findMany({
         where: { businessId: business.id },
         orderBy: { sortOrder: 'asc' },
@@ -223,7 +226,10 @@ export default async function ProductsPage(
     },
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
   );
-  const totalProductPages = Math.max(1, Math.ceil(totalProductCount / DEFAULT_PAGE_SIZE));
+  const listedProducts = await rowsForListPage(page, totalProductCount, DEFAULT_PAGE_SIZE, firstProducts, loadProducts);
+  const products = listedProducts.rows;
+  const currentPage = listedProducts.page;
+  const totalProductPages = listedProducts.totalPages;
   const preferredBaseUnitId = defaultBaseUnitId(units);
   const activeTab = searchParams?.tab || 'products';
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
@@ -526,9 +532,9 @@ export default async function ProductsPage(
             </>
           ) : null}
           <div className="card p-4 sm:p-5">
-            <ShowingRange page={page} pageSize={DEFAULT_PAGE_SIZE} total={totalProductCount} noun="products" />
+            <ShowingRange page={currentPage} pageSize={DEFAULT_PAGE_SIZE} total={totalProductCount} noun="products" />
             <CompactMobileList className="mt-3">
-              {products.length === 0 ? (
+              {products.length === 0 && totalProductCount === 0 ? (
                 <CompactMobileListItem>
                 <div className="rounded-2xl border border-dashed border-black/10 px-5 py-7">
                   {q ? (
@@ -665,7 +671,7 @@ export default async function ProductsPage(
                   </tr>
                 </thead>
                 <tbody>
-                  {products.length === 0 && (
+                  {products.length === 0 && totalProductCount === 0 && (
                     <tr>
                       <td colSpan={issueKey ? 8 : 7} className="px-3 py-10 text-center">
                         <div className="text-sm font-semibold text-ink">{q ? `No products matching "${q}".` : issueKey ? 'No matching products in this issue.' : 'No products yet.'}</div>
@@ -779,7 +785,7 @@ export default async function ProductsPage(
             </div>
             <Pagination
               documentNavigation
-              currentPage={page}
+              currentPage={currentPage}
               totalPages={totalProductPages}
               basePath="/products"
               searchParams={{
