@@ -24,9 +24,9 @@ CREATE INDEX "StockBatch_storeId_productId_createdAt_idx" ON "StockBatch"("store
 CREATE INDEX "StockBatch_productId_idx" ON "StockBatch"("productId");
 CREATE INDEX "StockBatch_openingReferenceId_idx" ON "StockBatch"("openingReferenceId");
 
-ALTER TABLE "StockBatch" ADD CONSTRAINT "StockBatch_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "StockBatch" ADD CONSTRAINT "StockBatch_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "StockBatch" ADD CONSTRAINT "StockBatch_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "StockBatch" ADD CONSTRAINT "StockBatch_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "StockBatch" ADD CONSTRAINT "StockBatch_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "StockBatch" ADD CONSTRAINT "StockBatch_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "StockBatch" ADD CONSTRAINT "StockBatch_purchaseLineId_fkey" FOREIGN KEY ("purchaseLineId") REFERENCES "PurchaseInvoiceLine"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE "StockBatch" ADD CONSTRAINT "StockBatch_source_check" CHECK ("source" IN ('PURCHASE', 'OPENING_STOCK', 'IMPORT'));

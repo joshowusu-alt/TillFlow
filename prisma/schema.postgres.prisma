@@ -1214,9 +1214,9 @@ model StockBatch {
   openingReferenceId String?
   createdAt          DateTime  @default(now())
 
-  business     Business             @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  store        Store                @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  product      Product              @relation(fields: [productId], references: [id], onDelete: Restrict)
+  business     Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  store        Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product      Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
   purchaseLine PurchaseInvoiceLine? @relation(fields: [purchaseLineId], references: [id], onDelete: Cascade)
 
   @@index([businessId, storeId, expiryDate])
