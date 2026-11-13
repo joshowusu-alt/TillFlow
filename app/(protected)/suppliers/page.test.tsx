@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { DEFAULT_PAGE_SIZE } from '@/lib/format';
 
-const suppliers = Array.from({ length: 24 }, (_, index) => ({
+const suppliers = Array.from({ length: 30 }, (_, index) => ({
   id: `supplier-${index + 1}`,
   name: `Bookshop ${index + 1}`,
   phone: null,
@@ -48,14 +48,15 @@ beforeEach(() => {
 });
 
 describe('supplier list paging', () => {
-  it('shows the last valid page instead of an empty catalogue when the URL page is past the end', async () => {
-    const html = renderToStaticMarkup(await SuppliersPage({ searchParams: Promise.resolve({ page: '2' }) }));
+  it('goes back to page 1 instead of an empty catalogue when the URL page is past the end', async () => {
+    const html = renderToStaticMarkup(await SuppliersPage({ searchParams: Promise.resolve({ page: '5' }) }));
     expect(html).toContain('Bookshop 1');
-    expect(html).toContain('Bookshop 24');
-    expect(html).toContain('Showing 1–24 of 24 suppliers.');
+    expect(html).toContain('Bookshop 25');
+    expect(html).not.toContain('Bookshop 26');
+    expect(html).toContain('Showing 1–25 of 30 suppliers.');
     expect(html).not.toContain('No suppliers yet.');
-    expect(html).not.toContain('Showing 26–24');
-    expect(mocks.db.supplier.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ skip: DEFAULT_PAGE_SIZE, take: DEFAULT_PAGE_SIZE }));
+    expect(html).not.toContain('Showing 26–');
+    expect(mocks.db.supplier.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ skip: 4 * DEFAULT_PAGE_SIZE, take: DEFAULT_PAGE_SIZE }));
     expect(mocks.db.supplier.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 0, take: DEFAULT_PAGE_SIZE }));
   });
 

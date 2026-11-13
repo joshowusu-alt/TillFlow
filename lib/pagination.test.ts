@@ -3,7 +3,7 @@ import { DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { listPageWindow, rowsForListPage } from './pagination';
 
 describe('listPageWindow', () => {
-  it('clamps a page past the end to the last page that still has rows', () => {
+  it('sends a page past the end back to page 1, even when a later page still has rows', () => {
     expect(listPageWindow(2, 24, DEFAULT_PAGE_SIZE)).toEqual({
       page: 1,
       totalPages: 1,
@@ -11,9 +11,9 @@ describe('listPageWindow', () => {
       take: DEFAULT_PAGE_SIZE,
     });
     expect(listPageWindow(9, 50, 25)).toEqual({
-      page: 2,
+      page: 1,
       totalPages: 2,
-      skip: 25,
+      skip: 0,
       take: 25,
     });
   });
@@ -26,10 +26,10 @@ describe('listPageWindow', () => {
 });
 
 describe('rowsForListPage', () => {
-  it('reloads the last page when the requested page is past the end', async () => {
+  it('reloads page 1 when the requested page is past the end', async () => {
     const loadPage = vi.fn(async (page: number) => [`page-${page}`]);
-    const listed = await rowsForListPage(2, 24, DEFAULT_PAGE_SIZE, [], loadPage);
-    expect(listed).toEqual({ page: 1, totalPages: 1, rows: ['page-1'] });
+    const listed = await rowsForListPage(9, 50, 25, [], loadPage);
+    expect(listed).toEqual({ page: 1, totalPages: 2, rows: ['page-1'] });
     expect(loadPage).toHaveBeenCalledExactlyOnceWith(1);
   });
 
