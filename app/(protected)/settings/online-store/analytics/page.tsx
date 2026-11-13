@@ -273,7 +273,7 @@ export default async function StorefrontAnalyticsPage(
           {topProductIds.length > 0 && (
             <div className="rounded-xl border border-edge bg-surface p-4">
               <p className="text-xs font-semibold text-dim uppercase tracking-wide mb-4">Top viewed products (30 days)</p>
-              <div className="overflow-x-auto -mx-4 px-4">
+              <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
                 <table className="w-full text-sm min-w-[400px]">
                   <thead>
                     <tr className="border-b border-edge">

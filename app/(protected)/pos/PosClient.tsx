@@ -1575,7 +1575,7 @@ export default function PosClient({
       data-selected-till-id={tillId}
       data-selected-shift-id={boundShiftId || undefined}
     >
-      {clearUndoAvailable ? <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"><span>Cart cleared. Sale details reset.</span><button type="button" className="min-h-11 px-3 font-semibold text-accent" onClick={handleUndo}>Undo clear</button></div> : null}
+      {clearUndoAvailable ? <div role="status" className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"><span className="min-w-0">Cart cleared. Sale details reset.</span><button type="button" className="min-h-11 shrink-0 px-3 font-semibold text-accent" onClick={handleUndo}>Undo clear</button></div> : null}
       <div className="pos-selling-layout space-y-3 sm:space-y-4" data-pos-workspace-tab={productWorkspaceTab}>
         {/* ── Scan / Search bar ─────────────────────────────── */}
         <div className="card scroll-mt-[calc(var(--app-header-offset)+0.5rem)] p-3 sm:p-4" data-pos-search-card="true">

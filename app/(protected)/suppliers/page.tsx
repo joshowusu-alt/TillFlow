@@ -201,7 +201,7 @@ export default async function SuppliersPage(
         primaryCta={{ label: 'Add supplier', href: '#add-supplier' }}
       />
 
-      <p className="text-xs text-black/50">These are current supplier balances across recorded purchases and payments, not limited to a date range. KPI totals use the full filtered supplier list, not the rows on screen.</p>
+      <p className="max-w-full break-words text-xs text-black/50">These are current supplier balances across recorded purchases and payments, not limited to a date range. KPI totals use the full filtered supplier list, not the rows on screen.</p>
 
       <div className="flex flex-wrap gap-2 text-sm">
         <Link href="/suppliers/orphans" className="btn-secondary text-xs">
@@ -215,7 +215,7 @@ export default async function SuppliersPage(
       </div>
 
       <div className="operational-metric-grid operational-metric-grid--3">
-        <Link href={q ? `/suppliers?q=${encodeURIComponent(q)}` : '/suppliers'} className="block no-underline">
+        <Link href={q ? `/suppliers?q=${encodeURIComponent(q)}` : '/suppliers'} className="block min-w-0 max-w-full no-underline">
           <SupplierStatCard
             label="Total suppliers"
             value={totalCount.toLocaleString('en-GH')}
@@ -224,7 +224,7 @@ export default async function SuppliersPage(
         </Link>
         <Link
           href={`/suppliers?${q ? `q=${encodeURIComponent(q)}&` : ''}amountOwed=1`}
-          className="block no-underline"
+          className="block min-w-0 max-w-full no-underline"
         >
           <SupplierStatCard
             label="Suppliers with balance"
@@ -234,7 +234,7 @@ export default async function SuppliersPage(
         </Link>
         <Link
           href={`/suppliers?${q ? `q=${encodeURIComponent(q)}&` : ''}amountOwed=1`}
-          className="block no-underline"
+          className="block min-w-0 max-w-full no-underline"
         >
           <SupplierStatCard
             label="What you owe suppliers"

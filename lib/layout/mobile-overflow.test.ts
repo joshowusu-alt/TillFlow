@@ -42,8 +42,9 @@ describe('mobile overflow guards', () => {
   });
 
   it('keeps shared search and page header wrappers shrink-safe on mobile', () => {
-    expect(searchFilter).toContain('min-w-0 w-full');
-    expect(searchFilter).toContain('min-w-0 w-full flex-1');
+    expect(searchFilter).toContain('min-w-0 w-full flex-wrap');
+    expect(searchFilter).toContain('min-w-0 flex-1 basis-0');
+    expect(searchFilter).not.toContain('min-w-0 w-full flex-1');
     expect(pageHeader).toContain('min-w-0 max-w-full');
     expect(metricCard).toContain('operational-metric-card');
     expect(metricCard).toContain('operational-metric-card__label');
@@ -72,5 +73,15 @@ describe('mobile overflow guards', () => {
 
   it('keeps protected main content width bounded', () => {
     expect(layout).toContain('app-main-shell w-full min-w-0 max-w-full');
+    expect(layout).toContain('app-shell-root min-h-screen w-full min-w-0 max-w-full');
+  });
+
+  it('wraps the phone header chips instead of clipping them on one line', () => {
+    const topNav = read('components/TopNav.tsx');
+    expect(globals).toContain('.app-shell-status-chips');
+    expect(globals).toContain('flex-wrap: wrap');
+    expect(topNav).toContain('app-shell-status-chips');
+    expect(topNav).not.toContain('flex flex-nowrap items-center gap-x-2 overflow-x-clip');
+    expect(topNav).toContain('lg:overflow-visible');
   });
 });

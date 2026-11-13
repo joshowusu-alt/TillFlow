@@ -603,7 +603,7 @@ function WelcomeDashboard({
                         : 'min-h-[4rem]'
                     }`}
                   >
-                    <span className="pointer-events-none relative z-10 whitespace-nowrap text-[11px] font-medium uppercase tracking-wider text-blue-100/80 lg:text-xs">{displayLabel}</span>
+                    <span className="pointer-events-none relative z-10 block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-medium uppercase tracking-wider text-blue-100/80 lg:text-xs">{displayLabel}</span>
                     <span
                       className={`mt-1 block max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-black leading-tight tracking-normal tabular-nums text-white ${getStatValueSize(value, primary)}`}
                       title={value}

@@ -107,7 +107,7 @@ export default function OperationalStoreSwitcher({
   if (!canSwitch || stores.length <= 1) {
     return (
       <span
-        className="inline-flex h-9 max-w-[12rem] items-center truncate rounded-xl border border-slate-200/80 bg-white/90 px-2.5 text-xs font-semibold text-ink shadow-sm"
+        className="inline-flex h-9 min-w-0 max-w-full items-center truncate rounded-xl border border-slate-200/80 bg-white/90 px-2.5 text-xs font-semibold text-ink shadow-sm sm:max-w-[12rem]"
         title={label}
         data-operational-store={selectedStoreId ?? ''}
       >
@@ -120,7 +120,7 @@ export default function OperationalStoreSwitcher({
     <form
       ref={formRef}
       action={switchOperationalStoreAction}
-      className="inline-flex items-center"
+      className="inline-flex min-w-0 max-w-full items-center"
       onSubmit={(event) => {
         // With JS available the switch runs through the result action so a
         // network failure or server rejection stays inside this dialog (Retry
@@ -164,7 +164,7 @@ export default function OperationalStoreSwitcher({
       */}
       <select
         id="operational-store-switcher"
-        className="h-11 max-w-[13rem] truncate rounded-xl border border-slate-200/80 bg-white/90 px-2 text-xs font-semibold text-ink shadow-sm sm:h-9"
+        className="h-11 w-full min-w-0 max-w-full truncate rounded-xl border border-slate-200/80 bg-white/90 px-2 text-xs font-semibold text-ink shadow-sm sm:h-9 sm:w-auto sm:max-w-[13rem]"
         value={selectedStoreId ?? ''}
         data-operational-store={selectedStoreId ?? ''}
         aria-busy={Boolean(pending) || !hydrated}
