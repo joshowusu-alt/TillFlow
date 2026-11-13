@@ -58,8 +58,10 @@ async function clearResolvedSessionCookie(cookieName: string) {
   }
 }
 
-function isPrismaP1017(error: unknown) {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P1017';
+function authConnectionErrorCode(error: unknown): string | null {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P1017') return error.code;
+  if (error instanceof Prisma.PrismaClientInitializationError && error.errorCode === 'P1001') return error.errorCode;
+  return null;
 }
 
 function delay(ms: number) {
@@ -70,13 +72,14 @@ async function withAuthReadP1017Retry<T>(operation: string, read: () => Promise<
   try {
     return await read();
   } catch (error) {
-    if (!isPrismaP1017(error)) {
+    const code = authConnectionErrorCode(error);
+    if (!code) {
       throw error;
     }
 
     appLog('warn', 'db.connection.retry', {
       operation,
-      code: 'P1017',
+      code,
       attempt: 1,
       operationType: 'read-auth',
     });
@@ -87,16 +90,17 @@ async function withAuthReadP1017Retry<T>(operation: string, read: () => Promise<
       const result = await read();
       appLog('info', 'db.connection.retry.success', {
         operation,
-        code: 'P1017',
+        code,
         attempt: 1,
         operationType: 'read-auth',
       });
       return result;
     } catch (retryError) {
-      if (isPrismaP1017(retryError)) {
+      const retryCode = authConnectionErrorCode(retryError);
+      if (retryCode) {
         appLog('error', 'db.connection.retry.failed', {
           operation,
-          code: 'P1017',
+          code,
           attempt: 1,
           operationType: 'read-auth',
         });

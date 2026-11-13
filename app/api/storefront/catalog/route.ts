@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(page, {
     headers: {
-      'Cache-Control': searchParams.has('ids') ? 'no-store' : 'private, max-age=20, stale-while-revalidate=60',
+      'Cache-Control': 'no-store',
     },
   });
 }
