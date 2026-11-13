@@ -72,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           aria-hidden="true"
           className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[26rem] bg-shell-glow opacity-80"
         />
-        <div className="relative z-10">
+        <div className="app-shell-root relative z-10 min-w-0 max-w-full">
           <ServiceWorkerRegistration />
           <KeyboardViewportBridge />
           <ToastProvider>

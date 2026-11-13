@@ -65,7 +65,7 @@ export default async function SupplierOrphansPage(
                   amountPence={invoice.totalPence}
                   paidPence={invoice.paidPence}
                   currency={business.currency}
-                  className="min-w-[16rem]"
+                  className="w-full min-w-0 sm:w-auto sm:min-w-[16rem]"
                 />
               </div>
               {canAssign ? (

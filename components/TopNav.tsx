@@ -332,7 +332,7 @@ export default function TopNav({
     <>
       <header
         ref={headerRef}
-        className={`app-shell-header border-b border-slate-200 bg-white shadow-nav${isPosRoute ? ' app-shell-header-pos' : ''}`}
+        className={`app-shell-header w-full min-w-0 max-w-full overflow-x-clip border-b border-slate-200 bg-white shadow-nav${isPosRoute ? ' app-shell-header-pos' : ''}`}
         role="banner"
         data-pos-compact-header={isPosRoute ? 'true' : undefined}
       >
@@ -568,7 +568,7 @@ export default function TopNav({
             ) : null}
           </nav>
 
-          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <div className="flex min-w-0 max-w-full items-center justify-end gap-2 overflow-hidden sm:gap-3 lg:overflow-visible">
             {isOnline ? (
               <button
                 type="button"
@@ -650,9 +650,9 @@ export default function TopNav({
             isPosRoute ? 'py-1.5' : 'py-2'
           }`}
         >
-          <div className="flex flex-nowrap items-center gap-x-2 overflow-x-clip">
-            {onReports ? <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Till</span> : null}
-            <Suspense fallback={<span className="text-xs font-semibold text-ink">{storeName || 'Select branch'}</span>}>
+          <div className="app-shell-status-chips">
+            {onReports ? <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">Till</span> : null}
+            <Suspense fallback={<span className="min-w-0 max-w-full truncate text-xs font-semibold text-ink">{storeName || 'Select branch'}</span>}>
               <OperationalStoreSwitcher
                 stores={stores}
                 selectedStoreId={storeId}
@@ -662,16 +662,16 @@ export default function TopNav({
               />
             </Suspense>
             {!onReports && mobileScopeLabel === 'All branches' ? (
-              <span className="metric-chip" title="Figures shown in this header are across all branches">
+              <span className="metric-chip max-w-full" title="Figures shown in this header are across all branches">
                 Today · All branches
               </span>
             ) : null}
-            <span className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
+            <span className={`${isOnline ? 'status-badge-online' : 'status-badge-offline'} max-w-full`}>
               {isOnline ? 'Sync ready' : 'Offline mode'}
             </span>
             {mobileSales ? (
               <span
-                className="text-xs font-semibold tabular-nums text-ink"
+                className="min-w-0 max-w-full text-xs font-semibold tabular-nums text-ink"
                 title="Today sales across all branches"
               >
                 {formatMoney(mobileSales.totalPence, mobileSales.currency)}

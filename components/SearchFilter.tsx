@@ -37,13 +37,13 @@ export default function SearchFilter({ placeholder = 'Search…', documentNaviga
   }
 
   const content = (
-    <div className="flex min-w-0 w-full items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-card">
-      <svg className="h-4 w-4 flex-shrink-0 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+    <div className="flex min-w-0 w-full flex-wrap items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-card sm:flex-nowrap sm:gap-3">
+      <svg className="h-4 w-4 shrink-0 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M16 10.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0Z" />
       </svg>
       <input
         key={documentNavigation ? query : 'router-search'}
-        className="min-w-0 w-full flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
+        className="min-w-0 flex-1 basis-0 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
         type="search"
         name="q"
         placeholder={placeholder}
@@ -73,7 +73,7 @@ export default function SearchFilter({ placeholder = 'Search…', documentNaviga
     </div>
   );
   if (!documentNavigation) return content;
-  return <form method="get" action={pathname ?? ''} role="search">
+  return <form method="get" action={pathname ?? ''} role="search" className="min-w-0 max-w-full">
     {[...(searchParams?.entries() ?? [])].filter(([key]) => !['q', 'page', 'success', 'error', 'resetClassification', 'resetList'].includes(key)).map(([key, value]) => <input key={key} type="hidden" name={key} value={value} />)}
     <input type="hidden" name="resetList" value="1" />
     {content}
