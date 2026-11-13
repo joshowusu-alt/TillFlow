@@ -1275,7 +1275,17 @@ export default function PosClient({
             paymentStatus,
             lines: saleSnapshot.cart.map((l) => {
               const product = saleSnapshot.productOptions.find((p) => p.id === l.productId);
-              const unitPricePence = product?.sellingPriceBasePence;
+              let unitPricePence = product?.sellingPriceBasePence;
+              let plate = l.plate;
+              if (product?.food && l.plate) {
+                try {
+                  const priced = pricePlate(product.food, l.plate, product.sellingPriceBasePence);
+                  unitPricePence = priced.platePricePence;
+                  plate = { ...l.plate, expectedPricePence: priced.platePricePence };
+                } catch {
+                  plate = l.plate;
+                }
+              }
               return {
                 productId: l.productId,
                 unitId: l.unitId,
@@ -1285,6 +1295,7 @@ export default function PosClient({
                 lineSubtotalPence: l.lineSubtotalPence,
                 discountType: l.discountType ?? 'NONE',
                 discountValue: l.discountValue ?? '',
+                ...(plate ? { plate } : {}),
               };
             }),
             payments: buildOfflinePayments({

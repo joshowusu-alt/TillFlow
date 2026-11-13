@@ -105,6 +105,46 @@ describe('pos-cart helpers', () => {
     expect(formatAvailable(products[1], 2)).toBe('2 bottles');
   });
 
+  it('does not call an available uncounted dish out of stock', () => {
+    const dish: PosProduct = {
+      id: 'banku',
+      name: 'Banku',
+      barcode: null,
+      sellingPriceBasePence: 2500,
+      vatRateBps: 0,
+      promoBuyQty: 0,
+      promoGetQty: 0,
+      categoryId: null,
+      categoryName: null,
+      imageUrl: null,
+      onHandBase: 0,
+      units: [{ id: 'plate', name: 'Plate', pluralName: 'Plates', conversionToBase: 1, isBaseUnit: true }],
+      food: {
+        productId: 'banku',
+        name: 'Banku',
+        stockMode: 'NOT_COUNTED',
+        soldOut: false,
+        lowAt: 0,
+        sizes: [],
+        inclusions: [],
+        groups: [],
+      },
+    };
+    const lines: PosCartLine[] = [{
+      id: 'banku:plate',
+      productId: 'banku',
+      unitId: 'plate',
+      qtyInUnit: 1,
+      qtyBase: 0,
+      discountType: 'NONE',
+      discountValue: '',
+    }];
+    const available = buildAvailableBaseMap(lines, buildProductMap([dish]));
+    expect(available.get('banku')).toBeGreaterThan(10);
+    dish.food!.soldOut = true;
+    expect(buildAvailableBaseMap(lines, buildProductMap([dish])).get('banku')).toBe(0);
+  });
+
   it('uses explicit configured selling prices for non-base units', () => {
     const productMap = buildProductMap(products);
     const details = buildCartDetails([

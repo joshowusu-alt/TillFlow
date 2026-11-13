@@ -218,6 +218,10 @@ export function buildAvailableBaseMap(cart: PosCartLine[], productMap: Map<strin
   const result = new Map<string, number>();
   for (const [productId, used] of usedMap) {
     const product = productMap.get(productId);
+    if (product?.food?.stockMode === 'NOT_COUNTED') {
+      result.set(productId, sellableBaseQty(product.food, product.onHandBase));
+      continue;
+    }
     result.set(productId, Math.max((product?.onHandBase ?? 0) - used, 0));
   }
   return result;

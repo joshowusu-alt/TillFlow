@@ -27,7 +27,7 @@ function asUserError(error: unknown): never {
 /** Replace client prices on dish lines. Other products in the same sale are left alone. */
 export async function priceFoodSaleLines<T extends PricedSaleLine>(businessId: string, lines: T[]): Promise<T[]> {
   if (lines.length === 0) return lines;
-  const { menus, startingPrices } = await loadFoodCatalogue(
+  const { menus, startingPrices, inactiveProductIds } = await loadFoodCatalogue(
     businessId,
     lines.map((line) => line.productId),
   );
@@ -36,6 +36,9 @@ export async function priceFoodSaleLines<T extends PricedSaleLine>(businessId: s
     return lines.map((line) => {
       const menu = menus.get(line.productId);
       if (!menu) return line;
+      if (inactiveProductIds.has(line.productId)) {
+        throw new PlateError(`${menu.name} is no longer on the menu.`);
+      }
       const snapshot = pricePlate(menu, line.plate, startingPrices.get(line.productId) ?? 0);
       const qty = Math.floor(line.qtyInUnit);
       return {
@@ -76,7 +79,7 @@ export async function repriceFoodCheckoutLines<T extends CheckoutPricedLine>(inp
   plates: Array<PlateSelection | null | undefined>;
 }): Promise<Array<T & { plateSnapshotJson?: string | null }>> {
   if (!isFoodBusiness(input.businessCategory)) return input.lines;
-  const { menus, startingPrices } = await loadFoodCatalogue(
+  const { menus, startingPrices, inactiveProductIds } = await loadFoodCatalogue(
     input.businessId,
     input.lines.map((line) => line.productId),
   );
@@ -85,6 +88,9 @@ export async function repriceFoodCheckoutLines<T extends CheckoutPricedLine>(inp
     return input.lines.map((line, index) => {
       const menu = menus.get(line.productId);
       if (!menu) return line;
+      if (inactiveProductIds.has(line.productId)) {
+        throw new PlateError(`${menu.name} is no longer on the menu.`);
+      }
       const snapshot = pricePlate(menu, input.plates[index], startingPrices.get(line.productId) ?? 0);
       const lineSubtotalPence = snapshot.platePricePence * line.qtyInUnit;
       const lineVatPence = foodLineVat(lineSubtotalPence, input.vatEnabled, input.vatRateByProduct.get(line.productId) ?? 0);

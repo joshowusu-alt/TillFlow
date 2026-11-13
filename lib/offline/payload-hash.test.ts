@@ -50,6 +50,16 @@ describe('offline sale payload hash', () => {
     expect(canonical).toContain('"cashierUserId":"cashier-1"');
   });
 
+  it('keeps a retail line hash free of plate data and changes when a plate is attached', async () => {
+    const plain = canonicalizeOfflineSalePayload(sample);
+    expect(plain).not.toContain('"plate"');
+    const plated = await hashOfflineSalePayload({
+      ...sample,
+      lines: [{ ...sample.lines[0], plate: { sizeId: null, addons: [{ addonId: 'extra', qty: 1 }] } }],
+    });
+    expect(plated).not.toBe(await hashOfflineSalePayload(sample));
+  });
+
   it('does not treat the same cart on a different shift as an exact replay', () => {
     expect(
       offlineReplayMatches(

@@ -138,6 +138,7 @@ export async function buildOfflineSaleCapture(
     lineSubtotalPence: line.lineSubtotalPence != null ? Math.round(Number(line.lineSubtotalPence)) : undefined,
     discountType: String(line.discountType ?? 'NONE'),
     discountValue: String(line.discountValue ?? ''),
+    ...(line.plate ? { plate: line.plate } : {}),
   }));
 
   const payments = (input.payments ?? []).map((payment) => ({

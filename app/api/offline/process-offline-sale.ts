@@ -8,7 +8,9 @@ import { parseDiscountValue } from '@/lib/format';
 import {
   hashOfflineSalePayload,
   offlineReplayMatches,
+  type OfflineSaleHashLine,
 } from '@/lib/offline/payload-hash';
+import { parsePlateSelection } from '@/lib/food/parse-plate';
 
 export const CLOCK_SKEW_REVIEW_MS = 24 * 60 * 60 * 1000;
 export const LATE_OFFLINE_SALE_SOURCE = 'LATE_OFFLINE';
@@ -24,7 +26,7 @@ export interface OfflineSalePayload {
   cashierUserId?: string | null;
   customerId: string | null;
   paymentStatus: 'PAID' | 'PART_PAID' | 'UNPAID';
-  lines: Array<{
+    lines: Array<{
     productId: string;
     unitId: string;
     qtyInUnit: number;
@@ -33,6 +35,7 @@ export interface OfflineSalePayload {
     lineSubtotalPence?: number;
     discountType: string;
     discountValue: string;
+    plate?: OfflineSaleHashLine['plate'];
   }>;
   payments: Array<{
     method: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
@@ -297,16 +300,22 @@ export async function processOfflineSale(
     .map((line) => {
       const qtyInUnit = Math.floor(Number(line.qtyInUnit));
       const discountType = toDiscountType(line.discountType);
+      const plate = parsePlateSelection(line.plate);
+      const unitPricePence = line.unitPricePence != null ? Math.round(Number(line.unitPricePence)) : undefined;
+      if (plate && unitPricePence != null && plate.expectedPricePence == null) {
+        plate.expectedPricePence = unitPricePence;
+      }
       return {
         productId: String(line.productId || ''),
         unitId: String(line.unitId || ''),
         qtyInUnit,
         qtyBase: line.qtyBase != null ? Math.round(Number(line.qtyBase)) : undefined,
-        unitPricePence: line.unitPricePence != null ? Math.round(Number(line.unitPricePence)) : undefined,
+        unitPricePence,
         lineSubtotalPence:
           line.lineSubtotalPence != null ? Math.round(Number(line.lineSubtotalPence)) : undefined,
         discountType,
         discountValue: parseDiscountValue(discountType, line.discountValue),
+        ...(plate ? { plate } : {}),
       };
     })
     .filter((line) => line.productId && line.unitId && line.qtyInUnit > 0);

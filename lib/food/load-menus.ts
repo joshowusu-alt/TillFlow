@@ -8,7 +8,7 @@ const dishInclude = {
     orderBy: { sortOrder: 'asc' as const },
     include: { addons: { orderBy: { sortOrder: 'asc' as const } } },
   },
-  product: { select: { name: true, sellingPriceBasePence: true } },
+  product: { select: { name: true, sellingPriceBasePence: true, active: true } },
 };
 
 type DishRow = {
@@ -16,7 +16,7 @@ type DishRow = {
   stockMode: string;
   soldOut: boolean;
   lowAt: number;
-  product: { name: string; sellingPriceBasePence: number };
+  product: { name: string; sellingPriceBasePence: number; active: boolean };
   sizes: Array<{ id: string; name: string; pricePence: number; isDefault: boolean; active: boolean }>;
   inclusions: Array<{ id: string; name: string; qty: number; stockPortions: number }>;
   groups: Array<{
@@ -76,9 +76,11 @@ export async function loadFoodCatalogue(businessId: string, productIds?: string[
   });
   const menus = new Map<string, FoodMenu>();
   const startingPrices = new Map<string, number>();
+  const inactiveProductIds = new Set<string>();
   for (const row of rows) {
     menus.set(row.productId, toFoodMenu(row));
     startingPrices.set(row.productId, row.product.sellingPriceBasePence);
+    if (row.product.active === false) inactiveProductIds.add(row.productId);
   }
-  return { menus, startingPrices };
+  return { menus, startingPrices, inactiveProductIds };
 }
