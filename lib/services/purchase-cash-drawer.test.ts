@@ -23,6 +23,7 @@ const {
     till: { findFirst: vi.fn() },
     moneyIdempotency: { findUnique: vi.fn(), create: vi.fn() },
     stockMovement: { createMany: vi.fn() },
+    stockBatch: { createMany: vi.fn() },
     inventoryBalance: { upsert: vi.fn() },
     $executeRaw: vi.fn(),
     $transaction: vi.fn(),
@@ -114,6 +115,7 @@ describe('purchase invoice cash drawer linkage', () => {
     }));
     prismaMock.shift.findFirst.mockResolvedValue({ id: 'shift-1', tillId: 'till-1' });
     prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
+    prismaMock.stockBatch.createMany.mockResolvedValue({ count: 1 });
     prismaMock.$executeRaw.mockResolvedValue(1);
     prismaMock.$transaction.mockImplementation(async (operation: any) => {
       if (typeof operation === 'function') {

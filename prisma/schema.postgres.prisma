@@ -176,6 +176,7 @@ model Business {
   suppliers              Supplier[]
   categories             Category[]
   products               Product[]
+  stockBatches           StockBatch[]
   productImports         ProductImport[]
   migrationPackages      MigrationPackage[]
   accounts               Account[]
@@ -405,6 +406,7 @@ model Store {
   business               Business                @relation(fields: [businessId], references: [id])
   tills                  Till[]
   inventoryBalances      InventoryBalance[]
+  stockBatches           StockBatch[]
   stockMovements         StockMovement[]
   stockAdjustments       StockAdjustment[]
   stocktakes             Stocktake[]
@@ -738,6 +740,7 @@ model Product {
   preferredSupplier  Supplier?             @relation("ProductPreferredSupplier", fields: [preferredSupplierId], references: [id])
   productUnits       ProductUnit[]
   inventoryBalances  InventoryBalance[]
+  stockBatches       StockBatch[]
   salesLines         SalesInvoiceLine[]
   purchaseLines      PurchaseInvoiceLine[]
   stockMovements     StockMovement[]
@@ -1202,6 +1205,34 @@ model InventoryBalance {
   @@index([productId])
 }
 
+/// Receipt record for a delivery. InventoryBalance.qtyOnHandBase stays the stock truth.
+/// Existing stock is not backfilled. Remaining quantity is estimated at report time.
+model StockBatch {
+  id                 String    @id @default(cuid())
+  businessId         String
+  storeId            String
+  productId          String
+  qtyReceivedBase    Int
+  productionDate     DateTime?
+  expiryDate         DateTime?
+  /// PURCHASE | OPENING_STOCK | IMPORT
+  source             String
+  purchaseLineId     String?   @unique
+  /// Opening-stock or import document id shared by the lines on that receipt.
+  openingReferenceId String?
+  createdAt          DateTime  @default(now())
+
+  business     Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  store        Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product      Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  purchaseLine PurchaseInvoiceLine? @relation(fields: [purchaseLineId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, storeId, expiryDate])
+  @@index([storeId, productId, createdAt])
+  @@index([productId])
+  @@index([openingReferenceId])
+}
+
 model StockMovement {
   id                String   @id @default(cuid())
   storeId           String
@@ -1528,6 +1559,7 @@ model PurchaseInvoiceLine {
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
   product         Product         @relation(fields: [productId], references: [id])
   unit            Unit            @relation(fields: [unitId], references: [id])
+  stockBatch      StockBatch?
 
   @@index([purchaseInvoiceId])
   @@index([productId])

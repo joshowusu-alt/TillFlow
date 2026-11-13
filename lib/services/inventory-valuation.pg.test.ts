@@ -57,6 +57,7 @@ describePg('isolated inventory valuation and COGS evidence', () => {
       () => db.cashDrawerEntry.deleteMany({ where: { businessId } }),
       () => db.moneyIdempotency.deleteMany({ where: { businessId } }),
       () => db.stockMovement.deleteMany({ where: { store: { businessId } } }),
+      () => db.stockBatch.deleteMany({ where: { businessId } }),
       () => db.inventoryBalance.deleteMany({ where: { store: { businessId } } }),
       () => db.journalEntry.deleteMany({ where: { businessId } }),
       () => db.product.deleteMany({ where: { businessId } }),

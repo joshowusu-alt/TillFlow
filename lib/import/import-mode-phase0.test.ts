@@ -8,6 +8,7 @@ import {
 
 vi.mock('@/lib/prisma', () => {
   const stockMovement = { findFirst: vi.fn(), createMany: vi.fn() };
+  const stockBatch = { createMany: vi.fn().mockResolvedValue({ count: 1 }) };
   const productUnit = { findMany: vi.fn() };
   const account = { findMany: vi.fn() };
   const inventoryBalance = {
@@ -19,12 +20,14 @@ vi.mock('@/lib/prisma', () => {
     prisma: {
       store: { findFirst: vi.fn().mockResolvedValue({ id: 's1' }) },
       stockMovement,
+      stockBatch,
       productUnit,
       account,
       inventoryBalance,
       $transaction: async (fn: any) =>
         fn({
           stockMovement,
+          stockBatch,
           inventoryBalance,
           journalEntry: { create: vi.fn().mockResolvedValue({ id: 'je1' }) },
           journalLine: { createMany: vi.fn() },

@@ -516,6 +516,7 @@ export const REPORT_PAGE_SURFACES: Record<string, SurfaceId> = {
   '/reports/margins': 'profit_margins',
   '/reports/sales-by-supplier': 'sales_by_supplier',
   '/reports/reorder-suggestions': 'reorder_suggestions',
+  '/reports/expiring': 'expiring_stock',
   '/reports/income-statement': 'income_statement',
   '/reports/balance-sheet': 'balance_sheet',
   '/reports/cashflow': 'cash_flow_statement',

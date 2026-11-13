@@ -10,6 +10,9 @@ export type HomeAttentionFlags = {
   reorderNeededCount: number;
   overdueSupplierInvoiceCount: number;
   canAccessReorder: boolean;
+  /** Batches already expired or expiring within 14 days. */
+  expiringSoonCount?: number;
+  canAccessExpiry?: boolean;
 };
 
 export function countHomeAttentionActions(flags: HomeAttentionFlags): number {
@@ -17,6 +20,7 @@ export function countHomeAttentionActions(flags: HomeAttentionFlags): number {
   if (flags.openShiftCount > 0) count += 1;
   if (flags.openIssueCount > 0) count += 1;
   if (flags.reorderNeededCount > 0 && flags.canAccessReorder) count += 1;
+  if ((flags.expiringSoonCount ?? 0) > 0 && (flags.canAccessExpiry ?? false)) count += 1;
   if (flags.overdueSupplierInvoiceCount > 0) count += 1;
   return count;
 }

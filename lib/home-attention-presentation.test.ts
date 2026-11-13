@@ -43,6 +43,31 @@ describe('home attention presentation', () => {
     expect(formatCommandCenterActionLabel(1)).toBe('1 issue in Today');
   });
 
+  it('counts expiring stock only on Growth and above', () => {
+    expect(
+      countHomeAttentionActions({
+        openShiftCount: 0,
+        openIssueCount: 0,
+        reorderNeededCount: 0,
+        overdueSupplierInvoiceCount: 0,
+        canAccessReorder: false,
+        expiringSoonCount: 4,
+        canAccessExpiry: false,
+      })
+    ).toBe(0);
+    expect(
+      countHomeAttentionActions({
+        openShiftCount: 0,
+        openIssueCount: 0,
+        reorderNeededCount: 2,
+        overdueSupplierInvoiceCount: 0,
+        canAccessReorder: true,
+        expiringSoonCount: 4,
+        canAccessExpiry: true,
+      })
+    ).toBe(2);
+  });
+
   it('handles no Home actions with honest record-aware hero copy', () => {
     expect(
       countHomeAttentionActions({

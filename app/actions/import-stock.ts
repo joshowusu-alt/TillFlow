@@ -9,6 +9,7 @@ import { readOperationalStoreCookie } from '@/lib/reliability/operational-store-
 import { createPurchase } from '@/lib/services/purchases';
 import type { SupplierProductLinkSummary, SupplierProductLinkSkippedProduct } from '@/lib/services/purchases';
 import { recordOpeningInventory, type RecordOpeningInventoryResult } from '@/lib/services/opening-inventory';
+import { readBatchDates } from '@/lib/inventory/batch-dates';
 import { buildImportChunkKey, buildImportChunkPayloadHash } from '@/lib/import/import-chunk-identity';
 import { userFacingImportFailure } from '@/lib/import/import-failure';
 import { createImportSupplierResolver } from '@/lib/import/import-suppliers';
@@ -70,6 +71,9 @@ export type ConfirmedImportRow = {
   confirmBelowCost?: boolean;
   /** Opening stock: EQUITY (default) or SUPPLIER_CREDIT (named supplier required). */
   openingFunding?: OpeningStockFunding;
+  /** Optional YYYY-MM-DD dates from production_date / expiry_date. */
+  productionDate?: string;
+  expiryDate?: string;
   /** Purchases PAID: which GL payment account to credit. */
   paymentAccount?: PurchasePaymentAccount;
 };
@@ -174,7 +178,7 @@ async function recordOpeningInventoryOnce(input: {
   importRunId: string;
   importMode: ImportMode;
   chunkIndex: number;
-  lines: Array<{ productId: string; unitId: string; qtyInUnit: number; unitCostBasePence?: number | null }>;
+  lines: Array<{ productId: string; unitId: string; qtyInUnit: number; unitCostBasePence?: number | null; productionDate?: Date | null; expiryDate?: Date | null }>;
   description?: string;
 }): Promise<RecordOpeningInventoryResult> {
   const hashLines = input.lines.map((l) => ({
@@ -182,6 +186,8 @@ async function recordOpeningInventoryOnce(input: {
     unitId: l.unitId,
     qtyInUnit: l.qtyInUnit,
     unitCostPence: l.unitCostBasePence,
+    productionDate: l.productionDate,
+    expiryDate: l.expiryDate,
   }));
   const amountPence = hashLines.reduce((s, l) => s + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
   const idempotencyKey = buildImportChunkKey({
@@ -220,6 +226,7 @@ async function recordOpeningInventoryOnce(input: {
           userId: input.userId,
           referenceId: `${input.importRunId}-equity-${input.chunkIndex}`,
           description: input.description,
+          batchSource: 'IMPORT',
           lines: input.lines,
         },
         tx,
@@ -617,7 +624,16 @@ async function _runImport(
     const toPurchaseLine = (row: ConfirmedImportRow, productId: string) => {
       const isQtyInPackUnit = row.packUnitId !== null && row.qtyInUnitId === row.packUnitId;
       const qtyBase = isQtyInPackUnit ? row.quantity * (row.packSize > 1 ? row.packSize : 1) : row.quantity;
-      return { productId, unitId: row.baseUnitId, qtyInUnit: qtyBase, unitCostPence: row.costPricePence };
+      const dates = readBatchDates(row.productionDate, row.expiryDate);
+      if (!dates.ok) throw new Error(dates.message);
+      return {
+        productId,
+        unitId: row.baseUnitId,
+        qtyInUnit: qtyBase,
+        unitCostPence: row.costPricePence,
+        ...(dates.dates.productionDate ? { productionDate: dates.dates.productionDate } : {}),
+        ...(dates.dates.expiryDate ? { expiryDate: dates.dates.expiryDate } : {}),
+      };
     };
 
 
@@ -825,11 +841,15 @@ async function _runImport(
             !!row.packUnitId &&
             row.qtyInUnitId === row.packUnitId &&
             row.packSize > 1;
+          const dates = readBatchDates(row.productionDate, row.expiryDate);
+          if (!dates.ok) throw new Error(`${dates.message} (${row.name})`);
           return {
             productId,
             unitId: row.baseUnitId,
             qtyInUnit: isPack ? row.quantity * row.packSize : row.quantity,
             unitCostBasePence: row.costPricePence > 0 ? row.costPricePence : 0,
+            ...(dates.dates.productionDate ? { productionDate: dates.dates.productionDate } : {}),
+            ...(dates.dates.expiryDate ? { expiryDate: dates.dates.expiryDate } : {}),
           };
         });
         let unvaluedUnits = 0;
@@ -890,6 +910,7 @@ async function _runImport(
                 lines: chunk,
                 userId: user.id,
                 stockMovementType: 'OPENING',
+                batchSource: 'IMPORT',
                 acknowledgeHighCost: true,
                 idempotencyKey: buildImportChunkKey({
                   businessId,
@@ -943,6 +964,7 @@ async function _runImport(
               userId: user.id,
               sourceDocuments,
               stockMovementType: 'PURCHASE',
+              batchSource: 'IMPORT',
               acknowledgeHighCost: true,
               skipCashDrawerRequirement: true,
               idempotencyKey: buildImportChunkKey({
@@ -984,6 +1006,7 @@ async function _runImport(
               userId: user.id,
               sourceDocuments,
               stockMovementType: 'PURCHASE',
+              batchSource: 'IMPORT',
               acknowledgeHighCost: true,
               idempotencyKey: buildImportChunkKey({
                 businessId,

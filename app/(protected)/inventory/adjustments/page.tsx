@@ -56,6 +56,8 @@ export default async function StockAdjustmentsPage(
       cost?: string;
       replayed?: string;
       storeId?: string;
+      productId?: string;
+      reason?: string;
     }>;
   }
 ) {
@@ -284,6 +286,8 @@ export default async function StockAdjustmentsPage(
           storeId={store.id}
           storeName={store.name}
           currency={business.currency}
+          initialProductId={searchParams?.productId}
+          initialReasonCode={searchParams?.reason === 'EXPIRED' ? 'EXPIRED' : undefined}
           phase1Enabled={phase1Enabled}
           phase2Enabled={phase2Enabled}
           actorRole={user.role}

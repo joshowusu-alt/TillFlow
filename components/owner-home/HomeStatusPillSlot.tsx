@@ -45,6 +45,8 @@ export default async function HomeStatusPillSlot({
     reorderNeededCount: attention.reorderNeededCount,
     overdueSupplierInvoiceCount: attention.overdueSupplierInvoiceCount,
     canAccessReorder,
+    expiringSoonCount: attention.expiry.expired + attention.expiry.within14,
+    canAccessExpiry: canAccessReorder,
   });
   // Only use IYR signal when the loader succeeded — never invent an all-clear for records.
   const hasRecordImprovements = Boolean(improveRecords?.primary);

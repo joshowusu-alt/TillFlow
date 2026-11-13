@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { getProductPriceWarnings } from '@/lib/product-price-guards';
+import BatchDateFields from '@/components/inventory/BatchDateFields';
 
 type OpeningStockFieldsProps = {
   currencySymbol: string;
@@ -75,6 +76,7 @@ export function OpeningStockFields({
       <p className="text-xs text-black/50">
         Enter the cost for the selected stock unit. Blank cost keeps stock value and affected profit incomplete; sales can continue. Valued opening stock is recorded against opening balance equity.
       </p>
+      <BatchDateFields idPrefix="opening-stock" productionName="openingProductionDate" expiryName="openingExpiryDate" />
       <p className="text-xs text-black/50">
         New delivery? Receive it through Purchases after saving this product.
       </p>

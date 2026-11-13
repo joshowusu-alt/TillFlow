@@ -22,6 +22,8 @@ export const TEMPLATE_HEADERS = [
   'payment_status',
   'division',
   'group',
+  'production_date',
+  'expiry_date',
 ] as const;
 
 export type TemplateColumn = (typeof TEMPLATE_HEADERS)[number];
@@ -64,6 +66,13 @@ export const HEADER_ALIASES: Record<string, TemplateColumn | 'pack_size' | 'qty_
   low_stock_threshold: 'reorder_point',
   reorder_point: 'reorder_point',
   reorderpoint: 'reorder_point',
+  production_date: 'production_date',
+  productiondate: 'production_date',
+  manufactured_date: 'production_date',
+  expiry_date: 'expiry_date',
+  expirydate: 'expiry_date',
+  expiration_date: 'expiry_date',
+  best_before: 'expiry_date',
   onlinevisible: 'storefront_published',
   online_visible: 'storefront_published',
   productimageurl: 'image_url',
