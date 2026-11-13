@@ -74,7 +74,7 @@ describePg('real PostgreSQL import release verification', () => {
           expect(product.inventoryBalances.reduce((sum,balance)=>sum+balance.qtyOnHandBase,0)).toBe(mode==='CATALOGUE'?0:(index+2)*(index>=2?12:1));
         }
         const ids=products.map(product=>product.id);
-        const journals=await db.journalEntry.findMany({where:{businessId:context.businessId,referenceId:`${meta.clientImportKey}-equity`},include:{lines:{include:{account:true}}}});
+        const journals=await db.journalEntry.findMany({where:{businessId:context.businessId,referenceId:`${meta.clientImportKey}-equity-0`},include:{lines:{include:{account:true}}}});
         expect(journals).toHaveLength(mode==='CATALOGUE'?0:1);
         if(mode==='OPENING_STOCK') {
           expect(journals[0].lines.reduce((sum,line)=>sum+line.debitPence,0)).toBe(22600);
@@ -83,7 +83,7 @@ describePg('real PostgreSQL import release verification', () => {
           expect(await action.importStockAction(rows,meta)).toMatchObject({success:true});
           expect(await db.product.count({where:{id:{in:ids}}})).toBe(4);
           expect(await db.stockMovement.count({where:{productId:{in:ids}}})).toBe(4);
-          expect(await db.journalEntry.count({where:{businessId:context.businessId,referenceId:`${meta.clientImportKey}-equity`}})).toBe(1);
+          expect(await db.journalEntry.count({where:{businessId:context.businessId,referenceId:`${meta.clientImportKey}-equity-0`}})).toBe(1);
           expect((await db.inventoryBalance.aggregate({where:{productId:{in:ids}},_sum:{qtyOnHandBase:true}}))._sum.qtyOnHandBase).toBe(113);
           lastOpening={rows,meta,ids};
         }

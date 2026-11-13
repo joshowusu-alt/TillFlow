@@ -17,10 +17,9 @@ import {
 } from '@/lib/improve-records-issues';
 import Link from 'next/link';
 
-// Server actions called from this route (importStockAction) can take up to
-// 60 s for large catalogues — raise the Vercel function timeout accordingly.
-// Without this, Vercel enforces a 10 s default and kills the action mid-import.
-export const maxDuration = 60;
+// Confirm Import posts through /api/import-stock, which already allows 300s.
+// Match that here so a large opening-stock run is not cut off at 60s.
+export const maxDuration = 300;
 
 export default async function ImportStockPage(
   props: {

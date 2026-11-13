@@ -101,6 +101,68 @@ export async function upsertInventoryBalance(
 }
 
 /**
+ * Write many inventory balances in one statement on Postgres.
+ * Callers must already have folded duplicate product ids down to the final
+ * quantity and value. SQLite keeps the per-row upsert.
+ */
+type InventoryBalanceWrite = {
+  productId: string;
+  qtyOnHandBase: number;
+  avgCostBasePence: number;
+  knownValuePence?: number | null;
+  unvaluedQtyBase?: number | null;
+};
+
+/** One INSERT ... ON CONFLICT for the final balance of every product in the chunk. */
+export async function executeInventoryBalanceUpsert(
+  tx: { $executeRaw: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown> },
+  storeId: string,
+  rows: InventoryBalanceWrite[],
+): Promise<void> {
+  const values = rows.map((row) =>
+    Prisma.sql`(gen_random_uuid()::text, ${storeId}, ${row.productId}, ${row.qtyOnHandBase}, ${row.avgCostBasePence}, ${row.knownValuePence ?? null}, ${row.unvaluedQtyBase ?? null}, NOW())`,
+  );
+  await tx.$executeRaw`
+    INSERT INTO "InventoryBalance" ("id", "storeId", "productId", "qtyOnHandBase", "avgCostBasePence", "knownValuePence", "unvaluedQtyBase", "updatedAt")
+    VALUES ${Prisma.join(values)}
+    ON CONFLICT ("storeId", "productId") DO UPDATE SET
+      "qtyOnHandBase" = EXCLUDED."qtyOnHandBase",
+      "avgCostBasePence" = EXCLUDED."avgCostBasePence",
+      "knownValuePence" = EXCLUDED."knownValuePence",
+      "unvaluedQtyBase" = EXCLUDED."unvaluedQtyBase",
+      "updatedAt" = NOW()
+  `;
+}
+
+/**
+ * Write many inventory balances in one statement on Postgres.
+ * Callers must already have folded duplicate product ids down to the final
+ * quantity and value. SQLite keeps the per-row upsert.
+ */
+export async function batchUpsertInventoryBalances(
+  tx: any,
+  storeId: string,
+  balances: InventoryBalanceWrite[],
+): Promise<void> {
+  if (balances.length === 0) return;
+  const rows = [...balances].sort((a, b) => a.productId.localeCompare(b.productId));
+  if (isPostgresRuntimeEnv(process.env) && typeof tx.$executeRaw === 'function') {
+    await executeInventoryBalanceUpsert(tx, storeId, rows);
+    return;
+  }
+  for (const row of rows) {
+    await upsertInventoryBalance(
+      tx,
+      storeId,
+      row.productId,
+      row.qtyOnHandBase,
+      row.avgCostBasePence,
+      row,
+    );
+  }
+}
+
+/**
  * Atomically decrement inventory balance inside a transaction.
  * Uses Prisma's `decrement` to avoid read-modify-write race conditions.
  * Throws if the resulting quantity would be negative.
