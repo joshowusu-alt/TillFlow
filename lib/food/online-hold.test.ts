@@ -72,7 +72,7 @@ beforeEach(() => {
 
 describe('online plate stock hold', () => {
   it('reserves the included bowl and the extra bowl before payment instructions', async () => {
-    prismaMock.business.findFirst.mockResolvedValue(business('RESTAURANT_STOCK'));
+    prismaMock.business.findFirst.mockResolvedValue(business('FOOD_DISHES'));
     prismaMock.foodDish.findMany.mockResolvedValue([bankuDish]);
     prismaMock.product.findMany.mockResolvedValue([{
       id: 'banku',
@@ -107,8 +107,28 @@ describe('online plate stock hold', () => {
     });
   });
 
+  it('rejects an extra with one bowl left but accepts the standard plate', async () => {
+    prismaMock.business.findFirst.mockResolvedValue(business('FOOD_DISHES'));
+    prismaMock.foodDish.findMany.mockResolvedValue([{ ...bankuDish, inclusions: [] }]);
+    prismaMock.product.findMany.mockResolvedValue([{
+      id: 'banku', name: 'Banku', sellingPriceBasePence: 2500, vatRateBps: 0,
+      productUnits: [{ unitId: 'plate', conversionToBase: 1, unit: { id: 'plate', name: 'Plate' } }],
+    }]);
+    prismaMock.inventoryBalance.findMany.mockResolvedValue([
+      { productId: 'banku', qtyOnHandBase: 1, avgCostBasePence: 0, knownValuePence: 0, unvaluedQtyBase: 1 },
+    ]);
+    const details = { slug: 'check-check', storeId: 'store-1', customerName: 'Ama', customerPhone: '0241234567' };
+    const line = { productId: 'banku', unitId: 'plate', qtyInUnit: 1 };
+    await expect(createOnlineCheckout({
+      ...details, items: [{ ...line, plate: { addons: [{ addonId: 'extra', qty: 1 }] } }],
+    })).rejects.toThrow('out of stock');
+    expect(prismaMock.onlineOrder.create).not.toHaveBeenCalled();
+    await createOnlineCheckout({ ...details, items: [line] });
+    expect(prismaMock.onlineOrder.create.mock.calls[0][0].data.lines.create[0].qtyBase).toBe(1);
+  });
+
   it('does not reserve a dish that is only switched on or off', async () => {
-    prismaMock.business.findFirst.mockResolvedValue(business('RESTAURANT_STOCK'));
+    prismaMock.business.findFirst.mockResolvedValue(business('FOOD_DISHES'));
     prismaMock.foodDish.findMany.mockResolvedValue([{ ...bankuDish, stockMode: 'NOT_COUNTED', soldOut: false }]);
     prismaMock.product.findMany.mockResolvedValue([{
       id: 'banku',

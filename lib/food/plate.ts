@@ -141,8 +141,7 @@ export function portionsForPlate(menu: FoodMenu, snapshot: Pick<PlateSnapshot, '
       .find((candidate) => candidate.id === addon.id);
     return sum + addon.qty * Math.max(0, defined?.stockPortions ?? 0);
   }, 0);
-  const total = included + extras;
-  return total > 0 ? total : 1;
+  return (included || 1) + extras;
 }
 
 export function pricePlate(

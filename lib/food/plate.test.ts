@@ -156,6 +156,7 @@ describe('counted and not-counted dishes', () => {
       inclusions: [{ id: 'bowl', name: 'bowl of banku', qty: 1, stockPortions: 0 }],
     };
     expect(pricePlate(plates, { addons: [] }, 2500).stockPortions).toBe(1);
+    expect(pricePlate(plates, { addons: [{ addonId: 'extra-banku', qty: 1 }] }, 2500).stockPortions).toBe(2);
   });
 });
 
@@ -186,7 +187,7 @@ describe('retail and bookshop sales stay on the catalogue price', () => {
   );
 
   it('recomputes the same dish for a food business and drops the client price', () => {
-    const priced = applyFoodSaleLines('RESTAURANT_STOCK', [{ ...lines[0], plate: { addons: [{ addonId: 'extra-banku', qty: 1 }] } }], menus, prices);
+    const priced = applyFoodSaleLines('FOOD_DISHES', [{ ...lines[0], plate: { addons: [{ addonId: 'extra-banku', qty: 1 }] } }], menus, prices);
     expect(priced).not.toBe(lines);
     expect(priced[0].unitPricePence).toBe(3000);
     expect(priced[0].lineSubtotalPence).toBe(3000);
@@ -199,7 +200,7 @@ describe('retail and bookshop sales stay on the catalogue price', () => {
 
   it('leaves a normal product inside a food business on its catalogue price', () => {
     const water = [{ productId: 'water', qtyInUnit: 2, unitPricePence: 300, lineSubtotalPence: 600, qtyBase: 2 }];
-    expect(applyFoodSaleLines('RESTAURANT_STOCK', water, menus, prices)).toEqual(water);
+    expect(applyFoodSaleLines('FOOD_DISHES', water, menus, prices)).toEqual(water);
   });
 
   it('two different plates do not collapse into one selection', () => {

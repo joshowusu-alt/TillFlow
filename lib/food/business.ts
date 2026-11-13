@@ -1,7 +1,7 @@
 import { PRODUCT_CREATE_HREF } from '@/lib/products/product-create-href';
 
-/** Existing onboarding category for chop bars and other food businesses. */
-export const FOOD_BUSINESS_CATEGORY = 'RESTAURANT_STOCK';
+/** Explicit opt-in category for chop bars and other food businesses. */
+export const FOOD_BUSINESS_CATEGORY = 'FOOD_DISHES';
 
 export const DISH_SETUP_HREF = '/products/dishes/new';
 

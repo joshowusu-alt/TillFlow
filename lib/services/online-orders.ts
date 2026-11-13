@@ -39,7 +39,7 @@ export async function invalidateStorefrontBusinessCache(slug: string | null | un
   if (!storefrontRedis || !slug) return;
   const normalizedSlug = normalizeStorefrontSlug(slug);
   if (!normalizedSlug) return;
-  storefrontRedis.del(`sf:biz:v2:${normalizedSlug}`).catch(() => null);
+  storefrontRedis.del(`sf:biz:v3:${normalizedSlug}`).catch(() => null);
 }
 
 export type StorefrontCatalogProduct = {
@@ -259,9 +259,12 @@ export async function restoreOnlineOrderInventoryReservation(input: {
   // Every caller owns the order transition lock; inventory and release audit stay atomic.
   if (!input.tx) return prisma.$transaction(tx => restoreOnlineOrderInventoryReservation({ ...input, tx }));
   const client = input.tx;
-  await lockInventoryValues(client, input.storeId, input.lines.map(line => line.productId));
-  const balances = await fetchInventoryMap(input.storeId, input.lines.map(line => line.productId), client);
-  for (const line of input.lines) {
+  const reservedLines = input.lines.filter(line => line.qtyBase > 0);
+  if (reservedLines.length === 0) return;
+  const productIds = reservedLines.map(line => line.productId);
+  await lockInventoryValues(client, input.storeId, productIds);
+  const balances = await fetchInventoryMap(input.storeId, productIds, client);
+  for (const line of reservedLines) {
     const before = balances.get(line.productId);
     if (!before) throw new Error('Reserved inventory balance is missing.');
     const value = line.lineCostPence != null && line.costBasis !== UNVERIFIED_STOCK_V1 ? line.lineCostPence : null;

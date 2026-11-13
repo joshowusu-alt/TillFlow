@@ -103,7 +103,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const rawCategory = formOptionalString(formData, 'businessCategory')?.toUpperCase() ?? null;
     const allowedCategories = new Set([
       'SUPERMARKET', 'PROVISION', 'MINI_MART', 'PHARMACY', 'COSMETICS',
-      'HARDWARE', 'WHOLESALE', 'RESTAURANT_STOCK', 'OTHER',
+      'HARDWARE', 'WHOLESALE', 'RESTAURANT_STOCK', 'FOOD_DISHES', 'OTHER',
     ]);
     const businessCategory = rawCategory && allowedCategories.has(rawCategory) ? rawCategory : undefined;
 

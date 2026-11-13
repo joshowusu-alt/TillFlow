@@ -312,6 +312,7 @@ export const BUSINESS_CATEGORY_LABELS: Record<string, string> = {
   COSMETICS: 'Cosmetics / beauty',
   HARDWARE: 'Hardware',
   WHOLESALE: 'Wholesaler',
-  RESTAURANT_STOCK: 'Food business',
+  RESTAURANT_STOCK: 'Food business with stock',
+  FOOD_DISHES: 'Food business (enable dish setup)',
   OTHER: 'Other product business',
 };

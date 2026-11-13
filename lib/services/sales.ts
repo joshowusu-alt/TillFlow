@@ -129,7 +129,7 @@ function buildLinePricing(
       throw new Error('Unit not configured for product');
     }
     const qtyBase =
-      typeof line.qtyBase === 'number' && line.qtyBase > 0
+      typeof line.qtyBase === 'number' && (line.qtyBase > 0 || (line.qtyBase === 0 && line.plateSnapshotJson))
         ? Math.round(line.qtyBase)
         : line.qtyInUnit * productUnit.conversionToBase;
     const lineSubtotal =
