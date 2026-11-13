@@ -249,6 +249,34 @@ export default async function ProductDetailPage(
                 Cost per base unit, e.g. 3.50 for {getCurrencySymbol(business.currency)}3.50. Saving here now also updates inventory average cost where stock has no purchase/transfer-return cost trail yet.
               </div>
             </div>
+            <div className="min-w-0">
+              <label className="label" htmlFor="edit-product-reorderPointBase">Restock reminder (base units)</label>
+              <input
+                className="input w-full min-w-0"
+                id="edit-product-reorderPointBase"
+                name="reorderPointBase"
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                defaultValue={product.reorderPointBase > 0 ? product.reorderPointBase : ''}
+              />
+              <div className="mt-1 text-xs leading-5 text-black/50">Remind me to restock when stock falls to this level. Counted in the base unit. Leave blank for no reminder.</div>
+            </div>
+            <div className="min-w-0">
+              <label className="label" htmlFor="edit-product-reorderQtyBase">Reorder quantity (optional)</label>
+              <input
+                className="input w-full min-w-0"
+                id="edit-product-reorderQtyBase"
+                name="reorderQtyBase"
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                defaultValue={product.reorderQtyBase > 0 ? product.reorderQtyBase : ''}
+              />
+              <div className="mt-1 text-xs leading-5 text-black/50">How many base units to order when you restock. Leave blank if you only want the reminder.</div>
+            </div>
             <div>
               <ProductMarginPreview currency={business.currency} />
               <label className="label">Target Margin Override (%)</label>

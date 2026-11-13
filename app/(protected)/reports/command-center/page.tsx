@@ -269,6 +269,7 @@ export default async function CommandCenterPage(
       { label: 'Profit Margins', desc: 'Product-level margin analysis with cost breakdown', href: '/reports/margins', plan: 'GROWTH' },
       { label: 'Risk Monitor', desc: 'Overrides, variances, and control alerts', href: '/reports/risk-monitor', plan: 'GROWTH' },
       { label: 'Reorder Queue', desc: 'Stock replenishment priorities ranked by urgency', href: '/reports/reorder-suggestions', plan: 'GROWTH' },
+      { label: 'Expiring stock', desc: 'Deliveries that are expired or expire within 14 days', href: '/reports/expiring', plan: 'GROWTH' },
       { label: 'Sales by Linked Supplier', desc: 'Revenue and volume for products linked to each supplier', href: '/reports/sales-by-supplier', plan: 'GROWTH' },
       { label: 'Income Statement', desc: 'Revenue minus costs for any period', href: '/reports/income-statement', plan: 'GROWTH' },
     );

@@ -59,6 +59,8 @@ export default function StockAdjustmentClient({
   phase1Enabled,
   phase2Enabled,
   actorRole,
+  initialProductId,
+  initialReasonCode,
 }: {
   storeId: string;
   storeName: string;
@@ -67,22 +69,26 @@ export default function StockAdjustmentClient({
   phase1Enabled: boolean;
   phase2Enabled: boolean;
   actorRole: string;
+  initialProductId?: string;
+  initialReasonCode?: InventoryDecreaseReasonCode;
 }) {
+  const presetProduct = products.find((product) => product.id === initialProductId) ?? products[0];
+  const presetReason = initialReasonCode === 'EXPIRED' && phase1Enabled;
   const defaultMode: Mode | null = phase1Enabled
     ? 'DECREASE'
     : phase2Enabled
       ? 'INCREASE'
       : null;
   const [mode, setMode] = useState<Mode | null>(defaultMode);
-  const [productId, setProductId] = useState(products[0]?.id ?? '');
-  const [unitId, setUnitId] = useState(products[0]?.units[0]?.id ?? '');
+  const [productId, setProductId] = useState(presetProduct?.id ?? '');
+  const [unitId, setUnitId] = useState(presetProduct?.units.find((unit) => unit.isBaseUnit)?.id ?? presetProduct?.units[0]?.id ?? '');
   const [qtyInput, setQtyInput] = useState('1');
   const [decreaseReasonCode, setDecreaseReasonCode] =
-    useState<InventoryDecreaseReasonCode>('WASTAGE');
+    useState<InventoryDecreaseReasonCode>(presetReason ? 'EXPIRED' : 'WASTAGE');
   const [increaseReasonCode, setIncreaseReasonCode] =
     useState<InventoryIncreaseReasonCode>('PHYSICAL_COUNT_SURPLUS');
-  const [reason, setReason] = useState('Wastage');
-  const [productSearch, setProductSearch] = useState('');
+  const [reason, setReason] = useState(presetReason ? 'Expired' : 'Wastage');
+  const [productSearch, setProductSearch] = useState(presetProduct?.name ?? '');
   const [showDropdown, setShowDropdown] = useState(false);
   const [confirmIncrease, setConfirmIncrease] = useState(false);
   const [correctsAdjustmentId, setCorrectsAdjustmentId] = useState('');

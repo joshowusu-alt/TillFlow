@@ -488,6 +488,16 @@ export default async function ProductsPage(
                       Used by Sales by Linked Supplier reporting. It does not track exact stock-batch origin.
                     </div>
                   </div>
+                  <div className="min-w-0">
+                    <label className="label" htmlFor="create-product-reorderPointBase">Restock reminder (base units)</label>
+                    <input className="input w-full min-w-0" id="create-product-reorderPointBase" name="reorderPointBase" type="number" min={0} step={1} inputMode="numeric" />
+                    <div className="mt-1 text-xs leading-5 text-black/50">Remind me to restock when stock falls to this level. Counted in the base unit. Leave blank for no reminder.</div>
+                  </div>
+                  <div className="min-w-0">
+                    <label className="label" htmlFor="create-product-reorderQtyBase">Reorder quantity (optional)</label>
+                    <input className="input w-full min-w-0" id="create-product-reorderQtyBase" name="reorderQtyBase" type="number" min={0} step={1} inputMode="numeric" />
+                    <div className="mt-1 text-xs leading-5 text-black/50">How many base units to order when you restock. Leave blank if you only want the reminder.</div>
+                  </div>
                   <div className="md:col-span-3">
                     <ProductUnitPricingEditor
                       units={units}

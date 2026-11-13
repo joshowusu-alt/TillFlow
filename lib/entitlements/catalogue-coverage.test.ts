@@ -34,6 +34,7 @@ export_margins GROWTH STORE_DIMENSIONAL yes true EXPORT:OM:DENY:DENY audit
 sales_by_supplier GROWTH STORE_DIMENSIONAL yes true VIEW:OM:RO:DENY
 export_sales_by_supplier GROWTH STORE_DIMENSIONAL yes true EXPORT:OM:DENY:DENY audit
 reorder_suggestions GROWTH STORE_DIMENSIONAL yes false VIEW:OM:RO:DENY
+expiring_stock GROWTH STORE_DIMENSIONAL yes false VIEW:OM:RO:DENY
 income_statement GROWTH ACCOUNTING_WHOLE_BUSINESS - true VIEW:OM:RO:DENY
 balance_sheet GROWTH ACCOUNTING_WHOLE_BUSINESS - true VIEW:OM:RO:DENY
 monthly_balance_review GROWTH ACCOUNTING_WHOLE_BUSINESS - true VIEW:OM:RO:DENY
@@ -186,6 +187,7 @@ describe('surface catalogue contract', () => {
       'app/(protected)/reports/page.tsx',
       'app/(protected)/reports/receipts/page.tsx',
       'app/(protected)/reports/reorder-suggestions/page.tsx',
+      'app/(protected)/reports/expiring/page.tsx',
       'app/(protected)/reports/risk-monitor/page.tsx',
       'app/(protected)/reports/sales/page.tsx',
       'app/(protected)/reports/sales-by-supplier/page.tsx',

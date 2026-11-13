@@ -5,6 +5,7 @@ import { revalidateTag } from 'next/cache';
 import { requireSelectedStoreContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { readOperationalStoreCookie } from '@/lib/reliability/operational-store-cookie';
 import { recordOpeningInventory } from '@/lib/services/opening-inventory';
+import { readBatchDates } from '@/lib/inventory/batch-dates';
 import { createPurchase } from '@/lib/services/purchases';
 import { audit } from '@/lib/audit';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
@@ -25,6 +26,8 @@ export type OpeningStockLine = {
   /** Default EQUITY. SUPPLIER_CREDIT requires supplierId. */
   funding?: 'EQUITY' | 'SUPPLIER_CREDIT';
   supplierId?: string | null;
+  productionDate?: string | null;
+  expiryDate?: string | null;
 };
 
 export type OpeningStockResult = {
@@ -63,8 +66,17 @@ export async function createOpeningStockAction(
     const accountingEffectSummary: string[] = [];
 
     if (validLines.length > 0) {
-      const equityLines = validLines.filter((l) => (l.funding ?? 'EQUITY') !== 'SUPPLIER_CREDIT');
-      const creditLines = validLines.filter((l) => l.funding === 'SUPPLIER_CREDIT');
+      const parsedLines: Array<Omit<OpeningStockLine, 'productionDate' | 'expiryDate'> & {
+        productionDate: Date | null;
+        expiryDate: Date | null;
+      }> = [];
+      for (const line of validLines) {
+        const dates = readBatchDates(line.productionDate, line.expiryDate);
+        if (!dates.ok) return err(dates.message);
+        parsedLines.push({ ...line, productionDate: dates.dates.productionDate, expiryDate: dates.dates.expiryDate });
+      }
+      const equityLines = parsedLines.filter((l) => (l.funding ?? 'EQUITY') !== 'SUPPLIER_CREDIT');
+      const creditLines = parsedLines.filter((l) => l.funding === 'SUPPLIER_CREDIT');
 
       for (const line of creditLines) {
         if (!line.supplierId) {
@@ -75,7 +87,12 @@ export async function createOpeningStockAction(
       if (equityLines.length > 0) {
         const digest = hashCanonicalParts(
           equityLines
-            .map((l) => `${l.productId}:${l.unitId}:${l.qtyInUnit}:${l.unitCostPence}`)
+            .map((l) => {
+              const dates = l.productionDate || l.expiryDate
+                ? `:${l.productionDate?.toISOString() ?? ''}:${l.expiryDate?.toISOString() ?? ''}`
+                : '';
+              return `${l.productId}:${l.unitId}:${l.qtyInUnit}:${l.unitCostPence}${dates}`;
+            })
             .sort(),
         );
         const idempotencyKey = `opening-ui:${digest}`;
@@ -85,6 +102,8 @@ export async function createOpeningStockAction(
           unitId: l.unitId,
           qtyInUnit: l.qtyInUnit,
           unitCostPence: l.unitCostPence > 0 ? l.unitCostPence : 0,
+          productionDate: l.productionDate,
+          expiryDate: l.expiryDate,
         }));
         const applyEquity = async () => {
           try {
@@ -148,7 +167,7 @@ export async function createOpeningStockAction(
       }
 
       if (creditLines.length > 0) {
-        const bySupplier = new Map<string, OpeningStockLine[]>();
+        const bySupplier = new Map<string, typeof parsedLines>();
         for (const line of creditLines) {
           const key = line.supplierId!;
           const list = bySupplier.get(key) ?? [];
@@ -168,6 +187,8 @@ export async function createOpeningStockAction(
               unitId: l.unitId,
               qtyInUnit: l.qtyInUnit,
               unitCostPence: l.unitCostPence,
+              productionDate: l.productionDate,
+              expiryDate: l.expiryDate,
             })),
             userId: user.id,
             stockMovementType: 'OPENING',

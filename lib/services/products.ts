@@ -27,6 +27,10 @@ export type ProductCoreInput = {
   vatRateBps: number;
   promoBuyQty: number;
   promoGetQty: number;
+  /** Base units. Undefined leaves the saved value unchanged on update. */
+  reorderPointBase?: number;
+  /** Base units to order. Undefined leaves the saved value unchanged on update. */
+  reorderQtyBase?: number;
   baseUnitId: string;
   packagingUnitId: string;
   packagingConversion: number;
@@ -249,7 +253,14 @@ function validateUnitConfigs(unitConfigs: ProductUnitInput[]) {
   }
 }
 
-function validateProductValues(data: Pick<ProductCoreInput, 'name' | 'sellingPriceBasePence' | 'defaultCostBasePence' | 'vatRateBps' | 'promoBuyQty' | 'promoGetQty' | 'baseUnitId' | 'packagingUnitId' | 'packagingConversion' | 'unitConfigs'>) {
+function assertReorderQuantity(value: number | undefined, label: string) {
+  if (value === undefined) return;
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${label} must be a whole number of base units, or blank.`);
+  }
+}
+
+function validateProductValues(data: Pick<ProductCoreInput, 'name' | 'sellingPriceBasePence' | 'defaultCostBasePence' | 'vatRateBps' | 'promoBuyQty' | 'promoGetQty' | 'reorderPointBase' | 'reorderQtyBase' | 'baseUnitId' | 'packagingUnitId' | 'packagingConversion' | 'unitConfigs'>) {
   if (!data.name.trim()) {
     throw new Error('Please enter a product name.');
   }
@@ -268,6 +279,8 @@ function validateProductValues(data: Pick<ProductCoreInput, 'name' | 'sellingPri
   if (data.promoBuyQty < 0 || data.promoGetQty < 0) {
     throw new Error('Promo quantities cannot be negative.');
   }
+  assertReorderQuantity(data.reorderPointBase, 'Restock reminder');
+  assertReorderQuantity(data.reorderQtyBase, 'Reorder quantity');
   validateUnitConfigs(data.unitConfigs ?? []);
   if (data.packagingUnitId) {
     if (data.packagingUnitId === data.baseUnitId) {
@@ -436,6 +449,8 @@ async function createProductImpl(
       vatRateBps: normalized.vatRateBps,
       promoBuyQty: normalized.promoBuyQty,
       promoGetQty: normalized.promoGetQty,
+      reorderPointBase: normalized.reorderPointBase ?? 0,
+      reorderQtyBase: normalized.reorderQtyBase ?? 0,
       productUnits: {
         create: (normalized.unitConfigs ?? []).map((config) => ({
           unitId: config.unitId,
@@ -520,6 +535,8 @@ async function updateProductImpl(
         vatRateBps: normalized.vatRateBps,
         promoBuyQty: normalized.promoBuyQty,
         promoGetQty: normalized.promoGetQty,
+        ...(normalized.reorderPointBase !== undefined ? { reorderPointBase: normalized.reorderPointBase } : {}),
+        ...(normalized.reorderQtyBase !== undefined ? { reorderQtyBase: normalized.reorderQtyBase } : {}),
       } as any,
     });
 

@@ -3,7 +3,9 @@ import { pricePurchaseLines } from '@/lib/purchases/discounts';
 import { allocateCostByQuantity, splitPurchaseTender } from '@/lib/purchases/additional-costs';
 import { recordPurchaseCostExpenseTx } from './purchase-costs';
 import { ensureFundingAccount, lockFundingBalance, type PurchaseCashSource } from './purchase-funding';
+import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
+import { assertBatchDates, createStockBatchReceipts, type StockBatchSource } from '@/lib/inventory/stock-batch-receipts';
 import { receiveStockValue, INVENTORY_VALUE_V1 } from '@/lib/inventory-value';
 import { lockInventoryValues, upsertInventoryBalance as writeInventoryValue } from './shared/inventory-utils';
 import { prisma } from '@/lib/prisma';
@@ -49,6 +51,8 @@ export type PurchaseLineInput = {
   unitId: string;
   qtyInUnit: number;
   unitCostPence?: number | null;
+  productionDate?: Date | null;
+  expiryDate?: Date | null;
 };
 
 export type CreatePurchaseInput = {
@@ -78,6 +82,12 @@ export type CreatePurchaseInput = {
   acknowledgeHighCost?: boolean;
   /** Opening stock from import/setup uses OPENING in the stock ledger. */
   stockMovementType?: 'OPENING' | 'PURCHASE';
+  /**
+   * Receipt-batch label. Defaults to PURCHASE, or OPENING_STOCK when the
+   * stock movement is an opening balance. Import passes IMPORT.
+   * Does not change the ledger.
+   */
+  batchSource?: StockBatchSource;
   /**
    * Import / bulk paths post Cash to GL without requiring an open till.
    * Cash drawer PAID_OUT entries are still recorded when a shift is open.
@@ -420,6 +430,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     const lineTotal = lineSubtotal + lineVat;
     return {
       ...line,
+      id: randomUUID(),
       productUnit,
       qtyBase,
       unitCostPence,
@@ -430,6 +441,11 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       lineTotal
     };
   });
+  const batchSource: StockBatchSource = input.batchSource
+    ?? (input.stockMovementType === 'OPENING' ? 'OPENING_STOCK' : 'PURCHASE');
+  for (const line of lineDetails) {
+    assertBatchDates(line.productionDate, line.expiryDate);
+  }
 
   const supplierInvoiceNumber = input.supplierInvoiceNumber?.trim() || null;
   if (supplierInvoiceNumber && (supplierInvoiceNumber.length > 100 || /[\u0000-\u001f]/.test(supplierInvoiceNumber))) throw new UserError('Supplier invoice number must be up to 100 characters.');
@@ -596,6 +612,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     // 2. All lines in one SQL INSERT — 1 RTT regardless of line count
     await client.purchaseInvoiceLine.createMany({
       data: lineDetails.map((line, index) => ({
+        id: line.id,
         allocatedCostPence: allocatedCosts[index],
         purchaseInvoiceId: created.id,
         productId: line.productId,
@@ -715,6 +732,17 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         userId: input.userId ?? null
       }))
     });
+
+    await createStockBatchReceipts(client, lineDetails.map((line) => ({
+      businessId: input.businessId,
+      storeId: store.id,
+      productId: line.productId,
+      qtyReceivedBase: line.qtyBase,
+      productionDate: line.productionDate ?? null,
+      expiryDate: line.expiryDate ?? null,
+      source: batchSource,
+      purchaseLineId: line.id,
+    })));
   };
 
   const finishInvoice = async (created: Awaited<ReturnType<typeof _doInvoice>>, client: any) => {

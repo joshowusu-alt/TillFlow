@@ -407,6 +407,8 @@ export default function ImportStockClient({
         duplicateAction: r.duplicateAction,
         supplierName: r.supplierName,
         reorderPointBase: r.reorderPointProvided === false ? undefined : r.reorderPoint,
+        productionDate: r.productionDate || undefined,
+        expiryDate: r.expiryDate || undefined,
         storefrontPublished: r.storefrontPublishedProvided === false ? undefined : r.storefrontPublished,
         imageUrl: r.imageUrl,
         notes: r.notes,

@@ -12,13 +12,14 @@ import { redirect } from 'next/navigation';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { toPence, formString, formInt, formDate, formOptionalString } from '@/lib/form-helpers';
 import { PaymentStatusEnum } from '@/lib/validation/enums';
-import { requireSelectedStoreContext, withBusinessContext, formAction, type ActionResult, safeAction, ok, err } from '@/lib/action-utils';
+import { requireSelectedStoreContext, withBusinessContext, formAction, type ActionResult, safeAction, ok, err, UserError } from '@/lib/action-utils';
 import { resolveStoreFromTill } from '@/lib/reliability/selected-store';
 import { audit } from '@/lib/audit';
 import type { PaymentStatus } from '@/lib/services/shared';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { purchaseDiscountBps } from '@/lib/purchases/discounts';
+import { readBatchDates } from '@/lib/inventory/batch-dates';
 import { purchaseNeedsSupplierLink, isOpeningStockMovement } from '@/lib/improve-records-classify';
 import {
   OPENING_STOCK_MOVEMENT_TYPES,
@@ -50,23 +51,30 @@ export async function createPurchaseAction(formData: FormData): Promise<ActionRe
     }
     const dueDate = paymentStatus === 'PAID' ? null : formDate(formData, 'dueDate');
 
-    let lines: { productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null; discountBps?: number }[] = [];
+    let lines: { productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null; discountBps?: number; productionDate?: Date | null; expiryDate?: Date | null }[] = [];
     const cartRaw = formData.get('cart');
     if (cartRaw) {
       try {
         const parsed = JSON.parse(String(cartRaw));
         if (Array.isArray(parsed)) {
           lines = parsed
-            .map((item) => ({
-              productId: String(item.productId || ''),
-              unitId: String(item.unitId || ''),
-              qtyInUnit: Number(item.qtyInUnit || 0),
-              discountBps: purchaseDiscountBps(item.discountPercent),
-              unitCostPence: toPence(item.unitCostInput ?? item.unitCostPence ?? '')
-            }))
+            .map((item) => {
+              const dates = readBatchDates(item.productionDate, item.expiryDate);
+              if (!dates.ok) throw new UserError(dates.message);
+              return {
+                productId: String(item.productId || ''),
+                unitId: String(item.unitId || ''),
+                qtyInUnit: Number(item.qtyInUnit || 0),
+                discountBps: purchaseDiscountBps(item.discountPercent),
+                unitCostPence: toPence(item.unitCostInput ?? item.unitCostPence ?? ''),
+                productionDate: dates.dates.productionDate,
+                expiryDate: dates.dates.expiryDate,
+              };
+            })
             .filter((item) => item.productId && item.unitId && item.qtyInUnit > 0);
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof UserError) throw error;
         lines = [];
       }
     }

@@ -29,6 +29,7 @@ export const SURFACE_IDS = [
   'sales_by_supplier',
   'export_sales_by_supplier',
   'reorder_suggestions',
+  'expiring_stock',
   'income_statement',
   'balance_sheet',
   'monthly_balance_review',
@@ -195,6 +196,7 @@ export const SURFACE_CATALOGUE: Record<SurfaceId, SurfaceSpec> = {
     auditRequired: true,
   }),
   reorder_suggestions: dimensional('reorder_suggestions', 'GROWTH', 'VIEW', 'OM'),
+  expiring_stock: dimensional('expiring_stock', 'GROWTH', 'VIEW', 'OM'),
   income_statement: plain('income_statement', 'GROWTH', 'ACCOUNTING_WHOLE_BUSINESS', { VIEW: viewOm }, {
     rangeCapped: true,
   }),

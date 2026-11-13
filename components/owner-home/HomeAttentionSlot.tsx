@@ -10,6 +10,7 @@ import {
 } from '@/lib/home-attention-presentation';
 import { HomeActionCard, HomeIcon, type HomeAction } from '@/components/owner-home/home-chrome';
 import { HomeAttentionUnavailable } from '@/components/owner-home/section-errors';
+import { formatExpiringSoonDescription, shouldShowExpiringSoonCard } from '@/lib/inventory/expiry-report';
 
 export default async function HomeAttentionSlot({
   attentionPromise,
@@ -26,12 +27,15 @@ export default async function HomeAttentionSlot({
     return <HomeAttentionUnavailable />;
   }
   const canAccessReorder = hasPlanAccess(plan, 'GROWTH');
+  const showExpiring = shouldShowExpiringSoonCard(plan, data.expiry);
   const actionCount = countHomeAttentionActions({
     openShiftCount: data.openShiftCount,
     openIssueCount: data.openIssueCount,
     reorderNeededCount: data.reorderNeededCount,
     overdueSupplierInvoiceCount: data.overdueSupplierInvoiceCount,
     canAccessReorder,
+    expiringSoonCount: data.expiry.expired + data.expiry.within14,
+    canAccessExpiry: showExpiring || hasPlanAccess(plan, 'GROWTH'),
   });
 
   const attentionActions = (
@@ -65,6 +69,15 @@ export default async function HomeAttentionSlot({
             href: '/reports/reorder-suggestions',
             urgent: true,
             icon: <HomeIcon name="reorder" />,
+          }
+        : null,
+      showExpiring
+        ? {
+            label: 'Expiring soon',
+            desc: formatExpiringSoonDescription(data.expiry),
+            href: '/reports/expiring',
+            urgent: true,
+            icon: <HomeIcon name="box" />,
           }
         : null,
       data.overdueSupplierInvoiceCount > 0

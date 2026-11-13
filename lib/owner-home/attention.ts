@@ -10,6 +10,8 @@ import { countCommandCenterIssueFlags } from '@/lib/reports/home-issue-count';
 import { measureHomePerf } from '@/lib/performance/home-perf-instrumentation';
 import { assertHomeLoaderAllowed } from '@/lib/owner-home/force-fail';
 import { mapOpenShiftTills, type OpenShiftTillIdentity } from '@/lib/home-attention-presentation';
+import { loadBusinessExpiryCounts } from '@/lib/inventory/load-expiry-report';
+import type { ExpiryCounts } from '@/lib/inventory/expiry-report';
 
 export type OwnerHomeAttentionData = {
   openShiftCount: number;
@@ -19,6 +21,7 @@ export type OwnerHomeAttentionData = {
   openIssueCount: number;
   reorderNeededCount: number;
   overdueSupplierInvoiceCount: number;
+  expiry: ExpiryCounts;
 };
 
 const DEMO_SALE_EXCLUSION = {
@@ -37,7 +40,7 @@ export async function getOwnerHomeAttentionData(
     const timeZone = requireReportTimeZone(business?.timezone);
     const todayStart = businessDayWindow(new Date(), timeZone).startInclusive;
 
-    const [openShifts, overdueSupplierInvoiceCount, todayKpis] = await Promise.all([
+    const [openShifts, overdueSupplierInvoiceCount, todayKpis, expiry] = await Promise.all([
       prisma.shift.findMany({
         where: {
           status: 'OPEN',
@@ -68,6 +71,7 @@ export async function getOwnerHomeAttentionData(
       }),
       // Deferred — not on useful-Home critical path. Same source as Command Center.
       getHomeIssueFlags(businessId).catch(() => null),
+      loadBusinessExpiryCounts(businessId, timeZone),
     ]);
 
     return {
@@ -83,6 +87,7 @@ export async function getOwnerHomeAttentionData(
       openIssueCount: todayKpis ? countCommandCenterIssueFlags(todayKpis) : 0,
       reorderNeededCount: todayKpis?.urgentReorderCount ?? 0,
       overdueSupplierInvoiceCount,
+      expiry,
     };
   });
 }

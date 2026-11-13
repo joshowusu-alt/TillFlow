@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { UserError } from '@/lib/action-utils';
+import { formatCalendarDate } from '@/lib/inventory/batch-dates';
 import { isPostgresDatabaseUrl, isPostgresRuntimeEnv, isSqliteDatabaseUrl } from '@/lib/database-runtime';
 
 export const MONEY_IDEMPOTENCY_ERROR = {
@@ -137,12 +138,13 @@ export function buildPurchaseCreatePayloadHash(parts: {
   additionalCostTreatment?: string;
   additionalCostNote?: string | null;
   payments: Array<{ method: string; amountPence: number; reference?: string | null }>;
-  lines: Array<{ productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null; discountBps?: number }>;
+  lines: Array<{ productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null; discountBps?: number; productionDate?: Date | null; expiryDate?: Date | null }>;
   userId: string;
 }): string {
   const lineCanon = parts.lines
     .map((l) => `${l.productId}:${l.unitId}:${l.qtyInUnit}:${l.unitCostPence ?? ''}`)
     .join('|');
+  const dated = parts.lines.some((line) => line.productionDate || line.expiryDate);
   return hashCanonicalParts([
     parts.businessId,
     'PURCHASE_CREATE',
@@ -154,6 +156,7 @@ export function buildPurchaseCreatePayloadHash(parts: {
     ...(parts.documentHashes?.length ? [JSON.stringify(parts.documentHashes)] : []),
     ...(parts.discountBps || parts.lines.some(line => line.discountBps) || parts.receiptDocumentType === 'DELIVERY_NOTE' ? [JSON.stringify([parts.discountBps ?? 0, parts.lines.map(line => line.discountBps ?? 0), parts.receiptDocumentType ?? 'INVOICE'])] : []),
     ...(parts.supplierInvoiceNumber || parts.additionalCostPence ? [JSON.stringify([parts.supplierInvoiceNumber ?? null, parts.additionalCostPence ?? 0, parts.additionalCostTreatment ?? 'EXPENSE', parts.additionalCostNote?.trim() ?? ''])] : []),
+    ...(dated ? [parts.lines.map((line) => `${formatCalendarDate(line.productionDate)}:${formatCalendarDate(line.expiryDate)}`).join('|')] : []),
   ]);
 }
 
@@ -166,13 +169,14 @@ export function buildImportChunkPayloadHash(parts: {
   operation: string;
   supplierKey: string;
   chunkIndex: number;
-  lines: Array<{ productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null }>;
+  lines: Array<{ productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null; productionDate?: Date | null; expiryDate?: Date | null }>;
   amountPence: number;
   method?: string | null;
 }): string {
   const lineCanon = parts.lines
     .map((l) => `${l.productId}:${l.unitId}:${l.qtyInUnit}:${l.unitCostPence ?? ''}`)
     .join('|');
+  const dated = parts.lines.some((line) => line.productionDate || line.expiryDate);
   return hashCanonicalParts([
     parts.businessId,
     'IMPORT_CHUNK',
@@ -185,6 +189,7 @@ export function buildImportChunkPayloadHash(parts: {
     lineCanon,
     String(parts.amountPence),
     parts.method ?? '',
+    ...(dated ? [parts.lines.map((line) => `${formatCalendarDate(line.productionDate)}:${formatCalendarDate(line.expiryDate)}`).join('|')] : []),
   ]);
 }
 
