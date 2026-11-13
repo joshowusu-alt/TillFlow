@@ -17,12 +17,12 @@ import type {
 // The demo window always ends "yesterday" so the data feels current.
 function getDemoWindow(): { start: Date; end: Date } {
   const end = new Date();
-  end.setHours(23, 59, 59, 0);
-  end.setDate(end.getDate() - 1);
+  end.setUTCHours(23, 59, 59, 999);
+  end.setUTCDate(end.getUTCDate() - 1);
 
   const start = new Date(end);
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - (DEMO_PERIOD_DAYS - 1));
+  start.setUTCHours(0, 0, 0, 0);
+  start.setUTCDate(start.getUTCDate() - (DEMO_PERIOD_DAYS - 1));
 
   return { start, end };
 }
@@ -113,18 +113,27 @@ export function buildDemoLedger(): DemoSnapshot {
   // ── AR & AP ─────────────────────────────────────────────────────────────
   // AR: unpaid credit sales minus customer receipts already collected
   const creditCollectedPence = customerReceipts.reduce((s, r) => s + r.amountPence, 0);
-  const arBalancePence       = Math.max(0, creditSalesPence - creditCollectedPence);
+  // Customer credit must never offset another customer's unpaid invoice.
+  const balances = DEMO_CUSTOMERS.map(customer =>
+    salesInvoices.filter(i => i.customerId === customer.id && i.paymentMethod === 'CREDIT')
+      .reduce((sum, i) => sum + i.subtotalPence, 0)
+    - customerReceipts.filter(r => r.customerId === customer.id).reduce((sum, r) => sum + r.amountPence, 0));
+  const arBalancePence = balances.reduce((sum, balance) => sum + Math.max(0, balance), 0);
+  const customerCreditPence = balances.reduce((sum, balance) => sum + Math.max(0, -balance), 0);
+  const cashCollectedPence = customerReceipts.filter(r => r.paymentMethod === 'CASH').reduce((sum, r) => sum + r.amountPence, 0);
+  const momoCollectedPence = creditCollectedPence - cashCollectedPence;
   const apBalancePence       = purchasesOutstandingPence;
 
   // ── Cash position ────────────────────────────────────────────────────────
   // Cash = opening + cash sales + credit collected - cash purchase payments - cash expenses
   const endingCashPence = openingCashPence
     + cashSalesPence
-    + creditCollectedPence
+    + cashCollectedPence
     - purchasesPaidPence
     - totalExpensesPence;
 
-  const endingMomoPence = momoSalesPence + cardSalesPence;
+  const endingMomoPence = momoSalesPence + momoCollectedPence;
+  const endingCardPence = cardSalesPence;
 
   // ── Ending inventory value ───────────────────────────────────────────────
   const endingInventoryValuePence = DEMO_PRODUCTS.reduce((s, p) => {
@@ -150,6 +159,10 @@ export function buildDemoLedger(): DemoSnapshot {
     creditCollectedPence,
     endingCashPence,
     endingMomoPence,
+    endingCardPence,
+    cashCollectedPence,
+    momoCollectedPence,
+    customerCreditPence,
     arBalancePence,
     apBalancePence,
     openingInventoryValuePence,

@@ -140,9 +140,9 @@ export function buildExpenses(start: Date): DemoExpense[] {
 export function buildCustomerReceipts(start: Date): DemoCustomerReceipt[] {
   const day = (d: number) => new Date(start.getTime() + d * 86_400_000);
   return [
-    { id:'RCT-001', date:day(8),  customerId:'CUST-001', amountPence: 60_000, note:'Part payment – week 1 balance' },
-    { id:'RCT-002', date:day(11), customerId:'CUST-002', amountPence: 80_000, note:'Payment via MoMo' },
-    { id:'RCT-003', date:day(13), customerId:'CUST-003', amountPence: 40_000, note:'Cash settlement' },
+    { id:'RCT-001', paymentMethod:'CASH', date:day(8),  customerId:'CUST-001', amountPence: 60_000, note:'Part payment – week 1 balance' },
+    { id:'RCT-002', paymentMethod:'MOMO', date:day(11), customerId:'CUST-002', amountPence: 80_000, note:'Payment via MoMo' },
+    { id:'RCT-003', paymentMethod:'CASH', date:day(13), customerId:'CUST-003', amountPence: 40_000, note:'Cash settlement' },
   ];
 }
 
@@ -175,7 +175,7 @@ export function buildSalesInvoices(
 
   for (let day = 0; day < DEMO_PERIOD_DAYS; day++) {
     const dayDate = new Date(start.getTime() + day * 86_400_000);
-    const dow = dayDate.getDay();
+    const dow = dayDate.getUTCDay();
     const isWeekend = dow === 0 || dow === 6;
     const numInvoices = isWeekend
       ? 22 + Math.floor(rand() * 10)   // 22-31 on weekends

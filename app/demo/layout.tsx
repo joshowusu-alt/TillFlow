@@ -1,7 +1,12 @@
+import '@/app/commercial-public.css';
+import { buildDemoLedger } from '@/lib/demo-fixtures';
+import DemoJourneys from '@/components/marketing/DemoJourneys';
 import DemoNavTabs from './_components/DemoNavTabs';
 import BookDemoActions from '@/components/marketing/BookDemoActions';
 import { buildTillflowPublicMetadata } from '@/lib/marketing/site';
 import { ADOM_RETAIL_DEMO_NAME, DEMO_PERIOD_DAYS } from '@/lib/demo-sandbox/constants';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = buildTillflowPublicMetadata({
   title: `Explore ${ADOM_RETAIL_DEMO_NAME} | TillFlow`,
@@ -12,11 +17,13 @@ export const metadata = buildTillflowPublicMetadata({
 });
 
 export default function DemoLayout({ children }: { children: React.ReactNode }) {
+  const { period } = buildDemoLedger();
+  const date = (d: Date) => d.toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Accra' });
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="commercial-public min-h-screen bg-slate-50">
       {/* Demo banner — safe-area aware */}
       <div
-        className="sticky top-0 z-50 flex items-center justify-between bg-accent px-4 text-sm font-semibold text-white shadow"
+        className="relative z-50 flex items-center justify-between bg-accent px-4 text-sm font-semibold text-white shadow"
         style={{ paddingTop: 'max(14px, env(safe-area-inset-top, 0px))', paddingBottom: '10px' }}
       >
         <div className="flex items-center gap-3">
@@ -42,16 +49,18 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
       {/* Tab navigation — offsets below the banner */}
       <div
         className="sticky z-40 border-b border-black/8 bg-white shadow-sm"
-        style={{ top: 'calc(46px + max(14px, env(safe-area-inset-top, 0px)))' }}
+        style={{ top: 0 }}
       >
         <div className="mx-auto max-w-7xl">
           <DemoNavTabs />
         </div>
       </div>
 
+      <p data-testid="demo-period" className="mx-auto max-w-7xl px-4 pt-4 text-xs leading-5 text-slate-600">Fictional data · {DEMO_PERIOD_DAYS} days · {date(period.start)} – {date(period.end)} · Ghana time</p>
       {/* Page content */}
       <main className="mx-auto max-w-7xl px-4 py-6">
         {children}
+        <div className="mt-8"><DemoJourneys /></div>
       </main>
     </div>
   );
