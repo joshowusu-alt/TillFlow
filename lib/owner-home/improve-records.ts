@@ -3,6 +3,7 @@
  * Recommendation engine unchanged — only timing/placement changes.
  */
 import { prisma } from '@/lib/prisma';
+import { sellableProductWhere } from '@/lib/food/sellable';
 import { loadImproveRecordsResult } from '@/lib/improve-records-load';
 import type { ImproveRecordsResult } from '@/lib/improve-records';
 import { measureHomePerf } from '@/lib/performance/home-perf-instrumentation';
@@ -32,12 +33,7 @@ export async function getOwnerHomeImproveRecords(
         where: { businessId, active: true, sellingPriceBasePence: { gt: 0 } },
       }),
       prisma.product.count({
-        where: {
-          businessId,
-          active: true,
-          sellingPriceBasePence: { gt: 0 },
-          inventoryBalances: { some: { qtyOnHandBase: { gt: 0 } } },
-        },
+        where: sellableProductWhere(businessId),
       }),
       prisma.user.count({ where: { businessId, active: true } }),
     ]);

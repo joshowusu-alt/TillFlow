@@ -7,6 +7,7 @@ import {
 import type { SubscriptionInput } from '@/lib/subscription-lifecycle';
 import { revalidateTag } from 'next/cache';
 import { markActivationSnapshotRead } from '@/lib/performance/home-perf-instrumentation';
+import { sellableProductWhere } from '@/lib/food/sellable';
 
 const demoSaleExclusion = {
   OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
@@ -82,12 +83,7 @@ export async function loadActivationSnapshot(
         where: { businessId, active: true, sellingPriceBasePence: { gt: 0 } },
       }),
       prisma.product.count({
-        where: {
-          businessId,
-          active: true,
-          sellingPriceBasePence: { gt: 0 },
-          inventoryBalances: { some: { qtyOnHandBase: { gt: 0 } } },
-        },
+        where: sellableProductWhere(businessId),
       }),
       prisma.inventoryBalance.aggregate({
         where: { product: { businessId } },

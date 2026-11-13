@@ -23,6 +23,7 @@ import { formatCatalogueUnitLabel, getPrimaryPackagingUnit } from '@/lib/units';
 import { defaultBaseUnitId } from '@/lib/units/selectable-units';
 import { listSelectableUnits } from '@/lib/units/list-selectable-units';
 import { createProductAction } from '@/app/actions/products';
+import { isFoodBusiness } from '@/lib/food/business';
 import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from '@/app/actions/categories';
 import BarcodeScanInput from '@/components/BarcodeScanInput';
 import ProductUnitPricingEditor from '@/components/ProductUnitPricingEditor';
@@ -412,6 +413,11 @@ export default async function ProductsPage(
             </div>
             {isManager && !issueActive ? (
               <div className="flex flex-wrap gap-2">
+                {isFoodBusiness(business.businessCategory) ? (
+                  <Link href="/products/dishes/new" className="btn-primary text-sm">
+                    Add a dish
+                  </Link>
+                ) : null}
                 <a href="#product-create" className="btn-secondary text-sm">
                   Add product
                 </a>

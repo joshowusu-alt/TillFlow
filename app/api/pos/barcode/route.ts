@@ -10,6 +10,8 @@ import {
   toSellableProductDto,
   type SellableProductDto,
 } from '@/lib/pos/sellable-dto';
+import { isFoodBusiness } from '@/lib/food/business';
+import { loadFoodCatalogue } from '@/lib/food/load-menus';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,9 +65,20 @@ export async function GET(request: NextRequest) {
       })
     : [];
   const inventoryMap = new Map(inventory.map((row) => [row.productId, row.qtyOnHandBase]));
-  const products: SellableProductDto[] = rows.map((product) =>
+  let products: SellableProductDto[] = rows.map((product) =>
     toSellableProductDto(product, inventoryMap.get(product.id) ?? 0)
   );
+  const business = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { businessCategory: true },
+  });
+  if (isFoodBusiness(business?.businessCategory) && products.length > 0) {
+    const { menus } = await loadFoodCatalogue(user.businessId, products.map((product) => product.id));
+    products = products.map((product) => {
+      const food = menus.get(product.id);
+      return food ? { ...product, food } : product;
+    });
+  }
   const index = buildPosProductIndex(products);
   const resolution = resolveBarcodeScan(code, products, index);
 

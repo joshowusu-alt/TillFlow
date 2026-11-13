@@ -6,6 +6,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { formatMoney, toTitleCase, formatGhanaPhoneForDisplay } from '@/lib/format';
 import { buildCartDetails, buildProductMap, formatAvailable, getUnitFromProduct, sumCartTotals, type PosCartLine } from '@/lib/payments/pos-cart';
+import FoodPlatePicker from '@/components/food/FoodPlatePicker';
+import { foodAvailabilityText } from '@/lib/food/availability';
+import { defaultPlateSelection, dishNeedsPicker, menuListPricePence, plateSelectionKey, pricePlate, type PlateSelection } from '@/lib/food/plate';
 import { resolveBrandStyles } from '@/lib/storefront-branding';
 import { getPaymentInstructionDetails } from '@/lib/storefront-payments';
 import type { PublicStorefront } from '@/lib/services/online-orders';
@@ -215,6 +218,15 @@ function CheckoutUnavailableBanner() {
 
 type ProductSelectionState = Record<string, { unitId: string; qtyInUnit: number }>;
 type StorefrontProduct = PublicStorefront['products'][number];
+
+function isListedInStock(product: { onHandBase: number; food?: { stockMode: string; soldOut: boolean } | null }) {
+  if (product.food?.stockMode === 'NOT_COUNTED') return !product.food.soldOut;
+  return product.onHandBase > 0;
+}
+
+function listedPricePence(product: { sellingPriceBasePence: number; food?: Parameters<typeof menuListPricePence>[0] }) {
+  return product.food ? menuListPricePence(product.food, product.sellingPriceBasePence) : product.sellingPriceBasePence;
+}
 type RecommendationProductLike = {
   id: string;
   categoryId: string | null;
@@ -222,6 +234,7 @@ type RecommendationProductLike = {
   publicCategoryName?: string | null;
   sellingPriceBasePence: number;
   onHandBase: number;
+  food?: { stockMode: string; soldOut: boolean } | null;
 };
 
 function initialSelections(storefront: PublicStorefront) {
@@ -245,7 +258,7 @@ function getRecommendationCategoryLabel(product: RecommendationProductLike | nul
 }
 
 function sortRecommendationProducts(a: RecommendationProductLike, b: RecommendationProductLike) {
-  const stockDifference = Number(b.onHandBase > 0) - Number(a.onHandBase > 0);
+  const stockDifference = Number(isListedInStock(b)) - Number(isListedInStock(a));
   if (stockDifference !== 0) return stockDifference;
   return b.sellingPriceBasePence - a.sellingPriceBasePence;
 }
@@ -297,13 +310,15 @@ function ProductDetailSheet({
   useFocusTrap(true, dialogRef, onClose);
   const selected = selectionState[product.id];
   const selectedUnit = selected ? getUnitFromProduct(product, selected.unitId) : undefined;
-  const unitPrice = selectedUnit
+  const unitPrice = product.food
+    ? formatMoney(listedPricePence(product), storefront.currency)
+    : selectedUnit
     ? formatMoney(
         selectedUnit.sellingPricePence ?? product.sellingPriceBasePence * selectedUnit.conversionToBase,
         storefront.currency,
       )
     : formatMoney(product.sellingPriceBasePence, storefront.currency);
-  const inStock = product.onHandBase > 0;
+  const inStock = isListedInStock(product);
   const hasPromo = product.promoBuyQty > 0 && product.promoGetQty > 0;
   const productInCart = cartProductIds.has(product.id);
   const productCartQty = cartQtyByProductId[product.id] ?? 0;
@@ -357,10 +372,10 @@ function ProductDetailSheet({
           {inStock ? (
             <div className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              Available for pickup
+              {product.food && foodAvailabilityText(product.food, product.onHandBase) === 'Low' ? 'Low — a few portions left' : 'Available for pickup'}
             </div>
           ) : (
-            <div className="mt-1 text-xs font-semibold text-slate-400">Currently sold out</div>
+            <div className="mt-1 text-xs font-semibold text-slate-400">{product.food ? 'Sold out' : 'Currently sold out'}</div>
           )}
 
           {product.storefrontDescription ? (
@@ -460,6 +475,7 @@ export default function StorefrontClient({
   const CART_STORAGE_KEY = `tillflow_cart_${storefront.slug}`;
   const RECENTLY_VIEWED_STORAGE_KEY = `tillflow_viewed_${storefront.slug}`;
   const [cart, setCart] = useState<PosCartLine[]>([]);
+  const [plateProduct, setPlateProduct] = useState<StorefrontProduct | null>(null);
   const [cartRestored, setCartRestored] = useState(false);
   const [cartRestoring, setCartRestoring] = useState(false);
   const [cartProducts, setCartProducts] = useState(storefront.products);
@@ -712,8 +728,8 @@ export default function StorefrontClient({
       );
     });
     return filtered.sort((a, b) => {
-      if (a.onHandBase > 0 && b.onHandBase <= 0) return -1;
-      if (a.onHandBase <= 0 && b.onHandBase > 0) return 1;
+      if (isListedInStock(a) && !isListedInStock(b)) return -1;
+      if (!isListedInStock(a) && isListedInStock(b)) return 1;
       return 0;
     });
   }, [productsForStore, searchQuery, selectedCategoryId]);
@@ -855,7 +871,7 @@ export default function StorefrontClient({
       recentlyViewed
         .map((productId) => productMap.get(productId))
         .filter((product): product is NonNullable<typeof product> => Boolean(product))
-        .filter((product) => product.onHandBase > 0),
+        .filter((product) => isListedInStock(product)),
     [productMap, recentlyViewed],
   );
 
@@ -900,7 +916,7 @@ export default function StorefrontClient({
     const sameCategoryCandidates = productsForStore
       .filter((product) => {
         const key = getRecommendationCategoryKey(product);
-        return Boolean(key && cartCategoryKeys.has(key) && !cartProductIds.has(product.id) && product.onHandBase > 0);
+        return Boolean(key && cartCategoryKeys.has(key) && !cartProductIds.has(product.id) && isListedInStock(product));
       })
       .sort(sortRecommendationProducts);
 
@@ -952,7 +968,7 @@ export default function StorefrontClient({
     }
 
     const fallbackCandidates = productsForStore
-      .filter((product) => !cartProductIds.has(product.id) && product.onHandBase > 0)
+      .filter((product) => !cartProductIds.has(product.id) && isListedInStock(product))
       .sort(sortRecommendationProducts);
     const maxFallbackSuggestions = fallbackCandidates.length >= 4 ? 4 : 3;
 
@@ -968,12 +984,16 @@ export default function StorefrontClient({
   const cataloguePending = catalogLoading || searchQuery !== debouncedSearchQuery;
   const showInitialEmptySkeleton = cataloguePending || (!isMounted && storefront.products.length === 0);
 
-  function addToCart(productId: string) {
+  function addToCart(productId: string, plate?: PlateSelection) {
     // The add button is rendered from the catalogue immediately. cartProducts,
     // and therefore productMap, only catches up in an effect. A click in that
     // gap used to no-op, leaving the previous total on screen.
     const listed = productsForStore.find((item) => item.id === productId);
     const product = productMap.get(productId) ?? listed;
+    if (product?.food && !plate && dishNeedsPicker(product.food)) {
+      setPlateProduct(product as StorefrontProduct);
+      return;
+    }
     const current = selectionState[productId]?.unitId
       ? selectionState[productId]
       : listed?.units[0]?.id
@@ -999,11 +1019,13 @@ export default function StorefrontClient({
       setError('Your basket can contain up to 50 different items. Place this order before starting another basket.');
       return;
     }
+    const selection = plate ?? (product.food ? defaultPlateSelection(product.food) : undefined);
     setError(null);
     rememberViewedProduct(productId);
     trackEvent('add_to_cart', productId);
+    const plateKey = selection ? plateSelectionKey(selection) : '';
     setCart((prev) => {
-      const existing = prev.find((line) => line.productId === productId && line.unitId === current.unitId);
+      const existing = prev.find((line) => line.productId === productId && line.unitId === current.unitId && (line.plate ? plateSelectionKey(line.plate) : '') === plateKey);
       if (existing) {
         return prev.map((line) =>
           line.id === existing.id
@@ -1015,10 +1037,11 @@ export default function StorefrontClient({
       return [
         ...prev,
         {
-          id: `${productId}-${current.unitId}-${crypto.randomUUID()}`,
+          id: `${productId}-${current.unitId}-${plateKey}-${crypto.randomUUID()}`,
           productId,
           unitId: current.unitId,
           qtyInUnit: current.qtyInUnit,
+          ...(selection ? { plate: selection } : {}),
         },
       ];
     });
@@ -1085,11 +1108,24 @@ export default function StorefrontClient({
           customerNotes,
           sessionId: storefrontSessionId,
           network,
-          items: cart.map((line) => ({
-            productId: line.productId,
-            unitId: line.unitId,
-            qtyInUnit: line.qtyInUnit,
-          })),
+          items: cart.map((line) => {
+            const product = productMap.get(line.productId);
+            const expected = line.plate && product?.food
+              ? (() => {
+                  try {
+                    return pricePlate(product.food, line.plate, product.sellingPriceBasePence).platePricePence;
+                  } catch {
+                    return undefined;
+                  }
+                })()
+              : undefined;
+            return {
+              productId: line.productId,
+              unitId: line.unitId,
+              qtyInUnit: line.qtyInUnit,
+              ...(line.plate ? { plate: { ...line.plate, expectedPricePence: expected } } : {}),
+            };
+          }),
         }),
       });
 
@@ -1170,7 +1206,7 @@ export default function StorefrontClient({
       'radial-gradient(circle at 18% 0%, rgba(255,255,255,0.24), transparent 32%), radial-gradient(circle at 88% 18%, rgba(16,185,129,0.18), transparent 28%), linear-gradient(135deg, #061b45 0%, var(--store-primary) 46%, #0f4f9f 100%)',
     color: 'var(--store-primary-foreground)',
   };
-  const merchProducts = productsForStore.filter((product) => product.onHandBase > 0);
+  const merchProducts = productsForStore.filter((product) => isListedInStock(product));
   const featuredProducts = merchProducts
     .filter((product) => product.imageUrl || product.promoBuyQty > 0 || product.publicCategoryPriority <= 30)
     .slice(0, 8);
@@ -1462,7 +1498,7 @@ export default function StorefrontClient({
                           }}
                           aria-label={`View ${toTitleCase(product.name)}`}
                         >
-                          <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} priority={featuredIndex < 4} />
+                          <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={isListedInStock(product)} categoryName={product.publicCategoryName} priority={featuredIndex < 4} />
                         </button>
                         <div className="p-2">
                           <div className="line-clamp-2 min-h-[2rem] text-xs font-bold leading-tight text-ink">{toTitleCase(product.name)}</div>
@@ -1585,13 +1621,15 @@ export default function StorefrontClient({
                   {pagedProducts.map((product, index) => {
                     const selected = selectionState[product.id];
                     const selectedUnit = selected ? getUnitFromProduct(product, selected.unitId) : undefined;
-                    const unitPrice = selectedUnit
+                    const unitPrice = product.food
+                      ? formatMoney(listedPricePence(product), storefront.currency)
+                      : selectedUnit
                       ? formatMoney(
                           selectedUnit.sellingPricePence ?? product.sellingPriceBasePence * selectedUnit.conversionToBase,
                           storefront.currency,
                         )
                       : formatMoney(product.sellingPriceBasePence, storefront.currency);
-                    const inStock = product.onHandBase > 0;
+                    const inStock = isListedInStock(product);
                     const hasPromo = product.promoBuyQty > 0 && product.promoGetQty > 0;
                     const displayName = toTitleCase(product.name);
                     const displayCategory = product.publicCategoryName ? toTitleCase(product.publicCategoryName) : null;
@@ -1857,7 +1895,7 @@ export default function StorefrontClient({
                               className="flex min-w-0 flex-1 items-center gap-3 text-left"
                             >
                               <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-50">
-                                <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
+                                <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={isListedInStock(product)} categoryName={product.publicCategoryName} />
                               </div>
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-medium text-ink">{toTitleCase(product.name)}</div>
@@ -1946,6 +1984,7 @@ export default function StorefrontClient({
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-medium text-ink">{toTitleCase(line.product.name)}</div>
                           <div className="mt-0.5 text-xs text-black/50">{line.qtyInUnit} × {toTitleCase(line.unit.name)}</div>
+                          {line.plateSummary ? <div className="mt-0.5 text-xs text-black/55">{line.plateSummary}</div> : null}
                         </div>
                         <div className="shrink-0 text-right">
                           <div className="text-sm font-semibold text-ink">{formatMoney(line.total, storefront.currency)}</div>
@@ -1989,7 +2028,7 @@ export default function StorefrontClient({
                             onClick={() => scrollToProduct(product.id)}
                             className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-slate-50"
                           >
-                            <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
+                            <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={isListedInStock(product)} categoryName={product.publicCategoryName} />
                           </button>
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-medium text-ink">{toTitleCase(product.name)}</div>
@@ -2251,7 +2290,7 @@ export default function StorefrontClient({
                         onClick={() => scrollToProduct(product.id)}
                         className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-50"
                       >
-                        <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
+                        <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={isListedInStock(product)} categoryName={product.publicCategoryName} />
                       </button>
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-ink">{toTitleCase(product.name)}</div>
@@ -2479,6 +2518,20 @@ export default function StorefrontClient({
           cartQtyByProductId={cartQtyByProductId}
           adjustCartProduct={adjustCartProduct}
           primaryStyle={primaryStyle}
+        />
+      ) : null}
+
+      {plateProduct?.food ? (
+        <FoodPlatePicker
+          menu={plateProduct.food}
+          startingPricePence={plateProduct.sellingPriceBasePence}
+          currency={storefront.currency}
+          onCancel={() => setPlateProduct(null)}
+          onConfirm={(selection) => {
+            const id = plateProduct.id;
+            setPlateProduct(null);
+            addToCart(id, selection);
+          }}
         />
       ) : null}
 

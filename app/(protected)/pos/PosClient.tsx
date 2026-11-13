@@ -44,6 +44,9 @@ import {
   type DueDateDecision,
 } from '@/lib/payments/pos-checkout-state';
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
+import FoodPlatePicker from '@/components/food/FoodPlatePicker';
+import { foodAvailabilityText } from '@/lib/food/availability';
+import { defaultPlateSelection, dishNeedsPicker, pricePlate, type PlateSelection } from '@/lib/food/plate';
 import { filterPosProducts } from '@/lib/payments/pos-search';
 import type { PosCatalogueMode, SellableProductDto } from '@/lib/pos/sellable-dto';
 import {
@@ -140,6 +143,7 @@ type CartLine = {
   lineSubtotalPence?: number;
   qtyBase?: number;
   weighedLabel?: string;
+  plate?: PlateSelection | null;
 };
 
 type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
@@ -428,17 +432,27 @@ export default function PosClient({
     targetProductId: string,
     targetUnitId: string,
     desiredQty: number,
-    excludeLineId?: string
+    excludeLineId?: string,
+    stockPerEach?: number,
   ) => {
     const product = getProduct(targetProductId);
     const unit = getUnit(product, targetUnitId);
     if (!product || !unit) return desiredQty;
+    if (product.food?.stockMode === 'NOT_COUNTED') {
+      if (product.food.soldOut) {
+        setStockAlert(`${product.name} is sold out.`);
+        return 0;
+      }
+      setStockAlert(null);
+      return desiredQty;
+    }
     const availableBase = getAvailableBase(targetProductId, excludeLineId);
     if (availableBase <= 0) {
       setStockAlert(`No stock available for ${product.name}.`);
       return 0;
     }
-    const maxQty = Math.floor(availableBase / unit.conversionToBase);
+    const each = stockPerEach && stockPerEach > 0 ? stockPerEach : unit.conversionToBase;
+    const maxQty = Math.floor(availableBase / each);
     if (desiredQty > maxQty) {
       const availableLabel = formatAvailable(product, availableBase);
       setStockAlert(`Only ${availableLabel} available for ${product.name}.`);
@@ -468,6 +482,37 @@ export default function PosClient({
     clampQtyInUnit,
     onFirstCartLine: () => router.prefetch('/pos'),
   });
+  const [plateProduct, setPlateProduct] = useState<ProductDto | null>(null);
+  const addPlateToCart = useCallback((product: ProductDto, plate?: PlateSelection) => {
+    const baseUnitId = getProductBaseUnitId(product);
+    if (!baseUnitId) return;
+    if (
+      product.food &&
+      !plate &&
+      (dishNeedsPicker(product.food) || (product.food.stockMode === 'NOT_COUNTED' && product.food.soldOut))
+    ) {
+      if (product.food.stockMode === 'NOT_COUNTED' && product.food.soldOut) return;
+      mergeProductOption(product);
+      setPlateProduct(product);
+      return;
+    }
+    const selection = plate ?? (product.food ? defaultPlateSelection(product.food) : undefined);
+    let qtyBase: number | undefined;
+    if (product.food && selection) {
+      try {
+        qtyBase = pricePlate(product.food, selection, product.sellingPriceBasePence).stockPortions;
+      } catch {
+        setPlateProduct(product);
+        return;
+      }
+    }
+    addToCart({
+      productId: product.id,
+      unitId: baseUnitId,
+      qtyInUnit: 1,
+      ...(selection ? { plate: selection, qtyBase } : {}),
+    });
+  }, [addToCart, mergeProductOption]);
 
   const selectedProduct = useMemo(
     () => productOptions.find((product) => product.id === productId),
@@ -857,6 +902,14 @@ export default function PosClient({
         }
       : undefined,
     addToCart: (line) => {
+      const product = productOptions.find((candidate) => candidate.id === line.productId);
+      if (product?.food) {
+        addPlateToCart(product);
+        setProductId(line.productId);
+        setBarcode('');
+        setBarcodeAlert(null);
+        return;
+      }
       addToCart(line);
       setProductId(line.productId);
       setUnitId(line.unitId);
@@ -1157,7 +1210,17 @@ export default function PosClient({
       const result = await completeSaleAction({
         storeId: store.id,
         tillId,
-        cart: JSON.stringify(saleSnapshot.cart),
+        cart: JSON.stringify(saleSnapshot.cart.map((line) => {
+          if (!line.plate) return line;
+          const product = saleSnapshot.productOptions.find((candidate) => candidate.id === line.productId);
+          if (!product?.food) return line;
+          try {
+            const priced = pricePlate(product.food, line.plate, product.sellingPriceBasePence);
+            return { ...line, plate: { ...line.plate, expectedPricePence: priced.platePricePence } };
+          } catch {
+            return line;
+          }
+        })),
         paymentStatus,
         customerId: saleSnapshot.customerId,
         dueDate: dueResolved.dueDate,
@@ -1641,8 +1704,7 @@ export default function PosClient({
                               setProductSearch('');
                               setProductDropdownOpen(false);
                             } else {
-                              // Single unit — add directly as before
-                              addToCart({ productId: product.id, unitId: baseUnitId, qtyInUnit: 1 });
+                              addPlateToCart(product);
                               setProductId(product.id);
                               setUnitId(baseUnitId);
                               setProductSearch('');
@@ -1670,10 +1732,12 @@ export default function PosClient({
                                 {formatMoney(product.sellingPriceBasePence, business.currency)}
                               </div>
                               <div className={`text-[10px] font-semibold uppercase tracking-wide ${outOfStock ? 'text-red-500' : 'text-black/40'}`}>
-                                Stock
+                                {product.food?.stockMode === 'COUNTED' ? 'Portions' : 'Stock'}
                               </div>
-                              <div className={`text-[11px] tabular-nums ${outOfStock ? 'text-red-600 font-semibold' : 'text-black/55'}`}>
-                                {outOfStock ? 'None available' : formatAvailable(product, available)}
+                              <div className={`text-[11px] tabular-nums ${outOfStock ? 'text-red-600 font-semibold' : product.food && foodAvailabilityText(product.food, available) === 'Low' ? 'text-amber-700 font-semibold' : 'text-black/55'}`}>
+                                {product.food
+                                  ? (foodAvailabilityText(product.food, product.food.stockMode === 'COUNTED' ? available : product.onHandBase) ?? formatAvailable(product, available))
+                                  : outOfStock ? 'None available' : formatAvailable(product, available)}
                               </div>
                             </div>
                           </div>
@@ -1803,6 +1867,20 @@ export default function PosClient({
           )}
         </div>
 
+        {plateProduct?.food ? (
+          <FoodPlatePicker
+            menu={plateProduct.food}
+            startingPricePence={plateProduct.sellingPriceBasePence}
+            currency={business.currency}
+            onCancel={() => setPlateProduct(null)}
+            onConfirm={(selection) => {
+              addPlateToCart(plateProduct, selection);
+              setPlateProduct(null);
+              playBeep(true);
+              barcodeRef.current?.focus();
+            }}
+          />
+        ) : null}
         <ProductShortcuts
           key={`${business.id}.${store.id}`}
           workspaceTab={productWorkspaceTab} onWorkspaceTabChange={setProductWorkspaceTab} cartCount={cartDetails.length}
@@ -1811,9 +1889,9 @@ export default function PosClient({
           onSelect={(product) => {
             const baseUnitId = getProductBaseUnitId(product);
             if (!baseUnitId || getAvailableBase(product.id) <= 0) return;
-            if (product.units.length > 1) stageProduct(product);
+            if (product.units.length > 1 && !product.food) stageProduct(product);
             else {
-              addToCart({ productId: product.id, unitId: baseUnitId, qtyInUnit: 1 });
+              addPlateToCart(product);
               playBeep(true);
               barcodeRef.current?.focus();
             }
@@ -2097,6 +2175,7 @@ export default function PosClient({
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="font-semibold text-sm truncate">{line.product.name}</div>
+                          {line.plateSummary ? <div className="mt-0.5 text-xs text-black/55">{line.plateSummary}</div> : null}
                           <div className="mt-0.5 flex flex-wrap items-center gap-2">
                             <span className="text-xs text-black/40">{formatMoney(line.unitPrice, business.currency)} × {line.unit.name}</span>
                             {line.promoLabel && <span className="text-[10px] text-emerald-600 font-medium">{line.promoLabel}</span>}

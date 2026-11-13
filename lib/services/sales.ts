@@ -39,6 +39,9 @@ import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
 import { reserveNextDocumentNumber, reserveNextSequenceValue } from './document-numbers';
 import { unstable_cache } from 'next/cache';
 import { checkoutContextTag } from '@/lib/cache/pos-tags';
+import { isFoodBusiness } from '@/lib/food/business';
+import { priceFoodSaleLines } from '@/lib/food/price-sale';
+import type { PlateSelection } from '@/lib/food/plate';
 
 // Account codes fetched on every checkout — extracted to module level so the
 // unstable_cache key is stable across calls.
@@ -296,6 +299,10 @@ export type SaleLineInput = {
   qtyBase?: number;
   /** Fixed line subtotal (weighed items). */
   lineSubtotalPence?: number;
+  /** Food plate choices. Ignored unless this business is a food business. */
+  plate?: PlateSelection | null;
+  /** Set by the server when a plate is priced. Never trusted from the client. */
+  plateSnapshotJson?: string | null;
   discountType?: DiscountType;
   discountValue?: number;
 };
@@ -697,7 +704,12 @@ async function createSaleImpl(input: CreateSaleInput) {
   const lineDetails = await measureCheckoutStage(
     'action.checkout.cart-pricing',
     input,
-    async () => buildLinePricing(input.lines, unitMap, business.vatEnabled),
+    async () => {
+      const lines = input.onlineOrderId || !isFoodBusiness(business.businessCategory)
+        ? input.lines
+        : await priceFoodSaleLines(input.businessId, input.lines);
+      return buildLinePricing(lines, unitMap, business.vatEnabled);
+    },
     { stage: 'cart-pricing', rowCount: input.lines.length },
     CHECKOUT_STAGE_THRESHOLDS_MS.cartPricing,
   );
@@ -712,11 +724,15 @@ async function createSaleImpl(input: CreateSaleInput) {
       }
       Object.assign(line, { qtyBase: captured.qtyBase, unitPricePence: captured.unitPricePence,
         lineSubtotal: captured.lineSubtotalPence, lineNetSubtotal: captured.lineSubtotalPence,
-        lineDiscount: 0, promoDiscount: 0, lineVat: captured.lineVatPence, lineTotal: captured.lineTotalPence });
+        lineDiscount: 0, promoDiscount: 0, lineVat: captured.lineVatPence, lineTotal: captured.lineTotalPence,
+        plateSnapshotJson: captured.plateSnapshotJson ?? null });
       line.productUnit = { ...line.productUnit, conversionToBase: captured.conversionToBase };
     }
   }
   const qtyByProduct = buildQtyByProductMap(lineDetails);
+  for (const [productId, qtyBase] of qtyByProduct) {
+    if (qtyBase <= 0) qtyByProduct.delete(productId);
+  }
   const enforceInventory = (input.inventoryPolicy ?? 'enforce') === 'enforce';
   const shouldApplyInventoryMovements = !input.skipInventoryMovements;
 
@@ -1102,6 +1118,7 @@ async function createSaleImpl(input: CreateSaleInput) {
           lineTotalPence: line.lineTotal,
           lineCostPence: transactionCosts[index].costPence,
           costBasis: transactionCosts[index].costBasis,
+          plateSnapshotJson: line.plateSnapshotJson ?? null,
         }))
       },
       payments: {
@@ -1422,9 +1439,10 @@ async function createSaleImpl(input: CreateSaleInput) {
         measureCheckoutStage(
           'action.checkout.stock-movements',
           input,
-          async () => recordSaleStockMovements(tx, lineDetails.map((line, index) => {
+          async () => recordSaleStockMovements(tx, lineDetails.flatMap((line, index) => {
+              if (line.qtyBase <= 0) return [];
               const beforeQtyBase = stockMovementInventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
-              return {
+              return [{
                 storeId: input.storeId,
                 productId: line.productId,
                 qtyBase: -line.qtyBase,
@@ -1439,7 +1457,7 @@ async function createSaleImpl(input: CreateSaleInput) {
                 referenceType: 'SALES_INVOICE' as const,
                 referenceId: created.id,
                 userId: input.cashierUserId,
-              };
+              }];
             }), stockMovementInventoryMap),
           { stage: 'stock-movements', rowCount: lineDetails.length },
           CHECKOUT_STAGE_THRESHOLDS_MS.stockMovements,

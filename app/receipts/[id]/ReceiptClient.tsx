@@ -52,6 +52,7 @@ type ReceiptClientProps = {
   }[];
   lines: {
     name: string;
+    detail?: string | null;
     qtyLabel: string;
     unitPricePence: number;
     lineTotalPence: number;
@@ -351,6 +352,7 @@ export default function ReceiptClient({
                   <div className="font-mono text-black/45">{index + 1}</div>
                   <div className="min-w-0">
                     <div className="font-semibold leading-tight text-black">{line.name}</div>
+                    {line.detail ? <div className="mt-0.5 text-[10px] leading-tight text-black/55">{line.detail}</div> : null}
                     {discountPence > 0 ? (
                       <div className="mt-1 text-[10px] leading-tight text-emerald-700">
                         Discount {formatMoney(discountPence, business.currency)}

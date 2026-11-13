@@ -116,7 +116,7 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
               <option value="COSMETICS">Cosmetics / beauty</option>
               <option value="HARDWARE">Hardware</option>
               <option value="WHOLESALE">Wholesaler</option>
-              <option value="RESTAURANT_STOCK">Food business with stock</option>
+              <option value="RESTAURANT_STOCK">Food business</option>
               <option value="OTHER">Other product business</option>
             </select>
           </div>

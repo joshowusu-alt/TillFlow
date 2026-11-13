@@ -4,6 +4,7 @@
  */
 
 import { productDisplayName } from '@/lib/products/barcode-identity';
+import type { FoodMenu } from '@/lib/food/plate';
 
 export const POS_LOCAL_INDEX_MAX = 2000;
 export const POS_OFFLINE_CATALOGUE_MAX = 5000;
@@ -35,6 +36,7 @@ export type SellableProductDto = {
   categoryName: string | null;
   units: SellableUnitDto[];
   onHandBase: number;
+  food?: FoodMenu;
 };
 
 /** Prisma select for sellable POS rows. Intentionally omits imageUrl and cost fields. */

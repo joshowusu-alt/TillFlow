@@ -2,6 +2,8 @@ import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import ReceiptClient from './ReceiptClient';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
+import { formatMoney } from '@/lib/format';
+import { formatPlateDetail, parsePlateSnapshot } from '@/lib/food/plate';
 
 export default async function ReceiptPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -55,7 +57,9 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
       },
       lines: {
         select: {
+          qtyInUnit: true,
           qtyBase: true,
+          plateSnapshotJson: true,
           unitPricePence: true,
           lineTotalPence: true,
           lineDiscountPence: true,
@@ -90,16 +94,20 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
     const packaging = getPrimaryPackagingUnit(
       line.product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit }))
     );
-    const qtyLabel = formatMixedUnit({
-      qtyBase: line.qtyBase,
-      baseUnit: baseUnit?.unit.name ?? 'unit',
-      baseUnitPlural: baseUnit?.unit.pluralName,
-      packagingUnit: packaging?.unit.name,
-      packagingUnitPlural: packaging?.unit.pluralName,
-      packagingConversion: packaging?.conversionToBase
-    });
+    const plate = parsePlateSnapshot(line.plateSnapshotJson);
+    const qtyLabel = plate
+      ? String(line.qtyInUnit)
+      : formatMixedUnit({
+          qtyBase: line.qtyBase,
+          baseUnit: baseUnit?.unit.name ?? 'unit',
+          baseUnitPlural: baseUnit?.unit.pluralName,
+          packagingUnit: packaging?.unit.name,
+          packagingUnitPlural: packaging?.unit.pluralName,
+          packagingConversion: packaging?.conversionToBase
+        });
     return {
-      name: line.product.name,
+      name: plate?.dishName ?? line.product.name,
+      detail: plate ? formatPlateDetail(plate, (pence) => formatMoney(pence, invoice.business.currency)) : null,
       qtyLabel,
       unitPricePence: line.unitPricePence,
       lineTotalPence: line.lineTotalPence,

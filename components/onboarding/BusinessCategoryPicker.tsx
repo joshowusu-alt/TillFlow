@@ -12,7 +12,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   COSMETICS: 'Cosmetics / beauty',
   HARDWARE: 'Hardware',
   WHOLESALE: 'Wholesaler',
-  RESTAURANT_STOCK: 'Food business with stock',
+  RESTAURANT_STOCK: 'Food business',
   OTHER: 'Other product business',
 };
 

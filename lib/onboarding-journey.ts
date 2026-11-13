@@ -4,6 +4,7 @@
  */
 
 import { BUSINESS_CATEGORIES, type BusinessCategory } from './activation-steps';
+import { isFoodBusiness, manualCatalogueHref } from '@/lib/food/business';
 
 export const ONBOARDING_STAGE_KEYS = ['business', 'products', 'stock', 'selling'] as const;
 export type OnboardingStageKey = (typeof ONBOARDING_STAGE_KEYS)[number];
@@ -155,7 +156,9 @@ export function buildOnboardingStages(snapshot: OnboardingJourneySnapshot): Onbo
     {
       key: 'products',
       title: 'Add or import what you sell',
-      explanation: 'Add a product manually or import a catalogue / opening stock file.',
+      explanation: isFoodBusiness(snapshot.businessCategory)
+        ? 'Add a dish by hand: its price, what is included, and any extras.'
+        : 'Add a product manually or import a catalogue / opening stock file.',
       done: productsDone,
       href: '/onboarding#products',
     },
@@ -208,9 +211,11 @@ export function resolveOnboardingUpNext(snapshot: OnboardingJourneySnapshot): On
   if (!hasValidProduct(snapshot)) {
     return {
       key: 'add-product',
-      title: 'Add or import a product',
-      explanation: 'Add one product manually or import a product catalogue.',
-      href: '/onboarding#products',
+      title: isFoodBusiness(snapshot.businessCategory) ? 'Add a dish' : 'Add or import a product',
+      explanation: isFoodBusiness(snapshot.businessCategory)
+        ? 'Add one dish by hand, with its price and what comes on the plate.'
+        : 'Add one product manually or import a product catalogue.',
+      href: isFoodBusiness(snapshot.businessCategory) ? manualCatalogueHref(snapshot.businessCategory) : '/onboarding#products',
       isStartSelling: false,
     };
   }
@@ -257,8 +262,9 @@ export function computeOnboardingJourney(
   let stockDeferredMessage: string | null = null;
   let zeroStockBlockMessage: string | null = null;
   if (valid && !sellable && !firstSale && !snapshot.onboardingCompletedAt) {
-    zeroStockBlockMessage =
-      'Add stock to at least one product to make your first sale. You can complete the rest later.';
+    zeroStockBlockMessage = isFoodBusiness(snapshot.businessCategory)
+      ? 'Counted dishes need cooked portions before they can sell. A dish that is not counted can be switched on without a portion count.'
+      : 'Add stock to at least one product to make your first sale. You can complete the rest later.';
   }
   if (sellable && !firstSale && !snapshot.onboardingCompletedAt) {
     stockDeferredMessage =
@@ -306,6 +312,6 @@ export const BUSINESS_CATEGORY_LABELS: Record<string, string> = {
   COSMETICS: 'Cosmetics / beauty',
   HARDWARE: 'Hardware',
   WHOLESALE: 'Wholesaler',
-  RESTAURANT_STOCK: 'Food business with stock',
+  RESTAURANT_STOCK: 'Food business',
   OTHER: 'Other product business',
 };

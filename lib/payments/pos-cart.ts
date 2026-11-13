@@ -4,6 +4,9 @@ import {
   resolveEffectiveSellingPricePence,
   resolveProductUnitBaseValuePence,
 } from '@/lib/services/shared';
+import { formatPlateDetail, pricePlate, type FoodMenu, type PlateSelection } from '@/lib/food/plate';
+import { sellableBaseQty } from '@/lib/food/availability';
+import { formatMoney } from '@/lib/format';
 
 export type PosUnit = {
   id: string;
@@ -32,6 +35,7 @@ export type PosProduct = {
   imageUrl: string | null;
   units: PosUnit[];
   onHandBase: number;
+  food?: FoodMenu;
 };
 
 export type PosCartLine = {
@@ -46,6 +50,7 @@ export type PosCartLine = {
   /** Stock deduction in base units (grams when inventory is tracked per kg). */
   qtyBase?: number;
   weighedLabel?: string;
+  plate?: PlateSelection | null;
 };
 
 export type PosCartDetail = PosCartLine & {
@@ -60,6 +65,7 @@ export type PosCartDetail = PosCartLine & {
   vat: number;
   total: number;
   promoLabel: string | null;
+  plateSummary: string | null;
 };
 
 export function buildProductMap(products: PosProduct[]) {
@@ -78,6 +84,9 @@ export function getAvailableBase(
 ) {
   const product = productMap.get(targetProductId);
   if (!product) return 0;
+  if (product.food?.stockMode === 'NOT_COUNTED') {
+    return sellableBaseQty(product.food, product.onHandBase);
+  }
   const usedBase = cart.reduce((sum, line) => {
     if (line.productId !== targetProductId || line.id === excludeLineId) return sum;
     const unit = getUnitFromProduct(product, line.unitId);
@@ -121,13 +130,23 @@ export function buildCartDetails(
       const unit = product ? getUnitFromProduct(product, line.unitId) : undefined;
       if (!product || !unit) return null;
 
-      const qtyBase =
-        typeof line.qtyBase === 'number' && line.qtyBase > 0
+      let plate = null;
+      if (product.food && line.plate) {
+        try {
+          plate = pricePlate(product.food, { ...line.plate, expectedPricePence: undefined }, product.sellingPriceBasePence);
+        } catch {
+          plate = null;
+        }
+      }
+      const qtyBase = plate
+        ? plate.stockPortions * line.qtyInUnit
+        : typeof line.qtyBase === 'number' && line.qtyBase > 0
           ? Math.round(line.qtyBase)
           : line.qtyInUnit * unit.conversionToBase;
-      const unitPrice = resolveEffectiveSellingPricePence(product, unit);
-      const subtotal =
-        typeof line.lineSubtotalPence === 'number' && line.lineSubtotalPence > 0
+      const unitPrice = plate ? plate.platePricePence : resolveEffectiveSellingPricePence(product, unit);
+      const subtotal = plate
+        ? plate.platePricePence * line.qtyInUnit
+        : typeof line.lineSubtotalPence === 'number' && line.lineSubtotalPence > 0
           ? line.lineSubtotalPence
           : unitPrice * line.qtyInUnit;
       const lineDiscount = computeDiscount(subtotal, line.discountType, line.discountValue);
@@ -176,6 +195,7 @@ export function buildCartDetails(
           promoFreeUnits > 0
             ? `Promo: ${promoBuyQty} + ${promoGetQty} (free ${promoFreeUnits})`
             : null,
+        plateSummary: plate ? formatPlateDetail(plate, (pence) => formatMoney(pence, 'GHS')) : null,
       };
     })
     .filter(Boolean) as PosCartDetail[];

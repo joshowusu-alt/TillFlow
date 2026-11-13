@@ -7,6 +7,8 @@ import {
   clampPosSearchTake,
   toSellableProductDto,
 } from '@/lib/pos/sellable-dto';
+import { isFoodBusiness } from '@/lib/food/business';
+import { loadFoodCatalogue } from '@/lib/food/load-menus';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,10 +49,23 @@ export async function GET(request: NextRequest) {
     : [];
   const inventoryMap = new Map(inventory.map((row) => [row.productId, row.qtyOnHandBase]));
 
+  let dtos = products.map((product) =>
+    toSellableProductDto(product, inventoryMap.get(product.id) ?? 0)
+  );
+  const business = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { businessCategory: true },
+  });
+  if (isFoodBusiness(business?.businessCategory) && dtos.length > 0) {
+    const { menus } = await loadFoodCatalogue(user.businessId, dtos.map((product) => product.id));
+    dtos = dtos.map((product) => {
+      const food = menus.get(product.id);
+      return food ? { ...product, food } : product;
+    });
+  }
+
   return NextResponse.json({
-    products: products.map((product) =>
-      toSellableProductDto(product, inventoryMap.get(product.id) ?? 0)
-    ),
+    products: dtos,
     take,
   });
 }

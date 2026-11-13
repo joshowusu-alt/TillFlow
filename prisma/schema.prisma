@@ -210,6 +210,8 @@ model Business {
   controlSupportIssues       ControlSupportIssue[]
   businessSequences          BusinessSequence[]
   cashVarianceInvestigations CashVarianceInvestigation[]
+  foodDishes                 FoodDish[]
+  foodPreparations           FoodPreparation[]
 
   @@index([whatsappEnabled, isDemo])
 }
@@ -425,6 +427,7 @@ model Store {
   reorderActions             ReorderAction[]
   paymentReconciliations     PaymentReconciliation[]
   migrationBranchMappings    MigrationBranchMapping[]
+  foodPreparations           FoodPreparation[]
 
   /// Tenant-aware composite target for migration branch mappings.
   @@unique([businessId, id])
@@ -549,6 +552,7 @@ model User {
   migrationPackagesSuperseded MigrationPackage[]           @relation("MigrationPackageSupersededBy")
   migrationValidationRuns     MigrationValidationRun[]
   migrationApprovalHistories  MigrationApprovalHistory[]
+  foodPreparations            FoodPreparation[]
 
   /// Tenant-aware composite target for migration actor FKs.
   @@unique([businessId, id])
@@ -740,6 +744,8 @@ model Product {
   reorderActions     ReorderAction[]
   onlineOrderLines   OnlineOrderLine[]
   storefrontEvents   StorefrontEvent[]
+  foodDish           FoodDish?
+  foodPreparations   FoodPreparation[]
 
   @@unique([businessId, barcode])
   @@index([businessId, name, publisher, edition])
@@ -1180,6 +1186,8 @@ model OnlineOrderLine {
   lineCostPence     Int?
   costBasis         String?
   lineTotalPence    Int
+  /// Plate as sold: dish, size, included items, extras and prices. Null on retail lines.
+  plateSnapshotJson String?
   createdAt         DateTime @default(now())
 
   onlineOrder OnlineOrder @relation(fields: [onlineOrderId], references: [id], onDelete: Cascade)
@@ -1402,6 +1410,8 @@ model SalesInvoiceLine {
   lineTotalPence            Int
   lineCostPence             Int      @default(0)
   costBasis                 String?
+  /// Plate as sold: dish, size, included items, extras and prices. Null on retail lines.
+  plateSnapshotJson         String?
   createdAt                 DateTime @default(now())
 
   salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
@@ -2221,4 +2231,108 @@ model PurchaseReturnCredit {
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Restrict)
   @@index([businessId, storeId, createdAt])
   @@index([purchaseInvoiceId])
+}
+
+/// Food-business dish. Absent for supermarket, bookshop and every other product.
+model FoodDish {
+  id         String   @id @default(cuid())
+  businessId String
+  productId  String   @unique
+  /// COUNTED portions, or NOT_COUNTED (available / sold out only).
+  stockMode  String   @default("NOT_COUNTED")
+  soldOut    Boolean  @default(false)
+  /// Counted dishes: till shows Low at or below this many portions. 0 means no low warning.
+  lowAt      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business   Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product    Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sizes      FoodDishSize[]
+  inclusions FoodDishInclusion[]
+  groups     FoodAddonGroup[]
+
+  @@unique([businessId, productId])
+  @@index([businessId])
+}
+
+model FoodDishSize {
+  id         String  @id @default(cuid())
+  dishId     String
+  name       String
+  pricePence Int
+  isDefault  Boolean @default(false)
+  sortOrder  Int     @default(0)
+  active     Boolean @default(true)
+
+  dish FoodDish @relation(fields: [dishId], references: [id], onDelete: Cascade)
+
+  @@index([dishId, sortOrder])
+}
+
+model FoodDishInclusion {
+  id            String @id @default(cuid())
+  dishId        String
+  name          String
+  qty           Int    @default(1)
+  /// Portions of the counted dish this included item uses. 0 means it is descriptive only.
+  stockPortions Int    @default(0)
+  sortOrder     Int    @default(0)
+
+  dish FoodDish @relation(fields: [dishId], references: [id], onDelete: Cascade)
+
+  @@index([dishId, sortOrder])
+}
+
+model FoodAddonGroup {
+  id        String  @id @default(cuid())
+  dishId    String
+  name      String
+  /// MANY extras, or SINGLE (choose one).
+  selection String  @default("MANY")
+  required  Boolean @default(false)
+  sortOrder Int     @default(0)
+
+  dish   FoodDish    @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  addons FoodAddon[]
+
+  @@index([dishId, sortOrder])
+}
+
+model FoodAddon {
+  id            String  @id @default(cuid())
+  groupId       String
+  name          String
+  pricePence    Int     @default(0)
+  maxQty        Int     @default(1)
+  /// Extra counted portions used each time this add-on is chosen.
+  stockPortions Int     @default(0)
+  sortOrder     Int     @default(0)
+  active        Boolean @default(true)
+
+  group FoodAddonGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, sortOrder])
+}
+
+/// Cooked portions added to a counted dish. Quantity only — no journal.
+model FoodPreparation {
+  id             String   @id @default(cuid())
+  businessId     String
+  storeId        String
+  productId      String
+  qtyBase        Int
+  note           String?
+  userId         String
+  idempotencyKey String?
+  createdAt      DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, productId, createdAt])
+  @@index([storeId, createdAt])
 }

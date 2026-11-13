@@ -15,6 +15,8 @@ import {
   toSellableProductDto,
 } from '@/lib/pos/sellable-dto';
 import { posInventoryTag, posProductsTag } from '@/lib/cache/pos-tags';
+import { isFoodBusiness } from '@/lib/food/business';
+import { loadFoodCatalogue } from '@/lib/food/load-menus';
 
 function getCachedProducts(businessId: string) {
   return unstable_cache(
@@ -128,9 +130,15 @@ export default async function PosBoard({
         'page.pos.dto-map',
         async () => {
           const inventoryMap = new Map(inventory.map((item) => [item.productId, item.qtyOnHandBase]));
-          return products.map((product) =>
+          const dtos = products.map((product) =>
             toSellableProductDto(product, inventoryMap.get(product.id) ?? 0)
           );
+          if (!isFoodBusiness(business.businessCategory)) return dtos;
+          const { menus } = await loadFoodCatalogue(business.id, dtos.map((product) => product.id));
+          return dtos.map((product) => {
+            const food = menus.get(product.id);
+            return food ? { ...product, food } : product;
+          });
         },
         { ...posRouteMeta, cacheState: 'cpu-map', rowCount: products.length },
         { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'route' },

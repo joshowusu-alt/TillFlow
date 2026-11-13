@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createOnlineCheckout } from '@/lib/services/online-orders';
 import { consumeStorefrontCheckoutAttempt } from '@/lib/security/storefront-throttle';
 import { getStorefrontSessionCustomer } from '@/lib/services/storefront-customers';
+import { parsePlateSelection } from '@/lib/food/parse-plate';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -53,11 +54,13 @@ export async function POST(request: NextRequest) {
           : null,
       items: Array.isArray(body?.items)
         ? body.items.slice(0, MAX_CART_LINES).map((item: unknown) => {
-            const value = item as { productId?: string; unitId?: string; qtyInUnit?: number };
+            const value = item as { productId?: string; unitId?: string; qtyInUnit?: number; plate?: unknown };
+            const plate = parsePlateSelection(value?.plate);
             return {
               productId: String(value?.productId ?? ''),
               unitId: String(value?.unitId ?? ''),
               qtyInUnit: Math.min(Math.max(Math.floor(Number(value?.qtyInUnit ?? 0)), 0), MAX_QTY_PER_LINE),
+              ...(plate ? { plate } : {}),
             };
           })
         : [],
