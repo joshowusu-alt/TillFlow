@@ -50,6 +50,7 @@ describe('Reports Today shell', () => {
       '/reports/stock-movements',
       '/reports/margins',
       '/reports/reorder-suggestions',
+      '/reports/expiring',
       '/reports/sales-by-supplier',
       '/reports/risk-monitor',
       '/settings/online-store/analytics',

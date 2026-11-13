@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, ensureChartOfAccounts, postJournalEntry } from '@/lib/accounting';
 import { batchUpsertInventoryBalances, fetchInventoryMap, lockInventoryValues } from '@/lib/services/shared/inventory-utils';
 import { receiveStockValue, INVENTORY_VALUE_V1, type StockValue } from '@/lib/inventory-value';
+import { assertBatchDates, createStockBatchReceipts, type StockBatchSource } from '@/lib/inventory/stock-batch-receipts';
 
 export type OpeningInventoryLine = {
   productId: string;
@@ -18,6 +19,8 @@ export type OpeningInventoryLine = {
   unitCostBasePence?: number | null;
   /** Exact cost per selected unit (e.g. a pack), before base-unit rounding. */
   unitCostPence?: number | null;
+  productionDate?: Date | null;
+  expiryDate?: Date | null;
 };
 
 export type RecordOpeningInventoryResult = {
@@ -38,6 +41,8 @@ export async function recordOpeningInventory(
     /** Stable id for journal / movement reference — also used as idempotency key. */
     referenceId: string;
     description?: string;
+    /** IMPORT when the lines came from a spreadsheet. Defaults to OPENING_STOCK. */
+    batchSource?: Extract<StockBatchSource, 'OPENING_STOCK' | 'IMPORT'>;
   },
   db?: any,
 ): Promise<RecordOpeningInventoryResult> {
@@ -45,6 +50,7 @@ export async function recordOpeningInventory(
   const store = await client.store.findFirst({ where: { id: input.storeId, businessId: input.businessId }, select: { id: true } });
   if (!store) throw new Error('Opening stock branch does not belong to this business.');
   const lines = input.lines.filter((l) => l.productId && l.unitId && l.qtyInUnit > 0);
+  for (const line of lines) assertBatchDates(line.productionDate, line.expiryDate);
   if (lines.length === 0) {
     return {
       valuedUnits: 0,
@@ -106,6 +112,8 @@ export async function recordOpeningInventory(
     qtyBase: number;
     unitCostBasePence: number;
     lineValuePence: number;
+    productionDate: Date | null;
+    expiryDate: Date | null;
   };
 
   const applied: Applied[] = [];
@@ -129,6 +137,8 @@ export async function recordOpeningInventory(
       qtyBase,
       unitCostBasePence: costBase,
       lineValuePence: lineValue,
+      productionDate: line.productionDate ?? null,
+      expiryDate: line.expiryDate ?? null,
     });
 
 
@@ -181,6 +191,16 @@ export async function recordOpeningInventory(
           userId: input.userId ?? null,
         })),
       });
+      await createStockBatchReceipts(tx, applied.map((row) => ({
+        businessId: input.businessId,
+        storeId: input.storeId,
+        productId: row.productId,
+        qtyReceivedBase: row.qtyBase,
+        productionDate: row.productionDate,
+        expiryDate: row.expiryDate,
+        source: input.batchSource ?? 'OPENING_STOCK',
+        openingReferenceId: input.referenceId,
+      })));
     }
 
     if (valuedPence > 0) {

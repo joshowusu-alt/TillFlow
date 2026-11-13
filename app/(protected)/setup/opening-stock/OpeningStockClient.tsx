@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
 import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared';
 import { createOpeningStockAction } from '@/app/actions/opening-stock';
+import BatchDateFields from '@/components/inventory/BatchDateFields';
 import type { OpeningStockResult } from '@/app/actions/opening-stock';
 
 type UnitOption = {
@@ -30,6 +31,8 @@ type CartLine = {
   unitId: string;
   qty: string;
   cost: string;
+  productionDate: string;
+  expiryDate: string;
 };
 
 export default function OpeningStockClient({
@@ -72,6 +75,8 @@ export default function OpeningStockClient({
         unitId: firstUnit?.unitId ?? '',
         qty: '1',
         cost: getDefaultUnitCost(first, firstUnit?.unitId),
+        productionDate: '',
+        expiryDate: '',
       },
     ]);
   };
@@ -124,6 +129,8 @@ export default function OpeningStockClient({
         unitId: r.unitId,
         qtyInUnit: parseFloat(r.qty),
         unitCostPence: Math.round(parseFloat(r.cost) * 100),
+        productionDate: r.productionDate,
+        expiryDate: r.expiryDate,
       }));
 
     startTransition(async () => {
@@ -352,6 +359,15 @@ export default function OpeningStockClient({
                         />
                       </div>
                     </div>
+                    <div className="mt-4">
+                      <BatchDateFields
+                        idPrefix={`opening-${row.id}`}
+                        productionDate={row.productionDate}
+                        expiryDate={row.expiryDate}
+                        onProductionDate={(value) => updateRow(row.id, 'productionDate', value)}
+                        onExpiryDate={(value) => updateRow(row.id, 'expiryDate', value)}
+                      />
+                    </div>
                   </div>
                 );
               })}
@@ -361,8 +377,8 @@ export default function OpeningStockClient({
             {cart.map(row => {
               const prod = products.find(p => p.id === row.productId);
               return (
+                <div key={row.id} className="min-w-0 space-y-2">
                 <div
-                  key={row.id}
                   className="grid grid-cols-12 gap-2 items-center"
                 >
                   <div className="col-span-4">
@@ -445,6 +461,16 @@ export default function OpeningStockClient({
                       </svg>
                     </button>
                   </div>
+                </div>
+                <div className="min-w-0 pl-1">
+                  <BatchDateFields
+                    idPrefix={`opening-wide-${row.id}`}
+                    productionDate={row.productionDate}
+                    expiryDate={row.expiryDate}
+                    onProductionDate={(value) => updateRow(row.id, 'productionDate', value)}
+                    onExpiryDate={(value) => updateRow(row.id, 'expiryDate', value)}
+                    />
+                </div>
                 </div>
               );
             })}

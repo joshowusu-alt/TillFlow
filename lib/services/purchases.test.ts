@@ -17,6 +17,7 @@ const { prismaMock, postJournalEntryMock, ensureChartOfAccountsMock, recordCashD
     till: { findFirst: vi.fn() },
     moneyIdempotency: { findUnique: vi.fn(), create: vi.fn() },
     stockMovement: { createMany: vi.fn() },
+    stockBatch: { createMany: vi.fn() },
     inventoryBalance: { upsert: vi.fn() },
     $executeRaw: vi.fn(),
     $transaction: vi.fn(),
@@ -105,6 +106,7 @@ describe('purchase unit conversion', () => {
       afterExpectedCashPence: 0,
     });
     prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
+    prismaMock.stockBatch.createMany.mockResolvedValue({ count: 1 });
     prismaMock.inventoryBalance.upsert.mockResolvedValue({});
     prismaMock.$executeRaw.mockResolvedValue(1);
     ensureChartOfAccountsMock.mockResolvedValue(undefined);
@@ -122,6 +124,45 @@ describe('purchase unit conversion', () => {
     expect(prismaMock.purchaseInvoiceLine.createMany.mock.calls[0][0].data.map((line:any)=>line.allocatedCostPence)).toEqual([25,76]);
     expect(postJournalEntryMock).toHaveBeenCalledWith(expect.objectContaining({lines:expect.arrayContaining([{accountCode:'1200',debitPence:801},{accountCode:'2000',creditPence:801}])}));
     expect(prismaMock.stockMovement.createMany.mock.calls[0][0].data.map((line:any)=>line.valuePence)).toEqual([125,676]);
+  });
+
+  it('records optional production and expiry dates without changing the inventory journal', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([{ productId: 'p1', unitId: 'piece', conversionToBase: 1, product: { name: 'Milk', defaultCostBasePence: 100, sellingPriceBasePence: 250, vatRateBps: 0 }, unit: { name: 'Piece' } }]);
+    const productionDate = new Date('2026-11-01T00:00:00.000Z');
+    const expiryDate = new Date('2026-11-20T00:00:00.000Z');
+    await createPurchase({
+      sourceDocuments: [purchaseDocumentFixture()],
+      businessId: bizId,
+      storeId,
+      supplierId: 'supplier-a',
+      userId,
+      paymentStatus: 'UNPAID',
+      payments: [],
+      lines: [{ productId: 'p1', unitId: 'piece', qtyInUnit: 4, unitCostPence: 100, productionDate, expiryDate }],
+    });
+    expect(postJournalEntryMock).toHaveBeenCalledWith(expect.objectContaining({
+      lines: expect.arrayContaining([{ accountCode: '1200', debitPence: 400 }, { accountCode: '2000', creditPence: 400 }]),
+    }));
+    expect(prismaMock.stockBatch.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ source: 'PURCHASE', qtyReceivedBase: 4, productionDate, expiryDate, productId: 'p1', storeId })],
+    });
+  });
+
+  it('rejects an expiry before the production date before posting stock', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([{ productId: 'p1', unitId: 'piece', conversionToBase: 1, product: { name: 'Milk', defaultCostBasePence: 100, sellingPriceBasePence: 250, vatRateBps: 0 }, unit: { name: 'Piece' } }]);
+    await expect(createPurchase({
+      sourceDocuments: [purchaseDocumentFixture()],
+      businessId: bizId,
+      storeId,
+      supplierId: 'supplier-a',
+      userId,
+      paymentStatus: 'UNPAID',
+      payments: [],
+      lines: [{ productId: 'p1', unitId: 'piece', qtyInUnit: 1, unitCostPence: 100, productionDate: new Date('2026-11-20T00:00:00.000Z'), expiryDate: new Date('2026-11-01T00:00:00.000Z') }],
+    })).rejects.toThrow(/expiry date/i);
+    expect(prismaMock.purchaseInvoice.create).not.toHaveBeenCalled();
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
+    expect(prismaMock.stockBatch.createMany).not.toHaveBeenCalled();
   });
 
   it('posts discounted delivery-note stock and debt at the discounted cost', async () => {

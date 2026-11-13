@@ -154,6 +154,7 @@ const harness = vi.hoisted(() => {
         return created;
       },
     },
+    stockBatch: { createMany: async () => ({ count: 0 }) },
     stockMovement: {
       findFirst: async ({ where }: { where: { storeId: string; referenceType: string; referenceId: string } }) => state().movements.find((movement) => (
         movement.storeId === where.storeId && movement.referenceType === where.referenceType && movement.referenceId === where.referenceId

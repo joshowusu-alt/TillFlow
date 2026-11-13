@@ -11,6 +11,7 @@ import {
   type DuplicateAction,
   type DuplicateKind,
 } from '@/lib/import/import-validation';
+import { formatCalendarDate, readBatchDates } from '@/lib/inventory/batch-dates';
 
 export type PaymentStatus = 'PAID' | 'UNPAID';
 
@@ -36,6 +37,8 @@ export type ParsedImportRow = {
   qtyInName: string;
   supplierName: string;
   reorderPoint: number;
+  productionDate: string;
+  expiryDate: string;
   storefrontPublished: boolean;
   imageUrl: string;
   notes: string;
@@ -134,6 +137,7 @@ function buildRow(raw: Record<string, string>, rowNumber: number, seen: { names:
   const imageUrl = g('image_url');
   const notes = g('notes');
   const paymentStatus = normalisePaymentStatus(g('payment_status'));
+  const batchDates = readBatchDates(g('production_date'), g('expiry_date'));
 
   const validation = validateImportRow(
     {
@@ -181,6 +185,8 @@ function buildRow(raw: Record<string, string>, rowNumber: number, seen: { names:
     qtyInName,
     supplierName,
     reorderPoint,
+    productionDate: batchDates.ok ? formatCalendarDate(batchDates.dates.productionDate) : '',
+    expiryDate: batchDates.ok ? formatCalendarDate(batchDates.dates.expiryDate) : '',
     storefrontPublished,
     imageUrl,
     notes,
@@ -192,6 +198,7 @@ function buildRow(raw: Record<string, string>, rowNumber: number, seen: { names:
     errors: [...validation.errors,
       ...(packSizeRaw < 0 ? ['pack_size must be a whole number.'] : []),
       ...(reorderRaw < 0 ? ['reorder_point must be a non-negative whole number.'] : []),
+      ...(!batchDates.ok ? [batchDates.message] : []),
       ...(g('storefront_published') && !['yes','true','1','y','no','false','0','n'].includes(g('storefront_published').toLowerCase()) ? ['storefront_published must be yes or no.'] : []),
       ...hierarchyErrors({ category, division:g('division'), group:g('group') })],
     warnings: validation.warnings,

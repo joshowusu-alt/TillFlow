@@ -68,6 +68,8 @@ const COLUMN_HELP: Record<string, string> = {
   qty_in: 'Blank means base_unit. To count cartons, enter your pack_unit name; quantity then counts cartons.',
   supplier_name: 'Supplier name. Required for unpaid purchases. Opening-stock supplier credit is confirmed in the app.',
   reorder_point: 'Optional low-stock threshold, counted in base units.',
+  production_date: 'Optional. Date the goods were produced, as YYYY-MM-DD or DD/MM/YYYY. Leave blank if unknown.',
+  expiry_date: 'Optional. Date the goods expire, as YYYY-MM-DD or DD/MM/YYYY. Must be on or after the production date when both are filled.',
   storefront_published: 'Optional: yes or no. Blank keeps the existing setting when updating a product.',
   image_url: 'Optional public product-image URL.',
   notes: 'Optional notes about this product or stock record.',

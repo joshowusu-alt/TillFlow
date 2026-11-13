@@ -2,6 +2,8 @@
 import Link from 'next/link';
 
 import PurchaseDocumentInput from '@/components/purchases/PurchaseDocumentInput';
+import BatchDateFields from '@/components/inventory/BatchDateFields';
+import { readBatchDates } from '@/lib/inventory/batch-dates';
 import { pricePurchaseLines, purchaseDiscountBps } from '@/lib/purchases/discounts';
 import ProductIdentityFields from '@/components/products/ProductIdentityFields';
 import { ProductMarginResult } from '@/components/products/ProductMarginPreview';
@@ -76,6 +78,8 @@ type CartLine = {
   unitId: string;
   qtyInUnit: number;
   unitCostInput: string;
+  productionDate?: string;
+  expiryDate?: string;
 };
 
 type PurchaseDraft = {
@@ -139,6 +143,9 @@ export default function PurchaseFormClient({
   const [unitId, setUnitId] = useState(products[0]?.units[0]?.id ?? '');
   const [qtyInput, setQtyInput] = useState('1');
   const [unitCostInput, setUnitCostInput] = useState('');
+  const [productionDate, setProductionDate] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [lineError, setLineError] = useState<string | null>(null);
   const [unitCostTouched, setUnitCostTouched] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({});
@@ -485,12 +492,18 @@ export default function PurchaseFormClient({
     if (!productId || !unitId) return;
     const qty = Math.floor(Number(qtyInput));
     if (!Number.isFinite(qty) || qty <= 0) return;
+    const dates = readBatchDates(productionDate, expiryDate);
+    if (!dates.ok) {
+      setLineError(dates.message);
+      return;
+    }
+    setLineError(null);
     const defaultCost =
       selectedProduct && selectedUnit
         ? ((resolveEffectiveDefaultCostPence(selectedProduct, selectedUnit) / 100).toFixed(2))
         : '0';
     const costValue = unitCostInput.trim() ? unitCostInput : defaultCost;
-    const id = `${productId}:${unitId}`;
+    const id = `${productId}:${unitId}:${productionDate}:${expiryDate}`;
     setCart((prev) => {
       const existing = prev.find((line) => line.id === id);
       if (existing) {
@@ -499,7 +512,9 @@ export default function PurchaseFormClient({
             ? {
                 ...line,
                 qtyInUnit: line.qtyInUnit + qty,
-                unitCostInput: unitCostInput.trim() ? costValue : line.unitCostInput
+                unitCostInput: unitCostInput.trim() ? costValue : line.unitCostInput,
+                productionDate,
+                expiryDate,
               }
             : line
         );
@@ -511,11 +526,15 @@ export default function PurchaseFormClient({
           productId,
           unitId,
           qtyInUnit: qty,
-          unitCostInput: costValue
+          unitCostInput: costValue,
+          productionDate,
+          expiryDate,
         }
       ];
     });
     setQtyInput('1');
+    setProductionDate('');
+    setExpiryDate('');
   };
 
   const updateLine = (lineId: string, patch: Partial<CartLine>) => {
@@ -1021,6 +1040,16 @@ export default function PurchaseFormClient({
               </div>
             ) : null}
           </div>
+          <div className="min-w-0 sm:col-span-2 xl:col-span-3">
+            <BatchDateFields
+              idPrefix="purchase-line"
+              productionDate={productionDate}
+              expiryDate={expiryDate}
+              onProductionDate={setProductionDate}
+              onExpiryDate={setExpiryDate}
+            />
+            {lineError ? <p role="alert" className="mt-2 text-sm text-red-700">{lineError}</p> : null}
+          </div>
           <div className="flex items-end">
             <button type="button" className="btn-primary w-full" onClick={addToCart}>
               Add line
@@ -1103,6 +1132,15 @@ export default function PurchaseFormClient({
                         </div>
                       </div>
                     </div>
+                    <div className="mt-4 min-w-0">
+                      <BatchDateFields
+                        idPrefix={`purchase-cart-${line.id}`}
+                        productionDate={line.productionDate ?? ''}
+                        expiryDate={line.expiryDate ?? ''}
+                        onProductionDate={(value) => updateLine(line.id, { productionDate: value })}
+                        onExpiryDate={(value) => updateLine(line.id, { expiryDate: value })}
+                      />
+                    </div>
 
                     <div className="mt-4 rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2 text-sm">
                       <label className="label">Item discount (%)<input className="input mb-2" type="number" min="0" max="100" step="0.01" value={line.discountPercent ?? ''} onChange={event=>updateLine(line.id,{discountPercent:event.target.value})} /></label>
@@ -1127,7 +1165,18 @@ export default function PurchaseFormClient({
               <tbody>
                 {cartDetails.map((line) => (
                   <tr key={line.id} className="rounded-xl bg-white">
-                    <td className="px-3 py-3 text-sm font-semibold">{line.product.name}</td>
+                    <td className="min-w-0 px-3 py-3 text-sm font-semibold">
+                      {line.product.name}
+                      <div className="mt-2 font-normal">
+                        <BatchDateFields
+                          idPrefix={`purchase-cart-wide-${line.id}`}
+                          productionDate={line.productionDate ?? ''}
+                          expiryDate={line.expiryDate ?? ''}
+                          onProductionDate={(value) => updateLine(line.id, { productionDate: value })}
+                          onExpiryDate={(value) => updateLine(line.id, { expiryDate: value })}
+                        />
+                      </div>
+                    </td>
                     <td className="px-3 py-3 text-sm">
                       <div className="text-xs text-black/50">{line.qtyLabel}</div>
                       <input

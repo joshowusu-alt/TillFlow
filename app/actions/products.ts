@@ -29,6 +29,7 @@ import {
 import { revalidatePosCatalog, revalidatePosInventory } from '@/lib/cache/pos-tags';
 import { saveProductImageFile, validateExternalProductImageUrl } from '@/lib/services/storage';
 import { recordOpeningInventory } from '@/lib/services/opening-inventory';
+import { readBatchDates } from '@/lib/inventory/batch-dates';
 import { persistActivationSnapshot } from '@/lib/activation-snapshot';
 import {
   formatProductPriceWarnings,
@@ -92,6 +93,26 @@ async function resolveProductImageUrl(formData: FormData): Promise<string | null
   return external;
 }
 
+function parseOptionalBaseQuantity(formData: FormData, key: string, label: string): number | undefined {
+  if (!formData.has(key)) return undefined;
+  const raw = String(formData.get(key) ?? '').trim();
+  if (!raw) return 0;
+  if (!/^\d+$/.test(raw)) {
+    throw new UserError(`${label} must be a whole number of base units, or blank.`);
+  }
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value > 2147483647) {
+    throw new UserError(`${label} is too large.`);
+  }
+  return value;
+}
+
+function readOpeningBatchDates(formData: FormData) {
+  const result = readBatchDates(formData.get('openingProductionDate'), formData.get('openingExpiryDate'));
+  if (!result.ok) throw new UserError(result.message);
+  return result.dates;
+}
+
 async function parseProductFields(formData: FormData): Promise<ProductCoreInput> {
   const unitConfigs = parseUnitConfigs(formData);
   const baseUnit = unitConfigs?.find((config) => config.isBaseUnit);
@@ -120,6 +141,8 @@ async function parseProductFields(formData: FormData): Promise<ProductCoreInput>
     vatRateBps: formInt(formData, 'vatRateBps'),
     promoBuyQty: formInt(formData, 'promoBuyQty'),
     promoGetQty: formInt(formData, 'promoGetQty'),
+    reorderPointBase: parseOptionalBaseQuantity(formData, 'reorderPointBase', 'Restock reminder'),
+    reorderQtyBase: parseOptionalBaseQuantity(formData, 'reorderQtyBase', 'Reorder quantity'),
     baseUnitId: formOptionalString(formData, 'baseUnitId') || baseUnit?.unitId || '',
     packagingUnitId: formOptionalString(formData, 'packagingUnitId') || firstNonBaseUnit?.unitId || '',
     packagingConversion: formData.get('packagingConversion')
@@ -186,12 +209,15 @@ export async function createProductAction(formData: FormData): Promise<void> {
       ...(fields.unitConfigs ?? []).map((config) => config.unitId),
     ].filter((id): id is string => Boolean(id && id.trim()));
     await assertSelectableUnitsExist(unitIds);
+    const openingDates = openingStockQty > 0 || formData.get('openingProductionDate') || formData.get('openingExpiryDate')
+      ? readOpeningBatchDates(formData)
+      : { productionDate: null, expiryDate: null };
 
     const product = openingStockStoreId ? await prisma.$transaction(async tx => {
       const created = await createProduct(businessId, fields, tx);
       await recordOpeningInventory({ businessId, storeId: openingStockStoreId!, userId: user.id,
         referenceId: `product-opening:${created.id}`, description: 'Product opening stock — Opening Balance Equity',
-        lines: [{ productId: created.id, unitId: openingStockUnitId, qtyInUnit: openingStockQty, unitCostPence: openingStockCostPence }],
+        lines: [{ productId: created.id, unitId: openingStockUnitId, qtyInUnit: openingStockQty, unitCostPence: openingStockCostPence, ...openingDates }],
       }, tx);
       return created;
     }, { timeout: 20000 }) : await createProduct(businessId, fields);

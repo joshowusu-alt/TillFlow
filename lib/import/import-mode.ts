@@ -72,6 +72,8 @@ export const OPENING_STOCK_TEMPLATE_HEADERS = [
   'notes',
   'division',
   'group',
+  'production_date',
+  'expiry_date',
 ] as const;
 
 export const PURCHASE_TEMPLATE_HEADERS = [
@@ -92,6 +94,8 @@ export const PURCHASE_TEMPLATE_HEADERS = [
   'payment_status',
   'division',
   'group',
+  'production_date',
+  'expiry_date',
 ] as const;
 
 export function templateHeadersForMode(mode: ImportMode): readonly string[] {
