@@ -110,7 +110,7 @@ export default async function HomePerformanceSlot({
             primary ? 'col-span-2 min-h-[4.5rem] sm:col-span-1' : 'min-h-[4rem]'
           }`}
         >
-          <span className="pointer-events-none relative z-10 whitespace-nowrap text-[11px] font-medium uppercase tracking-wider text-blue-100/80 lg:text-xs">
+          <span className="pointer-events-none relative z-10 block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-medium uppercase tracking-wider text-blue-100/80 lg:text-xs">
             {displayLabel}
           </span>
           <span

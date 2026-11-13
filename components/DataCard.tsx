@@ -25,7 +25,7 @@ type DataCardActionsProps = {
 
 export function DataCard({ children, className = '' }: DataCardProps) {
   return (
-    <div className={`rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm ${className}`}>
+    <div className={`min-w-0 max-w-full rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm ${className}`}>
       {children}
     </div>
   );
@@ -33,12 +33,12 @@ export function DataCard({ children, className = '' }: DataCardProps) {
 
 export function DataCardHeader({ title, subtitle, aside }: DataCardHeaderProps) {
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <div className="font-semibold text-ink">{title}</div>
-        {subtitle ? <div className="mt-1 text-sm text-black/60">{subtitle}</div> : null}
+    <div className="flex min-w-0 items-start justify-between gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="break-words font-semibold text-ink [overflow-wrap:anywhere]">{title}</div>
+        {subtitle ? <div className="mt-1 break-words text-sm text-black/60 [overflow-wrap:anywhere]">{subtitle}</div> : null}
       </div>
-      {aside ? <div className="flex-shrink-0">{aside}</div> : null}
+      {aside ? <div className="max-w-[45%] shrink-0">{aside}</div> : null}
     </div>
   );
 }

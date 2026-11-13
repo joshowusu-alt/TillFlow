@@ -157,7 +157,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     !isAllowedWhenBillingRestricted(pathname, billingAccessState);
 
   return (
-    <div className="min-h-screen w-full max-w-full">
+    <div className="app-shell-root min-h-screen w-full min-w-0 max-w-full">
       <BusinessNameSaver name={business.name} businessId={business.id} />
       <ProtectedBusinessScope businessId={business.id} storeId={store?.id ?? null} />
       <StaleOperationalStoreGuard storeId={store?.id ?? null} storeName={store?.name ?? null} />

@@ -262,16 +262,54 @@ textarea {
   padding-bottom: max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
 }
 
+.app-shell-root {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .app-main-shell {
   padding-bottom: var(--mobile-bottom-nav-clearance);
   overflow-x: clip;
+  overflow-wrap: break-word;
 }
 
+.app-shell-header,
 .app-shell-status-strip,
 .app-shell-header-row {
   max-width: 100%;
   min-width: 0;
+}
+
+.app-shell-status-strip,
+.app-shell-header-row,
+.app-shell-header {
   overflow-x: clip;
+}
+
+/* Phone header chips wrap onto extra lines instead of widening the page. */
+.app-shell-status-chips {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 0.5rem;
+  row-gap: 0.375rem;
+}
+
+.app-shell-status-chips > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.app-shell-status-chips .metric-chip,
+.app-shell-status-chips .status-badge-online,
+.app-shell-status-chips .status-badge-offline {
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 
 .app-main-shell[data-route-shell='pos'] {
@@ -972,8 +1010,14 @@ details.details-mobile > summary {
 details.details-mobile > summary::-webkit-details-marker { display: none; }
 details.details-mobile[open] > summary svg:last-child { transform: rotate(180deg); }
 
+.app-main-shell pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .responsive-table-shell {
   width: 100%;
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
   overscroll-behavior-x: contain;
