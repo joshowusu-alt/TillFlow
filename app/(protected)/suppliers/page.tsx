@@ -12,6 +12,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { createSupplierAction } from '@/app/actions/suppliers';
 import { formatMoney, formatRelativeDate, DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { rowsForListPage } from '@/lib/pagination';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import { parseTags } from '@/lib/contact-tags';
 import {
@@ -37,7 +38,8 @@ function SupplierStatCard({ label, value, helper }: { label: string; value: stri
   return <OperationalMetricCard label={label} value={value} helper={helper} />;
 }
 
-function SuppliersEmptyState({ q, amountOwed }: { q: string; amountOwed: boolean }) {
+function SuppliersEmptyState({ q, amountOwed, totalCount }: { q: string; amountOwed: boolean; totalCount: number }) {
+  if (totalCount > 0) return null;
   const isFiltered = Boolean(q) || amountOwed;
   const title = q
     ? `No suppliers matching "${q}".`
@@ -76,55 +78,59 @@ export default async function SuppliersPage(
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const q = searchParams?.q?.trim() ?? '';
-  const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
+  const requestedPage = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
   const amountOwed = searchParams?.amountOwed === '1';
 
   const where = buildSupplierListWhere(business.id, { search: q, amountOwed });
+  const loadSuppliers = (page: number) => prisma.supplier.findMany({
+    where,
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      creditLimitPence: true,
+      tagsJson: true,
+      purchaseInvoices: {
+        where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
+        select: {
+          paymentStatus: true,
+          totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
+          createdAt: true,
+          payments: {
+            select: { amountPence: true, paidAt: true },
+            orderBy: { paidAt: 'desc' },
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+      }
+    },
+    orderBy: { name: 'asc' },
+    skip: (page - 1) * DEFAULT_PAGE_SIZE,
+    take: DEFAULT_PAGE_SIZE,
+  });
 
-  const [totalCount, suppliers, listKpis] = await measureServerOperation(
+  const [totalCount, firstPage, listKpis] = await measureServerOperation(
     'page.suppliers.load',
     () => Promise.all([
       prisma.supplier.count({ where }),
-      prisma.supplier.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          email: true,
-          creditLimitPence: true,
-          tagsJson: true,
-          purchaseInvoices: {
-            where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
-            select: {
-              paymentStatus: true,
-              totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
-              createdAt: true,
-              payments: {
-                select: { amountPence: true, paidAt: true },
-                orderBy: { paidAt: 'desc' },
-              }
-            },
-            orderBy: { createdAt: 'desc' },
-          }
-        },
-        orderBy: { name: 'asc' },
-        skip: (page - 1) * DEFAULT_PAGE_SIZE,
-        take: DEFAULT_PAGE_SIZE,
-      }),
+      loadSuppliers(requestedPage),
       getSupplierListKpis(business.id, { search: q, amountOwed }),
     ]),
     {
       businessId: business.id,
       route: '/suppliers',
-      page,
+      page: requestedPage,
       pageSize: DEFAULT_PAGE_SIZE,
       cacheState: 'uncached-page-load',
     },
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
   );
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
+  const listed = await rowsForListPage(requestedPage, totalCount, DEFAULT_PAGE_SIZE, firstPage, loadSuppliers);
+  const page = listed.page;
+  const suppliers = listed.rows;
+  const totalPages = listed.totalPages;
 
   // Batch-load linked product counts
   const supplierIds = suppliers.map((s) => s.id);
@@ -304,7 +310,7 @@ export default async function SuppliersPage(
         {/* Mobile cards */}
         <div className="space-y-3 lg:hidden">
           {suppliersWithData.length === 0 ? (
-            <SuppliersEmptyState q={q} amountOwed={amountOwed} />
+            <SuppliersEmptyState q={q} amountOwed={amountOwed} totalCount={totalCount} />
           ) : (
             suppliersWithData.map((supplier) => (
               <DataCard key={supplier.id} className="transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100">
@@ -353,7 +359,7 @@ export default async function SuppliersPage(
               {suppliersWithData.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-3 py-12 text-center">
-                    <SuppliersEmptyState q={q} amountOwed={amountOwed} />
+                    <SuppliersEmptyState q={q} amountOwed={amountOwed} totalCount={totalCount} />
                   </td>
                 </tr>
               )}

@@ -9,6 +9,7 @@ import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { rowsForListPage } from '@/lib/pagination';
 import { getFeatures } from '@/lib/features';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 import { displayDocumentNumber, remainingBalancePence } from '@/lib/reliability/walkthrough-contracts';
@@ -28,7 +29,28 @@ export default async function ExpensesPage(
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
 
-  const [expenseAccounts, expenseCount, expenses, openShifts] = await Promise.all([
+  const loadExpenses = (listPage: number) => prisma.expense.findMany({
+    where: { businessId: business.id },
+    select: {
+      id: true,
+      storeId: true,
+      transactionNumber: true,
+      createdAt: true,
+      amountPence: true,
+      paymentStatus: true,
+      method: true,
+      vendorName: true,
+      notes: true,
+      attachmentPath: true,
+      account: { select: { name: true } },
+      user: { select: { name: true } },
+      payments: { select: { amountPence: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    skip: (listPage - 1) * DEFAULT_PAGE_SIZE,
+    take: DEFAULT_PAGE_SIZE,
+  });
+  const [expenseAccounts, expenseCount, firstExpenses, openShifts] = await Promise.all([
     prisma.account.findMany({
       where: {
         businessId: business.id,
@@ -39,27 +61,7 @@ export default async function ExpensesPage(
       select: { id: true, code: true, name: true },
     }),
     prisma.expense.count({ where: { businessId: business.id } }),
-    prisma.expense.findMany({
-      where: { businessId: business.id },
-      select: {
-        id: true,
-        storeId: true,
-        transactionNumber: true,
-        createdAt: true,
-        amountPence: true,
-        paymentStatus: true,
-        method: true,
-        vendorName: true,
-        notes: true,
-        attachmentPath: true,
-        account: { select: { name: true } },
-        user: { select: { name: true } },
-        payments: { select: { amountPence: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * DEFAULT_PAGE_SIZE,
-      take: DEFAULT_PAGE_SIZE,
-    }),
+    loadExpenses(page),
     store
       ? prisma.shift.findMany({
           where: {
@@ -72,7 +74,10 @@ export default async function ExpensesPage(
       : Promise.resolve([]),
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(expenseCount / DEFAULT_PAGE_SIZE));
+  const listedExpenses = await rowsForListPage(page, expenseCount, DEFAULT_PAGE_SIZE, firstExpenses, loadExpenses);
+  const expenses = listedExpenses.rows;
+  const currentPage = listedExpenses.page;
+  const totalPages = listedExpenses.totalPages;
   // Paying an existing expense happens on Expense payments; the list must say so
   // on every unpaid or part-paid row, or the owner lands on "Record expense" instead.
   // Expense payments is scoped to the operational store, so the action is only offered
@@ -249,8 +254,8 @@ export default async function ExpensesPage(
             </tbody>
           </table>
         </div>
-        <Pagination currentPage={page} totalPages={totalPages} basePath="/expenses" />
-        {expenses.length === 0 ? <div className="text-sm text-black/50">No expenses yet.</div> : null}
+        <Pagination currentPage={currentPage} totalPages={totalPages} basePath="/expenses" />
+        {expenses.length === 0 && expenseCount === 0 ? <div className="text-sm text-black/50">No expenses yet.</div> : null}
       </div>
     </div>
   );

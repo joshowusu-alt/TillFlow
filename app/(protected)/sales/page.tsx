@@ -6,6 +6,7 @@ import InlinePaymentForm from '@/components/InlinePaymentForm';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { rowsForListPage } from '@/lib/pagination';
 import { getBusinessStores } from '@/lib/services/stores';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { localDateInstant } from '@/lib/reports/reporting-clock';
@@ -51,29 +52,32 @@ export default async function SalesPage(
     ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
   };
 
-  const [totalCount, sales] = await Promise.all([
+  const loadSales = (listPage: number) => prisma.salesInvoice.findMany({
+    where,
+    select: {
+      id: true,
+      transactionNumber: true,
+      createdAt: true,
+      paymentStatus: true,
+      totalPence: true,
+      store: { select: { name: true } },
+      customer: { select: { name: true } },
+      salesReturn: { select: { id: true } },
+      payments: { select: { method: true, amountPence: true, status: true } },
+      _count: { select: { lines: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    skip: (listPage - 1) * DEFAULT_PAGE_SIZE,
+    take: DEFAULT_PAGE_SIZE,
+  });
+  const [totalCount, firstPage] = await Promise.all([
     prisma.salesInvoice.count({ where }),
-    prisma.salesInvoice.findMany({
-      where,
-      select: {
-        id: true,
-        transactionNumber: true,
-        createdAt: true,
-        paymentStatus: true,
-        totalPence: true,
-        store: { select: { name: true } },
-        customer: { select: { name: true } },
-        salesReturn: { select: { id: true } },
-        payments: { select: { method: true, amountPence: true, status: true } },
-        _count: { select: { lines: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * DEFAULT_PAGE_SIZE,
-      take: DEFAULT_PAGE_SIZE,
-    }),
+    loadSales(page),
   ]);
-
-  const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
+  const listed = await rowsForListPage(page, totalCount, DEFAULT_PAGE_SIZE, firstPage, loadSales);
+  const sales = listed.rows;
+  const currentPage = listed.page;
+  const totalPages = listed.totalPages;
 
   const getClosedSaleLabel = (paymentStatus: string, hasSalesReturn: boolean) => {
     if (paymentStatus === 'VOID') return 'Voided';
@@ -144,7 +148,7 @@ export default async function SalesPage(
 
       <div className="card p-4 sm:p-5">
         <div className="space-y-3 lg:hidden">
-          {sales.length === 0 ? (
+          {sales.length === 0 && totalCount === 0 ? (
             <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-center">
               <div className="flex flex-col items-center animate-fade-in-up">
                 <div className="rounded-full bg-black/5 p-3 mb-2">
@@ -242,7 +246,7 @@ export default async function SalesPage(
               </tr>
             </thead>
             <tbody>
-              {sales.length === 0 && (
+              {sales.length === 0 && totalCount === 0 && (
                 <tr>
                   <td colSpan={8} className="px-3 py-12 text-center">
                     <div className="flex flex-col items-center animate-fade-in-up">
@@ -335,7 +339,7 @@ export default async function SalesPage(
           </table>
         </div>
         <Pagination
-          currentPage={page}
+          currentPage={currentPage}
           totalPages={totalPages}
           basePath="/sales"
           searchParams={{

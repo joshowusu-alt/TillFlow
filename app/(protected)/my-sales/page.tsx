@@ -6,6 +6,7 @@ import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { rowsForListPage } from '@/lib/pagination';
 import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
 import {
   buildCashierMySalesWhere,
@@ -53,27 +54,30 @@ export default async function MySalesPage(
     timeZone: business.timezone,
   });
 
-  const [totalCount, sales] = await Promise.all([
+  const loadSales = (listPage: number) => prisma.salesInvoice.findMany({
+    where,
+    select: {
+      id: true,
+      transactionNumber: true,
+      createdAt: true,
+      paymentStatus: true,
+      totalPence: true,
+      store: { select: { name: true } },
+      shift: { select: { till: { select: { name: true } } } },
+      payments: { select: { method: true, amountPence: true, status: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    skip: (listPage - 1) * DEFAULT_PAGE_SIZE,
+    take: DEFAULT_PAGE_SIZE,
+  });
+  const [totalCount, firstPage] = await Promise.all([
     prisma.salesInvoice.count({ where }),
-    prisma.salesInvoice.findMany({
-      where,
-      select: {
-        id: true,
-        transactionNumber: true,
-        createdAt: true,
-        paymentStatus: true,
-        totalPence: true,
-        store: { select: { name: true } },
-        shift: { select: { till: { select: { name: true } } } },
-        payments: { select: { method: true, amountPence: true, status: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * DEFAULT_PAGE_SIZE,
-      take: DEFAULT_PAGE_SIZE,
-    }),
+    loadSales(page),
   ]);
-
-  const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
+  const listed = await rowsForListPage(page, totalCount, DEFAULT_PAGE_SIZE, firstPage, loadSales);
+  const sales = listed.rows;
+  const currentPage = listed.page;
+  const totalPages = listed.totalPages;
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -125,7 +129,7 @@ export default async function MySalesPage(
 
       <div className="card p-4 sm:p-5">
         <div className="space-y-3">
-          {sales.length === 0 ? (
+          {sales.length === 0 && totalCount === 0 ? (
             <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-center">
               <div className="flex flex-col items-center animate-fade-in-up">
                 <div className="mb-2 rounded-full bg-black/5 p-3">
@@ -213,7 +217,7 @@ export default async function MySalesPage(
         </div>
 
         <Pagination
-          currentPage={page}
+          currentPage={currentPage}
           totalPages={totalPages}
           basePath={CASHIER_MY_SALES_ROUTE}
           searchParams={{

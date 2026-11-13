@@ -6,6 +6,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { rowsForListPage } from '@/lib/pagination';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import { DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { normalizeGhanaPhone } from '@/lib/storefront-phone';
@@ -140,26 +141,30 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
       : {}),
   };
 
-  const [totalCount, customers] = await Promise.all([
+  const requestedPage = Math.max(1, page);
+  const loadCustomers = (listPage: number) => prisma.customer.findMany({
+    where,
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      creditLimitPence: true,
+      storeId: true,
+      tagsJson: true,
+      // salesInvoices intentionally omitted — balance loaded in a single
+      // batch query below to eliminate the previous N+1.
+    },
+    orderBy: { name: 'asc' },
+    skip: (listPage - 1) * pageSize,
+    take: pageSize,
+  });
+  const [totalCount, firstPage] = await Promise.all([
     prisma.customer.count({ where }),
-    prisma.customer.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        creditLimitPence: true,
-        storeId: true,
-        tagsJson: true,
-        // salesInvoices intentionally omitted — balance loaded in a single
-        // batch query below to eliminate the previous N+1.
-      },
-      orderBy: { name: 'asc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
+    loadCustomers(requestedPage),
   ]);
+  const listed = await rowsForListPage(requestedPage, totalCount, pageSize, firstPage, loadCustomers);
+  const customers = listed.rows;
 
   // Reuse the full-scope confirmed-payment summary for the visible account balances.
   const customerIds = customers.map((c) => c.id);
@@ -304,8 +309,7 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
     };
   });
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  return { customers: customersWithBalance, totalCount, totalPages, accountSummary };
+  return { customers: customersWithBalance, totalCount, totalPages: listed.totalPages, page: listed.page, accountSummary };
 }
 
 /**

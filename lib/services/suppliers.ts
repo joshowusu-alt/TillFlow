@@ -8,6 +8,7 @@
 import { prisma } from '@/lib/prisma';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
 import { DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { rowsForListPage } from '@/lib/pagination';
 import { parseTags, serializeTags } from '@/lib/contact-tags';
 
 // ---------------------------------------------------------------------------
@@ -46,39 +47,42 @@ export async function getSuppliers(businessId: string, opts: SupplierListOptions
     ...(search ? { name: { contains: search, mode: 'insensitive' as const } as any } : {}),
   };
 
-  const [totalCount, suppliers] = await Promise.all([
-    prisma.supplier.count({ where }),
-    prisma.supplier.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        creditLimitPence: true,
-        tagsJson: true,
-        purchaseInvoices: {
-          where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
-          select: {
-            paymentStatus: true,
-            totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
-            payments: { select: { amountPence: true } },
-          },
+  const requestedPage = Math.max(1, page);
+  const loadSuppliers = (listPage: number) => prisma.supplier.findMany({
+    where,
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      creditLimitPence: true,
+      tagsJson: true,
+      purchaseInvoices: {
+        where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
+        select: {
+          paymentStatus: true,
+          totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
+          payments: { select: { amountPence: true } },
         },
       },
-      orderBy: { name: 'asc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
+    },
+    orderBy: { name: 'asc' },
+    skip: (listPage - 1) * pageSize,
+    take: pageSize,
+  });
+  const [totalCount, firstPage] = await Promise.all([
+    prisma.supplier.count({ where }),
+    loadSuppliers(requestedPage),
   ]);
+  const listed = await rowsForListPage(requestedPage, totalCount, pageSize, firstPage, loadSuppliers);
+  const suppliers = listed.rows;
 
   const suppliersWithTags = suppliers.map((s) => {
     const { tagsJson, ...rest } = s;
     return { ...rest, tags: parseTags(tagsJson) };
   });
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  return { suppliers: suppliersWithTags, totalCount, totalPages };
+  return { suppliers: suppliersWithTags, totalCount, totalPages: listed.totalPages, page: listed.page };
 }
 
 /**
@@ -191,6 +195,15 @@ export async function deleteSupplier(id: string, businessId: string) {
   );
   if (outstanding > 0) {
     throw new Error('Cannot delete a supplier who has outstanding purchase invoices.');
+  }
+
+  // supplierId on SupplierCreditSettlement is not a foreign key. Deleting the
+  // supplier would leave those settlement rows pointing at a missing id.
+  const creditSettlements = await prisma.supplierCreditSettlement.count({
+    where: { businessId, supplierId: supplier.id },
+  });
+  if (creditSettlements > 0) {
+    throw new Error('Cannot delete a supplier who has credit settlements.');
   }
 
   return prisma.supplier.delete({ where: { id: supplier.id } });

@@ -13,6 +13,7 @@ import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import RemainingBalance from '@/components/RemainingBalance';
 import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { rowsForListPage } from '@/lib/pagination';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { listSelectableUnits } from '@/lib/units/list-selectable-units';
@@ -81,8 +82,47 @@ export default async function PurchasesPage(
             ...(searchParams?.awaitingInvoice==='1'?{receiptDocumentType:'DELIVERY_NOTE',invoiceReceivedAt:null}:{}),
             ...(selectedStoreId ? { storeId: selectedStoreId } : {}),
           };
+  const loadPurchases = (listPage: number) => prisma.purchaseInvoice.findMany({
+    where: purchaseWhere,
+    select: {
+      id: true,
+      storeId: true,
+      transactionNumber: true,
+      supplierInvoiceNumber: true,
+      receiptDocumentType: true,
+      invoiceReceivedAt: true,
+      createdAt: true,
+      paymentStatus: true,
+      totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
+      supplier: { select: { name: true } },
+      purchaseReturn: { select: { id: true } },
+      payments: { select: { amountPence: true } },
+      _count: { select: { lines: true } },
+      lines: {
+        take: missingSupplierIssue ? 5 : 1,
+        select: {
+          qtyBase: true,
+          product: {
+            select: {
+              name: true,
+              productUnits: {
+                select: {
+                  isBaseUnit: true,
+                  conversionToBase: true,
+                  unit: { select: { name: true, pluralName: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    skip: (listPage - 1) * DEFAULT_PAGE_SIZE,
+    take: DEFAULT_PAGE_SIZE,
+  });
 
-  const [products, suppliers, units, purchaseCount, purchases, openShifts] = await Promise.all([
+  const [products, suppliers, units, purchaseCount, firstPurchases, openShifts] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: business.id, active: true },
       select: {
@@ -112,45 +152,7 @@ export default async function PurchasesPage(
     }),
     listSelectableUnits(business.id),
     prisma.purchaseInvoice.count({ where: purchaseWhere }),
-    prisma.purchaseInvoice.findMany({
-      where: purchaseWhere,
-      select: {
-        id: true,
-        storeId: true,
-        transactionNumber: true,
-        supplierInvoiceNumber: true,
-        receiptDocumentType: true,
-        invoiceReceivedAt: true,
-        createdAt: true,
-        paymentStatus: true,
-        totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
-        supplier: { select: { name: true } },
-        purchaseReturn: { select: { id: true } },
-        payments: { select: { amountPence: true } },
-        _count: { select: { lines: true } },
-        lines: {
-          take: missingSupplierIssue ? 5 : 1,
-          select: {
-            qtyBase: true,
-            product: {
-              select: {
-                name: true,
-                productUnits: {
-                  select: {
-                    isBaseUnit: true,
-                    conversionToBase: true,
-                    unit: { select: { name: true, pluralName: true } },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * DEFAULT_PAGE_SIZE,
-      take: DEFAULT_PAGE_SIZE,
-    }),
+    loadPurchases(page),
     selectedStoreId
       ? prisma.shift.findMany({
           where: {
@@ -171,7 +173,10 @@ export default async function PurchasesPage(
 
   const cashUsers = await prisma.user.findMany({ where: { businessId: business.id, role: { in: ['OWNER', 'MANAGER'] } }, select: { id: true, name: true, role: true } });
   const cashPeople = await Promise.all(cashUsers.map(async person => ({ ...person, balancePence: selectedStoreId ? await accountBalance(prisma, business.id, holdingCode(selectedStoreId, person.id)) : 0 })));
-  const totalPages = Math.max(1, Math.ceil(purchaseCount / DEFAULT_PAGE_SIZE));
+  const listedPurchases = await rowsForListPage(page, purchaseCount, DEFAULT_PAGE_SIZE, firstPurchases, loadPurchases);
+  const purchases = listedPurchases.rows;
+  const currentPage = listedPurchases.page;
+  const totalPages = listedPurchases.totalPages;
   const purchaseRows = purchases.map((purchase) => {
     const lineCount = purchase._count.lines;
     const line = purchase.lines[0];
@@ -395,7 +400,7 @@ export default async function PurchasesPage(
           </div>
 
           <div className="mt-4 space-y-3 lg:hidden">
-            {purchaseRows.length === 0 ? (
+            {purchaseRows.length === 0 && purchaseCount === 0 ? (
               <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6">
                 <div className="text-sm font-semibold text-ink">
                   {missingSupplierIssue ? 'No purchases missing a supplier.' : 'No purchases recorded yet.'}
@@ -495,7 +500,7 @@ export default async function PurchasesPage(
                 </tr>
               </thead>
               <tbody>
-                {purchaseRows.length === 0 && (
+                {purchaseRows.length === 0 && purchaseCount === 0 && (
                   <tr>
                     <td colSpan={7} className="px-3 py-10 text-center">
                       <div className="text-sm font-semibold text-ink">
@@ -578,7 +583,7 @@ export default async function PurchasesPage(
             </table>
           </div>
           <Pagination
-            currentPage={page}
+            currentPage={currentPage}
             totalPages={totalPages}
             basePath="/purchases"
             searchParams={{

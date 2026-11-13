@@ -83,15 +83,15 @@ export default async function CustomersPage(
   }
 
   const q = searchParams?.q?.trim() ?? '';
-  const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
+  const requestedPage = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
   const balanceDue = searchParams?.balanceDue === '1';
   const selectedStoreId = store.id;
 
-  const { customers, totalCount, totalPages, accountSummary } = await measureServerOperation(
+  const { customers, totalCount, totalPages, page, accountSummary } = await measureServerOperation(
     'page.customers.load',
     () => getCustomers(business.id, {
       search: q || undefined,
-      page,
+      page: requestedPage,
       storeId: business.customerScope === 'BRANCH' ? selectedStoreId : undefined,
       balanceDue: balanceDue || undefined,
     }),
@@ -99,7 +99,7 @@ export default async function CustomersPage(
       businessId: business.id,
       storeId: business.customerScope === 'BRANCH' ? selectedStoreId : 'ALL',
       route: '/customers',
-      page,
+      page: requestedPage,
       cacheState: 'uncached-page-load',
     },
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
@@ -236,7 +236,7 @@ export default async function CustomersPage(
       <div className="card min-w-0 max-w-full p-4 sm:p-5">
         {/* Mobile cards */}
         <div className="space-y-3 lg:hidden">
-          {customers.length === 0 ? (
+          {customers.length === 0 && totalCount === 0 ? (
             <CustomersEmptyState q={q} balanceDue={balanceDue} />
           ) : customers.map((customer) => {
             const balance = customer.outstandingBalancePence;
@@ -299,7 +299,7 @@ export default async function CustomersPage(
               </tr>
             </thead>
             <tbody>
-              {customers.length === 0 && (
+              {customers.length === 0 && totalCount === 0 && (
                 <tr>
                   <td colSpan={8} className="px-3 py-12 text-center">
                     <CustomersEmptyState q={q} balanceDue={balanceDue} />

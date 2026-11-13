@@ -6,12 +6,14 @@ import { prisma } from '@/lib/prisma';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import { formatMoney, DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { rowsForListPage } from '@/lib/pagination';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
-function InventoryEmptyState({ q }: { q: string }) {
+function InventoryEmptyState({ q, totalCount }: { q: string; totalCount: number }) {
+  if (totalCount > 0) return null;
   return (
     <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-7 text-center">
       <div className="text-sm font-semibold text-ink">
@@ -51,11 +53,7 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
     ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
   };
 
-  const [totalCount, products] = await measureServerOperation(
-    'page.inventory.load',
-    () => Promise.all([
-      prisma.product.count({ where }),
-      prisma.product.findMany({
+  const loadInventory = (listPage: number) => prisma.product.findMany({
         where,
         select: {
           id: true,
@@ -77,9 +75,14 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
           }
         },
         orderBy: { name: 'asc' },
-        skip: (page - 1) * DEFAULT_PAGE_SIZE,
+        skip: (listPage - 1) * DEFAULT_PAGE_SIZE,
         take: DEFAULT_PAGE_SIZE,
-      }),
+      });
+  const [totalCount, firstProducts] = await measureServerOperation(
+    'page.inventory.load',
+    () => Promise.all([
+      prisma.product.count({ where }),
+      loadInventory(page),
     ]),
     {
       businessId: business.id,
@@ -92,8 +95,10 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
     },
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
   );
-
-  const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
+  const listedInventory = await rowsForListPage(page, totalCount, DEFAULT_PAGE_SIZE, firstProducts, loadInventory);
+  const products = listedInventory.rows;
+  const currentPage = listedInventory.page;
+  const totalPages = listedInventory.totalPages;
   const inventoryRows = products.map((product) => {
     const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
     const packaging = getPrimaryPackagingUnit(
@@ -202,7 +207,7 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
         {/* Mobile cards */}
         <div className="space-y-3 lg:hidden">
           {inventoryRows.length === 0 ? (
-            <InventoryEmptyState q={q} />
+            <InventoryEmptyState q={q} totalCount={totalCount} />
           ) : (
             inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, stockValue, hasCostDrift, isLow, isOut }) => (
               <div
@@ -268,7 +273,7 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
               {inventoryRows.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-3 py-12 text-center">
-                    <InventoryEmptyState q={q} />
+                    <InventoryEmptyState q={q} totalCount={totalCount} />
                   </td>
                 </tr>
               ) : (
@@ -313,7 +318,7 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
             </tbody>
           </table>
         </div>
-        <Pagination documentNavigation currentPage={page} totalPages={totalPages} basePath="/inventory" searchParams={{ q: q || undefined }} />
+        <Pagination documentNavigation currentPage={currentPage} totalPages={totalPages} basePath="/inventory" searchParams={{ q: q || undefined }} />
       </div>
     </div>
   );

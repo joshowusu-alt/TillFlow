@@ -11,6 +11,7 @@ import type { SupplierProductLinkSummary, SupplierProductLinkSkippedProduct } fr
 import { recordOpeningInventory, type RecordOpeningInventoryResult } from '@/lib/services/opening-inventory';
 import { buildImportChunkKey, buildImportChunkPayloadHash } from '@/lib/import/import-chunk-identity';
 import { userFacingImportFailure } from '@/lib/import/import-failure';
+import { createImportSupplierResolver } from '@/lib/import/import-suppliers';
 import {
   IMPORT_INTERACTIVE_TX,
   OPENING_EQUITY_CHUNK_SIZE,
@@ -263,29 +264,6 @@ export async function importStockAction(
   }
 }
 
-async function resolveSupplierId(
-  businessId: string,
-  supplierName: string | undefined,
-  supplierMap: Map<string, string>,
-  stats: { matched: number; created: number }
-) {
-  const trimmed = (supplierName ?? '').trim();
-  if (!trimmed) return null;
-  const key = trimmed.toLowerCase();
-  const existing = supplierMap.get(key);
-  if (existing) {
-    stats.matched++;
-    return existing;
-  }
-  const created = await prisma.supplier.create({
-    data: { businessId, name: trimmed },
-    select: { id: true },
-  });
-  supplierMap.set(key, created.id);
-  stats.created++;
-  return created.id;
-}
-
 async function _runImport(
   rows: ConfirmedImportRow[],
   meta: ImportStockMeta
@@ -497,29 +475,15 @@ async function _runImport(
     // ── Step 1: Pre-create all missing categories outside any transaction ──
     // IDs are stable before product chunks start, so no repeated category
     // creates inside the tx loop.
-    const supplierMap = new Map(
-      (
-        await prisma.supplier.findMany({
-          where: { businessId },
-          select: { id: true, name: true },
-        })
-      ).map((s) => [s.name.toLowerCase(), s.id])
+    const supplierResolver = createImportSupplierResolver(
+      businessId,
+      await prisma.supplier.findMany({
+        where: { businessId },
+        select: { id: true, name: true, createdAt: true },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
     );
-    const supplierStats = { matched: 0, created: 0 };
-    const supplierIdByName = new Map<string, string | null>();
-    const resolveSupplierIdForRow = async (row: ConfirmedImportRow) => {
-      const key = (row.supplierName ?? '').trim().toLowerCase();
-      if (!key) return null;
-      if (supplierIdByName.has(key)) return supplierIdByName.get(key) ?? null;
-      const supplierId = await resolveSupplierId(
-        businessId,
-        row.supplierName,
-        supplierMap,
-        supplierStats
-      );
-      supplierIdByName.set(key, supplierId);
-      return supplierId;
-    };
+    const resolveSupplierIdForRow = (row: ConfirmedImportRow) => supplierResolver.resolve(row.supplierName);
     let importRecord: { id: string } | null = null;
     let updatedCount = 0;
     let openingChunksPosted = 0;
@@ -1081,8 +1045,8 @@ async function _runImport(
       openingSupplierCreditValuePence,
       missingCostCount,
       journalsPosted,
-      suppliersMatched: supplierStats.matched,
-      suppliersCreated: supplierStats.created,
+      suppliersMatched: supplierResolver.stats.matched,
+      suppliersCreated: supplierResolver.stats.created,
       categoriesCreated,
       openingStockUnits,
       accountingEffectSummary,
@@ -1147,8 +1111,8 @@ async function _runImport(
       missingCostCount,
       costReviewProductIds: [...new Set(costReviewProductIds)],
       journalsPosted,
-      suppliersMatched: supplierStats.matched,
-      suppliersCreated: supplierStats.created,
+      suppliersMatched: supplierResolver.stats.matched,
+      suppliersCreated: supplierResolver.stats.created,
       categoriesCreated,
       warningsAcknowledged: incomingRows.filter((r) => r.confirmBelowCost).length,
       accountingEffectSummary,

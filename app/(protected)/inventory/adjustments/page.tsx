@@ -9,6 +9,7 @@ import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNot
 import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { formatDateTime, formatMoney } from '@/lib/format';
+import { rowsForListPage } from '@/lib/pagination';
 import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
 import { isInventoryIncreasePhase2EnabledForBusiness } from '@/lib/inventory-increase-flag';
 import StockAdjustmentClient from '../StockAdjustmentClient';
@@ -81,7 +82,38 @@ export default async function StockAdjustmentsPage(
   // Visibility only — createInventoryIncrease still enforces the scoped gate.
   const phase2Enabled = isInventoryIncreasePhase2EnabledForBusiness(business.id);
 
-  const [products, adjustmentCount, adjustments, increaseCount, decreaseCount] = await Promise.all([
+  const adjustmentWhere = { storeId: store.id, ...(searchParams?.adjustmentId ? { id: searchParams.adjustmentId } : {}) };
+  const loadAdjustments = (listPage: number) => prisma.stockAdjustment.findMany({
+    where: adjustmentWhere,
+    select: {
+      id: true,
+      createdAt: true,
+      qtyBase: true,
+      direction: true,
+      reason: true,
+      reasonCode: true,
+      valuePence: true,
+      transactionNumber: true,
+      reversalOfId: true,
+      product: {
+        select: {
+          name: true,
+          productUnits: {
+            select: {
+              isBaseUnit: true,
+              conversionToBase: true,
+              unit: { select: { name: true, pluralName: true } },
+            },
+          },
+        },
+      },
+      user: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    skip: (listPage - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+  const [products, adjustmentCount, firstAdjustments, increaseCount, decreaseCount] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: business.id, active: true },
       orderBy: { name: 'asc' },
@@ -102,39 +134,8 @@ export default async function StockAdjustmentsPage(
         },
       },
     }),
-    prisma.stockAdjustment.count({
-      where: { storeId: store.id, ...(searchParams?.adjustmentId ? { id: searchParams.adjustmentId } : {}) },
-    }),
-    prisma.stockAdjustment.findMany({
-      where: { storeId: store.id, ...(searchParams?.adjustmentId ? { id: searchParams.adjustmentId } : {}) },
-      select: {
-        id: true,
-        createdAt: true,
-        qtyBase: true,
-        direction: true,
-        reason: true,
-        reasonCode: true,
-        valuePence: true,
-        transactionNumber: true,
-        reversalOfId: true,
-        product: {
-          select: {
-            name: true,
-            productUnits: {
-              select: {
-                isBaseUnit: true,
-                conversionToBase: true,
-                unit: { select: { name: true, pluralName: true } },
-              },
-            },
-          },
-        },
-        user: { select: { name: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-    }),
+    prisma.stockAdjustment.count({ where: adjustmentWhere }),
+    loadAdjustments(page),
     // Store-scoped totals (not page-scoped) so counters stay consistent when paginated.
     prisma.stockAdjustment.count({
       where: { storeId: store.id, direction: { in: ['INCREASE', 'IN'] } },
@@ -143,6 +144,11 @@ export default async function StockAdjustmentsPage(
       where: { storeId: store.id, NOT: { direction: { in: ['INCREASE', 'IN'] } } },
     }),
   ]);
+
+  const listedAdjustments = await rowsForListPage(page, adjustmentCount, PAGE_SIZE, firstAdjustments, loadAdjustments);
+  const adjustments = listedAdjustments.rows;
+  const currentPage = listedAdjustments.page;
+  const totalPages = listedAdjustments.totalPages;
 
   const reversedOriginalIds = new Set(
     adjustments.map((adjustment) => adjustment.reversalOfId).filter((id): id is string => Boolean(id)),
@@ -158,7 +164,6 @@ export default async function StockAdjustmentsPage(
   }
   const canReverseAdjustments = user.role === 'OWNER';
 
-  const totalPages = Math.max(1, Math.ceil(adjustmentCount / PAGE_SIZE));
   const adjustmentRows = adjustments.map((adjustment) => {
     const baseUnit = adjustment.product.productUnits.find((unit) => unit.isBaseUnit);
     const packaging = getPrimaryPackagingUnit(
@@ -314,7 +319,7 @@ export default async function StockAdjustmentsPage(
         </div>
 
         <div className="space-y-3 lg:hidden">
-          {adjustmentRows.length === 0 ? (
+          {adjustmentRows.length === 0 && adjustmentCount === 0 ? (
             <AdjustmentsEmptyState />
           ) : (
             adjustmentRows.map(({ adjustment, formatted }) => (
@@ -385,7 +390,7 @@ export default async function StockAdjustmentsPage(
               </tr>
             </thead>
             <tbody>
-              {adjustmentRows.length === 0 ? (
+              {adjustmentRows.length === 0 && adjustmentCount === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-3 py-12 text-center">
                     <AdjustmentsEmptyState />
@@ -434,7 +439,7 @@ export default async function StockAdjustmentsPage(
           </table>
         </div>
         <Pagination
-          currentPage={page}
+          currentPage={currentPage}
           totalPages={totalPages}
           basePath="/inventory/adjustments"
         />
