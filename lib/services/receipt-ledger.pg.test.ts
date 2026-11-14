@@ -77,7 +77,7 @@ describePg('forward receipt ledger on isolated PostgreSQL',()=>{
  async function balance(id:string,code:string){return (await entries(id)).flatMap(e=>e.lines).filter(l=>l.account.code===code).reduce((s,l)=>s+l.debitPence-l.creditPence,0);}
  async function assertBalanced(){for(const entry of await prisma.journalEntry.findMany({where:{businessId},include:{lines:true}}))expect(entry.lines.reduce((s,l)=>s+l.debitPence-l.creditPence,0)).toBe(0);}
 
- it('real mixed checkout and captured offline replay keep pending MoMo in AR exactly once',async()=>{
+ it('real mixed checkout and captured offline replay keep pending MoMo in clearing exactly once',async()=>{
   const {createSale}=await import('./sales');
   const value={businessId,storeId,tillId,cashierUserId:userId,capturedShiftId:shiftId,
    paymentStatus:'PAID' as const,externalRef:`OFFLINE_SYNC:ledger-${Date.now()}`,
@@ -88,9 +88,13 @@ describePg('forward receipt ledger on isolated PostgreSQL',()=>{
   const final=await prisma.salesInvoice.findUniqueOrThrow({where:{id:invoice.id},include:{payments:true}});
   expect(final.payments.find(p=>p.method==='MOBILE_MONEY')?.status).toBe('PENDING_MANUAL');
   expect(await balance(invoice.id,'1000')).toBe(2000);expect(await balance(invoice.id,'1010')).toBe(0);
-  expect(await balance(invoice.id,'1100')).toBe(4000);
+  expect(await balance(invoice.id,'1100')).toBe(0);
+  expect(await balance(invoice.id,'1150')).toBe(4000);
   expect((await entries(invoice.id)).length).toBe(1);
   expect((await prisma.inventoryBalance.findUniqueOrThrow({where:{storeId_productId:{storeId,productId}}})).qtyOnHandBase).toBe(before.qtyOnHandBase);
+  await confirm(input(final.payments.find(p=>p.method==='MOBILE_MONEY')!.id));
+  expect(await balance(invoice.id,'1150')).toBe(0);
+  expect(await balance(invoice.id,'1010')).toBe(4000);
   await assertBalanced();
  },30000);
 

@@ -271,6 +271,7 @@ model ControlSubscription {
   effectivePlanOverride  String?
   gracePolicyVersion     String?
   monthlyValuePence      Int                    @default(0)
+  monthlyValueMinorUnits Int?
   outstandingAmountPence Int                    @default(0)
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt

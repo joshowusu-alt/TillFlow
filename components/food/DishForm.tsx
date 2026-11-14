@@ -7,7 +7,7 @@ import { emptyDishDraft, type DishDraft } from '@/lib/food/dish-draft';
 
 import IngredientRows, { type IngredientOption } from './IngredientRows';
 
-export default function DishForm({ initial, productId, ingredients }: { initial?: DishDraft; productId?: string; ingredients: IngredientOption[] }) {
+export default function DishForm({ initial, productId, ingredients, categories }: { initial?: DishDraft; productId?: string; ingredients: IngredientOption[]; categories: { id: string; name: string }[] }) {
   const router = useRouter();
   const [draft, setDraft] = useState<DishDraft>(initial ?? emptyDishDraft());
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +39,12 @@ export default function DishForm({ initial, productId, ingredients }: { initial?
         <label className="block text-sm">
           Name
           <input className="input mt-1" value={draft.name} onChange={(event) => update('name', event.target.value)} placeholder="Banku" required />
+        </label>
+        <label className="block text-sm">Category
+          <select className="input mt-1" value={draft.categoryId ?? ''} onChange={event => update('categoryId', event.target.value || null)}>
+            <option value="">No category</option>
+            {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select>
         </label>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">

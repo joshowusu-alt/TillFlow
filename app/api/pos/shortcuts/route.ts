@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   const layout = readShortcutLayout(store.posShortcutsJson);
   const ids = [...new Set(layout.screens.flatMap(s => s.productIds))];
   const [products, balances] = await Promise.all([
-    prisma.product.findMany({ where: { businessId: user.businessId, active: true, id: { in: ids } }, select: SELLABLE_PRODUCT_SELECT }),
+    prisma.product.findMany({ where: { businessId: user.businessId, active: true, ingredientOnly: false, id: { in: ids } }, select: SELLABLE_PRODUCT_SELECT }),
     prisma.inventoryBalance.findMany({ where: { storeId: store.id, productId: { in: ids } }, select: { productId: true, qtyOnHandBase: true } }),
   ]);
   const stock = new Map(balances.map(b => [b.productId, b.qtyOnHandBase]));

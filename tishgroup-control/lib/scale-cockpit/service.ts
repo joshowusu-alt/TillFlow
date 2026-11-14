@@ -173,7 +173,7 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
       referralNotes: true,
       supportStatus: true,
       subscription: {
-        select: { billingCadence: true, monthlyValuePence: true, outstandingAmountPence: true },
+        select: { billingCadence: true, monthlyValueMinorUnits: true, monthlyValuePence: true, outstandingAmountPence: true },
       },
     },
   });
@@ -197,13 +197,13 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
         plan: planKey as BusinessPlan,
         addonOnlineStorefront,
         billingCadence: billingCadenceLabel,
-        storedMonthlyGhs: profile?.subscription?.monthlyValuePence ?? null,
+        storedMonthlyGhs: profile?.subscription?.monthlyValueMinorUnits != null ? profile.subscription.monthlyValueMinorUnits / 100 : profile?.subscription?.monthlyValuePence ?? null,
       }) || planRates[planKey as keyof typeof planRates];
     const intervalCharge = resolveControlCollectionAmountGhs({
       plan: planKey as BusinessPlan,
       addonOnlineStorefront,
       billingCadence: billingCadenceLabel,
-      storedMonthlyGhs: profile?.subscription?.monthlyValuePence ?? null,
+      storedMonthlyGhs: profile?.subscription?.monthlyValueMinorUnits != null ? profile.subscription.monthlyValueMinorUnits / 100 : profile?.subscription?.monthlyValuePence ?? null,
       storedOutstandingGhs: profile?.subscription?.outstandingAmountPence ?? null,
     });
     const outstandingAmount = profile?.subscription?.outstandingAmountPence ?? 0;

@@ -9,6 +9,7 @@ import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observa
 // ---------------------------------------------------------------------------
 
 export type ProductCoreInput = {
+  ingredientOnly?: boolean;
   name: string;
   sku: string | null;
   barcode: string | null;
@@ -434,6 +435,7 @@ async function createProductImpl(
     data: {
       businessId,
       name: normalized.name,
+      ...(data.ingredientOnly === undefined ? {} : { ingredientOnly: data.ingredientOnly }),
       attributesJson: normalized.attributesJson,
       publisher: normalized.publisher,
       edition: normalized.edition,
@@ -521,6 +523,7 @@ async function updateProductImpl(
       where: { id: existing.id },
       data: {
         name: normalized.name,
+      ...(data.ingredientOnly === undefined ? {} : { ingredientOnly: data.ingredientOnly }),
       attributesJson: normalized.attributesJson,
       publisher: normalized.publisher,
       edition: normalized.edition,

@@ -173,7 +173,10 @@ async function assertSelectableUnitsExist(unitIds: string[]) {
 export async function createProductAction(formData: FormData): Promise<void> {
   return formAction(async () => {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
-    const fields = await parseProductFields(formData);
+    const fields = {
+      ...await parseProductFields(formData),
+      ingredientOnly: formData.has('ingredientOnlyIncluded') ? formData.get('ingredientOnly') === 'on' : undefined,
+    };
 
     const openingStockQty = Math.max(0, formInt(formData, 'openingStockQty'));
     const openingStockUnitId = formOptionalString(formData, 'openingStockUnitId') ?? fields.baseUnitId;
@@ -264,7 +267,10 @@ export async function updateProductAction(formData: FormData): Promise<void> {
     const id = formString(formData, 'id');
     if (!id) redirect('/products');
 
-    const fields = await parseProductFields(formData);
+    const fields = {
+      ...await parseProductFields(formData),
+      ingredientOnly: formData.has('ingredientOnlyIncluded') ? formData.get('ingredientOnly') === 'on' : undefined,
+    };
     const productId = await updateProduct(id, businessId, fields);
 
     audit({

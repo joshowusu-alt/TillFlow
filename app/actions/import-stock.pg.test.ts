@@ -91,6 +91,19 @@ describePg('real PostgreSQL import release verification', () => {
     }
   }
 
+  it('creates a new supplier while posting the first opening stock import', async () => {
+    const name = `${run}-ingredient`;
+    const supplierName = `${run} supplier`;
+    expect(await action.importStockAction([{
+      name, supplierName, sku: '', barcode: '', category: '', packUnitId: null, packSize: 1, sellingPricePence: 500, costPricePence: 200,
+      quantity: 3, baseUnitId, qtyInUnitId: baseUnitId, duplicateAction: 'create', openingFunding: 'EQUITY',
+    }], { importMode: 'OPENING_STOCK', clientImportKey: `${run}-first-supplier`, fileName: 'products.csv' }))
+      .toMatchObject({ success: true });
+    expect(await db.supplier.count({ where: { businessId: context.businessId, name: supplierName } })).toBe(1);
+    expect(await db.inventoryBalance.findFirst({ where: { storeId: context.storeId, product: { name } } }))
+      .toMatchObject({ qtyOnHandBase: 3 });
+  });
+
   it('preserves existing classification, cost and publishing when optional update cells are blank',async()=>{
     const existing=await db.product.findFirstOrThrow({where:{businessId:context.businessId,groupId:{not:null}}});
     const row:ConfirmedImportRow={name:existing.name,sku:existing.sku??'',barcode:existing.barcode??'',category:'',sellingPricePence:600,costPricePence:0,costPriceProvided:false,quantity:0,baseUnitId,packUnitId:null,packSize:0,qtyInUnitId:baseUnitId,duplicateAction:'update'};

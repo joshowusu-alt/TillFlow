@@ -73,7 +73,7 @@ const COLUMN_HELP: Record<string, string> = {
   storefront_published: 'Optional: yes or no. Blank keeps the existing setting when updating a product.',
   image_url: 'Optional public product-image URL.',
   notes: 'Optional notes about this product or stock record.',
-  payment_status: 'Required for purchases: paid or unpaid. Unpaid purchases create supplier debt.',
+  payment_status: 'Optional for purchases: defaults to unpaid. Unpaid purchases create supplier debt.',
 };
 const NUMBER_COLUMNS = new Set(['selling_price', 'cost_price', 'quantity', 'pack_size', 'reorder_point']);
 

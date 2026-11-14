@@ -249,3 +249,15 @@ describe('subscription lifecycle', () => {
     expect(canUseFeature('reports', restricted)).toBe(false);
   });
 });
+
+describe('active sponsored access without receipt dates', () => {
+  const today = new Date('2026-11-14T12:00:00Z');
+  it.each([
+    { subscriptionStatus: 'PAID_ACTIVE', nextPaymentDueAt: '2026-12-20', billingAmount: 54900 },
+    { planStatus: 'PAID_ACTIVE', billingAmount: 0 },
+    { isDemo: true, billingAmount: 0 },
+  ])('grants paid access with no trial or payment date', input => {
+    expect(computeBillingAccessState({ plan: 'PRO', trialEndsAt: null, ...input }, today))
+      .toMatchObject({ accessState: 'PAID_ACTIVE', isPaid: true });
+  });
+});

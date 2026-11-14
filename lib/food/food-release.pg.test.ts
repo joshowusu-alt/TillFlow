@@ -153,6 +153,18 @@ describePg('food release stress on throwaway Postgres', () => {
     return row.unitId;
   }
 
+  it('preserves the dish category and excludes counted dishes from missing stock costs', async () => {
+    const { getIncompleteStockSnapshot } = await import('@/lib/reports/incomplete-stock');
+    const category = await db.category.create({ data: { businessId, name: 'Rice bowls' } });
+    const dish = await dishes.saveDish({ businessId, draft: draft({
+      name: 'Rice bowl category fixture', startingPriceCedis: '20', stockMode: 'COUNTED', categoryId: category.id,
+    }) });
+    await prep.addPreparedPortions({ businessId, storeId, userId, productId: dish.id, qty: 2 });
+    expect(await db.product.findUnique({ where: { id: dish.id } })).toMatchObject({ categoryId: category.id });
+    expect((await getIncompleteStockSnapshot(businessId, db)).costReviewProductIds).not.toContain(dish.id);
+    await db.category.delete({ where: { id: category.id } });
+  });
+
   it('posts purchased ingredients once and reclassifies two leftovers without touching stock value', async () => {
     const { createPurchase } = await import('@/lib/services/purchases');
     const { recordIngredientUsage } = await import('@/lib/food/usage-service');

@@ -77,5 +77,15 @@ it('states pickup expectations and does not claim sales popularity for generated
   fireEvent.click(screen.getByRole('button', { name: 'Add Toffee to cart' }));
   expect(within(screen.getByRole('complementary')).getByRole('heading', { name: 'Checkout' })).toBeInTheDocument();
   expect(within(screen.getByRole('complementary')).getByText(/Wait until your order is marked ready before travelling/)).toBeInTheDocument();
-  expect(within(screen.getByRole('complementary')).getByText(/Opening hours have not been provided/)).toBeInTheDocument();
+  expect(within(screen.getByRole('complementary')).queryByText(/Opening hours have not been provided/)).not.toBeInTheDocument();
+});
+
+it('preserves product casing and shows preparation time without configured hours', async () => {
+  const drink = product('drink', 'Coca-Cola 500 ml');
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ products: [drink], total: 1 }) })));
+  render(<StorefrontClient storefront={{ ...shop, name: "Connie's Food", products: [drink], prepMinutes: 20 }} customer={null} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Add Coca-Cola 500 ml to cart' }));
+  const cart = screen.getByRole('complementary');
+  expect(within(cart).getByText(/Preparation estimate: about 20 minutes/)).toBeInTheDocument();
+  expect(within(cart).queryByText(/Opening hours have not been provided/)).not.toBeInTheDocument();
 });

@@ -411,8 +411,8 @@ export function getBottomTabsForRole(role: AppRole): BottomTabDefinition[] {
       {
         label: 'Home',
         icon: 'home',
-        href: '/onboarding',
-        match: (pathname) => pathname === '/onboarding' || pathname === '/',
+        href: '/home',
+        match: (pathname) => pathname === '/home' || pathname === '/onboarding' || pathname === '/',
       },
       {
         label: 'Sales',

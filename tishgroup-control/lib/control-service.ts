@@ -307,14 +307,14 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
         plan,
         addonOnlineStorefront: business.addonOnlineStorefront,
         billingCadence,
-        storedMonthlyGhs: subscription?.monthlyValuePence ?? null,
+        storedMonthlyGhs: subscription?.monthlyValueMinorUnits != null ? subscription.monthlyValueMinorUnits / 100 : subscription?.monthlyValuePence ?? null,
       });
       const storedOutstandingAmount = subscription?.outstandingAmountPence ?? null;
       const collectionAmount = resolveControlCollectionAmountGhs({
         plan,
         addonOnlineStorefront: business.addonOnlineStorefront,
         billingCadence,
-        storedMonthlyGhs: subscription?.monthlyValuePence ?? null,
+        storedMonthlyGhs: subscription?.monthlyValueMinorUnits != null ? subscription.monthlyValueMinorUnits / 100 : subscription?.monthlyValuePence ?? null,
         storedOutstandingGhs: storedOutstandingAmount,
       });
       const outstandingAmount = state === 'CANCELLED'

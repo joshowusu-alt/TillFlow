@@ -126,6 +126,7 @@ export async function ensureControlPlaneBusinessBootstrap(client: ControlPlaneCl
         nextDueDate: input.nextDueDate ?? null,
         lastPaymentDate: input.lastPaymentDate ?? null,
         monthlyValuePence: monthlyValueGhs,
+        monthlyValueMinorUnits: monthlyValueGhs * 100,
       },
       create: {
         controlBusinessId: profile.id,
@@ -136,6 +137,7 @@ export async function ensureControlPlaneBusinessBootstrap(client: ControlPlaneCl
         nextDueDate: input.nextDueDate ?? null,
         lastPaymentDate: input.lastPaymentDate ?? null,
         monthlyValuePence: monthlyValueGhs,
+        monthlyValueMinorUnits: monthlyValueGhs * 100,
       },
     });
 

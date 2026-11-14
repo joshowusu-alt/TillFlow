@@ -3,6 +3,7 @@ export function sellableProductWhere(businessId: string) {
   return {
     businessId,
     active: true,
+    ingredientOnly: false,
     sellingPriceBasePence: { gt: 0 },
     OR: [
       { inventoryBalances: { some: { qtyOnHandBase: { gt: 0 } } } },

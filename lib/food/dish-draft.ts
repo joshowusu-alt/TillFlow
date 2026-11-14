@@ -1,6 +1,7 @@
 import type { FoodGroupSelection, FoodStockMode } from '@/lib/food/plate';
 
 export type DishDraft = {
+  categoryId?: string | null;
   productId?: string | null;
   name: string;
   startingPriceCedis: string;

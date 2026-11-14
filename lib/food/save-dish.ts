@@ -46,6 +46,10 @@ export async function saveDish(input: { businessId: string; draft: DishDraft }) 
       await validateIngredients(tx, input.businessId, rows, true);
       if (rows.some(row => row.productId === productId)) throw new UserError('A dish cannot be its own ingredient.');
     }
+    const categoryId = input.draft.categoryId?.trim() || null;
+    if (categoryId && !await tx.category.findFirst({ where: { id: categoryId, businessId: input.businessId }, select: { id: true } })) {
+      throw new UserError('Choose a category for this business.');
+    }
     let id = productId;
     if (id) {
       const existing = await tx.product.findFirst({
@@ -56,6 +60,7 @@ export async function saveDish(input: { businessId: string; draft: DishDraft }) 
       await tx.product.update({
         where: { id },
         data: {
+          ...(input.draft.categoryId === undefined ? {} : { categoryId }),
           name: normalized.name,
           sellingPriceBasePence: normalized.startingPricePence,
           defaultCostBasePence: normalized.estimatedCostPence,
@@ -72,7 +77,7 @@ export async function saveDish(input: { businessId: string; draft: DishDraft }) 
           name: normalized.name,
           sku: null,
           barcode: null,
-          categoryId: null,
+          categoryId,
           imageUrl: null,
           sellingPriceBasePence: normalized.startingPricePence,
           defaultCostBasePence: normalized.estimatedCostPence,

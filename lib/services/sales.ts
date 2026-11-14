@@ -615,7 +615,7 @@ async function createSaleImpl(input: CreateSaleInput) {
       getCachedStore(input.storeId, input.businessId),
       prisma.productUnit.findMany({
         where: {
-          product: { businessId: input.businessId },
+          product: { businessId: input.businessId, ingredientOnly: false },
           OR: input.lines.map((line) => ({
             productId: line.productId,
             unitId: line.unitId,
@@ -1082,6 +1082,9 @@ async function createSaleImpl(input: CreateSaleInput) {
       });
     }
 
+    const clearsAtConfirmation = (payment: PaymentInput) => !onlineOrder &&
+      payment.method === 'MOBILE_MONEY' && payment.status === 'PENDING_MANUAL';
+    const pendingTillMomo = payments.filter(clearsAtConfirmation).reduce((sum, payment) => sum + payment.amountPence, 0);
     const invoiceCreateData = {
       businessId: input.businessId,
       storeId: store.id,
@@ -1140,7 +1143,7 @@ async function createSaleImpl(input: CreateSaleInput) {
           payerMsisdn: payment.payerMsisdn ?? null,
           provider: payment.provider ?? null,
           status: payment.status ?? 'CONFIRMED',
-          ...receiptLedgerFields(payment),
+          ...receiptLedgerFields(payment, clearsAtConfirmation(payment)),
           collectionId: payment.collectionId ?? null,
           // Checkout / original sale workflow — including split-tender components
           // and part-paid deposits created with the invoice.
@@ -1184,7 +1187,7 @@ async function createSaleImpl(input: CreateSaleInput) {
                     payerMsisdn: payment.payerMsisdn ?? null,
                     provider: payment.provider ?? null,
                     status: payment.status ?? 'CONFIRMED',
-                    ...receiptLedgerFields(payment),
+                    ...receiptLedgerFields(payment, clearsAtConfirmation(payment)),
                     collectionId: payment.collectionId ?? null,
                     receiptOrigin: RECEIPT_ORIGIN.RECEIVED_AT_SALE,
                     businessId: input.businessId,
@@ -1482,9 +1485,10 @@ async function createSaleImpl(input: CreateSaleInput) {
 
     // Journal entry inside tx — accounting must be atomic with the sale
     const paymentSplit = settledReceiptSplit(payments);
-    const arAmount = total - paymentSplit.totalPence;
+    const arAmount = total - paymentSplit.totalPence - pendingTillMomo;
     const journalLines: JournalLine[] = [
       ...debitCashBankLines(paymentSplit),
+      pendingTillMomo > 0 ? { accountCode: ACCOUNT_CODES.momoClearing, debitPence: pendingTillMomo } : null,
       arAmount > 0 ? { accountCode: ACCOUNT_CODES.ar, debitPence: arAmount } : null,
       { accountCode: ACCOUNT_CODES.sales, creditPence: subtotal },
       (business.vatEnabled || onlineOrder) && vatTotal > 0
@@ -1658,7 +1662,7 @@ export async function amendSale(input: AmendSaleInput) {
   if (hasNewLines) {
     const productUnits = await prisma.productUnit.findMany({
       where: {
-        product: { businessId: input.businessId },
+        product: { businessId: input.businessId, ingredientOnly: false },
         OR: input.newLines!.map((line) => ({
           productId: line.productId,
           unitId: line.unitId,

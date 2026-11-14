@@ -7,5 +7,5 @@ export default async function OnboardingPage() {
   // Cashiers and managers go straight to the POS — this page is owner-only
   if (user.role !== 'OWNER') redirect('/pos');
 
-  return <OwnerReadinessContent />;
+  return <OwnerReadinessContent destination="onboarding" />;
 }

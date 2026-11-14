@@ -76,7 +76,7 @@ export default function TopNav({
   const pathname = usePathname() ?? '';
   // '/onboarding' is Home once setup is complete (and the Setup Guide entry point
   // beforehand). Either way it should read as "Home" here, not "Admin".
-  const isHomeRoute = pathname === '/onboarding';
+  const isHomeRoute = pathname === '/home' || pathname === '/onboarding';
   const features = getFeatures(plan ?? 'STARTER', storeMode ?? 'SINGLE_STORE', { onlineStorefront: addonOnlineStorefront });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -143,7 +143,7 @@ export default function TopNav({
   }, [user.role, features.multiStore, momoEnabled, allowedReports]);
 
   const onReports = pathname === '/reports' || pathname.startsWith('/reports/');
-  const showMobileSalesPulse = Boolean(liveTodaySales) && !pathname.startsWith('/onboarding') && !onReports;
+  const showMobileSalesPulse = Boolean(liveTodaySales) && !isHomeRoute && !onReports;
   const mobileSales = showMobileSalesPulse ? liveTodaySales : undefined;
   // Home KPIs are always business-wide. Never show the operational store name
   // as if it filtered Home ("Main Branch" beside "Today · All branches").
@@ -372,7 +372,7 @@ export default function TopNav({
               <>
             {user.role === 'OWNER' ? (
               <Link
-                href="/onboarding"
+                href="/home"
                 aria-current={isHomeRoute ? 'page' : undefined}
                 className={isHomeRoute ? 'shell-nav-trigger shell-nav-trigger-active' : 'shell-nav-trigger'}
               >

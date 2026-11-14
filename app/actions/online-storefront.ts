@@ -167,6 +167,9 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
           ? storefrontPickupInstructions.trim()
           : null,
         storefrontMomoNumber,
+        ...(formData.has('storefrontMomoAccountName') ? {
+          storefrontMomoAccountName: formOptionalString(formData, 'storefrontMomoAccountName')?.trim().slice(0, 120) || null,
+        } : {}),
         storefrontMomoNetwork,
         storefrontPaymentMode,
         storefrontMerchantShortcode,
@@ -223,12 +226,15 @@ export async function updateStorefrontHoursAction(formData: FormData): Promise<v
       ? storefrontPickupInstructions.trim()
       : null;
 
+    const prepRaw = String(formData.get('pickupPrepMinutes') ?? '').trim();
+    const prep = Math.max(0, Math.min(parseInt(prepRaw, 10) || 0, 24 * 60));
+
     if (!hoursEnabled) {
       await prisma.business.update({
         where: { id: businessId },
         data: {
           storefrontHoursJson: null,
-          storefrontPickupPrepMinutes: 0,
+          storefrontPickupPrepMinutes: prep,
           storefrontPickupInstructions: pickupInstructions,
         },
       });
@@ -262,8 +268,7 @@ export async function updateStorefrontHoursAction(formData: FormData): Promise<v
       hours[day] = { open, close, closed };
     }
 
-    const prepRaw = String(formData.get('pickupPrepMinutes') ?? '').trim();
-    const prep = Math.max(0, Math.min(parseInt(prepRaw, 10) || 0, 24 * 60));
+
 
     await prisma.business.update({
       where: { id: businessId },

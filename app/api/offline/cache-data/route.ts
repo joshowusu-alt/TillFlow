@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
         const updatedSinceValid = updatedSince && !Number.isNaN(updatedSince.getTime());
 
         const [catalogueSize, catalogVersionRow, products] = await Promise.all([
-            prisma.product.count({ where: { businessId: business.id, active: true } }),
+            prisma.product.count({ where: { businessId: business.id, active: true, ingredientOnly: false } }),
             prisma.product.aggregate({
                 where: { businessId: business.id, active: true },
                 _max: { updatedAt: true },
@@ -94,6 +94,7 @@ export async function GET(request: NextRequest) {
                 where: {
                     businessId: business.id,
                     active: true,
+                    ingredientOnly: false,
                     ...(updatedSinceValid ? { updatedAt: { gt: updatedSince } } : {}),
                 },
                 select: SELLABLE_PRODUCT_SELECT,

@@ -460,6 +460,11 @@ export default async function ProductsPage(
                 includeOpeningStock={false}
               >
                 <ProductFormSection title="Essential" description="Name, identity, and the price you sell at.">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="hidden" name="ingredientOnlyIncluded" value="1" />
+                    <input type="checkbox" name="ingredientOnly" defaultChecked={isFoodBusiness(business.businessCategory)} />
+                    Ingredient – not sold
+                  </label>
                   <div>
                     <label className="label" htmlFor="create-product-name">Name</label>
                     <input className="input" id="create-product-name" name="name" required />

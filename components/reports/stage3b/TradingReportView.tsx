@@ -8,6 +8,7 @@ export type TradingViewData = {
   grossProfit: number | null; grossProfitPercent: number | null; incompleteLineCount: number;
   seeProfitAndLoss?: boolean;
   expenses: number; profitAfterExpenses: number | null; netProfitPercent: number; allBranches: boolean;
+  pendingTillMomoPence?: number;
   creditUnpaid: number; outstandingAR: number; outstandingAP: number; scopeHelper: string;
   customerDebt: { invoiceDue: number; excess: number; creditBalance: number; netBalance: number; unlinkedDue: number; unlinkedExcess: number; unlinkedCount: number; scope: string; salesHref: string };
   receiptsHref: string; cashDrawerHref: string; analyticsHref: string; reorderHref: string;
@@ -49,6 +50,7 @@ export default function TradingReportView({ data }: { data: TradingViewData }) {
       <ReportMetric label="Business-wide expenses" pence={data.expenses} currency={c} helper={data.scopeHelper} />
       <ReportMetric label={data.allBranches ? 'Net profit' : 'Profit after business-wide expenses'} pence={data.profitAfterExpenses} value={data.seeProfitAndLoss ? "See P&L" : data.incompleteLineCount > 0 ? "Costs incomplete" : "Not available"} currency={c} warning={!ready || data.profitAfterExpenses! < 0}
         helper={data.allBranches ? 'Profit after expenses.' : 'Branch gross profit minus whole-business expenses. This is not branch net profit.'} />
+      {!!data.pendingTillMomoPence && <ReportMetric label="MoMo awaiting confirmation" helper="Till payments waiting to be verified." pence={data.pendingTillMomoPence} currency={c} />}
       <ReportMetric label="Credit sales (unpaid)" pence={data.creditUnpaid} currency={c} helper="Unpaid portion of sales in this period. Not counted as money received." />
     </div>
     {unusualMargin ? <p role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">Gross margin looks unusual ({data.grossProfitPercent}%). Review product cost prices and units before relying on this profit figure. <Link href="/products" className="font-semibold underline">Review products</Link>.</p> : null}

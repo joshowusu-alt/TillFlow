@@ -48,7 +48,7 @@ describe('inventory valuation audit: historical cost evidence', () => {
     db.salesInvoiceLine.findMany.mockResolvedValue([{ productId: 'inactive-product' }]);
     await getIncompleteStockSnapshot('review-business');
     expect(db.salesInvoiceLine.findMany).toHaveBeenCalledWith({
-      where: { OR: [
+      where: { NOT: expect.objectContaining({ salesInvoice: { business: { businessCategory: "FOOD_DISHES" } } }), OR: [
         { costBasis: 'UNVERIFIED_STOCK_V1' },
         { lineCostPence: { lte: 0 }, OR: [{ costBasis: null }, { costBasis: { not: 'INVENTORY_VALUE_V1' } }] },
       ], salesInvoice: {

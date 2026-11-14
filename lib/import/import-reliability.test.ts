@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { importClassificationErrors, importOptionalProductUpdates, matchImportProduct } from './import-reliability';
-import { enrichRowsWithCatalog, parseStockFileDetailed } from './parse-stock-file';
+import { enrichRowsWithCatalog, parseStockFileDetailed, resolvePurchasePaymentStatus } from './parse-stock-file';
 import * as XLSX from 'xlsx';
 
 const csv = (contents: string) => ({ name: 'products.csv', text: async () => contents } as File);
@@ -22,9 +22,16 @@ describe('import reliability', () => {
   });
 
   it('validates purchase payment text only for purchases', async () => {
-    expect((await parse('payment_status', 'perhaps', 'PURCHASES')).rows[0].errors).toContain('payment_status is required: enter paid or unpaid.');
+    expect((await parse('payment_status', 'perhaps', 'PURCHASES')).rows[0].errors).toContain('Enter paid or unpaid for payment_status.');
     expect((await parse('payment_status', 'perhaps')).rows[0].errors).toEqual([]);
-    expect((await parse('payment_status', '', 'PURCHASES')).rows[0].errors.length).toBeGreaterThan(0);
+    expect((await parse('payment_status', '', 'PURCHASES')).rows[0]).toMatchObject({ paymentStatus: 'UNPAID', errors: [] });
+  });
+
+  it('clears only the payment error when marking all purchases unpaid', async () => {
+    const { rows } = await parse('payment_status', 'perhaps', 'PURCHASES');
+    expect(resolvePurchasePaymentStatus([...rows[0].errors, 'Other error'], 'UNPAID')).toEqual({
+      resolvedPaymentStatus: 'UNPAID', errors: ['Other error'],
+    });
   });
 
   it('reads quoted multiline CSV and preserves physical row numbers', async () => {

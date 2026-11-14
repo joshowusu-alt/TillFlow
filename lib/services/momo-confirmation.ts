@@ -5,7 +5,7 @@ import { isUnverifiedLegacyStatus } from '@/lib/reports/money-received/compute';
 import { CONFIRMED_PAYMENT_STATUS } from '@/lib/reports/money-received/types';
 import { MOMO_CONFIRMATION_STATUS } from '@/lib/reports/momo-confirmation/types';
 import { postJournalEntry } from '@/lib/accounting';
-import { RECEIPT_LEDGER_V1, pendingMomoConfirmationLines } from '@/lib/payments/receipt-ledger';
+import { RECEIPT_LEDGER_MOMO_CLEARING, RECEIPT_LEDGER_V1, pendingMomoConfirmationLines } from '@/lib/payments/receipt-ledger';
 import { lockSalesInvoiceForUpdate } from './money-idempotency';
 
 const CONFIRM_ROLES: readonly Role[] = ['OWNER', 'MANAGER'];
@@ -222,14 +222,14 @@ export async function confirmMomoPayment(
       throw new MomoConfirmError('STATUS');
     }
 
-    if (payment.ledgerTreatment === RECEIPT_LEDGER_V1) {
+    if (payment.ledgerTreatment === RECEIPT_LEDGER_V1 || payment.ledgerTreatment === RECEIPT_LEDGER_MOMO_CLEARING) {
       await postJournalEntry({
         businessId: input.actor.businessId,
         description: 'MoMo receipt confirmed',
         referenceType: 'MOMO_PAYMENT_CONFIRM',
         referenceId: payment.id,
         entryDate: confirmedAt,
-        lines: pendingMomoConfirmationLines(payment.amountPence),
+        lines: pendingMomoConfirmationLines(payment.amountPence, payment.ledgerTreatment === RECEIPT_LEDGER_MOMO_CLEARING),
         prismaClient: tx as any,
       });
     } else if (payment.ledgerTreatment != null) {
