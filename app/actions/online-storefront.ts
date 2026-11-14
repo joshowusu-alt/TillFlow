@@ -18,7 +18,7 @@ import { buildOnlineOrderStatusSnapshot, notifyOrderStatusChange } from '@/lib/s
 import { createSalesReturn } from '@/lib/services/returns';
 import { recordUnpostedOrderRefundDue } from '@/lib/services/online-order-refunds';
 import { checkMobileMoneyCollectionStatus } from '@/lib/services/mobile-money';
-import { DAY_KEYS, makeDefaultWeeklyHours, serializeWeeklyHours, type WeeklyHours } from '@/lib/business-hours';
+import { readWeeklyHoursForm, serializeWeeklyHours } from '@/lib/business-hours';
 import { normalizePaymentMode, paymentConfigIsReady } from '@/lib/storefront-payments';
 import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
 import { normalizeBrandColor, resolvePrimaryBrandColor } from '@/lib/storefront-branding';
@@ -213,8 +213,6 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
   }, '/settings/online-store');
 }
 
-const HHMM_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
-
 export async function updateStorefrontHoursAction(formData: FormData): Promise<void> {
   return formAction(async () => {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
@@ -255,25 +253,12 @@ export async function updateStorefrontHoursAction(formData: FormData): Promise<v
       redirect('/settings/online-store?saved=hours');
     }
 
-    const hours = makeDefaultWeeklyHours();
-    for (const day of DAY_KEYS) {
-      const closed = formData.get(`${day}_closed`) === 'on';
-      const openValue = String(formData.get(`${day}_open`) ?? '').trim();
-      const closeValue = String(formData.get(`${day}_close`) ?? '').trim();
-      const open = HHMM_PATTERN.test(openValue) ? openValue : hours[day].open;
-      const close = HHMM_PATTERN.test(closeValue) ? closeValue : hours[day].close;
-      if (!closed && parseInt(open.replace(':', ''), 10) >= parseInt(close.replace(':', ''), 10)) {
-        throw new Error(`Closing time on ${day} must be after opening time.`);
-      }
-      hours[day] = { open, close, closed };
-    }
-
-
+    const hours = readWeeklyHoursForm(formData);
 
     await prisma.business.update({
       where: { id: businessId },
       data: {
-        storefrontHoursJson: serializeWeeklyHours(hours satisfies WeeklyHours),
+        storefrontHoursJson: serializeWeeklyHours(hours),
         storefrontPickupPrepMinutes: prep,
         storefrontPickupInstructions: pickupInstructions,
       },

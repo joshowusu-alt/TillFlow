@@ -38,6 +38,22 @@ export function makeDefaultWeeklyHours(): WeeklyHours {
   }, {} as WeeklyHours);
 }
 
+export function readWeeklyHoursForm(formData: FormData): WeeklyHours {
+  const hours = makeDefaultWeeklyHours();
+  for (const day of DAY_KEYS) {
+    const closed = formData.get(`${day}_closed`) === 'on';
+    const openValue = String(formData.get(`${day}_open`) ?? '').trim();
+    const closeValue = String(formData.get(`${day}_close`) ?? '').trim();
+    const open = HHMM_PATTERN.test(openValue) ? openValue : hours[day].open;
+    const close = HHMM_PATTERN.test(closeValue) ? closeValue : hours[day].close;
+    if (!closed && parseInt(open.replace(':', ''), 10) >= parseInt(close.replace(':', ''), 10)) {
+      throw new Error(`Closing time on ${day} must be after opening time.`);
+    }
+    hours[day] = { open, close, closed };
+  }
+  return hours;
+}
+
 export function parseWeeklyHours(value: string | null | undefined): WeeklyHours | null {
   if (!value) return null;
   try {

@@ -153,6 +153,76 @@ describePg('food release stress on throwaway Postgres', () => {
     return row.unitId;
   }
 
+  it('saves food onboarding hours and prep time to the public storefront', async () => {
+    const { saveFoodStorefrontSetup } = await import('@/lib/food/storefront-setup');
+    const form = new FormData();
+    form.set('hoursEnabled', 'on');
+    form.set('monday_open', '09:30');
+    form.set('monday_close', '16:00');
+    form.set('sunday_closed', 'on');
+    const { storefrontSlug } = await saveFoodStorefrontSetup(businessId, form);
+    const storefront = await checkout.getPublicStorefrontBySlug(storefrontSlug!);
+    expect(storefront).toMatchObject({
+      prepMinutes: 20,
+      weeklyHours: { monday: { open: '09:30', close: '16:00' }, sunday: { closed: true } },
+    });
+    const prepOnly = new FormData();
+    prepOnly.set('pickupPrepMinutes', '35');
+    await saveFoodStorefrontSetup(businessId, prepOnly);
+    expect(await checkout.getPublicStorefrontBySlug(storefrontSlug!)).toMatchObject({
+      prepMinutes: 35, weeklyHours: storefront!.weeklyHours,
+    });
+    // Keep timing independent for the order tests below.
+    await db.business.update({
+      where: { id: businessId },
+      data: { storefrontHoursJson: null, storefrontPickupPrepMinutes: 0 },
+    });
+  });
+
+  it('hides saved dish and size ingredients from till search and storefront, leaving stock and retail intact', async () => {
+    const { findSaleableRecipeIngredients, markRecipeIngredientsNotSold } = await import('@/lib/food/recipe-ingredient-visibility');
+    const { posSearchWhere } = await import('@/lib/pos/catalogue-query');
+    async function stockProduct(name: string) {
+      const item = await db.product.create({ data: {
+        businessId, name, sellingPriceBasePence: 400, defaultCostBasePence: 100,
+        storefrontPublished: true,
+        productUnits: { create: { unitId, isBaseUnit: true, conversionToBase: 1 } },
+      } });
+      await db.inventoryBalance.create({ data: {
+        storeId, productId: item.id, qtyOnHandBase: 10, avgCostBasePence: 100, knownValuePence: 1000,
+      } });
+      return item.id;
+    }
+    const rice = await stockProduct('Visibility rice');
+    const oil = await stockProduct('Visibility oil');
+    const water = await stockProduct('Visibility water');
+    const dish = await dishes.saveDish({ businessId, draft: draft({
+      name: 'Visibility plate', startingPriceCedis: '20', stockMode: 'COUNTED',
+      recipe: [{ productId: rice, qty: 1 }],
+      sizes: [{ name: 'Large', priceCedis: '20', isDefault: true, recipe: [{ productId: oil, qty: 1 }] }],
+    }) });
+    await db.inventoryBalance.create({ data: { storeId, productId: dish.id, qtyOnHandBase: 5 } });
+    const { storefrontSlug } = await db.business.findUniqueOrThrow({ where: { id: businessId } });
+    async function onlineIds() {
+      return (await checkout.getStorefrontCatalogPage(storefrontSlug!))!.products.map(({ id }) => id);
+    }
+    async function tillIds() {
+      return (await db.product.findMany({ where: posSearchWhere(businessId, 'Visibility') })).map(({ id }) => id);
+    }
+    expect(await tillIds()).toEqual(expect.arrayContaining([rice, oil, water, dish.id]));
+    expect(await onlineIds()).toEqual(expect.arrayContaining([rice, oil, water, dish.id]));
+    expect((await findSaleableRecipeIngredients(businessId, dish.id)).map(({ id }) => id)).toEqual([oil, rice]);
+    expect(await markRecipeIngredientsNotSold(businessId, dish.id)).toMatchObject({ count: 2 });
+    expect(await markRecipeIngredientsNotSold(businessId, dish.id)).toMatchObject({ count: 0 });
+    for (const ids of [await tillIds(), await onlineIds()]) {
+      expect(ids).not.toContain(rice);
+      expect(ids).not.toContain(oil);
+      expect(ids).toEqual(expect.arrayContaining([water, dish.id]));
+    }
+    expect(await onHand(rice)).toBe(10);
+    expect(await onHand(oil)).toBe(10);
+  });
+
   it('preserves the dish category and excludes counted dishes from missing stock costs', async () => {
     const { getIncompleteStockSnapshot } = await import('@/lib/reports/incomplete-stock');
     const category = await db.category.create({ data: { businessId, name: 'Rice bowls' } });

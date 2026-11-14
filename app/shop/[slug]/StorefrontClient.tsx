@@ -1,5 +1,6 @@
 'use client';
 
+import { DAY_KEYS, DAY_LABELS, formatHumanTime } from '@/lib/business-hours';
 import React from 'react';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -268,12 +269,25 @@ function PickupDetails({ storefront, store }: {
 }) {
   const address = store?.address || null;
   const phone = store?.phone || storefront.phone;
+  const weeklyHours = storefront.weeklyHours;
   return <section aria-label="Collection details" className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 text-sm text-slate-700">
     <h3 className="font-bold text-slate-950">Collect from {store?.name || storefront.name}</h3>
     <p className="mt-1">{address || 'Contact the store to confirm the collection address before travelling.'}</p>
     {storefront.openStatus ? <p className="mt-2 font-semibold">{storefront.openStatus.shortLabel}{storefront.openStatus.detail ? ` · ${storefront.openStatus.detail}` : ''}</p>
       : null}
-    {storefront.prepMinutes > 0 && storefront.openStatus?.isOpen !== false ? <p>Preparation estimate: about {storefront.prepMinutes} minutes after payment is confirmed.</p> : null}
+    {weeklyHours && <details className="mt-2">
+      <summary className="cursor-pointer font-semibold">Opening hours</summary>
+      <dl className="mt-1 space-y-1">
+        {DAY_KEYS.map((day) => {
+          const hours = weeklyHours[day];
+          return <div key={day} className="flex justify-between gap-2">
+            <dt>{DAY_LABELS[day]}</dt>
+            <dd>{hours.closed ? 'Closed' : `${formatHumanTime(hours.open)} – ${formatHumanTime(hours.close)}`}</dd>
+          </div>;
+        })}
+      </dl>
+    </details>}
+    {storefront.prepMinutes > 0 ? <p>Preparation estimate: about {storefront.prepMinutes} minutes after payment is confirmed.</p> : null}
     <p className="mt-2 font-semibold">Wait until your order is marked ready before travelling.</p>
     {storefront.pickupInstructions ? <div className="mt-3 border-t border-blue-200 pt-3"><h4 className="font-semibold text-slate-900">Store pickup instructions</h4><p className="mt-1 whitespace-pre-line">{storefront.pickupInstructions}</p></div> : null}
     {phone ? <a className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-blue-200 bg-white px-3 font-semibold text-blue-900" href={`tel:${phone}`}>Call the store</a> : null}

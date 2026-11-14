@@ -9,7 +9,7 @@ import { buildQtyByProductMap, resolveEffectiveSellingPricePence, resolveProduct
 import { initiateMobileMoneyCollection, normalizeAfricanMsisdn, currencyToDialCode } from '@/lib/services/mobile-money';
 import { normalizeGhanaPhone } from '@/lib/storefront-phone';
 import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
-import { getOpenStatus, parseWeeklyHours, type OpenStatus } from '@/lib/business-hours';
+import { getOpenStatus, parseWeeklyHours, type OpenStatus, type WeeklyHours } from '@/lib/business-hours';
 import { lockInventoryValues, fetchInventoryMap } from '@/lib/services/shared/inventory-utils';
 import { issueStockValue, receiveStockValue, allocateLineValues, INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
 import { parseStoredStorefrontPaymentConfig, normalizePaymentMode, paymentConfigIsReady, type StorefrontPaymentConfig } from '@/lib/storefront-payments';
@@ -115,6 +115,7 @@ export type PublicStorefront = {
   totalProductCount: number;
   initialProductCount: number;
   openStatus: OpenStatus | null;
+  weeklyHours?: WeeklyHours | null;
   paymentConfig: StorefrontPaymentConfig;
   prepMinutes: number;
 };
@@ -907,6 +908,7 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
       tagline: (business as any).storefrontTagline ?? null,
     },
     openStatus,
+    weeklyHours,
     paymentConfig: {
       mode: normalizePaymentMode((business as any).storefrontPaymentMode),
       momoNumber: (business as any).storefrontMomoNumber ?? null,

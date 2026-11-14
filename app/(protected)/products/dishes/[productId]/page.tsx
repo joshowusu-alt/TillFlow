@@ -1,3 +1,5 @@
+import MarkRecipeIngredientsButton from '@/components/food/MarkRecipeIngredientsButton';
+import { findSaleableRecipeIngredients } from '@/lib/food/recipe-ingredient-visibility';
 import FoodRecordHistory from '@/components/food/FoodRecordHistory';
 import { loadFoodRecordHistory } from '@/lib/food/record-history';
 import Link from 'next/link';
@@ -84,6 +86,7 @@ export default async function DishPage(props: { params: Promise<{ productId: str
       ) : null}
       {branch && <FoodRecordHistory storeId={branch.id} title="Cooking history"
         records={await loadFoodRecordHistory({ businessId: business.id, storeId: branch.id, productId, timeZone: business.timezone || 'UTC' })} />}
+      <MarkRecipeIngredientsButton productId={productId} names={(await findSaleableRecipeIngredients(business.id, productId)).map(({ name }) => name)} />
       <DishForm categories={await prisma.category.findMany({ where: { businessId: business.id }, select: { id: true, name: true }, orderBy: { name: 'asc' } })} ingredients={await ingredientOptions(business.id)} initial={draft} productId={dish.productId} />
     </div>
   );
