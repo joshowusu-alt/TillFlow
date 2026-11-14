@@ -63,15 +63,15 @@ async function login(page) {
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
     const url = page.url();
-    if (/\/pos|\/onboarding/.test(url)) break;
+    if (/\/pos|\/onboarding|\/home/.test(url)) break;
     if (/error=/.test(url)) throw new Error(`Login error: ${url}`);
     await page.waitForTimeout(500);
   }
-  if (!/\/pos|\/onboarding/.test(page.url())) {
+  if (!/\/pos|\/onboarding|\/home/.test(page.url())) {
     const diag = { url: page.url(), failedResponses: responses };
     throw new Error(`Login failed — landed on ${page.url()} | diag: ${JSON.stringify(diag)}`);
   }
-  if (/\/onboarding/.test(page.url())) {
+  if (/\/onboarding|\/home/.test(page.url())) {
     await page.goto(`${BASE_URL}/pos`, { waitUntil: 'networkidle' });
   }
 }
