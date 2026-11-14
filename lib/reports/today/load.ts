@@ -13,10 +13,11 @@
  * expenses, cash-on-hand estimate, Balance Sheet, cash-flow statement, cash-flow forecast,
  * and any whole-business fallback.
  */
+import { applyFoodProfit } from '@/lib/reports/food-profit';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import type { TodaySnapshot } from '@/lib/reports/today/model';
-import { evaluateMarginLines } from '@/lib/reports/margin-line';
+import { evaluateMarginLines, evaluateMarginSet } from '@/lib/reports/margin-line';
 import { aggregateMoneyReceivedByMethod, requireMoneyReceivedMethodRows } from '@/lib/reports/money-received/query';
 import { resolveMoneyReceivedScope } from '@/lib/reports/money-received/scope-clock';
 import { MOMO_CONFIRMATION_STATUS } from '@/lib/reports/momo-confirmation/types';
@@ -47,6 +48,7 @@ export type TodayStoreName = { id: string; name: string };
 
 export type TodayLoadInput = {
   businessId: string;
+  businessCategory?: string | null;
   ownedStoreIds: readonly string[];
   storeIds: readonly string[];
   currency: string;
@@ -415,7 +417,15 @@ export async function loadToday(db: Db, input: TodayLoadInput): Promise<TodaySna
     }
 
     const evaluated = input.showProfit ? evaluateMarginLines([...marginInvoices.values()]) : null;
-    const profit = !input.showProfit || !evaluated || evaluated.lines.length === 0
+    const adjusted = input.showProfit && input.businessCategory === 'FOOD_DISHES'
+      ? await applyFoodProfit(db, {
+        ...windows.today, businessId: input.businessId, businessCategory: input.businessCategory,
+        branchScoped: storeIds.length !== input.ownedStoreIds.length,
+      }, evaluateMarginSet([...marginInvoices.values()]))
+      : null;
+    const profit = adjusted?.seeProfitAndLoss ? { state: 'see-pnl' as const, grossProfitPence: null }
+      : adjusted?.grossProfitPence != null ? { state: 'ready' as const, grossProfitPence: adjusted.grossProfitPence }
+      : !input.showProfit || !evaluated || evaluated.lines.length === 0
       ? { state: 'omitted' as const, grossProfitPence: null }
       : evaluated.state === 'READY'
         ? {

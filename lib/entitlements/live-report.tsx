@@ -42,6 +42,7 @@ type RawBusiness = {
   name: string;
   currency: string;
   timezone: string | null;
+  businessCategory?: string | null;
   plan?: string | null;
   mode?: string | null;
   storeMode?: string | null;

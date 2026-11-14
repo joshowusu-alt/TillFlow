@@ -77,7 +77,7 @@ export const BUSINESS_CATEGORIES = [
   'COSMETICS',
   'HARDWARE',
   'WHOLESALE',
-  'RESTAURANT_STOCK',
+  'FOOD_DISHES',
   'OTHER',
 ] as const;
 

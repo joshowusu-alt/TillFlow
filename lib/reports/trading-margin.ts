@@ -1,3 +1,4 @@
+import { applyFoodProfit } from '@/lib/reports/food-profit';
 import { prisma } from '@/lib/prisma';
 import { evaluateMarginSet, type MarginReturnKind } from '@/lib/reports/margin-line';
 
@@ -6,6 +7,7 @@ export async function loadTradingPeriodMargin(input: {
   startInclusive: Date;
   endExclusive: Date;
   storeId?: string;
+  businessCategory?: string | null;
 }) {
   const marginInvoices = await prisma.salesInvoice.findMany({
     where: {
@@ -30,7 +32,7 @@ export async function loadTradingPeriodMargin(input: {
     },
   });
 
-  const tradingMargin = evaluateMarginSet(marginInvoices.map((invoice) => {
+  const saleMargin = evaluateMarginSet(marginInvoices.map((invoice) => {
     let returnKind: MarginReturnKind = 'NONE';
     if (invoice.salesReturn?.type === 'VOID' && invoice.paymentStatus === 'VOID') returnKind = 'FULL_VOID';
     else if (invoice.salesReturn?.type === 'RETURN' && invoice.paymentStatus === 'RETURNED') returnKind = 'FULL_RETURN';
@@ -50,7 +52,9 @@ export async function loadTradingPeriodMargin(input: {
     };
   }));
 
+  const tradingMargin = await applyFoodProfit(prisma, { ...input, branchScoped: !!input.storeId }, saleMargin);
   return {
+    ...(tradingMargin.seeProfitAndLoss ? { seeProfitAndLoss: true as const } : {}),
     state: tradingMargin.state,
     grossProfitPence: tradingMargin.grossProfitPence,
     grossProfitPercent: tradingMargin.state === 'READY' ? tradingMargin.grossProfitPercent : null,

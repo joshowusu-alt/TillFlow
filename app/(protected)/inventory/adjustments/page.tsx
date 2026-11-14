@@ -362,8 +362,13 @@ export default async function StockAdjustmentsPage(
                       {adjustment.reasonCode ? `${adjustment.reasonCode}: ` : ''}
                       {adjustment.reason ?? 'No reason provided'}
                     </div>
+                    {adjustment.valuePence != null ? (
+                      <div className="mt-1 text-sm font-semibold text-ink">
+                        {adjustment.valuePence === 0 ? 'No cost posted' : formatMoney(adjustment.valuePence, business.currency)}
+                      </div>
+                    ) : null}
                   </div>
-                  {canReverseAdjustments ? (
+                  {canReverseAdjustments && adjustment.reasonCode !== 'END_OF_DAY_LEFTOVER' && adjustment.reasonCode !== 'SPOILED' ? (
                     <div className="col-span-2">
                       <ReverseStockAdjustmentForm
                         adjustmentId={adjustment.id}
@@ -422,10 +427,15 @@ export default async function StockAdjustmentsPage(
                     <td className="px-3 py-3 text-sm">
                       {adjustment.reasonCode ? `${adjustment.reasonCode}: ` : ''}
                       {adjustment.reason ?? '-'}
+                      {adjustment.valuePence != null ? (
+                        <div className="mt-1 font-semibold text-ink">
+                          {adjustment.valuePence === 0 ? 'No cost posted' : formatMoney(adjustment.valuePence, business.currency)}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-3 py-3 text-sm">{adjustment.user.name ?? 'Unknown'}</td>
                     <td className="px-3 py-3 text-sm">
-                      {canReverseAdjustments ? (
+                      {canReverseAdjustments && adjustment.reasonCode !== 'END_OF_DAY_LEFTOVER' && adjustment.reasonCode !== 'SPOILED' ? (
                         <ReverseStockAdjustmentForm
                           adjustmentId={adjustment.id}
                           storeId={store.id}

@@ -152,6 +152,7 @@ export default function BusinessProfileEditor({
           aria-label="Business type"
         >
           <option value="">Select your type of business</option>
+          {category === 'RESTAURANT_STOCK' ? <option value="RESTAURANT_STOCK">Food business with stock</option> : null}
           {BUSINESS_CATEGORIES.map((value) => (
             <option key={value} value={value}>
               {BUSINESS_CATEGORY_LABELS[value] ?? value}

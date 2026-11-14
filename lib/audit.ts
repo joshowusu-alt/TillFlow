@@ -67,7 +67,10 @@ export type AuditAction =
   | 'SUPPLIER_DELETE'
   | 'CATEGORY_CREATE'
   | 'CATEGORY_DELETE'
-  | 'CATEGORY_UPDATE';
+  | 'CATEGORY_UPDATE'
+  | 'FOOD_DISH_SAVE'
+  | 'FOOD_PREPARATION'
+  | 'FOOD_LEFTOVER_WRITE_OFF';
 
 /**
  * Write an entry to the audit trail — best-effort, never throws, must not block callers.

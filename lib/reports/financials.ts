@@ -100,8 +100,11 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
   });
   const margin = evaluateMarginSet(marginInvoices);
   const revenue = margin.recognisedSalesPence;
-  const grossProfit = margin.grossProfitPence;
-  const cogs = grossProfit == null ? null : revenue - grossProfit;
+  const retailGrossProfit = margin.grossProfitPence;
+  const cogs = retailGrossProfit == null ? null : revenue - retailGrossProfit;
+  let foodCosts = 0;
+  let foodWaste = 0;
+  let hasFoodCosts = false;
 
   // Other expenses from journals (excluding COGS which is derived above)
   let otherExpenses = 0;
@@ -114,7 +117,13 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
     const accountType = account.type as AccountType;
     const debit = g._sum.debitPence ?? 0;
     const credit = g._sum.creditPence ?? 0;
-    if (accountType === 'EXPENSE' && account.code !== ACCOUNT_CODES.cogs) {
+    if (account.code === ACCOUNT_CODES.foodCosts && account.name === 'Food costs' && accountType === 'EXPENSE') {
+      foodCosts = debit - credit;
+      hasFoodCosts = true;
+    } else if (account.code === ACCOUNT_CODES.foodWaste && account.name === 'Food waste' && accountType === 'EXPENSE') {
+      foodWaste = debit - credit;
+      hasFoodCosts = true;
+    } else if (accountType === 'EXPENSE' && account.code !== ACCOUNT_CODES.cogs) {
       otherExpenses += applyBalance(accountType, debit, credit);
     }
     if (accountType === 'INCOME' && account.code !== ACCOUNT_CODES.sales) {
@@ -122,6 +131,7 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
     }
   }
 
+  const grossProfit = retailGrossProfit == null ? null : retailGrossProfit - foodCosts - foodWaste;
   const incomplete = await getIncompleteStockSnapshot(businessId, db);
 
   const entries: IncomeStatementContribution[] = [];
@@ -141,7 +151,9 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
       const href = journal.referenceId && journal.referenceType === 'EXPENSE' ? `/expenses/${encodeURIComponent(journal.referenceId)}`
         : journal.referenceId && journal.referenceType === 'PURCHASE_INVOICE' ? `/purchases/${encodeURIComponent(journal.referenceId)}` : null;
       entries.push({ id: `journal:${line.id}`, date: journal.entryDate.toISOString(), label: account.name,
-        description: journal.description, href, kind: expense ? 'expense' : 'other-income',
+        description: journal.description, href,
+        kind: expense && ((account.code === ACCOUNT_CODES.foodCosts && account.name === 'Food costs') ||
+          (account.code === ACCOUNT_CODES.foodWaste && account.name === 'Food waste')) ? 'food-cost' : expense ? 'expense' : 'other-income',
         revenuePence: 0, costPence: 0, profitPence: 0,
         amountPence: applyBalance(account.type as AccountType, line.debitPence, line.creditPence),
       });
@@ -151,6 +163,9 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
   return {
     revenue,
     cogs,
+    foodCosts,
+    foodWaste,
+    hasFoodCosts,
     otherExpenses,
     otherOperatingIncome,
     grossProfit,

@@ -18,7 +18,7 @@ export type TodaySnapshot = {
   cashDifferencePence: number | null;
   comparison: { last30Pence: number; previous30Pence: number } | null;
   branches: Array<{ storeId: string; name: string; salesPence: number }> | null;
-  profit: { state: 'omitted' | 'ready' | 'incomplete'; grossProfitPence: number | null };
+  profit: { state: 'omitted' | 'ready' | 'incomplete' | 'see-pnl'; grossProfitPence: number | null };
   topProducts: Array<{ name: string; salesPence: number }>;
   attention: AttentionCandidate[];
 };

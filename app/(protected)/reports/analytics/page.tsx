@@ -62,6 +62,8 @@ export default async function AnalyticsPage(
       <Suspense fallback={<ReportSectionSkeleton />}>
         <AnalyticsContent
           businessId={business.id}
+          businessCategory={business.businessCategory}
+          branchScoped={opened.branch.kind === 'stores' && opened.branch.selected !== 'ALL'}
           currency={business.currency}
           periodDays={periodDays}
           timeZone={business.timezone}

@@ -39,6 +39,9 @@ import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
 import { reserveNextDocumentNumber, reserveNextSequenceValue } from './document-numbers';
 import { unstable_cache } from 'next/cache';
 import { checkoutContextTag } from '@/lib/cache/pos-tags';
+import { isFoodBusiness } from '@/lib/food/business';
+import { priceFoodSaleLines } from '@/lib/food/price-sale';
+import type { PlateSelection } from '@/lib/food/plate';
 
 // Account codes fetched on every checkout — extracted to module level so the
 // unstable_cache key is stable across calls.
@@ -126,7 +129,7 @@ function buildLinePricing(
       throw new Error('Unit not configured for product');
     }
     const qtyBase =
-      typeof line.qtyBase === 'number' && line.qtyBase > 0
+      typeof line.qtyBase === 'number' && (line.qtyBase > 0 || (line.qtyBase === 0 && line.plateSnapshotJson))
         ? Math.round(line.qtyBase)
         : line.qtyInUnit * productUnit.conversionToBase;
     const lineSubtotal =
@@ -296,6 +299,10 @@ export type SaleLineInput = {
   qtyBase?: number;
   /** Fixed line subtotal (weighed items). */
   lineSubtotalPence?: number;
+  /** Food plate choices. Ignored unless this business is a food business. */
+  plate?: PlateSelection | null;
+  /** Set by the server when a plate is priced. Never trusted from the client. */
+  plateSnapshotJson?: string | null;
   discountType?: DiscountType;
   discountValue?: number;
 };
@@ -697,7 +704,12 @@ async function createSaleImpl(input: CreateSaleInput) {
   const lineDetails = await measureCheckoutStage(
     'action.checkout.cart-pricing',
     input,
-    async () => buildLinePricing(input.lines, unitMap, business.vatEnabled),
+    async () => {
+      const lines = input.onlineOrderId || !isFoodBusiness(business.businessCategory)
+        ? input.lines
+        : await priceFoodSaleLines(input.businessId, input.lines);
+      return buildLinePricing(lines, unitMap, business.vatEnabled);
+    },
     { stage: 'cart-pricing', rowCount: input.lines.length },
     CHECKOUT_STAGE_THRESHOLDS_MS.cartPricing,
   );
@@ -712,11 +724,15 @@ async function createSaleImpl(input: CreateSaleInput) {
       }
       Object.assign(line, { qtyBase: captured.qtyBase, unitPricePence: captured.unitPricePence,
         lineSubtotal: captured.lineSubtotalPence, lineNetSubtotal: captured.lineSubtotalPence,
-        lineDiscount: 0, promoDiscount: 0, lineVat: captured.lineVatPence, lineTotal: captured.lineTotalPence });
+        lineDiscount: 0, promoDiscount: 0, lineVat: captured.lineVatPence, lineTotal: captured.lineTotalPence,
+        plateSnapshotJson: captured.plateSnapshotJson ?? null });
       line.productUnit = { ...line.productUnit, conversionToBase: captured.conversionToBase };
     }
   }
   const qtyByProduct = buildQtyByProductMap(lineDetails);
+  for (const [productId, qtyBase] of qtyByProduct) {
+    if (qtyBase <= 0) qtyByProduct.delete(productId);
+  }
   const enforceInventory = (input.inventoryPolicy ?? 'enforce') === 'enforce';
   const shouldApplyInventoryMovements = !input.skipInventoryMovements;
 
@@ -1060,6 +1076,12 @@ async function createSaleImpl(input: CreateSaleInput) {
       }
     }
 
+    if (isFoodBusiness(business.businessCategory)) {
+      lineDetails.forEach((line, index) => {
+        if (line.plateSnapshotJson) transactionCosts[index] = { costPence: 0, costBasis: INVENTORY_VALUE_V1 };
+      });
+    }
+
     const invoiceCreateData = {
       businessId: input.businessId,
       storeId: store.id,
@@ -1102,6 +1124,7 @@ async function createSaleImpl(input: CreateSaleInput) {
           lineTotalPence: line.lineTotal,
           lineCostPence: transactionCosts[index].costPence,
           costBasis: transactionCosts[index].costBasis,
+          plateSnapshotJson: line.plateSnapshotJson ?? null,
         }))
       },
       payments: {
@@ -1422,9 +1445,10 @@ async function createSaleImpl(input: CreateSaleInput) {
         measureCheckoutStage(
           'action.checkout.stock-movements',
           input,
-          async () => recordSaleStockMovements(tx, lineDetails.map((line, index) => {
+          async () => recordSaleStockMovements(tx, lineDetails.flatMap((line, index) => {
+              if (line.qtyBase <= 0) return [];
               const beforeQtyBase = stockMovementInventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
-              return {
+              return [{
                 storeId: input.storeId,
                 productId: line.productId,
                 qtyBase: -line.qtyBase,
@@ -1439,7 +1463,7 @@ async function createSaleImpl(input: CreateSaleInput) {
                 referenceType: 'SALES_INVOICE' as const,
                 referenceId: created.id,
                 userId: input.cashierUserId,
-              };
+              }];
             }), stockMovementInventoryMap),
           { stage: 'stock-movements', rowCount: lineDetails.length },
           CHECKOUT_STAGE_THRESHOLDS_MS.stockMovements,
@@ -1468,8 +1492,10 @@ async function createSaleImpl(input: CreateSaleInput) {
         : null
     ].filter(Boolean) as JournalLine[];
     const cogsTotal = transactionCosts.reduce((sum, cost) => sum + cost.costPence, 0);
-    journalLines.push({ accountCode: ACCOUNT_CODES.cogs, debitPence: cogsTotal });
-    journalLines.push({ accountCode: ACCOUNT_CODES.inventory, creditPence: cogsTotal });
+    if (cogsTotal || !isFoodBusiness(business.businessCategory) || !lineDetails.every(line => line.plateSnapshotJson)) {
+      journalLines.push({ accountCode: ACCOUNT_CODES.cogs, debitPence: cogsTotal });
+      journalLines.push({ accountCode: ACCOUNT_CODES.inventory, creditPence: cogsTotal });
+    }
     txPromises.push(
       measureCheckoutStage(
         'action.checkout.journal-post',
@@ -1658,7 +1684,10 @@ export async function amendSale(input: AmendSaleInput) {
       productUnits.map((pu) => [`${pu.productId}:${pu.unitId}`, pu])
     );
 
-    newLineDetails = buildLinePricing(input.newLines!, unitMap, invoice.business.vatEnabled);
+    const priced = isFoodBusiness(invoice.business.businessCategory)
+      ? await priceFoodSaleLines(input.businessId, input.newLines!)
+      : input.newLines!;
+    newLineDetails = buildLinePricing(priced, unitMap, invoice.business.vatEnabled);
   }
 
   // Snapshot before state
@@ -1778,12 +1807,17 @@ export async function amendSale(input: AmendSaleInput) {
       const addedQty = addedQtyByProduct.get(productId) ?? 0;
       if (addedQty > 0 && value) {
         const issued = issueStockValue(value, addedQty, avgCostMap.get(productId) ?? 0);
-        const indexes = newLineDetails.flatMap((line, index) => line.productId === productId ? [index] : []);
+        const indexes = newLineDetails.flatMap((line, index) => line.productId === productId && line.qtyBase > 0 ? [index] : []);
         const allocations = allocateLineValues(issued.costPence, indexes.map(index => newLineDetails[index].qtyBase));
         indexes.forEach((index, offset) => { addedCosts[index] = { costPence: allocations[offset], costBasis: issued.costBasis }; });
         value = issued.after;
       }
       if (value) amendedValues.set(productId, value);
+    }
+    if (isFoodBusiness(invoice.business.businessCategory)) {
+      newLineDetails.forEach((line, index) => {
+        if (line.plateSnapshotJson) addedCosts[index] = { costPence: 0, costBasis: INVENTORY_VALUE_V1 };
+      });
     }
     const txPromises: Promise<any>[] = [];
 
@@ -1816,6 +1850,7 @@ export async function amendSale(input: AmendSaleInput) {
             lineSubtotalPence: line.lineSubtotal,
             lineVatPence: line.lineVat,
             lineTotalPence: line.lineTotal,
+            plateSnapshotJson: line.plateSnapshotJson ?? null,
             lineCostPence: addedCosts[index].costPence,
             costBasis: addedCosts[index].costBasis,
           })),

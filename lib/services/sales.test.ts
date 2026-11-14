@@ -1,3 +1,7 @@
+import { priceFoodSaleLines } from '@/lib/food/price-sale';
+
+vi.mock('@/lib/food/price-sale', () => ({ priceFoodSaleLines: vi.fn(async (_businessId, lines) => lines) }));
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('./shared/inventory-utils', async () => ({ ...await vi.importActual<typeof import('./shared/inventory-utils')>('./shared/inventory-utils'), lockInventoryValues: vi.fn().mockResolvedValue(undefined) }));
 
@@ -1806,6 +1810,16 @@ describe('createSale — recorded MoMo is not a confirmed receipt', () => {
 });
 
 
+it('posts an uncounted till plate without requiring inventory', async () => {
+  prismaMock.business.findUnique.mockResolvedValue({ id: BIZ_ID, businessCategory: 'FOOD_DISHES', vatEnabled: false, currency: 'GHS' });
+  fetchInventoryMapMock.mockResolvedValue(new Map());
+  const input = makeBaseInput();
+  vi.mocked(priceFoodSaleLines).mockResolvedValueOnce(input.lines.map(line => ({ ...line, qtyBase: 0, plateSnapshotJson: '{}'})));
+  await createSale(input);
+  expect(prismaMock.salesInvoice.create.mock.calls[0][0].data.lines.create[0]).toMatchObject({ qtyBase: 0, plateSnapshotJson: '{}' });
+  expect(prismaMock.stockMovement.createMany).not.toHaveBeenCalled();
+});
+
 describe('online order posting', () => {
   const order = () => ({ id: 'web-1', orderNumber: 'ABC123', paymentStatus: 'PAID', status: 'PAID', vatPence: 225, totalPence: 1725,
     business: { storefrontPaymentMode: 'MOMO_NUMBER' },
@@ -1829,6 +1843,18 @@ describe('online order posting', () => {
     expect(prismaMock.onlineOrder.update).toHaveBeenCalledWith({ where: { id: 'web-1' }, data: { salesInvoiceId: 'inv-1' } });
     expect(prismaMock.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ active: false, email: 'online-system+biz-1@tillflow.system' }) }));
     expect(postJournalEntryMock.mock.calls[0][0].lines).toEqual(expect.arrayContaining([expect.objectContaining({ creditPence: 225 })]));
+  });
+
+  it('posts an uncounted paid pickup with its plate details and no stock deduction', async () => {
+    const captured = order();
+    Object.assign(captured.lines[0], { qtyBase: 0, lineCostPence: 0, costBasis: 'UNVERIFIED_STOCK_V1', plateSnapshotJson: '{}' });
+    prismaMock.onlineOrder.findFirst.mockResolvedValue(captured);
+    prismaMock.onlineOrder.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.stockMovement.updateMany.mockResolvedValue({ count: 0 });
+    getOpenShiftForTillMock.mockResolvedValue(null);
+    await createSale(input());
+    expect(prismaMock.salesInvoice.create.mock.calls[0][0].data.lines.create[0]).toMatchObject({ qtyBase: 0, plateSnapshotJson: '{}' });
+    expect(batchDecrementInventoryBalanceMock).not.toHaveBeenCalled();
   });
 
   it('posts the exact reserved cost and links its stock audit without a second deduction', async () => {

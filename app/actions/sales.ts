@@ -18,6 +18,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 import { appLog, measureServerOperation } from '@/lib/observability';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
+import { parsePlateSelection } from '@/lib/food/parse-plate';
 
 const CHECKOUT_ACTION_STAGE_THRESHOLDS_MS = {
   auditLog: 200,
@@ -337,6 +338,7 @@ export async function completeSaleAction(data: {
               qtyBase: item.qtyBase != null ? Number(item.qtyBase) : undefined,
               lineSubtotalPence:
                 item.lineSubtotalPence != null ? Number(item.lineSubtotalPence) : undefined,
+              plate: parsePlateSelection(item.plate),
               discountType: (item.discountType || 'NONE') as DiscountType,
               discountValue: parseDiscountValue(item.discountType, item.discountValue),
             }))

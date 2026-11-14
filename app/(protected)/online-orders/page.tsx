@@ -5,6 +5,7 @@ import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { formatDateTime, formatMoney, formatGhanaPhoneForDisplay, toTitleCase } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
+import { formatPlateDetail, parsePlateSnapshot } from '@/lib/food/plate';
 
 export const dynamic = 'force-dynamic';
 
@@ -241,6 +242,7 @@ export default async function OnlineOrdersPage(
             productName: true,
             qtyInUnit: true,
             unitName: true,
+            plateSnapshotJson: true,
           },
         },
       },
@@ -401,7 +403,7 @@ type OrderRow = {
     providerReference: string | null;
     failureReason: string | null;
   } | null;
-  lines: Array<{ id: string; productName: string; qtyInUnit: number; unitName: string }>;
+  lines: Array<{ id: string; productName: string; qtyInUnit: number; unitName: string; plateSnapshotJson?: string | null }>;
 };
 
 function OrderCard({ order, compact = false, canManage = true }: { order: OrderRow; compact?: boolean; canManage?: boolean }) {
@@ -475,7 +477,11 @@ function OrderCard({ order, compact = false, canManage = true }: { order: OrderR
 
             <div className="min-w-0 space-y-1">
               <div className={`text-xs text-slate-600 leading-relaxed ${compact ? 'line-clamp-1' : 'line-clamp-2'}`}>
-                {order.lines.map((line) => `${line.qtyInUnit} × ${toTitleCase(line.productName)} (${toTitleCase(line.unitName)})`).join(' · ')}
+                {order.lines.map((line) => {
+                  const plate = parsePlateSnapshot(line.plateSnapshotJson);
+                  const detail = plate ? formatPlateDetail(plate, (pence) => formatMoney(pence, order.currency)) : '';
+                  return `${line.qtyInUnit} × ${toTitleCase(line.productName)}${detail ? ` (${detail})` : ` (${toTitleCase(line.unitName)})`}`;
+                }).join(' · ')}
               </div>
 
               {order.paymentCollection?.providerStatus ? (

@@ -48,6 +48,7 @@ on:
       - 'docs/payments/**'
       - 'lib/migration/**'
       - 'lib/services/migration/**'
+      - 'lib/food/food-release.pg.test.ts'
       - 'lib/services/sales.ts'
       - 'lib/services/inventory-valuation.pg.test.ts'
       - 'lib/services/stock-conversion*'
@@ -193,6 +194,7 @@ jobs:
             lib/services/final-walkthrough-gate.pg.test.ts
             lib/services/purchases-concurrency.test.ts
             lib/services/expense-payments-concurrency.test.ts
+            lib/food/food-release.pg.test.ts
             lib/services/sales.test.ts
           )
           present=()

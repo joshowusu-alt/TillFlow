@@ -122,9 +122,9 @@ export default async function WeeklyDigestPage(
           />
           <StatCard
             label={marginReady ? `Gross Profit (${data.gpPercent}%)` : 'Gross Profit'}
-            value={marginReady ? formatMoney(data.grossProfitPence ?? 0, currency) : 'Costs incomplete'}
+            value={marginReady ? formatMoney(data.grossProfitPence ?? 0, currency) : data.seeProfitAndLoss ? 'See P&L' : 'Costs incomplete'}
             tone={marginReady ? (data.gpPercent! >= 20 ? 'success' : data.gpPercent! >= 0 ? 'warn' : 'danger') : 'warn'}
-            helper={marginReady ? 'Profit before expenses.' : `${data.incompleteLineCount} lines without authoritative cost.`}
+            helper={marginReady ? 'Profit before expenses.' : data.seeProfitAndLoss ? 'Food costs cover all branches.' : `${data.incompleteLineCount} lines without authoritative cost.`}
           />
           <StatCard label="Transactions" value={String(data.txCount)} helper={`${txChange} vs prev week`} />
           <StatCard

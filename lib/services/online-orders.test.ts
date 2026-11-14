@@ -39,6 +39,13 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+it('releases an uncounted order without an inventory balance or movement', async () => {
+  await restoreOnlineOrderInventoryReservation({ tx: prismaMock as any, storeId: 'store-1', orderId: 'order-1',
+    lines: [{ productId: 'uncounted', qtyBase: 0, lineCostPence: 0 }] });
+  expect(prismaMock.inventoryBalance.findMany).not.toHaveBeenCalled();
+  expect(prismaMock.stockMovement.createMany).not.toHaveBeenCalled();
+});
+
 describe('normalizeStorefrontSlug', () => {
   it('normalizes a business name into a URL-safe slug', () => {
     expect(normalizeStorefrontSlug('  Tish Group Market  ')).toBe('tish-group-market');
@@ -271,7 +278,8 @@ describe('reserved stock valuation', () => {
   it('restores a captured rounded cost exactly and records the release', async () => {
     prismaMock.inventoryBalance.findMany.mockResolvedValue([{ productId: 'p1', qtyOnHandBase: 2, avgCostBasePence: 34, knownValuePence: 67, unvaluedQtyBase: 0 }]);
     await restoreOnlineOrderInventoryReservation({ tx: prismaMock as any, storeId: 'store-1', orderId: 'order-1',
-      lines: [{ productId: 'p1', qtyBase: 1, lineCostPence: 33, costBasis: 'INVENTORY_VALUE_V1' }] });
+      lines: [{ productId: 'p1', qtyBase: 1, lineCostPence: 33, costBasis: 'INVENTORY_VALUE_V1' },
+        { productId: 'uncounted', qtyBase: 0, lineCostPence: 0 }] });
     expect(prismaMock.inventoryBalance.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: {
       qtyOnHandBase: 3, avgCostBasePence: 33, knownValuePence: 100, unvaluedQtyBase: 0 } }));
     expect(prismaMock.stockMovement.createMany).toHaveBeenLastCalledWith({ data: [expect.objectContaining({

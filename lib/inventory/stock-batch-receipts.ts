@@ -1,8 +1,9 @@
+import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { UserError } from '@/lib/action-utils';
 import { readBatchDates } from '@/lib/inventory/batch-dates';
 
-export const STOCK_BATCH_SOURCES = ['PURCHASE', 'OPENING_STOCK', 'IMPORT'] as const;
+export const STOCK_BATCH_SOURCES = ['PURCHASE', 'OPENING_STOCK', 'IMPORT', 'FOOD_UNDO'] as const;
 export type StockBatchSource = (typeof STOCK_BATCH_SOURCES)[number];
 
 export type StockBatchReceiptDraft = {
@@ -20,7 +21,7 @@ export type StockBatchReceiptDraft = {
 
 type BatchWriter = {
   stockBatch: {
-    createMany: (args: { data: Array<Record<string, unknown>> }) => Promise<unknown>;
+    createMany: (args: { data: Prisma.StockBatchCreateManyInput[] }) => Promise<unknown>;
   };
 };
 

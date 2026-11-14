@@ -12,6 +12,11 @@ export type OfflineSaleHashLine = {
   lineSubtotalPence?: number;
   discountType: string;
   discountValue: string;
+  plate?: {
+    sizeId?: string | null;
+    addons?: Array<{ addonId: string; qty: number }>;
+    expectedPricePence?: number | null;
+  } | null;
 };
 
 export type OfflineSaleHashPayment = {
@@ -48,6 +53,16 @@ export function canonicalizeOfflineSalePayload(input: OfflineSaleHashInput): str
     lineSubtotalPence: line.lineSubtotalPence != null ? Math.round(Number(line.lineSubtotalPence)) : null,
     discountType: String(line.discountType ?? 'NONE'),
     discountValue: String(line.discountValue ?? ''),
+    ...(line.plate
+      ? {
+          plate: {
+            sizeId: line.plate.sizeId ?? null,
+            addons: [...(line.plate.addons ?? [])]
+              .map((addon) => ({ addonId: String(addon.addonId), qty: Math.floor(Number(addon.qty) || 0) }))
+              .sort((a, b) => a.addonId.localeCompare(b.addonId)),
+          },
+        }
+      : {}),
   }));
 
   const payments = sortBy(input.payments ?? [], (payment) => `${payment.method}:${payment.amountPence}`).map(

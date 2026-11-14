@@ -454,7 +454,7 @@ export async function updateOnboardingBusinessProfile(input: {
   let businessCategory = (business as { businessCategory?: string | null }).businessCategory ?? null;
   if (input.businessCategory !== undefined) {
     const raw = (input.businessCategory ?? '').trim();
-    if (raw && !(BUSINESS_CATEGORIES as readonly string[]).includes(raw)) {
+    if (raw && raw !== businessCategory && !(BUSINESS_CATEGORIES as readonly string[]).includes(raw)) {
       return { ok: false, error: 'Choose a valid business type.' };
     }
     businessCategory = raw || null;

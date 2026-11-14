@@ -1,3 +1,4 @@
+import { foodDishSaleLine } from '@/lib/food/sale-cost-repair';
 import Link from 'next/link';
 import SubmitButton from '@/components/SubmitButton';
 import PageHeader from '@/components/PageHeader';
@@ -53,6 +54,7 @@ export default async function SaleCostCorrectionsPage(
 
   const rawLines = await prisma.salesInvoiceLine.findMany({
     where: {
+      NOT: foodDishSaleLine,
       AND: [
         {
           salesInvoice: {

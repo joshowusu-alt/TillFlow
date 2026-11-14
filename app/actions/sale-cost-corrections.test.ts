@@ -213,6 +213,25 @@ describe('correctTargetedSaleCostsAction', () => {
     });
   });
 
+  it('rejects a submitted dish line that is excluded by the food filter', async () => {
+    selectedLinesFindManyMock.mockResolvedValue([]);
+    const formData = new FormData();
+    formData.append('lineIds', 'dish-line');
+    formData.set('reason', 'Attempt to change dish cost');
+    formData.set('confirmCorrection', 'on');
+
+    await expect(correctTargetedSaleCostsAction(formData)).rejects.toThrow('error=Some+selected+sale+lines');
+    expect(selectedLinesFindManyMock).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        NOT: expect.objectContaining({
+          salesInvoice: { business: { businessCategory: 'FOOD_DISHES' } },
+          OR: expect.arrayContaining([{ plateSnapshotJson: { not: null } }]),
+        }),
+      }),
+    }));
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
+
   it('redirects back with an error when no lines are selected', async () => {
     const formData = new FormData();
     formData.set('status', 'below-cost');

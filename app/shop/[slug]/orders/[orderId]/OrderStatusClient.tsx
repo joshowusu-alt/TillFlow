@@ -100,6 +100,7 @@ type PublicOrder = {
     qtyInUnit: number;
     unitPricePence: number;
     lineTotalPence: number;
+    plateDetail?: string | null;
   }>;
   business: {
     id: string;
@@ -788,6 +789,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-ink">{toTitleCase(line.productName)}</div>
                   <div className="text-xs text-black/45">{line.qtyInUnit} × {toTitleCase(line.unitName)}</div>
+                  {line.plateDetail ? <div className="text-xs text-black/55">{line.plateDetail}</div> : null}
                 </div>
                 <div className="shrink-0 font-semibold text-ink">{formatMoney(line.lineTotalPence, order.currency)}</div>
               </div>

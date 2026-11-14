@@ -11,7 +11,7 @@ import { normalizeGhanaPhone } from '@/lib/storefront-phone';
 import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
 import { getOpenStatus, parseWeeklyHours, type OpenStatus } from '@/lib/business-hours';
 import { lockInventoryValues, fetchInventoryMap } from '@/lib/services/shared/inventory-utils';
-import { issueStockValue, receiveStockValue, allocateLineValues, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
+import { issueStockValue, receiveStockValue, allocateLineValues, INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
 import { parseStoredStorefrontPaymentConfig, normalizePaymentMode, paymentConfigIsReady, type StorefrontPaymentConfig } from '@/lib/storefront-payments';
 import {
   buildCategoryMappingLookup,
@@ -20,6 +20,12 @@ import {
   type PublicCategory,
 } from '@/lib/storefront-taxonomy';
 import { Redis } from '@upstash/redis';
+import { isFoodBusiness } from '@/lib/food/business';
+import { loadFoodCatalogue } from '@/lib/food/load-menus';
+import { repriceFoodCheckoutLines } from '@/lib/food/price-sale';
+import type { FoodMenu, PlateSelection } from '@/lib/food/plate';
+import { formatPlateDetail, parsePlateSnapshot } from '@/lib/food/plate';
+import { formatMoney } from '@/lib/format';
 
 // Redis client for short-lived storefront read caching (60 s TTL).
 // Falls back gracefully to Postgres on any Redis error or missing env vars.
@@ -33,7 +39,7 @@ export async function invalidateStorefrontBusinessCache(slug: string | null | un
   if (!storefrontRedis || !slug) return;
   const normalizedSlug = normalizeStorefrontSlug(slug);
   if (!normalizedSlug) return;
-  storefrontRedis.del(`sf:biz:v2:${normalizedSlug}`).catch(() => null);
+  storefrontRedis.del(`sf:biz:v3:${normalizedSlug}`).catch(() => null);
 }
 
 export type StorefrontCatalogProduct = {
@@ -62,6 +68,7 @@ export type StorefrontCatalogProduct = {
     defaultCostPence?: number | null;
   }>;
   onHandBase: number;
+  food?: FoodMenu;
 };
 
 export type StorefrontPickupStore = {
@@ -124,6 +131,8 @@ export type OnlineCheckoutItemInput = {
   productId: string;
   unitId: string;
   qtyInUnit: number;
+  /** Present only when the customer configured a plate. Retail baskets omit it. */
+  plate?: PlateSelection | null;
 };
 
 export type CreateOnlineCheckoutInput = {
@@ -173,6 +182,7 @@ type CheckoutLine = {
   productName: string;
   unitName: string;
   imageUrl: string | null;
+  plateSnapshotJson?: string | null;
 };
 
 type OnlineOrderInventoryLine = {
@@ -249,9 +259,12 @@ export async function restoreOnlineOrderInventoryReservation(input: {
   // Every caller owns the order transition lock; inventory and release audit stay atomic.
   if (!input.tx) return prisma.$transaction(tx => restoreOnlineOrderInventoryReservation({ ...input, tx }));
   const client = input.tx;
-  await lockInventoryValues(client, input.storeId, input.lines.map(line => line.productId));
-  const balances = await fetchInventoryMap(input.storeId, input.lines.map(line => line.productId), client);
-  for (const line of input.lines) {
+  const reservedLines = input.lines.filter(line => line.qtyBase > 0);
+  if (reservedLines.length === 0) return;
+  const productIds = reservedLines.map(line => line.productId);
+  await lockInventoryValues(client, input.storeId, productIds);
+  const balances = await fetchInventoryMap(input.storeId, productIds, client);
+  for (const line of reservedLines) {
     const before = balances.get(line.productId);
     if (!before) throw new Error('Reserved inventory balance is missing.');
     const value = line.lineCostPence != null && line.costBasis !== UNVERIFIED_STOCK_V1 ? line.lineCostPence : null;
@@ -396,6 +409,7 @@ async function getStorefrontBusinessBySlug(slug: string) {
       storefrontTagline: true,
       phone: true,
       address: true,
+      businessCategory: true,
       stores: {
         orderBy: [{ isMainStore: 'desc' }, { createdAt: 'asc' }],
         select: {
@@ -408,7 +422,7 @@ async function getStorefrontBusinessBySlug(slug: string) {
     },
   });
 
-  const cacheKey = `sf:biz:v2:${slug}`;
+  const cacheKey = `sf:biz:v3:${slug}`;
   if (storefrontRedis) {
     try {
       const hit = await storefrontRedis.get<NonNullable<Awaited<ReturnType<typeof fetchFromDb>>>>(cacheKey);
@@ -787,6 +801,20 @@ async function getPublicCategoriesForBusiness(businessId: string, mappingLookup:
   return Array.from(categories.values()).sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
 }
 
+async function attachFoodMenus<T extends { id: string }>(
+  businessId: string,
+  category: string | null | undefined,
+  products: T[],
+) {
+  if (!isFoodBusiness(category) || products.length === 0) return products;
+  const { menus } = await loadFoodCatalogue(businessId, products.map((product) => product.id));
+  if (menus.size === 0) return products;
+  return products.map((product) => {
+    const food = menus.get(product.id);
+    return food ? { ...product, food } : product;
+  });
+}
+
 export async function getStorefrontCatalogPage(rawSlug: string, query: StorefrontCatalogQuery = {}) {
   const slug = normalizeStorefrontSlug(rawSlug);
   if (!slug) return null;
@@ -803,12 +831,16 @@ export async function getStorefrontCatalogPage(rawSlug: string, query: Storefron
 
   const mappings = await getBusinessCategoryMappings(business.id);
   const mappingLookup = buildCategoryMappingLookup(mappings);
-  return getStorefrontProductRows(
+  const page = await getStorefrontProductRows(
     business.id,
     business.stores.map((store) => store.id),
     query,
     mappingLookup,
   );
+  return {
+    ...page,
+    products: await attachFoodMenus(business.id, business.businessCategory, page.products),
+  };
 }
 
 export async function getPublicStorefrontBySlug(rawSlug: string): Promise<PublicStorefront | null> {
@@ -893,7 +925,7 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
       address: resolveStorefrontPickupAddress(store.address, business.address, business.stores.length),
       phone: store.phone,
     })),
-    products: catalogPage.products,
+    products: await attachFoodMenus(business.id, business.businessCategory, catalogPage.products),
     categories,
     totalProductCount: catalogPage.total,
     initialProductCount: catalogPage.products.length,
@@ -1003,8 +1035,19 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
   if (checkoutKey && !/^[a-zA-Z0-9-]{16,100}$/.test(checkoutKey)) throw new UserError('Invalid checkout reference. Refresh and try again.');
   const checkoutFingerprint = createHash('sha256').update(JSON.stringify({
     storeId: store.id, customerName, customerPhone, customerEmail, customerNotes,
-    items: input.items.map(item => ({ productId: item.productId, unitId: item.unitId, qtyInUnit: item.qtyInUnit }))
-      .sort((a, b) => `${a.productId}:${a.unitId}`.localeCompare(`${b.productId}:${b.unitId}`)),
+    items: input.items.map(item => {
+      const base = { productId: item.productId, unitId: item.unitId, qtyInUnit: item.qtyInUnit };
+      if (!item.plate) return base;
+      return {
+        ...base,
+        plate: {
+          sizeId: item.plate.sizeId ?? null,
+          addons: [...(item.plate.addons ?? [])]
+            .map((addon) => ({ addonId: addon.addonId, qty: addon.qty }))
+            .sort((a, b) => a.addonId.localeCompare(b.addonId)),
+        },
+      };
+    }).sort((a, b) => `${a.productId}:${a.unitId}`.localeCompare(`${b.productId}:${b.unitId}`)),
   })).digest('hex');
   const findReplay = async () => {
     if (!checkoutKey) return null;
@@ -1052,7 +1095,14 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
     },
   });
 
-  const lineDetails = buildCheckoutLines(input.items, products, business.vatEnabled);
+  const lineDetails = await repriceFoodCheckoutLines({
+    businessId: business.id,
+    businessCategory: business.businessCategory,
+    vatEnabled: business.vatEnabled,
+    vatRateByProduct: new Map(products.map((product) => [product.id, product.vatRateBps])),
+    lines: buildCheckoutLines(input.items, products, business.vatEnabled),
+    plates: input.items.map((item) => item.plate),
+  });
   const qtyByProduct = buildQtyByProductMap(lineDetails);
 
   const subtotalPence = lineDetails.reduce((sum, line) => sum + line.lineSubtotalPence, 0);
@@ -1067,6 +1117,7 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
     const capturedCosts = new Map<number, { lineCostPence: number; costBasis: string | null }>();
     const movements: Array<{ productId: string; qtyBase: number; beforeQtyBase: number; afterQtyBase: number; valuePence: number | null; costBasis: string | null }> = [];
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
+      if (qtyBase <= 0) continue;
       const before = balances.get(productId);
       if (!before || before.qtyOnHandBase < qtyBase) {
         const product = products.find(candidate => candidate.id === productId);
@@ -1080,9 +1131,10 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
       const indexes = lineDetails.map((line, index) => line.productId === productId ? index : -1).filter(index => index >= 0);
       const costs = allocateLineValues(issued.costPence, indexes.map(index => lineDetails[index].qtyBase));
       indexes.forEach((index, offset) => capturedCosts.set(index, { lineCostPence: costs[offset], costBasis: issued.costBasis }));
+      const dish = indexes.some(index => Boolean(lineDetails[index].plateSnapshotJson));
       movements.push({ productId, qtyBase: -qtyBase, beforeQtyBase: before.qtyOnHandBase,
-        afterQtyBase: issued.after.qtyOnHandBase, valuePence: issued.costBasis === UNVERIFIED_STOCK_V1 ? null : -issued.costPence,
-        costBasis: issued.costBasis });
+        afterQtyBase: issued.after.qtyOnHandBase, valuePence: dish ? 0 : issued.costBasis === UNVERIFIED_STOCK_V1 ? null : -issued.costPence,
+        costBasis: dish ? INVENTORY_VALUE_V1 : issued.costBasis });
     }
 
     // Resolve the customer link: prefer the explicit session customerId
@@ -1124,7 +1176,7 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
         currency: business.currency,
         lines: {
           create: lineDetails.map((line, index) => ({
-            ...capturedCosts.get(index)!,
+            ...(line.plateSnapshotJson ? { lineCostPence: 0, costBasis: INVENTORY_VALUE_V1 } : capturedCosts.get(index) ?? { lineCostPence: 0, costBasis: line.qtyBase > 0 ? null : UNVERIFIED_STOCK_V1 }),
             productId: line.productId,
             unitId: line.unitId,
             productName: line.productName,
@@ -1137,6 +1189,7 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
             lineSubtotalPence: line.lineSubtotalPence,
             lineVatPence: line.lineVatPence,
             lineTotalPence: line.lineTotalPence,
+            plateSnapshotJson: line.plateSnapshotJson ?? null,
           })),
         },
       },
@@ -1154,7 +1207,7 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
       eventType: 'order_placed', sessionId: input.sessionId?.trim().slice(0, 120) || checkoutKey || publicToken,
       metadata: JSON.stringify({ orderId: created.id }) } });
     return created;
-  }).catch(async (error) => {
+  }, { maxWait: 10_000, timeout: 20_000 }).catch(async (error) => {
     // The losing concurrent transaction rolls back its stock reservation.
     if (checkoutKey && error?.code === 'P2002') {
       const replay = await findReplay();
@@ -1285,6 +1338,7 @@ export async function getPublicOnlineOrder(input: {
           qtyInUnit: true,
           unitPricePence: true,
           lineTotalPence: true,
+          plateSnapshotJson: true,
         },
       },
     },
@@ -1303,6 +1357,13 @@ export async function getPublicOnlineOrder(input: {
   };
   return {
     ...order,
+    lines: (order.lines ?? []).map((line) => {
+      const plate = parsePlateSnapshot(line.plateSnapshotJson);
+      return {
+        ...line,
+        plateDetail: plate ? formatPlateDetail(plate, (pence) => formatMoney(pence, order.currency)) : null,
+      };
+    }),
     paymentDeadlineAt: onlineOrderPaymentDeadline(order.createdAt).toISOString(),
     storefrontSlug: order.business.storefrontSlug,
     storefrontName: order.business.name,

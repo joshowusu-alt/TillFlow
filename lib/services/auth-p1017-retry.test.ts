@@ -141,7 +141,17 @@ describe('Phase C8: auth P1017 session lookup retry', () => {
     expect(output).not.toMatch(/secret-session-token|private@example.com|Server has closed|stack/i);
   });
 
-  it('does not retry non-P1017 Prisma errors', async () => {
+  it('retries a temporarily unreachable database during session lookup', async () => {
+    const findUnique = vi.fn()
+      .mockRejectedValueOnce(new Prisma.PrismaClientInitializationError('Database unavailable', '5.22.0', 'P1001'))
+      .mockResolvedValueOnce(makeSession());
+    const { auth, deleteMock } = await loadAuthWithSessionMock(findUnique);
+    await expect(auth.getUser()).resolves.toMatchObject({ id: 'user-1' });
+    expect(findUnique).toHaveBeenCalledTimes(2);
+    expect(deleteMock).not.toHaveBeenCalled();
+  });
+
+  it('does not retry unrelated Prisma errors', async () => {
     const findUnique = vi.fn().mockRejectedValueOnce(prismaKnownError('P2002'));
     const { auth } = await loadAuthWithSessionMock(findUnique);
 

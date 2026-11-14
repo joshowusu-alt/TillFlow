@@ -171,7 +171,8 @@ async function createSalesReturnImpl(input: {
       ? (tenderMethods[0] ?? null)
       : input.refundMethod ?? 'CASH';
     const arReversal = invoice.totalPence - totalPaid - legacyPending;
-    const qtyByProduct = buildQtyByProductMap(invoice.lines);
+    const stockLines = invoice.lines.filter(line => line.qtyBase > 0);
+    const qtyByProduct = buildQtyByProductMap(stockLines);
     await lockInventoryValues(tx, invoice.storeId, Array.from(qtyByProduct.keys()));
     // Re-read inventory inside transaction to prevent TOCTOU race
     const inventoryMap = await fetchInventoryMap(invoice.storeId, Array.from(qtyByProduct.keys()), tx);
@@ -242,7 +243,7 @@ async function createSalesReturnImpl(input: {
     }
 
     await tx.stockMovement.createMany({
-      data: invoice.lines.map((line) => ({
+      data: stockLines.map((line) => ({
         storeId: invoice.storeId,
         productId: line.productId,
         qtyBase: line.qtyBase,

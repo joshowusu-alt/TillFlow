@@ -1,3 +1,4 @@
+import { applyFoodProfit } from '@/lib/reports/food-profit';
 import { getOwnerBrief, type OwnerBrief } from '@/lib/owner-intel';
 import { prisma } from '@/lib/prisma';
 import { expectedCashPenceFromEntries } from '@/lib/reports/expected-cash';
@@ -184,7 +185,7 @@ async function _getOwnerDashboardSnapshot(
 		});
 	}
 
-	const clock = await prisma.business.findUnique({ where: { id: businessId }, select: { timezone: true } });
+	const clock = await prisma.business.findUnique({ where: { id: businessId }, select: { timezone: true, businessCategory: true } });
 	const timeZone = requireReportTimeZone(clock?.timezone);
 	const todayStart = startOfDay(new Date(), timeZone);
 	const todayEnd = endOfDay(new Date(), timeZone);
@@ -577,12 +578,15 @@ async function _getOwnerDashboardSnapshot(
 		});
 		yesterdayGrouped.set(key, invoice);
 	});
-	const yesterdayMargin = evaluateMarginSet([...yesterdayGrouped.values()]);
+	const yesterdayMargin = await applyFoodProfit(prisma, {
+    businessId, businessCategory: clock?.businessCategory, startInclusive: yesterdayStart,
+    endExclusive: todayStart, branchScoped: !!storeId,
+  }, evaluateMarginSet([...yesterdayGrouped.values()]));
 	const yesterdayGrossProfit = yesterdayMargin.grossProfitPence;
 
 	const salesTrend = describeChange(kpis.totalSalesPence, normalizedYesterdaySales._sum.totalPence ?? 0);
 	const grossProfitTrend = kpis.grossMarginPence == null || yesterdayGrossProfit == null
-		? { label: 'Costs incomplete', direction: 'flat' as const, tone: 'neutral' as const }
+		? { label: kpis.seeProfitAndLoss ? 'See P&L' : 'Costs incomplete', direction: 'flat' as const, tone: 'neutral' as const }
 		: describeChange(kpis.grossMarginPence, yesterdayGrossProfit);
 	const transactionTrend = describeChange(kpis.txCount, normalizedYesterdaySales._count.id);
 	const cashTodayPence = openTillCash.length === 0
@@ -618,12 +622,12 @@ async function _getOwnerDashboardSnapshot(
 			label: 'Gross Profit',
 			value: kpis.marginState === 'READY' ? kpis.grossMarginPence : null,
 			kind: 'money',
-			subtitle: kpis.marginState === 'READY' && kpis.gpPercent != null
+			subtitle: kpis.seeProfitAndLoss ? 'See P&L for business-wide gross profit' : kpis.marginState === 'READY' && kpis.gpPercent != null
 				? `${kpis.gpPercent}% gross margin on today's sales`
 				: `Costs incomplete (${kpis.incompleteLineCount} lines). Recognised sales are still shown.`,
 			trend: grossProfitTrend,
 			tone: kpis.marginState !== 'READY' ? 'warning' : kpis.gpPercent != null && kpis.gpPercent >= 20 ? 'success' : kpis.gpPercent != null && kpis.gpPercent >= 10 ? 'warning' : 'danger',
-			href: '/reports/margins',
+			href: kpis.seeProfitAndLoss ? '/reports/income-statement' : '/reports/margins',
 		},
 		{
 			id: 'transactions',

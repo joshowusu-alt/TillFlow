@@ -23,6 +23,8 @@ export const ACCOUNT_CODES = {
   /** Inventory gains / surplus (Phase 2 increases). Other operating income — not Sales. */
   inventoryGain: '4100',
   cogs: '5000',
+  foodCosts: '5010',
+  foodWaste: '5020',
   /** Inventory write-offs / shrinkage (Phase 1 decreases). Not interchangeable with COGS. */
   inventoryLoss: '5100',
   operatingExpenses: '6000'

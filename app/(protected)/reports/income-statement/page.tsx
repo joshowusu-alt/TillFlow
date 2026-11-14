@@ -57,7 +57,7 @@ export default async function IncomeStatementPage(
   const npPct = !costsIncomplete && statement.revenue > 0 ? Math.round((statement.netProfit! / statement.revenue) * 100) : 0;
   const hasData =
     statement.revenue !== 0 ||
-    statement.cogs !== 0 ||
+    statement.cogs !== 0 || statement.hasFoodCosts ||
     statement.otherExpenses !== 0 ||
     statement.otherOperatingIncome !== 0;
 
@@ -142,6 +142,10 @@ export default async function IncomeStatementPage(
             label="Cost of products sold"
             value={breakdownLink('cogs', costsIncomplete ? 'Costs incomplete' : formatMoney(statement.cogs ?? 0, business.currency))}
           />
+          {statement.hasFoodCosts && <>
+            <ReportSummaryRow label="Food costs" value={formatMoney(statement.foodCosts, business.currency)} />
+            <ReportSummaryRow label="Food waste" value={formatMoney(statement.foodWaste, business.currency)} />
+          </>}
           <ReportSummaryRow
             label="Gross Profit"
             value={breakdownLink('grossProfit', costsIncomplete ? 'Costs incomplete' : formatMoney(statement.grossProfit ?? 0, business.currency))}

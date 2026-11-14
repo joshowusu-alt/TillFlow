@@ -1,3 +1,4 @@
+import { applyFoodProfit } from '@/lib/reports/food-profit';
 import { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
@@ -18,6 +19,7 @@ export const OWNER_DAILY_SUMMARY_EVENT_TYPE = 'OWNER_DAILY_SUMMARY';
 type PrismaTx = Prisma.TransactionClient | typeof prisma;
 
 type OwnerSummaryBusiness = {
+  businessCategory?: string | null;
   id: string;
   name: string;
   currency: string;
@@ -43,6 +45,7 @@ export type OwnerDailySummaryMetrics = {
   returnCount: number;
   closedVariancePence: number | null;
   marginState: 'READY' | 'INCOMPLETE_COSTS';
+  seeProfitAndLoss?: true;
   overdueCustomerPence: number;
   overdueSupplierPence: number;
   openExpectedCashPence: number | null;
@@ -79,6 +82,7 @@ export type OwnerDailySmsInput = {
   closedVariancePence: number | null;
   expensesPaidPence: number;
   marginState: 'READY' | 'INCOMPLETE_COSTS';
+  seeProfitAndLoss?: true;
   grossProfitPence: number | null;
   methodSplit: { cashPence: number; momoPence: number; cardPence: number; transferPence: number } | null;
   actions: string[];
@@ -135,6 +139,8 @@ function renderOwnerSms(input: OwnerDailySmsInput, fit: SmsFit): string {
   lines.push(`Expenses paid ${ghs(input.expensesPaidPence)}`);
   if (fit.gp && input.marginState === 'READY' && input.grossProfitPence != null) {
     lines.push(`Gross profit ${ghs(input.grossProfitPence)}`);
+  } else if (fit.gp && input.seeProfitAndLoss) {
+    lines.push('Gross profit: see P&L');
   } else if (fit.gp && input.marginState === 'INCOMPLETE_COSTS') {
     lines.push('Costs incomplete');
   }
@@ -301,7 +307,7 @@ export async function getOwnerDailySummaryMetrics(
     return acc;
   }, {} as Record<string, number>);
 
-  const margin = evaluateMarginSet(salesInvoices.map((invoice) => {
+  const saleMargin = evaluateMarginSet(salesInvoices.map((invoice) => {
     let returnKind: MarginReturnKind = 'NONE';
     if (invoice.salesReturn?.type === 'VOID' && invoice.paymentStatus === 'VOID') returnKind = 'FULL_VOID';
     else if (invoice.salesReturn?.type === 'RETURN' && invoice.paymentStatus === 'RETURNED') returnKind = 'FULL_RETURN';
@@ -320,6 +326,11 @@ export async function getOwnerDailySummaryMetrics(
       })),
     };
   }));
+
+  const margin = await applyFoodProfit(db, {
+    businessId: business.id, businessCategory: business.businessCategory, branchScoped: !!scopedStore,
+    startInclusive: dayStart, endExclusive: dayEndExclusive,
+  }, saleMargin);
 
   const [overdueCustomers, overdueSuppliers, expensePayments, openShifts] = await Promise.all([
     db.salesInvoice.findMany({
@@ -401,6 +412,7 @@ export async function getOwnerDailySummaryMetrics(
       ? null
       : cashVarShifts.reduce((sum, shift) => sum + (shift.variance ?? 0), 0),
     marginState: margin.state,
+    ...(margin.seeProfitAndLoss ? { seeProfitAndLoss: true as const } : {}),
     overdueCustomerPence: overdueCustomers.reduce(
       (sum, invoice) => sum + receivableDocumentBalance(invoice).balancePence,
       0,
@@ -439,6 +451,7 @@ export function buildOwnerDailySummarySms(metrics: OwnerDailySummaryMetrics): Ow
     closedVariancePence: metrics.closedVariancePence,
     expensesPaidPence: metrics.expensesPaidPence,
     marginState: metrics.marginState,
+    seeProfitAndLoss: metrics.seeProfitAndLoss,
     grossProfitPence: metrics.marginState === 'READY' ? metrics.grossProfitPence : null,
     methodSplit: {
       cashPence: metrics.cashPence,
@@ -467,6 +480,7 @@ export async function enqueueOwnerDailySummarySms(
       whatsappEnabled: true,
       timezone: true,
       whatsappBranchScope: true,
+      businessCategory: true,
       isDemo: true,
       subscriptionStatus: true,
     } as any,

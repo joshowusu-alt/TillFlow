@@ -66,7 +66,7 @@ export async function updateBusinessCategory(category: string): Promise<{ ok: bo
     'COSMETICS',
     'HARDWARE',
     'WHOLESALE',
-    'RESTAURANT_STOCK',
+    'FOOD_DISHES',
     'OTHER',
   ];
   if (!allowed.includes(normalized)) {

@@ -4,6 +4,7 @@ import { useCallback, useState, type Dispatch, type SetStateAction } from 'react
 
 import type { PosDiscountType } from '@/lib/payments/pos-checkout';
 import type { PosCartLine } from '@/lib/payments/pos-cart';
+import type { PlateSelection } from '@/lib/food/plate';
 
 type CartLineInput = {
   productId: string;
@@ -12,6 +13,7 @@ type CartLineInput = {
   lineSubtotalPence?: number;
   qtyBase?: number;
   weighedLabel?: string;
+  plate?: PlateSelection | null;
   /** When true, always adds a new line (weighed scans). */
   separateLine?: boolean;
 };
@@ -24,7 +26,8 @@ type UsePosCartActionsOptions<TCartLine extends PosCartLine> = {
     productId: string,
     unitId: string,
     desiredQty: number,
-    excludeLineId?: string
+    excludeLineId?: string,
+    stockPerEach?: number,
   ) => number;
   onFirstCartLine?: () => void;
 };
@@ -62,18 +65,32 @@ export function usePosCartActions<TCartLine extends PosCartLine>({
     if (cart.length === 0) onFirstCartLine?.();
 
     const mergeId = `${line.productId}:${line.unitId}`;
+    const plateKey = line.plate
+      ? `${line.plate.sizeId ?? ''}:${[...(line.plate.addons ?? [])].map((addon) => `${addon.addonId}:${addon.qty}`).sort().join(',')}`
+      : '';
     const id =
       line.separateLine || line.lineSubtotalPence != null
         ? `${mergeId}:w:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`
-        : mergeId;
+        : plateKey
+          ? `${mergeId}:plate:${plateKey}`
+          : mergeId;
     const existing = line.separateLine || line.lineSubtotalPence != null ? undefined : cart.find((item) => item.id === id);
     const desiredQty = (existing?.qtyInUnit ?? 0) + line.qtyInUnit;
-    const clampedQty = clampQtyInUnit(line.productId, line.unitId, desiredQty, existing?.id);
+    const stockPerEach = line.plate && line.qtyBase && line.qtyInUnit > 0 ? line.qtyBase / line.qtyInUnit : undefined;
+    const clampedQty = stockPerEach
+      ? clampQtyInUnit(line.productId, line.unitId, desiredQty, existing?.id, stockPerEach)
+      : clampQtyInUnit(line.productId, line.unitId, desiredQty, existing?.id);
     if (clampedQty <= 0) return;
 
     setCart((prev) => {
       if (existing) {
-        return prev.map((item) => (item.id === id ? { ...item, qtyInUnit: clampedQty } : item));
+        return prev.map((item) => (item.id === id ? {
+          ...item,
+          qtyInUnit: clampedQty,
+          qtyBase: item.plate && item.qtyInUnit > 0 && typeof item.qtyBase === 'number'
+            ? Math.round((item.qtyBase / item.qtyInUnit) * clampedQty)
+            : item.qtyBase,
+        } : item));
       }
       return [
         ...prev,
@@ -83,8 +100,9 @@ export function usePosCartActions<TCartLine extends PosCartLine>({
           unitId: line.unitId,
           qtyInUnit: clampedQty,
           lineSubtotalPence: line.lineSubtotalPence,
-          qtyBase: line.qtyBase,
+          qtyBase: stockPerEach ? Math.round(stockPerEach * clampedQty) : line.qtyBase,
           weighedLabel: line.weighedLabel,
+          plate: line.plate,
           discountType: 'NONE',
           discountValue: '',
         } as TCartLine,
@@ -109,13 +127,22 @@ export function usePosCartActions<TCartLine extends PosCartLine>({
     }
 
     const desiredQty = Math.max(0, Math.floor(parsed));
-    const clampedQty = clampQtyInUnit(line.productId, line.unitId, desiredQty, line.id);
+    const stockPerEach = line.plate && line.qtyInUnit > 0 && typeof line.qtyBase === 'number' ? line.qtyBase / line.qtyInUnit : undefined;
+    const clampedQty = stockPerEach
+      ? clampQtyInUnit(line.productId, line.unitId, desiredQty, line.id, stockPerEach)
+      : clampQtyInUnit(line.productId, line.unitId, desiredQty, line.id);
     setCart((prev) => {
       if (clampedQty <= 0) {
         return prev.filter((item) => item.id !== line.id);
       }
       return prev.map((item) =>
-        item.id === line.id ? { ...item, qtyInUnit: clampedQty } : item
+        item.id === line.id ? {
+          ...item,
+          qtyInUnit: clampedQty,
+          qtyBase: item.plate && item.qtyInUnit > 0 && typeof item.qtyBase === 'number'
+            ? Math.round((item.qtyBase / item.qtyInUnit) * clampedQty)
+            : item.qtyBase,
+        } : item
       );
     });
     clearQtyDraft(line.id);
@@ -130,17 +157,32 @@ export function usePosCartActions<TCartLine extends PosCartLine>({
 
     pushUndo(cart);
     setCart((prev) => prev.map((item) =>
-      item.id === line.id ? { ...item, qtyInUnit: newQty } : item
+      item.id === line.id ? {
+        ...item,
+        qtyInUnit: newQty,
+        qtyBase: item.plate && item.qtyInUnit > 0 && typeof item.qtyBase === 'number'
+          ? Math.round((item.qtyBase / item.qtyInUnit) * newQty)
+          : item.qtyBase,
+      } : item
     ));
   }, [cart, pushUndo, removeLine, setCart]);
 
   const incrementLineQty = useCallback((line: TCartLine) => {
-    const newQty = clampQtyInUnit(line.productId, line.unitId, line.qtyInUnit + 1, line.id);
+    const stockPerEach = line.plate && line.qtyInUnit > 0 && typeof line.qtyBase === 'number' ? line.qtyBase / line.qtyInUnit : undefined;
+    const newQty = stockPerEach
+      ? clampQtyInUnit(line.productId, line.unitId, line.qtyInUnit + 1, line.id, stockPerEach)
+      : clampQtyInUnit(line.productId, line.unitId, line.qtyInUnit + 1, line.id);
     if (newQty <= line.qtyInUnit) return;
 
     pushUndo(cart);
     setCart((prev) => prev.map((item) =>
-      item.id === line.id ? { ...item, qtyInUnit: newQty } : item
+      item.id === line.id ? {
+        ...item,
+        qtyInUnit: newQty,
+        qtyBase: item.plate && item.qtyInUnit > 0 && typeof item.qtyBase === 'number'
+          ? Math.round((item.qtyBase / item.qtyInUnit) * newQty)
+          : item.qtyBase,
+      } : item
     ));
   }, [cart, clampQtyInUnit, pushUndo, setCart]);
 

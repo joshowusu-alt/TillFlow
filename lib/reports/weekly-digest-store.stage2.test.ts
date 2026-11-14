@@ -10,6 +10,7 @@ vi.mock('next/cache', () => ({
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
+    business: { findUnique: async () => ({ businessCategory: "RETAIL" }) },
     salesInvoice: {
       aggregate: (...args: unknown[]) => aggregate(...args),
       count: (...args: unknown[]) => count(...args),

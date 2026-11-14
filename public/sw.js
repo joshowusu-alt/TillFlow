@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pos-cache-v20';
+const CACHE_NAME = 'pos-cache-v21';
 const OFFLINE_URL = '/offline';
 const SHOP_OFFLINE_URL = '/shop/offline';
 const MAX_CACHE_ITEMS = 100; // LRU eviction when exceeded
@@ -25,10 +25,9 @@ const CACHEABLE_API_ROUTES = [
   '/api/offline/cache-data'
 ];
 
-// Public storefront API routes that benefit from stale-while-revalidate.
-// These are unauthenticated, can be served from cache while a fresh copy
-// is fetched in the background.
-const STOREFRONT_SWR_ROUTES = [
+// Public storefront API routes cached for offline browsing.
+// These responses are unauthenticated.
+const STOREFRONT_CATALOG_ROUTES = [
   '/api/storefront/catalog'
 ];
 
@@ -124,17 +123,14 @@ self.addEventListener('fetch', (event) => {
       return;
     }
 
-    // Public storefront catalog: stale-while-revalidate so customers get
-    // instant product loads after the first visit and can keep browsing
-    // when the network is flaky.
-    const isStorefrontSwr = STOREFRONT_SWR_ROUTES.some(
+    // Live availability takes priority; the cached catalogue is an offline fallback.
+    const isStorefrontCatalog = STOREFRONT_CATALOG_ROUTES.some(
       (route) => url.pathname.startsWith(route)
     );
-    if (isStorefrontSwr) {
+    if (isStorefrontCatalog) {
       event.respondWith((async () => {
         const cache = await caches.open(CACHE_NAME);
-        const cached = await cache.match(request);
-        const network = fetch(request)
+        const network = fetch(request, { cache: 'no-store' })
           .then((response) => {
             if (response.ok) {
               cache.put(request, response.clone());
@@ -143,9 +139,10 @@ self.addEventListener('fetch', (event) => {
             return response;
           })
           .catch(() => null);
-        if (cached) return cached;
         const fresh = await network;
         if (fresh) return fresh;
+        const cached = await cache.match(request);
+        if (cached) return cached;
         return new Response(JSON.stringify({ error: 'Offline' }), {
           status: 503,
           statusText: 'Service Unavailable',
