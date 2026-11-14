@@ -12,6 +12,7 @@ const { prismaMock } = vi.hoisted(() => ({
     store: {
       findFirst: vi.fn(),
     },
+    journalLine: { aggregate: vi.fn() },
     salesInvoice: {
       findMany: vi.fn(),
       aggregate: vi.fn(),
@@ -40,7 +41,7 @@ const { prismaMock } = vi.hoisted(() => ({
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
-import { enqueueOwnerDailySummarySms } from '@/lib/notifications/owner-daily-summary-sms';
+import { enqueueOwnerDailySummarySms, getOwnerDailySummaryMetrics } from '@/lib/notifications/owner-daily-summary-sms';
 
 describe('enqueueOwnerDailySummarySms', () => {
   beforeEach(() => {
@@ -57,6 +58,18 @@ describe('enqueueOwnerDailySummarySms', () => {
     prismaMock.expensePayment.aggregate.mockResolvedValue({ _sum: { amountPence: 0 } });
     prismaMock.messageOutbox.findUnique.mockResolvedValue(null);
     prismaMock.messageOutbox.create.mockResolvedValue({ id: 'outbox-1' });
+  });
+
+  it('deducts net food costs and waste from the SMS gross profit only for food businesses', async () => {
+    prismaMock.salesInvoice.findMany.mockResolvedValueOnce([{
+      totalPence: 36000, paymentStatus: 'PAID', discountPence: 0, salesReturn: null,
+      lines: [{ lineSubtotalPence: 36000, lineDiscountPence: 0, promoDiscountPence: 0,
+        lineCostPence: 0, costBasis: 'INVENTORY_VALUE_V1', qtyBase: 18, product: { defaultCostBasePence: 500 } }],
+    }]);
+    prismaMock.journalLine.aggregate.mockResolvedValue({ _sum: { debitPence: 11000, creditPence: 1000 } });
+    const business = { id: 'biz-1', timezone: 'Africa/Accra', whatsappBranchScope: 'ALL', businessCategory: 'FOOD_DISHES' } as Parameters<typeof getOwnerDailySummaryMetrics>[1];
+    expect(await getOwnerDailySummaryMetrics(prismaMock as never, business, new Date())).toMatchObject({ grossProfitPence: 26000 });
+    expect(prismaMock.journalLine.aggregate).toHaveBeenCalledOnce();
   });
 
   it('does not enqueue when Daily Owner Summary is disabled', async () => {

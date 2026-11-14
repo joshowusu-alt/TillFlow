@@ -82,11 +82,7 @@ export default function DishForm({ initial, productId, ingredients }: { initial?
               Show Low when portions left are at or below
               <input className="input mt-1 w-28" inputMode="numeric" value={draft.lowAt || ''} onChange={(event) => update('lowAt', Math.max(0, Math.floor(Number(event.target.value) || 0)))} />
             </label>
-            <label className="block text-sm">
-              Fallback leftover cost per portion (GH₵, optional)
-              <input className="input mt-1 w-36" inputMode="decimal" value={draft.costPerPortionCedis ?? ''} onChange={(event) => update('costPerPortionCedis', event.target.value)} placeholder="0" />
-            </label>
-            <p className="text-xs text-black/50">Used for leftovers when there is no costed cooking batch.</p>
+
           </>
         )}
         <p className="text-xs text-black/50">
@@ -123,10 +119,10 @@ export default function DishForm({ initial, productId, ingredients }: { initial?
         {draft.sizes.length ? draft.sizes.map((size, index) => (
           <div key={index} className="space-y-2">
             <h3 className="text-sm font-medium">{size.name || `Size ${index + 1}`}</h3>
-            <IngredientRows products={ingredients} rows={size.recipe ?? []}
+            <IngredientRows recipe products={ingredients} rows={size.recipe ?? []}
               onChange={recipe => update('sizes', draft.sizes.map((row, i) => i === index ? { ...row, recipe } : row))} />
           </div>
-        )) : <IngredientRows products={ingredients} rows={draft.recipe ?? []} onChange={recipe => update('recipe', recipe)} />}
+        )) : <IngredientRows recipe products={ingredients} rows={draft.recipe ?? []} onChange={recipe => update('recipe', recipe)} />}
       </section>}
 
       <section className="card space-y-3 p-4">

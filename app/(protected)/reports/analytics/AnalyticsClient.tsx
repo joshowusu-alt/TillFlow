@@ -19,6 +19,7 @@ export interface AnalyticsData {
   productData: { name: string; revenue: number; profit: number; margin: number }[];
   comparison: { labels: string[]; current: number[]; previous: number[] };
   kpis: {
+    seeProfitAndLoss?: boolean;
     totalSales: number; totalProfit: number | null; marginPercent: number | null;
     totalTransactions: number; avgTransaction: number; growthPercent: number; previousPeriodSales: number;
     topSellingProduct: string; peakHour: string;
@@ -46,7 +47,7 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData; kpis?: 
       </ReportSection>
     </div>
     <div className="grid min-w-0 grid-cols-2 gap-3 xl:grid-cols-4" data-analytics-kpis>
-      <ReportMetric label="Gross profit" pence={k.totalProfit} value={k.totalTransactions === 0 ? "No sales" : "Costs incomplete"} currency={c} warning={k.totalProfit == null || k.totalProfit < 0} helper="Profit before expenses. Hidden when required costs are incomplete." />
+      <ReportMetric label="Gross profit" pence={k.totalProfit} value={k.seeProfitAndLoss ? "See P&L" : k.totalTransactions === 0 ? "No sales" : "Costs incomplete"} currency={c} warning={k.totalProfit == null || k.totalProfit < 0} helper="Profit before expenses. Hidden when required costs are incomplete." />
       <ReportMetric label="Gross margin" value={k.marginPercent == null ? (k.totalTransactions === 0 ? 'No sales' : 'Costs incomplete') : `${k.marginPercent.toFixed(1)}%`} currency={c} warning={k.marginPercent == null || k.marginPercent < 0} helper="Gross profit as a share of recorded sales." />
       <ReportMetric label="Average sale" pence={k.totalTransactions > 0 ? k.avgTransaction : null} value="No sales" currency={c} helper="Selected-period sales divided by its sale count." />
       <ReportMetric label="Sales change" value={growth} currency={c} helper={`Vs the previous ${data.periodDays} days. Today, if included, is still in progress.`} />
@@ -58,7 +59,7 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData; kpis?: 
         <ReportChartData title="Revenue trend" columns={['Date', 'Revenue']} rows={data.salesTrend.labels.map((label, i) => [label, money(data.salesTrend.values[i] ?? 0)])}><span className="sr-only">Exact daily sales values are in the figures below.</span></ReportChartData>
       </ReportSection>
       <ReportSection title="Daily gross profit" description="Excluding tax, after product costs and discounts; before operating expenses.">
-        {k.totalProfit !== null ? <TrendLine tone="profit" title="Gross profit trend" labels={data.profitTrend.labels} values={data.profitTrend.values} currency={c} /> : <p className="py-8 text-sm text-slate-600">{k.totalTransactions === 0 ? 'No sales in this period.' : 'Required product costs are incomplete. Use the supporting sales records to review costs.'}</p>}
+        {k.totalProfit !== null ? <TrendLine tone="profit" title="Gross profit trend" labels={data.profitTrend.labels} values={data.profitTrend.values} currency={c} /> : <p className="py-8 text-sm text-slate-600">{k.seeProfitAndLoss ? 'See P&L for business-wide gross profit.' : k.totalTransactions === 0 ? 'No sales in this period.' : 'Required product costs are incomplete. Use the supporting sales records to review costs.'}</p>}
       </ReportSection>
       <ReportSection title="Category net sales mix" description="After discounts, excluding tax. Explore divisions and groups in Classification performance below.">
         {data.netCategoryData ? <SalesMixChart compact title="Net sales by category" rows={data.netCategoryData} currency={c} /> : <p className="text-sm text-slate-600">Net category figures are available in Classification performance.</p>}

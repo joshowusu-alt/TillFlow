@@ -134,6 +134,7 @@ export default async function DashboardPage(
         <TradingDashboardContent
           businessId={business.id}
           businessName={business.name}
+          businessCategory={business.businessCategory}
           currency={business.currency}
           timeZone={scope.timeZone}
           userId={user.id}

@@ -1,5 +1,7 @@
 'use server';
 
+import { isFoodBusiness } from '@/lib/food/business';
+import { loadTradingPeriodMargin } from '@/lib/reports/trading-margin';
 import { Prisma } from '@prisma/client';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -138,6 +140,7 @@ async function _buildEodSummaryPayload(
       whatsappPhone: true,
       whatsappEnabled: true,
       whatsappBranchScope: true,
+      businessCategory: true,
       timezone: true
     } as any
   })) as {
@@ -146,6 +149,7 @@ async function _buildEodSummaryPayload(
     whatsappPhone: string | null;
     whatsappEnabled: boolean;
     whatsappBranchScope: string | null;
+    businessCategory?: string | null;
     timezone: string | null;
   } | null;
 
@@ -236,8 +240,12 @@ async function _buildEodSummaryPayload(
     ]);
 
   const totalSales = salesInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
-  const profitIncomplete = salesInvoices.some(invoice => invoice.grossMarginPence == null);
-  const totalGrossProfit = salesInvoices.reduce(
+  const foodProfit = isFoodBusiness(business.businessCategory) ? await loadTradingPeriodMargin({
+    businessId, businessCategory: business.businessCategory, storeId: scopedStore?.id,
+    startInclusive: dayStart, endExclusive: dayEndExclusive,
+  }) : null;
+  const profitIncomplete = foodProfit ? foodProfit.grossProfitPence == null : salesInvoices.some(invoice => invoice.grossMarginPence == null);
+  const totalGrossProfit = foodProfit ? (foodProfit.grossProfitPence ?? 0) : salesInvoices.reduce(
     (sum, invoice) => sum + (invoice.grossMarginPence ?? 0),
     0
   );
@@ -251,7 +259,7 @@ async function _buildEodSummaryPayload(
     0,
   );
   const cashVariance = cashVarShifts.reduce((sum, shift) => sum + Math.abs(shift.variance ?? 0), 0);
-  const gpPct = totalSales > 0 ? Math.round((totalGrossProfit / totalSales) * 100) : 0;
+  const gpPct = foodProfit ? (foodProfit.grossProfitPercent ?? 0) : totalSales > 0 ? Math.round((totalGrossProfit / totalSales) * 100) : 0;
   const dateLabel = formatBusinessDateLabel(now, effectiveTimeZone);
 
   const lines: string[] = [
@@ -260,7 +268,7 @@ async function _buildEodSummaryPayload(
     `Scope: ${scopeLabel}`,
     '',
     `Sales: ${fmt(totalSales, currency)} (${transactionCount} tx)`,
-    profitIncomplete ? 'Gross Profit: Incomplete — some sales have no confirmed cost.' : `Gross Profit: ${fmt(totalGrossProfit, currency)} (${gpPct}%)`,
+    foodProfit?.seeProfitAndLoss ? 'Gross Profit: see P&L' : profitIncomplete ? 'Gross Profit: Incomplete — some sales have no confirmed cost.' : `Gross Profit: ${fmt(totalGrossProfit, currency)} (${gpPct}%)`,
     '',
     'Payment Split:',
     `- Cash: ${fmt(paymentSplit.CASH ?? 0, currency)}`,

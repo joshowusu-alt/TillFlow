@@ -170,6 +170,17 @@ describePg('food release stress on throwaway Postgres', () => {
         lines: [{ productId: ingredient.id, unitId, qtyInUnit, unitCostPence: 500 }],
       });
     }
+    const manualDish = await dishes.saveDish({ businessId, draft: draft({
+      name: 'Manual waste', startingPriceCedis: '20', stockMode: 'COUNTED', costPerPortionCedis: '5',
+    }) });
+    await prep.addPreparedPortions({ businessId, storeId, productId: manualDish.id, userId, qty: 2 });
+    const unfunded = await writeOff.writeOffCookedPortions({
+      businessId, storeId, userId, userRole: 'OWNER', productId: manualDish.id,
+      qty: 2, manualCostPence: 500, reasonCode: 'SPOILED',
+    });
+    expect(unfunded.valuePence).toBe(0);
+    expect(await onHand(manualDish.id)).toBe(0);
+    expect(await db.journalEntry.count({ where: { referenceId: unfunded.id } })).toBe(0);
     const purchase = await buy(20);
     const dish = await dishes.saveDish({
       businessId, draft: draft({ name: 'Rice bowl', startingPriceCedis: '20', stockMode: 'COUNTED',
@@ -203,6 +214,15 @@ describePg('food release stress on throwaway Postgres', () => {
       for (const line of entry.lines) trialBalance[line.account.code] = (trialBalance[line.account.code] ?? 0) + line.debitPence - line.creditPence;
     }
     expect(trialBalance).toEqual({ '1000': 26000, '1200': 0, '4000': -36000, '5010': 9000, '5020': 1000 });
+    const { loadTradingPeriodMargin } = await import('@/lib/reports/trading-margin');
+    const { getOwnerDailySummaryMetrics } = await import('@/lib/notifications/owner-daily-summary-sms');
+    expect(await loadTradingPeriodMargin({
+      businessId, businessCategory: 'FOOD_DISHES', startInclusive: new Date(0), endExclusive: end(),
+    })).toMatchObject({ grossProfitPence: 26000 });
+    expect(await getOwnerDailySummaryMetrics(db, {
+      id: businessId, name: 'Fixture', currency: 'GHS', timezone: 'Africa/Accra',
+      businessCategory: 'FOOD_DISHES', whatsappBranchScope: 'ALL',
+    } as Parameters<typeof getOwnerDailySummaryMetrics>[1], new Date())).toMatchObject({ grossProfitPence: 26000 });
     await buy(2);
     const usage = { businessId, storeId, userId, userRole: 'OWNER', rows: [{ productId: ingredient.id, qty: 2 }], idempotencyKey: 'manual-rice' };
     await expect(recordIngredientUsage({ ...usage, userRole: 'CASHIER' })).rejects.toThrow(/owner or manager/i);
@@ -216,6 +236,26 @@ describePg('food release stress on throwaway Postgres', () => {
       await db.business.update({ where: { id: businessId }, data: { businessCategory: 'FOOD_DISHES' } });
     }
   }, 60000);
+
+  it('rounds fractional recipes to whole stock units and rolls back batches that use too little', async () => {
+    const rice = await db.product.create({ data: { businessId, name: 'Fractional rice',
+      sellingPriceBasePence: 500, defaultCostBasePence: 500 } });
+    await db.inventoryBalance.create({ data: { storeId, productId: rice.id, qtyOnHandBase: 5,
+      avgCostBasePence: 500, knownValuePence: 2500, unvaluedQtyBase: 0 } });
+    const recipeDish = (qty: number) => dishes.saveDish({
+      businessId, draft: draft({ name: `Rice ${qty}`, startingPriceCedis: '20', stockMode: 'COUNTED',
+        recipe: [{ productId: rice.id, qty }] }),
+    });
+    const dish = await recipeDish(0.15);
+    const batch = await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 20 });
+    expect(batch.costPerPortionPence).toBe(75);
+    expect(await onHand(rice.id)).toBe(2);
+    const small = await recipeDish(0.01);
+    await expect(prep.addPreparedPortions({ businessId, storeId, productId: small.id, userId, qty: 10 }))
+      .rejects.toThrow(/Fractional rice/);
+    expect(await onHand(small.id)).toBe(0);
+    expect(await onHand(rice.id)).toBe(2);
+  });
 
   it('sells sized plates, free extras, quantity, a retail line, a discount, and a balanced ledger', async () => {
     const banku = await dishes.saveDish({
@@ -663,7 +703,7 @@ describePg('food release stress on throwaway Postgres', () => {
 
     const posted = await writeOff.writeOffCookedPortions({
       businessId, storeId, productId: dish.id, userId, userRole: 'OWNER', qty: 2,
-      reasonCode: 'END_OF_DAY_LEFTOVER', note: 'Left after dinner', idempotencyKey: `left-${dish.id}`,
+      manualCostPence: 250, reasonCode: 'END_OF_DAY_LEFTOVER', note: 'Left after dinner', idempotencyKey: `left-${dish.id}`,
     });
     expect(posted.valuePence).toBe(500);
     expect(await onHand(dish.id)).toBe(3);
@@ -688,7 +728,6 @@ describePg('food release stress on throwaway Postgres', () => {
     expect(replay.replayed).toBe(true);
     expect(await onHand(dish.id)).toBe(3);
 
-    await db.foodDish.update({ where: { productId: dish.id }, data: { costPerPortionPence: null } });
     const free = await writeOff.writeOffCookedPortions({
       businessId, storeId, productId: dish.id, userId, userRole: 'OWNER', qty: 1, reasonCode: 'SPOILED',
     });

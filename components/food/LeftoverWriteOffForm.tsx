@@ -9,18 +9,16 @@ import { formatMoney } from '@/lib/format';
 export default function LeftoverWriteOffForm({
   productId,
   storeId,
-  fallbackCostPence,
   costPerPortionPence,
   currency,
 }: {
   productId: string;
   storeId: string;
-  fallbackCostPence: number | null;
   costPerPortionPence: number | null;
   currency: string;
 }) {
   const router = useRouter();
-  const [manualCost, setManualCost] = useState(fallbackCostPence == null ? '' : (fallbackCostPence / 100).toFixed(2));
+  const [manualCost, setManualCost] = useState('');
   const [qty, setQty] = useState('1');
   const [reasonCode, setReasonCode] = useState<LeftoverReasonCode>('END_OF_DAY_LEFTOVER');
   const [note, setNote] = useState('');
@@ -53,7 +51,7 @@ export default function LeftoverWriteOffForm({
     setMessage(
       result.data.valuePence > 0
         ? `Wrote off ${result.data.qty} portions. ${formatMoney(result.data.valuePence, currency)} moved from Food costs to Food waste.`
-        : `Wrote off ${result.data.qty} portions. No cost was set, so no money was posted.`,
+        : `Wrote off ${result.data.qty} portions. Record ingredients used first to cost this waste.`,
     );
     router.refresh();
   }
@@ -87,7 +85,7 @@ export default function LeftoverWriteOffForm({
         <input className="input mt-1" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Left after dinner" />
       </label>
       <p className="text-sm text-black/70">
-        {valuePence > 0 ? `This write-off will post ${formatMoney(valuePence, currency)}.` : 'This write-off will post GH₵0.00.'}
+        {valuePence > 0 ? `Estimated waste cost: ${formatMoney(valuePence, currency)}.` : 'The portion count will go down when you save.'}
       </p>
       {error ? <p className="text-sm text-rose-700">{error}</p> : null}
       {message ? <p className="text-sm text-emerald-800">{message}</p> : null}

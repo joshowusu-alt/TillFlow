@@ -1,3 +1,4 @@
+import { applyFoodProfit } from '@/lib/reports/food-profit';
 import { prisma } from '@/lib/prisma';
 import { unstable_cache } from 'next/cache';
 import { coalesceInFlightRead } from '@/lib/reliability/in-flight-read';
@@ -52,6 +53,7 @@ export type TodayKPIs = {
   gpPercent: number | null;
   marginState: 'READY' | 'INCOMPLETE_COSTS';
   incompleteLineCount: number;
+  seeProfitAndLoss?: true;
   txCount: number;
   outstandingARPence: number;
   outstandingAPPence: number;
@@ -274,10 +276,12 @@ async function getTodayKPIsSqlite(
   storeId: string | undefined,
   now: Date,
   timeZone: string,
+  businessCategory?: string | null,
   scope?: CommandCenterKpiScope,
 ): Promise<TodayKPIs> {
   const todayWindow = businessDayWindow(now, timeZone);
-  const todayStart = todayWindow.startInclusive;
+  const todayStart = businessCategory === 'FOOD_DISHES' && scope && scope.startInclusive > todayWindow.startInclusive
+    ? scope.startInclusive : todayWindow.startInclusive;
   const todayEnd = scope?.endExclusive ?? todayWindow.endExclusive;
   const authorisedStores = scope ? requireAuthorisedStoreIds(scope.storeIds) : null;
   const earliest = scope?.startInclusive;
@@ -404,7 +408,10 @@ async function getTodayKPIsSqlite(
     line.salesInvoice.createdAt >= todayStart && line.salesInvoice.createdAt < todayEnd &&
     !['RETURNED', 'VOID'].includes(line.salesInvoice.paymentStatus)
   );
-  const todayMargin = marginFromSaleLines(todaySaleLines);
+  const todayMargin = await applyFoodProfit(prisma, {
+    businessId, businessCategory, startInclusive: todayStart, endExclusive: todayEnd,
+    branchScoped: !!(storeId || scope),
+  }, marginFromSaleLines(todaySaleLines));
   const grossMarginPence = todayMargin.grossProfitPence;
   const gpPercent = todayMargin.grossProfitPercent;
 
@@ -475,6 +482,7 @@ async function getTodayKPIsSqlite(
     grossMarginPence,
     gpPercent,
     marginState: todayMargin.state,
+    ...(todayMargin.seeProfitAndLoss ? { seeProfitAndLoss: true as const } : {}),
     incompleteLineCount: todayMargin.incompleteLineCount,
     txCount: validTodaySales.length,
     outstandingARPence: receivables.outstandingTotalPence,
@@ -529,13 +537,14 @@ async function _getTodayKPIs(
   const now = scope?.now ?? new Date();
   const business = await prisma.business.findUnique({
     where: { id: businessId },
-    select: { timezone: true },
+    select: { timezone: true, businessCategory: true },
   });
   const timeZone = requireReportTimeZone(business?.timezone);
   if (isSqliteRuntime()) {
-    return getTodayKPIsSqlite(businessId, storeId, now, timeZone, scope);
+    return getTodayKPIsSqlite(businessId, storeId, now, timeZone, business?.businessCategory, scope);
   }
 
+  const businessCategory = business?.businessCategory;
   const todayWindow = businessDayWindow(now, timeZone);
   const earliest = scope?.startInclusive;
   const todayStart = earliest && todayWindow.startInclusive < earliest ? earliest : todayWindow.startInclusive;
@@ -733,7 +742,10 @@ async function _getTodayKPIs(
   const totalSalesPence = salesAgg._sum.totalPence ?? 0;
 
   // GP from sale lines — same source as margins/analytics
-  const todayMargin = marginFromSaleLines(todayLinesForGP);
+  const todayMargin = await applyFoodProfit(prisma, {
+    businessId, businessCategory, startInclusive: todayStart, endExclusive: todayEnd,
+    branchScoped: !!(storeId || scope),
+  }, marginFromSaleLines(todayLinesForGP));
   const grossMarginPence = todayMargin.grossProfitPence;
   const gpPercent = todayMargin.grossProfitPercent;
 
@@ -798,6 +810,7 @@ async function _getTodayKPIs(
     grossMarginPence,
     gpPercent,
     marginState: todayMargin.state,
+    ...(todayMargin.seeProfitAndLoss ? { seeProfitAndLoss: true as const } : {}),
     incompleteLineCount: todayMargin.incompleteLineCount,
     txCount: salesAgg._count.id,
     outstandingARPence: receivables.outstandingTotalPence,

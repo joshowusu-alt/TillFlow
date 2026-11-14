@@ -6,10 +6,11 @@ import { upsertInventoryBalance } from '@/lib/services/shared/inventory-utils';
 
 export type Ingredient = { productId: string; qty: number };
 
-export async function validateIngredients(tx: Prisma.TransactionClient, businessId: string, rows: Ingredient[]) {
+export async function validateIngredients(tx: Prisma.TransactionClient, businessId: string, rows: Ingredient[], recipe = false) {
   if (!Array.isArray(rows) || rows.length > 30 || rows.some(row =>
-    !row || typeof row.productId !== 'string' || !Number.isInteger(row.qty) || row.qty < 1 || row.qty > 1000000
-  )) throw new UserError('Enter whole quantities in the stock units shown.');
+    !row || typeof row.productId !== 'string' || !Number.isFinite(row.qty) || row.qty > 1000000 ||
+    (recipe ? row.qty < 0.001 || row.qty !== Math.round(row.qty * 1000) / 1000 : row.qty < 1 || !Number.isInteger(row.qty))
+  )) throw new UserError(recipe ? 'Enter recipe quantities with up to three decimal places.' : 'Enter whole quantities in the stock units shown.');
   const ids = rows.map(row => row.productId);
   if (new Set(ids).size !== ids.length) throw new UserError('Add each ingredient once.');
   const products = await tx.product.findMany({
@@ -50,10 +51,11 @@ export async function issueIngredients(tx: Prisma.TransactionClient, input: {
   businessId: string; storeId: string; userId: string; referenceType: string; referenceId: string;
   rows: Ingredient[]; portions: number;
 }) {
-  const names = await validateIngredients(tx, input.businessId, input.rows);
+  const names = await validateIngredients(tx, input.businessId, input.rows, input.referenceType === 'FOOD_PREPARATION');
   let value = 0;
   for (const row of input.rows) {
-    const qty = row.qty * input.portions;
+    const qty = Math.round(row.qty * input.portions);
+    if (qty === 0) throw new UserError(`This batch uses less than half a stock unit of ${names.get(row.productId)}. Add more portions or adjust the recipe.`);
     const before = await tx.inventoryBalance.findUnique({
       where: { storeId_productId: { storeId: input.storeId, productId: row.productId } },
     });

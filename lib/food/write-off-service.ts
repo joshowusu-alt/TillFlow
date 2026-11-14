@@ -1,3 +1,4 @@
+import { ACCOUNT_CODES } from '@/lib/accounting';
 import { prisma } from '@/lib/prisma';
 import { UserError } from '@/lib/action-utils';
 import { postFoodCost } from './ingredient-costs';
@@ -40,7 +41,6 @@ export async function writeOffCookedPortions(input: {
     where: { businessId: input.businessId, productId: input.productId },
     select: {
       stockMode: true,
-      costPerPortionPence: true,
       product: { select: { name: true, productUnits: { where: { isBaseUnit: true }, select: { unitId: true } } } },
     },
   });
@@ -67,9 +67,21 @@ export async function writeOffCookedPortions(input: {
       where: { businessId: input.businessId, storeId: store.id, productId: input.productId, costPerPortionPence: { not: null } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
-    const cost = batch?.costPerPortionPence ?? input.manualCostPence ?? dish.costPerPortionPence;
-    const valuePence = leftoverWriteOffValuePence(input.qty, cost);
-    if (valuePence > 2147483647) throw new UserError('The write-off cost is too large.');
+    // Reserving the number locks the tenant's stock-adjustment sequence through commit.
+    // Read the ledger after taking that lock so simultaneous branch write-offs cannot spend the same balance.
+    const transactionNumber = await reserveNextDocumentNumber(tx, input.businessId, 'stock_adjustment');
+    const cost = batch?.costPerPortionPence ?? input.manualCostPence ?? null;
+    const requestedValuePence = leftoverWriteOffValuePence(input.qty, cost);
+    if (requestedValuePence > 2147483647) throw new UserError('The write-off cost is too large.');
+    let valuePence = requestedValuePence;
+    if (valuePence > 0) {
+      const { _sum } = await tx.journalLine.aggregate({
+        where: { account: { businessId: input.businessId, code: ACCOUNT_CODES.foodCosts, name: 'Food costs', type: 'EXPENSE' },
+          journalEntry: { businessId: input.businessId } },
+        _sum: { debitPence: true, creditPence: true },
+      });
+      if ((_sum.debitPence ?? 0) - (_sum.creditPence ?? 0) < valuePence) valuePence = 0;
+    }
     const balance = await tx.inventoryBalance.findUnique({
       where: { storeId_productId: { storeId: store.id, productId: input.productId } },
     });
@@ -85,7 +97,6 @@ export async function writeOffCookedPortions(input: {
       },
       qty,
     );
-    const transactionNumber = await reserveNextDocumentNumber(tx, input.businessId, 'stock_adjustment');
     const created = await tx.stockAdjustment.create({
       data: {
         storeId: store.id,
@@ -97,7 +108,7 @@ export async function writeOffCookedPortions(input: {
         reason,
         reasonCode: input.reasonCode,
         idempotencyKey,
-        unitCostBasePence: cost,
+        unitCostBasePence: valuePence > 0 ? cost : null,
         valuePence,
         userId: input.userId,
         transactionNumber,
@@ -111,7 +122,7 @@ export async function writeOffCookedPortions(input: {
         qtyBase: -qty,
         beforeQtyBase: balance.qtyOnHandBase,
         afterQtyBase: after.qtyOnHandBase,
-        unitCostBasePence: cost,
+        unitCostBasePence: valuePence > 0 ? cost : null,
         valuePence: 0,
         type: 'ADJUSTMENT',
         referenceType: 'STOCK_ADJUSTMENT',

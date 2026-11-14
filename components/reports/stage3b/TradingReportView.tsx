@@ -6,6 +6,7 @@ import { ReportDisclosure, ReportMetric, ReportSalesHero, ReportSection, ReportV
 export type TradingViewData = {
   currency: string; totalSales: number; totalPaymentReceipts: number;
   grossProfit: number | null; grossProfitPercent: number | null; incompleteLineCount: number;
+  seeProfitAndLoss?: boolean;
   expenses: number; profitAfterExpenses: number | null; netProfitPercent: number; allBranches: boolean;
   creditUnpaid: number; outstandingAR: number; outstandingAP: number; scopeHelper: string;
   customerDebt: { invoiceDue: number; excess: number; creditBalance: number; netBalance: number; unlinkedDue: number; unlinkedExcess: number; unlinkedCount: number; scope: string; salesHref: string };
@@ -43,10 +44,10 @@ export default function TradingReportView({ data }: { data: TradingViewData }) {
     </div>
 
     <div className="grid min-w-0 grid-cols-2 gap-3 xl:grid-cols-4">
-      <ReportMetric label="Gross profit" pence={data.grossProfit} value={data.incompleteLineCount > 0 ? "Costs incomplete" : "Not available"} currency={c} warning={!ready || data.grossProfit! < 0}
+      <ReportMetric label="Gross profit" pence={data.grossProfit} value={data.seeProfitAndLoss ? "See P&L" : data.incompleteLineCount > 0 ? "Costs incomplete" : "Not available"} currency={c} warning={!ready || data.grossProfit! < 0}
         helper={ready ? `Profit before expenses · ${data.grossProfitPercent}% margin` : data.incompleteLineCount > 0 ? `${data.incompleteLineCount} sale lines have missing recorded costs. Profit stays hidden; sales are still shown.` : 'No gross profit figure available for this period.'} />
       <ReportMetric label="Business-wide expenses" pence={data.expenses} currency={c} helper={data.scopeHelper} />
-      <ReportMetric label={data.allBranches ? 'Net profit' : 'Profit after business-wide expenses'} pence={data.profitAfterExpenses} value={data.incompleteLineCount > 0 ? "Costs incomplete" : "Not available"} currency={c} warning={!ready || data.profitAfterExpenses! < 0}
+      <ReportMetric label={data.allBranches ? 'Net profit' : 'Profit after business-wide expenses'} pence={data.profitAfterExpenses} value={data.seeProfitAndLoss ? "See P&L" : data.incompleteLineCount > 0 ? "Costs incomplete" : "Not available"} currency={c} warning={!ready || data.profitAfterExpenses! < 0}
         helper={data.allBranches ? 'Profit after expenses.' : 'Branch gross profit minus whole-business expenses. This is not branch net profit.'} />
       <ReportMetric label="Credit sales (unpaid)" pence={data.creditUnpaid} currency={c} helper="Unpaid portion of sales in this period. Not counted as money received." />
     </div>

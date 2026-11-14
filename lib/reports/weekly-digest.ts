@@ -1,3 +1,4 @@
+import { applyFoodProfit } from '@/lib/reports/food-profit';
 import { prisma } from '@/lib/prisma';
 import { unstable_cache } from 'next/cache';
 import {
@@ -13,6 +14,7 @@ import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
 export type WeeklyDigestData = {
   totalSalesPence: number;
   grossProfitPence: number | null;
+  seeProfitAndLoss?: true;
   gpPercent: number | null;
   marginState: 'READY' | 'INCOMPLETE_COSTS';
   incompleteLineCount: number;
@@ -97,6 +99,7 @@ async function _getWeeklyDigestData(
   weekEndIso: string,
   timeZone: string,
   storeKey: string,
+  businessCategory?: string | null,
 ): Promise<WeeklyDigestData> {
   const authorisedStores = requireAuthorisedStoreIds(storeKey.split(','));
   const digestTimeZone = requireReportTimeZone(timeZone);
@@ -230,8 +233,14 @@ async function _getWeeklyDigestData(
   ]);
 
   const totalSalesPence = salesAgg._sum.totalPence ?? 0;
-  const margin = evaluateMarginSet(toMarginInvoices(marginInvoices));
-  const prevMargin = evaluateMarginSet(toMarginInvoices(prevMarginInvoices));
+  const branchScoped = businessCategory === 'FOOD_DISHES' &&
+    await prisma.store.count({ where: { businessId } }) !== authorisedStores.length;
+  const [margin, prevMargin] = await Promise.all([
+    applyFoodProfit(prisma, { businessId, businessCategory, branchScoped, startInclusive: weekStart, endExclusive: weekEnd },
+      evaluateMarginSet(toMarginInvoices(marginInvoices))),
+    applyFoodProfit(prisma, { businessId, businessCategory, branchScoped, startInclusive: prevStart, endExclusive: prevEnd },
+      evaluateMarginSet(toMarginInvoices(prevMarginInvoices))),
+  ]);
   const grossProfitPence = margin.grossProfitPence;
   const gpPercent = margin.grossProfitPercent;
 
@@ -330,6 +339,7 @@ async function _getWeeklyDigestData(
     grossProfitPence,
     gpPercent,
     marginState: margin.state,
+    ...(margin.seeProfitAndLoss ? { seeProfitAndLoss: true as const } : {}),
     incompleteLineCount: margin.incompleteLineCount,
     txCount: salesAgg._count.id,
     voidCount: voids,
@@ -361,6 +371,7 @@ export function getWeeklyDigestData(
   weekEnd: Date,
   timeZone: string,
   storeIds: readonly string[],
+  businessCategory?: string | null,
 ): Promise<WeeklyDigestData> {
   let storeKey: string;
   try {
@@ -374,5 +385,6 @@ export function getWeeklyDigestData(
     weekEnd.toISOString(),
     requireReportTimeZone(timeZone),
     storeKey,
+    ...(businessCategory === 'FOOD_DISHES' ? [businessCategory] : []),
   );
 }

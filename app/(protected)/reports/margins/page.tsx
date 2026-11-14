@@ -1,3 +1,5 @@
+import { isFoodBusiness } from '@/lib/food/business';
+import { loadTradingPeriodMargin } from '@/lib/reports/trading-margin';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
@@ -144,8 +146,14 @@ export default async function MarginsPage(
 
   const totalRevenue = products.reduce((sum, row) => sum + row.revenuePence, 0);
   const totalCost = products.reduce((sum, row) => sum + row.costPence, 0);
-  const totalProfit = totalRevenue - totalCost;
-  const overallMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+  const foodProfit = isFoodBusiness(business.businessCategory) ? await loadTradingPeriodMargin({
+    businessId: business.id, businessCategory: business.businessCategory,
+    storeId: opened.branch.selected === 'ALL' ? undefined : opened.branch.selected,
+    startInclusive: start, endExclusive: end,
+  }) : null;
+  const totalProfit = foodProfit ? foodProfit.grossProfitPence : totalRevenue - totalCost;
+  const overallMargin = foodProfit ? foodProfit.grossProfitPercent
+    : totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : 0;
 
   const filteredRows = sortRowsForView(
     currentView === 'below-cost'
@@ -310,8 +318,8 @@ export default async function MarginsPage(
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Revenue in period" value={formatMoney(totalRevenue, business.currency)} tone="accent" />
         <StatCard label="Cost in period" value={formatMoney(totalCost, business.currency)} />
-        <StatCard label="Gross profit" value={formatMoney(totalProfit, business.currency)} tone={totalProfit >= 0 ? 'success' : 'danger'} />
-        <StatCard label="Overall margin" value={formatMarginPercent(overallMargin)} tone={overallMargin >= snapshot.businessDefaultThresholdBps / 100 ? 'success' : 'warn'} />
+        <StatCard label="Gross profit" value={totalProfit == null ? (foodProfit?.seeProfitAndLoss ? 'See P&L' : 'Costs incomplete') : formatMoney(totalProfit, business.currency)} tone={(totalProfit ?? -1) >= 0 ? 'success' : 'danger'} />
+        <StatCard label="Overall margin" value={overallMargin == null ? (foodProfit?.seeProfitAndLoss ? 'See P&L' : 'Costs incomplete') : formatMarginPercent(overallMargin)} tone={(overallMargin ?? -1) >= snapshot.businessDefaultThresholdBps / 100 ? 'success' : 'warn'} />
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

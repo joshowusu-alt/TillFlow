@@ -43,7 +43,7 @@ export async function saveDish(input: { businessId: string; draft: DishDraft }) 
   return prisma.$transaction(async (tx) => {
     for (const rows of [input.draft.recipe, ...normalized.sizes.map(size => size.recipe)]) {
       if (rows == null) continue;
-      await validateIngredients(tx, input.businessId, rows);
+      await validateIngredients(tx, input.businessId, rows, true);
       if (rows.some(row => row.productId === productId)) throw new UserError('A dish cannot be its own ingredient.');
     }
     let id = productId;

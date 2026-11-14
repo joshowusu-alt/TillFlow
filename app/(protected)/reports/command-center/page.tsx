@@ -464,7 +464,7 @@ function PostureStrip({ kpis, currency }: {
     {
       label: 'Gross margin',
       value: kpis?.marginState === 'READY' && kpis.gpPercent != null ? `${kpis.gpPercent.toFixed(1)}%` : '—',
-      sub: kpis?.marginState === 'READY' && kpis.grossMarginPence != null
+      sub: kpis?.seeProfitAndLoss ? 'See P&L' : kpis?.marginState === 'READY' && kpis.grossMarginPence != null
         ? formatMoney(kpis.grossMarginPence, currency)
         : kpis ? `Costs incomplete (${kpis.incompleteLineCount})` : 'No cost data',
       tone: kpis?.marginState === 'READY' && kpis.gpPercent != null && kpis.gpPercent < 10

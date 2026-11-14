@@ -1,3 +1,5 @@
+import { applyFoodProfit, loadFoodCostTotal } from '@/lib/reports/food-profit';
+import { isFoodBusiness } from '@/lib/food/business';
 import { prisma } from '@/lib/prisma';
 import {
   addLocalDays,
@@ -14,6 +16,8 @@ import AnalyticsClient from './AnalyticsClient';
 
 type AnalyticsContentProps = {
   businessId: string;
+  businessCategory?: string | null;
+  branchScoped?: boolean;
   currency: string;
   periodDays: number;
   timeZone?: string | null;
@@ -25,6 +29,8 @@ type AnalyticsContentProps = {
 
 export async function loadAnalyticsReport({
   businessId,
+  businessCategory,
+  branchScoped,
   currency,
   periodDays,
   timeZone,
@@ -104,6 +110,7 @@ export async function loadAnalyticsReport({
 
       // Calculate daily sales trend
       const dailySales = new Map<string, number>();
+      const profitWindows = new Map<string, ReturnType<typeof windowForLocalDates>>();
       const dailyProfit = new Map<string, number>();
       const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -112,13 +119,15 @@ export async function loadAnalyticsReport({
       const chartEndParts = zonedDateTimeParts(new Date(endExclusive.getTime() - 1), reportTimeZone);
       for (let i = maxLabels - 1; i >= 0; i--) {
         const day = addLocalDays(chartEndParts, -i);
-        const date = windowForLocalDates(day, day, reportTimeZone).startInclusive;
+        const window = windowForLocalDates(day, day, reportTimeZone);
+        const date = window.startInclusive;
         const key =
           periodDays <= 14
             ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: reportTimeZone })
             : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: reportTimeZone });
         dailySales.set(key, 0);
         dailyProfit.set(key, 0);
+        if (isFoodBusiness(businessCategory)) profitWindows.set(key, window);
       }
 
       recentSales.forEach((sale) => {
@@ -280,7 +289,7 @@ export async function loadAnalyticsReport({
 
       // Calculate KPIs — GP derived from sale lines (same source as product table)
       const totalSales = recentSales.reduce((sum, s) => sum + s.totalPence, 0);
-      const periodMargin = evaluateMarginSet(recentSales.map((sale) => ({
+      const saleMargin = evaluateMarginSet(recentSales.map((sale) => ({
         paymentStatus: sale.paymentStatus,
         discountPence: sale.discountPence,
         lines: sale.lines.map((line) => ({
@@ -292,6 +301,19 @@ export async function loadAnalyticsReport({
           defaultCostBasePence: line.product.defaultCostBasePence,
         })),
       })));
+      const periodMargin = await applyFoodProfit(prisma, {
+        businessId, businessCategory, branchScoped: branchScoped ?? !!storeIds?.length,
+        startInclusive: periodAgo, endExclusive,
+      }, saleMargin);
+      if (periodMargin.grossProfitPence != null) {
+        await Promise.all([...profitWindows].map(async ([key, window]) => {
+          const start = window.startInclusive > periodAgo ? window.startInclusive : periodAgo;
+          const end = window.endExclusive < endExclusive ? window.endExclusive : endExclusive;
+          if (start >= end) return;
+          const costs = await loadFoodCostTotal(prisma, { businessId, startInclusive: start, endExclusive: end });
+          dailyProfit.set(key, (dailyProfit.get(key) ?? 0) - costs);
+        }));
+      }
       const totalProfit = periodMargin.grossProfitPence;
       const marginPercent = periodMargin.state === 'READY' ? periodMargin.grossProfitPercent : null;
       const previousTotalSales = previousSales.reduce((sum, s) => sum + s.totalPence, 0);
@@ -327,6 +349,7 @@ export async function loadAnalyticsReport({
           totalProfit,
           marginPercent,
           marginState: periodMargin.state,
+          ...(periodMargin.seeProfitAndLoss ? { seeProfitAndLoss: true } : {}),
           totalTransactions: recentSales.length,
           avgTransaction: recentSales.length > 0 ? totalSales / recentSales.length : 0,
           growthPercent,

@@ -23,6 +23,7 @@ import { getSalesRevenueSummary } from '@/lib/reports/sales-revenue';
 type TradingDashboardContentProps = {
   businessId: string;
   businessName: string;
+  businessCategory?: string | null;
   currency: string;
   timeZone: string;
   userId: string;
@@ -265,6 +266,7 @@ const getCachedTradingDashboardSnapshot = unstable_cache(
 
 export default async function TradingDashboardContent({
   businessId,
+  businessCategory,
   currency,
   timeZone,
   selectedStoreId,
@@ -362,6 +364,7 @@ export default async function TradingDashboardContent({
   const totalSales = salesRevenue.salesRevenuePence;
   const tradingMargin = await loadTradingPeriodMargin({
     businessId,
+    businessCategory,
     startInclusive: scope.startInclusive,
     endExclusive: scope.endExclusive,
     storeId: selectedStoreId === 'ALL' ? undefined : selectedStoreId,
@@ -505,6 +508,7 @@ export default async function TradingDashboardContent({
   return <TradingReportView data={{
     currency, totalSales, totalPaymentReceipts,
     grossProfit: marginReady ? totalGrossMargin : null, grossProfitPercent: marginReady ? gpPercent : null,
+    ...(tradingMargin.seeProfitAndLoss ? { seeProfitAndLoss: true } : {}),
     incompleteLineCount: tradingMargin.incompleteLineCount, expenses: income.otherExpenses,
     profitAfterExpenses: marginReady ? totalGrossMargin - income.otherExpenses : null,
     netProfitPercent: npPercent, allBranches: selectedStoreId === 'ALL', scopeHelper,

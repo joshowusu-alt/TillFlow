@@ -205,6 +205,7 @@ async function ReportsToday({ search }: { search?: Search }) {
     });
     const snapshot = await measureServerOperation('reports.today', () => loadToday(prisma, {
       businessId: hub.business!.id,
+      businessCategory: hub.business!.businessCategory,
       ownedStoreIds: data.stores.map((store) => store.id),
       storeIds: agreed.storeIds,
       currency: framed.currency,

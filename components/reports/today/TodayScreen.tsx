@@ -490,7 +490,9 @@ function Profit({
           </p>
         )
       ) : null}
-      {profit.state === 'incomplete' ? (
+      {profit.state === 'see-pnl' ? (
+        <p className="mt-2 text-sm text-ink"><Link href="/reports/income-statement">See P&L</Link> for business-wide gross profit.</p>
+      ) : profit.state === 'incomplete' ? (
         <p className="mt-2 text-sm text-ink" data-profit-state="incomplete">Profit is hidden because some product costs are missing.</p>
       ) : profit.state === 'ready' && profit.grossProfitPence != null ? (
         <p className="mt-2 text-sm text-ink" data-profit-state="ready">

@@ -45,7 +45,6 @@ export default async function DishPage(props: { params: Promise<{ productId: str
     stockMode: dish.stockMode === 'COUNTED' ? 'COUNTED' : 'NOT_COUNTED',
     soldOut: dish.soldOut,
     lowAt: dish.lowAt,
-    costPerPortionCedis: dish.costPerPortionPence && dish.costPerPortionPence > 0 ? cedisInput(dish.costPerPortionPence) : '',
     recipe: JSON.parse(dish.recipeJson ?? '[]'),
     sizes: dish.sizes.map((size) => ({ recipe: JSON.parse(size.recipeJson ?? '[]'), name: size.name, priceCedis: cedisInput(size.pricePence), isDefault: size.isDefault })),
     inclusions: dish.inclusions.map((item) => ({ name: item.name, qty: item.qty, counts: item.stockPortions > 0 })),
@@ -77,7 +76,7 @@ export default async function DishPage(props: { params: Promise<{ productId: str
       {dish.stockMode === 'COUNTED' && branch ? (
         <>
           <PreparePortionsForm productId={dish.productId} storeId={branch.id} currency={business.currency} sizes={dish.sizes.map(({ id, name, isDefault }) => ({ id, name, isDefault }))} />
-          <LeftoverWriteOffForm productId={dish.productId} storeId={branch.id} costPerPortionPence={latestCost?.costPerPortionPence ?? null} fallbackCostPence={dish.costPerPortionPence} currency={business.currency} />
+          <LeftoverWriteOffForm productId={dish.productId} storeId={branch.id} costPerPortionPence={latestCost?.costPerPortionPence ?? null} currency={business.currency} />
         </>
       ) : null}
       <DishForm ingredients={await ingredientOptions(business.id)} initial={draft} productId={dish.productId} />
