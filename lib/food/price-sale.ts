@@ -31,11 +31,10 @@ export async function priceFoodSaleLines<T extends PricedSaleLine>(businessId: s
     businessId,
     lines.map((line) => line.productId),
   );
-  if (menus.size === 0) return lines;
   try {
     return lines.map((line) => {
       const menu = menus.get(line.productId);
-      if (!menu) return line;
+      if (!menu) return line.plateSnapshotJson ? { ...line, plateSnapshotJson: null } : line;
       if (inactiveProductIds.has(line.productId)) {
         throw new PlateError(`${menu.name} is no longer on the menu.`);
       }

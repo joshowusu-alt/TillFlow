@@ -29,6 +29,29 @@ describe('income statement supporting records',()=>{
     expect(db.journalLine.findMany).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({account:expect.objectContaining({businessId:'business'}),journalEntry:{businessId:'business',entryDate:{gte:start,lt:end}}})}));
     expect(db.$transaction).toHaveBeenCalledWith(expect.any(Function),expect.objectContaining({isolationLevel:'Serializable'}));
   });
+  it('deducts food costs and food waste once in gross and net profit', async () => {
+    db.salesInvoice.findMany.mockResolvedValue([{ ...sale, discountPence: 0, lines: [{
+      ...sale.lines[0], qtyBase: 18, lineSubtotalPence: 36000, lineCostPence: 0,
+    }] }]);
+    db.account.findMany.mockResolvedValue([
+      { id: 'food', code: '5010', type: 'EXPENSE', name: 'Food costs' },
+      { id: 'waste', code: '5020', type: 'EXPENSE', name: 'Food waste' },
+    ]);
+    const lines = [['food', 10000, 0], ['food', 0, 1000], ['waste', 1000, 0]] as const;
+    db.journalLine.groupBy.mockResolvedValue([
+      { accountId: 'food', _sum: { debitPence: 10000, creditPence: 1000 } },
+      { accountId: 'waste', _sum: { debitPence: 1000, creditPence: 0 } },
+    ]);
+    db.journalLine.findMany.mockResolvedValue(lines.map(([accountId, debitPence, creditPence], id) => ({
+      id, accountId, debitPence, creditPence, journalEntry: { entryDate: start, description: 'Kitchen' },
+    })));
+    const result = await getIncomeStatementBreakdown('food-business', start, end);
+    expect(result).toMatchObject({ revenue: 36000, cogs: 0, foodCosts: 9000, foodWaste: 1000,
+      grossProfit: 26000, netProfit: 26000, otherExpenses: 0 });
+    for (const metric of ['grossProfit', 'netProfit'] as const) {
+      expect(selectIncomeStatementEntries(result.entries, metric).reduce((sum, row) => sum + (row.contributionPence ?? 0), 0)).toBe(26000);
+    }
+  });
   it('retains incomplete historical costs in both totals and detail',async()=>{
     db.salesInvoice.findMany.mockResolvedValue([{...sale,lines:[{...sale.lines[0],costBasis:'UNVERIFIED_STOCK_V1'}]}]);
     const result=await getIncomeStatementBreakdown('business',start,end);

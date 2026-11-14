@@ -1,19 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { UserError } from '@/lib/action-utils';
-import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
-import { ensureInventoryDecreaseAccounts } from '@/lib/accounting-inventory-decrease-accounts';
-import { assertAccount5100SafeForInventoryLoss } from '@/lib/accounting-inventory-loss-5100';
+import { postFoodCost } from './ingredient-costs';
 import { isFoodBusiness } from '@/lib/food/business';
 import { applyLeftoverQuantity, isLeftoverReasonCode, leftoverWriteOffValuePence } from '@/lib/food/leftover-write-off';
 import { reserveNextDocumentNumber } from '@/lib/services/document-numbers';
 import { lockInventoryValues, upsertInventoryBalance } from '@/lib/services/shared/inventory-utils';
 
-/**
- * Record cooked portions thrown away.
- * Quantity leaves the count. When a cost per portion is set, the money follows
- * the existing waste posting: Dr 5100 Inventory Loss, Cr 1200 Inventory.
- * When no cost is set, the count changes and no journal is posted.
- */
 export async function writeOffCookedPortions(input: {
   businessId: string;
   storeId: string;
@@ -21,6 +13,7 @@ export async function writeOffCookedPortions(input: {
   userId: string;
   userRole: string;
   qty: number;
+  manualCostPence?: number;
   reasonCode: string;
   note?: string | null;
   idempotencyKey?: string | null;
@@ -57,19 +50,26 @@ export async function writeOffCookedPortions(input: {
   }
   const unitId = dish.product.productUnits[0]?.unitId;
   if (!unitId) throw new UserError('This dish has no selling unit.');
-  const valuePence = leftoverWriteOffValuePence(input.qty, dish.costPerPortionPence);
+
   const qty = Math.floor(input.qty);
   const reason = (input.note?.trim() || (input.reasonCode === 'SPOILED' ? 'Spoiled' : 'End-of-day leftover')).slice(0, 240);
   const idempotencyKey = input.idempotencyKey?.trim() || null;
 
   return prisma.$transaction(async (tx) => {
+    await lockInventoryValues(tx, store.id, [input.productId]);
     if (idempotencyKey) {
       const existing = await tx.stockAdjustment.findUnique({
         where: { storeId_idempotencyKey: { storeId: store.id, idempotencyKey } },
       });
       if (existing) return { id: existing.id, qty: Math.abs(existing.qtyBase), valuePence: existing.valuePence ?? 0, replayed: true };
     }
-    await lockInventoryValues(tx, store.id, [input.productId]);
+    const batch = await tx.foodPreparation.findFirst({
+      where: { businessId: input.businessId, storeId: store.id, productId: input.productId, costPerPortionPence: { not: null } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    const cost = batch?.costPerPortionPence ?? input.manualCostPence ?? dish.costPerPortionPence;
+    const valuePence = leftoverWriteOffValuePence(input.qty, cost);
+    if (valuePence > 2147483647) throw new UserError('The write-off cost is too large.');
     const balance = await tx.inventoryBalance.findUnique({
       where: { storeId_productId: { storeId: store.id, productId: input.productId } },
     });
@@ -97,7 +97,7 @@ export async function writeOffCookedPortions(input: {
         reason,
         reasonCode: input.reasonCode,
         idempotencyKey,
-        unitCostBasePence: dish.costPerPortionPence,
+        unitCostBasePence: cost,
         valuePence,
         userId: input.userId,
         transactionNumber,
@@ -111,30 +111,18 @@ export async function writeOffCookedPortions(input: {
         qtyBase: -qty,
         beforeQtyBase: balance.qtyOnHandBase,
         afterQtyBase: after.qtyOnHandBase,
-        unitCostBasePence: dish.costPerPortionPence,
-        valuePence: valuePence === 0 ? 0 : -valuePence,
+        unitCostBasePence: cost,
+        valuePence: 0,
         type: 'ADJUSTMENT',
         referenceType: 'STOCK_ADJUSTMENT',
         referenceId: created.id,
         userId: input.userId,
       },
     });
-    if (valuePence > 0) {
-      await assertAccount5100SafeForInventoryLoss(tx, input.businessId);
-      const accountMap = await ensureInventoryDecreaseAccounts(input.businessId, tx);
-      await postJournalEntry({
-        businessId: input.businessId,
-        description: `Cooked leftover ${created.id}`,
-        referenceType: 'STOCK_ADJUSTMENT',
-        referenceId: created.id,
-        lines: [
-          { accountCode: ACCOUNT_CODES.inventoryLoss, debitPence: valuePence },
-          { accountCode: ACCOUNT_CODES.inventory, creditPence: valuePence },
-        ],
-        prismaClient: tx as never,
-        accountMap,
-      });
-    }
+    await postFoodCost(tx, {
+      businessId: input.businessId, referenceType: 'STOCK_ADJUSTMENT', referenceId: created.id,
+      value: valuePence, waste: true,
+    });
     return { id: created.id, qty, valuePence, replayed: false };
   });
 }

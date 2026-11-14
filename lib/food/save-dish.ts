@@ -1,3 +1,4 @@
+import { validateIngredients } from './ingredient-costs';
 import { prisma } from '@/lib/prisma';
 import { UserError } from '@/lib/action-utils';
 import { isFoodBusiness } from '@/lib/food/business';
@@ -33,10 +34,18 @@ export async function saveDish(input: { businessId: string; draft: DishDraft }) 
     throw new UserError(error instanceof Error ? error.message : 'Check the dish and try again.');
   }
 
+  if (normalized.stockMode !== 'COUNTED' && (input.draft.recipe?.length || normalized.sizes.some(size => size.recipe?.length))) {
+    throw new UserError('Choose Count portions to use a recipe, or remove the recipe and record ingredients used separately.');
+  }
   const productId = input.draft.productId?.trim() || null;
   const unitId = await plateUnitId();
 
   return prisma.$transaction(async (tx) => {
+    for (const rows of [input.draft.recipe, ...normalized.sizes.map(size => size.recipe)]) {
+      if (rows == null) continue;
+      await validateIngredients(tx, input.businessId, rows);
+      if (rows.some(row => row.productId === productId)) throw new UserError('A dish cannot be its own ingredient.');
+    }
     let id = productId;
     if (id) {
       const existing = await tx.product.findFirst({
@@ -94,12 +103,14 @@ export async function saveDish(input: { businessId: string; draft: DishDraft }) 
       data: {
         businessId: input.businessId,
         productId: id,
+        recipeJson: input.draft.recipe?.length ? JSON.stringify(input.draft.recipe) : null,
         stockMode: normalized.stockMode,
         soldOut: normalized.soldOut,
         lowAt: normalized.lowAt,
         costPerPortionPence: normalized.costPerPortionPence,
         sizes: {
           create: normalized.sizes.map((size, index) => ({
+            recipeJson: size.recipe?.length ? JSON.stringify(size.recipe) : null,
             name: size.name,
             pricePence: size.pricePence,
             isDefault: size.isDefault,

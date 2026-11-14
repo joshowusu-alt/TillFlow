@@ -1,11 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { formatMoney } from '@/lib/format';
 import { useRouter } from 'next/navigation';
 import { addPreparedPortionsAction } from '@/app/actions/food';
 
-export default function PreparePortionsForm({ productId }: { productId: string }) {
+export default function PreparePortionsForm({ productId, storeId, currency, sizes }: {
+  productId: string; storeId: string; currency: string; sizes: { id: string; name: string; isDefault: boolean }[];
+}) {
   const router = useRouter();
+  const [sizeId, setSizeId] = useState(sizes.find(size => size.isDefault)?.id ?? sizes[0]?.id);
   const [qty, setQty] = useState('10');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +23,9 @@ export default function PreparePortionsForm({ productId }: { productId: string }
     setMessage(null);
     const result = await addPreparedPortionsAction({
       productId,
-      qty: Math.floor(Number(qty)),
+      storeId,
+      sizeId,
+      qty: Number(qty),
       note,
       idempotencyKey: crypto.randomUUID(),
     });
@@ -28,7 +34,9 @@ export default function PreparePortionsForm({ productId }: { productId: string }
       setError(result.error);
       return;
     }
-    setMessage(`Added ${result.data.qty} portions. This updates the count only — it is not income and not a new opening balance.`);
+    const cost = result.data.costPerPortionPence;
+    setMessage(cost == null ? `Added ${result.data.qty} portions. Use Ingredients used to record the stock cost.`
+      : `Added ${result.data.qty} portions. Ingredient cost per portion: ${formatMoney(cost, currency)}.`);
     router.refresh();
   }
 
@@ -36,8 +44,14 @@ export default function PreparePortionsForm({ productId }: { productId: string }
     <form onSubmit={onSubmit} className="card space-y-3 p-4">
       <h2 className="text-base font-semibold">Add cooked portions</h2>
       <p className="text-sm text-black/60">
-        Use this when a new pot is ready. The portions are counted for the till and online orders. They are not posted as an inventory gain or an opening balance.
+        Add a batch when it is ready. A saved recipe takes ingredients out of stock and records their cost.
       </p>
+      {sizes.length > 0 && <label className="block text-sm">
+        Size cooked
+        <select className="input mt-1" value={sizeId} onChange={event => setSizeId(event.target.value)}>
+          {sizes.map(size => <option key={size.id} value={size.id}>{size.name}</option>)}
+        </select>
+      </label>}
       <label className="block text-sm">
         Portions cooked
         <input className="input mt-1 w-32" inputMode="numeric" value={qty} onChange={(event) => setQty(event.target.value)} />

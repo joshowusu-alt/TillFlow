@@ -1,6 +1,8 @@
 'use server';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
+import { recordIngredientUsage } from '@/lib/food/usage-service';
+import type { Ingredient } from '@/lib/food/ingredient-costs';
 import { audit } from '@/lib/audit';
 import { ok, safeAction, withBusinessContext, requireSelectedStoreContext, type ActionResult } from '@/lib/action-utils';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
@@ -17,6 +19,7 @@ async function refreshFoodSurfaces(businessId: string, storeId?: string | null) 
   revalidatePosCatalog(businessId, storeId);
   revalidateOwnerDashboardCache();
   revalidateTag(`readiness-${businessId}`);
+  revalidateTag('reports');
   revalidatePath('/products');
   revalidatePath('/onboarding');
   revalidatePath('/pos');
@@ -44,18 +47,21 @@ export async function saveDishAction(draft: DishDraft): Promise<ActionResult<{ i
 
 export async function addPreparedPortionsAction(input: {
   productId: string;
+  storeId?: string;
   qty: number;
+  sizeId?: string;
   note?: string;
   idempotencyKey?: string;
-}): Promise<ActionResult<{ qty: number }>> {
+}): Promise<ActionResult<{ qty: number; costPerPortionPence: number | null }>> {
   return safeAction(async () => {
-    const { user, businessId, storeId } = await requireSelectedStoreContext(['MANAGER', 'OWNER'], undefined);
+    const { user, businessId, storeId } = await requireSelectedStoreContext(['MANAGER', 'OWNER'], input.storeId);
     const row = await addPreparedPortions({
       businessId,
       storeId,
       productId: input.productId,
       userId: user.id,
       qty: input.qty,
+      sizeId: input.sizeId,
       note: input.note,
       idempotencyKey: input.idempotencyKey,
     });
@@ -70,19 +76,21 @@ export async function addPreparedPortionsAction(input: {
       entityId: row.id,
       details: { productId: input.productId, qty: row.qtyBase },
     }).catch(() => {});
-    return ok({ qty: row.qtyBase });
+    return ok({ qty: row.qtyBase, costPerPortionPence: row.costPerPortionPence });
   });
 }
 
 export async function writeOffCookedPortionsAction(input: {
   productId: string;
+  storeId?: string;
   qty: number;
   reasonCode: string;
+  manualCostPence?: number;
   note?: string;
   idempotencyKey?: string;
 }): Promise<ActionResult<{ qty: number; valuePence: number }>> {
   return safeAction(async () => {
-    const { user, businessId, storeId } = await requireSelectedStoreContext(['MANAGER', 'OWNER'], undefined);
+    const { user, businessId, storeId } = await requireSelectedStoreContext(['MANAGER', 'OWNER'], input.storeId);
     const row = await writeOffCookedPortions({
       businessId,
       storeId,
@@ -91,6 +99,7 @@ export async function writeOffCookedPortionsAction(input: {
       userRole: user.role,
       qty: input.qty,
       reasonCode: input.reasonCode,
+      manualCostPence: input.manualCostPence,
       note: input.note,
       idempotencyKey: input.idempotencyKey,
     });
@@ -106,5 +115,14 @@ export async function writeOffCookedPortionsAction(input: {
       details: { productId: input.productId, qty: row.qty, valuePence: row.valuePence, reasonCode: input.reasonCode },
     }).catch(() => {});
     return ok({ qty: row.qty, valuePence: row.valuePence });
+  });
+}
+
+export async function recordIngredientUsageAction(rows: Ingredient[], idempotencyKey: string, selectedStoreId?: string) {
+  return safeAction(async () => {
+    const { user, businessId, storeId } = await requireSelectedStoreContext(['MANAGER', 'OWNER'], selectedStoreId);
+    const result = await recordIngredientUsage({ businessId, storeId, userId: user.id, userRole: user.role, rows, idempotencyKey });
+    await refreshFoodSurfaces(businessId, storeId);
+    return ok(result);
   });
 }

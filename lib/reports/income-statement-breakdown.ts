@@ -17,7 +17,7 @@ export function incomeStatementEntriesHref(metric: IncomeStatementMetric, from: 
 }
 export type IncomeStatementContribution = {
   id: string; date: string; label: string; description: string; href: string | null;
-  kind: 'sale' | 'expense' | 'other-income';
+  kind: 'sale' | 'expense' | 'other-income' | 'food-cost';
   revenuePence: number; costPence: number | null; profitPence: number | null; amountPence: number;
 };
 
@@ -41,6 +41,9 @@ export function selectIncomeStatementEntries(entries: IncomeStatementContributio
     if (entry.kind === 'sale') {
       if (metric === 'otherExpenses' || metric === 'otherOperatingIncome') return [];
       amount = metric === 'revenue' ? entry.revenuePence : metric === 'cogs' ? entry.costPence : entry.profitPence;
+    } else if (entry.kind === 'food-cost') {
+      if (metric !== 'grossProfit' && metric !== 'netProfit') return [];
+      amount = -entry.amountPence;
     } else {
       if (metric !== 'netProfit' && metric !== (entry.kind === 'expense' ? 'otherExpenses' : 'otherOperatingIncome')) return [];
       amount = metric === 'netProfit' && entry.kind === 'expense' ? -entry.amountPence : entry.amountPence;

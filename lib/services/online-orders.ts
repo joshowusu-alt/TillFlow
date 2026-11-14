@@ -11,7 +11,7 @@ import { normalizeGhanaPhone } from '@/lib/storefront-phone';
 import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
 import { getOpenStatus, parseWeeklyHours, type OpenStatus } from '@/lib/business-hours';
 import { lockInventoryValues, fetchInventoryMap } from '@/lib/services/shared/inventory-utils';
-import { issueStockValue, receiveStockValue, allocateLineValues, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
+import { issueStockValue, receiveStockValue, allocateLineValues, INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
 import { parseStoredStorefrontPaymentConfig, normalizePaymentMode, paymentConfigIsReady, type StorefrontPaymentConfig } from '@/lib/storefront-payments';
 import {
   buildCategoryMappingLookup,
@@ -1131,9 +1131,10 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
       const indexes = lineDetails.map((line, index) => line.productId === productId ? index : -1).filter(index => index >= 0);
       const costs = allocateLineValues(issued.costPence, indexes.map(index => lineDetails[index].qtyBase));
       indexes.forEach((index, offset) => capturedCosts.set(index, { lineCostPence: costs[offset], costBasis: issued.costBasis }));
+      const dish = indexes.some(index => Boolean(lineDetails[index].plateSnapshotJson));
       movements.push({ productId, qtyBase: -qtyBase, beforeQtyBase: before.qtyOnHandBase,
-        afterQtyBase: issued.after.qtyOnHandBase, valuePence: issued.costBasis === UNVERIFIED_STOCK_V1 ? null : -issued.costPence,
-        costBasis: issued.costBasis });
+        afterQtyBase: issued.after.qtyOnHandBase, valuePence: dish ? 0 : issued.costBasis === UNVERIFIED_STOCK_V1 ? null : -issued.costPence,
+        costBasis: dish ? INVENTORY_VALUE_V1 : issued.costBasis });
     }
 
     // Resolve the customer link: prefer the explicit session customerId
@@ -1175,7 +1176,7 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
         currency: business.currency,
         lines: {
           create: lineDetails.map((line, index) => ({
-            ...(capturedCosts.get(index) ?? { lineCostPence: 0, costBasis: line.qtyBase > 0 ? null : UNVERIFIED_STOCK_V1 }),
+            ...(line.plateSnapshotJson ? { lineCostPence: 0, costBasis: INVENTORY_VALUE_V1 } : capturedCosts.get(index) ?? { lineCostPence: 0, costBasis: line.qtyBase > 0 ? null : UNVERIFIED_STOCK_V1 }),
             productId: line.productId,
             unitId: line.unitId,
             productName: line.productName,

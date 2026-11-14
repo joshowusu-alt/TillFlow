@@ -287,6 +287,12 @@ export async function reverseInventoryAdjustment(
       'Original adjustment not found for this store',
     );
   }
+  if (original.reasonCode === 'END_OF_DAY_LEFTOVER' || original.reasonCode === 'SPOILED') {
+    throw new InventoryReversalError(
+      INVENTORY_REVERSAL_ERROR.INVALID_ADJUSTMENT,
+      'Cooked food waste cannot be reversed through stock adjustments.',
+    );
+  }
   if (original.reversalOfId) {
     throw new InventoryReversalError(
       INVENTORY_REVERSAL_ERROR.CANNOT_REVERSE_REVERSAL,

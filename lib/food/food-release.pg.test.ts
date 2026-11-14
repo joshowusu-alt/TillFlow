@@ -8,6 +8,7 @@ import type { PrismaClient } from '@prisma/client';
 import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
 import { rankRecognisedProductSales } from '@/lib/reports/product-rank';
 import { summarizeInventoryRisk } from '@/lib/reports/operational-metrics';
+import { purchaseDocumentFixture } from '@/lib/test/purchase-document-fixture';
 import type { DishDraft } from '@/lib/food/dish-draft';
 
 vi.mock('next/cache', () => ({
@@ -106,6 +107,9 @@ describePg('food release stress on throwaway Postgres', () => {
       () => db.salesReturn.deleteMany({ where: { salesInvoice: { businessId } } }),
       () => db.onlineOrder.deleteMany({ where: { businessId } }),
       () => db.salesInvoice.deleteMany({ where: { businessId } }),
+      () => db.foodIngredientUsage.deleteMany({ where: { businessId } }),
+      () => db.purchaseDocument.deleteMany({ where: { businessId } }),
+      () => db.purchaseInvoice.deleteMany({ where: { businessId } }),
       () => db.foodPreparation.deleteMany({ where: { businessId } }),
       () => db.stockMovement.deleteMany({ where: { store: { businessId } } }),
       () => db.stockBatch.deleteMany({ where: { businessId } }),
@@ -115,6 +119,7 @@ describePg('food release stress on throwaway Postgres', () => {
       () => db.foodDish.deleteMany({ where: { businessId } }),
       () => db.product.deleteMany({ where: { businessId } }),
       () => db.cashDrawerEntry.deleteMany({ where: { businessId } }),
+      () => db.moneyIdempotency.deleteMany({ where: { businessId } }),
       () => db.businessSequence.deleteMany({ where: { businessId } }),
       () => db.account.deleteMany({ where: { businessId } }),
       () => db.shift.deleteMany({ where: { tillId } }),
@@ -146,6 +151,71 @@ describePg('food release stress on throwaway Postgres', () => {
     const row = await db.productUnit.findFirstOrThrow({ where: { productId, isBaseUnit: true } });
     return row.unitId;
   }
+
+  it('posts purchased ingredients once and reclassifies two leftovers without touching stock value', async () => {
+    const { createPurchase } = await import('@/lib/services/purchases');
+    const { recordIngredientUsage } = await import('@/lib/food/usage-service');
+    const { getIncomeStatement } = await import('@/lib/reports/financials');
+    const ingredient = await db.product.create({
+      data: {
+        businessId, name: 'Rice in scoops', sellingPriceBasePence: 500, defaultCostBasePence: 0,
+        productUnits: { create: { unitId, isBaseUnit: true, conversionToBase: 1 } },
+      },
+    });
+    async function buy(qtyInUnit: number) {
+      return createPurchase({
+        businessId, storeId, userId, paymentStatus: 'PAID', skipCashDrawerRequirement: true,
+        sourceDocuments: [purchaseDocumentFixture()], idempotencyKey: `rice-purchase-${qtyInUnit}`,
+        payments: [{ method: 'CASH', amountPence: qtyInUnit * 500 }],
+        lines: [{ productId: ingredient.id, unitId, qtyInUnit, unitCostPence: 500 }],
+      });
+    }
+    const purchase = await buy(20);
+    const dish = await dishes.saveDish({
+      businessId, draft: draft({ name: 'Rice bowl', startingPriceCedis: '20', stockMode: 'COUNTED',
+        recipe: [{ productId: ingredient.id, qty: 1 }] }),
+    });
+    const batch = await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 20 });
+    expect(batch.costPerPortionPence).toBe(500);
+    expect(await onHand(ingredient.id)).toBe(0);
+    const end = () => new Date(Date.now() + 1000);
+    const statement = () => getIncomeStatement(businessId, new Date(0), end());
+    expect(await statement()).toMatchObject({ foodCosts: 10000, foodWaste: 0, grossProfit: -10000 });
+    const sale = await sales.createSale({
+      businessId, storeId, tillId, cashierUserId: userId, paymentStatus: 'PAID',
+      payments: [{ method: 'CASH', amountPence: 36000 }],
+      lines: [{ productId: dish.id, unitId: await baseUnit(dish.id), qtyInUnit: 18 }],
+    });
+    await expect(db.salesInvoiceLine.findFirstOrThrow({ where: { salesInvoiceId: sale.id } })).resolves.toMatchObject({ lineCostPence: 0 });
+    const leftover = await writeOff.writeOffCookedPortions({
+      businessId, storeId, userId, userRole: 'OWNER', productId: dish.id, qty: 2, reasonCode: 'END_OF_DAY_LEFTOVER',
+    });
+    expect(leftover.valuePence).toBe(1000);
+    expect(await onHand(ingredient.id)).toBe(0);
+    expect(await onHand(dish.id)).toBe(0);
+    expect(await statement()).toMatchObject({ revenue: 36000, cogs: 0, foodCosts: 9000, foodWaste: 1000, grossProfit: 26000, netProfit: 26000 });
+    const entries = await db.journalEntry.findMany({ where: { referenceId: { in: [purchase.id, batch.id, sale.id, leftover.id] } },
+      include: { lines: { include: { account: true } } } });
+    expect(entries).toHaveLength(4);
+    const trialBalance: Record<string, number> = {};
+    for (const entry of entries) {
+      expect(entry.lines.reduce((sum, line) => sum + line.debitPence - line.creditPence, 0)).toBe(0);
+      for (const line of entry.lines) trialBalance[line.account.code] = (trialBalance[line.account.code] ?? 0) + line.debitPence - line.creditPence;
+    }
+    expect(trialBalance).toEqual({ '1000': 26000, '1200': 0, '4000': -36000, '5010': 9000, '5020': 1000 });
+    await buy(2);
+    const usage = { businessId, storeId, userId, userRole: 'OWNER', rows: [{ productId: ingredient.id, qty: 2 }], idempotencyKey: 'manual-rice' };
+    await expect(recordIngredientUsage({ ...usage, userRole: 'CASHIER' })).rejects.toThrow(/owner or manager/i);
+    expect(await recordIngredientUsage(usage)).toEqual({ replayed: false, value: 1000 });
+    expect(await recordIngredientUsage(usage)).toMatchObject({ replayed: true });
+    expect(await onHand(ingredient.id)).toBe(0);
+    await db.business.update({ where: { id: businessId }, data: { businessCategory: 'RETAIL' } });
+    try {
+      await expect(recordIngredientUsage({ ...usage, idempotencyKey: 'retail-rice' })).rejects.toThrow(/food business/i);
+    } finally {
+      await db.business.update({ where: { id: businessId }, data: { businessCategory: 'FOOD_DISHES' } });
+    }
+  }, 60000);
 
   it('sells sized plates, free extras, quantity, a retail line, a discount, and a balanced ledger', async () => {
     const banku = await dishes.saveDish({
@@ -608,8 +678,8 @@ describePg('food release stress on throwaway Postgres', () => {
       where: { referenceType: 'STOCK_ADJUSTMENT', referenceId: posted.id },
       include: { lines: { include: { account: true } } },
     });
-    expect(loss.lines.find((line) => line.account.code === '5100')?.debitPence).toBe(500);
-    expect(loss.lines.find((line) => line.account.code === '1200')?.creditPence).toBe(500);
+    expect(loss.lines.find((line) => line.account.code === '5020')?.debitPence).toBe(500);
+    expect(loss.lines.find((line) => line.account.code === '5010')?.creditPence).toBe(500);
 
     const replay = await writeOff.writeOffCookedPortions({
       businessId, storeId, productId: dish.id, userId, userRole: 'MANAGER', qty: 2,

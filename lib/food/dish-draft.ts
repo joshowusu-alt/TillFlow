@@ -12,7 +12,8 @@ export type DishDraft = {
   lowAt: number;
   /** Blank means no cost is posted when leftovers are written off. */
   costPerPortionCedis?: string;
-  sizes: Array<{ name: string; priceCedis: string; isDefault: boolean }>;
+  recipe?: import("./ingredient-costs").Ingredient[];
+  sizes: Array<{ name: string; priceCedis: string; isDefault: boolean; recipe?: import("./ingredient-costs").Ingredient[] }>;
   inclusions: Array<{ name: string; qty: number; counts: boolean }>;
   groups: Array<{
     name: string;
@@ -32,7 +33,7 @@ export type NormalizedDish = {
   soldOut: boolean;
   lowAt: number;
   costPerPortionPence: number | null;
-  sizes: Array<{ name: string; pricePence: number; isDefault: boolean }>;
+  sizes: Array<{ name: string; pricePence: number; isDefault: boolean; recipe?: import("./ingredient-costs").Ingredient[] }>;
   inclusions: Array<{ name: string; qty: number; stockPortions: number }>;
   groups: Array<{
     name: string;
@@ -84,6 +85,7 @@ export function normalizeDishDraft(draft: DishDraft): NormalizedDish {
       name: size.name.trim(),
       pricePence: size.priceCedis.trim() ? cedisToPence(size.priceCedis, size.name.trim() || 'a size', false) : 0,
       isDefault: Boolean(size.isDefault),
+      recipe: size.recipe,
     }))
     .filter((size) => size.name || size.pricePence > 0);
   if (sizes.length > 6) throw new Error('A dish can have up to 6 sizes.');

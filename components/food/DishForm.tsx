@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { saveDishAction } from '@/app/actions/food';
 import { emptyDishDraft, type DishDraft } from '@/lib/food/dish-draft';
 
-export default function DishForm({ initial, productId }: { initial?: DishDraft; productId?: string }) {
+import IngredientRows, { type IngredientOption } from './IngredientRows';
+
+export default function DishForm({ initial, productId, ingredients }: { initial?: DishDraft; productId?: string; ingredients: IngredientOption[] }) {
   const router = useRouter();
   const [draft, setDraft] = useState<DishDraft>(initial ?? emptyDishDraft());
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +64,7 @@ export default function DishForm({ initial, productId }: { initial?: DishDraft; 
       <section className="card space-y-3 p-4">
         <h2 className="text-base font-semibold">Portions</h2>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className={`rounded-full px-3 py-1.5 text-sm font-semibold ${!counted ? 'bg-accent text-white' : 'bg-black/5'}`} onClick={() => update('stockMode', 'NOT_COUNTED')}>
+          <button type="button" className={`rounded-full px-3 py-1.5 text-sm font-semibold ${!counted ? 'bg-accent text-white' : 'bg-black/5'}`} onClick={() => setDraft(prev => ({ ...prev, stockMode: 'NOT_COUNTED', recipe: [], sizes: prev.sizes.map(size => ({ ...size, recipe: [] })) }))}>
             Not counted
           </button>
           <button type="button" className={`rounded-full px-3 py-1.5 text-sm font-semibold ${counted ? 'bg-accent text-white' : 'bg-black/5'}`} onClick={() => update('stockMode', 'COUNTED')}>
@@ -81,10 +83,10 @@ export default function DishForm({ initial, productId }: { initial?: DishDraft; 
               <input className="input mt-1 w-28" inputMode="numeric" value={draft.lowAt || ''} onChange={(event) => update('lowAt', Math.max(0, Math.floor(Number(event.target.value) || 0)))} />
             </label>
             <label className="block text-sm">
-              Cost per cooked portion (GH₵, optional)
+              Fallback leftover cost per portion (GH₵, optional)
               <input className="input mt-1 w-36" inputMode="decimal" value={draft.costPerPortionCedis ?? ''} onChange={(event) => update('costPerPortionCedis', event.target.value)} placeholder="0" />
             </label>
-            <p className="text-xs text-black/50">Used only when leftovers are thrown away. Leave it blank and the count changes with no money posted.</p>
+            <p className="text-xs text-black/50">Used for leftovers when there is no costed cooking batch.</p>
           </>
         )}
         <p className="text-xs text-black/50">
@@ -114,6 +116,18 @@ export default function DishForm({ initial, productId }: { initial?: DishDraft; 
           </div>
         ))}
       </section>
+
+      {counted && <section className="card space-y-3 p-4">
+        <h2 className="text-base font-semibold">Ingredients per portion</h2>
+        <p className="text-sm">Optional. Enter quantities in the stock units shown. Ingredients come out of stock when you add cooked portions.</p>
+        {draft.sizes.length ? draft.sizes.map((size, index) => (
+          <div key={index} className="space-y-2">
+            <h3 className="text-sm font-medium">{size.name || `Size ${index + 1}`}</h3>
+            <IngredientRows products={ingredients} rows={size.recipe ?? []}
+              onChange={recipe => update('sizes', draft.sizes.map((row, i) => i === index ? { ...row, recipe } : row))} />
+          </div>
+        )) : <IngredientRows products={ingredients} rows={draft.recipe ?? []} onChange={recipe => update('recipe', recipe)} />}
+      </section>}
 
       <section className="card space-y-3 p-4">
         <div className="flex items-center justify-between">

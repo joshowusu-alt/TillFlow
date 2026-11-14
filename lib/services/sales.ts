@@ -1076,6 +1076,12 @@ async function createSaleImpl(input: CreateSaleInput) {
       }
     }
 
+    if (isFoodBusiness(business.businessCategory)) {
+      lineDetails.forEach((line, index) => {
+        if (line.plateSnapshotJson) transactionCosts[index] = { costPence: 0, costBasis: INVENTORY_VALUE_V1 };
+      });
+    }
+
     const invoiceCreateData = {
       businessId: input.businessId,
       storeId: store.id,
@@ -1486,8 +1492,10 @@ async function createSaleImpl(input: CreateSaleInput) {
         : null
     ].filter(Boolean) as JournalLine[];
     const cogsTotal = transactionCosts.reduce((sum, cost) => sum + cost.costPence, 0);
-    journalLines.push({ accountCode: ACCOUNT_CODES.cogs, debitPence: cogsTotal });
-    journalLines.push({ accountCode: ACCOUNT_CODES.inventory, creditPence: cogsTotal });
+    if (cogsTotal || !isFoodBusiness(business.businessCategory) || !lineDetails.every(line => line.plateSnapshotJson)) {
+      journalLines.push({ accountCode: ACCOUNT_CODES.cogs, debitPence: cogsTotal });
+      journalLines.push({ accountCode: ACCOUNT_CODES.inventory, creditPence: cogsTotal });
+    }
     txPromises.push(
       measureCheckoutStage(
         'action.checkout.journal-post',
@@ -1676,7 +1684,10 @@ export async function amendSale(input: AmendSaleInput) {
       productUnits.map((pu) => [`${pu.productId}:${pu.unitId}`, pu])
     );
 
-    newLineDetails = buildLinePricing(input.newLines!, unitMap, invoice.business.vatEnabled);
+    const priced = isFoodBusiness(invoice.business.businessCategory)
+      ? await priceFoodSaleLines(input.businessId, input.newLines!)
+      : input.newLines!;
+    newLineDetails = buildLinePricing(priced, unitMap, invoice.business.vatEnabled);
   }
 
   // Snapshot before state
@@ -1796,12 +1807,17 @@ export async function amendSale(input: AmendSaleInput) {
       const addedQty = addedQtyByProduct.get(productId) ?? 0;
       if (addedQty > 0 && value) {
         const issued = issueStockValue(value, addedQty, avgCostMap.get(productId) ?? 0);
-        const indexes = newLineDetails.flatMap((line, index) => line.productId === productId ? [index] : []);
+        const indexes = newLineDetails.flatMap((line, index) => line.productId === productId && line.qtyBase > 0 ? [index] : []);
         const allocations = allocateLineValues(issued.costPence, indexes.map(index => newLineDetails[index].qtyBase));
         indexes.forEach((index, offset) => { addedCosts[index] = { costPence: allocations[offset], costBasis: issued.costBasis }; });
         value = issued.after;
       }
       if (value) amendedValues.set(productId, value);
+    }
+    if (isFoodBusiness(invoice.business.businessCategory)) {
+      newLineDetails.forEach((line, index) => {
+        if (line.plateSnapshotJson) addedCosts[index] = { costPence: 0, costBasis: INVENTORY_VALUE_V1 };
+      });
     }
     const txPromises: Promise<any>[] = [];
 
@@ -1834,6 +1850,7 @@ export async function amendSale(input: AmendSaleInput) {
             lineSubtotalPence: line.lineSubtotal,
             lineVatPence: line.lineVat,
             lineTotalPence: line.lineTotal,
+            plateSnapshotJson: line.plateSnapshotJson ?? null,
             lineCostPence: addedCosts[index].costPence,
             costBasis: addedCosts[index].costBasis,
           })),

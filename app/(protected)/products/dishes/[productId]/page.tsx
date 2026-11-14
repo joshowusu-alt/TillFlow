@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import { ingredientOptions } from '@/lib/food/ingredient-options';
 import DishForm from '@/components/food/DishForm';
 import PreparePortionsForm from '@/components/food/PreparePortionsForm';
 import LeftoverWriteOffForm from '@/components/food/LeftoverWriteOffForm';
@@ -15,7 +16,7 @@ function cedisInput(pence: number) {
 
 export default async function DishPage(props: { params: Promise<{ productId: string }> }) {
   const { productId } = await props.params;
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, store } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business || !isFoodBusiness(business.businessCategory)) redirect('/products');
 
   const dish = await prisma.foodDish.findFirst({
@@ -29,6 +30,11 @@ export default async function DishPage(props: { params: Promise<{ productId: str
   });
   if (!dish) notFound();
 
+  const latestCost = store ? await prisma.foodPreparation.findFirst({
+    where: { businessId: business.id, storeId: store.id, productId, costPerPortionPence: { not: null } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { costPerPortionPence: true },
+  }) : null;
   const draft: DishDraft = {
     productId: dish.productId,
     name: dish.product.name,
@@ -40,7 +46,8 @@ export default async function DishPage(props: { params: Promise<{ productId: str
     soldOut: dish.soldOut,
     lowAt: dish.lowAt,
     costPerPortionCedis: dish.costPerPortionPence && dish.costPerPortionPence > 0 ? cedisInput(dish.costPerPortionPence) : '',
-    sizes: dish.sizes.map((size) => ({ name: size.name, priceCedis: cedisInput(size.pricePence), isDefault: size.isDefault })),
+    recipe: JSON.parse(dish.recipeJson ?? '[]'),
+    sizes: dish.sizes.map((size) => ({ recipe: JSON.parse(size.recipeJson ?? '[]'), name: size.name, priceCedis: cedisInput(size.pricePence), isDefault: size.isDefault })),
     inclusions: dish.inclusions.map((item) => ({ name: item.name, qty: item.qty, counts: item.stockPortions > 0 })),
     groups: dish.groups.map((group) => ({
       name: group.name,
@@ -67,13 +74,13 @@ export default async function DishPage(props: { params: Promise<{ productId: str
         </div>
         <Link href="/pos" className="btn-secondary text-sm">Try at the till</Link>
       </div>
-      {dish.stockMode === 'COUNTED' ? (
+      {dish.stockMode === 'COUNTED' && store ? (
         <>
-          <PreparePortionsForm productId={dish.productId} />
-          <LeftoverWriteOffForm productId={dish.productId} costPerPortionPence={dish.costPerPortionPence} currency={business.currency} />
+          <PreparePortionsForm productId={dish.productId} storeId={store.id} currency={business.currency} sizes={dish.sizes.map(({ id, name, isDefault }) => ({ id, name, isDefault }))} />
+          <LeftoverWriteOffForm productId={dish.productId} storeId={store.id} costPerPortionPence={latestCost?.costPerPortionPence ?? null} fallbackCostPence={dish.costPerPortionPence} currency={business.currency} />
         </>
       ) : null}
-      <DishForm initial={draft} productId={dish.productId} />
+      <DishForm ingredients={await ingredientOptions(business.id)} initial={draft} productId={dish.productId} />
     </div>
   );
 }

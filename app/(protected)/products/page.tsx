@@ -416,9 +416,12 @@ export default async function ProductsPage(
             {isManager && !issueActive ? (
               <div className="flex flex-wrap gap-2">
                 {isFoodBusiness(business.businessCategory) ? (
-                  <Link href="/products/dishes/new" className="btn-primary text-sm">
+                  <>
+                  <Link href="/products/dishes/ingredients-used" className="btn-secondary text-sm">Ingredients used</Link>
+                  <Link href="/products/dishes/new"  className="btn-primary text-sm">
                     Add a dish
                   </Link>
+                  </>
                 ) : null}
                 <a href="#product-create" className="btn-secondary text-sm">
                   Add product

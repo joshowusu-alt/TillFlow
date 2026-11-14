@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { requireBusiness } from '@/lib/auth';
+import { ingredientOptions } from '@/lib/food/ingredient-options';
 import DishForm from '@/components/food/DishForm';
 import { isFoodBusiness } from '@/lib/food/business';
 
@@ -15,7 +16,7 @@ export default async function NewDishPage() {
           One dish is one product. Set the starting price, what is included, and any extras. Amounts are in cedis (GH₵).
         </p>
       </div>
-      <DishForm />
+      <DishForm ingredients={await ingredientOptions(business.id)} />
     </div>
   );
 }

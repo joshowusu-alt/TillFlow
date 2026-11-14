@@ -2262,6 +2262,7 @@ model PurchaseReturnCredit {
 
 /// Food-business dish. Absent for supermarket, bookshop and every other product.
 model FoodDish {
+  recipeJson String?
   id         String   @id @default(cuid())
   businessId String
   productId  String   @unique
@@ -2286,6 +2287,7 @@ model FoodDish {
 }
 
 model FoodDishSize {
+  recipeJson String?
   id         String  @id @default(cuid())
   dishId     String
   name       String
@@ -2358,6 +2360,7 @@ model FoodBusinessTypeSwitch {
 
 /// Cooked portions added to a counted dish. Quantity only — no journal.
 model FoodPreparation {
+  costPerPortionPence Int?
   id             String   @id @default(cuid())
   businessId     String
   storeId        String
@@ -2376,4 +2379,15 @@ model FoodPreparation {
   @@unique([businessId, idempotencyKey])
   @@index([businessId, productId, createdAt])
   @@index([storeId, createdAt])
+}
+
+model FoodIngredientUsage {
+  id             String   @id @default(cuid())
+  businessId     String
+  storeId        String
+  userId         String
+  idempotencyKey String
+  createdAt      DateTime @default(now())
+
+  @@unique([businessId, idempotencyKey])
 }

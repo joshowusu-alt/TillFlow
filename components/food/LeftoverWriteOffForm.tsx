@@ -8,14 +8,19 @@ import { formatMoney } from '@/lib/format';
 
 export default function LeftoverWriteOffForm({
   productId,
+  storeId,
+  fallbackCostPence,
   costPerPortionPence,
   currency,
 }: {
   productId: string;
+  storeId: string;
+  fallbackCostPence: number | null;
   costPerPortionPence: number | null;
   currency: string;
 }) {
   const router = useRouter();
+  const [manualCost, setManualCost] = useState(fallbackCostPence == null ? '' : (fallbackCostPence / 100).toFixed(2));
   const [qty, setQty] = useState('1');
   const [reasonCode, setReasonCode] = useState<LeftoverReasonCode>('END_OF_DAY_LEFTOVER');
   const [note, setNote] = useState('');
@@ -23,7 +28,8 @@ export default function LeftoverWriteOffForm({
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const portions = Math.max(0, Math.floor(Number(qty) || 0));
-  const valuePence = (costPerPortionPence ?? 0) * portions;
+  const manualCostPence = manualCost === '' ? undefined : Math.round(Number(manualCost) * 100);
+  const valuePence = (costPerPortionPence ?? manualCostPence ?? 0) * portions;
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -32,6 +38,8 @@ export default function LeftoverWriteOffForm({
     setMessage(null);
     const result = await writeOffCookedPortionsAction({
       productId,
+      storeId,
+      manualCostPence,
       qty: portions,
       reasonCode,
       note,
@@ -44,7 +52,7 @@ export default function LeftoverWriteOffForm({
     }
     setMessage(
       result.data.valuePence > 0
-        ? `Wrote off ${result.data.qty} portions. ${formatMoney(result.data.valuePence, currency)} posted to inventory loss.`
+        ? `Wrote off ${result.data.qty} portions. ${formatMoney(result.data.valuePence, currency)} moved from Food costs to Food waste.`
         : `Wrote off ${result.data.qty} portions. No cost was set, so no money was posted.`,
     );
     router.refresh();
@@ -54,10 +62,14 @@ export default function LeftoverWriteOffForm({
     <form onSubmit={onSubmit} className="card space-y-3 p-4">
       <h2 className="text-base font-semibold">Throw away cooked portions</h2>
       <p className="text-sm text-black/60">
-        {costPerPortionPence && costPerPortionPence > 0
-          ? `Each portion is costed at ${formatMoney(costPerPortionPence, currency)}. That amount is posted to inventory loss, the same way as other stock written off.`
-          : 'No cost per portion is set, so this only reduces the count. Nothing is posted to the books.'}
+        {costPerPortionPence != null
+          ? `Latest batch cost: ${formatMoney(costPerPortionPence, currency)} per portion.`
+          : 'Enter the cost per portion if you already recorded the ingredients used.'}
       </p>
+      {costPerPortionPence == null && <label className="block text-sm">
+        Cost per portion ({currency})
+        <input className="input mt-1 w-32" type="number" min="0" step="0.01" value={manualCost} onChange={event => setManualCost(event.target.value)} />
+      </label>}
       <label className="block text-sm">
         Portions thrown away
         <input className="input mt-1 w-32" inputMode="numeric" value={qty} onChange={(event) => setQty(event.target.value)} />

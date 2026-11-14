@@ -69,6 +69,7 @@ export async function GET(request: Request) {
       ['Line Item', 'Amount'],
       ['Revenue', formatMoney(data.revenue, currency)],
       ['Cost of Goods Sold', moneyOrIncomplete(data.cogs)],
+      ...(data.hasFoodCosts ? [['Food costs', moneyOrIncomplete(data.foodCosts)], ['Food waste', moneyOrIncomplete(data.foodWaste)]] : []),
       ['Gross Profit', moneyOrIncomplete(data.grossProfit)],
       ['Other Operating Income', formatMoney(data.otherOperatingIncome, currency)],
       ['Operating Expenses', formatMoney(data.otherExpenses, currency)],
