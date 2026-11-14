@@ -1,3 +1,5 @@
+import FoodRecordHistory from '@/components/food/FoodRecordHistory';
+import { loadFoodRecordHistory } from '@/lib/food/record-history';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
@@ -31,7 +33,7 @@ export default async function DishPage(props: { params: Promise<{ productId: str
   if (!dish) notFound();
 
   const latestCost = branch ? await prisma.foodPreparation.findFirst({
-    where: { businessId: business.id, storeId: branch.id, productId, costPerPortionPence: { not: null } },
+    where: { businessId: business.id, storeId: branch.id, productId, undoneAt: null, costPerPortionPence: { not: null } },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     select: { costPerPortionPence: true },
   }) : null;
@@ -79,6 +81,8 @@ export default async function DishPage(props: { params: Promise<{ productId: str
           <LeftoverWriteOffForm productId={dish.productId} storeId={branch.id} costPerPortionPence={latestCost?.costPerPortionPence ?? null} currency={business.currency} />
         </>
       ) : null}
+      {branch && <FoodRecordHistory storeId={branch.id} title="Cooking history"
+        records={await loadFoodRecordHistory({ businessId: business.id, storeId: branch.id, productId, timeZone: business.timezone || 'UTC' })} />}
       <DishForm ingredients={await ingredientOptions(business.id)} initial={draft} productId={dish.productId} />
     </div>
   );

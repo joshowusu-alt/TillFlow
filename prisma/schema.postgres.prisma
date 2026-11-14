@@ -1216,7 +1216,7 @@ model StockBatch {
   qtyReceivedBase    Int
   productionDate     DateTime?
   expiryDate         DateTime?
-  /// PURCHASE | OPENING_STOCK | IMPORT
+  /// PURCHASE | OPENING_STOCK | IMPORT | FOOD_UNDO
   source             String
   purchaseLineId     String?   @unique
   /// Opening-stock or import document id shared by the lines on that receipt.
@@ -2358,8 +2358,11 @@ model FoodBusinessTypeSwitch {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 }
 
-/// Cooked portions added to a counted dish. Quantity only — no journal.
+/// Cooked portions added to a counted dish, with an optional ingredient cost.
 model FoodPreparation {
+  undoneAt DateTime?
+  undoneById String?
+  undoReason String?
   costPerPortionPence Int?
   id             String   @id @default(cuid())
   businessId     String
@@ -2382,6 +2385,9 @@ model FoodPreparation {
 }
 
 model FoodIngredientUsage {
+  undoneAt DateTime?
+  undoneById String?
+  undoReason String?
   id             String   @id @default(cuid())
   businessId     String
   storeId        String
@@ -2389,5 +2395,6 @@ model FoodIngredientUsage {
   idempotencyKey String
   createdAt      DateTime @default(now())
 
+  @@index([businessId, storeId, createdAt])
   @@unique([businessId, idempotencyKey])
 }

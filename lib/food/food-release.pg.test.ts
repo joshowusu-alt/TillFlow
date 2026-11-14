@@ -107,6 +107,7 @@ describePg('food release stress on throwaway Postgres', () => {
       () => db.salesReturn.deleteMany({ where: { salesInvoice: { businessId } } }),
       () => db.onlineOrder.deleteMany({ where: { businessId } }),
       () => db.salesInvoice.deleteMany({ where: { businessId } }),
+      () => db.auditLog.deleteMany({ where: { businessId } }),
       () => db.foodIngredientUsage.deleteMany({ where: { businessId } }),
       () => db.purchaseDocument.deleteMany({ where: { businessId } }),
       () => db.purchaseInvoice.deleteMany({ where: { businessId } }),
@@ -236,6 +237,81 @@ describePg('food release stress on throwaway Postgres', () => {
       await db.business.update({ where: { id: businessId }, data: { businessCategory: 'FOOD_DISHES' } });
     }
   }, 60000);
+
+  it('undoes exact cooking and ingredient costs, audits the changes, and blocks unsafe reversals', async () => {
+    const { undoFoodRecord } = await import('@/lib/food/undo-service');
+    const { recordIngredientUsage } = await import('@/lib/food/usage-service');
+    const { foodDishSaleLine } = await import('@/lib/food/sale-cost-repair');
+    const { getIncomeStatement } = await import('@/lib/reports/financials');
+    const rice = await db.product.create({ data: { businessId, name: 'Undo rice', sellingPriceBasePence: 500,
+      defaultCostBasePence: 500, productUnits: { create: { unitId, isBaseUnit: true, conversionToBase: 1 } } } });
+    await db.inventoryBalance.create({ data: { storeId, productId: rice.id, qtyOnHandBase: 20,
+      avgCostBasePence: 500, knownValuePence: 10000, unvaluedQtyBase: 0 } });
+    const dish = await dishes.saveDish({ businessId, draft: draft({
+      name: 'Undo rice bowl', startingPriceCedis: '20', stockMode: 'COUNTED',
+      recipe: [{ productId: rice.id, qty: 1 }],
+    }) });
+    const context = { businessId, storeId, userId, userRole: 'OWNER' };
+    const batch = await prep.addPreparedPortions({ ...context, productId: dish.id, qty: 20 });
+    const undo = { ...context, id: batch.id, kind: 'FOOD_PREPARATION' as const, reason: 'Entered twice' };
+    await expect(undoFoodRecord({ ...undo, reason: ' ' })).rejects.toThrow(/reason/i);
+    await expect(undoFoodRecord({ ...undo, userRole: 'CASHIER' })).rejects.toThrow(/owner or manager/i);
+    await db.business.update({ where: { id: businessId }, data: { businessCategory: 'RETAIL' } });
+    try {
+      await expect(undoFoodRecord(undo)).rejects.toThrow(/food businesses only/i);
+    } finally {
+      await db.business.update({ where: { id: businessId }, data: { businessCategory: 'FOOD_DISHES' } });
+    }
+    const attempts = await Promise.allSettled([undoFoodRecord(undo), undoFoodRecord(undo)]);
+    const rejected = attempts.filter(result => result.status === 'rejected');
+    expect(rejected.map(result => String(result.reason))).toEqual([expect.stringMatching(/already been undone/i)]);
+    await expect(undoFoodRecord(undo)).rejects.toThrow(/already been undone/i);
+    expect(await onHand(rice.id)).toBe(20);
+    expect(await onHand(dish.id)).toBe(0);
+    await expect(db.inventoryBalance.findUniqueOrThrow({ where: { storeId_productId: { storeId, productId: rice.id } } }))
+      .resolves.toMatchObject({ knownValuePence: 10000 });
+    const journals = await db.journalEntry.findMany({ where: { businessId, referenceId: batch.id },
+      include: { lines: { include: { account: true } } } });
+    expect(journals).toHaveLength(2);
+    expect(journals.find(entry => entry.referenceType === 'FOOD_PREPARATION_UNDO')?.lines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ account: expect.objectContaining({ code: '1200' }), debitPence: 10000, creditPence: 0 }),
+      expect.objectContaining({ account: expect.objectContaining({ code: '5010' }), debitPence: 0, creditPence: 10000 }),
+    ]));
+    expect(await db.stockBatch.count({ where: { storeId, productId: rice.id, openingReferenceId: batch.id, qtyReceivedBase: 20 } })).toBe(1);
+    const usageInput = { ...context, rows: [{ productId: rice.id, qty: 2 }], idempotencyKey: 'undo-rice', reason: 'Lunch' };
+    await recordIngredientUsage(usageInput);
+    await recordIngredientUsage(usageInput);
+    const usage = await db.foodIngredientUsage.findUniqueOrThrow({
+      where: { businessId_idempotencyKey: { businessId, idempotencyKey: usageInput.idempotencyKey } },
+    });
+    await undoFoodRecord({ ...context, id: usage.id, kind: 'FOOD_INGREDIENT_USAGE', reason: 'Wrong ingredient' });
+    expect(await onHand(rice.id)).toBe(20);
+    expect(await getIncomeStatement(businessId, batch.createdAt, new Date(Date.now() + 1000))).toMatchObject({ foodCosts: 0 });
+    const audits = await db.auditLog.findMany({ where: { businessId, entityId: { in: [batch.id, usage.id] } } });
+    expect(audits).toHaveLength(3);
+    for (const [action, reason, qty, valueCedis] of [
+      ['FOOD_PREPARATION_UNDO', 'Entered twice', 20, 100],
+      ['FOOD_INGREDIENT_USAGE_CREATE', 'Lunch', 2, 10],
+      ['FOOD_INGREDIENT_USAGE_UNDO', 'Wrong ingredient', 2, 10],
+    ] as const) {
+      const row = audits.find(item => item.action === action)!;
+      expect(row).toMatchObject({ branchId: storeId, userId, reason });
+      expect(JSON.parse(row.details!)).toMatchObject({ valueCedis, items: [{ productId: rice.id, qty }] });
+    }
+
+    const soldBatch = await prep.addPreparedPortions({ ...context, productId: dish.id, qty: 3 });
+    const sale = await sales.createSale({ ...context, tillId, cashierUserId: userId, paymentStatus: 'PAID',
+      payments: [{ method: 'CASH', amountPence: 2500 }], lines: [
+        { productId: dish.id, unitId: await baseUnit(dish.id), qtyInUnit: 1 },
+        { productId: rice.id, unitId, qtyInUnit: 1 },
+      ],
+    });
+    await prep.addPreparedPortions({ ...context, productId: dish.id, qty: 5 });
+    await expect(undoFoodRecord({ ...undo, id: soldBatch.id })).rejects.toThrow(/before portions are sold/i);
+    expect(await onHand(dish.id)).toBe(7);
+    expect(await db.salesInvoiceLine.findMany({ where: { salesInvoiceId: sale.id, NOT: foodDishSaleLine },
+      select: { productId: true } })).toEqual([{ productId: rice.id }]);
+  });
 
   it('rounds fractional recipes to whole stock units and rolls back batches that use too little', async () => {
     const rice = await db.product.create({ data: { businessId, name: 'Fractional rice',

@@ -1,5 +1,6 @@
 'use server';
 
+import { foodDishSaleLine } from '@/lib/food/sale-cost-repair';
 import { redirect } from 'next/navigation';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { audit } from '@/lib/audit';
@@ -47,6 +48,7 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
     const selectedLines = await prisma.salesInvoiceLine.findMany({
       where: {
         id: { in: lineIds },
+        NOT: foodDishSaleLine,
         salesInvoice: {
           businessId,
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },

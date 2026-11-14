@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
+import { undoFoodRecord, type FoodRecordKind } from '@/lib/food/undo-service';
 import { recordIngredientUsage } from '@/lib/food/usage-service';
 import type { Ingredient } from '@/lib/food/ingredient-costs';
 import { audit } from '@/lib/audit';
@@ -118,11 +119,22 @@ export async function writeOffCookedPortionsAction(input: {
   });
 }
 
-export async function recordIngredientUsageAction(rows: Ingredient[], idempotencyKey: string, selectedStoreId?: string) {
+export async function recordIngredientUsageAction(rows: Ingredient[], idempotencyKey: string, selectedStoreId?: string, reason?: string) {
   return safeAction(async () => {
     const { user, businessId, storeId } = await requireSelectedStoreContext(['MANAGER', 'OWNER'], selectedStoreId);
-    const result = await recordIngredientUsage({ businessId, storeId, userId: user.id, userRole: user.role, rows, idempotencyKey });
+    const result = await recordIngredientUsage({ businessId, storeId, userId: user.id, userRole: user.role, rows, idempotencyKey, reason });
     await refreshFoodSurfaces(businessId, storeId);
     return ok(result);
+  });
+}
+
+export async function undoFoodRecordAction(input: {
+  storeId: string; kind: FoodRecordKind; id: string; reason: string;
+}) {
+  return safeAction(async () => {
+    const { user, businessId, storeId } = await requireSelectedStoreContext(['MANAGER', 'OWNER'], input.storeId);
+    await undoFoodRecord({ ...input, businessId, storeId, userId: user.id, userRole: user.role });
+    await refreshFoodSurfaces(businessId, storeId);
+    return ok();
   });
 }

@@ -1,4 +1,4 @@
-import { ACCOUNT_CODES } from '@/lib/accounting';
+import { readFoodCostBalance } from './food-cost-balance';
 import { prisma } from '@/lib/prisma';
 import { UserError } from '@/lib/action-utils';
 import { postFoodCost } from './ingredient-costs';
@@ -64,7 +64,7 @@ export async function writeOffCookedPortions(input: {
       if (existing) return { id: existing.id, qty: Math.abs(existing.qtyBase), valuePence: existing.valuePence ?? 0, replayed: true };
     }
     const batch = await tx.foodPreparation.findFirst({
-      where: { businessId: input.businessId, storeId: store.id, productId: input.productId, costPerPortionPence: { not: null } },
+      where: { businessId: input.businessId, storeId: store.id, productId: input.productId, undoneAt: null, costPerPortionPence: { not: null } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
     // Reserving the number locks the tenant's stock-adjustment sequence through commit.
@@ -74,14 +74,7 @@ export async function writeOffCookedPortions(input: {
     const requestedValuePence = leftoverWriteOffValuePence(input.qty, cost);
     if (requestedValuePence > 2147483647) throw new UserError('The write-off cost is too large.');
     let valuePence = requestedValuePence;
-    if (valuePence > 0) {
-      const { _sum } = await tx.journalLine.aggregate({
-        where: { account: { businessId: input.businessId, code: ACCOUNT_CODES.foodCosts, name: 'Food costs', type: 'EXPENSE' },
-          journalEntry: { businessId: input.businessId } },
-        _sum: { debitPence: true, creditPence: true },
-      });
-      if ((_sum.debitPence ?? 0) - (_sum.creditPence ?? 0) < valuePence) valuePence = 0;
-    }
+    if (valuePence > 0 && await readFoodCostBalance(tx, input.businessId) < valuePence) valuePence = 0;
     const balance = await tx.inventoryBalance.findUnique({
       where: { storeId_productId: { storeId: store.id, productId: input.productId } },
     });
