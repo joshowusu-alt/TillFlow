@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
-import { ok, safeAction } from '@/lib/action-utils';
+import { ok, safeAction, withBusinessContext } from '@/lib/action-utils';
 import { isFoodBusiness } from '@/lib/food/business';
 import { saveFoodStorefrontSetup } from '@/lib/food/storefront-setup';
 import { invalidateStorefrontBusinessCache } from '@/lib/services/online-orders';
@@ -483,12 +483,12 @@ export async function updateOnboardingBusinessProfile(input: {
 
 export async function saveFoodStorefrontSetupAction(formData: FormData) {
   return safeAction(async () => {
-    const { business } = await requireBusiness(['OWNER']);
-    const { storefrontSlug } = await saveFoodStorefrontSetup(business.id, formData);
+    const { businessId } = await withBusinessContext(['OWNER']);
+    const { storefrontSlug } = await saveFoodStorefrontSetup(businessId, formData);
     await invalidateStorefrontBusinessCache(storefrontSlug);
     if (storefrontSlug) revalidatePath(`/shop/${storefrontSlug}`);
     revalidatePath('/settings/online-store');
-    revalidatePath('/onboarding');
+    revalidateTag(`readiness-${businessId}`);
     return ok();
   });
 }
