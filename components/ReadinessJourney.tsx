@@ -17,6 +17,7 @@ import {
   formatHeroStatusPill,
   formatHomeAttentionActionSummary,
 } from '@/lib/home-attention-presentation';
+import FoodStorefrontSetup from '@/components/onboarding/FoodStorefrontSetup';
 import BusinessProfileEditor from '@/components/onboarding/BusinessProfileEditor';
 import { BUSINESS_CATEGORY_LABELS, computeOnboardingJourney } from '@/lib/onboarding-journey';
 import {
@@ -831,6 +832,8 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
             </p>
           </div>
 
+          {isFoodBusiness(data.businessCategory) && <FoodStorefrontSetup settings={data.foodStorefront} />}
+
           <button
             type="button"
             onClick={handleStartSelling}
@@ -926,6 +929,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
         </div>
 
         {saveStatus}
+        {isFoodBusiness(data.businessCategory) && <FoodStorefrontSetup settings={data.foodStorefront} />}
 
         {upNext ? (
           <div className="mb-5 rounded-2xl border-2 border-accent/25 bg-white p-4 shadow-sm">

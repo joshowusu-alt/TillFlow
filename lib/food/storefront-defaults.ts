@@ -1,0 +1,1 @@
+export const DEFAULT_FOOD_PREP_MINUTES = 20;

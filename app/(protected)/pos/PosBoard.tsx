@@ -1,3 +1,4 @@
+import { posSearchWhere } from '@/lib/pos/catalogue-query';
 import { Suspense } from 'react';
 import { prisma } from '@/lib/prisma';
 import type { requireBusinessStore } from '@/lib/auth';
@@ -22,7 +23,7 @@ function getCachedProducts(businessId: string) {
   return unstable_cache(
     () =>
       prisma.product.findMany({
-        where: { businessId, active: true },
+        where: posSearchWhere(businessId, ''),
         select: SELLABLE_PRODUCT_SELECT,
       }),
     ['pos-products', businessId],

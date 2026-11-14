@@ -2,7 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ReadinessJourney from '@/components/ReadinessJourney';
-import { updateOnboardingBusinessProfile, type ReadinessData } from '@/app/actions/onboarding';
+import { saveFoodStorefrontSetupAction, updateOnboardingBusinessProfile, type ReadinessData } from '@/app/actions/onboarding';
 import { computeOnboardingJourney } from '@/lib/onboarding-journey';
 import {
   ONBOARDING_ADD_PRODUCT_MANUALLY_NAME,
@@ -46,6 +46,7 @@ vi.mock('@/app/actions/onboarding', () => ({
   markOnboardingCompleteAfterFirstSale: vi.fn(),
   toggleGuidedSetup: vi.fn(),
   updateOnboardingBusinessProfile: vi.fn(),
+  saveFoodStorefrontSetupAction: vi.fn(),
 }));
 
 vi.mock('@/app/actions/nav-kpis', () => ({
@@ -168,6 +169,20 @@ afterEach(() => {
 });
 
 describe('ReadinessJourney Phase 1 setup', () => {
+  it('offers editable storefront defaults to food businesses and skips without saving', () => {
+    const retail = renderDashboard({ onboardingComplete: false, businessCategory: 'SUPERMARKET' });
+    expect(screen.queryByLabelText('Preparation time in minutes')).toBeNull();
+    retail.unmount();
+
+    renderDashboard({ onboardingComplete: false, businessCategory: 'FOOD_DISHES' });
+    expect(screen.getByLabelText('Preparation time in minutes')).toHaveValue(20);
+    expect(screen.getByLabelText('Monday opens')).toHaveValue('08:00');
+    expect(screen.getByLabelText('Closed on Sunday')).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    expect(screen.getByText(/Storefront setup skipped/)).toBeVisible();
+    expect(saveFoodStorefrontSetupAction).not.toHaveBeenCalled();
+  });
+
   it('shows exactly one Start selling CTA on Ready to sell without duplicates', () => {
     const readyJourney = {
       ...completedJourney,

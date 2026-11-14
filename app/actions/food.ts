@@ -10,6 +10,7 @@ import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import type { DishDraft } from '@/lib/food/dish-draft';
 import { addPreparedPortions } from '@/lib/food/prepare-service';
 import { saveDish } from '@/lib/food/save-dish';
+import { markRecipeIngredientsNotSold } from '@/lib/food/recipe-ingredient-visibility';
 import { writeOffCookedPortions } from '@/lib/food/write-off-service';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 
@@ -136,5 +137,18 @@ export async function undoFoodRecordAction(input: {
     await undoFoodRecord({ ...input, businessId, storeId, userId: user.id, userRole: user.role });
     await refreshFoodSurfaces(businessId, storeId);
     return ok();
+  });
+}
+
+export async function markRecipeIngredientsNotSoldAction(productId: string): Promise<ActionResult<{ count: number }>> {
+  return safeAction(async () => {
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { count, storefrontSlug } = await markRecipeIngredientsNotSold(businessId, productId);
+    revalidatePosCatalog(businessId);
+    revalidatePath('/pos');
+    revalidatePath('/products');
+    revalidatePath(`/products/dishes/${productId}`);
+    if (storefrontSlug) revalidatePath(`/shop/${storefrontSlug}`);
+    return ok({ count });
   });
 }

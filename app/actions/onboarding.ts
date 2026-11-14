@@ -1,6 +1,10 @@
 'use server';
 
-import { revalidateTag } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
+import { ok, safeAction, withBusinessContext } from '@/lib/action-utils';
+import { isFoodBusiness } from '@/lib/food/business';
+import { saveFoodStorefrontSetup } from '@/lib/food/storefront-setup';
+import { invalidateStorefrontBusinessCache } from '@/lib/services/online-orders';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { writeHomeLoadingKindCookie } from '@/lib/owner-home/home-loading-kind';
@@ -67,6 +71,7 @@ export type ReadinessData = {
   steps: ReadinessStep[];
   nextStep: ReadinessStep | null;
   businessCategory: string | null;
+  foodStorefront?: { storefrontHoursJson: string | null; storefrontPickupPrepMinutes: number } | null;
   businessCategoryLabel: string | null;
   journey: OnboardingJourneyResult;
   stages: OnboardingStageResult[];
@@ -333,6 +338,10 @@ export async function getReadiness(): Promise<ReadinessData> {
         steps,
         nextStep,
         businessCategory: category,
+        foodStorefront: isFoodBusiness(category) ? await prisma.business.findUnique({
+          where: { id: business.id },
+          select: { storefrontHoursJson: true, storefrontPickupPrepMinutes: true },
+        }) : null,
         businessCategoryLabel: category ? BUSINESS_CATEGORY_LABELS[category] ?? category : null,
         journey,
         stages: journey.stages,
@@ -470,4 +479,16 @@ export async function updateOnboardingBusinessProfile(input: {
   // on it, and that refresh shows loading.tsx and can leave the checklist
   // skeleton mounted. The journey updates in place.
   return { ok: true };
+}
+
+export async function saveFoodStorefrontSetupAction(formData: FormData) {
+  return safeAction(async () => {
+    const { businessId } = await withBusinessContext(['OWNER']);
+    const { storefrontSlug } = await saveFoodStorefrontSetup(businessId, formData);
+    await invalidateStorefrontBusinessCache(storefrontSlug);
+    if (storefrontSlug) revalidatePath(`/shop/${storefrontSlug}`);
+    revalidatePath('/settings/online-store');
+    revalidateTag(`readiness-${businessId}`);
+    return ok();
+  });
 }
