@@ -5,6 +5,8 @@ import {
   defaultPlateSelection,
   dishNeedsPicker,
   formatPlateDetail,
+  cheapestActiveSizePricePence,
+  formatDishListPrice,
   menuListPricePence,
   onlineHoldQty,
   plateSelectionKey,
@@ -86,6 +88,9 @@ describe('plate price', () => {
 
   it('uses the chosen size price, not the starting price, and keeps a default size', () => {
     expect(menuListPricePence(jollof, 1500)).toBe(3000);
+    expect(cheapestActiveSizePricePence(jollof)).toBe(2000);
+    expect(formatDishListPrice(jollof, 1500, (pence) => formatMoney(pence))).toBe('from GH₵20.00');
+    expect(formatDishListPrice(banku, 2500, (pence) => formatMoney(pence))).toBe('GH₵25.00');
     expect(dishNeedsPicker(jollof)).toBe(true);
     const plate = pricePlate(
       jollof,

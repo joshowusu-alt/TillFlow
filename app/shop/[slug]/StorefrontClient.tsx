@@ -8,7 +8,7 @@ import { formatMoney, toTitleCase, formatGhanaPhoneForDisplay } from '@/lib/form
 import { buildCartDetails, buildProductMap, formatAvailable, getUnitFromProduct, sumCartTotals, type PosCartLine } from '@/lib/payments/pos-cart';
 import FoodPlatePicker from '@/components/food/FoodPlatePicker';
 import { foodAvailabilityText } from '@/lib/food/availability';
-import { defaultPlateSelection, dishNeedsPicker, menuListPricePence, plateSelectionKey, pricePlate, type PlateSelection } from '@/lib/food/plate';
+import { defaultPlateSelection, dishNeedsPicker, formatDishListPrice, plateSelectionKey, pricePlate, type PlateSelection } from '@/lib/food/plate';
 import { resolveBrandStyles } from '@/lib/storefront-branding';
 import { getPaymentInstructionDetails } from '@/lib/storefront-payments';
 import type { PublicStorefront } from '@/lib/services/online-orders';
@@ -224,9 +224,6 @@ function isListedInStock(product: { onHandBase: number; food?: { stockMode: stri
   return product.onHandBase > 0;
 }
 
-function listedPricePence(product: { sellingPriceBasePence: number; food?: Parameters<typeof menuListPricePence>[0] }) {
-  return product.food ? menuListPricePence(product.food, product.sellingPriceBasePence) : product.sellingPriceBasePence;
-}
 type RecommendationProductLike = {
   id: string;
   categoryId: string | null;
@@ -311,7 +308,7 @@ function ProductDetailSheet({
   const selected = selectionState[product.id];
   const selectedUnit = selected ? getUnitFromProduct(product, selected.unitId) : undefined;
   const unitPrice = product.food
-    ? formatMoney(listedPricePence(product), storefront.currency)
+    ? formatDishListPrice(product.food, product.sellingPriceBasePence, (pence) => formatMoney(pence, storefront.currency))
     : selectedUnit
     ? formatMoney(
         selectedUnit.sellingPricePence ?? product.sellingPriceBasePence * selectedUnit.conversionToBase,
@@ -1622,7 +1619,7 @@ export default function StorefrontClient({
                     const selected = selectionState[product.id];
                     const selectedUnit = selected ? getUnitFromProduct(product, selected.unitId) : undefined;
                     const unitPrice = product.food
-                      ? formatMoney(listedPricePence(product), storefront.currency)
+                      ? formatDishListPrice(product.food, product.sellingPriceBasePence, (pence) => formatMoney(pence, storefront.currency))
                       : selectedUnit
                       ? formatMoney(
                           selectedUnit.sellingPricePence ?? product.sellingPriceBasePence * selectedUnit.conversionToBase,

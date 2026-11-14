@@ -16,6 +16,7 @@ describe('dish setup stays with the owner', () => {
     const page = readFileSync(join(process.cwd(), 'app/(protected)/products/dishes/new/page.tsx'), 'utf8');
     expect(actions).toContain("withBusinessContext(['MANAGER', 'OWNER'])");
     expect(actions).toContain("requireSelectedStoreContext(['MANAGER', 'OWNER']");
+    expect(actions).toContain('writeOffCookedPortionsAction');
     expect(actions).not.toContain('CASHIER');
     expect(page).toContain("requireBusiness(['MANAGER', 'OWNER'])");
   });

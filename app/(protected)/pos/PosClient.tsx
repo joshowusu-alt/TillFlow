@@ -46,7 +46,7 @@ import {
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
 import FoodPlatePicker from '@/components/food/FoodPlatePicker';
 import { foodAvailabilityText } from '@/lib/food/availability';
-import { defaultPlateSelection, dishNeedsPicker, pricePlate, type PlateSelection } from '@/lib/food/plate';
+import { defaultPlateSelection, dishNeedsPicker, formatDishListPrice, pricePlate, type PlateSelection } from '@/lib/food/plate';
 import { filterPosProducts } from '@/lib/payments/pos-search';
 import type { PosCatalogueMode, SellableProductDto } from '@/lib/pos/sellable-dto';
 import {
@@ -1740,7 +1740,7 @@ export default function PosClient({
                             <div className="text-right flex-shrink-0 space-y-0.5">
                               <div className="text-[10px] font-semibold uppercase tracking-wide text-black/40">Price</div>
                               <div className="text-sm font-bold text-emerald-700 tabular-nums">
-                                {formatMoney(product.sellingPriceBasePence, business.currency)}
+                                {formatDishListPrice(product.food, product.sellingPriceBasePence, (pence) => formatMoney(pence, business.currency))}
                               </div>
                               <div className={`text-[10px] font-semibold uppercase tracking-wide ${outOfStock ? 'text-red-500' : 'text-black/40'}`}>
                                 {product.food?.stockMode === 'COUNTED' ? 'Portions' : 'Stock'}

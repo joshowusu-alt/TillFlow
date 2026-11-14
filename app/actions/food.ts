@@ -7,6 +7,7 @@ import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import type { DishDraft } from '@/lib/food/dish-draft';
 import { addPreparedPortions } from '@/lib/food/prepare-service';
 import { saveDish } from '@/lib/food/save-dish';
+import { writeOffCookedPortions } from '@/lib/food/write-off-service';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 
 async function refreshFoodSurfaces(businessId: string, storeId?: string | null) {
@@ -70,5 +71,40 @@ export async function addPreparedPortionsAction(input: {
       details: { productId: input.productId, qty: row.qtyBase },
     }).catch(() => {});
     return ok({ qty: row.qtyBase });
+  });
+}
+
+export async function writeOffCookedPortionsAction(input: {
+  productId: string;
+  qty: number;
+  reasonCode: string;
+  note?: string;
+  idempotencyKey?: string;
+}): Promise<ActionResult<{ qty: number; valuePence: number }>> {
+  return safeAction(async () => {
+    const { user, businessId, storeId } = await requireSelectedStoreContext(['MANAGER', 'OWNER'], undefined);
+    const row = await writeOffCookedPortions({
+      businessId,
+      storeId,
+      productId: input.productId,
+      userId: user.id,
+      userRole: user.role,
+      qty: input.qty,
+      reasonCode: input.reasonCode,
+      note: input.note,
+      idempotencyKey: input.idempotencyKey,
+    });
+    await refreshFoodSurfaces(businessId, storeId);
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'FOOD_LEFTOVER_WRITE_OFF',
+      entity: 'StockAdjustment',
+      entityId: row.id,
+      details: { productId: input.productId, qty: row.qty, valuePence: row.valuePence, reasonCode: input.reasonCode },
+    }).catch(() => {});
+    return ok({ qty: row.qty, valuePence: row.valuePence });
   });
 }

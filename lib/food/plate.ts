@@ -111,6 +111,35 @@ export function menuListPricePence(menu: FoodMenu, startingPricePence: number): 
   return defaultSize(menu)?.pricePence ?? startingPricePence;
 }
 
+/** Cheapest size a customer or cashier can still choose. Null when the dish has no sizes. */
+export function cheapestActiveSizePricePence(menu: FoodMenu): number | null {
+  const prices = activeSizes(menu).map((size) => size.pricePence);
+  if (prices.length === 0) return null;
+  return Math.min(...prices);
+}
+
+/** Same label from a list of size prices. An empty list keeps the starting price. */
+export function formatFromSizePrices(
+  sizePricesPence: number[] | null | undefined,
+  startingPricePence: number,
+  format: (pence: number) => string,
+): string {
+  const prices = (sizePricesPence ?? []).filter((price) => Number.isFinite(price));
+  if (prices.length === 0) return format(startingPricePence);
+  return `from ${format(Math.min(...prices))}`;
+}
+
+/** Search and list label. Sized dishes say "from GH₵X". A dish with no sizes keeps its price. */
+export function formatDishListPrice(
+  menu: FoodMenu | null | undefined,
+  startingPricePence: number,
+  format: (pence: number) => string,
+): string {
+  const cheapest = menu ? cheapestActiveSizePricePence(menu) : null;
+  if (cheapest == null) return format(startingPricePence);
+  return `from ${format(cheapest)}`;
+}
+
 export function dishNeedsPicker(menu: FoodMenu): boolean {
   if (activeSizes(menu).length > 0) return true;
   return menu.groups.some((group) => group.addons.some((addon) => addon.active !== false));

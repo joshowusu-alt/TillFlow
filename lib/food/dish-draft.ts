@@ -10,6 +10,8 @@ export type DishDraft = {
   stockMode: FoodStockMode;
   soldOut: boolean;
   lowAt: number;
+  /** Blank means no cost is posted when leftovers are written off. */
+  costPerPortionCedis?: string;
   sizes: Array<{ name: string; priceCedis: string; isDefault: boolean }>;
   inclusions: Array<{ name: string; qty: number; counts: boolean }>;
   groups: Array<{
@@ -29,6 +31,7 @@ export type NormalizedDish = {
   stockMode: FoodStockMode;
   soldOut: boolean;
   lowAt: number;
+  costPerPortionPence: number | null;
   sizes: Array<{ name: string; pricePence: number; isDefault: boolean }>;
   inclusions: Array<{ name: string; qty: number; stockPortions: number }>;
   groups: Array<{
@@ -72,6 +75,9 @@ export function normalizeDishDraft(draft: DishDraft): NormalizedDish {
   if (!Number.isInteger(lowAt) || lowAt < 0 || lowAt > 100000) {
     throw new Error('The low-portion warning must be zero or a whole number.');
   }
+  const costPerPortionPence = stockMode === 'COUNTED' && draft.costPerPortionCedis?.trim()
+    ? cedisToPence(draft.costPerPortionCedis, `the cost per portion of ${name}`, true)
+    : null;
 
   const sizes = (draft.sizes ?? [])
     .map((size) => ({
@@ -156,6 +162,7 @@ export function normalizeDishDraft(draft: DishDraft): NormalizedDish {
     stockMode,
     soldOut: stockMode === 'NOT_COUNTED' && Boolean(draft.soldOut),
     lowAt,
+    costPerPortionPence,
     sizes,
     inclusions: normalizedInclusions,
     groups: normalizedGroups,
@@ -172,6 +179,7 @@ export function emptyDishDraft(): DishDraft {
     stockMode: 'NOT_COUNTED',
     soldOut: false,
     lowAt: 0,
+    costPerPortionCedis: '',
     sizes: [],
     inclusions: [{ name: '', qty: 1, counts: true }],
     groups: [],

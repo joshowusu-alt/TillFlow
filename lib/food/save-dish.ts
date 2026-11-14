@@ -97,6 +97,7 @@ export async function saveDish(input: { businessId: string; draft: DishDraft }) 
         stockMode: normalized.stockMode,
         soldOut: normalized.soldOut,
         lowAt: normalized.lowAt,
+        costPerPortionPence: normalized.costPerPortionPence,
         sizes: {
           create: normalized.sizes.map((size, index) => ({
             name: size.name,

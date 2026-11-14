@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { requireBusiness } from '@/lib/auth';
 import DishForm from '@/components/food/DishForm';
 import PreparePortionsForm from '@/components/food/PreparePortionsForm';
+import LeftoverWriteOffForm from '@/components/food/LeftoverWriteOffForm';
 import { isFoodBusiness } from '@/lib/food/business';
 import type { DishDraft } from '@/lib/food/dish-draft';
 import { prisma } from '@/lib/prisma';
@@ -38,6 +39,7 @@ export default async function DishPage(props: { params: Promise<{ productId: str
     stockMode: dish.stockMode === 'COUNTED' ? 'COUNTED' : 'NOT_COUNTED',
     soldOut: dish.soldOut,
     lowAt: dish.lowAt,
+    costPerPortionCedis: dish.costPerPortionPence && dish.costPerPortionPence > 0 ? cedisInput(dish.costPerPortionPence) : '',
     sizes: dish.sizes.map((size) => ({ name: size.name, priceCedis: cedisInput(size.pricePence), isDefault: size.isDefault })),
     inclusions: dish.inclusions.map((item) => ({ name: item.name, qty: item.qty, counts: item.stockPortions > 0 })),
     groups: dish.groups.map((group) => ({
@@ -65,7 +67,12 @@ export default async function DishPage(props: { params: Promise<{ productId: str
         </div>
         <Link href="/pos" className="btn-secondary text-sm">Try at the till</Link>
       </div>
-      {dish.stockMode === 'COUNTED' ? <PreparePortionsForm productId={dish.productId} /> : null}
+      {dish.stockMode === 'COUNTED' ? (
+        <>
+          <PreparePortionsForm productId={dish.productId} />
+          <LeftoverWriteOffForm productId={dish.productId} costPerPortionPence={dish.costPerPortionPence} currency={business.currency} />
+        </>
+      ) : null}
       <DishForm initial={draft} productId={dish.productId} />
     </div>
   );

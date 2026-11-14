@@ -1206,7 +1206,7 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
       eventType: 'order_placed', sessionId: input.sessionId?.trim().slice(0, 120) || checkoutKey || publicToken,
       metadata: JSON.stringify({ orderId: created.id }) } });
     return created;
-  }).catch(async (error) => {
+  }, { maxWait: 10_000, timeout: 20_000 }).catch(async (error) => {
     // The losing concurrent transaction rolls back its stock reservation.
     if (checkoutKey && error?.code === 'P2002') {
       const replay = await findReplay();

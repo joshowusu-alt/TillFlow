@@ -213,6 +213,7 @@ model Business {
   cashVarianceInvestigations CashVarianceInvestigation[]
   foodDishes                 FoodDish[]
   foodPreparations           FoodPreparation[]
+  foodBusinessTypeSwitch     FoodBusinessTypeSwitch?
 
   @@index([whatsappEnabled, isDemo])
 }
@@ -2275,6 +2276,8 @@ model FoodDish {
   soldOut    Boolean  @default(false)
   /// Counted dishes: till shows Low at or below this many portions. 0 means no low warning.
   lowAt      Int      @default(0)
+  /// Optional cost of one cooked portion, used only when leftovers are written off. Null posts no money.
+  costPerPortionPence Int?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -2345,6 +2348,18 @@ model FoodAddon {
   group FoodAddonGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([groupId, sortOrder])
+}
+
+/// One row per business moved from "Food business with stock" to Food business.
+/// The switch is idempotent: a business already listed here is not moved again.
+/// Reverse by setting Business.businessCategory back to fromCategory, then deleting the row.
+model FoodBusinessTypeSwitch {
+  businessId   String   @id
+  fromCategory String
+  toCategory   String
+  switchedAt   DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 }
 
 /// Cooked portions added to a counted dish. Quantity only — no journal.

@@ -18,6 +18,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol, DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { formatFromSizePrices } from '@/lib/food/plate';
 import { rowsForListPage } from '@/lib/pagination';
 import { formatCatalogueUnitLabel, getPrimaryPackagingUnit } from '@/lib/units';
 import { defaultBaseUnitId } from '@/lib/units/selectable-units';
@@ -174,7 +175,8 @@ export default async function ProductsPage(
       category: { select: { name: true, colour: true } },
       division: { select: { name: true } },
       group: { select: { name: true, division: { select: { name: true } } } },
-      preferredSupplier: { select: { id: true, name: true } }
+      preferredSupplier: { select: { id: true, name: true } },
+      foodDish: { select: { sizes: { where: { active: true }, select: { pricePence: true } } } },
     },
     orderBy: { name: 'asc' },
     skip: (listPage - 1) * DEFAULT_PAGE_SIZE,
@@ -617,7 +619,7 @@ export default async function ProductsPage(
                       subtitle={<ProductClassificationLabel category={product.category} group={product.group} division={product.division} />}
                     />
                     <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                      <DataCardField label="Base price" value={<span className="font-semibold text-ink">{formatMoney(product.sellingPriceBasePence, business.currency)}</span>} />
+                      <DataCardField label="Base price" value={<span className="font-semibold text-ink">{formatFromSizePrices(product.foodDish?.sizes.map((size) => size.pricePence), product.sellingPriceBasePence, (pence) => formatMoney(pence, business.currency))}</span>} />
                       {isManager ? <DataCardField label="Default cost" value={<span className="font-semibold text-ink">{formatMoney(product.defaultCostBasePence, business.currency)}</span>} /> : null}
                       <DataCardField label="Preferred supplier" value={<span className="text-black/65">{product.preferredSupplier?.name ?? 'None'}</span>} className="col-span-2" />
                       <DataCardField label="Unit display" value={<span className="text-black/65">{unitLabel}</span>} className="col-span-2" />
@@ -736,7 +738,7 @@ export default async function ProductsPage(
                         <td className="hidden sm:table-cell px-3 py-3">
                           <ProductClassificationLabel category={product.category} group={product.group} division={product.division} />
                         </td>
-                        <td className="px-3 py-3">{formatMoney(product.sellingPriceBasePence, business.currency)}</td>
+                        <td className="px-3 py-3">{formatFromSizePrices(product.foodDish?.sizes.map((size) => size.pricePence), product.sellingPriceBasePence, (pence) => formatMoney(pence, business.currency))}</td>
                         {isManager ? <td className="hidden lg:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td> : null}
                         <td className="hidden xl:table-cell px-3 py-3 text-sm text-black/60">
                           {product.preferredSupplier ? (

@@ -6,6 +6,7 @@ import { EMPTY_SHORTCUT_LAYOUT, parseShortcutLayout, type ShortcutLayout } from 
 import type { SellableProductDto } from '@/lib/pos/sellable-dto';
 import ResponsiveModal from '@/components/ResponsiveModal';
 import { formatMoney } from '@/lib/format';
+import { formatDishListPrice } from '@/lib/food/plate';
 
 type Props = {
   businessId: string; storeId: string; currency: string;
@@ -149,7 +150,7 @@ export default function ProductShortcuts(props: Props) {
           const product = byId.get(id);
           const unavailable = !product || (validIds !== null && !validIds.has(id));
           const available = unavailable ? 0 : getAvailable(id);
-          return <button key={id} type="button" disabled={!ready || unavailable || available <= 0} className="pos-shortcut-tile min-h-20 min-w-0 rounded-xl border border-black/10 p-3 text-left transition hover:bg-accentSoft disabled:opacity-45" onClick={() => { if (product) onSelect(product); }}><span className="block break-words text-sm font-semibold">{product?.name ?? 'Unavailable product'}</span><span className="mt-1 block text-xs text-black/50">{unavailable ? 'Unavailable' : available <= 0 ? 'Out of stock' : formatMoney(product!.sellingPriceBasePence, currency)}</span></button>;
+          return <button key={id} type="button" disabled={!ready || unavailable || available <= 0} className="pos-shortcut-tile min-h-20 min-w-0 rounded-xl border border-black/10 p-3 text-left transition hover:bg-accentSoft disabled:opacity-45" onClick={() => { if (product) onSelect(product); }}><span className="block break-words text-sm font-semibold">{product?.name ?? 'Unavailable product'}</span><span className="mt-1 block text-xs text-black/50">{unavailable ? 'Unavailable' : available <= 0 ? 'Out of stock' : formatDishListPrice(product?.food, product?.sellingPriceBasePence ?? 0, (pence) => formatMoney(pence, currency))}</span></button>;
         })}
         {screen && !screen.productIds.length ? <p className="col-span-full text-xs text-black/50">No products on this screen yet.</p> : null}
       </div>}

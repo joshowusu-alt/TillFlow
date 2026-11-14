@@ -75,10 +75,17 @@ export default function DishForm({ initial, productId }: { initial?: DishDraft; 
             Sold out
           </label>
         ) : (
-          <label className="block text-sm">
-            Show Low when portions left are at or below
-            <input className="input mt-1 w-28" inputMode="numeric" value={draft.lowAt || ''} onChange={(event) => update('lowAt', Math.max(0, Math.floor(Number(event.target.value) || 0)))} />
-          </label>
+          <>
+            <label className="block text-sm">
+              Show Low when portions left are at or below
+              <input className="input mt-1 w-28" inputMode="numeric" value={draft.lowAt || ''} onChange={(event) => update('lowAt', Math.max(0, Math.floor(Number(event.target.value) || 0)))} />
+            </label>
+            <label className="block text-sm">
+              Cost per cooked portion (GH₵, optional)
+              <input className="input mt-1 w-36" inputMode="decimal" value={draft.costPerPortionCedis ?? ''} onChange={(event) => update('costPerPortionCedis', event.target.value)} placeholder="0" />
+            </label>
+            <p className="text-xs text-black/50">Used only when leftovers are thrown away. Leave it blank and the count changes with no money posted.</p>
+          </>
         )}
         <p className="text-xs text-black/50">
           {counted
