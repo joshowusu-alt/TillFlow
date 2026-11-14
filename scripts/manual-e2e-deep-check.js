@@ -121,7 +121,7 @@ async function login(page, email, password) {
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
     const url = page.url();
-    if (/\/pos|\/onboarding/.test(url)) break;
+    if (/\/pos|\/onboarding|\/home/.test(url)) break;
     if (/error=/.test(url)) {
       await screenshotStep(page, 'login-error');
       throw new Error(`Login returned error. URL: ${url}`);
@@ -129,12 +129,12 @@ async function login(page, email, password) {
     await page.waitForTimeout(500);
   }
   const postLoginUrl = page.url();
-  if (!/\/pos|\/onboarding/.test(postLoginUrl)) {
+  if (!/\/pos|\/onboarding|\/home/.test(postLoginUrl)) {
     await screenshotStep(page, 'login-failed');
     const body = await page.locator('body').textContent().catch(() => '');
     throw new Error(`Login did not redirect within 30s. URL: ${postLoginUrl}. Body snippet: ${body.slice(0, 200)}`);
   }
-  if (/\/onboarding/.test(postLoginUrl)) {
+  if (/\/onboarding|\/home/.test(postLoginUrl)) {
     await page.goto(`${BASE_URL}/pos`, { waitUntil: 'networkidle' });
   }
 }

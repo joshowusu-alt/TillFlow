@@ -50,7 +50,7 @@ async function login(page) {
   await page.locator('input[name="email"]').fill(OWNER_EMAIL);
   await page.locator('input[name="password"]').fill(OWNER_PASSWORD);
   await page.getByRole('button', { name: /sign in/i }).click();
-  await page.waitForURL(/\/(pos|onboarding)/, { timeout: 120_000 });
+  await page.waitForURL(/\/(pos|onboarding|home)/, { timeout: 120_000 });
 }
 
 const SAMPLES = Math.max(1, Number(process.env.GATE_F_SAMPLES || 5));
