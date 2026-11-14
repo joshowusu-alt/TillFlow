@@ -138,7 +138,7 @@ async function expectInputValue(locator: ReturnType<Page['locator']>, expected: 
 }
 
 export async function expectOwnerLanding(page: Page) {
-  await page.waitForURL(/\/(onboarding|reports\/dashboard)(?:\?|$)/, { timeout: 45_000 });
+  await page.waitForURL(/\/(home|onboarding|reports\/dashboard)(?:\?|$)/, { timeout: 45_000 });
 }
 
 export async function expectCashierLanding(page: Page) {

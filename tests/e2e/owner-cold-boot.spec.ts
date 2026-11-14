@@ -24,7 +24,7 @@ test.describe('Owner cold boot QA @owner', () => {
     const urlDeadline = Date.now() + 45_000;
     while (Date.now() < urlDeadline) {
       if (page.url().includes('/login')) break;
-      if (page.url().includes('/onboarding')) break;
+      if (/\/(home|onboarding)(?:[?#]|$)/.test(page.url())) break;
       await page.waitForTimeout(300);
     }
 

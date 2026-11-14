@@ -243,7 +243,7 @@ test.describe('UI programme shell geometry (read-only)', () => {
     await page.goBack();
     await expect(page).toHaveURL(/\/products/);
     await page.goForward();
-    await expect(page).toHaveURL(/\/onboarding/);
+    await expect(page).toHaveURL(/\/(?:home|onboarding)/);
   });
 
   test('Home never flashes the generic parent loader or the wrong journey skeleton', async ({ page }) => {

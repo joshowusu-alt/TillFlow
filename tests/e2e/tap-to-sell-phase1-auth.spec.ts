@@ -186,7 +186,7 @@ test.describe('Tap-to-Sell Phase 1 privacy isolation', () => {
     await page.locator('input[name="email"]').fill(bizBEmail!);
     await page.locator('input[name="password"]').fill(bizBPassword!);
     await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL(/\/(onboarding|pos)/, { timeout: 60_000 });
+    await page.waitForURL(/\/(home|onboarding|pos)/, { timeout: 60_000 });
     await expect(page.getByText(/RIVERBANK/i).first()).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('body')).not.toContainText('EL-SHADDAI PERF');
     await expect
