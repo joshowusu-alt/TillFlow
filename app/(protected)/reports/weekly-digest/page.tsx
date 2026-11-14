@@ -63,7 +63,7 @@ export default async function WeeklyDigestPage(
   if (storeIds.length === 0) notFound();
   let data: Awaited<ReturnType<typeof getWeeklyDigestData>>;
   try {
-    data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, timeZone, storeIds, business.businessCategory);
+    data = await getWeeklyDigestData(business.id, week.startInclusive, week.endExclusive, timeZone, storeIds);
   } catch (error) {
     if (isReportingScopeStoreError(error)) notFound();
     throw error;
@@ -124,7 +124,7 @@ export default async function WeeklyDigestPage(
             label={marginReady ? `Gross Profit (${data.gpPercent}%)` : 'Gross Profit'}
             value={marginReady ? formatMoney(data.grossProfitPence ?? 0, currency) : data.seeProfitAndLoss ? 'See P&L' : 'Costs incomplete'}
             tone={marginReady ? (data.gpPercent! >= 20 ? 'success' : data.gpPercent! >= 0 ? 'warn' : 'danger') : 'warn'}
-            helper={marginReady ? 'Profit before expenses.' : data.seeProfitAndLoss ? 'Food costs are recorded for the whole business.' : `${data.incompleteLineCount} lines without authoritative cost.`}
+            helper={marginReady ? 'Profit before expenses.' : data.seeProfitAndLoss ? 'Food costs cover all branches.' : `${data.incompleteLineCount} lines without authoritative cost.`}
           />
           <StatCard label="Transactions" value={String(data.txCount)} helper={`${txChange} vs prev week`} />
           <StatCard

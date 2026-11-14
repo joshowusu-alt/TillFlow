@@ -99,7 +99,6 @@ async function _getWeeklyDigestData(
   weekEndIso: string,
   timeZone: string,
   storeKey: string,
-  businessCategory?: string | null,
 ): Promise<WeeklyDigestData> {
   const authorisedStores = requireAuthorisedStoreIds(storeKey.split(','));
   const digestTimeZone = requireReportTimeZone(timeZone);
@@ -233,6 +232,7 @@ async function _getWeeklyDigestData(
   ]);
 
   const totalSalesPence = salesAgg._sum.totalPence ?? 0;
+  const businessCategory = (await prisma.business.findUnique({ where: { id: businessId }, select: { businessCategory: true } }))?.businessCategory;
   const branchScoped = businessCategory === 'FOOD_DISHES' &&
     await prisma.store.count({ where: { businessId } }) !== authorisedStores.length;
   const [margin, prevMargin] = await Promise.all([
@@ -371,7 +371,6 @@ export function getWeeklyDigestData(
   weekEnd: Date,
   timeZone: string,
   storeIds: readonly string[],
-  businessCategory?: string | null,
 ): Promise<WeeklyDigestData> {
   let storeKey: string;
   try {
@@ -385,6 +384,5 @@ export function getWeeklyDigestData(
     weekEnd.toISOString(),
     requireReportTimeZone(timeZone),
     storeKey,
-    ...(businessCategory === 'FOOD_DISHES' ? [businessCategory] : []),
   );
 }
