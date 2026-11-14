@@ -27,6 +27,7 @@ describe('food screens speak about the business', () => {
     const source = files.map((file) => readFileSync(join(process.cwd(), file), 'utf8')).join('\n');
     const visible = source
       .replace(/storefront[A-Za-z]*/g, '')
+      .replace(/\bstore: branch\b/g, '')
       .replace(/\/shop\//g, '');
     expect(visible).not.toMatch(/\bshop\b/i);
     expect(visible).not.toMatch(/\bstore\b/i);

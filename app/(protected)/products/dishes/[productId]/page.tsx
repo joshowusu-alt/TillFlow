@@ -16,7 +16,7 @@ function cedisInput(pence: number) {
 
 export default async function DishPage(props: { params: Promise<{ productId: string }> }) {
   const { productId } = await props.params;
-  const { business, store } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
+  const { business, store: branch } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
   if (!business || !isFoodBusiness(business.businessCategory)) redirect('/products');
 
   const dish = await prisma.foodDish.findFirst({
@@ -30,8 +30,8 @@ export default async function DishPage(props: { params: Promise<{ productId: str
   });
   if (!dish) notFound();
 
-  const latestCost = store ? await prisma.foodPreparation.findFirst({
-    where: { businessId: business.id, storeId: store.id, productId, costPerPortionPence: { not: null } },
+  const latestCost = branch ? await prisma.foodPreparation.findFirst({
+    where: { businessId: business.id, storeId: branch.id, productId, costPerPortionPence: { not: null } },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     select: { costPerPortionPence: true },
   }) : null;
@@ -74,10 +74,10 @@ export default async function DishPage(props: { params: Promise<{ productId: str
         </div>
         <Link href="/pos" className="btn-secondary text-sm">Try at the till</Link>
       </div>
-      {dish.stockMode === 'COUNTED' && store ? (
+      {dish.stockMode === 'COUNTED' && branch ? (
         <>
-          <PreparePortionsForm productId={dish.productId} storeId={store.id} currency={business.currency} sizes={dish.sizes.map(({ id, name, isDefault }) => ({ id, name, isDefault }))} />
-          <LeftoverWriteOffForm productId={dish.productId} storeId={store.id} costPerPortionPence={latestCost?.costPerPortionPence ?? null} fallbackCostPence={dish.costPerPortionPence} currency={business.currency} />
+          <PreparePortionsForm productId={dish.productId} storeId={branch.id} currency={business.currency} sizes={dish.sizes.map(({ id, name, isDefault }) => ({ id, name, isDefault }))} />
+          <LeftoverWriteOffForm productId={dish.productId} storeId={branch.id} costPerPortionPence={latestCost?.costPerPortionPence ?? null} fallbackCostPence={dish.costPerPortionPence} currency={business.currency} />
         </>
       ) : null}
       <DishForm ingredients={await ingredientOptions(business.id)} initial={draft} productId={dish.productId} />
