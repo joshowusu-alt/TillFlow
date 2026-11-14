@@ -9,6 +9,7 @@ datasource db {
 }
 
 model Business {
+  storefrontMomoAccountName String?
   id                                   String   @id @default(cuid())
   name                                 String
   currency                             String   @default("GHS")
@@ -349,6 +350,7 @@ model ControlSubscription {
   effectivePlanOverride  String?
   gracePolicyVersion     String?
   monthlyValuePence      Int                    @default(0)
+  monthlyValueMinorUnits Int?
   outstandingAmountPence Int                    @default(0)
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
@@ -699,6 +701,7 @@ model StorefrontCategoryMapping {
 }
 
 model Product {
+  ingredientOnly Boolean @default(false)
   attributesJson String?
   id                    String   @id @default(cuid())
   businessId            String

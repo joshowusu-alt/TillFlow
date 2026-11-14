@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { receiveStockValue, removeRecordedStockValue, INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
 import { lockInventoryValues } from './shared/inventory-utils';
-import { RECEIPT_LEDGER_V1, isPendingMomo } from '@/lib/payments/receipt-ledger';
+import { RECEIPT_LEDGER_MOMO_CLEARING, RECEIPT_LEDGER_V1, isPendingMomo } from '@/lib/payments/receipt-ledger';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { UserError } from '@/lib/action-utils';
 import { type JournalLine } from './shared';
@@ -135,7 +135,7 @@ async function createSalesReturnImpl(input: {
     });
     if (!invoice || ['RETURNED', 'VOID'].includes(invoice.paymentStatus)) throw new UserError('Sale already returned or voided');
     const pending = invoice.payments.filter(isPendingMomo);
-    if (pending.some(p => p.ledgerTreatment != null && p.ledgerTreatment !== RECEIPT_LEDGER_V1)) {
+    if (pending.some(p => p.ledgerTreatment != null && p.ledgerTreatment !== RECEIPT_LEDGER_V1 && p.ledgerTreatment !== RECEIPT_LEDGER_MOMO_CLEARING)) {
       throw new UserError('Receipt posting treatment requires reconciliation.');
     }
     const settled = invoice.payments.filter(p => !isPendingMomo(p));
@@ -170,7 +170,9 @@ async function createSalesReturnImpl(input: {
     const refundMethod = input.type === 'VOID'
       ? (tenderMethods[0] ?? null)
       : input.refundMethod ?? 'CASH';
-    const arReversal = invoice.totalPence - totalPaid - legacyPending;
+    const pendingClearing = pending.filter(p => p.ledgerTreatment === RECEIPT_LEDGER_MOMO_CLEARING)
+      .reduce((sum, p) => sum + p.amountPence, 0);
+    const arReversal = invoice.totalPence - totalPaid - legacyPending - pendingClearing;
     const stockLines = invoice.lines.filter(line => line.qtyBase > 0);
     const qtyByProduct = buildQtyByProductMap(stockLines);
     await lockInventoryValues(tx, invoice.storeId, Array.from(qtyByProduct.keys()));
@@ -278,6 +280,7 @@ async function createSalesReturnImpl(input: {
           ? { accountCode: ACCOUNT_CODES.cash, creditPence: refundAmount }
           : { accountCode: ACCOUNT_CODES.bank, creditPence: refundAmount }
         : null,
+      pendingClearing > 0 ? { accountCode: ACCOUNT_CODES.momoClearing, creditPence: pendingClearing } : null,
       arReversal > 0 ? { accountCode: ACCOUNT_CODES.ar, creditPence: arReversal } : null,
       legacyPending > 0 ? { accountCode: ACCOUNT_CODES.bank, creditPence: legacyPending } : null,
     ].filter(Boolean) as JournalLine[];

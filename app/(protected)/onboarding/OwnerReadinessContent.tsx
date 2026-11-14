@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { getReadiness, markOnboardingCompleteAfterFirstSale } from '@/app/actions/onboarding';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import { getOwnerHomeCriticalShell } from '@/lib/owner-home/critical-shell';
@@ -15,9 +16,11 @@ async function IncompleteOwnerHome() {
   return <OnboardingClient readiness={readiness} />;
 }
 
-export default async function OwnerReadinessContent() {
+export default async function OwnerReadinessContent({ destination }: { destination?: "home" | "onboarding" } = {}) {
   const shell = await getOwnerHomeCriticalShell();
 
+  if (destination === 'home' && shell.needsFullReadiness) redirect('/onboarding');
+  if (destination === 'onboarding' && !shell.needsFullReadiness) redirect('/home');
   if (shell.needsFullReadiness) {
     // Await the checklist in this segment. A nested Suspense fallback under
     // loading.tsx never resolved after a client transition, so /onboarding

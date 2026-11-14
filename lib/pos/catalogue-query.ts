@@ -4,7 +4,7 @@ import { SELLABLE_PRODUCT_SELECT, clampPosSearchTake } from '@/lib/pos/sellable-
 
 export function posSearchWhere(businessId: string, q: string): Prisma.ProductWhereInput {
   const trimmed = q.trim();
-  const where: Prisma.ProductWhereInput = { businessId, active: true };
+  const where: Prisma.ProductWhereInput = { businessId, active: true, ingredientOnly: false };
   if (!trimmed) return where;
 
   const digits = /^[\d\s-]+$/.test(trimmed) ? normalizeBarcodeDigits(trimmed) : trimmed;
@@ -31,6 +31,7 @@ export function posBarcodeWhere(businessId: string, code: string): Prisma.Produc
   return {
     businessId,
     active: true,
+    ingredientOnly: false,
     OR: [{ barcode: { in: barcodes } }, { barcodes: { some: { code: { in: barcodes } } } }],
   };
 }

@@ -108,6 +108,7 @@ export type SubscriptionInput = {
   billingInterval?: string | null;
   billingCadence?: string | null;
   billingAmount?: number | null;
+  isDemo?: boolean | null;
   addonOnlineStorefront?: boolean | null;
 };
 
@@ -515,6 +516,8 @@ export function computeBillingAccessState(input: SubscriptionInput & { today?: D
     input.addonOnlineStorefront
   );
 
+  const complimentary = input.billingAmount === 0 && (explicitStatus === 'PAID_ACTIVE' || input.isDemo === true);
+  const paidBusiness = firstPaymentAt != null || explicitStatus === 'PAID_ACTIVE' || complimentary;
   let accessState: BillingAccessState;
   let daysRemaining: number | null = null;
 
@@ -524,7 +527,9 @@ export function computeBillingAccessState(input: SubscriptionInput & { today?: D
     accessState = 'READ_ONLY';
   } else if (explicitStatus === 'TRIAL_RESTRICTED' || explicitStatus === 'PAYMENT_RESTRICTED') {
     accessState = explicitStatus;
-  } else if (!firstPaymentAt) {
+  } else if (complimentary) {
+    accessState = 'PAID_ACTIVE';
+  } else if (!paidBusiness) {
     const trial = computeTrialState({ trialEndsAt, graceEndsAt: paymentGraceEndsAt, today, timeZone: timezone });
     accessState = trial.accessState;
     daysRemaining = trial.daysRemaining;
@@ -535,7 +540,7 @@ export function computeBillingAccessState(input: SubscriptionInput & { today?: D
   }
 
   const isTrial = accessState.startsWith('TRIAL_');
-  const isPaid = firstPaymentAt != null && !isTrial && accessState !== 'CANCELLED';
+  const isPaid = paidBusiness && !isTrial && accessState !== 'CANCELLED';
   const isRestricted = RESTRICTED_ACCESS_STATES.has(accessState);
   const isOverdue = ['TRIAL_EXPIRED_GRACE', 'TRIAL_RESTRICTED', 'PAYMENT_OVERDUE_GRACE', 'PAYMENT_RESTRICTED', 'READ_ONLY'].includes(accessState);
   const allowedFeatures = isRestricted ? RESTRICTED_ALLOWED_FEATURES : ALL_FEATURES;

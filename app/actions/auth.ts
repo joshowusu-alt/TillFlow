@@ -209,6 +209,7 @@ export async function login(_prevState: LoginFormState, formData: FormData): Pro
     await writeHomeLoadingKindCookie(
       business?.onboardingCompletedAt || firstSale ? 'established' : 'checklist',
     );
+    if (business?.onboardingCompletedAt || firstSale) redirect('/home');
     if (business?.guidedSetup) {
       redirect('/onboarding');
     }

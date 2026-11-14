@@ -1,3 +1,4 @@
+import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { requireBusiness } from '@/lib/auth';
 import { ingredientOptions } from '@/lib/food/ingredient-options';
@@ -16,7 +17,7 @@ export default async function NewDishPage() {
           One dish is one product. Set the starting price, what is included, and any extras. Amounts are in cedis (GH₵).
         </p>
       </div>
-      <DishForm ingredients={await ingredientOptions(business.id)} />
+      <DishForm categories={await prisma.category.findMany({ where: { businessId: business.id }, select: { id: true, name: true }, orderBy: { name: 'asc' } })} ingredients={await ingredientOptions(business.id)} />
     </div>
   );
 }

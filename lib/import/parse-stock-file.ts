@@ -254,6 +254,12 @@ async function parseXlsx(file: File): Promise<{ rows: ParsedImportRow[]; headers
   return parseMatrix(matrix as string[][]);
 }
 
+export const INVALID_PURCHASE_PAYMENT_STATUS = 'Enter paid or unpaid for payment_status.';
+
+export function resolvePurchasePaymentStatus(errors: string[], status: PaymentStatus) {
+  return { resolvedPaymentStatus: status, errors: errors.filter(error => error !== INVALID_PURCHASE_PAYMENT_STATUS) };
+}
+
 export type ParseStockFileResult = {
   rows: ParsedImportRow[];
   headers: string[];
@@ -268,7 +274,8 @@ export async function parseStockFileDetailed(file: File, mode?: ImportMode): Pro
   else throw new Error('Please upload a .csv or .xlsx file.');
   if (mode === 'PURCHASES') {
     for (const row of parsed.rows) {
-      if (!['paid', 'unpaid', 'yes', 'no'].includes((row.paymentStatusRaw ?? '').toLowerCase())) row.errors.push('payment_status is required: enter paid or unpaid.');
+      const status = row.paymentStatusRaw?.trim().toLowerCase();
+      if (status && !['paid', 'unpaid', 'yes', 'no'].includes(status)) row.errors.push(INVALID_PURCHASE_PAYMENT_STATUS);
     }
   }
   return {

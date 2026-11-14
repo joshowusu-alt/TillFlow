@@ -208,16 +208,16 @@ async function run() {
     const deadline = Date.now() + 30000;
     while (Date.now() < deadline) {
       const url = page.url();
-      if (/\/pos|\/onboarding/.test(url)) break;
+      if (/\/pos|\/onboarding|\/home/.test(url)) break;
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
     const postLoginUrl = page.url();
-    if (!/\/pos|\/onboarding/.test(postLoginUrl)) {
+    if (!/\/pos|\/onboarding|\/home/.test(postLoginUrl)) {
       await page.screenshot({ path: '.playwright-mcp/login-failed.png', fullPage: true });
       const errorBanner = await page.locator('div.rounded-xl.border.border-rose-300').first().textContent().catch(() => null);
       throw new Error(`Login did not redirect to /pos. URL: ${postLoginUrl}. ErrorBanner: ${errorBanner ?? 'none'}`);
     }
-    if (/\/onboarding/.test(postLoginUrl)) {
+    if (/\/onboarding|\/home/.test(postLoginUrl)) {
       await page.goto(`${BASE_URL}/pos`, { waitUntil: 'networkidle' });
     }
     report.login = true;

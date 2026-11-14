@@ -300,6 +300,7 @@ async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$discon
       startDate,
       nextDueDate,
       monthlyValuePence,
+      monthlyValueMinorUnits: monthlyValuePence * 100,
     },
     create: {
       controlBusinessId: args.profileId,
@@ -311,6 +312,7 @@ async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$discon
       lastPaymentDate: existingSubscription?.lastPaymentDate ?? null,
       outstandingAmountPence: existingSubscription?.outstandingAmountPence ?? 0,
       monthlyValuePence,
+      monthlyValueMinorUnits: monthlyValuePence * 100,
       gracePolicyVersion: '2026-04-08',
     },
   });
@@ -496,6 +498,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           effectivePlanOverride: null,
           gracePolicyVersion: '2026-04-08',
           monthlyValuePence,
+          monthlyValueMinorUnits: monthlyValuePence * 100,
           outstandingAmountPence: isCancelledStatus(status) ? 0 : outstandingAmountPence,
         },
         create: {
@@ -509,6 +512,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           readOnlyAt: status === 'READ_ONLY' ? now : null,
           gracePolicyVersion: '2026-04-08',
           monthlyValuePence,
+          monthlyValueMinorUnits: monthlyValuePence * 100,
           outstandingAmountPence: isCancelledStatus(status) ? 0 : outstandingAmountPence,
         },
       });
@@ -678,6 +682,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
           lastPaymentDate: paidAt,
           readOnlyAt: null,
           monthlyValuePence: recommendedMonthlyGhs,
+          monthlyValueMinorUnits: recommendedMonthlyGhs * 100,
           outstandingAmountPence: 0,
           gracePolicyVersion: '2026-04-08',
         },
@@ -690,6 +695,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
           nextDueDate,
           lastPaymentDate: paidAt,
           monthlyValuePence: recommendedMonthlyGhs,
+          monthlyValueMinorUnits: recommendedMonthlyGhs * 100,
           outstandingAmountPence: 0,
           gracePolicyVersion: '2026-04-08',
         },

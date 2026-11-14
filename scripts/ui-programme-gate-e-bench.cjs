@@ -344,7 +344,7 @@ async function login(page, baseUrl) {
   await page.locator('input[name="password"]').fill(OWNER_PASSWORD);
   await page.getByRole('button', { name: /sign in/i }).click();
   try {
-    await page.waitForURL(/\/(pos|onboarding)/, { timeout: 120_000 });
+    await page.waitForURL(/\/(pos|onboarding|home)/, { timeout: 120_000 });
   } catch (error) {
     const url = page.url();
     const body = await page.locator('body').innerText().catch(() => '');

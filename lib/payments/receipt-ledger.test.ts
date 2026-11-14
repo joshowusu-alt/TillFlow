@@ -16,11 +16,13 @@ describe('confirmed-receipts receivable posting contract', () => {
     }
   });
   it('dates only settled receipts and marks the forward treatment explicitly', () => {
-    expect(receiptLedgerFields({method:'MOBILE_MONEY',status:'PENDING_MANUAL'})).toEqual({ledgerTreatment:RECEIPT_LEDGER_V1,confirmedAt:null});
-    expect(receiptLedgerFields({method:'CASH'}).confirmedAt).toBeInstanceOf(Date);
+    expect(receiptLedgerFields({method:'MOBILE_MONEY',status:'PENDING_MANUAL'})).toEqual({ledgerTreatment:RECEIPT_LEDGER_V1,confirmedAt:null,receivedAt:expect.any(Date)});
+    const cash = receiptLedgerFields({method:'CASH'});
+    expect(cash.confirmedAt).toEqual(cash.receivedAt);
   });
   it('moves exactly the confirmed amount from AR to Bank and refuses invalid amounts', () => {
     expect(pendingMomoConfirmationLines(5200)).toEqual([{accountCode:'1010',debitPence:5200},{accountCode:'1100',creditPence:5200}]);
+    expect(pendingMomoConfirmationLines(5200, true)).toEqual([{accountCode:'1010',debitPence:5200},{accountCode:'1150',creditPence:5200}]);
     for(const amount of [0,-1,0.5,NaN]) expect(()=>pendingMomoConfirmationLines(amount)).toThrow();
   });
 });

@@ -29,7 +29,7 @@ async function main() {
     await page.waitForURL(url => !url.pathname.startsWith('/login'));
     await page.locator('#main-content h1').first().waitFor({ timeout: 30_000 });
     const destinations = [
-      { group: null, href: '/onboarding' },
+      { group: null, href: '/home', setupHref: '/onboarding' },
       { group: 'Stock', href: '/products' },
       { group: 'Stock', href: '/inventory' },
       { group: 'Stock', href: '/purchases' },
@@ -44,7 +44,7 @@ async function main() {
       const start = Date.now();
       const link = page.locator(`nav a[href="${route.href}"], nav a[href^="${route.href}?"]`).first();
       await link.click();
-      await page.waitForURL(url => url.pathname === route.href);
+      await page.waitForURL(url => url.pathname === route.href || url.pathname === route.setupHref);
       await page.locator('#main-content h1').first().waitFor({ timeout: 30_000 });
       await page.locator('[aria-label="Preparing owner home"]').waitFor({ state: 'hidden', timeout: 30_000 });
       const elapsedMs = Date.now() - start;

@@ -174,6 +174,11 @@ export default async function ProductDetailPage(
           <h2 className="text-lg font-display font-semibold">Edit product</h2>
           <FormError error={searchParams?.error} />
           <form action={updateProductAction} className="mt-4 grid gap-4 lg:grid-cols-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="hidden" name="ingredientOnlyIncluded" value="1" />
+                    <input type="checkbox" name="ingredientOnly" defaultChecked={product.ingredientOnly} />
+                    Ingredient – not sold
+                  </label>
             <input type="hidden" name="id" value={product.id} />
             <div>
               <label className="label">Name</label>

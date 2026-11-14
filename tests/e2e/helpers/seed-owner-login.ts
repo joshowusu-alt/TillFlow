@@ -22,7 +22,7 @@ export async function loginAsSeedOwner(page: Page) {
   const deadline = Date.now() + 45_000;
   while (Date.now() < deadline) {
     const url = page.url();
-    if (/\/pos|\/onboarding/.test(url)) {
+    if (/\/pos|\/onboarding|\/home/.test(url)) {
       await page.locator('#main-content').waitFor({ state: 'visible', timeout: 30_000 }).catch(() => undefined);
       return;
     }

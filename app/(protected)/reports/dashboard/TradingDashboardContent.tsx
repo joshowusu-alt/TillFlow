@@ -512,7 +512,7 @@ export default async function TradingDashboardContent({
     incompleteLineCount: tradingMargin.incompleteLineCount, expenses: income.otherExpenses,
     profitAfterExpenses: marginReady ? totalGrossMargin - income.otherExpenses : null,
     netProfitPercent: npPercent, allBranches: selectedStoreId === 'ALL', scopeHelper,
-    creditUnpaid: salesRevenue.creditSalesOutstandingPence, outstandingAR, outstandingAP,
+    pendingTillMomoPence: salesRevenue.pendingTillMomoPence, creditUnpaid: salesRevenue.creditSalesOutstandingPence, outstandingAR, outstandingAP,
     customerDebt: {
       invoiceDue: tradingBalances.customerDebt.customerInvoiceDuePence,
       excess: tradingBalances.customerDebt.customerExcessPence,

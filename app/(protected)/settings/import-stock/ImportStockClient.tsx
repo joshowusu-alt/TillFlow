@@ -1,4 +1,6 @@
 'use client';
+
+import { resolvePurchasePaymentStatus } from '@/lib/import/parse-stock-file';
 import PurchaseDocumentInput from '@/components/purchases/PurchaseDocumentInput';
 
 import { useState, useRef, useCallback } from 'react';
@@ -347,10 +349,10 @@ export default function ImportStockClient({
   // ── Row mutation helpers ─────────────────────────────────────────────────
 
   const updateRow = (id: string, patch: Partial<PreviewRow>) =>
-    setPreviewRows((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch } : r)));
+    setPreviewRows((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch, ...(patch.resolvedPaymentStatus ? resolvePurchasePaymentStatus(r.errors, patch.resolvedPaymentStatus) : {}) } : r)));
 
   const setAllPayment = (status: PaymentStatus) =>
-    setPreviewRows((prev) => prev.map((r) => ({ ...r, resolvedPaymentStatus: status })));
+    setPreviewRows((prev) => prev.map((r) => ({ ...r, ...resolvePurchasePaymentStatus(r.errors, status) })));
 
   // ── Summary calculations ─────────────────────────────────────────────────
 

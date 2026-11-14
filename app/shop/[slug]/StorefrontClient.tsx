@@ -4,7 +4,7 @@ import React from 'react';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { formatMoney, toTitleCase, formatGhanaPhoneForDisplay } from '@/lib/format';
+import { formatMoney, formatGhanaPhoneForDisplay } from '@/lib/format';
 import { buildCartDetails, buildProductMap, formatAvailable, getUnitFromProduct, sumCartTotals, type PosCartLine } from '@/lib/payments/pos-cart';
 import FoodPlatePicker from '@/components/food/FoodPlatePicker';
 import { foodAvailabilityText } from '@/lib/food/availability';
@@ -109,7 +109,7 @@ function ProductImage({
     return (
       <div className={`relative flex h-full w-full items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_20%_15%,rgba(16,185,129,0.13),transparent_34%),linear-gradient(135deg,#fbfdff,#eef6ff_52%,#f0fdf4)] ${inStock ? '' : 'opacity-60'}`}>
         <div className="absolute inset-x-3 top-3 truncate rounded-full bg-white/60 px-2 py-1 text-center text-[8px] font-black uppercase tracking-[0.16em] text-slate-600">
-          {categoryName ? toTitleCase(categoryName) : 'Store pick'}
+          {categoryName ? categoryName : 'Store pick'}
         </div>
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-slate-400 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
           <PackageIcon className="h-8 w-8" />
@@ -272,8 +272,8 @@ function PickupDetails({ storefront, store }: {
     <h3 className="font-bold text-slate-950">Collect from {store?.name || storefront.name}</h3>
     <p className="mt-1">{address || 'Contact the store to confirm the collection address before travelling.'}</p>
     {storefront.openStatus ? <p className="mt-2 font-semibold">{storefront.openStatus.shortLabel}{storefront.openStatus.detail ? ` · ${storefront.openStatus.detail}` : ''}</p>
-      : <p className="mt-2">Opening hours have not been provided. Check with the store before travelling.</p>}
-    {storefront.prepMinutes > 0 && storefront.openStatus?.isOpen ? <p>Preparation estimate: about {storefront.prepMinutes} minutes after payment is confirmed.</p> : null}
+      : null}
+    {storefront.prepMinutes > 0 && storefront.openStatus?.isOpen !== false ? <p>Preparation estimate: about {storefront.prepMinutes} minutes after payment is confirmed.</p> : null}
     <p className="mt-2 font-semibold">Wait until your order is marked ready before travelling.</p>
     {storefront.pickupInstructions ? <div className="mt-3 border-t border-blue-200 pt-3"><h4 className="font-semibold text-slate-900">Store pickup instructions</h4><p className="mt-1 whitespace-pre-line">{storefront.pickupInstructions}</p></div> : null}
     {phone ? <a className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-blue-200 bg-white px-3 font-semibold text-blue-900" href={`tel:${phone}`}>Call the store</a> : null}
@@ -319,8 +319,8 @@ function ProductDetailSheet({
   const hasPromo = product.promoBuyQty > 0 && product.promoGetQty > 0;
   const productInCart = cartProductIds.has(product.id);
   const productCartQty = cartQtyByProductId[product.id] ?? 0;
-  const displayName = toTitleCase(product.name);
-  const displayCategory = product.publicCategoryName ? toTitleCase(product.publicCategoryName) : null;
+  const displayName = product.name;
+  const displayCategory = product.publicCategoryName ? product.publicCategoryName : null;
 
   return (
     <div
@@ -403,7 +403,7 @@ function ProductDetailSheet({
                       }`}
                       style={isSelected ? { backgroundColor: 'var(--store-primary)', color: 'var(--store-primary-foreground)' } : undefined}
                     >
-                      {toTitleCase(unit.name)}
+                      {unit.name}
                     </button>
                   );
                 })}
@@ -1430,7 +1430,7 @@ export default function StorefrontClient({
                          type="button"
                          role="tab"
                          aria-selected={active}
-                         aria-label={`Filter by ${toTitleCase(category.name)} (${category.count} products)`}
+                         aria-label={`Filter by ${category.name} (${category.count} products)`}
                         onClick={() => handleCategoryChange(category.id)}
                         className={active
                           ? 'h-9 shrink-0 rounded-full px-4 text-xs font-bold text-white shadow-sm ring-2 ring-blue-100'
@@ -1438,7 +1438,7 @@ export default function StorefrontClient({
                         }
                         style={active ? primaryStyle : undefined}
                       >
-                        <span className="inline-block max-w-[9.5rem] truncate align-bottom">{toTitleCase(category.name)}</span>
+                        <span className="inline-block max-w-[9.5rem] truncate align-bottom">{category.name}</span>
                         <span className="ml-1.5 opacity-60" aria-hidden="true">{category.count}</span>
                       </button>
                     );
@@ -1454,9 +1454,9 @@ export default function StorefrontClient({
                   ? searchQuery.trim()
                     ? `No results for "${searchQuery.trim()}"`
                     : selectedCategory
-                      ? `No products in ${toTitleCase(selectedCategory.name)} right now`
+                      ? `No products in ${selectedCategory.name} right now`
                       : 'No products right now'
-                  : `${filteredProducts.length} ${filteredProducts.length === 1 ? 'product' : 'products'}${selectedCategory ? ` in ${toTitleCase(selectedCategory.name)}` : ''}${searchQuery.trim() ? ` · "${searchQuery.trim()}"` : ''}`
+                  : `${filteredProducts.length} ${filteredProducts.length === 1 ? 'product' : 'products'}${selectedCategory ? ` in ${selectedCategory.name}` : ''}${searchQuery.trim() ? ` · "${searchQuery.trim()}"` : ''}`
                 }
                 </span>
                 {cartItemCount > 0 ? (
@@ -1493,12 +1493,12 @@ export default function StorefrontClient({
                             trackEvent('product_view', product.id, { source: 'featured' });
                             scrollToProduct(product.id);
                           }}
-                          aria-label={`View ${toTitleCase(product.name)}`}
+                          aria-label={`View ${product.name}`}
                         >
-                          <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={isListedInStock(product)} categoryName={product.publicCategoryName} priority={featuredIndex < 4} />
+                          <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={product.name} inStock={isListedInStock(product)} categoryName={product.publicCategoryName} priority={featuredIndex < 4} />
                         </button>
                         <div className="p-2">
-                          <div className="line-clamp-2 min-h-[2rem] text-xs font-bold leading-tight text-ink">{toTitleCase(product.name)}</div>
+                          <div className="line-clamp-2 min-h-[2rem] text-xs font-bold leading-tight text-ink">{product.name}</div>
                           <div className="mt-1 text-sm font-extrabold text-ink">{price}</div>
                           {cartProductIds.has(product.id) ? (
                             <button
@@ -1602,7 +1602,7 @@ export default function StorefrontClient({
                                 }}
                                 className="rounded-full border border-black/10 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-black/65 transition hover:border-black/20 hover:bg-white hover:text-ink"
                               >
-                                {toTitleCase(category.name)}
+                                {category.name}
                               </button>
                             ))}
                           </div>
@@ -1628,8 +1628,8 @@ export default function StorefrontClient({
                       : formatMoney(product.sellingPriceBasePence, storefront.currency);
                     const inStock = isListedInStock(product);
                     const hasPromo = product.promoBuyQty > 0 && product.promoGetQty > 0;
-                    const displayName = toTitleCase(product.name);
-                    const displayCategory = product.publicCategoryName ? toTitleCase(product.publicCategoryName) : null;
+                    const displayName = product.name;
+                    const displayCategory = product.publicCategoryName ? product.publicCategoryName : null;
                     const productInCart = cartProductIds.has(product.id);
                     const productCartQty = cartQtyByProductId[product.id] ?? 0;
 
@@ -1724,13 +1724,13 @@ export default function StorefrontClient({
                                 }`}
                                 style={isSelectedUnit ? { backgroundColor: 'var(--store-primary)', color: 'var(--store-primary-foreground)' } : undefined}
                               >
-                                {toTitleCase(unit.name)}
+                                {unit.name}
                               </button>
                             );
                           })}
                         </div>
                       ) : product.units[0] ? (
-                        <div className="mt-1 text-[10px] font-semibold text-slate-600">{toTitleCase(product.units[0].name)}</div>
+                        <div className="mt-1 text-[10px] font-semibold text-slate-600">{product.units[0].name}</div>
                       ) : null}
 
                       {inStock && !productInCart ? (
@@ -1892,10 +1892,10 @@ export default function StorefrontClient({
                               className="flex min-w-0 flex-1 items-center gap-3 text-left"
                             >
                               <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-50">
-                                <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={isListedInStock(product)} categoryName={product.publicCategoryName} />
+                                <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={product.name} inStock={isListedInStock(product)} categoryName={product.publicCategoryName} />
                               </div>
                               <div className="min-w-0">
-                                <div className="truncate text-sm font-medium text-ink">{toTitleCase(product.name)}</div>
+                                <div className="truncate text-sm font-medium text-ink">{product.name}</div>
                                 <div className="text-xs text-slate-600">{price}</div>
                               </div>
                             </button>
@@ -1976,11 +1976,11 @@ export default function StorefrontClient({
                     <div key={line.id} className="rounded-2xl border border-black/5 bg-slate-50 px-3 py-2.5">
                       <div className="flex items-center gap-2.5">
                         <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                          <ProductImage src={line.product.imageUrl} fallbackSrc={line.product.categoryImageUrl} alt={toTitleCase(line.product.name)} inStock categoryName={line.product.publicCategoryName ?? line.product.categoryName} />
+                          <ProductImage src={line.product.imageUrl} fallbackSrc={line.product.categoryImageUrl} alt={line.product.name} inStock categoryName={line.product.publicCategoryName ?? line.product.categoryName} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-ink">{toTitleCase(line.product.name)}</div>
-                          <div className="mt-0.5 text-xs text-black/50">{line.qtyInUnit} × {toTitleCase(line.unit.name)}</div>
+                          <div className="truncate text-sm font-medium text-ink">{line.product.name}</div>
+                          <div className="mt-0.5 text-xs text-black/50">{line.qtyInUnit} × {line.unit.name}</div>
                           {line.plateSummary ? <div className="mt-0.5 text-xs text-black/55">{line.plateSummary}</div> : null}
                         </div>
                         <div className="shrink-0 text-right">
@@ -2025,10 +2025,10 @@ export default function StorefrontClient({
                             onClick={() => scrollToProduct(product.id)}
                             className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-slate-50"
                           >
-                            <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={isListedInStock(product)} categoryName={product.publicCategoryName} />
+                            <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={product.name} inStock={isListedInStock(product)} categoryName={product.publicCategoryName} />
                           </button>
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-medium text-ink">{toTitleCase(product.name)}</div>
+                            <div className="truncate text-sm font-medium text-ink">{product.name}</div>
                             <div className="text-xs text-slate-600">{price}</div>
                           </div>
                           <button
@@ -2219,11 +2219,11 @@ export default function StorefrontClient({
                 <div key={line.id} className="rounded-2xl border border-black/5 bg-slate-50 px-3 py-2.5">
                   <div className="flex items-center gap-2.5">
                     <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                      <ProductImage src={line.product.imageUrl} fallbackSrc={line.product.categoryImageUrl} alt={toTitleCase(line.product.name)} inStock categoryName={line.product.publicCategoryName ?? line.product.categoryName} />
+                      <ProductImage src={line.product.imageUrl} fallbackSrc={line.product.categoryImageUrl} alt={line.product.name} inStock categoryName={line.product.publicCategoryName ?? line.product.categoryName} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-ink">{toTitleCase(line.product.name)}</div>
-                      <div className="text-xs text-slate-600">{toTitleCase(line.unit.name)}</div>
+                      <div className="truncate text-sm font-medium text-ink">{line.product.name}</div>
+                      <div className="text-xs text-slate-600">{line.unit.name}</div>
                     </div>
                     <div className="shrink-0 text-right">
                       <div className="text-sm font-semibold text-ink">{formatMoney(line.total, storefront.currency)}</div>
@@ -2233,7 +2233,7 @@ export default function StorefrontClient({
                     <div className="flex h-9 items-center overflow-hidden rounded-lg border border-black/10 bg-white">
                       <button
                         type="button"
-                        aria-label={`Remove one ${toTitleCase(line.product.name)} from cart`}
+                        aria-label={`Remove one ${line.product.name} from cart`}
                         className="flex h-9 w-9 items-center justify-center text-sm font-bold text-black/50 transition hover:bg-slate-50 hover:text-rose-600"
                         onClick={() => adjustCartProduct(line.productId, -1)}
                       >
@@ -2242,7 +2242,7 @@ export default function StorefrontClient({
                       <span className="min-w-[2rem] text-center text-sm font-black text-ink">{line.qtyInUnit}</span>
                       <button
                         type="button"
-                        aria-label={`Add one more ${toTitleCase(line.product.name)} to cart`}
+                        aria-label={`Add one more ${line.product.name} to cart`}
                         className="flex h-9 w-9 items-center justify-center text-sm font-bold text-black/50 transition hover:bg-slate-50 hover:text-accent disabled:opacity-30"
                         disabled={line.qtyInUnit >= MAX_CART_QTY}
                         onClick={() => adjustCartProduct(line.productId, 1)}
@@ -2252,7 +2252,7 @@ export default function StorefrontClient({
                     </div>
                     <button
                       type="button"
-                      aria-label={`Remove ${toTitleCase(line.product.name)} from cart`}
+                      aria-label={`Remove ${line.product.name} from cart`}
                       className="text-[11px] font-medium text-slate-600 transition hover:text-rose-600"
                       onClick={() => setCart((prev) => prev.filter((c) => c.id !== line.id))}
                     >
@@ -2287,10 +2287,10 @@ export default function StorefrontClient({
                         onClick={() => scrollToProduct(product.id)}
                         className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-50"
                       >
-                        <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={isListedInStock(product)} categoryName={product.publicCategoryName} />
+                        <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={product.name} inStock={isListedInStock(product)} categoryName={product.publicCategoryName} />
                       </button>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium text-ink">{toTitleCase(product.name)}</div>
+                        <div className="truncate font-medium text-ink">{product.name}</div>
                         <div className="text-xs text-slate-600">{price}</div>
                       </div>
                       <button

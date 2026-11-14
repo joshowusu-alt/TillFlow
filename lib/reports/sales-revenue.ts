@@ -12,6 +12,7 @@
  * are not receipts. Later debtor collections do not create new invoices and
  * therefore do not inflate revenue.
  */
+import { RECEIPT_LEDGER_MOMO_CLEARING } from '@/lib/payments/receipt-ledger';
 import { prisma } from '@/lib/prisma';
 import { receivableDocumentBalance } from '@/lib/reports/receivables-balance';
 import {
@@ -26,6 +27,7 @@ export type SalesRevenueSummary = {
   transactionCount: number;
   /** Invoice total still unpaid within the period (credit component of period sales). */
   creditSalesOutstandingPence: number;
+  pendingTillMomoPence?: number;
 };
 
 export function salesRevenueWhere(scope: ReportingScope) {
@@ -54,20 +56,25 @@ export async function getSalesRevenueSummary(scope: ReportingScope): Promise<Sal
       select: {
         paymentStatus: true,
         totalPence: true,
-        payments: { select: { amountPence: true, status: true } },
+        payments: { select: { amountPence: true, status: true, ledgerTreatment: true } },
       },
       take: 5000,
     }),
   ]);
 
   let creditSalesOutstandingPence = 0;
+  let pendingTillMomoPence = 0;
   for (const invoice of creditRows) {
-    creditSalesOutstandingPence += receivableDocumentBalance(invoice).balancePence;
+    const pending = invoice.payments.filter(payment => payment.status === 'PENDING_MANUAL' &&
+      payment.ledgerTreatment === RECEIPT_LEDGER_MOMO_CLEARING).reduce((sum, payment) => sum + payment.amountPence, 0);
+    pendingTillMomoPence += pending;
+    creditSalesOutstandingPence += Math.max(0, receivableDocumentBalance(invoice).balancePence - pending);
   }
 
   return {
     salesRevenuePence: agg._sum.totalPence ?? 0,
     transactionCount: agg._count.id,
     creditSalesOutstandingPence,
+    ...(pendingTillMomoPence > 0 ? { pendingTillMomoPence } : {}),
   };
 }

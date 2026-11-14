@@ -6,6 +6,7 @@ import type { StorefrontPaymentMode } from '@/lib/storefront-payments';
 type Props = {
   defaultMode: StorefrontPaymentMode;
   defaultMomoNumber: string;
+  defaultMomoAccountName?: string;
   defaultMomoNetwork: string;
   defaultMerchantShortcode: string;
   defaultBankName: string;
@@ -70,7 +71,10 @@ export default function StorefrontPaymentModeCard(props: Props) {
       {mode === 'MOMO_NUMBER' ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px]">
           <div>
-            <label className="label" htmlFor="field-storefrontMomoNumber">MoMo number</label>
+            <label className="label" htmlFor="field-storefrontMomoAccountName">MoMo account name</label>
+            <input id="field-storefrontMomoAccountName" className="input" name="storefrontMomoAccountName"
+              maxLength={120} defaultValue={props.defaultMomoAccountName} />
+            <label className="label mt-2" htmlFor="field-storefrontMomoNumber">MoMo number</label>
             <input id="field-storefrontMomoNumber"
               className="input"
               name="storefrontMomoNumber"

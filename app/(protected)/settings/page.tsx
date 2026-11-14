@@ -431,7 +431,7 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
       <CashDrawerSetup businessId={business.id} />
       {stores.length > 1 ? (
         <form className="card p-4" method="GET">
-          <label className="label" htmlFor="settings-storeId">Till store</label>
+          <label className="label" htmlFor="settings-storeId">Branch for till management</label>
           <select id="settings-storeId" className="input mt-1" name="storeId" defaultValue={storeId ?? ''} required>
             <option value="">Select a store</option>
             {stores.map((row) => (

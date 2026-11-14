@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { formatDateTime, formatMoney, toTitleCase, formatGhanaPhoneForDisplay } from '@/lib/format';
+import { formatDateTime, formatMoney, formatGhanaPhoneForDisplay } from '@/lib/format';
 import MerchantBrandBadge from '@/components/MerchantBrandBadge';
 import {
   buildPaymentShareMessage,
@@ -32,7 +32,7 @@ function OrderLineImage({ imageUrl, productName }: { imageUrl: string | null; pr
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={imageUrl}
-        alt={toTitleCase(productName)}
+        alt={productName}
         className="h-full w-full object-cover"
         onError={() => setFailed(true)}
       />
@@ -73,6 +73,7 @@ type PublicOrder = {
   pickupInstructions: string | null;
   pickupPrepMinutes?: number;
   momoPayoutNumber: string | null;
+  momoPayoutAccountName?: string | null;
   momoPayoutNetwork: string | null;
   paymentMode: string | null;
   merchantShortcode: string | null;
@@ -204,7 +205,7 @@ function buildPaidShareUrl(order: PublicOrder, pickupLocation: string | null) {
     `*${order.storefrontName}* — Order ${order.orderNumber}`,
     '',
     'Items:',
-    ...order.lines.map((line) => `• ${toTitleCase(line.productName)} × ${line.qtyInUnit} ${toTitleCase(line.unitName)} — ${formatMoney(line.lineTotalPence, order.currency)}`),
+    ...order.lines.map((line) => `• ${line.productName} × ${line.qtyInUnit} ${line.unitName} — ${formatMoney(line.lineTotalPence, order.currency)}`),
     '',
     `Total paid: ${formatMoney(order.totalPence, order.currency)}`,
     pickupLocation ? `Pickup: ${pickupLocation}` : 'Pickup at the store',
@@ -463,7 +464,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
   const paymentDetails = getPaymentInstructionDetails(paymentConfig);
   const paidWhatsAppUrl = buildPaidShareUrl(order, pickupLocation);
   const paymentWhatsAppUrl = buildPaymentShareUrl(order, paymentConfig);
-  const storefrontDisplayName = toTitleCase(order.storefrontName);
+  const storefrontDisplayName = order.storefrontName;
   const customerPhoneDisplay = formatGhanaPhoneForDisplay(order.customerPhone);
   const storefrontPhoneDisplay = formatGhanaPhoneForDisplay(order.storefrontPhone);
   const orderBranding = {
@@ -585,7 +586,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
             <svg className="h-4 w-4 shrink-0 text-black/30" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-xs text-black/50">{order.pickupPrepMinutes && order.pickupPrepMinutes > 0 ? `Estimated preparation: ${order.pickupPrepMinutes} minutes after payment is confirmed. ` : 'Preparation time has not been provided. '}Wait until your order is marked ready before travelling.</p>
+            <p className="text-xs text-black/50">{order.pickupPrepMinutes && order.pickupPrepMinutes > 0 ? `Estimated preparation: ${order.pickupPrepMinutes} minutes after payment is confirmed. ` : ''}Wait until your order is marked ready before travelling.</p>
           </div>
         )}
 
@@ -644,7 +645,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
               ) : order.momoPayoutNumber ? (
                 <ol className="list-decimal space-y-2 pl-4">
                   <li>Open your MoMo app or dial the USSD code.</li>
-                  <li>Send <span className="font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</span> to <span className="font-mono font-bold text-ink">{order.momoPayoutNumber}</span>{order.momoPayoutNetwork ? ` on ${order.momoPayoutNetwork}` : ''}.</li>
+                  <li>Send <span className="font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</span> to <span className="font-mono font-bold text-ink">{order.momoPayoutNumber}</span>{order.momoPayoutNetwork ? ` on ${order.momoPayoutNetwork}` : ''}{order.momoPayoutAccountName ? ` (${order.momoPayoutAccountName})` : ''}.</li>
                   <li>Use <span className="font-mono font-bold text-ink">{order.orderNumber}</span> as the payment note.</li>
                   <li>Come back here — your order updates once confirmed.</li>
                 </ol>
@@ -787,8 +788,8 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
               <div key={line.id} className="flex items-center gap-4 px-5 py-3.5">
                 <OrderLineImage imageUrl={line.imageUrl} productName={line.productName} />
                 <div className="min-w-0 flex-1">
-                  <div className="font-medium text-ink">{toTitleCase(line.productName)}</div>
-                  <div className="text-xs text-black/45">{line.qtyInUnit} × {toTitleCase(line.unitName)}</div>
+                  <div className="font-medium text-ink">{line.productName}</div>
+                  <div className="text-xs text-black/45">{line.qtyInUnit} × {line.unitName}</div>
                   {line.plateDetail ? <div className="text-xs text-black/55">{line.plateDetail}</div> : null}
                 </div>
                 <div className="shrink-0 font-semibold text-ink">{formatMoney(line.lineTotalPence, order.currency)}</div>

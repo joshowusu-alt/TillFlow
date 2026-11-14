@@ -317,6 +317,7 @@ async function _runImport(
 
     // Reject invalid submissions before making any changes.
     for (const row of incomingRows) {
+      if (importMode === 'PURCHASES' && row.paymentStatus == null) row.paymentStatus = 'UNPAID';
       const errors = importClassificationErrors(row);
       if (errors.length) throw new Error(`${row.name}: ${errors.join(' ')}`);
       if (!row.name.trim() || !row.baseUnitId || !Number.isSafeInteger(row.sellingPricePence) || row.sellingPricePence <= 0 || !Number.isSafeInteger(row.costPricePence) || row.costPricePence < 0) throw new Error(`Invalid product name, unit or price for ${row.name}.`);

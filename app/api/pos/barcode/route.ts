@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
       ? {
           businessId: user.businessId,
           active: true,
+          ingredientOnly: false,
           OR: [posBarcodeWhere(user.businessId, code), { barcode: { in: prefixes } }],
         }
       : posBarcodeWhere(user.businessId, code),

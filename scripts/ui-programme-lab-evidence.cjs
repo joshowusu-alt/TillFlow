@@ -50,7 +50,7 @@ async function login(page) {
   await page.getByRole('button', { name: /sign in/i }).click();
   const deadline = Date.now() + 45_000;
   while (Date.now() < deadline) {
-    if (/\/pos|\/onboarding/.test(page.url())) return;
+    if (/\/pos|\/onboarding|\/home/.test(page.url())) return;
     await page.waitForTimeout(250);
   }
   throw new Error(`Login did not reach Home or POS (${page.url()})`);

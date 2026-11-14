@@ -572,7 +572,7 @@ async function getStorefrontProductRows(businessId: string, storeIds: string[], 
   const where: Prisma.ProductWhereInput = {
     businessId,
     active: true,
-    storefrontPublished: true,
+    storefrontPublished: true, ingredientOnly: false,
     ...(query.productIds ? { id: { in: query.productIds.slice(0, 50) } } : {}),
   };
   if (normalized.search) {
@@ -706,7 +706,7 @@ async function getStorefrontInitialData(
   mappingLookup: ReturnType<typeof buildCategoryMappingLookup>,
 ) {
   const rows = await prisma.product.findMany({
-    where: { businessId, active: true, storefrontPublished: true },
+    where: { businessId, active: true, storefrontPublished: true, ingredientOnly: false },
     orderBy: [{ name: 'asc' }],
     select: {
       id: true,
@@ -783,7 +783,7 @@ async function getStorefrontInitialData(
 
 async function getPublicCategoriesForBusiness(businessId: string, mappingLookup: ReturnType<typeof buildCategoryMappingLookup>): Promise<PublicCategory[]> {
   const rawCategories = await prisma.product.findMany({
-    where: { businessId, active: true, storefrontPublished: true },
+    where: { businessId, active: true, storefrontPublished: true, ingredientOnly: false },
     select: { category: { select: { name: true } } },
   });
   const categories = new Map<string, PublicCategory>();
@@ -958,7 +958,7 @@ export async function recordStorefrontEvent(input: {
   let productId = input.productId ?? null;
   if (productId) {
     const product = await prisma.product.findFirst({
-      where: { id: productId, businessId: business.id, active: true, storefrontPublished: true },
+      where: { id: productId, businessId: business.id, active: true, storefrontPublished: true, ingredientOnly: false },
       select: { id: true },
     });
     productId = product?.id ?? null;
@@ -1067,7 +1067,7 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
     where: {
       businessId: business.id,
       active: true,
-      storefrontPublished: true,
+      storefrontPublished: true, ingredientOnly: false,
       id: { in: productIds },
     },
     select: {
@@ -1300,6 +1300,7 @@ export async function getPublicOnlineOrder(input: {
           storefrontTagline: true,
           storefrontMomoNumber: true,
           storefrontMomoNetwork: true,
+          storefrontMomoAccountName: true,
           storefrontPaymentMode: true,
           storefrontMerchantShortcode: true,
           storefrontBankName: true,
@@ -1389,6 +1390,7 @@ export async function getPublicOnlineOrder(input: {
       tagline: order.business.storefrontTagline ?? null,
     },
     momoPayoutNumber: config.momoNumber,
+    momoPayoutAccountName: order.business.storefrontMomoAccountName,
     momoPayoutNetwork: config.momoNetwork,
     paymentMode: config.mode,
     merchantShortcode: config.merchantShortcode,

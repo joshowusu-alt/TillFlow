@@ -125,7 +125,7 @@ export async function claimSupplierName(
         SELECT pg_advisory_xact_lock(
           hashtext('tillflow.import-supplier'),
           hashtext(${`${businessId}\n${nameKey}`})
-        )
+        )::text
       `;
     }
     const existing = chooseExistingSupplier(await readSuppliers(tx, businessId), nameKey);

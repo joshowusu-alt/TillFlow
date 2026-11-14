@@ -73,6 +73,7 @@ export default async function OnlineStoreSettingsPage(
         storefrontMerchantShortcode: true,
         storefrontBankName: true,
         storefrontBankAccountName: true,
+        storefrontMomoAccountName: true,
         storefrontBankAccountNumber: true,
         storefrontBankBranch: true,
         storefrontPaymentNote: true,
@@ -419,6 +420,7 @@ export default async function OnlineStoreSettingsPage(
             defaultMomoNetwork={storefrontBusiness.storefrontMomoNetwork ?? ''}
             defaultMerchantShortcode={storefrontBusiness.storefrontMerchantShortcode ?? ''}
             defaultBankName={storefrontBusiness.storefrontBankName ?? ''}
+            defaultMomoAccountName={storefrontBusiness.storefrontMomoAccountName ?? ''}
             defaultBankAccountName={storefrontBusiness.storefrontBankAccountName ?? ''}
             defaultBankAccountNumber={storefrontBusiness.storefrontBankAccountNumber ?? ''}
             defaultBankBranch={storefrontBusiness.storefrontBankBranch ?? ''}
@@ -448,7 +450,7 @@ export default async function OnlineStoreSettingsPage(
           const parsedHours = parseWeeklyHours(storefrontBusiness.storefrontHoursJson);
           const hoursEnabled = Boolean(parsedHours);
           const hours = parsedHours ?? makeDefaultWeeklyHours();
-          const prepMinutes = storefrontBusiness.storefrontPickupPrepMinutes ?? 0;
+          const prepMinutes = storefrontBusiness.storefrontPickupPrepMinutes || 20;
           return (
             <div className="space-y-4">
               <p className="text-sm text-black/55">

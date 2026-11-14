@@ -228,6 +228,7 @@ describe('getStorefrontCatalogPage', () => {
         businessId: 'biz-1',
         active: true,
         storefrontPublished: true,
+        ingredientOnly: false,
       },
     });
   });

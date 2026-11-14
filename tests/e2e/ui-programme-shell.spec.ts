@@ -27,7 +27,7 @@ const VIEWPORTS = [
 ] as const;
 
 const ROUTES = [
-  { path: '/onboarding', pos: false, heading: /home|setup|today|sell/i },
+  { path: '/home', pos: false, heading: /home|setup|today|sell/i },
   { path: '/pos', pos: true, heading: /./ },
   { path: '/products', pos: false, heading: /product/i },
   { path: '/purchases', pos: false, heading: /purchase/i },
@@ -57,7 +57,7 @@ test.describe('UI programme shell geometry (read-only)', () => {
 
   test('seed owner can open Home and POS without a sale', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
+    await page.goto('/home', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
     await expectNoHorizontalOverflow(page);
     await expectShellContract(page, false);
@@ -87,7 +87,7 @@ test.describe('UI programme shell geometry (read-only)', () => {
     test(`Home+POS geometry at ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
 
-      await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
+      await page.goto('/home', { waitUntil: 'domcontentloaded' });
       await page.locator('#main-content').waitFor({ state: 'visible' });
       await expectNoHorizontalOverflow(page);
       await expectSignOutReachable(page, false);
@@ -101,7 +101,7 @@ test.describe('UI programme shell geometry (read-only)', () => {
 
   test('Home rotation does not keep an invalid scroll offset', async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
+    await page.goto('/home', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
     await attachShot(page, testInfo, 'home-portrait-before-rotation');
     await page.evaluate(() => window.scrollTo(0, 400));
@@ -151,7 +151,7 @@ test.describe('UI programme shell geometry (read-only)', () => {
 
   test('Home More drawer exposes Sign out without a second hamburger', async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
+    await page.goto('/home', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
     await expect(page.locator('[data-shell-menu-button="true"]')).toBeHidden();
     await page.locator('[data-shell-more="true"]').click();
@@ -218,7 +218,7 @@ test.describe('UI programme shell geometry (read-only)', () => {
   test('authenticated landmarks, skip link and 200% zoom remain usable', async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
+    await page.goto('/home', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
     await expect(page.getByRole('banner')).toBeVisible();
     await expect(page.getByRole('main')).toBeVisible();
@@ -238,12 +238,12 @@ test.describe('UI programme shell geometry (read-only)', () => {
     });
     await page.goto('/products', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
-    await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
+    await page.goto('/home', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
     await page.goBack();
     await expect(page).toHaveURL(/\/products/);
     await page.goForward();
-    await expect(page).toHaveURL(/\/onboarding/);
+    await expect(page).toHaveURL(/\/(?:home)/);
   });
 
   test('Home never flashes the generic parent loader or the wrong journey skeleton', async ({ page }) => {
@@ -264,7 +264,7 @@ test.describe('UI programme shell geometry (read-only)', () => {
       });
     });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
+    await page.goto('/home', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
     const frames = await page.evaluate(
       () => (window as unknown as { __tfLoadingFrames?: string[] }).__tfLoadingFrames ?? [],
@@ -281,7 +281,7 @@ test.describe('UI programme shell geometry (read-only)', () => {
 
   test('short landscape Home keeps content below the header when a field is focused', async ({ page }) => {
     await page.setViewportSize({ width: 568, height: 320 });
-    await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
+    await page.goto('/home', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
     const field = page.locator('#main-content input, #main-content textarea, #main-content select').first();
     if ((await field.count()) > 0) {
@@ -293,7 +293,7 @@ test.describe('UI programme shell geometry (read-only)', () => {
 
   test('status is not colour-only and only one navigation is exposed on phones', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
+    await page.goto('/home', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
     await expect(page.locator('.nav-trust-status-compact, .nav-trust-status-label').first()).toBeVisible();
     const desktopNav = page.locator('nav[aria-label="Main navigation"]');

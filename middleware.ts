@@ -119,7 +119,7 @@ export function middleware(request: NextRequest) {
 
   if (pathname === '/') {
     const rootUrl = request.nextUrl.clone();
-    rootUrl.pathname = sessionToken ? '/onboarding' : '/welcome';
+    rootUrl.pathname = sessionToken ? '/home' : '/welcome';
     return NextResponse.redirect(rootUrl);
   }
 

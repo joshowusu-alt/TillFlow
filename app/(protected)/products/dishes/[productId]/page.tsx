@@ -24,7 +24,7 @@ export default async function DishPage(props: { params: Promise<{ productId: str
   const dish = await prisma.foodDish.findFirst({
     where: { productId, businessId: business.id },
     include: {
-      product: { select: { name: true, sellingPriceBasePence: true, defaultCostBasePence: true, storefrontDescription: true, storefrontPublished: true } },
+      product: { select: { categoryId: true, name: true, sellingPriceBasePence: true, defaultCostBasePence: true, storefrontDescription: true, storefrontPublished: true } },
       sizes: { orderBy: { sortOrder: 'asc' } },
       inclusions: { orderBy: { sortOrder: 'asc' } },
       groups: { orderBy: { sortOrder: 'asc' }, include: { addons: { orderBy: { sortOrder: 'asc' } } } },
@@ -38,6 +38,7 @@ export default async function DishPage(props: { params: Promise<{ productId: str
     select: { costPerPortionPence: true },
   }) : null;
   const draft: DishDraft = {
+    categoryId: dish.product.categoryId,
     productId: dish.productId,
     name: dish.product.name,
     startingPriceCedis: cedisInput(dish.product.sellingPriceBasePence),
@@ -83,7 +84,7 @@ export default async function DishPage(props: { params: Promise<{ productId: str
       ) : null}
       {branch && <FoodRecordHistory storeId={branch.id} title="Cooking history"
         records={await loadFoodRecordHistory({ businessId: business.id, storeId: branch.id, productId, timeZone: business.timezone || 'UTC' })} />}
-      <DishForm ingredients={await ingredientOptions(business.id)} initial={draft} productId={dish.productId} />
+      <DishForm categories={await prisma.category.findMany({ where: { businessId: business.id }, select: { id: true, name: true }, orderBy: { name: 'asc' } })} ingredients={await ingredientOptions(business.id)} initial={draft} productId={dish.productId} />
     </div>
   );
 }

@@ -9,6 +9,8 @@
  */
 
 import type { Prisma } from '@prisma/client';
+import { FOOD_BUSINESS_CATEGORY } from '@/lib/food/business';
+import { foodDishSaleLine } from '@/lib/food/sale-cost-repair';
 import { prisma } from '@/lib/prisma';
 import { INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
 
@@ -52,6 +54,7 @@ export async function getIncompleteStockSnapshot(businessId: string, db: Prisma.
       where: {
         storeId: { in: storeIds },
         qtyOnHandBase: { gt: 0 },
+        NOT: { product: { business: { businessCategory: FOOD_BUSINESS_CATEGORY }, foodDish: { isNot: null } } },
       },
       select: {
         productId: true,
@@ -64,6 +67,7 @@ export async function getIncompleteStockSnapshot(businessId: string, db: Prisma.
     }),
     db.salesInvoiceLine.findMany({
       where: {
+        NOT: foodDishSaleLine,
         OR: [
           { costBasis: UNVERIFIED_STOCK_V1 },
           { lineCostPence: { lte: 0 }, OR: [{ costBasis: null }, { costBasis: { not: INVENTORY_VALUE_V1 } }] },
