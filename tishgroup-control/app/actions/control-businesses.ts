@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { canManageStaff, canManageSubscriptions, canRecordPayments, canWriteNotes, requireControlStaff } from '@/lib/control-auth';
+import { planAfterPayment } from '@/lib/payment-plan';
 import { planRates, type ManagedPlan } from '@/lib/control-data';
 import {
   computeSubscriptionPricing,
@@ -642,7 +643,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
         where: { controlBusinessId: profile.id },
         select: { purchasedPlan: true, startDate: true },
       });
-      const purchasedPlan = normalizePlan(existingSubscription?.purchasedPlan ?? business.plan);
+      const purchasedPlan = planAfterPayment(existingSubscription?.purchasedPlan, business.plan);
       const addonOnlineStorefront = business.addonOnlineStorefront ?? false;
       const pricing = computeSubscriptionPricing({
         plan: purchasedPlan,

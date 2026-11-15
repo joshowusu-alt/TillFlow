@@ -600,7 +600,7 @@ export default async function ProductsPage(
                 </CompactMobileListItem>
               ) : products.map((product) => {
                 const unitLabel = catalogueUnitLabel(product);
-                const productHref = isManager && foodBusiness && product.foodDish ? dishSettingsHref(product.id) : `/products/${product.id}`;
+                const productHref = foodBusiness && product.foodDish ? dishSettingsHref(product.id) : `/products/${product.id}`;
 
                 return (
                   <CompactMobileListItem key={product.id}>
@@ -723,7 +723,7 @@ export default async function ProductsPage(
                   )}
                   {products.map((product) => {
                     const unitLabel = catalogueUnitLabel(product);
-                    const productHref = isManager && foodBusiness && product.foodDish ? dishSettingsHref(product.id) : `/products/${product.id}`;
+                    const productHref = foodBusiness && product.foodDish ? dishSettingsHref(product.id) : `/products/${product.id}`;
                     return (
                       <tr key={product.id} className="rounded-xl bg-white transition-colors duration-150 hover:bg-slate-50">
                         <td className="hidden sm:table-cell px-3 py-3 w-10">

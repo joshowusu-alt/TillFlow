@@ -16,11 +16,11 @@ describe('income statement drilldown links',()=>{
     const opened = await mocks.open();
     const statement = {...await mocks.statement(), foodCosts:0, foodWaste:0};
     mocks.statement.mockResolvedValue(statement);
-    expect(renderToStaticMarkup(await Page({}))).not.toContain('no net food costs recorded');
+    expect(renderToStaticMarkup(await Page({}))).not.toContain('No food costs are showing');
     mocks.open.mockResolvedValue({...opened,business:{...opened.business,businessCategory:'FOOD_DISHES'}});
-    expect(renderToStaticMarkup(await Page({}))).toContain('no net food costs recorded');
+    expect(renderToStaticMarkup(await Page({}))).toContain('No food costs are showing');
     mocks.statement.mockResolvedValue({...statement,foodCosts:100});
-    expect(renderToStaticMarkup(await Page({}))).not.toContain('no net food costs recorded');
+    expect(renderToStaticMarkup(await Page({}))).not.toContain('No food costs are showing');
   });
   it('does not load the snapshot if access is denied',async()=>{
     mocks.open.mockResolvedValue({ok:false,denial:<p>Access denied</p>});expect(renderToStaticMarkup(await Page({}))).toContain('Access denied');expect(mocks.statement).not.toHaveBeenCalled();

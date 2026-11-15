@@ -587,6 +587,32 @@ describePg('food release stress on throwaway Postgres', () => {
     })).rejects.toThrow(/sold out/i);
   }, 60000);
 
+  it('blocks counted dishes marked sold out on the till and storefront until the switch is cleared', async () => {
+    const menu = draft({ name: 'Kitchen closed rice', startingPriceCedis: '12', stockMode: 'COUNTED', soldOut: true });
+    const dish = await dishes.saveDish({ businessId, draft: menu });
+    await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 3 });
+    const unitId = await baseUnit(dish.id);
+    const slug = (await db.business.findUniqueOrThrow({ where: { id: businessId } })).storefrontSlug!;
+    const attemptSale = () => sales.createSale({
+      businessId, storeId, tillId, cashierUserId: userId, paymentStatus: 'PAID',
+      payments: [{ method: 'CASH', amountPence: 1200 }],
+      lines: [{ productId: dish.id, unitId, qtyInUnit: 1 }],
+    });
+    const attemptOnline = () => checkout.createOnlineCheckout({
+      slug, storeId, customerName: 'Ama', customerPhone: '0241234567',
+      items: [{ productId: dish.id, unitId, qtyInUnit: 1 }],
+    });
+
+    await expect(attemptSale()).rejects.toThrow(/sold out/i);
+    await expect(attemptOnline()).rejects.toThrow(/sold out/i);
+    expect(await onHand(dish.id)).toBe(3);
+
+    await dishes.saveDish({ businessId, draft: { ...menu, productId: dish.id, soldOut: false } });
+    await attemptSale();
+    await attemptOnline();
+    expect(await onHand(dish.id)).toBe(1);
+  });
+
   it('lets only one of two simultaneous sales take the last portion', async () => {
     const dish = await dishes.saveDish({
       businessId,

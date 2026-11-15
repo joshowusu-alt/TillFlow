@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { formatMoney, formatGhanaPhoneForDisplay } from '@/lib/format';
 import { buildCartDetails, buildProductMap, formatAvailable, getUnitFromProduct, sumCartTotals, type PosCartLine } from '@/lib/payments/pos-cart';
 import FoodPlatePicker from '@/components/food/FoodPlatePicker';
-import { foodAvailabilityText } from '@/lib/food/availability';
+import { foodAvailabilityText, sellableBaseQty } from '@/lib/food/availability';
 import { defaultPlateSelection, dishNeedsPicker, formatDishListPrice, plateSelectionKey, pricePlate, type PlateSelection } from '@/lib/food/plate';
 import { resolveBrandStyles } from '@/lib/storefront-branding';
 import { getPaymentInstructionDetails } from '@/lib/storefront-payments';
@@ -219,9 +219,8 @@ function CheckoutUnavailableBanner() {
 type ProductSelectionState = Record<string, { unitId: string; qtyInUnit: number }>;
 type StorefrontProduct = PublicStorefront['products'][number];
 
-function isListedInStock(product: { onHandBase: number; food?: { stockMode: string; soldOut: boolean } | null }) {
-  if (product.food?.stockMode === 'NOT_COUNTED') return !product.food.soldOut;
-  return product.onHandBase > 0;
+function isListedInStock(product: { onHandBase: number; food?: Parameters<typeof sellableBaseQty>[0] }) {
+  return sellableBaseQty(product.food, product.onHandBase) > 0;
 }
 
 type RecommendationProductLike = {
@@ -231,7 +230,7 @@ type RecommendationProductLike = {
   publicCategoryName?: string | null;
   sellingPriceBasePence: number;
   onHandBase: number;
-  food?: { stockMode: string; soldOut: boolean } | null;
+  food?: Parameters<typeof sellableBaseQty>[0];
 };
 
 function initialSelections(storefront: PublicStorefront) {
@@ -987,6 +986,10 @@ export default function StorefrontClient({
     // gap used to no-op, leaving the previous total on screen.
     const listed = productsForStore.find((item) => item.id === productId);
     const product = productMap.get(productId) ?? listed;
+    if ((listed?.food ?? product?.food)?.soldOut) {
+      setError(`${product?.name ?? 'This dish'} is sold out.`);
+      return;
+    }
     if (product?.food && !plate && dishNeedsPicker(product.food)) {
       setPlateProduct(product as StorefrontProduct);
       return;

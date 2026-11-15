@@ -26,6 +26,8 @@ jobs:
           cache: npm
           cache-dependency-path: tishgroup-control/package-lock.json
       - run: npm ci
+      - name: Verify Control plan actions
+        run: npm test -- __tests__/control-plan-sync.test.ts
       - name: Verify production compilation
         run: npx next build
         env:

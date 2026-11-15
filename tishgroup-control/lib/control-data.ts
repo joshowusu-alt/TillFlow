@@ -31,6 +31,7 @@ export type ManagedBusiness = {
   assignedManager: string;
   plan: ManagedPlan;
   effectivePlan: ManagedPlan;
+  paymentPlanChangeTo?: ManagedPlan | null;
   state: ManagedState;
   billingCadence: 'MONTHLY' | 'ANNUAL';
   subscriptionStartAt?: string | null;

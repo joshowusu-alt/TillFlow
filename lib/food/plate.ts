@@ -178,7 +178,7 @@ export function pricePlate(
   selection: PlateSelection | null | undefined,
   startingPricePence: number,
 ): PlateSnapshot {
-  if (menu.stockMode === 'NOT_COUNTED' && menu.soldOut) {
+  if (menu.soldOut) {
     throw new PlateError(`${menu.name} is sold out.`);
   }
   if (!Number.isInteger(startingPricePence) || startingPricePence < 0) {

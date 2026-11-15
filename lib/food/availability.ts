@@ -7,7 +7,8 @@ export type FoodAvailability = 'available' | 'low' | 'sold_out';
  * finds there is not enough, the same way retail does. There is no till hold.
  */
 export function foodAvailability(menu: Pick<FoodMenu, 'stockMode' | 'soldOut' | 'lowAt'>, onHand: number): FoodAvailability {
-  if (menu.stockMode === 'NOT_COUNTED') return menu.soldOut ? 'sold_out' : 'available';
+  if (menu.soldOut) return 'sold_out';
+  if (menu.stockMode === 'NOT_COUNTED') return 'available';
   if (onHand <= 0) return 'sold_out';
   if (menu.lowAt > 0 && onHand <= menu.lowAt) return 'low';
   return 'available';
@@ -22,8 +23,9 @@ export function foodAvailabilityText(menu: FoodMenu, onHand: number): string | n
 }
 
 /** Not-counted dishes are available or sold out. They do not use a quantity. */
-export function sellableBaseQty(menu: FoodMenu | null | undefined, onHand: number): number {
+export function sellableBaseQty(menu: Pick<FoodMenu, 'stockMode' | 'soldOut'> | null | undefined, onHand: number): number {
   if (!menu) return onHand;
-  if (menu.stockMode === 'NOT_COUNTED') return menu.soldOut ? 0 : Number.MAX_SAFE_INTEGER;
+  if (menu.soldOut) return 0;
+  if (menu.stockMode === 'NOT_COUNTED') return Number.MAX_SAFE_INTEGER;
   return onHand;
 }

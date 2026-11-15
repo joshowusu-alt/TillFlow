@@ -1,3 +1,5 @@
+import { FOOD_BUSINESS_CATEGORY } from '@/lib/food/business';
+
 /** A product can be sold when it has stock, or when it is an available uncounted dish. */
 export function sellableProductWhere(businessId: string) {
   return {
@@ -5,6 +7,10 @@ export function sellableProductWhere(businessId: string) {
     active: true,
     ingredientOnly: false,
     sellingPriceBasePence: { gt: 0 },
+    NOT: {
+      business: { businessCategory: { equals: FOOD_BUSINESS_CATEGORY, not: null } },
+      foodDish: { is: { soldOut: true } },
+    },
     OR: [
       { inventoryBalances: { some: { qtyOnHandBase: { gt: 0 } } } },
       { foodDish: { is: { stockMode: 'NOT_COUNTED', soldOut: false } } },

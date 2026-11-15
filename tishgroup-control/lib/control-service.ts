@@ -1,3 +1,4 @@
+import { planAfterPayment } from './payment-plan';
 import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
 import { managedBusinesses, planRates, type BusinessHealth, type ManagedBusiness, type ManagedPlan, type ManagedState } from '@/lib/control-data';
@@ -280,6 +281,8 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
       const profile = controlProfiles.get(business.id);
       const subscription = profile?.subscription;
       const plan = normalizePlan(subscription?.purchasedPlan ?? business.selectedPlan ?? business.plan);
+      const paymentPlan = planAfterPayment(subscription?.purchasedPlan, business.plan);
+      const currentTillflowPlan = normalizePlan(business.selectedPlan ?? business.plan);
       const manualState = normalizeManualManagedState(subscription?.status);
       const derived = deriveManagedState({
         plan,
@@ -340,6 +343,7 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
         assignedManager: profile?.assignedManager?.name ?? 'Unassigned',
         plan,
         effectivePlan,
+        paymentPlanChangeTo: currentTillflowPlan === paymentPlan ? null : paymentPlan,
         state,
         billingCadence: normalizeCadence(subscription?.billingCadence),
         subscriptionStartAt: formatDate(subscription?.startDate ?? business.planSetAt ?? business.createdAt),

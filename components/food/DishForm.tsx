@@ -14,6 +14,8 @@ export default function DishForm({ initial, productId, ingredients, categories }
   const [pending, setPending] = useState(false);
   const counted = draft.stockMode === 'COUNTED';
 
+  const hasRecipe = Boolean(draft.recipe?.length || draft.sizes.some(size => size.recipe?.length));
+
   function update<K extends keyof DishDraft>(key: K, value: DishDraft[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
   }
@@ -22,7 +24,10 @@ export default function DishForm({ initial, productId, ingredients, categories }
     event.preventDefault();
     setPending(true);
     setError(null);
-    const result = await saveDishAction({ ...draft, productId: productId ?? draft.productId ?? null });
+    const savedDraft = counted ? draft : {
+      ...draft, recipe: [], sizes: draft.sizes.map(size => ({ ...size, recipe: [] })),
+    };
+    const result = await saveDishAction({ ...savedDraft, productId: productId ?? draft.productId ?? null });
     setPending(false);
     if (!result.success) {
       setError(result.error);
@@ -70,31 +75,31 @@ export default function DishForm({ initial, productId, ingredients, categories }
       <section className="card space-y-3 p-4">
         <h2 className="text-base font-semibold">Portions</h2>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className={`rounded-full px-3 py-1.5 text-sm font-semibold ${!counted ? 'bg-accent text-white' : 'bg-black/5'}`} onClick={() => setDraft(prev => ({ ...prev, stockMode: 'NOT_COUNTED', recipe: [], sizes: prev.sizes.map(size => ({ ...size, recipe: [] })) }))}>
+          <button type="button" className={`rounded-full px-3 py-1.5 text-sm font-semibold ${!counted ? 'bg-accent text-white' : 'bg-black/5'}`} aria-pressed={!counted} onClick={() => update('stockMode', 'NOT_COUNTED')}>
             Not counted
           </button>
-          <button type="button" className={`rounded-full px-3 py-1.5 text-sm font-semibold ${counted ? 'bg-accent text-white' : 'bg-black/5'}`} onClick={() => update('stockMode', 'COUNTED')}>
+          <button type="button" className={`rounded-full px-3 py-1.5 text-sm font-semibold ${counted ? 'bg-accent text-white' : 'bg-black/5'}`} aria-pressed={counted} onClick={() => update('stockMode', 'COUNTED')}>
             Count portions
           </button>
         </div>
-        {!counted ? (
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={draft.soldOut} onChange={(event) => update('soldOut', event.target.checked)} />
-            Sold out
-          </label>
-        ) : (
-          <>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={draft.soldOut} onChange={(event) => update('soldOut', event.target.checked)} />
+          Sold out
+        </label>
+        <p className="text-sm text-black/60">Save with Sold out checked to stop orders at the till and online, even if portions are left. To start selling again, uncheck it and save.</p>
+        {counted && (
             <label className="block text-sm">
-              Show Low when portions left are at or below
+              Warn when this many portions or fewer are left
               <input className="input mt-1 w-28" inputMode="numeric" value={draft.lowAt || ''} onChange={(event) => update('lowAt', Math.max(0, Math.floor(Number(event.target.value) || 0)))} />
             </label>
-
-          </>
         )}
+        {!counted && hasRecipe && <p className="text-sm text-amber-800" role="status">
+          Saving with portions not counted will remove the recipe for this dish and its sizes. Choose Count portions to keep it.
+        </p>}
         <p className="text-xs text-black/50">
           {counted
             ? 'The till warns when portions are low or gone. It does not hold them before payment. Online orders still reserve portions when the customer checks out.'
-            : 'This dish is simply available or sold out. Nothing is counted.'}
+            : 'TillFlow won’t track how many portions are left.'}
         </p>
       </section>
 

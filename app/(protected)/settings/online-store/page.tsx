@@ -1,3 +1,4 @@
+import StorefrontStockNotice from '@/components/StorefrontStockNotice';
 import { isFoodBusiness, purchasedStockOnly } from '@/lib/food/business';
 import CatalogueVisibilityFilter from '@/components/CatalogueVisibilityFilter';
 import Link from 'next/link';
@@ -651,16 +652,11 @@ export default async function OnlineStoreSettingsPage(
             </form>
             <form action={hideOutOfStockStorefrontProductsAction}>
               <button type="submit" className="btn-secondary text-sm" disabled={publishedOutOfStock === 0}>
-                {foodBusiness ? "Hide out-of-stock resale items" : "Hide out-of-stock products"}
+                {foodBusiness ? "Hide items that ran out" : "Hide out-of-stock products"}
               </button>
             </form>
           </div>
-          <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
-            {foodBusiness ? `${publishedOutOfStock} published resale items are out of stock. Manage dish availability from each dish page.`
-              : publishedOutOfStock > 0
-              ? `${publishedOutOfStock} published product${publishedOutOfStock === 1 ? '' : 's'} currently show as out of stock. Hide them now to keep the storefront cleaner for customers.`
-              : 'No published products are currently out of stock.'}
-          </div>
+          <StorefrontStockNotice foodBusiness={foodBusiness} count={publishedOutOfStock} />
           {categoryPublishSummaries.length > 1 ? (
             <div className="mt-4 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-3">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/55">Publish by category</div>

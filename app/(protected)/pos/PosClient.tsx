@@ -440,11 +440,11 @@ export default function PosClient({
     const product = getProduct(targetProductId);
     const unit = getUnit(product, targetUnitId);
     if (!product || !unit) return desiredQty;
+    if (product.food?.soldOut) {
+      setStockAlert(`${product.name} is sold out.`);
+      return 0;
+    }
     if (product.food?.stockMode === 'NOT_COUNTED') {
-      if (product.food.soldOut) {
-        setStockAlert(`${product.name} is sold out.`);
-        return 0;
-      }
       setStockAlert(null);
       return desiredQty;
     }
@@ -488,12 +488,11 @@ export default function PosClient({
   const addPlateToCart = useCallback((product: ProductDto, plate?: PlateSelection) => {
     const baseUnitId = getProductBaseUnitId(product);
     if (!baseUnitId) return;
-    if (
-      product.food &&
-      !plate &&
-      (dishNeedsPicker(product.food) || (product.food.stockMode === 'NOT_COUNTED' && product.food.soldOut))
-    ) {
-      if (product.food.stockMode === 'NOT_COUNTED' && product.food.soldOut) return;
+    if (product.food?.soldOut) {
+      setStockAlert(`${product.name} is sold out.`);
+      return;
+    }
+    if (product.food && !plate && dishNeedsPicker(product.food)) {
       mergeProductOption(product);
       setPlateProduct(product);
       return;

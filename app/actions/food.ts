@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { undoFoodRecord, type FoodRecordKind } from '@/lib/food/undo-service';
 import { recordIngredientUsage } from '@/lib/food/usage-service';
 import type { Ingredient } from '@/lib/food/ingredient-costs';
+import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { ok, safeAction, withBusinessContext, requireSelectedStoreContext, type ActionResult } from '@/lib/action-utils';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
@@ -32,6 +33,8 @@ export async function saveDishAction(draft: DishDraft): Promise<ActionResult<{ i
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
     const saved = await saveDish({ businessId, draft });
     await refreshFoodSurfaces(businessId);
+    const storefront = await prisma.business.findUnique({ where: { id: businessId }, select: { storefrontSlug: true } });
+    if (storefront?.storefrontSlug) revalidatePath(`/shop/${storefront.storefrontSlug}`);
     audit({
       businessId,
       userId: user.id,

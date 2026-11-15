@@ -1,3 +1,5 @@
+import { paymentPlanChangeNotice } from '@/lib/payment-plan';
+import type { ManagedPlan } from '@/lib/control-data';
 import { recordControlPaymentAction } from '@/app/actions/control-businesses';
 import ConfirmSubmitButton from '@/components/confirm-submit-button';
 
@@ -5,6 +7,7 @@ type PaymentFormBusiness = {
   id: string;
   billingCadence: 'MONTHLY' | 'ANNUAL';
   outstandingAmount: number;
+  paymentPlanChangeTo?: ManagedPlan | null;
 };
 
 export default function PaymentForm({
@@ -14,13 +17,16 @@ export default function PaymentForm({
   business: PaymentFormBusiness;
   recommendedAmount: number;
 }) {
+  const planChangeNotice = paymentPlanChangeNotice(business.paymentPlanChangeTo);
   return (
     <form action={recordControlPaymentAction} className="space-y-3 rounded-2xl border border-black/8 bg-white/80 p-4">
       <input type="hidden" name="businessId" value={business.id} />
       <div>
         <h3 className="text-sm font-semibold text-control-ink">Record payment</h3>
-        <p className="mt-1 text-sm text-black/60">This creates a payment record and restores Tillflow entitlement state immediately.</p>
+        <p className="mt-1 text-sm text-black/60">This records the payment and restores TillFlow access immediately.</p>
       </div>
+
+      {planChangeNotice && <p className="rounded-lg bg-amber-50 p-3 text-sm font-semibold text-amber-900">{planChangeNotice}</p>}
 
       <label className="block space-y-1 text-sm">
         <span className="font-medium text-control-ink">Amount</span>

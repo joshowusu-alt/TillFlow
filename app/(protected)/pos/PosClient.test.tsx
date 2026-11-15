@@ -1234,6 +1234,7 @@ describe('POS clear cart confirmation and recovery', () => {
 it.each([
   ['NOT_COUNTED', true, 0, true, true],
   ['NOT_COUNTED', false, 0, true, false],
+  ['COUNTED', true, 3, true, true],
   ['COUNTED', false, 0, true, true],
   ['COUNTED', false, 2, true, false],
   ['NOT_COUNTED', true, 0, false, false],
@@ -1246,7 +1247,9 @@ it.each([
   const search = screen.getByLabelText('Search products');
   fireEvent.focus(search);
   fireEvent.change(search, { target: { value: 'Banku' } });
-  await screen.findByRole('button', { name: /^Banku/i });
+  const result = await screen.findByRole('button', { name: /^Banku/i });
+  if (soldOut || (stockMode === 'COUNTED' && onHandBase === 0)) expect(result).toBeDisabled();
+  else expect(result).toBeEnabled();
   const link = screen.queryByRole('link', { name: 'Manage dish: Banku' });
   if (showLink) expect(link).toHaveAttribute('href', '/products/dishes/banku');
   else expect(link).toBeNull();

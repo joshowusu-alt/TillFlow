@@ -8,6 +8,7 @@ import DishForm from '@/components/food/DishForm';
 import PreparePortionsForm from '@/components/food/PreparePortionsForm';
 import LeftoverWriteOffForm from '@/components/food/LeftoverWriteOffForm';
 import { isFoodBusiness } from '@/lib/food/business';
+import { inventoryAvailability } from '@/lib/food/inventory-presentation';
 import type { DishDraft } from '@/lib/food/dish-draft';
 import { prisma } from '@/lib/prisma';
 import { formatMoney } from '@/lib/format';
@@ -18,7 +19,7 @@ function cedisInput(pence: number) {
 
 export default async function DishPage(props: { params: Promise<{ productId: string }> }) {
   const { productId } = await props.params;
-  const { business, store: branch } = await requireBusinessAndOptionalStore(['MANAGER', 'OWNER']);
+  const { business, user, store: branch } = await requireBusinessAndOptionalStore(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business || !isFoodBusiness(business.businessCategory)) redirect('/products');
 
   const dish = await prisma.foodDish.findFirst({
@@ -31,6 +32,49 @@ export default async function DishPage(props: { params: Promise<{ productId: str
     },
   });
   if (!dish) notFound();
+
+  const balance = dish.stockMode === 'COUNTED' && branch ? await prisma.inventoryBalance.findUnique({
+    where: { storeId_productId: { storeId: branch.id, productId } },
+    select: { qtyOnHandBase: true },
+  }) : null;
+  const availability = inventoryAvailability(business.businessCategory, dish, balance?.qtyOnHandBase ?? 0, 0);
+  const availabilityText = dish.stockMode === 'COUNTED' && !branch && !dish.soldOut
+    ? 'Select a branch to check portions.'
+    : availability.status;
+  const portionText = dish.stockMode === 'COUNTED' && branch ? availability.quantity : null;
+  const sizes = dish.sizes.filter((size) => size.active);
+
+  if (user.role === 'CASHIER') {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4">
+        <Link href="/products" className="btn-secondary text-sm">Back to products</Link>
+        <section className="card space-y-4 p-4">
+          <h1 className="text-2xl font-semibold">{dish.product.name}</h1>
+          <p className="font-semibold">{availabilityText}{portionText ? ` · ${portionText}` : ''}</p>
+          {sizes.length ? <>
+            <h2 className="font-semibold">Sizes and prices</h2>
+            <dl className="space-y-2">{sizes.map((size) => (
+              <div className="flex justify-between gap-3" key={size.id}>
+                <dt>{size.name}</dt><dd>{formatMoney(size.pricePence, business.currency)}</dd>
+              </div>
+            ))}</dl>
+          </> : <p>Price {formatMoney(dish.product.sellingPriceBasePence, business.currency)}</p>}
+          {dish.groups.map((group) => {
+            const extras = group.addons.filter((addon) => addon.active);
+            if (!extras.length) return null;
+            return <div key={group.id}>
+              <h2 className="font-semibold">{group.name}</h2>
+              <dl className="mt-2 space-y-2">{extras.map((addon) => (
+                <div className="flex justify-between gap-3" key={addon.id}>
+                  <dt>{addon.name}</dt><dd>{addon.pricePence ? formatMoney(addon.pricePence, business.currency) : 'Free'}</dd>
+                </div>
+              ))}</dl>
+            </div>;
+          })}
+        </section>
+      </div>
+    );
+  }
 
   const latestCost = branch ? await prisma.foodPreparation.findFirst({
     where: { businessId: business.id, storeId: branch.id, productId, undoneAt: null, costPerPortionPence: { not: null } },
@@ -71,14 +115,14 @@ export default async function DishPage(props: { params: Promise<{ productId: str
           <h1 className="text-2xl font-semibold">{dish.product.name}</h1>
           <p className="mt-1 text-sm text-black/60">
             Starting price {formatMoney(dish.product.sellingPriceBasePence, business.currency)}.
-            {dish.stockMode === 'COUNTED' ? ' Portions are counted.' : dish.soldOut ? ' Marked sold out.' : ' Available, and not counted.'}
+            {' '}{availabilityText}{portionText ? ` · ${portionText}` : ''}
           </p>
         </div>
         <Link href="/pos" className="btn-secondary text-sm">Try at the till</Link>
       </div>
       {dish.stockMode === 'COUNTED' && branch ? (
         <>
-          <PreparePortionsForm productId={dish.productId} storeId={branch.id} currency={business.currency} sizes={dish.sizes.map(({ id, name, isDefault }) => ({ id, name, isDefault }))} />
+          <PreparePortionsForm productId={dish.productId} storeId={branch.id} currency={business.currency} sizes={sizes.map(({ id, name, isDefault }) => ({ id, name, isDefault }))} />
           <LeftoverWriteOffForm productId={dish.productId} storeId={branch.id} costPerPortionPence={latestCost?.costPerPortionPence ?? null} currency={business.currency} />
         </>
       ) : null}
