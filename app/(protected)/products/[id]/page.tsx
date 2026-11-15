@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation';
+import { dishSettingsHref, isFoodBusiness } from '@/lib/food/business';
 import { parseProductAttributes } from '@/lib/products/attributes';
 import ProductCategoryField from '@/components/products/ProductCategoryField';
 import { listProductDivisions } from '@/lib/services/product-classification';
@@ -37,7 +39,8 @@ export default async function ProductDetailPage(
   const canGenerateBarcode = user.role !== 'CASHIER' && features.advancedOps;
 
   if (user.role === 'CASHIER') {
-    const safe = await prisma.product.findFirst({ where: { id: params.id, businessId: business.id }, select: { name: true, publisher: true, edition: true, barcode: true, sellingPriceBasePence: true } });
+    const safe = await prisma.product.findFirst({ where: { id: params.id, businessId: business.id }, select: { name: true, publisher: true, edition: true, barcode: true, sellingPriceBasePence: true, foodDish: { select: { productId: true } } } });
+    if (safe?.foodDish && isFoodBusiness(business.businessCategory)) redirect(dishSettingsHref(params.id));
     return <div className="card p-6">{safe ? <><h1 className="text-xl font-semibold">{[safe.name, safe.publisher, safe.edition].filter(Boolean).join(' · ')}</h1><p>Barcode: {safe.barcode ?? 'None'}</p><p>Selling price: {formatMoney(safe.sellingPriceBasePence, business.currency)}</p><Link href="/products">Back to products</Link></> : 'Product not found.'}</div>;
   }
   const [product, units, categories, suppliers, divisions] = await Promise.all([
@@ -50,6 +53,7 @@ export default async function ProductDetailPage(
             select: { storeId: true, qtyOnHandBase: true, avgCostBasePence: true }
           },
           category: true,
+          foodDish: { select: { productId: true } },
           barcodes: true,
           preferredSupplier: { select: { id: true, name: true } }
         }
@@ -68,6 +72,7 @@ export default async function ProductDetailPage(
   ]);
 
   if (!product) return <div className="card p-6">Product not found.</div>;
+  if (isFoodBusiness(business.businessCategory) && product.foodDish) redirect(dishSettingsHref(product.id));
   const assignedDivision = divisions.find(division => division.id === product.divisionId || division.groups.some(group => group.id === product.groupId));
   const assignedGroup = assignedDivision?.groups.find(group => group.id === product.groupId);
   const isManager = user.role !== 'CASHIER';

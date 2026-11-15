@@ -1,3 +1,4 @@
+import { isFoodBusiness, purchasedStockOnly } from '@/lib/food/business';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
@@ -117,7 +118,7 @@ export default async function StockAdjustmentsPage(
   });
   const [products, adjustmentCount, firstAdjustments, increaseCount, decreaseCount] = await Promise.all([
     prisma.product.findMany({
-      where: { businessId: business.id, active: true },
+      where: { ...purchasedStockOnly, businessId: business.id, active: true },
       orderBy: { name: 'asc' },
       select: {
         id: true,
@@ -195,7 +196,7 @@ export default async function StockAdjustmentsPage(
     <div className="space-y-4 sm:space-y-5">
       <PageHeader
         title="Stock Adjustments"
-        subtitle="Correct stock safely and keep a clear audit trail."
+        subtitle={isFoodBusiness(business.businessCategory) ? "Correct ingredient and resale stock. To add cooked portions or write off leftovers, open the dish." : "Correct stock safely and keep a clear audit trail."}
       />
       {searchParams?.adjustmentId ? <p className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Showing the linked adjustment. <a className="font-semibold text-accent underline" href="/inventory/adjustments">View all adjustments</a></p> : null}
       <EffectiveStoreBanner

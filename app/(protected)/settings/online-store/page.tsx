@@ -1,3 +1,5 @@
+import StorefrontStockNotice from '@/components/StorefrontStockNotice';
+import { isFoodBusiness, purchasedStockOnly } from '@/lib/food/business';
 import CatalogueVisibilityFilter from '@/components/CatalogueVisibilityFilter';
 import Link from 'next/link';
 import FormError from '@/components/FormError';
@@ -41,6 +43,7 @@ export default async function OnlineStoreSettingsPage(
     return <StorefrontUpgradeNotice plan={features.plan} featureName="Online Storefront" />;
   }
 
+  const foodBusiness = isFoodBusiness(business.businessCategory);
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const [
     storefrontBusiness,
@@ -49,6 +52,7 @@ export default async function OnlineStoreSettingsPage(
     totalProducts,
     totalPublished,
     publishedInventoryTotals,
+    publishedPurchasedStockCount,
     categories,
     activeProductCounts,
     publishedProductCounts,
@@ -113,10 +117,14 @@ export default async function OnlineStoreSettingsPage(
           businessId: business.id,
           active: true,
           storefrontPublished: true,
+          ...purchasedStockOnly,
         },
       },
       _sum: { qtyOnHandBase: true },
     }),
+    foodBusiness
+      ? prisma.product.count({ where: { businessId: business.id, active: true, storefrontPublished: true, ...purchasedStockOnly } })
+      : Promise.resolve(null),
     prisma.category.findMany({
       where: { businessId: business.id },
       orderBy: { name: 'asc' },
@@ -188,7 +196,7 @@ export default async function OnlineStoreSettingsPage(
       ]
       : categorySummaries;
   const publishedOutOfStock =
-    totalPublished -
+    (publishedPurchasedStockCount ?? totalPublished) -
     publishedInventoryTotals.filter((entry) => (entry._sum.qtyOnHandBase ?? 0) > 0).length;
   const publishedWithoutAnyImage = Math.max(
     totalPublished - publishedWithOwnImage - publishedWithCategoryFallback,
@@ -644,15 +652,11 @@ export default async function OnlineStoreSettingsPage(
             </form>
             <form action={hideOutOfStockStorefrontProductsAction}>
               <button type="submit" className="btn-secondary text-sm" disabled={publishedOutOfStock === 0}>
-                Hide out-of-stock products
+                {foodBusiness ? "Hide items that ran out" : "Hide out-of-stock products"}
               </button>
             </form>
           </div>
-          <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
-            {publishedOutOfStock > 0
-              ? `${publishedOutOfStock} published product${publishedOutOfStock === 1 ? '' : 's'} currently show as out of stock. Hide them now to keep the storefront cleaner for customers.`
-              : 'No published products are currently out of stock.'}
-          </div>
+          <StorefrontStockNotice foodBusiness={foodBusiness} count={publishedOutOfStock} />
           {categoryPublishSummaries.length > 1 ? (
             <div className="mt-4 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-3">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/55">Publish by category</div>

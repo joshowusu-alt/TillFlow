@@ -10,6 +10,7 @@
  * full candidate catalogue into application memory to count or paginate.
  */
 
+import { purchasedStockOnly } from '@/lib/food/business';
 import type { Prisma } from '@prisma/client';
 import {
   OPENING_STOCK_MOVEMENT_TYPES,
@@ -76,6 +77,7 @@ export function stockGapBaseCandidateWhere(
   businessId: string
 ): Prisma.ProductWhereInput {
   return {
+    ...purchasedStockOnly,
     businessId,
     active: true,
     sellingPriceBasePence: { gt: 0 },

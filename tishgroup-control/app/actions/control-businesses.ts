@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { canManageStaff, canManageSubscriptions, canRecordPayments, canWriteNotes, requireControlStaff } from '@/lib/control-auth';
+import { planAfterPayment } from '@/lib/payment-plan';
 import { planRates, type ManagedPlan } from '@/lib/control-data';
 import {
   computeSubscriptionPricing,
@@ -321,6 +322,7 @@ async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$discon
     where: { id: args.businessId },
     data: {
       plan: args.purchasedPlan,
+      selectedPlan: args.purchasedPlan,
       addonOnlineStorefront,
       billingAmount: intervalPricing.totalBillingAmount,
       billingInterval: billingCadence,
@@ -528,6 +530,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
         where: { id: businessId },
         data: {
           plan: purchasedPlan,
+          selectedPlan: purchasedPlan,
           planStatus: businessStatusFromSubscription(status),
           subscriptionStatus: billingStatusFromSubscription(status),
           trialEndsAt: isTrialStatus(status) ? trialEndsAt : null,
@@ -640,7 +643,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
         where: { controlBusinessId: profile.id },
         select: { purchasedPlan: true, startDate: true },
       });
-      const purchasedPlan = normalizePlan(existingSubscription?.purchasedPlan ?? business.plan);
+      const purchasedPlan = planAfterPayment(existingSubscription?.purchasedPlan, business.plan);
       const addonOnlineStorefront = business.addonOnlineStorefront ?? false;
       const pricing = computeSubscriptionPricing({
         plan: purchasedPlan,
@@ -711,6 +714,8 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
       await tx.business.update({
         where: { id: businessId },
         data: {
+          plan: purchasedPlan,
+          selectedPlan: purchasedPlan,
           planStatus: activation.planStatus,
           subscriptionStatus: activation.subscriptionStatus,
           trialEndsAt: null,

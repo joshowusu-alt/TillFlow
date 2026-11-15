@@ -1,3 +1,5 @@
+import { inventoryAvailability } from '@/lib/food/inventory-presentation';
+import { dishSettingsHref, isFoodBusiness } from '@/lib/food/business';
 import PageHeader from '@/components/PageHeader';
 import RefreshIndicator from '@/components/RefreshIndicator';
 import SearchFilter from '@/components/SearchFilter';
@@ -61,6 +63,7 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
           publisher: true,
           edition: true,
           reorderPointBase: true,
+          foodDish: { select: { stockMode: true, soldOut: true, lowAt: true } },
           defaultCostBasePence: true,
           productUnits: {
             select: {
@@ -116,8 +119,7 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
       packagingUnitPlural: packaging?.unit.pluralName,
       packagingConversion: packaging?.conversionToBase
     });
-    const isLow = product.reorderPointBase > 0 && qtyOnHand <= product.reorderPointBase;
-    const isOut = qtyOnHand <= 0;
+    const availability = inventoryAvailability(business.businessCategory, product.foodDish, qtyOnHand, product.reorderPointBase);
 
     return {
       product,
@@ -126,22 +128,23 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
       qtyOnHand,
       avgCostBase,
       stockValue: qtyOnHand === 0 ? 0 : balance?.knownValuePence != null && balance.unvaluedQtyBase === 0 ? balance.knownValuePence : null,
-      hasCostDrift,
-      formatted,
-      isLow,
-      isOut,
+      hasCostDrift: !availability.dish && hasCostDrift,
+      formatted: availability.quantity ?? formatted,
+      ...availability,
     };
   });
-  const outOfStockCount = inventoryRows.filter((row) => row.isOut).length;
-  const lowStockCount = inventoryRows.filter((row) => row.isLow && !row.isOut).length;
+  const food = isFoodBusiness(business.businessCategory);
+  const outOfStockCount = inventoryRows.filter((row) => !row.dish && row.isOut).length;
+  const soldOutDishes = inventoryRows.filter((row) => row.dish && row.isOut).length;
+  const lowStockCount = inventoryRows.filter((row) => !row.dish && row.isLow && !row.isOut).length;
   const costDriftCount = inventoryRows.filter((row) => row.hasCostDrift).length;
-  const healthyCount = Math.max(0, inventoryRows.length - outOfStockCount - lowStockCount);
+  const healthyCount = Math.max(0, inventoryRows.filter((row) => !row.dish).length - outOfStockCount - lowStockCount);
 
   return (
     <div className="space-y-4 sm:space-y-5">
       <PageHeader
         title="Inventory"
-        subtitle="See what is in stock, what is running low, and what needs attention."
+        subtitle={food ? "Check dish availability, ingredients, and items you resell." : "See what is in stock, what is running low, and what needs attention."}
         actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
       />
 
@@ -190,7 +193,7 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
           <div>
             <h2 className="text-lg font-display font-semibold">Current stock</h2>
             <p className="mt-1 text-sm text-black/55">
-              {healthyCount} healthy · {lowStockCount} low · {outOfStockCount} out of stock · {costDriftCount} with cost drift
+              {healthyCount} healthy · {lowStockCount} low · {outOfStockCount} out of stock · {costDriftCount} with cost drift{food ? ` · ${soldOutDishes} dishes sold out` : null}
             </p>
           </div>
         </div>
@@ -209,21 +212,21 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
           {inventoryRows.length === 0 ? (
             <InventoryEmptyState q={q} totalCount={totalCount} />
           ) : (
-            inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, stockValue, hasCostDrift, isLow, isOut }) => (
+            inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, stockValue, hasCostDrift, isLow, isOut, dish, status }) => (
               <div
                 key={product.id}
                 className={`rounded-2xl border px-4 py-4 shadow-sm transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100 ${isOut ? 'border-rose-200 bg-rose-50' : isLow ? 'border-amber-200 bg-amber-50' : 'border-black/5 bg-white'}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="font-semibold text-ink">{[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}</div>
-                    <div className="mt-1 text-sm text-black/60">On hand: <span className="font-semibold text-black/75">{formatted}</span></div>
+                    <div className="font-semibold text-ink">{dish ? <Link className="underline" href={dishSettingsHref(product.id)}>{product.name}</Link> : [product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}</div>
+                    <div className="mt-1 text-sm text-black/60">{dish ? null : "On hand: "}<span className="font-semibold text-black/75">{formatted}</span></div>
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isOut ? 'bg-rose-100 text-rose-700' : isLow ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                    {isOut ? 'Out of stock' : isLow ? 'Low stock' : 'OK'}
+                    {status}
                   </span>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                {!dish && <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <div className="text-xs uppercase tracking-[0.16em] text-black/40">Avg cost</div>
                     <div className="mt-1 font-semibold text-ink">{formatMoney(avgCostBase, business.currency)}</div>
@@ -249,7 +252,7 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
                       Average cost reflects stock receipts and can differ from the current default cost.
                     </div>
                   ) : null}
-                </div>
+                </div>}
               </div>
             ))
           )}
@@ -277,7 +280,7 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
                   </td>
                 </tr>
               ) : (
-                inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, stockValue, hasCostDrift, isLow, isOut }) => (
+                inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, stockValue, hasCostDrift, isLow, isOut, dish, status }) => (
                   <tr
                     key={product.id}
                     className={`rounded-xl transition-all duration-150 motion-reduce:transform-none motion-reduce:transition-none ${
@@ -288,8 +291,9 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
                         : 'bg-white hover:-translate-y-px hover:bg-slate-50 hover:shadow-card'
                     }`}
                   >
-                    <td className="px-3 py-3 font-semibold">{[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}</td>
+                    <td className="px-3 py-3 font-semibold">{dish ? <Link className="underline" href={dishSettingsHref(product.id)}>{product.name}</Link> : [product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}</td>
                     <td className={`px-3 py-3 font-semibold ${isOut ? 'text-rose-600' : isLow ? 'text-amber-700' : ''}`}>{formatted}</td>
+                    {dish ? <td colSpan={4} className="px-3 py-3 text-sm text-black/60">Prepared dish</td> : <>
                     <td className="px-3 py-3 text-sm font-semibold">
                       {formatMoney(avgCostBase, business.currency)}
                       <div className="mt-1 text-xs font-normal text-black/60">Stock value: {stockValue == null ? 'Incomplete — cost review needed' : formatMoney(stockValue, business.currency)}</div>
@@ -301,15 +305,16 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
                     <td className="px-3 py-3 text-sm text-black/60">
                       {packaging ? `${packaging.unit.name} (${packaging.conversionToBase} base)` : '-'}
                     </td>
+                    </>}
                     <td className="px-3 py-3 text-sm">
                       {hasCostDrift ? (
                         <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-700">Cost drift</span>
                       ) : isOut ? (
-                        <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">Out of stock</span>
+                        <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">{status}</span>
                       ) : isLow ? (
-                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Low stock</span>
+                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">{status}</span>
                       ) : (
-                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">OK</span>
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{status}</span>
                       )}
                     </td>
                   </tr>

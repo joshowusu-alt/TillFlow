@@ -1,3 +1,4 @@
+import { purchasedStockOnly } from '@/lib/food/business';
 import TradingReportView from '@/components/reports/stage3b/TradingReportView';
 import { prisma } from '@/lib/prisma';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
@@ -86,6 +87,7 @@ async function _getTradingDashboardSnapshot(
     Promise.resolve(tradingBalances.outstandingPurchases),
     prisma.inventoryBalance.findMany({
       where: {
+        product: purchasedStockOnly,
         ...(selectedStoreId === 'ALL'
           ? { store: { businessId } }
           : { storeId: selectedStoreId }),

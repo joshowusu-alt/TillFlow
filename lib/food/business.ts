@@ -21,3 +21,12 @@ export function manualCatalogueHref(category: string | null | undefined): string
 export function manualCatalogueLabel(category: string | null | undefined): string {
   return isFoodBusiness(category) ? 'Add a dish' : 'Add a product manually';
 }
+
+export function dishSettingsHref(productId: string): string {
+  return `/products/dishes/${encodeURIComponent(productId)}`;
+}
+
+// Prepared dishes are managed through cooking and waste, independently of purchased stock.
+export const purchasedStockOnly = {
+  NOT: { business: { businessCategory: { equals: FOOD_BUSINESS_CATEGORY, not: null } }, foodDish: { isNot: null } },
+};

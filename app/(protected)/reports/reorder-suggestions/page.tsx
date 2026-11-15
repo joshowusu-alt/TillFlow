@@ -1,3 +1,4 @@
+import { purchasedStockOnly } from '@/lib/food/business';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
@@ -122,7 +123,7 @@ export default async function ReorderSuggestionsPage(
     'report.reorder-suggestions.load',
     () => Promise.all([
       prisma.product.findMany({
-        where: { businessId: business.id, active: true },
+        where: { ...purchasedStockOnly, businessId: business.id, active: true },
         select: {
           id: true,
           name: true,

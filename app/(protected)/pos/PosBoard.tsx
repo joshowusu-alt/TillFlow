@@ -18,14 +18,14 @@ import { posInventoryTag, posProductsTag } from '@/lib/cache/pos-tags';
 import { isFoodBusiness } from '@/lib/food/business';
 import { loadFoodCatalogue } from '@/lib/food/load-menus';
 
-function getCachedProducts(businessId: string) {
+function getCachedProducts(businessId: string, foodBusiness: boolean) {
   return unstable_cache(
     () =>
       prisma.product.findMany({
-        where: { businessId, active: true },
+        where: { businessId, active: true, ...(foodBusiness ? { ingredientOnly: false } : {}) },
         select: SELLABLE_PRODUCT_SELECT,
       }),
-    ['pos-products', businessId],
+    ['pos-products', businessId, String(foodBusiness)],
     { revalidate: 60, tags: [posProductsTag(businessId)] },
   )();
 }
@@ -116,7 +116,7 @@ export default async function PosBoard({
             ),
             measurePosFetch(
               'page.pos.products-load',
-              () => getCachedProducts(business.id),
+              () => getCachedProducts(business.id, isFoodBusiness(business.businessCategory)),
               'cached-wrapper',
             ),
           ]);
@@ -150,6 +150,7 @@ export default async function PosBoard({
             id: business.id,
             currency: business.currency,
             vatEnabled: business.vatEnabled,
+            canManageDishes: isFoodBusiness(business.businessCategory) && (user.role === "OWNER" || user.role === "MANAGER"),
             momoEnabled: (business as any).momoEnabled ?? false,
             momoProvider: (business as any).momoProvider ?? null,
             requireOpenTillForSales: (business as any).requireOpenTillForSales ?? false,

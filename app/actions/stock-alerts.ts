@@ -1,5 +1,6 @@
 'use server';
 
+import { purchasedStockOnly } from '@/lib/food/business';
 import { Prisma } from '@prisma/client';
 
 import { requireUser } from '@/lib/auth';
@@ -213,6 +214,7 @@ export async function checkAndSendLowStockAlert(input?: {
         ...(input?.storeId ? { storeId: input.storeId } : { store: { businessId } }),
         product: {
           businessId,
+          ...purchasedStockOnly,
           reorderPointBase: { gt: 0 },
           ...(input?.productIds?.length ? { id: { in: input.productIds } } : {}),
         },

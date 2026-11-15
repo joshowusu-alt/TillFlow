@@ -14,7 +14,7 @@ import {
   type FoodMenu,
   type PlateSnapshot,
 } from '@/lib/food/plate';
-import { foodAvailability } from '@/lib/food/availability';
+import { foodAvailability, sellableBaseQty } from '@/lib/food/availability';
 import { isFoodBusiness } from '@/lib/food/business';
 
 const banku: FoodMenu = {
@@ -141,6 +141,15 @@ describe('counted and not-counted dishes', () => {
     expect(() => pricePlate({ ...jollof, soldOut: true }, { addons: [{ addonId: 'chicken', qty: 1 }] }, 1500)).toThrow(/sold out/i);
     const sold = pricePlate(jollof, { addons: [{ addonId: 'chicken', qty: 1 }] }, 1500);
     expect(onlineHoldQty(sold, 2)).toBe(0);
+  });
+
+  it('keeps a counted dish unavailable at every quantity while manually sold out', () => {
+    const menu = { ...banku, soldOut: true };
+    expect(foodAvailability(menu, 5)).toBe('sold_out');
+    expect(sellableBaseQty(menu, 5)).toBe(0);
+    expect(() => pricePlate(menu, defaultPlateSelection(menu), 2500)).toThrow(/sold out/i);
+    expect(sellableBaseQty(banku, 5)).toBe(5);
+    expect(sellableBaseQty(null, 5)).toBe(5);
   });
 
   it('warns when a counted dish is low or sold out and holds every portion used', () => {

@@ -1,3 +1,4 @@
+import { purchasedStockOnly } from '@/lib/food/business';
 import { accountBalance, holdingCode } from '@/lib/services/purchase-funding';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
@@ -124,7 +125,7 @@ export default async function PurchasesPage(
 
   const [products, suppliers, units, purchaseCount, firstPurchases, openShifts] = await Promise.all([
     prisma.product.findMany({
-      where: { businessId: business.id, active: true },
+      where: { ...purchasedStockOnly, businessId: business.id, active: true },
       select: {
         id: true,
         name: true,

@@ -1,3 +1,4 @@
+import { isFoodBusiness, purchasedStockOnly } from '@/lib/food/business';
 import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { prisma } from '@/lib/prisma';
@@ -89,7 +90,7 @@ export default async function StocktakePage(
       take: 10,
     }),
     prisma.product.findMany({
-      where: { businessId: business.id, active: true },
+      where: { ...purchasedStockOnly, businessId: business.id, active: true },
       select: { id: true },
     }),
   ]);
@@ -100,7 +101,7 @@ export default async function StocktakePage(
     <div className="space-y-6">
       <PageHeader
         title="Stocktake"
-        subtitle="Scan products, enter counts, and reconcile variances safely."
+        subtitle={isFoodBusiness(business.businessCategory) ? "Count ingredients and items you resell. Manage cooked portions from the dish page." : "Scan products, enter counts, and reconcile variances safely."}
         actions={
           <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/inventory">
             ← Back to Inventory

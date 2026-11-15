@@ -84,7 +84,7 @@ export function getAvailableBase(
 ) {
   const product = productMap.get(targetProductId);
   if (!product) return 0;
-  if (product.food?.stockMode === 'NOT_COUNTED') {
+  if (product.food?.soldOut || product.food?.stockMode === 'NOT_COUNTED') {
     return sellableBaseQty(product.food, product.onHandBase);
   }
   const usedBase = cart.reduce((sum, line) => {
@@ -218,7 +218,7 @@ export function buildAvailableBaseMap(cart: PosCartLine[], productMap: Map<strin
   const result = new Map<string, number>();
   for (const [productId, used] of usedMap) {
     const product = productMap.get(productId);
-    if (product?.food?.stockMode === 'NOT_COUNTED') {
+    if (product?.food?.soldOut || product?.food?.stockMode === 'NOT_COUNTED') {
       result.set(productId, sellableBaseQty(product.food, product.onHandBase));
       continue;
     }

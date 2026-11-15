@@ -45,6 +45,7 @@ import {
 } from '@/lib/payments/pos-checkout-state';
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
 import FoodPlatePicker from '@/components/food/FoodPlatePicker';
+import { dishSettingsHref } from '@/lib/food/business';
 import { foodAvailabilityText } from '@/lib/food/availability';
 import { defaultPlateSelection, dishNeedsPicker, formatDishListPrice, pricePlate, type PlateSelection } from '@/lib/food/plate';
 import { filterPosProducts } from '@/lib/payments/pos-search';
@@ -106,6 +107,7 @@ type PosClientProps = {
     id: string;
     currency: string;
     vatEnabled: boolean;
+    canManageDishes?: boolean;
     momoEnabled?: boolean;
     momoProvider?: string | null;
     requireOpenTillForSales?: boolean;
@@ -438,11 +440,11 @@ export default function PosClient({
     const product = getProduct(targetProductId);
     const unit = getUnit(product, targetUnitId);
     if (!product || !unit) return desiredQty;
+    if (product.food?.soldOut) {
+      setStockAlert(`${product.name} is sold out.`);
+      return 0;
+    }
     if (product.food?.stockMode === 'NOT_COUNTED') {
-      if (product.food.soldOut) {
-        setStockAlert(`${product.name} is sold out.`);
-        return 0;
-      }
       setStockAlert(null);
       return desiredQty;
     }
@@ -486,12 +488,11 @@ export default function PosClient({
   const addPlateToCart = useCallback((product: ProductDto, plate?: PlateSelection) => {
     const baseUnitId = getProductBaseUnitId(product);
     if (!baseUnitId) return;
-    if (
-      product.food &&
-      !plate &&
-      (dishNeedsPicker(product.food) || (product.food.stockMode === 'NOT_COUNTED' && product.food.soldOut))
-    ) {
-      if (product.food.stockMode === 'NOT_COUNTED' && product.food.soldOut) return;
+    if (product.food?.soldOut) {
+      setStockAlert(`${product.name} is sold out.`);
+      return;
+    }
+    if (product.food && !plate && dishNeedsPicker(product.food)) {
       mergeProductOption(product);
       setPlateProduct(product);
       return;
@@ -1699,9 +1700,10 @@ export default function PosClient({
                       const baseUnitId = getProductBaseUnitId(product);
                       const available = getAvailableBase(product.id);
                       const outOfStock = available <= 0;
+                      const manageSoldOut = outOfStock && product.food && business.canManageDishes;
                       return (
+                        <div key={product.id}>
                         <button
-                          key={product.id}
                           type="button"
                           disabled={outOfStock}
                           className={`w-full px-4 py-3 text-left transition-colors ${outOfStock ? 'opacity-40 cursor-not-allowed' : 'hover:bg-accentSoft active:bg-blue-100'}`}
@@ -1743,7 +1745,7 @@ export default function PosClient({
                                 {formatDishListPrice(product.food, product.sellingPriceBasePence, (pence) => formatMoney(pence, business.currency))}
                               </div>
                               <div className={`text-[10px] font-semibold uppercase tracking-wide ${outOfStock ? 'text-red-500' : 'text-black/40'}`}>
-                                {product.food?.stockMode === 'COUNTED' ? 'Portions' : 'Stock'}
+                                {product.food?.stockMode === 'COUNTED' ? 'Portions' : product.food ? 'Availability' : 'Stock'}
                               </div>
                               <div className={`text-[11px] tabular-nums ${outOfStock ? 'text-red-600 font-semibold' : product.food && foodAvailabilityText(product.food, available) === 'Low' ? 'text-amber-700 font-semibold' : 'text-black/55'}`}>
                                 {product.food
@@ -1753,6 +1755,14 @@ export default function PosClient({
                             </div>
                           </div>
                         </button>
+                        {manageSoldOut && <Link className="inline-flex min-h-11 items-center px-4 text-sm font-semibold text-accent underline"
+                          href={dishSettingsHref(product.id)}
+                          onFocus={() => {
+                            if (productDropdownCloseTimer.current) clearTimeout(productDropdownCloseTimer.current);
+                          }}
+                          onBlur={() => setProductDropdownOpen(false)}
+                          aria-label={`Manage dish: ${product.name}`}>Manage dish</Link>}
+                        </div>
                       );
                     })}
                     </>
@@ -1896,6 +1906,7 @@ export default function PosClient({
           key={`${business.id}.${store.id}`}
           workspaceTab={productWorkspaceTab} onWorkspaceTabChange={setProductWorkspaceTab} cartCount={cartDetails.length}
           businessId={business.id} storeId={store.id} currency={business.currency}
+          canManageDishes={business.canManageDishes}
           products={productOptions} serverCatalogue={useServerCatalogue} onProductLoaded={mergeProductOption} getAvailable={getAvailableBase}
           onSelect={(product) => {
             const baseUnitId = getProductBaseUnitId(product);

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { inventoryAvailability } from '@/lib/food/inventory-presentation';
 import { describe, expect, it } from 'vitest';
 
 describe('inventory page polish', () => {
@@ -65,12 +66,14 @@ describe('inventory page polish', () => {
     expect(src).toContain('Cost drift');
   });
 
-  it('stock calculation logic is untouched', () => {
+  it('uses the same low and out-of-stock thresholds for retail rows', () => {
     expect(src).toContain('qtyOnHandBase');
     expect(src).toContain('avgCostBasePence');
     expect(src).toContain('reorderPointBase');
-    expect(src).toContain('isLow = product.reorderPointBase > 0 && qtyOnHand <= product.reorderPointBase');
-    expect(src).toContain('isOut = qtyOnHand <= 0');
+    expect(src).toContain('inventoryAvailability(business.businessCategory, product.foodDish, qtyOnHand, product.reorderPointBase)');
+    expect(inventoryAvailability('SUPERMARKET', null, 2, 2)).toMatchObject({ isLow: true, isOut: false });
+    expect(inventoryAvailability('SUPERMARKET', null, 0, 0)).toMatchObject({ isLow: false, isOut: true });
+    expect(inventoryAvailability('SUPERMARKET', null, 3, 2)).toMatchObject({ isLow: false, isOut: false });
     expect(src).toContain('hasCostDrift = balance?.avgCostBasePence != null && balance.avgCostBasePence !== product.defaultCostBasePence');
   });
 

@@ -163,7 +163,7 @@ export function normalizeDishDraft(draft: DishDraft): NormalizedDish {
     description,
     showOnline: Boolean(draft.showOnline),
     stockMode,
-    soldOut: stockMode === 'NOT_COUNTED' && Boolean(draft.soldOut),
+    soldOut: Boolean(draft.soldOut),
     lowAt,
     costPerPortionPence,
     sizes,

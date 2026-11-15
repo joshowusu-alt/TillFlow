@@ -1,6 +1,6 @@
 'use server';
 
-import { isFoodBusiness } from '@/lib/food/business';
+import { isFoodBusiness, purchasedStockOnly } from '@/lib/food/business';
 import { loadTradingPeriodMargin } from '@/lib/reports/trading-margin';
 import { Prisma } from '@prisma/client';
 import { redirect } from 'next/navigation';
@@ -214,7 +214,7 @@ async function _buildEodSummaryPayload(
         where: {
           ...(scopedStore ? { storeId: scopedStore.id } : { store: { businessId } }),
           qtyOnHandBase: { lte: 0 },
-          product: { reorderPointBase: { gt: 0 } }
+          product: { ...purchasedStockOnly, reorderPointBase: { gt: 0 } }
         }
       }),
       prisma.salesInvoice.count({

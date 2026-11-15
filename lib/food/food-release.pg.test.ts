@@ -153,6 +153,39 @@ describePg('food release stress on throwaway Postgres', () => {
     return row.unitId;
   }
 
+  it('keeps counted and uncounted dishes out of purchased-stock selectors while keeping actual stock', async () => {
+    const { purchasedStockOnly } = await import('@/lib/food/business');
+    const { stockSetupGapProductWhere } = await import('@/lib/improve-records-stock-gap-where');
+    const uncounted = await dishes.saveDish({ businessId, draft: draft({
+      name: 'Available menu item', startingPriceCedis: '20',
+    }) });
+    const counted = await dishes.saveDish({ businessId, draft: draft({
+      name: 'Counted menu item', startingPriceCedis: '20', stockMode: 'COUNTED',
+    }) });
+    const water = await db.product.create({ data: { businessId, name: 'Selector fixture water', sellingPriceBasePence: 200, defaultCostBasePence: 100 } });
+    const ids = [uncounted.id, counted.id, water.id];
+    const query = () => db.product.findMany({
+      where: { businessId, id: { in: ids }, active: true, ...purchasedStockOnly },
+      select: { id: true },
+    });
+    const stockSetup = () => db.product.findMany({
+      where: { ...stockSetupGapProductWhere(businessId), id: { in: ids } },
+      select: { id: true },
+    });
+    expect(await query()).toEqual([{ id: water.id }]);
+    expect(await stockSetup()).toEqual([{ id: water.id }]);
+    const expectedIds = [...ids].sort();
+    try {
+      for (const businessCategory of ['SUPERMARKET', null]) {
+        await db.business.update({ where: { id: businessId }, data: { businessCategory } });
+        expect((await query()).map(({ id }) => id).sort()).toEqual(expectedIds);
+        expect((await stockSetup()).map(({ id }) => id).sort()).toEqual(expectedIds);
+      }
+    } finally {
+      await db.business.update({ where: { id: businessId }, data: { businessCategory: 'FOOD_DISHES' } });
+    }
+  });
+
   it('preserves the dish category and excludes counted dishes from missing stock costs', async () => {
     const { getIncompleteStockSnapshot } = await import('@/lib/reports/incomplete-stock');
     const category = await db.category.create({ data: { businessId, name: 'Rice bowls' } });
@@ -553,6 +586,32 @@ describePg('food release stress on throwaway Postgres', () => {
       items: [{ productId: plain.id, unitId: await baseUnit(plain.id), qtyInUnit: 3 }],
     })).rejects.toThrow(/sold out/i);
   }, 60000);
+
+  it('blocks counted dishes marked sold out on the till and storefront until the switch is cleared', async () => {
+    const menu = draft({ name: 'Kitchen closed rice', startingPriceCedis: '12', stockMode: 'COUNTED', soldOut: true });
+    const dish = await dishes.saveDish({ businessId, draft: menu });
+    await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 3 });
+    const unitId = await baseUnit(dish.id);
+    const slug = (await db.business.findUniqueOrThrow({ where: { id: businessId } })).storefrontSlug!;
+    const attemptSale = () => sales.createSale({
+      businessId, storeId, tillId, cashierUserId: userId, paymentStatus: 'PAID',
+      payments: [{ method: 'CASH', amountPence: 1200 }],
+      lines: [{ productId: dish.id, unitId, qtyInUnit: 1 }],
+    });
+    const attemptOnline = () => checkout.createOnlineCheckout({
+      slug, storeId, customerName: 'Ama', customerPhone: '0241234567',
+      items: [{ productId: dish.id, unitId, qtyInUnit: 1 }],
+    });
+
+    await expect(attemptSale()).rejects.toThrow(/sold out/i);
+    await expect(attemptOnline()).rejects.toThrow(/sold out/i);
+    expect(await onHand(dish.id)).toBe(3);
+
+    await dishes.saveDish({ businessId, draft: { ...menu, productId: dish.id, soldOut: false } });
+    await attemptSale();
+    await attemptOnline();
+    expect(await onHand(dish.id)).toBe(1);
+  });
 
   it('lets only one of two simultaneous sales take the last portion', async () => {
     const dish = await dishes.saveDish({
