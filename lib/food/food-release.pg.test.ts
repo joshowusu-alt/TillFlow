@@ -155,6 +155,7 @@ describePg('food release stress on throwaway Postgres', () => {
 
   it('keeps counted and uncounted dishes out of purchased-stock selectors while keeping actual stock', async () => {
     const { purchasedStockOnly } = await import('@/lib/food/business');
+    const { stockSetupGapProductWhere } = await import('@/lib/improve-records-stock-gap-where');
     const uncounted = await dishes.saveDish({ businessId, draft: draft({
       name: 'Available menu item', startingPriceCedis: '20',
     }) });
@@ -167,10 +168,16 @@ describePg('food release stress on throwaway Postgres', () => {
       where: { businessId, id: { in: ids }, active: true, ...purchasedStockOnly },
       select: { id: true },
     });
+    const stockSetup = () => db.product.findMany({
+      where: { ...stockSetupGapProductWhere(businessId), id: { in: ids } },
+      select: { id: true },
+    });
     expect(await query()).toEqual([{ id: water.id }]);
+    expect(await stockSetup()).toEqual([{ id: water.id }]);
     await db.business.update({ where: { id: businessId }, data: { businessCategory: 'SUPERMARKET' } });
     try {
       expect((await query()).map(({ id }) => id).sort()).toEqual(ids.sort());
+      expect((await stockSetup()).map(({ id }) => id).sort()).toEqual(ids);
     } finally {
       await db.business.update({ where: { id: businessId }, data: { businessCategory: 'FOOD_DISHES' } });
     }
