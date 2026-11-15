@@ -49,7 +49,7 @@ describe('P15 paged POS does not load all inventory', () => {
 
   it('keeps local-mode inventory load behind the paged return', () => {
     expect(posBoard).toContain('getCachedInventory(business.id, baseStore.id)');
-    expect(posBoard).toContain('getCachedProducts(business.id)');
+    expect(posBoard).toContain('getCachedProducts(business.id, isFoodBusiness(business.businessCategory))');
     const elseIdx = posBoard.indexOf("if (catalogueMode === 'paged')");
     const localLoad = posBoard.slice(elseIdx);
     expect(localLoad).toMatch(/Promise\.all\(\s*\[/);

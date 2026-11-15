@@ -44,7 +44,8 @@ describe('products page polish', () => {
     expect(src).toContain('name="preferredSupplierId"');
     expect(src).toContain('Used by Sales by Linked Supplier reporting');
     expect(src).toContain('href="/products?tab=categories"');
-    expect(src).toContain('href={`/products/${product.id}`}');
+    expect(src).toContain('isManager && foodBusiness && product.foodDish ? dishSettingsHref(product.id) : `/products/${product.id}`');
+    expect(src).toContain('href={productHref}');
     expect(src).toContain('/suppliers/${product.preferredSupplier.id}');
   });
 
