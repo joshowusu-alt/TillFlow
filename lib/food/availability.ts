@@ -6,7 +6,7 @@ export type FoodAvailability = 'available' | 'low' | 'sold_out';
  * Till warning only. Counted dishes still sell until the connected checkout
  * finds there is not enough, the same way retail does. There is no till hold.
  */
-export function foodAvailability(menu: FoodMenu, onHand: number): FoodAvailability {
+export function foodAvailability(menu: Pick<FoodMenu, 'stockMode' | 'soldOut' | 'lowAt'>, onHand: number): FoodAvailability {
   if (menu.stockMode === 'NOT_COUNTED') return menu.soldOut ? 'sold_out' : 'available';
   if (onHand <= 0) return 'sold_out';
   if (menu.lowAt > 0 && onHand <= menu.lowAt) return 'low';

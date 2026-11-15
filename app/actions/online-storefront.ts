@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { purchasedStockOnly } from '@/lib/food/business';
 import { audit } from '@/lib/audit';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { formAction, withBusinessContext } from '@/lib/action-utils';
@@ -349,6 +350,7 @@ export async function hideOutOfStockStorefrontProductsAction(): Promise<void> {
         businessId,
         active: true,
         storefrontPublished: true,
+        ...purchasedStockOnly,
       },
       select: {
         id: true,
@@ -369,6 +371,7 @@ export async function hideOutOfStockStorefrontProductsAction(): Promise<void> {
           where: {
             businessId,
             id: { in: outOfStockProductIds },
+            ...purchasedStockOnly,
           },
           data: { storefrontPublished: false },
         })

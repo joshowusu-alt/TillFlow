@@ -1230,3 +1230,28 @@ describe('POS clear cart confirmation and recovery', () => {
     expect(screen.getByTestId('pos-complete-checkout')).toBeEnabled();
   });
 });
+
+it.each([
+  ['NOT_COUNTED', true, 0, true, true],
+  ['NOT_COUNTED', false, 0, true, false],
+  ['COUNTED', false, 0, true, true],
+  ['COUNTED', false, 2, true, false],
+  ['NOT_COUNTED', true, 0, false, false],
+] as const)('offers dish management for sold-out %s results only to authorised users', async (stockMode, soldOut, onHandBase, canManageDishes, showLink) => {
+  const dish = {
+    ...product, id: 'banku', name: 'Banku', onHandBase,
+    food: { productId: 'banku', name: 'Banku', stockMode, soldOut, lowAt: 1, sizes: [], inclusions: [], groups: [] },
+  };
+  render(<PosClient {...baseProps} business={{ ...baseProps.business, canManageDishes }} products={[dish, { ...product, onHandBase: 0 }]} />);
+  const search = screen.getByLabelText('Search products');
+  fireEvent.focus(search);
+  fireEvent.change(search, { target: { value: 'Banku' } });
+  await screen.findByRole('button', { name: /^Banku/i });
+  const link = screen.queryByRole('link', { name: 'Manage dish: Banku' });
+  if (showLink) expect(link).toHaveAttribute('href', '/products/dishes/banku');
+  else expect(link).toBeNull();
+
+  fireEvent.change(search, { target: { value: 'Coca' } });
+  expect(await screen.findByRole('button', { name: /^Coca Cola/i })).toBeDisabled();
+  expect(screen.queryByRole('link', { name: /Manage dish/ })).toBeNull();
+});

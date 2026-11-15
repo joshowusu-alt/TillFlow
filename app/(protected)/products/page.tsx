@@ -24,7 +24,7 @@ import { formatCatalogueUnitLabel, getPrimaryPackagingUnit } from '@/lib/units';
 import { defaultBaseUnitId } from '@/lib/units/selectable-units';
 import { listSelectableUnits } from '@/lib/units/list-selectable-units';
 import { createProductAction } from '@/app/actions/products';
-import { isFoodBusiness } from '@/lib/food/business';
+import { dishSettingsHref, isFoodBusiness } from '@/lib/food/business';
 import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from '@/app/actions/categories';
 import BarcodeScanInput from '@/components/BarcodeScanInput';
 import ProductUnitPricingEditor from '@/components/ProductUnitPricingEditor';
@@ -104,6 +104,7 @@ export default async function ProductsPage(
   const searchParams = await props.searchParams;
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
+  const foodBusiness = isFoodBusiness(business.businessCategory);
   const defaultMarginThresholdPercent = ((business.minimumMarginThresholdBps ?? 1500) / 100).toFixed(2);
   const fileUploadEnabled = Boolean(process.env.BLOB_READ_WRITE_TOKEN) || (process.env.VERCEL !== '1' && process.env.VERCEL !== 'true');
   const isManager = user.role !== 'CASHIER';
@@ -599,6 +600,7 @@ export default async function ProductsPage(
                 </CompactMobileListItem>
               ) : products.map((product) => {
                 const unitLabel = catalogueUnitLabel(product);
+                const productHref = isManager && foodBusiness && product.foodDish ? dishSettingsHref(product.id) : `/products/${product.id}`;
 
                 return (
                   <CompactMobileListItem key={product.id}>
@@ -619,7 +621,7 @@ export default async function ProductsPage(
                               {product.name.charAt(0)}
                             </div>
                           )}
-                          <Link href={`/products/${product.id}`} className="min-h-[44px] min-w-0 break-words py-2 [overflow-wrap:anywhere] hover:underline">
+                          <Link href={productHref} className="min-h-[44px] min-w-0 break-words py-2 [overflow-wrap:anywhere] hover:underline">
                             {[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                           </Link>
                         </div>
@@ -627,8 +629,8 @@ export default async function ProductsPage(
                       subtitle={<ProductClassificationLabel category={product.category} group={product.group} division={product.division} />}
                     />
                     <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                      <DataCardField label="Base price" value={<span className="font-semibold text-ink">{formatFromSizePrices(product.foodDish?.sizes.map((size) => size.pricePence), product.sellingPriceBasePence, (pence) => formatMoney(pence, business.currency))}</span>} />
-                      {isManager ? <DataCardField label="Default cost" value={<span className="font-semibold text-ink">{formatMoney(product.defaultCostBasePence, business.currency)}</span>} /> : null}
+                      <DataCardField label={foodBusiness && product.foodDish ? "Dish price" : "Base price"} value={<span className="font-semibold text-ink">{formatFromSizePrices(product.foodDish?.sizes.map((size) => size.pricePence), product.sellingPriceBasePence, (pence) => formatMoney(pence, business.currency))}</span>} />
+                      {isManager && !(foodBusiness && product.foodDish) ? <DataCardField label="Default cost" value={<span className="font-semibold text-ink">{formatMoney(product.defaultCostBasePence, business.currency)}</span>} /> : null}
                       <DataCardField label="Preferred supplier" value={<span className="text-black/65">{product.preferredSupplier?.name ?? 'None'}</span>} className="col-span-2" />
                       <DataCardField label="Unit display" value={<span className="text-black/65">{unitLabel}</span>} className="col-span-2" />
                     </div>
@@ -657,7 +659,7 @@ export default async function ProductsPage(
                               >
                                 Add stock
                               </Link>
-                              <Link href={`/products/${product.id}`} className="btn-ghost min-h-[44px] text-xs">
+                              <Link href={productHref} className="btn-ghost min-h-[44px] text-xs">
                                 Edit product
                               </Link>
                               {issueKey === 'UNUSED_CATALOGUE' ? (
@@ -671,7 +673,7 @@ export default async function ProductsPage(
                           ) : null}
                         </>
                       ) : (
-                        <Link href={`/products/${product.id}`} className="btn-ghost min-h-[44px] text-xs">
+                        <Link href={productHref} className="btn-ghost min-h-[44px] text-xs">
                           Open product
                         </Link>
                       )}
@@ -721,6 +723,7 @@ export default async function ProductsPage(
                   )}
                   {products.map((product) => {
                     const unitLabel = catalogueUnitLabel(product);
+                    const productHref = isManager && foodBusiness && product.foodDish ? dishSettingsHref(product.id) : `/products/${product.id}`;
                     return (
                       <tr key={product.id} className="rounded-xl bg-white transition-colors duration-150 hover:bg-slate-50">
                         <td className="hidden sm:table-cell px-3 py-3 w-10">
@@ -739,7 +742,7 @@ export default async function ProductsPage(
                           )}
                         </td>
                         <td className="px-3 py-3 font-semibold">
-                          <Link href={`/products/${product.id}`} className="hover:underline">
+                          <Link href={productHref} className="hover:underline">
                             {[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
                           </Link>
                         </td>
@@ -747,7 +750,7 @@ export default async function ProductsPage(
                           <ProductClassificationLabel category={product.category} group={product.group} division={product.division} />
                         </td>
                         <td className="px-3 py-3">{formatFromSizePrices(product.foodDish?.sizes.map((size) => size.pricePence), product.sellingPriceBasePence, (pence) => formatMoney(pence, business.currency))}</td>
-                        {isManager ? <td className="hidden lg:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td> : null}
+                        {isManager ? <td className="hidden lg:table-cell px-3 py-3">{foodBusiness && product.foodDish ? "Costed in kitchen" : formatMoney(product.defaultCostBasePence, business.currency)}</td> : null}
                         <td className="hidden xl:table-cell px-3 py-3 text-sm text-black/60">
                           {product.preferredSupplier ? (
                             <Link href={`/suppliers/${product.preferredSupplier.id}`} className="hover:underline">
@@ -788,7 +791,7 @@ export default async function ProductsPage(
                                   >
                                     Add stock
                                   </Link>
-                                  <Link href={`/products/${product.id}`} className="btn-ghost text-xs">
+                                  <Link href={productHref} className="btn-ghost text-xs">
                                     Edit
                                   </Link>
                                   {issueKey === 'UNUSED_CATALOGUE' ? (

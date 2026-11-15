@@ -153,6 +153,29 @@ describePg('food release stress on throwaway Postgres', () => {
     return row.unitId;
   }
 
+  it('keeps counted and uncounted dishes out of purchased-stock selectors while keeping actual stock', async () => {
+    const { purchasedStockOnly } = await import('@/lib/food/business');
+    const uncounted = await dishes.saveDish({ businessId, draft: draft({
+      name: 'Available menu item', startingPriceCedis: '20',
+    }) });
+    const counted = await dishes.saveDish({ businessId, draft: draft({
+      name: 'Counted menu item', startingPriceCedis: '20', stockMode: 'COUNTED',
+    }) });
+    const water = await db.product.create({ data: { businessId, name: 'Selector fixture water', sellingPriceBasePence: 200, defaultCostBasePence: 100 } });
+    const ids = [uncounted.id, counted.id, water.id];
+    const query = () => db.product.findMany({
+      where: { businessId, id: { in: ids }, active: true, ...purchasedStockOnly },
+      select: { id: true },
+    });
+    expect(await query()).toEqual([{ id: water.id }]);
+    await db.business.update({ where: { id: businessId }, data: { businessCategory: 'SUPERMARKET' } });
+    try {
+      expect((await query()).map(({ id }) => id).sort()).toEqual(ids.sort());
+    } finally {
+      await db.business.update({ where: { id: businessId }, data: { businessCategory: 'FOOD_DISHES' } });
+    }
+  });
+
   it('preserves the dish category and excludes counted dishes from missing stock costs', async () => {
     const { getIncompleteStockSnapshot } = await import('@/lib/reports/incomplete-stock');
     const category = await db.category.create({ data: { businessId, name: 'Rice bowls' } });

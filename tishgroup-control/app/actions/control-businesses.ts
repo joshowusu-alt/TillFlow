@@ -321,6 +321,7 @@ async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$discon
     where: { id: args.businessId },
     data: {
       plan: args.purchasedPlan,
+      selectedPlan: args.purchasedPlan,
       addonOnlineStorefront,
       billingAmount: intervalPricing.totalBillingAmount,
       billingInterval: billingCadence,
@@ -528,6 +529,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
         where: { id: businessId },
         data: {
           plan: purchasedPlan,
+          selectedPlan: purchasedPlan,
           planStatus: businessStatusFromSubscription(status),
           subscriptionStatus: billingStatusFromSubscription(status),
           trialEndsAt: isTrialStatus(status) ? trialEndsAt : null,
@@ -711,6 +713,8 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
       await tx.business.update({
         where: { id: businessId },
         data: {
+          plan: purchasedPlan,
+          selectedPlan: purchasedPlan,
           planStatus: activation.planStatus,
           subscriptionStatus: activation.subscriptionStatus,
           trialEndsAt: null,

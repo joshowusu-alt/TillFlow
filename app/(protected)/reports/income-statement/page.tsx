@@ -1,3 +1,4 @@
+import { isFoodBusiness } from '@/lib/food/business';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import DownloadLink from '@/components/DownloadLink';
 import StatCard from '@/components/StatCard';
@@ -81,6 +82,13 @@ export default async function IncomeStatementPage(
           </ReportActionGroup>
         }
       />
+
+      {isFoodBusiness(business.businessCategory) && statement.revenue > 0 &&
+        statement.foodCosts === 0 && statement.foodWaste === 0 && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            This period has no net food costs recorded. Record cooked portions with a recipe or use Ingredients used so the report reflects your ingredient costs.
+          </p>
+        )}
 
       {/* KPI Summary */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

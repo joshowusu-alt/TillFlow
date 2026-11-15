@@ -1,3 +1,4 @@
+import { purchasedStockOnly } from '@/lib/food/business';
 import { applyFoodProfit } from '@/lib/reports/food-profit';
 import { Prisma } from '@prisma/client';
 
@@ -276,7 +277,7 @@ export async function getOwnerDailySummaryMetrics(
         where: {
           ...(scopedStore ? { storeId: scopedStore.id } : { store: { businessId: business.id } }),
           qtyOnHandBase: { lte: 0 },
-          product: { reorderPointBase: { gt: 0 } },
+          product: { ...purchasedStockOnly, reorderPointBase: { gt: 0 } },
         },
       }),
       db.salesInvoice.count({

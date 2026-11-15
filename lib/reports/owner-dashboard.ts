@@ -1,3 +1,4 @@
+import { purchasedStockOnly } from '@/lib/food/business';
 import { applyFoodProfit } from '@/lib/reports/food-profit';
 import { getOwnerBrief, type OwnerBrief } from '@/lib/owner-intel';
 import { prisma } from '@/lib/prisma';
@@ -325,11 +326,11 @@ async function _getOwnerDashboardSnapshot(
 			where: storeId
 				? {
 						storeId,
-						product: { active: true, reorderPointBase: { gt: 0 } },
+						product: { ...purchasedStockOnly, active: true, reorderPointBase: { gt: 0 } },
 					}
 				: {
 						store: { businessId },
-						product: { active: true, reorderPointBase: { gt: 0 } },
+						product: { ...purchasedStockOnly, active: true, reorderPointBase: { gt: 0 } },
 					},
 			select: {
 				id: true,

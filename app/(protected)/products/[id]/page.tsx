@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation';
+import { dishSettingsHref, isFoodBusiness } from '@/lib/food/business';
 import { parseProductAttributes } from '@/lib/products/attributes';
 import ProductCategoryField from '@/components/products/ProductCategoryField';
 import { listProductDivisions } from '@/lib/services/product-classification';
@@ -50,6 +52,7 @@ export default async function ProductDetailPage(
             select: { storeId: true, qtyOnHandBase: true, avgCostBasePence: true }
           },
           category: true,
+          foodDish: { select: { productId: true } },
           barcodes: true,
           preferredSupplier: { select: { id: true, name: true } }
         }
@@ -68,6 +71,7 @@ export default async function ProductDetailPage(
   ]);
 
   if (!product) return <div className="card p-6">Product not found.</div>;
+  if (isFoodBusiness(business.businessCategory) && product.foodDish) redirect(dishSettingsHref(product.id));
   const assignedDivision = divisions.find(division => division.id === product.divisionId || division.groups.some(group => group.id === product.groupId));
   const assignedGroup = assignedDivision?.groups.find(group => group.id === product.groupId);
   const isManager = user.role !== 'CASHIER';

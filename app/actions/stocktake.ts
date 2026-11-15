@@ -1,5 +1,6 @@
 'use server';
 
+import { purchasedStockOnly } from '@/lib/food/business';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
@@ -85,7 +86,7 @@ export async function createStocktakeAction(formData?: FormData): Promise<void> 
     }
 
     const products = await prisma.product.findMany({
-      where: { businessId: user.businessId, active: true },
+      where: { ...purchasedStockOnly, businessId: user.businessId, active: true },
       select: {
         id: true,
         inventoryBalances: {

@@ -1,3 +1,4 @@
+import { purchasedStockOnly } from '@/lib/food/business';
 /**
  * Metric sources for the live Today page. Figures use existing calculations.
  *
@@ -286,7 +287,7 @@ export async function loadToday(db: Db, input: TodayLoadInput): Promise<TodaySna
         where: {
           storeId: { in: storeIds },
           store: { businessId: input.businessId },
-          product: { businessId: input.businessId, active: true, reorderPointBase: { gt: 0 } },
+          product: { ...purchasedStockOnly, businessId: input.businessId, active: true, reorderPointBase: { gt: 0 } },
         },
         select: {
           qtyOnHandBase: true,
