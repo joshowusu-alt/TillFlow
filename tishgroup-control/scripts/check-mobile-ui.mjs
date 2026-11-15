@@ -28,7 +28,7 @@ try {
     for(const route of routes){
       const response=await page.goto(base+route); assert.equal(response.status(),200,route);
       await page.locator('main h1').waitFor();
-      if(route==='/businesses/fixture-0?tab=billing') await page.getByText('Recording this payment will set the TillFlow plan to Growth.').waitFor();
+      if(route==='/businesses/fixture-0?tab=billing') await page.getByText('Recording this payment will set the TillFlow plan to Growth.').filter({visible:true}).first().waitFor();
       if(route.includes('businessId=fixture-0'))await page.getByRole('dialog').waitFor();
       const overflow = await page.evaluate(()=>{const main=document.querySelector('main');const modal=document.querySelector('dialog');return {document:document.documentElement.scrollWidth>innerWidth+1,main:main.scrollWidth>main.clientWidth+1,modal:modal?modal.scrollWidth>modal.clientWidth+1:false}});
       if(overflow.document||overflow.main){await page.screenshot({path:`${output}/failure.png`,fullPage:true});console.log(await page.locator('main *').evaluateAll(els=>els.filter(el=>el.getClientRects().length&&el.getBoundingClientRect().right>innerWidth).map(el=>({tag:el.tagName,cls:el.className,text:el.textContent.slice(0,90),right:el.getBoundingClientRect().right})).slice(-20)))}
