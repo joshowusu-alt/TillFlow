@@ -174,10 +174,13 @@ describePg('food release stress on throwaway Postgres', () => {
     });
     expect(await query()).toEqual([{ id: water.id }]);
     expect(await stockSetup()).toEqual([{ id: water.id }]);
-    await db.business.update({ where: { id: businessId }, data: { businessCategory: 'SUPERMARKET' } });
+    const expectedIds = [...ids].sort();
     try {
-      expect((await query()).map(({ id }) => id).sort()).toEqual(ids.sort());
-      expect((await stockSetup()).map(({ id }) => id).sort()).toEqual(ids);
+      for (const businessCategory of ['SUPERMARKET', null]) {
+        await db.business.update({ where: { id: businessId }, data: { businessCategory } });
+        expect((await query()).map(({ id }) => id).sort()).toEqual(expectedIds);
+        expect((await stockSetup()).map(({ id }) => id).sort()).toEqual(expectedIds);
+      }
     } finally {
       await db.business.update({ where: { id: businessId }, data: { businessCategory: 'FOOD_DISHES' } });
     }

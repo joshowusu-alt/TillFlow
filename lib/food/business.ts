@@ -28,5 +28,5 @@ export function dishSettingsHref(productId: string): string {
 
 // Prepared dishes are managed through cooking and waste, independently of purchased stock.
 export const purchasedStockOnly = {
-  NOT: { business: { businessCategory: FOOD_BUSINESS_CATEGORY }, foodDish: { isNot: null } },
+  NOT: { business: { businessCategory: { equals: FOOD_BUSINESS_CATEGORY, not: null } }, foodDish: { isNot: null } },
 };
