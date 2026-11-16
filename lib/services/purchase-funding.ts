@@ -27,10 +27,12 @@ export async function accountBalance(db: any, businessId: string, code: string) 
   const sum = await db.journalLine.aggregate({ where: { account: { businessId, code }, journalEntry: { businessId } }, _sum: { debitPence: true, creditPence: true } });
   return (sum._sum.debitPence ?? 0) - (sum._sum.creditPence ?? 0);
 }
+export const INSUFFICIENT_HELD_CASH = 'Not enough recorded business cash with this person. Record the handover first.';
+
 export async function lockFundingBalance(db: any, businessId: string, code: string, amountPence: number) {
   // All consumers of these balances take this lock before reading/posting.
   if (isPostgresRuntimeEnv(process.env)) await db.$queryRaw(Prisma.sql`SELECT id FROM "Account" WHERE "businessId" = ${businessId} AND code = ${code} FOR NO KEY UPDATE`);
-  if (await accountBalance(db, businessId, code) < amountPence) throw new Error(code === '1010' ? 'Not enough recorded bank / MoMo balance for this transfer.' : 'Not enough recorded business cash with this person. Record the handover first.');
+  if (await accountBalance(db, businessId, code) < amountPence) throw new Error(code === '1010' ? 'Not enough recorded bank / MoMo balance for this transfer.' : INSUFFICIENT_HELD_CASH);
 }
 export type CashTransferInput = { businessId: string; storeId: string; actorId: string; holderId: string; direction: 'ISSUE' | 'RETURN' | 'REPAY_OWNER'; source: 'TILL' | 'BANK' | 'OWNER_LOAN' | 'OWNER_CAPITAL'; ownerId?: string; tillId?: string; amountPence: number; note: string; key: string };
 export async function transferBusinessCash(input: CashTransferInput) {

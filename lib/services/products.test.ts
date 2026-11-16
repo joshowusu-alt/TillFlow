@@ -61,6 +61,23 @@ describe('product unit configuration helpers', () => {
     ]);
   });
 
+  it('quick-creates ingredients without a selling price while keeping the resale price check', async () => {
+    const data = {
+      name: 'Bread flour', sellingPriceBasePence: 0, defaultCostBasePence: 0,
+      baseUnitId: 'unit-piece', vatRateBps: 0,
+    };
+    prismaMock.product.create.mockResolvedValue({
+      id: 'flour', name: data.name, barcode: null, productUnits: [],
+      defaultCostBasePence: 0, sellingPriceBasePence: 0, vatRateBps: 0,
+    });
+    await expect(quickCreateProduct('biz-1', data)).rejects.toThrow('Selling price must be greater than zero.');
+    expect(prismaMock.product.create).not.toHaveBeenCalled();
+    await expect(quickCreateProduct('biz-1', { ...data, ingredientOnly: true })).resolves.toMatchObject({ id: 'flour' });
+    expect(prismaMock.product.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ ingredientOnly: true, sellingPriceBasePence: 0 }),
+    }));
+  });
+
   it('quick-creates products with explicit unit configs and returns override metadata', async () => {
     const dbMock = {
       $queryRaw: vi.fn().mockResolvedValue([]),

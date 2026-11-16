@@ -105,7 +105,6 @@ export async function createPurchaseAction(formData: FormData): Promise<ActionRe
     }
 
     const sourceDocuments=decodePurchaseDocuments(formString(formData,'purchaseDocumentsJson'));
-    validatePurchaseDocuments(sourceDocuments);
     const invoice = await createPurchase({
       businessId,
       storeId,

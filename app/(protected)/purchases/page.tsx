@@ -1,4 +1,5 @@
-import { purchasedStockOnly } from '@/lib/food/business';
+import { QUICK_PURCHASE_HREF } from '@/lib/purchases/quick';
+import { isFoodBusiness, purchasedStockOnly } from '@/lib/food/business';
 import { accountBalance, holdingCode } from '@/lib/services/purchase-funding';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
@@ -33,6 +34,7 @@ export default async function PurchasesPage(
   props: {
     searchParams?: Promise<{
       error?: string;
+      full?: string;
       page?: string;
       storeId?: string;
       created?: string;
@@ -54,6 +56,7 @@ export default async function PurchasesPage(
     );
   }
 
+  const quickPurchase = isFoodBusiness(business.businessCategory) && searchParams?.full !== '1';
   const issueKey = parseImproveRecordsIssue(searchParams?.issue);
   const missingSupplierIssue = issueKey === 'MISSING_SUPPLIER';
   // Unknown issue keys must not fall through to the full unfiltered list.
@@ -260,7 +263,7 @@ export default async function PurchasesPage(
             ? supplierIssueDef.explanation
             : 'Record deliveries once — TillFlow updates stock, costs, and payables together.'
         }
-        actions={issueActive ? undefined : <RecordPurchaseButton />}
+        actions={issueActive ? undefined : quickPurchase ? <Link className="btn-primary" href={QUICK_PURCHASE_HREF}>Record purchase</Link> : <RecordPurchaseButton />}
       />
       <FormError error={searchParams?.error} />
 
@@ -324,8 +327,8 @@ export default async function PurchasesPage(
         </div>
       )}
 
-      {!issueActive && (
-        <details id="record-purchase-form" className="details-mobile scroll-mt-16" open={Boolean(searchParams?.created)}>
+      {!issueActive && !quickPurchase && (
+        <details id="record-purchase-form" className="details-mobile scroll-mt-16" open={Boolean(searchParams?.created) || (isFoodBusiness(business.businessCategory) && searchParams?.full === '1')}>
           <summary className="flex cursor-pointer select-none items-center justify-between rounded-2xl border border-accent/20 bg-accent/5 px-4 py-3.5 shadow-sm transition-colors duration-150 hover:bg-accent/10 active:bg-accent/[0.12]">
             <span className="flex items-center gap-2 text-sm font-semibold text-accent">
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
@@ -351,6 +354,8 @@ export default async function PurchasesPage(
               <p className="mt-4 text-sm text-amber-800">Select a store before recording a purchase.</p>
             ) : (
             <PurchaseFormClient
+              receiptPhotoRequired={isFoodBusiness(business.businessCategory) && business.requirePurchasePhoto}
+              photoOptional={isFoodBusiness(business.businessCategory) && !business.requirePurchasePhoto}
               key={searchParams?.created ?? 'default'}
               storeId={selectedStoreId}
               currency={business.currency}

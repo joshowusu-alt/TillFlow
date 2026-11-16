@@ -116,6 +116,8 @@ export default function PurchaseFormClient({
   vatEnabled,
   openTills = [],
   cashPeople = [],
+  photoOptional = false,
+  receiptPhotoRequired = false,
 }: {
   storeId: string;
   products: ProductDto[];
@@ -124,6 +126,8 @@ export default function PurchaseFormClient({
   units: UnitOption[];
   vatEnabled: boolean;
   openTills?: OpenTillOption[];
+  photoOptional?: boolean;
+  receiptPhotoRequired?: boolean;
   cashPeople?: { id: string; name: string; role: string; balancePence: number }[];
 }) {
   const searchParams = useSearchParams();
@@ -817,7 +821,7 @@ export default function PurchaseFormClient({
 
         <label className="label">Receiving document<select name="receiptDocumentType" className="input mt-1" value={receiptDocumentType} onChange={event=>setReceiptDocumentType(event.target.value as 'INVOICE' | 'DELIVERY_NOTE')}><option value="INVOICE">Supplier invoice</option><option value="DELIVERY_NOTE">Delivery note — invoice to follow</option></select></label>
         {receiptDocumentType === 'DELIVERY_NOTE' ? <p className="text-sm text-amber-800">Confirm quantities and supplier costs before recording. This purchase will stay in Awaiting invoice until the supplier invoice is attached.</p> : null}
-        <PurchaseDocumentInput /><p className="text-xs text-black/50">If you restore a draft or reopen this page, select the document files again before recording.</p>
+        <PurchaseDocumentInput required={!photoOptional} imagesOnly={receiptPhotoRequired} /><p className="text-xs text-black/50">If you restore a draft or reopen this page, select the document files again before recording.</p>
         <div className="rounded-xl border border-slate-200 p-4">
           <label className="label" htmlFor="supplier-invoice-number">Supplier’s original invoice number (optional)</label>
           <input id="supplier-invoice-number" name="supplierInvoiceNumber" className="input" maxLength={100} value={supplierInvoiceNumber} onChange={event => { setSupplierInvoiceNumber(event.target.value); setDuplicateInvoice(null); }} onBlur={async () => { try { const result = await checkSupplierInvoiceReferenceAction(supplierId, supplierInvoiceNumber); if (result.success) setDuplicateInvoice(result.data); } catch { /* Optional duplicate hint must not interrupt entry. */ } }} placeholder="e.g. INV-2026-1042" />

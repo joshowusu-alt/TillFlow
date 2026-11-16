@@ -155,6 +155,7 @@ model Business {
   guidedSetup                          Boolean  @default(true)
   // Phase 6: activation / scale readiness (computed + cached by cron)
   businessCategory                     String?
+  requirePurchasePhoto                 Boolean  @default(false)
   activationStatus                     String   @default("GETTING_STARTED")
   setupProgressPct                     Int      @default(0)
   ownerLastDashboardViewAt             DateTime?
