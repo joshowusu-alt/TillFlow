@@ -660,8 +660,7 @@ describePg('food release stress on throwaway Postgres', () => {
     const { summarizeAmountSales } = await import('@/lib/food/amount-sales');
     await db.business.update({ where: { id: businessId }, data: { trialEndsAt: new Date(Date.now() + 86400000) } });
     const menu = draft({ name: 'Fried rice', startingPriceCedis: '30', stockMode: 'COUNTED',
-      allowCustomAmount: true, minimumAmountCedis: '',
-      sizes: [{ name: 'Regular', priceCedis: '30', isDefault: true }] });
+      allowCustomAmount: true, minimumAmountCedis: '' });
     const dish = await dishes.saveDish({ businessId, draft: menu });
     await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 3 });
     const shift = await db.shift.findFirstOrThrow({ where: { tillId, status: 'OPEN' } });
@@ -691,12 +690,15 @@ describePg('food release stress on throwaway Postgres', () => {
     expect(await summarizeAmountSales({ businessId, id: invoiceId })).toEqual({ count: 1, totalPence: 2000 });
     expect((await processOfflineSale(payload, { id: userId, businessId })).status).toBe('already_synced');
 
-    await dishes.saveDish({ businessId, draft: { ...menu, productId: dish.id, groups: [{
+    await dishes.saveDish({ businessId, draft: { ...menu, productId: dish.id,
+      sizes: [{ name: 'Regular', priceCedis: '30', isDefault: true }], groups: [{
       name: 'Extras', selection: 'MANY', required: false,
       addons: [{ name: 'Extra bowl', priceCedis: '5', stockPortions: 1, maxQty: 1 }],
     }] } });
     const configured = await menus.loadFoodCatalogue(businessId, [dish.id]);
-    const extra = configured.menus.get(dish.id)!.groups[0].addons[0];
+    const configuredDish = configured.menus.get(dish.id)!;
+    const sizeId = configuredDish.sizes[0].id;
+    const extra = configuredDish.groups[0].addons[0];
     const beforeExtra = await onHand(dish.id);
     const amountSale = await sales.createSale({
       businessId, storeId, tillId, cashierUserId: userId, paymentStatus: 'PAID',
@@ -710,7 +712,7 @@ describePg('food release stress on throwaway Postgres', () => {
       managerApprovedByUserId: userId, type: 'VOID', ownerDelete: true, reasonCode: 'TEST_SALE' });
     expect(await onHand(dish.id)).toBe(beforeExtra);
     expect(await summarizeAmountSales({ businessId, id: amountSale.id })).toEqual({ count: 0, totalPence: 0 });
-    await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 1 });
+    await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, sizeId, qty: 1 });
 
     await db.business.update({ where: { id: businessId }, data: { vatEnabled: true } });
     await db.product.update({ where: { id: dish.id }, data: { vatRateBps: 1500 } });
@@ -725,7 +727,7 @@ describePg('food release stress on throwaway Postgres', () => {
         unitPricePence: 2000, lineSubtotalPence: 1739, lineVatPence: 261, lineTotalPence: 2000, qtyBase: 1, lineCostPence: 0,
       });
       await balanced(taxed.id);
-      await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 4 });
+      await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, sizeId, qty: 4 });
       const beforeConverted = await onHand(dish.id);
       // Same payload the till queues after converting two regular plates with extras.
       const vatPayload = {
