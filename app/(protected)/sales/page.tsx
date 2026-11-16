@@ -97,7 +97,7 @@ export default async function SalesPage(
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      {amountSales && <p>Sold by amount: {amountSales.count} sales, {formatMoney(amountSales.totalPence, business.currency)} total</p>}
+      {amountSales && <p>Sold by amount: {amountSales.count} {amountSales.count === 1 ? 'sale' : 'sales'}, {formatMoney(amountSales.totalPence, business.currency)} total</p>}
       <PageHeader
         title="Sales"
         subtitle="Latest invoices, receipts, and payment status."

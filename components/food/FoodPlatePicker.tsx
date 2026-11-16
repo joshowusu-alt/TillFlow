@@ -72,7 +72,7 @@ export default function FoodPlatePicker({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-ink">{menu.name}</h2>
-            <p className="text-xs text-black/50">Build one plate. The price is worked out from the menu.</p>
+            <p className="text-xs text-black/50">{allowTillAmount && menu.allowCustomAmount ? "Choose a size or type an amount." : "Build one plate. The price is worked out from the menu."}</p>
           </div>
           <button type="button" className="text-sm text-black/50" onClick={onCancel}>
             Close
@@ -95,7 +95,7 @@ export default function FoodPlatePicker({
                   type="button"
                   onClick={() => { setOtherAmount(false); setSizeId(size.id); }}
                   className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
-                    sizeId === size.id ? 'bg-accent text-white' : 'bg-black/5 text-black/70'
+                    !otherAmount && sizeId === size.id ? 'bg-accent text-white' : 'bg-black/5 text-black/70'
                   }`}
                 >
                   {size.name} · {formatMoney(size.pricePence, currency)}

@@ -514,7 +514,7 @@ export default async function TradingDashboardContent({
     businessId, ...storeFilter, createdAt: { gte: scope.startInclusive, lt: scope.endExclusive },
   }) : null;
   return <>
-    {amountSales && <p className="mb-3">Sold by amount: {amountSales.count} sales, {formatMoney(amountSales.totalPence, currency)} total</p>}
+    {amountSales && <p className="mb-3">Sold by amount: {amountSales.count} {amountSales.count === 1 ? 'sale' : 'sales'}, {formatMoney(amountSales.totalPence, currency)} total</p>}
     <TradingReportView data={{
     currency, totalSales, totalPaymentReceipts,
     grossProfit: marginReady ? totalGrossMargin : null, grossProfitPercent: marginReady ? gpPercent : null,

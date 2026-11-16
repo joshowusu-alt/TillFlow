@@ -1900,7 +1900,7 @@ export default function PosClient({
               addPlateToCart(plateProduct, selection);
               setPlateProduct(null);
               playBeep(true);
-              barcodeRef.current?.focus();
+              if (selection.customAmountPence === undefined) barcodeRef.current?.focus();
             }}
           />
         ) : null}
@@ -1917,7 +1917,7 @@ export default function PosClient({
             else {
               addPlateToCart(product);
               playBeep(true);
-              barcodeRef.current?.focus();
+              if (!product.food || !(product.food.allowCustomAmount || dishNeedsPicker(product.food))) barcodeRef.current?.focus();
             }
           }}
         />
