@@ -112,6 +112,24 @@ describe('purchase unit conversion', () => {
     ensureChartOfAccountsMock.mockResolvedValue(undefined);
   });
 
+  it('enforces the food photo requirement before writing and rejects prepared dishes', async () => {
+    const food = { id: bizId, vatEnabled: false, currency: 'GHS', businessCategory: 'FOOD_DISHES' };
+    const input = {
+      businessId: bizId, storeId, supplierId: 'supplier-a', userId, paymentStatus: 'UNPAID' as const,
+      quickPurchase: {}, payments: [], lines: [{ productId: 'dish', unitId: 'piece', qtyInUnit: 1, unitCostPence: 500 }],
+    };
+    prismaMock.productUnit.findMany.mockResolvedValue([]);
+    prismaMock.business.findUnique.mockResolvedValue({ ...food, requirePurchasePhoto: true });
+    await expect(createPurchase(input)).rejects.toThrow('Add a photo of the receipt');
+    await expect(createPurchase({ ...input, quickPurchase: undefined })).rejects.toThrow('Add a photo of the receipt');
+    prismaMock.business.findUnique.mockResolvedValue({ ...food, requirePurchasePhoto: false });
+    await expect(createPurchase(input)).rejects.toThrow('Choose an available ingredient or item you resell.');
+    expect(prismaMock.product.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ businessId: bizId, foodDish: { is: null } }),
+    }));
+    expect(prismaMock.purchaseInvoice.create).not.toHaveBeenCalled();
+  });
+
   it('requires a source invoice before posting purchase stock or payments',async()=>{
     await expect(createPurchase({businessId:bizId,storeId,userId,paymentStatus:'UNPAID',payments:[],lines:[{productId:'p',unitId:'unit',qtyInUnit:1,unitCostPence:100}]})).rejects.toThrow('Attach the supplier');
     expect(prismaMock.purchaseInvoice.create).not.toHaveBeenCalled();expect(prismaMock.stockMovement.createMany).not.toHaveBeenCalled();expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();

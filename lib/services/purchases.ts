@@ -1,3 +1,4 @@
+import { isFoodBusiness } from '@/lib/food/business';
 import { validatePurchaseDocuments, type PurchaseDocumentInput } from '@/lib/purchases/source-documents';
 import { pricePurchaseLines } from '@/lib/purchases/discounts';
 import { allocateCostByQuantity, splitPurchaseTender } from '@/lib/purchases/additional-costs';
@@ -56,6 +57,7 @@ export type PurchaseLineInput = {
 };
 
 export type CreatePurchaseInput = {
+  quickPurchase?: { paidWith?: 'CASH' | 'TRANSFER'; purchaseDate?: Date };
   discountBps?: number;
   receiptDocumentType?: 'INVOICE' | 'DELIVERY_NOTE';
   businessId: string;
@@ -340,7 +342,6 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     throw new Error('No items in purchase');
   }
 
-  const sourceDocuments = input.stockMovementType === 'OPENING' && !input.sourceDocuments?.length ? [] : validatePurchaseDocuments(input.sourceDocuments ?? []);
   const receiptDocumentType = input.receiptDocumentType ?? 'INVOICE';
   if (!['INVOICE', 'DELIVERY_NOTE'].includes(receiptDocumentType)) throw new UserError('Choose an invoice or delivery note.');
 
@@ -371,6 +372,29 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   ]);
 
   if (!business) throw new Error('Business not found');
+  const food = isFoodBusiness(business.businessCategory);
+  if (input.quickPurchase && !food) throw new UserError('Quick purchase is only available for food businesses.');
+  const hasDocuments = Boolean(input.sourceDocuments?.length);
+  const optionalDocuments = input.stockMovementType === 'OPENING' || (food && !business.requirePurchasePhoto);
+  if (food && !optionalDocuments && !input.sourceDocuments?.some(document => document.contentType.startsWith('image/'))) {
+    throw new UserError('Add a photo of the receipt');
+  }
+  const sourceDocuments = !hasDocuments && optionalDocuments ? [] : validatePurchaseDocuments(input.sourceDocuments ?? []);
+  if (input.quickPurchase) {
+    const eligible = await dbClient.product.findMany({
+      where: {
+        id: { in: input.lines.map(line => line.productId) },
+        businessId: input.businessId, active: true, foodDish: { is: null },
+      },
+      select: { id: true },
+    });
+    const eligibleIds = new Set(eligible.map(product => product.id));
+    if (input.lines.some(line => !eligibleIds.has(line.productId) ||
+      !productUnits.some(unit => unit.productId === line.productId && unit.unitId === line.unitId))) {
+      throw new UserError('Choose an available ingredient or item you resell.');
+    }
+    if (input.paymentStatus === 'UNPAID' && !supplier) throw new UserError("Choose who you're paying later");
+  }
   if (!store) throw new Error('Store not found');
   if (input.supplierId && !supplier) throw new Error('Supplier not found');
 
@@ -465,7 +489,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
 
   const allPayments: PaymentInput[] =
     positivePayments.length === 0 && input.paymentStatus === 'PAID'
-      ? [{ method: 'CASH' as const, amountPence: combinedTotal }]
+      ? [{ method: input.quickPurchase?.paidWith ?? 'CASH', amountPence: combinedTotal }]
       : positivePayments;
   const tender = additionalCost && costTreatment === 'EXPENSE' ? splitPurchaseTender(allPayments, goodsTotal, additionalCost) : { goods: allPayments, expenses: [] as PaymentInput[], costPaid: 0 };
   const payments = tender.goods;
@@ -529,6 +553,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         storeId: input.storeId,
         supplierId: input.supplierId ?? '',
         payments: allPayments,
+        quickPurchaseDates: input.quickPurchase ? [input.quickPurchase.purchaseDate?.toISOString() ?? '', input.dueDate?.toISOString() ?? ''] : undefined,
         documentHashes: sourceDocuments.map(document=>document.sha256),
         discountBps: input.discountBps, receiptDocumentType,
         supplierInvoiceNumber, additionalCostPence: additionalCost, additionalCostTreatment: costTreatment, additionalCostNote: input.additionalCostNote,
@@ -605,6 +630,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         vatPence: vatTotal,
         totalPence: total,
         transactionNumber,
+        ...(input.quickPurchase?.purchaseDate ? { createdAt: input.quickPurchase.purchaseDate } : {}),
         ...(sourceDocuments.length ? {documents:{create:sourceDocuments.map(document=>({...document,documentKind:receiptDocumentType,businessId:input.businessId,uploadedByUserId:input.userId??null}))}} : {}),
       }
     });

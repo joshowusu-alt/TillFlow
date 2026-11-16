@@ -43,6 +43,7 @@ const AUTH_LEGACY_SELECT = {
   isDemo: true,
   onboardingCompletedAt: true,
   businessCategory: true,
+  requirePurchasePhoto: true,
   hasDemoData: true,
   guidedSetup: true,
   createdAt: true,

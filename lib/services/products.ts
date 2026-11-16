@@ -48,6 +48,7 @@ export type ProductUnitInput = {
 
 export type QuickCreateProductInput = {
   name: string;
+  ingredientOnly?: boolean;
   sku?: string | null;
   barcode?: string | null;
   attributesJson?: string | null;
@@ -261,14 +262,14 @@ function assertReorderQuantity(value: number | undefined, label: string) {
   }
 }
 
-function validateProductValues(data: Pick<ProductCoreInput, 'name' | 'sellingPriceBasePence' | 'defaultCostBasePence' | 'vatRateBps' | 'promoBuyQty' | 'promoGetQty' | 'reorderPointBase' | 'reorderQtyBase' | 'baseUnitId' | 'packagingUnitId' | 'packagingConversion' | 'unitConfigs'>) {
+function validateProductValues(data: Pick<ProductCoreInput, 'name' | 'sellingPriceBasePence' | 'defaultCostBasePence' | 'vatRateBps' | 'promoBuyQty' | 'promoGetQty' | 'reorderPointBase' | 'reorderQtyBase' | 'baseUnitId' | 'packagingUnitId' | 'packagingConversion' | 'unitConfigs'>, allowZeroSellingPrice = false) {
   if (!data.name.trim()) {
     throw new Error('Please enter a product name.');
   }
   if (!data.baseUnitId.trim()) {
     throw new Error('Please select a base unit.');
   }
-  if (data.sellingPriceBasePence <= 0) {
+  if (data.sellingPriceBasePence < 0 || (data.sellingPriceBasePence === 0 && !allowZeroSellingPrice)) {
     throw new Error('Selling price must be greater than zero.');
   }
   if (data.defaultCostBasePence < 0) {
@@ -692,7 +693,7 @@ async function quickCreateProductImpl(
     packagingUnitId: normalized.packagingUnitId ?? '',
     packagingConversion: normalized.packagingConversion ?? 0,
     unitConfigs: normalized.unitConfigs,
-  });
+  }, input.ingredientOnly === true);
 
   await assertAvailableBarcodes(db, businessId, normalized);
 
@@ -708,6 +709,7 @@ async function quickCreateProductImpl(
     data: {
       businessId,
       name: normalized.name,
+      ...(input.ingredientOnly === true ? { ingredientOnly: true } : {}),
       attributesJson: normalized.attributesJson,
       publisher: normalized.publisher,
       edition: normalized.edition,

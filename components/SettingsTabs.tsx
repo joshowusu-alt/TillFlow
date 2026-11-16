@@ -2,9 +2,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SETTINGS_TAB_SECTIONS, type AppRole } from '@/lib/navigation-config';
-export default function SettingsTabs({ role }: { role: AppRole }) {
+export default function SettingsTabs({ role, foodPurchases = false }: { role: AppRole; foodPurchases?: boolean }) {
   const pathname = usePathname() ?? '';
   const sections = SETTINGS_TAB_SECTIONS.map(section => ({ ...section, items: section.items.filter(item => item.roles.includes(role)) })).filter(section => section.items.length);
+  if (foodPurchases && (role === 'OWNER' || role === 'MANAGER')) {
+    sections.push({ id: 'food-purchases', label: 'Stock', items: [
+      { href: '/settings/purchases', label: 'Purchases', roles: ['OWNER', 'MANAGER'] },
+    ] });
+  }
   const active = (href: string) => pathname === href || (href !== '/settings' && pathname.startsWith(href + '/'));
   const current = sections.flatMap(section => section.items).find(item => active(item.href));
   const navigation = (
