@@ -132,13 +132,13 @@ describe('purchase unit conversion', () => {
   });
 
   it.each([
-    ['OWNER_CAPITAL', '3100.OWNER.user-1'],
-    ['BUSINESS_CASH', '1000.HOLD.store-1.user-1'],
-  ] as const)('posts %s without a till payout and combines duplicate-item stock', async (cashSource, accountCode) => {
+    ['OWNER_CAPITAL', '3100.OWNER.user-1', 0],
+    ['BUSINESS_CASH', '1000.HOLD.store-1.user-1', 100],
+  ] as const)('posts %s without a till payout and combines duplicate-item stock', async (cashSource, accountCode, defaultCostBasePence) => {
     prismaMock.business.findUnique.mockResolvedValue({ id: bizId, businessCategory: 'FOOD_DISHES', vatEnabled: false });
     prismaMock.product.findMany.mockResolvedValue([{ id: 'bread' }]);
     prismaMock.productUnit.findMany.mockResolvedValue([{ productId: 'bread', unitId: 'piece', conversionToBase: 1,
-      product: { name: 'Bread', defaultCostBasePence: 100, vatRateBps: 0 }, unit: { name: 'Piece' } }]);
+      product: { name: 'Bread', defaultCostBasePence, vatRateBps: 0 }, unit: { name: 'Piece' } }]);
     prismaMock.account.findMany.mockResolvedValue([...defaultAccounts, { code: accountCode, id: 'funding' }]);
     prismaMock.journalLine.aggregate.mockResolvedValue({ _sum: { debitPence: 5000, creditPence: 0 } });
     await createPurchase({
@@ -157,6 +157,14 @@ describe('purchase unit conversion', () => {
     expect(prismaMock.inventoryBalance.upsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({ productId: 'bread', qtyOnHandBase: 5, avgCostBasePence: 700 }),
     }));
+    if (defaultCostBasePence === 0) {
+      expect(prismaMock.product.updateMany).toHaveBeenCalledExactlyOnceWith({
+        where: { id: 'bread', businessId: bizId, defaultCostBasePence: 0 },
+        data: { defaultCostBasePence: 700 },
+      });
+    } else {
+      expect(prismaMock.product.updateMany).not.toHaveBeenCalled();
+    }
     expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
   });
 

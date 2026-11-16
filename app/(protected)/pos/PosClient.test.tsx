@@ -1285,3 +1285,32 @@ it.each([
   expect(await screen.findByRole('button', { name: /^Coca Cola/i })).toBeDisabled();
   expect(screen.queryByRole('link', { name: /Manage dish/ })).toBeNull();
 });
+
+it.each([null, 1500])('edits a food cart amount with minimum %s', async minimumAmountPence => {
+  window.localStorage.clear();
+  const dish = {
+    ...product, id: 'banku', name: 'Banku', sellingPriceBasePence: 3000,
+    food: {
+      productId: 'banku', name: 'Banku', stockMode: 'NOT_COUNTED' as const,
+      soldOut: false, lowAt: 1, sizes: [], inclusions: [], groups: [],
+      allowCustomAmount: true, minimumAmountPence,
+    },
+  };
+  render(<PosClient {...baseProps} business={{ ...baseProps.business, foodBusiness: true }} products={[dish]} />);
+  const search = screen.getByLabelText('Search products');
+  fireEvent.focus(search);
+  fireEvent.change(search, { target: { value: 'Banku' } });
+  fireEvent.click(await screen.findByRole('button', { name: /^Banku/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Other amount' }));
+  fireEvent.change(screen.getByLabelText('Amount (GH₵)'), { target: { value: '20' } });
+  fireEvent.click(screen.getByRole('button', { name: /Add GH₵20.00/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Edit amount for Banku, GH₵20.00/ }));
+  expect(screen.getByLabelText('Amount (GH₵)')).toHaveValue('20.00');
+
+  fireEvent.change(screen.getByLabelText('Amount (GH₵)'), { target: { value: minimumAmountPence ? '14' : '0' } });
+  expect(screen.getByRole('button', { name: 'Save amount' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Amount (GH₵)'), { target: { value: '16.50' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save amount' }));
+  expect(screen.getByRole('button', { name: /Edit amount for Banku, GH₵16.50/ })).toBeVisible();
+  expect(screen.getAllByRole('button', { name: 'Remove Banku' })).toHaveLength(1);
+});

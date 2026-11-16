@@ -125,7 +125,7 @@ describePg('food release stress on throwaway Postgres', () => {
       () => db.moneyIdempotency.deleteMany({ where: { businessId } }),
       () => db.businessSequence.deleteMany({ where: { businessId } }),
       () => db.account.deleteMany({ where: { businessId } }),
-      () => db.shift.deleteMany({ where: { tillId } }),
+      () => db.shift.deleteMany({ where: { till: { storeId } } }),
       () => db.till.deleteMany({ where: { storeId } }),
       () => db.store.deleteMany({ where: { businessId } }),
       () => db.unit.deleteMany({ where: { id: unitId } }),
@@ -613,6 +613,45 @@ describePg('food release stress on throwaway Postgres', () => {
     await attemptSale();
     await attemptOnline();
     expect(await onHand(dish.id)).toBe(1);
+  });
+
+  it('keeps cash from a deleted sale out of another open drawer', async () => {
+    const { createSalesReturn } = await import('@/lib/services/returns');
+    const dish = await dishes.saveDish({ businessId, draft: draft({
+      name: 'Cash reversal dish', startingPriceCedis: '20', stockMode: 'NOT_COUNTED',
+    }) });
+    const originalShift = await db.shift.findFirstOrThrow({ where: { tillId, status: 'OPEN' } });
+    const sale = await sales.createSale({
+      businessId, storeId, tillId, cashierUserId: userId, paymentStatus: 'PAID',
+      lines: [{ productId: dish.id, unitId: await baseUnit(dish.id), qtyInUnit: 1 }],
+      payments: [{ method: 'CASH', amountPence: 2000 }],
+    });
+    expect(sale.shiftId).toBe(originalShift.id);
+    const otherTill = await db.till.create({ data: { storeId, name: 'Other counter' } });
+    const otherShift = await db.shift.create({
+      data: { tillId: otherTill.id, userId, status: 'OPEN', openKey: otherTill.id },
+    });
+    try {
+      await db.shift.update({ where: { id: originalShift.id }, data: { status: 'CLOSED', openKey: null, closedAt: new Date() } });
+      const reversal = await createSalesReturn({
+        businessId, salesInvoiceId: sale.id, userId, type: 'VOID', ownerDelete: true,
+        managerApprovedByUserId: userId, reasonCode: 'TEST_SALE',
+      });
+      expect(await db.cashDrawerEntry.count({ where: { shiftId: otherShift.id } })).toBe(0);
+      expect(await db.cashDrawerEntry.count({ where: { businessId, referenceId: reversal.id } })).toBe(0);
+      const journal = await db.journalEntry.findFirstOrThrow({
+        where: { businessId, referenceType: 'SALES_RETURN', referenceId: reversal.id },
+        include: { lines: { include: { account: true } } },
+      });
+      expect(journal.lines).toContainEqual(expect.objectContaining({
+        account: expect.objectContaining({ code: '1000' }), creditPence: 2000,
+      }));
+      await balanced(reversal.id);
+    } finally {
+      await db.shift.update({ where: { id: originalShift.id }, data: { status: 'OPEN', openKey: tillId, closedAt: null } });
+      await db.shift.delete({ where: { id: otherShift.id } });
+      await db.till.delete({ where: { id: otherTill.id } });
+    }
   });
 
   it('revalidates an offline amount and records stock, audit and reporting once', async () => {

@@ -1,6 +1,7 @@
 'use server';
 
 import { createSalesReturn, createPurchaseReturn } from '@/lib/services/returns';
+import { confirmedTenderMethods } from '@/lib/payments/receipt-ledger';
 import { isFoodBusiness } from '@/lib/food/business';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
@@ -193,15 +194,21 @@ export async function deleteFoodSaleAction(invoiceId: string, reasonCode: string
     if (!['TEST_SALE', 'MISTAKE'].includes(reasonCode) || note.length > 500) return err('Choose a reason and keep the note under 500 characters.');
     const invoice = await prisma.salesInvoice.findFirst({
       where: { id: invoiceId, businessId },
-      select: { storeId: true, business: { select: { businessCategory: true } } },
+      select: { storeId: true, business: { select: { businessCategory: true } },
+        payments: { select: { method: true, status: true, amountPence: true } } },
     });
     if (!invoice || !isFoodBusiness(invoice.business.businessCategory)) return err('Sale not found.');
     await requireSelectedStoreContext(['OWNER'], invoice.storeId);
+    if (confirmedTenderMethods(invoice.payments).length > 1) {
+      return err('This sale was paid more than one way. Use Return instead.');
+    }
     const returned = await createSalesReturn({
       businessId, salesInvoiceId: invoiceId, userId: user.id, type: 'VOID', ownerDelete: true,
       managerApprovedByUserId: user.id, managerApprovalMode: 'OWNER_DELETE', reasonCode, reason: note.trim() || null,
     });
-    void sendVoidReturnAlert({ salesReturnId: returned.id, businessId }).catch(() => {});
+    if (reasonCode === 'MISTAKE') {
+      void sendVoidReturnAlert({ salesReturnId: returned.id, businessId }).catch(() => {});
+    }
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SALE_VOID',
       entity: 'SalesInvoice', entityId: invoiceId, details: { reasonCode, note: note.trim(), method: 'DELETE_SALE' } });
     revalidatePosCatalog(businessId, invoice.storeId);

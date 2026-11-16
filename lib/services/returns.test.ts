@@ -245,6 +245,7 @@ describe('createSalesReturn', () => {
       lines: expect.arrayContaining([{ accountCode: '1010', creditPence: 5000 }]),
     }));
     expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
+    expect(mockDetectVoidFrequencyRisk).toHaveBeenCalledTimes(1);
   });
 
   it.each(['manager', 'cashier'])('refuses a %s trying to delete as the owner', async role => {
@@ -267,10 +268,14 @@ describe('createSalesReturn', () => {
     expect(mockPostJournalEntry).toHaveBeenCalledWith(expect.objectContaining({
       lines: expect.arrayContaining([{ accountCode: '1000', creditPence: 5000 }]),
     }));
-    if (drawer === 'none') expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
-    else expect(mockRecordCashDrawerEntryTx).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      tillId: drawer === 'other' ? 'till-2' : 'till-1', amountPence: -5000,
+    expect(mockGetOpenCashShiftForPayment).toHaveBeenCalledWith(expect.anything(),
+      expect.objectContaining({ shiftId: 'shift-1', tillId: 'till-1' }));
+    if (drawer !== 'original') expect(prismaMock.shift.findFirst).not.toHaveBeenCalled();
+    if (drawer === 'original') expect(mockRecordCashDrawerEntryTx).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      tillId: 'till-1', amountPence: -5000,
     }));
+    else expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
+    expect(mockDetectVoidFrequencyRisk).not.toHaveBeenCalled();
     expect(mockUpsertInventoryBalance).toHaveBeenCalled();
   });
 

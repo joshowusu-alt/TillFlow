@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { receiveStockValue, removeRecordedStockValue, INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
 import { lockInventoryValues } from './shared/inventory-utils';
-import { RECEIPT_LEDGER_MOMO_CLEARING, RECEIPT_LEDGER_V1, isPendingMomo } from '@/lib/payments/receipt-ledger';
+import { RECEIPT_LEDGER_MOMO_CLEARING, RECEIPT_LEDGER_V1, confirmedTenderMethods, isPendingMomo } from '@/lib/payments/receipt-ledger';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { UserError } from '@/lib/action-utils';
 import { type JournalLine } from './shared';
@@ -166,9 +166,9 @@ async function createSalesReturnImpl(input: {
         throw new UserError('Legacy Bank postings require reconciliation before reversing this sale.');
       }
     }
-    const tenderMethods = [...new Set(settled.filter(p => p.amountPence > 0).map(p => p.method))];
+    const tenderMethods = confirmedTenderMethods(settled);
     if (input.type === 'VOID' && tenderMethods.length > 1) {
-      throw new UserError('Use a return with an explicit refund method for a sale with mixed confirmed tender.');
+      throw new UserError(input.ownerDelete ? 'This sale was paid more than one way. Use Return instead.' : 'Use a return with an explicit refund method for a sale with mixed confirmed tender.');
     }
     const refundAmount = input.type === 'VOID' ? totalPaid : Math.min(input.refundAmountPence ?? totalPaid, totalPaid);
     if (refundAmount < 0 || refundAmount !== totalPaid || totalPaid + pendingTotal > invoice.totalPence) {
@@ -208,19 +208,14 @@ async function createSalesReturnImpl(input: {
     });
 
     if (refundAmount > 0 && refundMethod === 'CASH' && !input.deferRefund) {
-      let openShift = invoice.tillId ? await getOpenCashShiftForPayment(tx, {
-        businessId: invoice.businessId,
-        storeId: invoice.storeId,
-        tillId: invoice.tillId,
-        ...(input.ownerDelete && invoice.shiftId ? { shiftId: invoice.shiftId } : {}),
-      }) : null;
-      if (input.ownerDelete && !openShift) {
-        openShift = await tx.shift.findFirst({
-          where: { status: 'OPEN', till: { active: true, storeId: invoice.storeId, store: { businessId: invoice.businessId } } },
-          orderBy: [{ openedAt: 'desc' }, { id: 'asc' }],
-          select: { id: true, tillId: true },
-        });
-      }
+      const openShift = invoice.tillId && (!input.ownerDelete || invoice.shiftId)
+        ? await getOpenCashShiftForPayment(tx, {
+          businessId: invoice.businessId,
+          storeId: invoice.storeId,
+          tillId: invoice.tillId,
+          ...(input.ownerDelete ? { shiftId: invoice.shiftId } : {}),
+        })
+        : null;
       if (!input.ownerDelete && !invoice.tillId) throw new UserError('Open till is required before recording a cash refund.');
       if (!input.ownerDelete && !openShift) throw new UserError('Open shift is required before recording a cash refund.');
       if (openShift) {
@@ -313,7 +308,7 @@ async function createSalesReturnImpl(input: {
   };
   const result = input.tx ? await execute(input.tx) : await prisma.$transaction(execute);
 
-  if (input.type === 'VOID') {
+  if (input.type === 'VOID' && !(input.ownerDelete && input.reasonCode === 'TEST_SALE')) {
     await detectVoidFrequencyRisk({
       businessId: input.businessId,
       storeId: invoice.storeId,

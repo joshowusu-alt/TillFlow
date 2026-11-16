@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { INSUFFICIENT_HELD_CASH } from '@/lib/services/purchase-funding';
-import { createQuickPurchaseProduct, saveQuickPurchase, setFoodPurchasePhotoRequired } from './quick-purchases';
+import { changeNewQuickPurchaseItem, createQuickPurchaseProduct, saveQuickPurchase, setFoodPurchasePhotoRequired } from './quick-purchases';
 
 const mocks = vi.hoisted(() => ({
-  auth: vi.fn(), storeAuth: vi.fn(), save: vi.fn(), update: vi.fn(), audit: vi.fn(), tills: vi.fn(), raw: vi.fn(), product: vi.fn(), createProduct: vi.fn(), productAudit: vi.fn(),
+  auth: vi.fn(), storeAuth: vi.fn(), save: vi.fn(), update: vi.fn(), audit: vi.fn(), tills: vi.fn(), raw: vi.fn(), product: vi.fn(), createProduct: vi.fn(), productAudit: vi.fn(), unitUpdate: vi.fn(), productUpdate: vi.fn(), productAuditLookup: vi.fn(), used: vi.fn(),
 }));
 vi.mock('@/lib/action-utils', async () => ({
   ...await vi.importActual<typeof import('@/lib/action-utils')>('@/lib/action-utils'),
@@ -15,12 +15,16 @@ vi.mock('@/lib/prisma', () => ({
     business: { findUniqueOrThrow: vi.fn().mockResolvedValue({ timezone: 'Africa/Accra', businessCategory: 'FOOD_DISHES' }), update: mocks.update },
     till: { findMany: mocks.tills }, product: { findFirst: vi.fn().mockResolvedValue({ name: 'Tea bread' }) },
     $transaction: async (callback: (tx: unknown) => unknown) => callback({
-      $queryRaw: mocks.raw, product: { findFirst: mocks.product }, auditLog: { create: mocks.productAudit },
+      $queryRaw: mocks.raw, product: { findFirst: mocks.product, update: mocks.productUpdate },
+      auditLog: { create: mocks.productAudit, findFirst: mocks.productAuditLookup },
+      productUnit: { updateMany: mocks.unitUpdate },
+      stockMovement: { count: mocks.used }, salesInvoiceLine: { count: vi.fn().mockResolvedValue(0) },
+      purchaseInvoiceLine: { count: vi.fn().mockResolvedValue(0) },
     }),
   },
 }));
 vi.mock('@/lib/services/products', () => ({ quickCreateProduct: mocks.createProduct }));
-vi.mock('@/lib/units/list-selectable-units', () => ({ listSelectableUnits: async () => [{ id: 'piece', name: 'Piece' }] }));
+vi.mock('@/lib/units/list-selectable-units', () => ({ listSelectableUnits: async () => [{ id: 'piece', name: 'Piece' }, { id: 'kg', name: 'Kilogram' }] }));
 vi.mock('@/lib/services/purchases', () => ({ createPurchase: mocks.save }));
 vi.mock('@/lib/audit', () => ({ audit: mocks.audit }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
@@ -39,7 +43,27 @@ describe('quick purchase action', () => {
     mocks.audit.mockResolvedValue(undefined);
     mocks.tills.mockResolvedValue([]);
     mocks.raw.mockResolvedValue([]);
+    mocks.used.mockResolvedValue(0);
+    mocks.productAuditLookup.mockResolvedValue({ details: '{"source":"QUICK_PURCHASE"}' });
     mocks.createProduct.mockResolvedValue({ id: 'tea', name: 'Tea bread', units: [] });
+  });
+
+  it('changes the unused item’s unit and enables resale only with a positive price', async () => {
+    mocks.product.mockResolvedValue({ id: 'bread', name: 'Bread', vatRateBps: 0,
+      productUnits: [{ unitId: 'piece', isBaseUnit: true }] });
+    const change = { id: 'bread', unitId: 'kg', resell: true, sellingPrice: '0' };
+    expect(await changeNewQuickPurchaseItem(change, 'store')).toEqual({ success: false, error: 'Add a selling price.' });
+    expect(mocks.productUpdate).not.toHaveBeenCalled();
+    expect(await changeNewQuickPurchaseItem({ ...change, sellingPrice: '5' }, 'store')).toMatchObject({ success: true });
+    expect(mocks.productUpdate).toHaveBeenCalledWith({ where: { id: 'bread' }, data: { ingredientOnly: false, sellingPriceBasePence: 500 } });
+    expect(mocks.unitUpdate).toHaveBeenCalledWith({ where: { productId: 'bread', isBaseUnit: true }, data: { unitId: 'kg' } });
+
+    vi.clearAllMocks();
+    mocks.used.mockResolvedValue(1);
+    expect(await changeNewQuickPurchaseItem({ ...change, sellingPrice: '5' }, 'store')).toEqual({
+      success: false, error: 'This item has already been used. Change it from Products.',
+    });
+    expect(mocks.productUpdate).not.toHaveBeenCalled();
   });
 
   it('requires an owner or manager to change the setting', async () => {

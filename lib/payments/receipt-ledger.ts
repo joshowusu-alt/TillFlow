@@ -10,6 +10,10 @@ export function isPendingMomo(payment: { method: string; status?: string | null 
   return payment.method === 'MOBILE_MONEY' && payment.status !== 'CONFIRMED';
 }
 
+export function confirmedTenderMethods<Method extends string>(payments: { method: Method; status?: string | null; amountPence: number }[]) {
+  return [...new Set(payments.filter(payment => payment.amountPence > 0 && !isPendingMomo(payment)).map(payment => payment.method))];
+}
+
 export function receiptLedgerFields(payment: { method: string; status?: string | null }, clearing = false) {
   const receivedAt = new Date();
   return {

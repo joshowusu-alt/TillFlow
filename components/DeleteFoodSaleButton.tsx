@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import ResponsiveModal from '@/components/ResponsiveModal';
 import { deleteFoodSaleAction } from '@/app/actions/returns';
 
-export default function DeleteFoodSaleButton({ invoiceId }: { invoiceId: string }) {
+export default function DeleteFoodSaleButton({ invoiceId, preview }: {
+  invoiceId: string;
+  preview: { mixedTender: boolean; refund: string | null };
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -13,6 +16,7 @@ export default function DeleteFoodSaleButton({ invoiceId }: { invoiceId: string 
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const close = useCallback(() => { if (!busy) setOpen(false); }, [busy]);
+  if (preview.mixedTender) return <span className="text-xs text-black/65">Paid more than one way — use Return</span>;
   return <>
     <button type="button" className="btn-secondary text-xs text-red-700" onClick={() => {
       setReason(''); setNote(''); setError(''); setOpen(true);
@@ -38,6 +42,7 @@ export default function DeleteFoodSaleButton({ invoiceId }: { invoiceId: string 
       }}>
         <h2 className="text-lg font-semibold">Delete this sale?</h2>
         <p className="text-sm">This reverses the sale and returns its items to stock.</p>
+        {preview.refund && <p className="text-sm font-medium">{preview.refund}</p>}
         <label className="block">Reason<select required className="input mt-1" value={reason} onChange={event => setReason(event.target.value)}>
           <option value="">Choose a reason</option><option value="TEST_SALE">Test sale</option><option value="MISTAKE">Mistake</option>
         </select></label>

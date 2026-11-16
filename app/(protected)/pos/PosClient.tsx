@@ -497,6 +497,7 @@ export default function PosClient({
     onFirstCartLine: () => router.prefetch('/pos'),
   });
   const [plateProduct, setPlateProduct] = useState<ProductDto | null>(null);
+  const [editingAmountLineId, setEditingAmountLineId] = useState<string | null>(null);
   const addPlateToCart = useCallback((product: ProductDto, plate?: PlateSelection) => {
     const baseUnitId = getProductBaseUnitId(product);
     if (!baseUnitId) return;
@@ -1425,6 +1426,13 @@ export default function PosClient({
     isCompletingSale,
     totalLabel: formatMoney(totalDue, business.currency),
   });
+  const showNoTillBlock =
+    checkoutExtrasReady &&
+    !checkoutUnavailable &&
+    (tills.length === 0 ||
+      openShiftTillIds.length === 0 ||
+      (tillSelected && !openShiftTillIds.includes(tillId)));
+  const showFoodOpenTill = Boolean(showNoTillBlock && business.foodBusiness && tills.length > 0);
   const checkoutIssues = useMemo(() => {
     const issues: Array<{ tone: 'warning' | 'success'; message: string }> = [];
     if (checkoutLoading) {
@@ -1444,10 +1452,10 @@ export default function PosClient({
     }
     if (checkoutExtrasReady && !checkoutUnavailable && tills.length === 0) {
       issues.push({ tone: 'warning', message: 'No tills are configured for this store.' });
-    } else if (checkoutExtrasReady && !checkoutUnavailable && tills.length > 0 && !tillSelected) {
-      issues.push({ tone: 'warning', message: openShiftTillIds.length > 0 ? 'Select an open till before recording sales.' : 'Open a till shift before recording sales.' });
-    } else if (checkoutExtrasReady && !checkoutUnavailable && !tillReady) {
-      issues.push({ tone: 'warning', message: 'Open this till shift before recording sales.' });
+    } else if (!showFoodOpenTill && checkoutExtrasReady && !checkoutUnavailable && tills.length > 0 && !tillSelected) {
+      issues.push({ tone: 'warning', message: openShiftTillIds.length > 0 ? 'Select an open till before recording sales.' : business.foodBusiness ? 'Open a till to take payment.' : 'Open a till shift before recording sales.' });
+    } else if (!showFoodOpenTill && checkoutExtrasReady && !checkoutUnavailable && !tillReady) {
+      issues.push({ tone: 'warning', message: business.foodBusiness ? 'Open a till to take payment.' : 'Open this till shift before recording sales.' });
     }
     if (needsMomoConfirmation && !momoConfirmed) {
       issues.push({ tone: 'success', message: 'MoMo will be recorded manually. Confirm payment on the customer phone before completion.' });
@@ -1471,7 +1479,7 @@ export default function PosClient({
       issues.push({ tone: 'warning', message: 'Payment amounts cannot be negative or invalid.' });
     }
     return issues;
-  }, [ambiguousFailure, checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, dueDateReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, openShiftTillIds.length, partPaidValid, paymentStatus, requiresCustomer, requiresDiscountApproval, tenderMalformed, tillReady, tillSelected, tills.length]);
+  }, [ambiguousFailure, business.foodBusiness, checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, dueDateReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, openShiftTillIds.length, partPaidValid, paymentStatus, requiresCustomer, requiresDiscountApproval, showFoodOpenTill, tenderMalformed, tillReady, tillSelected, tills.length]);
   const primaryCheckoutIssue = checkoutIssues.find((issue) => issue.tone === 'warning') ?? checkoutIssues[0] ?? null;
   const errorParam = searchParams?.get('error');
   const selectedTillName = tills.find((till) => till.id === tillId)?.name ?? null;
@@ -1499,17 +1507,12 @@ export default function PosClient({
       setOpeningBusy(false);
     }
   }
-  const showNoTillBlock =
-    checkoutExtrasReady &&
-    !checkoutUnavailable &&
-    (tills.length === 0 ||
-      openShiftTillIds.length === 0 ||
-      (tillSelected && !openShiftTillIds.includes(tillId)));
   // Phone empty-cart keeps checkout collapsed via CSS (`max-md:hidden`), not matchMedia.
   const showCheckoutPanel = cartFilled || checkoutUnavailable;
   const closePhoneCheckoutSheet = useCallback(() => {
     if (isCompletingSale) return;
     setPhoneCheckoutSheetOpen(false);
+    setEditingAmountLineId(null);
   }, [isCompletingSale]);
 
   useEffect(() => {
@@ -2222,6 +2225,7 @@ export default function PosClient({
               >
                 {cartDetails.map((line, index) => {
                   const isActive = activeLineId === line.id;
+                  const canEditAmount = business.foodBusiness && line.product.food && line.plate?.customAmountPence !== undefined;
                   const availBase = availableBaseMap.get(line.productId) ?? getAvailableBase(line.productId, line.id);
                   return (
                     <div
@@ -2297,9 +2301,28 @@ export default function PosClient({
                           </button>
                         </div>
                         <div className="ml-auto text-right sm:min-w-[5rem]">
-                          <div className="text-sm font-bold">{formatMoney(line.total, business.currency)}</div>
+                          {canEditAmount ? <button type="button" className="min-h-11 text-sm font-bold text-accent underline"
+                            aria-label={`Edit amount for ${line.product.name}, ${formatMoney(line.total, business.currency)}`}
+                            disabled={isCompletingSale || ambiguousFailure}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setEditingAmountLineId(line.id);
+                            }}>{formatMoney(line.total, business.currency)}</button>
+                            : <div className="text-sm font-bold">{formatMoney(line.total, business.currency)}</div>}
                         </div>
                       </div>
+                      {canEditAmount && editingAmountLineId === line.id && line.product.food && line.plate && (
+                        <FoodPlatePicker menu={line.product.food} startingPricePence={line.product.sellingPriceBasePence}
+                          currency={business.currency} allowTillAmount editAmount={line.plate}
+                          amountVatRateBps={business.vatEnabled ? line.product.vatRateBps : 0}
+                          onCancel={() => setEditingAmountLineId(null)}
+                          onConfirm={(selection) => {
+                            if (isCompletingSale || ambiguousFailure) return;
+                            pushUndo(cart);
+                            setCart(cart.map(item => item.id === line.id ? { ...item, plate: selection } : item));
+                            setEditingAmountLineId(null);
+                          }} />
+                      )}
                     </div>
                   );
                 })}
@@ -2445,9 +2468,9 @@ export default function PosClient({
                     <option value="">No tills configured</option>
                   ) : (
                     <>
-                      <option value="">{openShiftTillIds.length ? 'Choose an open till…' : 'No open till — open a shift'}</option>
+                      <option value="">{openShiftTillIds.length ? 'Choose an open till…' : business.foodBusiness ? 'No till open' : 'No open till — open a shift'}</option>
                       {tills.map((till) => (
-                        <option key={till.id} value={till.id}>{till.name}{openShiftTillIds.includes(till.id) ? ' · Open' : ' · Closed'}</option>
+                        <option key={till.id} value={till.id}>{till.name}{openShiftTillIds.includes(till.id) ? ' · Open' : business.foodBusiness ? ' · not open' : ' · Closed'}</option>
                       ))}
                     </>
                   )}
@@ -2637,7 +2660,7 @@ export default function PosClient({
 
             </div>
             <div className="pos-checkout-footer space-y-3">
-              {cartFilled ? <div role="status" data-pos-completion-status="true" className={`hidden rounded-xl px-3 py-2 text-xs font-medium ring-1 lg:block ${primaryCheckoutIssue?.tone === 'warning' ? 'bg-amber-50 text-amber-950 ring-amber-200' : 'bg-emerald-50 text-emerald-950 ring-emerald-200'}`}>{primaryCheckoutIssue?.message ?? `✓ Ready — ${activePaymentMethodLabels.join(' + ')}`}</div> : null}
+              {cartFilled && (!showFoodOpenTill || primaryCheckoutIssue) ? <div role="status" data-pos-completion-status="true" className={`hidden rounded-xl px-3 py-2 text-xs font-medium ring-1 lg:block ${primaryCheckoutIssue?.tone === 'warning' ? 'bg-amber-50 text-amber-950 ring-amber-200' : 'bg-emerald-50 text-emerald-950 ring-emerald-200'}`}>{primaryCheckoutIssue?.message ?? `✓ Ready — ${activePaymentMethodLabels.join(' + ')}`}</div> : null}
               <div className="hidden lg:block"><PosPaymentSummary currency={business.currency} subtotal={totals.netSubtotal} discount={orderDiscount} tax={vatTotal} totalDue={totalDue} changeDue={changeDue} hasCash={paymentStatus !== 'UNPAID' && hasMethod('CASH')} balanceRemaining={balanceRemaining} /></div>
             <div className="flex flex-col gap-2 md:flex-row lg:flex-col">
               {/* Narrow screens complete through the Cart/Payment sheet. */}
@@ -2704,7 +2727,7 @@ export default function PosClient({
                     summary={<PosPaymentSummary currency={business.currency} subtotal={totals.netSubtotal} discount={orderDiscount} tax={vatTotal} totalDue={totalDue} changeDue={changeDue} hasCash={paymentStatus !== 'UNPAID' && hasMethod('CASH')} balanceRemaining={balanceRemaining} />}
                     footer={
                       <div className="space-y-2" data-pos-mobile-payment-actions="true">
-                        <div
+                        {(!showFoodOpenTill || primaryCheckoutIssue) && <div
                           className={`rounded-2xl px-3 py-2 text-xs font-medium ${
                             canSubmit
                               ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'
@@ -2715,7 +2738,7 @@ export default function PosClient({
                             ? `Ready to complete • ${activePaymentMethodLabels.join(' + ')} • ${formatMoney(totalDue, business.currency)}`
                             : primaryCheckoutIssue?.message ??
                               `Review checkout before completing this ${formatMoney(totalDue, business.currency)} sale.`}
-                        </div>
+                        </div>}
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
