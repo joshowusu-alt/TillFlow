@@ -15,7 +15,7 @@ const sugar = { id: 'sugar', name: 'Sugar bread', vatRateBps: 0, units: [piece] 
 const props = {
   storeId: 'store', products: [tea, sugar], units: [piece], tills: [{ id: 'till', name: 'Main till' }],
   suppliers: [{ id: 'supplier', name: 'Bread supplier' }],
-  vatEnabled: false, photoRequired: false,
+  vatEnabled: false, photoRequired: false, role: 'OWNER', businessCashPence: 2500,
 };
 function pick(name: string, row = 0) {
   fireEvent.focus(screen.getAllByLabelText('Item')[row]);
@@ -28,7 +28,7 @@ function fill(qty: string, cost: string, row = 0) {
 
 describe('food quick purchases', () => {
   it('validates incomplete rows, sends two complete items and ignores an empty row', async () => {
-    vi.mocked(saveQuickPurchase).mockResolvedValue({ success: true, data: { id: 'purchase', total: 5500, cashSource: undefined } });
+    vi.mocked(saveQuickPurchase).mockResolvedValue({ success: true, data: { id: 'purchase', total: 5500, cashSource: undefined, tillUsed: false } });
     render(<QuickPurchaseForm {...props} />);
     expect(screen.getByRole('button', { name: 'Choose an item you bought' })).toBeEnabled();
     pick('Tea bread');
@@ -70,7 +70,7 @@ describe('food quick purchases', () => {
     ['My own money', 'OWNER_CAPITAL', 'my own money'],
     ['Business cash', 'BUSINESS_CASH', 'business cash'],
   ] as const)('explains the selected cash source %s when no till is open', async (label, cashSource, summary) => {
-    vi.mocked(saveQuickPurchase).mockResolvedValue({ success: true, data: { id: 'purchase', total: 1500, cashSource } });
+    vi.mocked(saveQuickPurchase).mockResolvedValue({ success: true, data: { id: 'purchase', total: 1500, cashSource, tillUsed: false } });
     render(<QuickPurchaseForm {...props} tills={[]} />);
     pick('Tea bread');
     fill('3', '5');
@@ -80,6 +80,51 @@ describe('food quick purchases', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save purchase' }));
     expect(await screen.findByText('Paid by Cash · from ' + summary)).toBeVisible();
     expect(saveQuickPurchase).toHaveBeenLastCalledWith(expect.objectContaining({ cashSource, tillId: '' }));
+  });
+
+  it('shows only held business cash and the recorded balance to a manager', () => {
+    render(<QuickPurchaseForm {...props} tills={[]} role="MANAGER" />);
+    expect(screen.queryByRole('button', { name: 'My own money' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Business cash' })).toBeVisible();
+    expect(screen.getByText('You have GH₵25.00 recorded')).toBeVisible();
+    expect(screen.getByText('Only the owner can record their own money.')).toBeVisible();
+  });
+
+  it.each([
+    ['OWNER', 'Not enough business cash recorded. Choose My own money, or record a cash handover first.'],
+    ['MANAGER', 'Not enough business cash recorded. Record a cash handover first.'],
+  ])('points %s to business cash when the total exceeds the displayed balance', (role, message) => {
+    render(<QuickPurchaseForm {...props} tills={[]} role={role} businessCashPence={0} />);
+    pick('Tea bread');
+    fill('3', '5');
+    const source = screen.getByRole('button', { name: 'Business cash' });
+    fireEvent.click(source);
+    expect(screen.getByText('You have GH₵0.00 recorded')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: message }));
+    expect(source).toHaveFocus();
+  });
+
+  it('shows a cash shortfall reported by the server after the balance changed', async () => {
+    const message = 'Not enough business cash recorded. Record a cash handover first.';
+    vi.mocked(saveQuickPurchase).mockResolvedValueOnce({ success: false, error: message });
+    render(<QuickPurchaseForm {...props} tills={[]} role="MANAGER" />);
+    pick('Tea bread');
+    fill('3', '5');
+    fireEvent.click(screen.getByRole('button', { name: 'Business cash' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save purchase' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+  });
+
+  it('shows the till as the actual source when it opens after page load', async () => {
+    vi.mocked(saveQuickPurchase).mockResolvedValueOnce({ success: true, data: {
+      id: 'purchase', total: 1500, tillUsed: true, cashSource: undefined,
+    } });
+    render(<QuickPurchaseForm {...props} tills={[]} />);
+    pick('Tea bread');
+    fill('3', '5');
+    fireEvent.click(screen.getByRole('button', { name: 'My own money' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save purchase' }));
+    expect(await screen.findByText('Paid by Cash · from the till')).toBeVisible();
   });
 
   it('opens the photo requirement panel and updates the form when the owner enables it', async () => {

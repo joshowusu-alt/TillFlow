@@ -20,6 +20,12 @@ export const QUICK_CASH_SOURCES = {
 } as const;
 export type QuickCashSource = keyof typeof QUICK_CASH_SOURCES;
 
+export function quickCashShortfallMessage(role: string) {
+  return role === 'OWNER'
+    ? 'Not enough business cash recorded. Choose My own money, or record a cash handover first.'
+    : 'Not enough business cash recorded. Record a cash handover first.';
+}
+
 export function quickMoney(value: string) {
   return /^\d+(?:\.\d{1,2})?$/.test(value.trim()) ? Math.round(Number(value) * 100) : NaN;
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { INSUFFICIENT_HELD_CASH } from '@/lib/services/purchase-funding';
 import { createQuickPurchaseProduct, saveQuickPurchase, setFoodPurchasePhotoRequired } from './quick-purchases';
 
 const mocks = vi.hoisted(() => ({
@@ -73,10 +74,29 @@ describe('quick purchase action', () => {
     expect(mocks.save).not.toHaveBeenCalled();
   });
 
+  it('refuses owner capital sent by a manager', async () => {
+    mocks.storeAuth.mockResolvedValue({ businessId: 'business', storeId: 'store', user: { id: 'manager', role: 'MANAGER' } });
+    expect(await saveQuickPurchase({ ...input, payment: 'Cash', cashSource: 'OWNER_CAPITAL' })).toMatchObject({
+      success: false, error: 'Only the owner can record their own money here. Use the full purchase form for money paid by an owner.',
+    });
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['OWNER', 'Not enough business cash recorded. Choose My own money, or record a cash handover first.'],
+    ['MANAGER', 'Not enough business cash recorded. Record a cash handover first.'],
+  ])('translates a %s cash shortfall reported by the posting service', async (role, error) => {
+    mocks.storeAuth.mockResolvedValue({ businessId: 'business', storeId: 'store', user: { id: 'user', role } });
+    mocks.save.mockRejectedValueOnce(new Error(INSUFFICIENT_HELD_CASH));
+    expect(await saveQuickPurchase({ ...input, payment: 'Cash', cashSource: 'BUSINESS_CASH' })).toEqual({ success: false, error });
+    expect(mocks.audit).not.toHaveBeenCalled();
+  });
+
   it('ignores outside cash and uses the open till if one is available', async () => {
     mocks.tills.mockResolvedValue([{ id: 'open-till' }]);
     mocks.save.mockResolvedValue({ id: 'purchase', totalPence: 1500 });
-    await saveQuickPurchase({ ...input, payment: 'Cash', cashSource: 'OWNER_CAPITAL' });
+    expect(await saveQuickPurchase({ ...input, payment: 'Cash', cashSource: 'OWNER_CAPITAL' }))
+      .toMatchObject({ success: true, data: { tillUsed: true, cashSource: undefined } });
     expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ tillId: 'open-till', cashSource: undefined }));
   });
 

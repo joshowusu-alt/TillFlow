@@ -5,13 +5,14 @@ import { err, ok, requireSelectedStoreContext, safeAction, withBusinessContext }
 import { prisma } from '@/lib/prisma';
 import { isFoodBusiness } from '@/lib/food/business';
 import { createPurchase } from '@/lib/services/purchases';
+import { INSUFFICIENT_HELD_CASH } from '@/lib/services/purchase-funding';
 import { quickCreateProduct } from '@/lib/services/products';
 import { listSelectableUnits } from '@/lib/units/list-selectable-units';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 import { decodePurchaseDocuments } from '@/lib/purchases/source-documents';
 import { purchaseDiscountBps } from '@/lib/purchases/discounts';
-import { quickCost, quickMoney, validQuickQuantity, type QuickCashSource, type QuickPayment } from '@/lib/purchases/quick';
+import { quickCashShortfallMessage, quickCost, quickMoney, validQuickQuantity, type QuickCashSource, type QuickPayment } from '@/lib/purchases/quick';
 import { audit } from '@/lib/audit';
 import { readBatchDates } from '@/lib/inventory/batch-dates';
 
@@ -115,12 +116,20 @@ export async function saveQuickPurchase(input: {
       cashHolderId: cashSource === 'BUSINESS_CASH' ? user.id : undefined,
       fundingOwnerId: cashSource === 'OWNER_CAPITAL' ? user.id : undefined,
       sourceDocuments: decodePurchaseDocuments(input.document),
+    }).catch((error: unknown) => {
+      if (cashSource === 'BUSINESS_CASH' && error instanceof Error && error.message === INSUFFICIENT_HELD_CASH) {
+        return null;
+      }
+      throw error;
     });
+    if (!invoice) return err(quickCashShortfallMessage(user.role));
     revalidatePosCatalog(businessId, storeId);
     void audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', entityId: invoice.id, details: { supplierId: input.supplierId, payment: input.payment, quickPurchase: true } }).catch(error => console.error('[audit]', error));
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
     revalidatePath('/purchases');
-    return ok({ id: invoice.id as string, total: Number(invoice.totalPence) + additionalCostPence, cashSource });
+    revalidatePath('/purchases/quick');
+    const total = Number(invoice.totalPence) + additionalCostPence;
+    return ok({ id: invoice.id as string, total, cashSource, tillUsed: Boolean(tillId) && total > 0 });
   });
 }

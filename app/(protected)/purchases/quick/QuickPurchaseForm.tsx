@@ -6,13 +6,13 @@ import { createPortal } from 'react-dom';
 import { createQuickPurchaseProduct, saveQuickPurchase } from '@/app/actions/quick-purchases';
 import { formatMoney } from '@/lib/format';
 import { purchaseDiscountBps } from '@/lib/purchases/discounts';
-import { QUICK_CASH_SOURCES, quickCost, quickMoney, quickPurchaseProblem, quickPurchaseTotal, type QuickCashSource, type QuickRow, type QuickPayment, type QuickProduct, type QuickUnit } from '@/lib/purchases/quick';
+import { QUICK_CASH_SOURCES, quickCashShortfallMessage, quickCost, quickMoney, quickPurchaseProblem, quickPurchaseTotal, type QuickCashSource, type QuickRow, type QuickPayment, type QuickProduct, type QuickUnit } from '@/lib/purchases/quick';
 import PurchasePhotoSwitch from './PurchasePhotoSwitch';
 
 type Choice = { id: string; name: string };
 type Props = {
   storeId: string; products: QuickProduct[]; suppliers: Choice[]; units: QuickUnit[]; tills: Choice[];
-  vatEnabled: boolean; photoRequired: boolean;
+  vatEnabled: boolean; photoRequired: boolean; role: string; businessCashPence: number;
 };
 const emptyRow = (key: number): QuickRow => ({ key, unitId: '', quantity: '', cost: '', expiry: '' });
 
@@ -113,7 +113,7 @@ export default function QuickPurchaseForm(props: Props) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const requestKey = useRef('');
-  const [result, setResult] = useState<{ id: string; total: number; cashSource?: QuickCashSource }>();
+  const [result, setResult] = useState<{ id: string; total: number; cashSource?: QuickCashSource; tillUsed: boolean }>();
   const [newItem, setNewItem] = useState<{ row: number; name: string; unitId: string; ingredient: boolean; sellingPrice: string }>();
   const [itemError, setItemError] = useState('');
   const [creating, setCreating] = useState(false);
@@ -131,9 +131,14 @@ export default function QuickPurchaseForm(props: Props) {
   const extra = additionalCost ? quickMoney(additionalCost) : 0;
   if (!Number.isSafeInteger(extra) || extra > 2147483647) pricingProblem ??= { id: 'quick-delivery', message: 'Enter a valid delivery or other cost' };
   else total += extra;
+  const shortfallMessage = quickCashShortfallMessage(props.role);
   const cashProblem = payment !== 'Cash' ? undefined : props.tills.length
     ? (!till ? { id: 'quick-till', message: 'Choose which till you paid from' } : undefined)
-    : (!cashSource ? { id: 'quick-cash-source', message: 'Choose where the cash came from' } : undefined);
+    : !cashSource
+      ? { id: 'quick-cash-source', message: 'Choose where the cash came from' }
+      : cashSource === 'BUSINESS_CASH' && total > props.businessCashPence
+        ? { id: 'quick-business-cash', message: shortfallMessage }
+        : undefined;
   const problem = baseProblem ?? pricingProblem ?? cashProblem;
   const inputClass = (id: string) => 'input text-base' + (problemId === id && problem?.id === id ? ' ring-2 ring-red-500' : '');
   const changeRow = (key: number, changes: Partial<QuickRow>) => setRows(current => current.map(row => row.key === key ? { ...row, ...changes } : row));
@@ -192,7 +197,10 @@ export default function QuickPurchaseForm(props: Props) {
         setPhotoRequired(true);
         setError(saved.error);
         requestAnimationFrame(() => highlight({ id: 'quick-photo', message: saved.error }));
-      } else setError(saved.error);
+      } else {
+        if (saved.error === shortfallMessage) highlight({ id: 'quick-business-cash', message: saved.error });
+        setError(saved.error);
+      }
     } catch {
       setError('Could not confirm the purchase. Try Save purchase again.');
     } finally {
@@ -225,7 +233,7 @@ export default function QuickPurchaseForm(props: Props) {
   if (result) return <section className="card space-y-4 p-5">
     <h1 className="text-2xl font-semibold">Purchase saved</h1>
     <p className="text-xl font-semibold">{formatMoney(result.total)}</p>
-    <p>{payment === 'Pay later' ? 'Pay later' : 'Paid by ' + payment + (result.cashSource ? ' · from ' + QUICK_CASH_SOURCES[result.cashSource].toLowerCase() : '')}</p>
+    <p>{payment === 'Pay later' ? 'Pay later' : 'Paid by ' + payment + (result.tillUsed ? ' · from the till' : result.cashSource ? ' · from ' + QUICK_CASH_SOURCES[result.cashSource].toLowerCase() : '')}</p>
     <p>Stock updated: {selected.map(row => row.product!.name + ' +' + row.quantity).join(', ')}</p>
     <div className="flex flex-wrap gap-3">
       <button type="button" className="btn-primary" onClick={recordAnother}>Record another</button>
@@ -325,12 +333,18 @@ export default function QuickPurchaseForm(props: Props) {
         </label> : <fieldset id="quick-cash-source" tabIndex={-1}
           className={problemId === 'quick-cash-source' && !cashSource ? 'rounded-lg ring-2 ring-red-500' : ''}>
           <legend className="mb-2 font-medium">Where did the cash come from?</legend>
-          <div className="grid grid-cols-2 gap-2">
-            {(Object.keys(QUICK_CASH_SOURCES) as QuickCashSource[]).map(source => (
-              <button key={source} type="button" aria-pressed={cashSource === source}
-                className={cashSource === source ? 'btn-primary justify-center' : 'btn-secondary justify-center'}
-                onClick={() => setCashSource(source)}>{QUICK_CASH_SOURCES[source]}</button>
-            ))}
+          <div className={props.role === 'OWNER' ? 'grid grid-cols-2 items-start gap-2' : 'space-y-2'}>
+            {props.role === 'OWNER' && <button type="button" aria-pressed={cashSource === 'OWNER_CAPITAL'}
+              className={cashSource === 'OWNER_CAPITAL' ? 'btn-primary justify-center' : 'btn-secondary justify-center'}
+              onClick={() => { setCashSource('OWNER_CAPITAL'); setError(''); }}>{QUICK_CASH_SOURCES.OWNER_CAPITAL}</button>}
+            <div className={problemId === 'quick-business-cash' && (cashProblem?.id === problemId || error === shortfallMessage)
+              ? 'rounded-lg ring-2 ring-red-500' : ''}>
+              <button id="quick-business-cash" type="button" aria-pressed={cashSource === 'BUSINESS_CASH'}
+                className={cashSource === 'BUSINESS_CASH' ? 'btn-primary w-full justify-center' : 'btn-secondary w-full justify-center'}
+                onClick={() => { setCashSource('BUSINESS_CASH'); setError(''); }}>{QUICK_CASH_SOURCES.BUSINESS_CASH}</button>
+              <p className="mt-1 text-sm">You have {formatMoney(props.businessCashPence)} recorded</p>
+              {props.role !== 'OWNER' && <p className="mt-1 text-sm">Only the owner can record their own money.</p>}
+            </div>
           </div>
         </fieldset>}
       </div>}
@@ -357,7 +371,7 @@ export default function QuickPurchaseForm(props: Props) {
       <button type="button" className="btn-primary min-h-12 grow justify-center sm:grow-0" onClick={save} disabled={busy || Boolean(newItem)}>
         {busy ? 'Saving…' : problem?.message ?? 'Save purchase'}
       </button>
-      {error && (!problemId || (problemId === problem?.id && !selected.length)) && <p className="w-full text-sm font-medium text-red-700" role="alert">{error}</p>}
+      {error && (!problemId || (problemId === problem?.id && !selected.length) || (error === shortfallMessage && !problem && payment === 'Cash' && cashSource === 'BUSINESS_CASH')) && <p className="w-full text-sm font-medium text-red-700" role="alert">{error}</p>}
     </SaveBar>
     {newItem && <div role="dialog" aria-modal="true" aria-labelledby="new-purchase-item" className="fixed inset-0 z-[70] grid items-center overflow-auto bg-black/40 p-4">
       <form className="card mx-auto w-full max-w-sm space-y-3 bg-white p-5" onSubmit={async event => {
