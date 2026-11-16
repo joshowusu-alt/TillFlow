@@ -56,8 +56,7 @@ type ReceiptClientProps = {
     qtyLabel: string;
     unitPricePence: number;
     lineTotalPence: number;
-    lineDiscountPence: number;
-    promoDiscountPence: number;
+    displayDiscountPence: number;
   }[];
   canReturn?: boolean;
   isReturned?: boolean;
@@ -104,7 +103,7 @@ export default function ReceiptClient({
     (payment) => payment.method === 'MOBILE_MONEY' && payment.amountPence > 0
   );
   const lineDiscountTotal = lines.reduce(
-    (sum, line) => sum + line.lineDiscountPence + line.promoDiscountPence,
+    (sum, line) => sum + line.displayDiscountPence,
     0
   );
   const lastReceiptStorageKey = getLastReceiptStorageKey({ businessId: business.id, storeId: store.id });
@@ -342,7 +341,7 @@ export default function ReceiptClient({
           </div>
           <div className="divide-y divide-black/10">
             {lines.map((line, index) => {
-              const discountPence = line.lineDiscountPence + line.promoDiscountPence;
+              const discountPence = line.displayDiscountPence;
 
               return (
                 <div

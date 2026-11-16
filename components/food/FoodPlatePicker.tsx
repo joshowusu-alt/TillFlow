@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
+import { amountLineVat } from '@/lib/food/amount-vat';
 import { formatMoney } from '@/lib/format';
 import {
   activeSizes,
@@ -19,7 +20,7 @@ export default function FoodPlatePicker({
   startingPricePence,
   currency = 'GHS',
   allowTillAmount = false,
-  amountIncludesVat = false,
+  amountVatRateBps = 0,
   onCancel,
   onConfirm,
 }: {
@@ -27,15 +28,20 @@ export default function FoodPlatePicker({
   startingPricePence: number;
   currency?: string;
   allowTillAmount?: boolean;
-  amountIncludesVat?: boolean;
+  amountVatRateBps?: number;
   onCancel: () => void;
   onConfirm: (selection: PlateSelection, platePricePence: number) => void;
 }) {
+  const vatNoteId = useId();
+  const amountIncludesVat = amountVatRateBps > 0;
   const initial = defaultPlateSelection(menu);
   const [sizeId, setSizeId] = useState<string | null>(initial.sizeId ?? null);
   const [qtyByAddon, setQtyByAddon] = useState<Record<string, number>>({});
   const [otherAmount, setOtherAmount] = useState(false);
   const [amount, setAmount] = useState('');
+  const hasPricedExtras = menu.groups.some((group) => group.addons.some(
+    (addon) => addon.active !== false && addon.pricePence > 0 && qtyByAddon[addon.id] > 0,
+  ));
   const sizes = activeSizes(menu);
   const selection = useMemo<PlateSelection>(
     () => ({
@@ -54,6 +60,13 @@ export default function FoodPlatePicker({
       return { plate: null, error: error instanceof Error ? error.message : 'Check this plate.' };
     }
   }, [menu, selection, startingPricePence, allowTillAmount]);
+
+  const plate = priced.plate;
+  let displayedPrice = plate?.platePricePence ?? 0;
+  if (plate?.customAmountPence !== undefined && amountIncludesVat) {
+    const { net, vat } = amountLineVat(plate.platePricePence, plate.customAmountPence, 0, amountVatRateBps);
+    displayedPrice = net + vat;
+  }
 
   function setAddonQty(addonId: string, qty: number, groupSelection: 'MANY' | 'SINGLE') {
     setQtyByAddon((prev) => {
@@ -111,13 +124,18 @@ export default function FoodPlatePicker({
         {allowTillAmount && menu.allowCustomAmount && !menu.soldOut && (
           <div className="mt-3">
             <button type="button" aria-pressed={otherAmount} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${otherAmount ? 'bg-accent text-white' : 'bg-black/5 text-black/70'}`} onClick={() => setOtherAmount(!otherAmount)}>Other amount</button>
-            {otherAmount && <label className="mt-3 block">
-              Amount (GH₵)
-              <input className="input mt-1 text-xl" inputMode="decimal" value={amount}
-                ref={focusAmount}
-                onChange={(event) => setAmount(event.target.value)} />
-              {amountIncludesVat && <span className="mt-1 block text-sm text-black/60">Includes VAT</span>}
-            </label>}
+            {otherAmount && <div className="mt-3">
+              <label className="block">
+                Amount (GH₵)
+                <input className="input mt-1 text-xl" inputMode="decimal" value={amount}
+                  aria-describedby={amountIncludesVat ? vatNoteId : undefined}
+                  ref={focusAmount}
+                  onChange={(event) => setAmount(event.target.value)} />
+              </label>
+              {amountIncludesVat && <span id={vatNoteId} className="mt-1 block text-sm text-black/60">
+                {hasPricedExtras ? 'Includes VAT. Extras + VAT.' : 'Includes VAT'}
+              </span>}
+            </div>}
           </div>
         )}
 
@@ -164,14 +182,14 @@ export default function FoodPlatePicker({
 
         {priced.error && (!otherAmount || amount) ? <p className="mt-4 text-sm text-rose-700">{priced.error}</p> : null}
         <div className="mt-4 flex items-center justify-between gap-3">
-          <div className="text-base font-bold">{priced.plate ? formatMoney(priced.plate.platePricePence, currency) : '—'}</div>
+          <div className="text-base font-bold">{priced.plate ? formatMoney(displayedPrice, currency) : '—'}</div>
           <button
             type="button"
             className="btn-primary"
             disabled={!priced.plate}
             onClick={() => priced.plate && onConfirm(selection, priced.plate.platePricePence)}
           >
-            {otherAmount && priced.plate ? `Add ${formatMoney(priced.plate.platePricePence, currency)}` : 'Add plate'}
+            {otherAmount && priced.plate ? `Add ${formatMoney(displayedPrice, currency)}` : 'Add plate'}
           </button>
         </div>
       </div>
