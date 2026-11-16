@@ -660,7 +660,8 @@ describePg('food release stress on throwaway Postgres', () => {
     const { summarizeAmountSales } = await import('@/lib/food/amount-sales');
     await db.business.update({ where: { id: businessId }, data: { trialEndsAt: new Date(Date.now() + 86400000) } });
     const menu = draft({ name: 'Fried rice', startingPriceCedis: '30', stockMode: 'COUNTED',
-      allowCustomAmount: true, minimumAmountCedis: '' });
+      allowCustomAmount: true, minimumAmountCedis: '',
+      sizes: [{ name: 'Regular', priceCedis: '30', isDefault: true }] });
     const dish = await dishes.saveDish({ businessId, draft: menu });
     await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 3 });
     const shift = await db.shift.findFirstOrThrow({ where: { tillId, status: 'OPEN' } });
@@ -724,13 +725,24 @@ describePg('food release stress on throwaway Postgres', () => {
         unitPricePence: 2000, lineSubtotalPence: 1739, lineVatPence: 261, lineTotalPence: 2000, qtyBase: 1, lineCostPence: 0,
       });
       await balanced(taxed.id);
-      await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 1 });
-      const vatPayload = { ...payload, id: 'food-amount-vat-sync' };
+      await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 4 });
+      const beforeConverted = await onHand(dish.id);
+      // Same payload the till queues after converting two regular plates with extras.
+      const vatPayload = {
+        ...payload, id: 'food-amount-vat-sync',
+        lines: [{
+          ...payload.lines[0], qtyInUnit: 2, qtyBase: 4, unitPricePence: 3950,
+          plate: { sizeId: null, customAmountPence: 3450, addons: [{ addonId: extra.id, qty: 1 }], expectedPricePence: 3950 },
+        }],
+        payments: [{ method: 'CASH' as const, amountPence: 8050 }],
+      };
       vatPayload.payloadHash = await hashOfflineSalePayload(vatPayload);
       const syncedVat = await processOfflineSale(vatPayload, { id: userId, businessId });
       expect(syncedVat.status).toBe('synced');
       expect(await db.salesInvoiceLine.findFirst({ where: { salesInvoiceId: syncedVat.invoiceId! } }))
-        .toMatchObject({ lineSubtotalPence: 1739, lineVatPence: 261, lineTotalPence: 2000 });
+        .toMatchObject({ customAmountPence: 3450, qtyInUnit: 2, qtyBase: 4, lineSubtotalPence: 7000, lineVatPence: 1050, lineTotalPence: 8050 });
+      expect(await onHand(dish.id)).toBe(beforeConverted - 4);
+      await balanced(syncedVat.invoiceId!);
       expect((await processOfflineSale(vatPayload, { id: userId, businessId })).status).toBe('already_synced');
     } finally {
       await db.business.update({ where: { id: businessId }, data: { vatEnabled: false } });

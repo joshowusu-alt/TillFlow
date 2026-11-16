@@ -22,6 +22,7 @@ export default function FoodPlatePicker({
   allowTillAmount = false,
   amountVatRateBps = 0,
   editAmount,
+  sizeAmountEdit,
   onCancel,
   onConfirm,
 }: {
@@ -31,6 +32,7 @@ export default function FoodPlatePicker({
   allowTillAmount?: boolean;
   amountVatRateBps?: number;
   editAmount?: PlateSelection;
+  sizeAmountEdit?: { grossPricePence: number; grossExtrasPence: number };
   onCancel: () => void;
   onConfirm: (selection: PlateSelection, platePricePence: number) => void;
 }) {
@@ -41,7 +43,12 @@ export default function FoodPlatePicker({
   const [qtyByAddon, setQtyByAddon] = useState<Record<string, number>>(() =>
     Object.fromEntries((editAmount?.addons ?? []).map(addon => [addon.addonId, addon.qty])));
   const [otherAmount, setOtherAmount] = useState(Boolean(editAmount));
-  const [amount, setAmount] = useState(() => editAmount?.customAmountPence === undefined ? '' : (editAmount.customAmountPence / 100).toFixed(2));
+  const [amount, setAmount] = useState(() => {
+    const initialAmount = sizeAmountEdit?.grossPricePence ?? editAmount?.customAmountPence;
+    return initialAmount === undefined ? '' : (initialAmount / 100).toFixed(2);
+  });
+  // The conversion input includes extras. The amount stored for the dish excludes them.
+  const grossExtrasPence = sizeAmountEdit?.grossExtrasPence ?? 0;
   const hasPricedExtras = menu.groups.some((group) => group.addons.some(
     (addon) => addon.active !== false && addon.pricePence > 0 && qtyByAddon[addon.id] > 0,
   ));
@@ -49,12 +56,12 @@ export default function FoodPlatePicker({
   const selection = useMemo<PlateSelection>(
     () => ({
       sizeId: otherAmount ? null : sizeId,
-      ...(otherAmount ? { customAmountPence: /^\d+(?:\.\d{1,2})?$/.test(amount.trim()) ? Math.round(Number(amount) * 100) : NaN } : {}),
+      ...(otherAmount ? { customAmountPence: /^\d+(?:\.\d{1,2})?$/.test(amount.trim()) ? Math.round(Number(amount) * 100) - grossExtrasPence : NaN } : {}),
       addons: Object.entries(qtyByAddon)
         .filter(([, qty]) => qty > 0)
         .map(([addonId, qty]) => ({ addonId, qty })),
     }),
-    [qtyByAddon, sizeId, otherAmount, amount],
+    [qtyByAddon, sizeId, otherAmount, amount, grossExtrasPence],
   );
   const priced = useMemo(() => {
     try {
@@ -132,12 +139,14 @@ export default function FoodPlatePicker({
               <label className="block">
                 Amount (GH₵)
                 <input className="input mt-1 text-xl" inputMode="decimal" value={amount}
-                  aria-describedby={amountIncludesVat ? vatNoteId : undefined}
+                  aria-describedby={amountIncludesVat || sizeAmountEdit ? vatNoteId : undefined}
                   ref={focusAmount}
                   onChange={(event) => setAmount(event.target.value)} />
               </label>
-              {amountIncludesVat && <span id={vatNoteId} className="mt-1 block text-sm text-black/60">
-                {hasPricedExtras ? 'Includes VAT. Extras + VAT.' : 'Includes VAT'}
+              {(amountIncludesVat || sizeAmountEdit) && <span id={vatNoteId} className="mt-1 block text-sm text-black/60">
+                {sizeAmountEdit
+                  ? `Per plate${hasPricedExtras ? ', including extras' : ''}${amountIncludesVat ? `${hasPricedExtras ? ' and' : ', including'} VAT` : ''}.`
+                  : hasPricedExtras ? 'Includes VAT. Extras + VAT.' : 'Includes VAT'}
               </span>}
             </div>}
           </div>

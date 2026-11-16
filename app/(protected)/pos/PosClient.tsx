@@ -497,7 +497,10 @@ export default function PosClient({
     onFirstCartLine: () => router.prefetch('/pos'),
   });
   const [plateProduct, setPlateProduct] = useState<ProductDto | null>(null);
-  const [editingAmountLineId, setEditingAmountLineId] = useState<string | null>(null);
+  const [editingAmount, setEditingAmount] = useState<{
+    lineId: string;
+    sizeAmount?: { grossPricePence: number; grossExtrasPence: number };
+  } | null>(null);
   const addPlateToCart = useCallback((product: ProductDto, plate?: PlateSelection) => {
     const baseUnitId = getProductBaseUnitId(product);
     if (!baseUnitId) return;
@@ -1512,7 +1515,7 @@ export default function PosClient({
   const closePhoneCheckoutSheet = useCallback(() => {
     if (isCompletingSale) return;
     setPhoneCheckoutSheetOpen(false);
-    setEditingAmountLineId(null);
+    setEditingAmount(null);
   }, [isCompletingSale]);
 
   useEffect(() => {
@@ -2225,7 +2228,30 @@ export default function PosClient({
               >
                 {cartDetails.map((line, index) => {
                   const isActive = activeLineId === line.id;
-                  const canEditAmount = business.foodBusiness && line.product.food && line.plate?.customAmountPence !== undefined;
+                  const isAmountLine = line.plate?.customAmountPence !== undefined;
+                  const canEditAmount = Boolean(business.foodBusiness && line.product.food?.allowCustomAmount &&
+                    (isAmountLine || line.plate?.sizeId));
+                  function editAmount(event: React.MouseEvent<HTMLButtonElement>) {
+                    event.stopPropagation();
+                    if (isAmountLine) {
+                      setEditingAmount({ lineId: line.id });
+                      return;
+                    }
+                    const menu = line.product.food;
+                    if (!menu) return;
+                    try {
+                      const plate = pricePlate(menu, { ...line.plate, expectedPricePence: undefined }, line.product.sellingPriceBasePence, true);
+                      const extras = plate.addons.reduce((total, addon) => total + addon.linePricePence, 0);
+                      const vatRate = business.vatEnabled ? line.product.vatRateBps : 0;
+                      const gross = (price: number) => price + Math.round(price * vatRate / 10000);
+                      setEditingAmount({
+                        lineId: line.id,
+                        sizeAmount: { grossPricePence: gross(plate.platePricePence), grossExtrasPence: gross(extras) },
+                      });
+                    } catch (error) {
+                      setStockAlert(error instanceof Error ? error.message : 'Check this plate.');
+                    }
+                  }
                   const availBase = availableBaseMap.get(line.productId) ?? getAvailableBase(line.productId, line.id);
                   return (
                     <div
@@ -2301,26 +2327,32 @@ export default function PosClient({
                           </button>
                         </div>
                         <div className="ml-auto text-right sm:min-w-[5rem]">
-                          {canEditAmount ? <button type="button" className="min-h-11 text-sm font-bold text-accent underline"
+                          {canEditAmount && isAmountLine ? <button type="button" className="min-h-11 text-sm font-bold text-accent underline"
                             aria-label={`Edit amount for ${line.product.name}, ${formatMoney(line.total, business.currency)}`}
                             disabled={isCompletingSale || ambiguousFailure}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setEditingAmountLineId(line.id);
-                            }}>{formatMoney(line.total, business.currency)}</button>
-                            : <div className="text-sm font-bold">{formatMoney(line.total, business.currency)}</div>}
+                            onClick={editAmount}>{formatMoney(line.total, business.currency)}</button>
+                            : <div className="flex flex-wrap items-center justify-end gap-x-2">
+                              <span className="text-sm font-bold">{formatMoney(line.total, business.currency)}</span>
+                              {canEditAmount && <button type="button" className="min-h-11 text-xs text-accent underline"
+                                aria-label={`Change amount for ${line.product.name}`}
+                                disabled={isCompletingSale || ambiguousFailure || line.product.food?.soldOut}
+                                onClick={editAmount}>Change amount</button>}
+                            </div>}
                         </div>
                       </div>
-                      {canEditAmount && editingAmountLineId === line.id && line.product.food && line.plate && (
+                      {canEditAmount && editingAmount?.lineId === line.id && line.product.food && line.plate && (
                         <FoodPlatePicker menu={line.product.food} startingPricePence={line.product.sellingPriceBasePence}
-                          currency={business.currency} allowTillAmount editAmount={line.plate}
+                          currency={business.currency} allowTillAmount editAmount={line.plate} sizeAmountEdit={editingAmount.sizeAmount}
                           amountVatRateBps={business.vatEnabled ? line.product.vatRateBps : 0}
-                          onCancel={() => setEditingAmountLineId(null)}
+                          onCancel={() => setEditingAmount(null)}
                           onConfirm={(selection) => {
-                            if (isCompletingSale || ambiguousFailure) return;
+                            const menu = line.product.food;
+                            if (!menu || isCompletingSale || ambiguousFailure) return;
+                            const plate = pricePlate(menu, selection, line.product.sellingPriceBasePence, true);
                             pushUndo(cart);
-                            setCart(cart.map(item => item.id === line.id ? { ...item, plate: selection } : item));
-                            setEditingAmountLineId(null);
+                            setCart(cart.map(item => item.id === line.id
+                              ? { ...item, plate: selection, qtyBase: plate.stockPortions * item.qtyInUnit } : item));
+                            setEditingAmount(null);
                           }} />
                       )}
                     </div>
