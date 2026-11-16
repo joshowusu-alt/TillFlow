@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { savePosShortcutsAction } from '@/app/actions/pos-shortcuts';
 import { EMPTY_SHORTCUT_LAYOUT, parseShortcutLayout, type ShortcutLayout } from '@/lib/pos/shortcuts';
 import type { SellableProductDto } from '@/lib/pos/sellable-dto';
@@ -34,6 +34,10 @@ export default function ProductShortcuts(props: Props) {
   const [offline, setOffline] = useState(false);
   const [selected, setSelected] = useState('');
   const [draft, setDraft] = useState<ShortcutLayout | null>(null);
+  const [confirmation, setConfirmation] = useState<'discard' | { id: string; name: string } | null>(null);
+  const [missingName, setMissingName] = useState<string | null>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
+  const keepButton = useRef<HTMLButtonElement>(null);
   const [query, setQuery] = useState('');
   const [matches, setMatches] = useState<SellableProductDto[]>([]);
   const [busy, setBusy] = useState(false);
@@ -93,6 +97,25 @@ export default function ProductShortcuts(props: Props) {
   const shown = draft ?? layout;
   const screen = shown.screens.find(s => s.id === selected) ?? shown.screens[0];
   const byId = useMemo(() => new Map(products.map(p => [p.id, p])), [products]);
+  function closeEditor() {
+    setDraft(null);
+    setQuery('');
+    setMessage('');
+    setConfirmation(null);
+    setMissingName(null);
+  }
+  function requestClose() {
+    if (busy || !draft) return;
+    if (JSON.stringify(draft) === JSON.stringify(layout)) closeEditor();
+    else setConfirmation('discard');
+  }
+  useEffect(() => {
+    if (missingName && missingName === screen?.id) nameInput.current?.focus();
+  }, [missingName, screen?.id]);
+  useEffect(() => {
+    if (confirmation) keepButton.current?.focus();
+  }, [confirmation]);
+
   function updateScreen(update: Partial<{ name: string; productIds: string[] }>) {
     if (!screen || !draft) return;
     setDraft({ screens: draft.screens.map(s => s.id === screen.id ? { ...s, ...update } : s) });
@@ -104,12 +127,19 @@ export default function ProductShortcuts(props: Props) {
     updateScreen({ productIds: ids });
   }
   async function save() {
-    if (!draft) return;
+    if (!draft || busy) return;
+    const unnamed = draft.screens.find(item => !item.name.trim());
+    if (unnamed) {
+      setSelected(unnamed.id);
+      setMissingName(unnamed.id);
+      if (unnamed.id === screen?.id) nameInput.current?.focus();
+      return;
+    }
     setBusy(true); setMessage('');
     try {
       const result = await savePosShortcutsAction(storeId, revision, draft);
       if (!result.success) { setMessage(result.error); return; }
-      setLayout(result.data.layout); setRevision(result.data.revision); setDraft(null); setQuery('');
+      setLayout(result.data.layout); setRevision(result.data.revision); closeEditor();
       setValidIds(new Set(result.data.layout.screens.flatMap(s => s.productIds)));
       try { localStorage.setItem(cacheKey, JSON.stringify(result.data.layout)); } catch { /* Server save succeeded. */ }
       setMessage('Shortcuts saved for this branch. Other tills receive them when they reload or reconnect.');
@@ -130,14 +160,22 @@ export default function ProductShortcuts(props: Props) {
       {message ? <p role="status" className="mt-2 text-xs text-black/60">{message}</p> : null}
       <div className="pos-shortcut-screens mt-3 flex max-h-28 flex-wrap gap-2 overflow-y-auto" aria-label="Shortcut screens">
         {!draft && onWorkspaceTabChange ? <label className="pos-shortcut-picker hidden text-xs font-semibold">Quick access <select className="input ml-2 w-auto max-w-full" aria-label="Quick access screen" value={screen?.id ?? ''} onChange={event => setSelected(event.target.value)}>{shown.screens.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label> : null}
-        {shown.screens.map(s => <button type="button" key={s.id} disabled={busy} aria-pressed={s.id === screen?.id} className={`pos-shortcut-screen-button min-h-11 max-w-full break-words rounded-lg border px-3 text-sm ${s.id === screen?.id ? 'border-accent bg-accentSoft font-semibold' : 'border-black/10'}`} onClick={() => { setSelected(s.id); setQuery(''); }}>{s.name || 'Unnamed screen'}</button>)}
+        {shown.screens.map(s => <button type="button" key={s.id} disabled={busy} aria-pressed={s.id === screen?.id} className={`pos-shortcut-screen-button min-h-11 max-w-full break-words rounded-lg border px-3 text-sm ${s.id === screen?.id ? 'border-accent bg-accentSoft font-semibold' : 'border-black/10'}`} onClick={() => { setSelected(s.id); setQuery(''); }}>{s.name || layout.screens.find(saved => saved.id === s.id)?.name || `Screen ${shown.screens.indexOf(s) + 1}`}</button>)}
         {draft && shown.screens.length < 12 ? <button type="button" disabled={busy || offline} className="btn-secondary text-xs" onClick={() => { const id = crypto.randomUUID(); setDraft({ screens: [...shown.screens, { id, name: `Screen ${shown.screens.length + 1}`, productIds: [] }] }); setSelected(id); setQuery(''); }}>Add screen</button> : null}
       </div>
       {ready && !shown.screens.length && !draft ? <p className="mt-2 text-xs text-black/50">No shortcuts set up. An owner or manager can add screens for this branch.</p> : null}
       {draft ? <fieldset disabled={busy || offline} className="mt-3 space-y-3">
         {screen ? <>
-          <label className="block text-xs font-semibold">Screen name<input className="input mt-1" maxLength={40} value={screen.name} onChange={e => updateScreen({ name: e.target.value })} /></label>
-          <button type="button" className="text-xs text-red-700 underline" onClick={() => { setDraft({ screens: shown.screens.filter(s => s.id !== screen.id) }); setQuery(''); }}>Remove screen</button>
+          <label className="block text-xs font-semibold">Screen name
+            <input ref={nameInput} className="input mt-1 text-base" maxLength={40} value={screen.name} placeholder="e.g. Drinks"
+              aria-invalid={missingName === screen.id}
+              aria-describedby={missingName === screen.id ? 'shortcut-screen-name-error' : undefined}
+              onChange={event => {
+                updateScreen({ name: event.target.value });
+                if (event.target.value.trim() && missingName === screen.id) setMissingName(null);
+              }} />
+          </label>
+          {missingName === screen.id ? <p id="shortcut-screen-name-error" role="alert" className="text-sm text-red-700">Give this screen a name</p> : null}
           <label className="block text-xs font-semibold">Find products for this screen<input type="search" className="input mt-1" placeholder="Name, code or barcode…" value={query} onChange={e => setQuery(e.target.value)} /></label>
           {query.trim() ? <div className="max-h-52 overflow-y-auto rounded-lg border border-black/10 p-2">
             {searching ? <p role="status" className="text-xs">Searching…</p> : !searchMatches.length ? <p className="text-xs">No matching products.</p> : null}
@@ -147,6 +185,10 @@ export default function ProductShortcuts(props: Props) {
           <ol className="max-h-64 space-y-2 overflow-y-auto">
             {screen.productIds.map((id, index) => <li key={id} className="flex flex-wrap items-center gap-2 rounded-lg border border-black/10 p-2 text-sm"><span className="min-w-0 flex-1 break-words">{byId.get(id)?.name ?? 'Unavailable product — remove before saving'}</span><button type="button" className="min-h-11 px-2 disabled:opacity-30" disabled={index === 0} aria-label={`Move ${byId.get(id)?.name ?? 'product'} up`} onClick={() => move(index, -1)}>↑</button><button type="button" className="min-h-11 px-2 disabled:opacity-30" disabled={index === screen.productIds.length - 1} aria-label={`Move ${byId.get(id)?.name ?? 'product'} down`} onClick={() => move(index, 1)}>↓</button><button type="button" className="min-h-11 px-2 text-red-700" aria-label={`Remove ${byId.get(id)?.name ?? 'product'}`} onClick={() => updateScreen({ productIds: screen.productIds.filter(p => p !== id) })}>Remove</button></li>)}
           </ol>
+          <div className="border-t border-slate-200 pt-3">
+            <button type="button" className="min-h-11 text-sm text-red-700 underline"
+              onClick={() => setConfirmation({ id: screen.id, name: screen.name.trim() || layout.screens.find(saved => saved.id === screen.id)?.name || `Screen ${shown.screens.indexOf(screen) + 1}` })}>Remove screen</button>
+          </div>
         </> : <p className="text-xs">Add a screen, then search for its products.</p>}
       </fieldset> : <div className="pos-shortcut-tiles mt-3 grid max-h-80 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 lg:grid-cols-4">
         {screen?.productIds.map(id => {
@@ -163,8 +205,42 @@ export default function ProductShortcuts(props: Props) {
         })}
         {screen && !screen.productIds.length ? <p className="col-span-full text-xs text-black/50">No products on this screen yet.</p> : null}
       </div>}
-      {draft ? <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={busy || offline} onClick={() => void save()}>{busy ? 'Saving…' : 'Save shortcuts'}</button><button type="button" className="btn-secondary" disabled={busy} onClick={() => { setDraft(null); setQuery(''); setMessage(''); }}>Cancel</button></div> : null}
     </section>
   );
-  return draft ? <ResponsiveModal open onClose={() => { if (!busy) { setDraft(null); setQuery(''); } }} ariaLabel="Manage product shortcuts" closeOnBackdrop={!busy} closeOnEscape={!busy} maxWidthClassName="max-w-3xl">{content}</ResponsiveModal> : content;
+  const footer = confirmation ? (
+    <div className="space-y-2" role="group" aria-labelledby="shortcut-confirmation">
+      <p id="shortcut-confirmation" className="text-sm font-semibold">
+        {confirmation === 'discard' ? 'Discard your changes?' : `Remove the screen '${confirmation.name}' and its buttons?`}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button ref={keepButton} type="button" className="btn-primary" onClick={() => setConfirmation(null)}>
+          {confirmation === 'discard' ? 'Keep editing' : 'Keep'}
+        </button>
+        <button type="button" className="btn-secondary border-red-200 text-red-700" onClick={() => {
+          if (confirmation === 'discard') {
+            closeEditor();
+          } else {
+            setDraft(current => current && ({ screens: current.screens.filter(item => item.id !== confirmation.id) }));
+            setConfirmation(null);
+            setQuery('');
+            if (missingName === confirmation.id) setMissingName(null);
+          }
+        }}>{confirmation === 'discard' ? 'Discard' : 'Remove'}</button>
+      </div>
+    </div>
+  ) : (
+    <div className="flex flex-wrap gap-2">
+      <button type="button" className="btn-primary" disabled={busy || offline} onClick={() => void save()}>
+        {busy ? 'Saving…' : 'Save shortcuts'}
+      </button>
+      <button type="button" className="btn-secondary" disabled={busy} onClick={requestClose}>Cancel</button>
+    </div>
+  );
+
+  return draft ? (
+    <ResponsiveModal open onClose={requestClose} ariaLabel="Manage product shortcuts" closeOnBackdrop={false}
+      closeOnEscape={!busy} maxWidthClassName="max-w-3xl" fitVisualViewport footer={footer}>
+      <fieldset disabled={Boolean(confirmation)}>{content}</fieldset>
+    </ResponsiveModal>
+  ) : content;
 }
