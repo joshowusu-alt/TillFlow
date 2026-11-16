@@ -977,7 +977,7 @@ async function run() {
       await shortcutPanel.getByLabel('Screen name', { exact: true }).fill(shortcutScreenName);
       await shortcutPanel.getByLabel('Find products for this screen', { exact: true }).fill(bulkName);
       await shortcutPanel.getByRole('button', { name: / Add$/ }).first().click();
-      await shortcutPanel.getByRole('button', { name: 'Save shortcuts', exact: true }).click();
+      await page.getByRole('dialog', { name: 'Manage product shortcuts' }).getByRole('button', { name: 'Save shortcuts', exact: true }).click();
       await shortcutPanel.getByText(/Shortcuts saved for this branch/).waitFor();
       const savedShortcutStore = await prisma.store.findUniqueOrThrow({ where: { id: shortcutStoreId }, select: { posShortcutsJson: true } });
       const savedShortcutScreen = JSON.parse(savedShortcutStore.posShortcutsJson).screens.find(screen => screen.name === shortcutScreenName);
