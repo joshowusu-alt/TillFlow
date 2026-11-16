@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { createQuickPurchaseProduct, saveQuickPurchase } from '@/app/actions/quick-purchases';
@@ -94,6 +95,7 @@ function ItemPicker({ row, products, choose, add }: {
 }
 
 export default function QuickPurchaseForm(props: Props) {
+  const router = useRouter();
   const [products, setProducts] = useState(props.products);
   const nextKey = useRef(1);
   const [rows, setRows] = useState([emptyRow(0)]);
@@ -131,12 +133,13 @@ export default function QuickPurchaseForm(props: Props) {
   const extra = additionalCost ? quickMoney(additionalCost) : 0;
   if (!Number.isSafeInteger(extra) || extra > 2147483647) pricingProblem ??= { id: 'quick-delivery', message: 'Enter a valid delivery or other cost' };
   else total += extra;
+  const isBusinessCashShort = total > props.businessCashPence;
   const shortfallMessage = quickCashShortfallMessage(props.role);
   const cashProblem = payment !== 'Cash' ? undefined : props.tills.length
     ? (!till ? { id: 'quick-till', message: 'Choose which till you paid from' } : undefined)
     : !cashSource
       ? { id: 'quick-cash-source', message: 'Choose where the cash came from' }
-      : cashSource === 'BUSINESS_CASH' && total > props.businessCashPence
+      : cashSource === 'BUSINESS_CASH' && isBusinessCashShort
         ? { id: 'quick-business-cash', message: shortfallMessage }
         : undefined;
   const problem = baseProblem ?? pricingProblem ?? cashProblem;
@@ -228,6 +231,7 @@ export default function QuickPurchaseForm(props: Props) {
       updates.set(product.id, { ...product, lastUnitId: row.unitId, lastCosts: { ...product.lastCosts, [row.unitId]: quickCost(row.cost) } });
     }
     setProducts(current => current.map(product => updates.get(product.id) ?? product));
+    router.refresh();
   }
 
   if (result) return <section className="card space-y-4 p-5">
@@ -343,6 +347,8 @@ export default function QuickPurchaseForm(props: Props) {
                 className={cashSource === 'BUSINESS_CASH' ? 'btn-primary w-full justify-center' : 'btn-secondary w-full justify-center'}
                 onClick={() => { setCashSource('BUSINESS_CASH'); setError(''); }}>{QUICK_CASH_SOURCES.BUSINESS_CASH}</button>
               <p className="mt-1 text-sm">You have {formatMoney(props.businessCashPence)} recorded</p>
+              {isBusinessCashShort && <Link className="mt-1 inline-block text-sm underline"
+                href={'/purchases/cash?storeId=' + encodeURIComponent(props.storeId)}>Record cash given to you</Link>}
               {props.role !== 'OWNER' && <p className="mt-1 text-sm">Only the owner can record their own money.</p>}
             </div>
           </div>

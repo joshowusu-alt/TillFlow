@@ -83,8 +83,8 @@ describe('quick purchase action', () => {
   });
 
   it.each([
-    ['OWNER', 'Not enough business cash recorded. Choose My own money, or record a cash handover first.'],
-    ['MANAGER', 'Not enough business cash recorded. Record a cash handover first.'],
+    ['OWNER', 'Not enough business cash recorded. Choose My own money, or record cash given to you first.'],
+    ['MANAGER', 'Not enough business cash recorded. Record cash given to you first.'],
   ])('translates a %s cash shortfall reported by the posting service', async (role, error) => {
     mocks.storeAuth.mockResolvedValue({ businessId: 'business', storeId: 'store', user: { id: 'user', role } });
     mocks.save.mockRejectedValueOnce(new Error(INSUFFICIENT_HELD_CASH));

@@ -22,8 +22,8 @@ export type QuickCashSource = keyof typeof QUICK_CASH_SOURCES;
 
 export function quickCashShortfallMessage(role: string) {
   return role === 'OWNER'
-    ? 'Not enough business cash recorded. Choose My own money, or record a cash handover first.'
-    : 'Not enough business cash recorded. Record a cash handover first.';
+    ? 'Not enough business cash recorded. Choose My own money, or record cash given to you first.'
+    : 'Not enough business cash recorded. Record cash given to you first.';
 }
 
 export function quickMoney(value: string) {

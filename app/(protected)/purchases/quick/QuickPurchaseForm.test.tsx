@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import QuickPurchaseForm from './QuickPurchaseForm';
 import { createQuickPurchaseProduct, saveQuickPurchase, setFoodPurchasePhotoRequired } from '@/app/actions/quick-purchases';
 
+const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
+
 vi.mock('@/app/actions/quick-purchases', () => ({
   createQuickPurchaseProduct: vi.fn(),
   saveQuickPurchase: vi.fn(),
@@ -56,6 +59,30 @@ describe('food quick purchases', () => {
     }));
   });
 
+  it('refreshes the branch balance after starting another purchase', async () => {
+    vi.mocked(saveQuickPurchase).mockResolvedValueOnce({ success: true, data: {
+      id: 'purchase', total: 1500, cashSource: 'BUSINESS_CASH', tillUsed: false,
+    } });
+    render(<QuickPurchaseForm {...props} tills={[]} />);
+    pick('Tea bread');
+    fill('3', '5');
+    fireEvent.click(screen.getByRole('button', { name: 'Business cash' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save purchase' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Record another' }));
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Choose an item you bought' })).toBeVisible();
+  });
+
+  it('links to the current branch cash page only when the balance is below the total', () => {
+    render(<QuickPurchaseForm {...props} tills={[]} storeId="branch+1" />);
+    pick('Tea bread');
+    fill('5', '5');
+    expect(screen.queryByRole('link', { name: 'Record cash given to you' })).not.toBeInTheDocument();
+    fill('6', '5');
+    expect(screen.getByRole('link', { name: 'Record cash given to you' }))
+      .toHaveAttribute('href', '/purchases/cash?storeId=branch%2B1');
+  });
+
   it('requires a supplier only when paying later', () => {
     render(<QuickPurchaseForm {...props} photoRequired />);
     pick('Tea bread');
@@ -91,8 +118,8 @@ describe('food quick purchases', () => {
   });
 
   it.each([
-    ['OWNER', 'Not enough business cash recorded. Choose My own money, or record a cash handover first.'],
-    ['MANAGER', 'Not enough business cash recorded. Record a cash handover first.'],
+    ['OWNER', 'Not enough business cash recorded. Choose My own money, or record cash given to you first.'],
+    ['MANAGER', 'Not enough business cash recorded. Record cash given to you first.'],
   ])('points %s to business cash when the total exceeds the displayed balance', (role, message) => {
     render(<QuickPurchaseForm {...props} tills={[]} role={role} businessCashPence={0} />);
     pick('Tea bread');
@@ -105,7 +132,7 @@ describe('food quick purchases', () => {
   });
 
   it('shows a cash shortfall reported by the server after the balance changed', async () => {
-    const message = 'Not enough business cash recorded. Record a cash handover first.';
+    const message = 'Not enough business cash recorded. Record cash given to you first.';
     vi.mocked(saveQuickPurchase).mockResolvedValueOnce({ success: false, error: message });
     render(<QuickPurchaseForm {...props} tills={[]} role="MANAGER" />);
     pick('Tea bread');
