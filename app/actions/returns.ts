@@ -1,12 +1,13 @@
 'use server';
 
 import { createSalesReturn, createPurchaseReturn } from '@/lib/services/returns';
+import { isFoodBusiness } from '@/lib/food/business';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
-import { revalidateTag } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { formString, formInt } from '@/lib/form-helpers';
 import { ReturnTypeEnum, PaymentMethodEnum } from '@/lib/validation/enums';
-import { withBusinessContext, requireSelectedStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, requireSelectedStoreContext, formAction, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { resolveStoreFromTill } from '@/lib/reliability/selected-store';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { audit } from '@/lib/audit';
@@ -183,4 +184,31 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
 
     redirect('/purchases');
   }, '/purchases');
+}
+
+
+export async function deleteFoodSaleAction(invoiceId: string, reasonCode: string, note: string) {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['OWNER']);
+    if (!['TEST_SALE', 'MISTAKE'].includes(reasonCode) || note.length > 500) return err('Choose a reason and keep the note under 500 characters.');
+    const invoice = await prisma.salesInvoice.findFirst({
+      where: { id: invoiceId, businessId },
+      select: { storeId: true, business: { select: { businessCategory: true } } },
+    });
+    if (!invoice || !isFoodBusiness(invoice.business.businessCategory)) return err('Sale not found.');
+    await requireSelectedStoreContext(['OWNER'], invoice.storeId);
+    const returned = await createSalesReturn({
+      businessId, salesInvoiceId: invoiceId, userId: user.id, type: 'VOID', ownerDelete: true,
+      managerApprovedByUserId: user.id, managerApprovalMode: 'OWNER_DELETE', reasonCode, reason: note.trim() || null,
+    });
+    void sendVoidReturnAlert({ salesReturnId: returned.id, businessId }).catch(() => {});
+    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SALE_VOID',
+      entity: 'SalesInvoice', entityId: invoiceId, details: { reasonCode, note: note.trim(), method: 'DELETE_SALE' } });
+    revalidatePosCatalog(businessId, invoice.storeId);
+    revalidateTag('reports');
+    revalidateOwnerDashboardCache();
+    revalidatePath('/sales');
+    revalidatePath('/receipts/' + invoiceId);
+    return ok();
+  });
 }

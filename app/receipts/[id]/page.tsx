@@ -1,3 +1,4 @@
+import { isFoodBusiness } from '@/lib/food/business';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import ReceiptClient from './ReceiptClient';
@@ -32,6 +33,7 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
           id: true,
           name: true,
           currency: true,
+          businessCategory: true,
           vatEnabled: true,
           vatNumber: true,
           receiptTemplate: true,
@@ -179,6 +181,7 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
       }))}
       lines={lines}
       canReturn={canReturn}
+      canDelete={user.role === 'OWNER' && !isReturned && isFoodBusiness(invoice.business.businessCategory)}
       isReturned={isReturned}
       salesListHref={salesListHref}
     />

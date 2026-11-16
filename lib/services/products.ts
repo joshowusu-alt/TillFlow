@@ -1,3 +1,4 @@
+import { FOOD_BUSINESS_CATEGORY } from '@/lib/food/business';
 import { normalizeProductAttributes } from '@/lib/products/attributes';
 import { prisma } from '@/lib/prisma';
 import { resolveProductClassification } from '@/lib/services/product-classification';
@@ -423,7 +424,10 @@ async function createProductImpl(
   db?: any,
 ): Promise<{ id: string; name: string }> {
   const normalized = normalizeCoreProductInput(data);
-  validateProductValues(normalized);
+  const foodIngredient = data.ingredientOnly === true && await (db ?? prisma).business.findFirst({
+    where: { id: businessId, businessCategory: FOOD_BUSINESS_CATEGORY }, select: { id: true },
+  });
+  validateProductValues(normalized, Boolean(foodIngredient));
   validateMarginThresholdBps(normalized.minimumMarginThresholdBps);
   if ((normalized.publisher?.length ?? 0) > 120 || (normalized.edition?.length ?? 0) > 120) throw new Error("Publisher and edition must be 120 characters or fewer.");
 

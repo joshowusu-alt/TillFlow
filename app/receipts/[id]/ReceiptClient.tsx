@@ -1,4 +1,5 @@
 'use client';
+import DeleteFoodSaleButton from '@/components/DeleteFoodSaleButton';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getLastReceiptStorageKey } from '@/lib/business-scope';
@@ -59,6 +60,7 @@ type ReceiptClientProps = {
     displayDiscountPence: number;
   }[];
   canReturn?: boolean;
+  canDelete?: boolean;
   isReturned?: boolean;
   salesListHref?: string;
 };
@@ -72,6 +74,7 @@ export default function ReceiptClient({
   lines,
   payments,
   canReturn = false,
+  canDelete = false,
   isReturned = false,
   salesListHref = '/sales',
 }: ReceiptClientProps) {
@@ -229,6 +232,7 @@ export default function ReceiptClient({
               Return Sale
             </a>
           ) : null}
+          {canDelete && <DeleteFoodSaleButton invoiceId={invoice.id} />}
           <button
             type="button"
             className="btn-secondary text-xs"

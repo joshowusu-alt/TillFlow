@@ -233,6 +233,47 @@ describe('createSalesReturn', () => {
     }
   });
 
+  it('reverses a confirmed MoMo sale through bank without a till payout', async () => {
+    setupSuccessfulMocks(makeInvoice({
+      business: { vatEnabled: false, businessCategory: 'FOOD_DISHES' }, subtotalPence: 5000,
+      payments: [{ method: 'MOBILE_MONEY', amountPence: 5000, status: 'CONFIRMED' }],
+    }));
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'owner' });
+    await createSalesReturn({ businessId: 'biz-1', salesInvoiceId: 'inv-1', userId: 'owner',
+      managerApprovedByUserId: 'owner', type: 'VOID', reasonCode: 'MISTAKE', ownerDelete: true });
+    expect(mockPostJournalEntry).toHaveBeenCalledWith(expect.objectContaining({
+      lines: expect.arrayContaining([{ accountCode: '1010', creditPence: 5000 }]),
+    }));
+    expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
+  });
+
+  it('requires the approved owner to be the same person deleting the sale', async () => {
+    setupSuccessfulMocks(makeInvoice({ business: { vatEnabled: false, businessCategory: 'FOOD_DISHES' } }));
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'owner' });
+    await expect(createSalesReturn({ businessId: 'biz-1', salesInvoiceId: 'inv-1', userId: 'manager',
+      managerApprovedByUserId: 'owner', type: 'VOID', reasonCode: 'MISTAKE', ownerDelete: true }))
+      .rejects.toThrow('Only the owner');
+    expect(prismaMock.salesInvoice.update).not.toHaveBeenCalled();
+  });
+
+  it.each(['original', 'other', 'none'] as const)('reverses owner-deleted food cash sales with %s drawer', async drawer => {
+    prismaMock.salesInvoice.findFirst.mockResolvedValue(makeInvoice({ business: { vatEnabled: false, businessCategory: 'FOOD_DISHES' } }));
+    mockGetOpenCashShiftForPayment.mockResolvedValue(drawer === 'original' ? { id: 'shift-1', tillId: 'till-1' } : null);
+    prismaMock.shift.findFirst.mockResolvedValue(drawer === 'other' ? { id: 'shift-2', tillId: 'till-2' } : drawer === 'original' ? { id: 'shift-1', tillId: 'till-1' } : null);
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'owner' });
+    await createSalesReturn({ businessId: 'biz-1', salesInvoiceId: 'inv-1', userId: 'owner',
+      managerApprovedByUserId: 'owner', type: 'VOID', reasonCode: 'TEST_SALE', ownerDelete: true });
+    expect(prismaMock.salesInvoice.update).toHaveBeenCalledWith({ where: { id: 'inv-1' }, data: { paymentStatus: 'VOID' } });
+    expect(mockPostJournalEntry).toHaveBeenCalledWith(expect.objectContaining({
+      lines: expect.arrayContaining([{ accountCode: '1000', creditPence: 5000 }]),
+    }));
+    if (drawer === 'none') expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
+    else expect(mockRecordCashDrawerEntryTx).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      tillId: drawer === 'other' ? 'till-2' : 'till-1', amountPence: -5000,
+    }));
+    expect(mockUpsertInventoryBalance).toHaveBeenCalled();
+  });
+
   it('1. full paid RETURN — SalesReturn.create called with correct refundAmountPence', async () => {
     setupSuccessfulMocks();
 

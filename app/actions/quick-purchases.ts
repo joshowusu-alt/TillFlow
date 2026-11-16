@@ -30,9 +30,9 @@ export async function setFoodPurchasePhotoRequired(required: boolean) {
   });
 }
 
-export async function createQuickPurchaseProduct(input: { name: string; unitId: string; ingredient: boolean; sellingPrice: string }, requestedStore: string) {
+export async function createQuickPurchaseProduct(input: { name: string; unitId?: string; ingredient?: boolean; sellingPrice?: string }, requestedStore: string) {
   return safeAction(async () => {
-    const { businessId, storeId } = await requireSelectedStoreContext([...purchaseRoles], requestedStore);
+    const { businessId, storeId, user } = await requireSelectedStoreContext([...purchaseRoles], requestedStore);
     const [business, units] = await Promise.all([
       prisma.business.findUniqueOrThrow({ where: { id: businessId } }),
       listSelectableUnits(businessId),
@@ -40,16 +40,81 @@ export async function createQuickPurchaseProduct(input: { name: string; unitId: 
     if (!isFoodBusiness(business.businessCategory)) return err('Quick purchase is only available for food businesses.');
     const name = input.name.trim();
     if (!name || name.length > 160) return err('Enter an item name.');
-    if (!units.some(unit => unit.id === input.unitId)) return err('Choose a unit.');
-    const sellingPrice = input.ingredient ? 0 : quickCost(input.sellingPrice);
-    if (!Number.isSafeInteger(sellingPrice) || (!input.ingredient && sellingPrice <= 0) || sellingPrice > 2147483647) return err('Add a selling price.');
-    const product = await quickCreateProduct(businessId, {
-      name, baseUnitId: input.unitId, sellingPriceBasePence: sellingPrice,
-      ingredientOnly: input.ingredient, defaultCostBasePence: 0, vatRateBps: 0,
+    const unitId = input.unitId ?? units.find(unit => unit.name.toLowerCase() === 'piece')?.id;
+    if (!unitId || !units.some(unit => unit.id === unitId)) return err('Choose a unit.');
+    const ingredientOnly = input.ingredient !== false;
+    const sellingPrice = ingredientOnly ? 0 : quickCost(input.sellingPrice ?? '');
+    if (!Number.isSafeInteger(sellingPrice) || (!ingredientOnly && sellingPrice <= 0) || sellingPrice > 2147483647) return err('Add a selling price.');
+    const findOrCreateProduct = () => prisma.$transaction(async tx => {
+      const [existing] = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "Product" WHERE "businessId" = ${businessId} AND LOWER(name) = LOWER(${name})
+        ORDER BY id LIMIT 1
+      `;
+      if (existing) {
+        const item = await tx.product.findFirst({
+          where: { id: existing.id, businessId, active: true, foodDish: { is: null } },
+          include: { productUnits: { include: { unit: true } } },
+        });
+        if (!item) return null;
+        return { created: false, id: item.id, name: item.name, vatRateBps: item.vatRateBps,
+          units: item.productUnits.map(unit => ({ id: unit.unitId, name: unit.unit.name, pluralName: unit.unit.pluralName, isBaseUnit: unit.isBaseUnit })) };
+      }
+      const created = await quickCreateProduct(businessId, {
+        name, baseUnitId: unitId, sellingPriceBasePence: sellingPrice,
+        ingredientOnly, defaultCostBasePence: 0, vatRateBps: 0,
+      }, tx);
+      await tx.auditLog.create({ data: { businessId, userId: user.id, userName: user.name ?? 'Unknown',
+        userRole: user.role, action: 'PRODUCT_CREATE', entity: 'Product', entityId: created.id,
+        details: JSON.stringify({ source: 'QUICK_PURCHASE', name, ingredientOnly }) } });
+      return { ...created, created: true };
+    }, { isolationLevel: 'Serializable' });
+    const product = await findOrCreateProduct().catch((error: unknown) => {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2034') return findOrCreateProduct();
+      throw error;
     });
+    if (!product) return err('That name is already used by an unavailable item or dish.');
     revalidatePosCatalog(businessId, storeId);
     revalidatePath('/products');
     return ok(product);
+  });
+}
+
+export async function changeNewQuickPurchaseItem(input: { id: string; unitId: string; resell: boolean; sellingPrice: string }, requestedStore: string) {
+  return safeAction(async () => {
+    const { businessId, storeId, user } = await requireSelectedStoreContext([...purchaseRoles], requestedStore);
+    const [business, units] = await Promise.all([
+      prisma.business.findUniqueOrThrow({ where: { id: businessId } }),
+      listSelectableUnits(businessId),
+    ]);
+    if (!isFoodBusiness(business.businessCategory)) return err('Quick purchase is only available for food businesses.');
+    const unit = units.find(option => option.id === input.unitId);
+    if (!unit) return err('Choose a unit.');
+    const price = input.resell ? quickCost(input.sellingPrice) : 0;
+    if (!Number.isSafeInteger(price) || price > 2147483647) return err('Add a selling price.');
+    const updated = await prisma.$transaction(async tx => {
+      const product = await tx.product.findFirst({
+        where: { id: input.id, businessId, active: true, foodDish: { is: null } },
+        select: { id: true, name: true, vatRateBps: true, productUnits: { select: { unitId: true, isBaseUnit: true } } },
+      });
+      const created = await tx.auditLog.findFirst({
+        where: { businessId, userId: user.id, entity: 'Product', entityId: input.id, action: 'PRODUCT_CREATE' },
+        select: { details: true },
+      });
+      if (!product || !created?.details?.includes('"source":"QUICK_PURCHASE"') ||
+        product.productUnits.length !== 1 || !product.productUnits[0].isBaseUnit) return null;
+      if (await tx.stockMovement.count({ where: { productId: product.id } }) ||
+        await tx.salesInvoiceLine.count({ where: { productId: product.id } }) ||
+        await tx.purchaseInvoiceLine.count({ where: { productId: product.id } })) return null;
+      await tx.product.update({ where: { id: product.id }, data: { ingredientOnly: !input.resell, sellingPriceBasePence: price } });
+      await tx.productUnit.updateMany({ where: { productId: product.id, isBaseUnit: true }, data: { unitId: unit.id } });
+      return { id: product.id, name: product.name, vatRateBps: product.vatRateBps, sellingPriceBasePence: price, units: [{ ...unit, isBaseUnit: true }] };
+    }, { isolationLevel: 'Serializable' });
+    if (!updated) return err('This item has already been used. Change it from Products.');
+    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role,
+      action: 'PRODUCT_UPDATE', entity: 'Product', entityId: input.id, details: { source: 'QUICK_PURCHASE', ...input } });
+    revalidatePosCatalog(businessId, storeId);
+    revalidatePath('/products');
+    return ok(updated);
   });
 }
 

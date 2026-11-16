@@ -195,10 +195,10 @@ export function pricePlate(
   if (amount !== undefined) {
     if (!allowTillAmount || !menu.allowCustomAmount) throw new PlateError('Other amount is unavailable for this dish.');
     const minimum = menu.minimumAmountPence;
-    if (!minimum || !Number.isSafeInteger(amount) || amount > 100_000_000) {
+    if (!Number.isSafeInteger(amount) || amount <= 0 || amount > 100_000_000) {
       throw new PlateError('Enter a valid amount in cedis.');
     }
-    if (amount < minimum) throw new PlateError(`Lowest amount for this dish is ${formatMoney(minimum, 'GHS')}.`);
+    if (minimum != null && amount < minimum) throw new PlateError(`Lowest amount for this dish is ${formatMoney(minimum, 'GHS')}.`);
   }
   const sizes = activeSizes(menu);
   let size: FoodSize | null = null;

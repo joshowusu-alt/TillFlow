@@ -1,3 +1,4 @@
+import DeleteFoodSaleButton from '@/components/DeleteFoodSaleButton';
 import { summarizeAmountSales } from '@/lib/food/amount-sales';
 import { isFoodBusiness } from '@/lib/food/business';
 import Link from 'next/link';
@@ -21,7 +22,7 @@ export default async function SalesPage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {
     return (
       <div className="card p-6 text-center">
@@ -64,7 +65,7 @@ export default async function SalesPage(
       totalPence: true,
       store: { select: { name: true } },
       customer: { select: { name: true } },
-      salesReturn: { select: { id: true } },
+      salesReturn: { select: { id: true, reasonCode: true, managerApprovalMode: true } },
       payments: { select: { method: true, amountPence: true, status: true } },
       _count: { select: { lines: true } },
       lines: { where: { customAmountPence: { not: null } }, select: { customAmountPence: true, product: { select: { name: true } } } },
@@ -83,10 +84,12 @@ export default async function SalesPage(
   const currentPage = listed.page;
   const totalPages = listed.totalPages;
 
-  const getClosedSaleLabel = (paymentStatus: string, hasSalesReturn: boolean) => {
+  const canDelete = user?.role === 'OWNER' && isFoodBusiness(business.businessCategory);
+  const getClosedSaleLabel = (paymentStatus: string, returned: typeof sales[number]['salesReturn']) => {
+    if (returned?.managerApprovalMode === 'OWNER_DELETE') return returned.reasonCode === 'TEST_SALE' ? 'Deleted · test sale' : 'Deleted · mistake';
     if (paymentStatus === 'VOID') return 'Voided';
     if (paymentStatus === 'RETURNED') return 'Returned';
-    return hasSalesReturn ? 'Closed' : 'Closed';
+    return 'Closed';
   };
 
   function amountLabels(sale: typeof sales[number]) {
@@ -188,7 +191,7 @@ export default async function SalesPage(
             const receiptRef = sale.transactionNumber ?? `#${sale.id.slice(0, 8).toUpperCase()}`;
             const outstandingPence = sale.totalPence - sale.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
             const isClosed = Boolean(sale.salesReturn) || ['RETURNED', 'VOID'].includes(sale.paymentStatus);
-            const closedSaleLabel = getClosedSaleLabel(sale.paymentStatus, Boolean(sale.salesReturn));
+            const closedSaleLabel = getClosedSaleLabel(sale.paymentStatus, sale.salesReturn);
 
             return (
               <DataCard key={sale.id}>
@@ -230,6 +233,7 @@ export default async function SalesPage(
                       <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
                         Amend
                       </Link>
+                      {canDelete && <DeleteFoodSaleButton invoiceId={sale.id} />}
                       <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
                         Return
                       </Link>
@@ -287,7 +291,7 @@ export default async function SalesPage(
               )}
               {sales.map((sale) => {
                 const isClosed = Boolean(sale.salesReturn) || ['RETURNED', 'VOID'].includes(sale.paymentStatus);
-                const closedSaleLabel = getClosedSaleLabel(sale.paymentStatus, Boolean(sale.salesReturn));
+                const closedSaleLabel = getClosedSaleLabel(sale.paymentStatus, sale.salesReturn);
 
                 return (
                   <tr key={sale.id} className="rounded-xl bg-white">
@@ -339,7 +343,8 @@ export default async function SalesPage(
                           <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
                             Amend
                           </Link>
-                          <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
+                          {canDelete && <DeleteFoodSaleButton invoiceId={sale.id} />}
+                      <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
                             Return
                           </Link>
                         </div>

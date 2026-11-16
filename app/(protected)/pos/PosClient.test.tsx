@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PosClient from './PosClient';
 import { getParkedCartsStorageKey, getPosTillStorageKey } from '@/lib/business-scope';
+import { openShiftAction } from '@/app/actions/shifts';
 import { completeSaleAction } from '@/app/actions/sales';
 
 const searchParamsGet = vi.hoisted(() => vi.fn((_key?: string) => null as string | null));
@@ -25,6 +26,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ prefetch: vi.fn(), refresh: refreshMock }),
 }));
 
+vi.mock('@/app/actions/shifts', () => ({ openShiftAction: vi.fn() }));
 vi.mock('@/app/actions/sales', () => ({ completeSaleAction: vi.fn() }));
 vi.mock('@/app/actions/mobile-money', () => ({
   checkMomoCollectionStatusAction: vi.fn(),
@@ -549,6 +551,31 @@ describe('PosClient mobile phase 1 layout', () => {
     });
     expect(screen.getByRole('link', { name: /Open till/i })).toHaveAttribute('href', '/shifts');
     expect(screen.getByText(/Open a till to complete sales/i)).toBeInTheDocument();
+  });
+
+  it('opens a till in food checkout and keeps the cart ready to complete', async () => {
+    vi.mocked(openShiftAction).mockResolvedValueOnce({ success: true, data: { id: 'new-shift', tillId: baseProps.tills[0].id } });
+    render(<PosClient {...baseProps} business={{ ...baseProps.business, foodBusiness: true }} openShiftTillIds={[]} />);
+    const search = screen.getByPlaceholderText(/type product name/i);
+    fireEvent.change(search, { target: { value: 'Coca' } });
+    fireEvent.focus(search);
+    fireEvent.click(await screen.findByRole('button', { name: /^Coca Cola/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open till' }));
+    fireEvent.change(screen.getByLabelText('Opening cash (GH₵)'), { target: { value: '50' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm opening' }));
+    await waitFor(() => expect(document.querySelector('[data-pos-shift-id="new-shift"]')).not.toBeNull());
+    expect(vi.mocked(openShiftAction).mock.calls.at(-1)?.[0].get('openingCash')).toBe('50');
+    expect(screen.queryByText('Cart is empty')).not.toBeInTheDocument();
+    mockedCompleteSaleAction.mockResolvedValueOnce({
+      success: true, data: { receiptId: 'new-receipt', totalPence: 250, transactionNumber: 'INV-NEW' },
+    });
+    const complete = screen.getAllByRole('button', { name: /Complete Cash Sale/i })
+      .find(button => !(button as HTMLButtonElement).disabled);
+    expect(complete).toBeDefined();
+    fireEvent.click(complete!);
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledWith(expect.objectContaining({
+      tillId: baseProps.tills[0].id, cashPaid: 250,
+    })));
   });
 
   it('keeps Option B defaults and mutual exclusivity after adding an item on phone', async () => {

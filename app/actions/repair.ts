@@ -660,6 +660,11 @@ export async function ownerVoidSaleAction(saleReference: string): Promise<Action
     const cleanupResult = await cleanupOwnerVoidedSale({
       businessId,
       salesInvoiceId: invoice.id,
+    }).catch(error => {
+      if (error instanceof Error && error.message === 'CLOSED_SHIFT_CLEANUP_REJECTED') {
+        throw new Error('That sale’s till is closed. For a food business, open the receipt and choose Delete sale.');
+      }
+      throw error;
     });
 
     await audit({

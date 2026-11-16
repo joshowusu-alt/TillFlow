@@ -7,6 +7,7 @@ export type QuickProduct = {
   id: string;
   name: string;
   vatRateBps: number;
+  sellingPriceBasePence?: number;
   units: QuickUnit[];
   lastUnitId?: string;
   lastCosts?: Record<string, number>;

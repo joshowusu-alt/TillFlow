@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { createQuickPurchaseProduct, saveQuickPurchase } from '@/app/actions/quick-purchases';
+import { changeNewQuickPurchaseItem, createQuickPurchaseProduct, saveQuickPurchase } from '@/app/actions/quick-purchases';
 import { formatMoney } from '@/lib/format';
 import { purchaseDiscountBps } from '@/lib/purchases/discounts';
 import { QUICK_CASH_SOURCES, quickCashShortfallMessage, quickCost, quickMoney, quickPurchaseProblem, quickPurchaseTotal, type QuickCashSource, type QuickRow, type QuickPayment, type QuickProduct, type QuickUnit } from '@/lib/purchases/quick';
@@ -75,7 +75,8 @@ function ItemPicker({ row, products, choose, add }: {
 }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const matches = products.filter(product => product.name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 12);
+  const search = query.trim().toLowerCase();
+  const matches = products.filter(product => product.name.toLowerCase().includes(search)).slice(0, 12);
   return <div className="relative" onBlur={event => {
     if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
   }}>
@@ -84,12 +85,13 @@ function ItemPicker({ row, products, choose, add }: {
       value={open ? query : row.product?.name ?? query} onFocus={() => { setQuery(''); setOpen(true); }}
       onChange={event => { setQuery(event.target.value); setOpen(true); }} />
     {open && <ul className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-xl border bg-white shadow-lg">
+      {search && !products.some(product => product.name.trim().toLowerCase() === search) && <li><button type="button" className="min-h-11 w-full px-3 text-left underline"
+        onMouseDown={event => event.preventDefault()}
+        onClick={() => { add(query.trim()); setOpen(false); }}>+ Add &quot;{query.trim()}&quot; as new item</button></li>}
       {matches.map(product => <li key={product.id}><button type="button" className="min-h-11 w-full px-3 text-left hover:bg-black/5"
         onMouseDown={event => event.preventDefault()}
         onClick={() => { choose(product); setQuery(''); setOpen(false); }}>{product.name}</button></li>)}
-      {!matches.length && query.trim() && <li><button type="button" className="min-h-11 w-full px-3 text-left underline"
-        onMouseDown={event => event.preventDefault()}
-        onClick={() => { add(query.trim()); setOpen(false); }}>Add &apos;{query.trim()}&apos; as a new item</button></li>}
+
     </ul>}
   </div>;
 }
@@ -116,9 +118,16 @@ export default function QuickPurchaseForm(props: Props) {
   const [busy, setBusy] = useState(false);
   const requestKey = useRef('');
   const [result, setResult] = useState<{ id: string; total: number; cashSource?: QuickCashSource; tillUsed: boolean }>();
-  const [newItem, setNewItem] = useState<{ row: number; name: string; unitId: string; ingredient: boolean; sellingPrice: string }>();
   const [itemError, setItemError] = useState('');
+  const [newRows, setNewRows] = useState<Set<number>>(new Set());
+  const [change, setChange] = useState<{ row: number; unitId: string; resell: boolean; sellingPrice: string }>();
   const [creating, setCreating] = useState(false);
+  const [quantityFocusRow, setQuantityFocusRow] = useState<number>();
+  useEffect(() => {
+    if (quantityFocusRow === undefined || creating) return;
+    document.getElementById('qty-' + quantityFocusRow)?.focus();
+    setQuantityFocusRow(undefined);
+  }, [quantityFocusRow, creating]);
   const selected = rows.filter(row => row.product);
   const baseProblem = quickPurchaseProblem(rows, payment, supplier, photoRequired, Boolean(photo));
   let total = 0;
@@ -172,7 +181,7 @@ export default function QuickPurchaseForm(props: Props) {
   };
 
   async function save() {
-    if (busy || newItem) return;
+    if (busy || creating || change) return;
     if (problem) return highlight(problem);
     setBusy(true);
     setError('');
@@ -288,19 +297,76 @@ export default function QuickPurchaseForm(props: Props) {
       const rowTotal = Number(row.quantity) * quickCost(row.cost);
       return <section key={row.key} className="card space-y-3 p-4">
         <div className="grid grid-cols-[minmax(0,1fr)_2.75rem] items-end gap-2">
-          <ItemPicker row={row} products={products} choose={product => chooseProduct(row.key, product)} add={name => {
-            const unitId = props.units.find(unit => unit.name.toLowerCase() === 'piece')?.id ?? props.units[0]?.id ?? '';
-            setNewItem({ row: row.key, name, unitId, ingredient: true, sellingPrice: '' });
+          <ItemPicker row={row} products={products} choose={product => {
+            if (creating) return;
+            setChange(current => current?.row === row.key ? undefined : current);
+            setNewRows(current => new Set([...current].filter(key => key !== row.key)));
+            chooseProduct(row.key, product);
+          }} add={async name => {
+            if (creating || busy) return;
+            setCreating(true);
             setItemError('');
+            try {
+              const created = await createQuickPurchaseProduct({ name }, props.storeId);
+              if (!created.success) { setItemError(created.error); return; }
+              setProducts(current => current.some(item => item.id === created.data.id) ? current : [...current, created.data]);
+              chooseProduct(row.key, created.data);
+              if (created.data.created) setNewRows(current => new Set(current).add(row.key));
+              setQuantityFocusRow(row.key);
+            } catch {
+              setItemError('Could not add this item. Try again.');
+            } finally {
+              setCreating(false);
+            }
           }} />
           <button className="btn-secondary h-11 justify-center px-0" type="button" aria-label={'Remove ' + (row.product?.name ?? 'item')}
-            onClick={() => setRows(current => current.length === 1 ? [emptyRow(nextKey.current++)] : current.filter(item => item.key !== row.key))}>×</button>
+            onClick={() => { if (change?.row === row.key) setChange(undefined); setRows(current => current.length === 1 ? [emptyRow(nextKey.current++)] : current.filter(item => item.key !== row.key)); }}>×</button>
         </div>
         {row.product && <>
+          {newRows.has(row.key) && <button type="button" className="text-sm underline" onClick={() => {
+            setItemError('');
+            const price = row.product?.sellingPriceBasePence ?? 0;
+            setChange({ row: row.key, unitId: row.unitId, resell: price > 0, sellingPrice: price > 0 ? (price / 100).toFixed(2) : '' });
+          }}>Change</button>}
+          {change?.row === row.key && <div className="space-y-2">
+            <label className="block">Unit<select className="input" value={change.unitId}
+              onChange={event => setChange({ ...change, unitId: event.target.value })}>
+              {props.units.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
+            </select></label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={change.resell}
+              onChange={event => setChange({ ...change, resell: event.target.checked })} />I also sell this</label>
+            {change.resell && <label className="block">Selling price (GH₵)<input className="input" inputMode="decimal"
+              value={change.sellingPrice} onChange={event => setChange({ ...change, sellingPrice: event.target.value })} /></label>}
+            <div className="flex gap-2">
+              <button type="button" className="btn-primary" disabled={creating} onClick={async () => {
+                setCreating(true);
+                setItemError('');
+                try {
+                  const result = await changeNewQuickPurchaseItem({ id: row.product!.id, ...change }, props.storeId);
+                  if (!result.success) { setItemError(result.error); return; }
+                  setProducts(current => current.map(item => item.id === result.data.id ? result.data : item));
+                  setRows(current => current.map(item => item.product?.id === result.data.id
+                    ? { ...item, product: result.data, unitId: change.unitId } : item));
+                  setChange(undefined);
+                } catch {
+                  setItemError('Could not change this item. Try again.');
+                } finally {
+                  setCreating(false);
+                }
+              }}>Save item</button>
+              <button type="button" className="btn-secondary" disabled={creating} onClick={() => setChange(undefined)}>Cancel</button>
+            </div>
+          </div>}
           <div className="grid grid-cols-2 gap-3">
             <label className="min-w-0">How many{unit && row.product.units.length === 1 ? ' (' + (unit.pluralName ?? unit.name) + ')' : ''}
               <input id={'qty-' + row.key} className={inputClass('qty-' + row.key)} inputMode="numeric" value={row.quantity}
-                onChange={event => changeRow(row.key, { quantity: event.target.value })} />
+                onChange={event => changeRow(row.key, { quantity: event.target.value })}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    document.getElementById('cost-' + row.key)?.focus();
+                  }
+                }} />
             </label>
             <label className="min-w-0">Cost each (GH₵)
               <input id={'cost-' + row.key} className={inputClass('cost-' + row.key)} inputMode="decimal" value={row.cost}
@@ -374,42 +440,11 @@ export default function QuickPurchaseForm(props: Props) {
     </fieldset>
     <SaveBar>
       <p className="font-semibold">{selected.length} {selected.length === 1 ? 'item' : 'items'} · {formatMoney(total)}</p>
-      <button type="button" className="btn-primary min-h-12 grow justify-center sm:grow-0" onClick={save} disabled={busy || Boolean(newItem)}>
+      <button type="button" className="btn-primary min-h-12 grow justify-center sm:grow-0" onClick={save} disabled={busy || creating || Boolean(change)}>
         {busy ? 'Saving…' : problem?.message ?? 'Save purchase'}
       </button>
       {error && (!problemId || (problemId === problem?.id && !selected.length) || (error === shortfallMessage && !problem && payment === 'Cash' && cashSource === 'BUSINESS_CASH')) && <p className="w-full text-sm font-medium text-red-700" role="alert">{error}</p>}
     </SaveBar>
-    {newItem && <div role="dialog" aria-modal="true" aria-labelledby="new-purchase-item" className="fixed inset-0 z-[70] grid items-center overflow-auto bg-black/40 p-4">
-      <form className="card mx-auto w-full max-w-sm space-y-3 bg-white p-5" onSubmit={async event => {
-        event.preventDefault();
-        if (creating) return;
-        setCreating(true);
-        setItemError('');
-        try {
-          const created = await createQuickPurchaseProduct(newItem, props.storeId);
-          if (!created.success) { setItemError(created.error); return; }
-          setProducts(current => [...current, created.data]);
-          chooseProduct(newItem.row, created.data);
-          setNewItem(undefined);
-        } catch {
-          setItemError('Could not add this item. Try again.');
-        } finally {
-          setCreating(false);
-        }
-      }}>
-        <h2 className="text-lg font-semibold" id="new-purchase-item">Add a new item</h2>
-        <label className="block">Name<input className="input text-base" required value={newItem.name} onChange={event => setNewItem({ ...newItem, name: event.target.value })} /></label>
-        <label className="block">Unit<select className="input text-base" required value={newItem.unitId} onChange={event => setNewItem({ ...newItem, unitId: event.target.value })}>
-          {props.units.map(unit => <option value={unit.id} key={unit.id}>{unit.name}</option>)}
-        </select></label>
-        <label className="block">What is it?<select className="input text-base" value={newItem.ingredient ? 'ingredient' : 'resale'} onChange={event => setNewItem({ ...newItem, ingredient: event.target.value === 'ingredient' })}>
-          <option value="ingredient">Ingredient</option><option value="resale">Something I resell</option>
-        </select></label>
-        {!newItem.ingredient && <label className="block">Selling price (GH₵)<input className="input text-base" required inputMode="decimal" value={newItem.sellingPrice} onChange={event => setNewItem({ ...newItem, sellingPrice: event.target.value })} /></label>}
-        {itemError && <p role="alert" className="text-red-700">{itemError}</p>}
-        <div className="flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setNewItem(undefined)} disabled={creating}>Cancel</button>
-          <button type="submit" className="btn-primary" disabled={creating}>Add item</button></div>
-      </form>
-    </div>}
+    {itemError && <p role="alert" className="text-sm text-red-700">{itemError}</p>}
   </div>;
 }

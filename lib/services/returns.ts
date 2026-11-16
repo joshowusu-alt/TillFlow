@@ -1,3 +1,4 @@
+import { isFoodBusiness } from '@/lib/food/business';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { receiveStockValue, removeRecordedStockValue, INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
@@ -62,6 +63,7 @@ export async function createSalesReturn(input: {
   tx?: Prisma.TransactionClient;
   /** Record an authorised refund liability; no money has left the business yet. */
   deferRefund?: boolean;
+  ownerDelete?: boolean;
 }) {
   return measureServerOperation(
     'action.sales-return.create',
@@ -89,6 +91,7 @@ async function createSalesReturnImpl(input: {
   tx?: Prisma.TransactionClient;
   /** Record an authorised refund liability; no money has left the business yet. */
   deferRefund?: boolean;
+  ownerDelete?: boolean;
 }) {
   const db = input.tx ?? prisma;
   const invoice = await db.salesInvoice.findFirst({
@@ -113,12 +116,16 @@ async function createSalesReturnImpl(input: {
       id: input.managerApprovedByUserId,
       businessId: input.businessId,
       active: true,
-      role: { in: ['MANAGER', 'OWNER'] },
+      role: { in: input.ownerDelete ? ['OWNER'] : ['MANAGER', 'OWNER'] },
     },
     select: { id: true },
   });
   if (!approvedBy) {
     throw new Error('Manager approval user is invalid.');
+  }
+
+  if (input.ownerDelete && (input.type !== 'VOID' || input.userId !== approvedBy.id || !isFoodBusiness(invoice.business.businessCategory))) {
+    throw new UserError('Only the owner of a food business can delete this sale.');
   }
 
   const existingReturn = await db.salesReturn.findUnique({
@@ -201,38 +208,44 @@ async function createSalesReturnImpl(input: {
     });
 
     if (refundAmount > 0 && refundMethod === 'CASH' && !input.deferRefund) {
-      if (!invoice.tillId) {
-        throw new UserError('Open till is required before recording a cash refund.');
+      let openShift = invoice.tillId ? await getOpenCashShiftForPayment(tx, {
+        businessId: invoice.businessId,
+        storeId: invoice.storeId,
+        tillId: invoice.tillId,
+        ...(input.ownerDelete && invoice.shiftId ? { shiftId: invoice.shiftId } : {}),
+      }) : null;
+      if (input.ownerDelete && !openShift) {
+        openShift = await tx.shift.findFirst({
+          where: { status: 'OPEN', till: { active: true, storeId: invoice.storeId, store: { businessId: invoice.businessId } } },
+          orderBy: [{ openedAt: 'desc' }, { id: 'asc' }],
+          select: { id: true, tillId: true },
+        });
       }
-      const openShift = await getOpenCashShiftForPayment(tx, {
-        businessId: invoice.businessId,
-        storeId: invoice.storeId,
-        tillId: invoice.tillId,
-      });
-      if (!openShift) {
-        throw new UserError('Open shift is required before recording a cash refund.');
+      if (!input.ownerDelete && !invoice.tillId) throw new UserError('Open till is required before recording a cash refund.');
+      if (!input.ownerDelete && !openShift) throw new UserError('Open shift is required before recording a cash refund.');
+      if (openShift) {
+        await assertMoneyMovementTenantChain(tx, {
+          businessId: invoice.businessId,
+          storeId: invoice.storeId,
+          userId: input.userId,
+          tillId: openShift.tillId,
+          shiftId: openShift.id,
+        });
+        await recordCashDrawerEntryTx(tx, {
+          businessId: invoice.businessId,
+          storeId: invoice.storeId,
+          tillId: openShift.tillId,
+          shiftId: openShift.id,
+          createdByUserId: input.userId,
+          cashierUserId: input.userId,
+          entryType: 'CASH_REFUND',
+          amountPence: -refundAmount,
+          reasonCode: input.type === 'VOID' ? 'VOID' : 'RETURN',
+          reason: input.reason ?? null,
+          referenceType: 'SALES_RETURN',
+          referenceId: created.id,
+        });
       }
-      await assertMoneyMovementTenantChain(tx, {
-        businessId: invoice.businessId,
-        storeId: invoice.storeId,
-        userId: input.userId,
-        tillId: invoice.tillId,
-        shiftId: openShift.id,
-      });
-      await recordCashDrawerEntryTx(tx, {
-        businessId: invoice.businessId,
-        storeId: invoice.storeId,
-        tillId: invoice.tillId,
-        shiftId: openShift.id,
-        createdByUserId: input.userId,
-        cashierUserId: input.userId,
-        entryType: 'CASH_REFUND',
-        amountPence: -refundAmount,
-        reasonCode: input.type === 'VOID' ? 'VOID' : 'RETURN',
-        reason: input.reason ?? null,
-        referenceType: 'SALES_RETURN',
-        referenceId: created.id,
-      });
     }
 
     for (const [productId, qtyBase] of qtyByProduct.entries()) {

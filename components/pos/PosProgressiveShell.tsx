@@ -49,6 +49,7 @@ type PosProgressiveShellProps = {
     currency: string;
     vatEnabled: boolean;
     canManageDishes?: boolean;
+    foodBusiness?: boolean;
     momoEnabled?: boolean;
     momoProvider?: string | null;
     requireOpenTillForSales?: boolean;

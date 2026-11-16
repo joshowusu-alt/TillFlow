@@ -3,7 +3,7 @@ import { INSUFFICIENT_HELD_CASH } from '@/lib/services/purchase-funding';
 import { createQuickPurchaseProduct, saveQuickPurchase, setFoodPurchasePhotoRequired } from './quick-purchases';
 
 const mocks = vi.hoisted(() => ({
-  auth: vi.fn(), storeAuth: vi.fn(), save: vi.fn(), update: vi.fn(), audit: vi.fn(), tills: vi.fn(),
+  auth: vi.fn(), storeAuth: vi.fn(), save: vi.fn(), update: vi.fn(), audit: vi.fn(), tills: vi.fn(), raw: vi.fn(), product: vi.fn(), createProduct: vi.fn(), productAudit: vi.fn(),
 }));
 vi.mock('@/lib/action-utils', async () => ({
   ...await vi.importActual<typeof import('@/lib/action-utils')>('@/lib/action-utils'),
@@ -11,8 +11,16 @@ vi.mock('@/lib/action-utils', async () => ({
   requireSelectedStoreContext: mocks.storeAuth,
 }));
 vi.mock('@/lib/prisma', () => ({
-  prisma: { business: { findUniqueOrThrow: vi.fn().mockResolvedValue({ timezone: 'Africa/Accra', businessCategory: 'FOOD_DISHES' }), update: mocks.update }, till: { findMany: mocks.tills }, product: { findFirst: vi.fn().mockResolvedValue({ name: 'Tea bread' }) } },
+  prisma: {
+    business: { findUniqueOrThrow: vi.fn().mockResolvedValue({ timezone: 'Africa/Accra', businessCategory: 'FOOD_DISHES' }), update: mocks.update },
+    till: { findMany: mocks.tills }, product: { findFirst: vi.fn().mockResolvedValue({ name: 'Tea bread' }) },
+    $transaction: async (callback: (tx: unknown) => unknown) => callback({
+      $queryRaw: mocks.raw, product: { findFirst: mocks.product }, auditLog: { create: mocks.productAudit },
+    }),
+  },
 }));
+vi.mock('@/lib/services/products', () => ({ quickCreateProduct: mocks.createProduct }));
+vi.mock('@/lib/units/list-selectable-units', () => ({ listSelectableUnits: async () => [{ id: 'piece', name: 'Piece' }] }));
 vi.mock('@/lib/services/purchases', () => ({ createPurchase: mocks.save }));
 vi.mock('@/lib/audit', () => ({ audit: mocks.audit }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
@@ -30,6 +38,8 @@ describe('quick purchase action', () => {
     mocks.storeAuth.mockResolvedValue({ businessId: 'business', storeId: 'store', user: { id: 'owner', role: 'OWNER' } });
     mocks.audit.mockResolvedValue(undefined);
     mocks.tills.mockResolvedValue([]);
+    mocks.raw.mockResolvedValue([]);
+    mocks.createProduct.mockResolvedValue({ id: 'tea', name: 'Tea bread', units: [] });
   });
 
   it('requires an owner or manager to change the setting', async () => {
@@ -60,6 +70,33 @@ describe('quick purchase action', () => {
     expect(mocks.storeAuth).toHaveBeenNthCalledWith(1, ['OWNER', 'MANAGER'], 'store');
     expect(mocks.storeAuth).toHaveBeenNthCalledWith(2, ['OWNER', 'MANAGER'], 'store');
     expect(mocks.save).not.toHaveBeenCalled();
+  });
+
+  it('creates an ingredient by name with Piece, zero price and an audit entry', async () => {
+    expect(await createQuickPurchaseProduct({ name: 'Tea bread' }, 'store'))
+      .toMatchObject({ success: true, data: { id: 'tea', created: true } });
+    expect(mocks.createProduct).toHaveBeenCalledWith('business', expect.objectContaining({
+      name: 'Tea bread', baseUnitId: 'piece', ingredientOnly: true, sellingPriceBasePence: 0,
+    }), expect.any(Object));
+    expect(mocks.productAudit).toHaveBeenCalledWith({ data: expect.objectContaining({
+      entityId: 'tea', action: 'PRODUCT_CREATE', businessId: 'business',
+    }) });
+  });
+
+  it('returns the case-insensitive match without creating a duplicate', async () => {
+    mocks.raw.mockResolvedValue([{ id: 'tea' }]);
+    mocks.product.mockResolvedValue({ id: 'tea', name: 'Tea bread', vatRateBps: 0, productUnits: [] });
+    expect(await createQuickPurchaseProduct({ name: 'TEA BREAD' }, 'store'))
+      .toMatchObject({ success: true, data: { id: 'tea', created: false } });
+    expect(mocks.raw.mock.calls[0][0].join('')).toContain('LOWER(name) = LOWER(');
+    expect(mocks.createProduct).not.toHaveBeenCalled();
+    expect(mocks.productAudit).not.toHaveBeenCalled();
+  });
+
+  it('requires a positive price to create a resold item', async () => {
+    expect(await createQuickPurchaseProduct({ name: 'Tea bread', ingredient: false, sellingPrice: '0' }, 'store'))
+      .toEqual({ success: false, error: 'Add a selling price.' });
+    expect(mocks.createProduct).not.toHaveBeenCalled();
   });
 
   it('names the item when rejecting zero cost', async () => {

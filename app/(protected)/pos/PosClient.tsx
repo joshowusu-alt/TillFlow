@@ -44,6 +44,7 @@ import {
   type DueDateDecision,
 } from '@/lib/payments/pos-checkout-state';
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
+import { openShiftAction } from '@/app/actions/shifts';
 import FoodPlatePicker from '@/components/food/FoodPlatePicker';
 import { dishSettingsHref } from '@/lib/food/business';
 import { foodAvailabilityText } from '@/lib/food/availability';
@@ -108,6 +109,7 @@ type PosClientProps = {
     currency: string;
     vatEnabled: boolean;
     canManageDishes?: boolean;
+    foodBusiness?: boolean;
     momoEnabled?: boolean;
     momoProvider?: string | null;
     requireOpenTillForSales?: boolean;
@@ -164,8 +166,8 @@ export default function PosClient({
   business,
   store,
   tills,
-  openShiftTillIds,
-  openShifts,
+  openShiftTillIds: initialOpenTillIds,
+  openShifts: initialOpenShifts,
   cashierUserId,
   products,
   posCatalogueMode,
@@ -177,6 +179,16 @@ export default function PosClient({
   customersUnavailable = false,
   checkoutUnavailable = false,
 }: PosClientProps) {
+  const [openedShift, setOpenedShift] = useState<{ tillId: string; shiftId: string }>();
+  const openShiftTillIds = openedShift ? [...new Set([...initialOpenTillIds, openedShift.tillId])] : initialOpenTillIds;
+  const openShifts = useMemo(() => openedShift
+    ? [...(initialOpenShifts ?? []).filter(shift => shift.tillId !== openedShift.tillId), openedShift]
+    : initialOpenShifts, [initialOpenShifts, openedShift]);
+  const [openingTill, setOpeningTill] = useState(false);
+  const [openingBusy, setOpeningBusy] = useState(false);
+  const [openingError, setOpeningError] = useState('');
+  const [openingTillId, setOpeningTillId] = useState('');
+  const [openingCash, setOpeningCash] = useState('0');
   const searchParams = useSearchParams();
   const router = useRouter();
   const safeUnits = useMemo(() => units ?? [], [units]);
@@ -1464,6 +1476,29 @@ export default function PosClient({
   const errorParam = searchParams?.get('error');
   const selectedTillName = tills.find((till) => till.id === tillId)?.name ?? null;
   const boundShiftId = openShifts?.find((shift) => shift.tillId === tillId)?.shiftId ?? '';
+  async function openTillInCheckout() {
+    if (openingBusy || !openingTillId || !openingCash.trim() || !Number.isFinite(Number(openingCash)) || Number(openingCash) < 0) return;
+    setOpeningBusy(true);
+    setOpeningError('');
+    const data = new FormData();
+    data.set('tillId', openingTillId);
+    data.set('openingCash', openingCash);
+    data.set('storeId', store.id);
+    try {
+      const result = await openShiftAction(data);
+      if (!result.success) {
+        setOpeningError(result.error);
+        return;
+      }
+      setOpenedShift({ tillId: result.data.tillId, shiftId: result.data.id });
+      setTillId(result.data.tillId);
+      setOpeningTill(false);
+    } catch {
+      setOpeningError('The till could not open. Try again or ask your manager or owner.');
+    } finally {
+      setOpeningBusy(false);
+    }
+  }
   const showNoTillBlock =
     checkoutExtrasReady &&
     !checkoutUnavailable &&
@@ -2337,7 +2372,20 @@ export default function PosClient({
             data-pos-checkout-card="true"
           >
             <div className="pos-checkout-fields space-y-3">
-            {showNoTillBlock ? <div role="alert" data-pos-till-block="true" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-950"><span>{tills.length === 0 ? 'No tills configured for this branch.' : 'Open a till to complete sales.'}</span>{tills.length > 0 ? <Link href="/shifts" className="min-h-11 inline-flex items-center font-semibold underline">Open till →</Link> : null}</div> : null}
+            {showNoTillBlock ? <div role="alert" data-pos-till-block="true" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-950"><span>{tills.length === 0 ? 'No tills configured for this branch.' : 'Open a till to complete sales.'}</span>{tills.length > 0 ? (business.foodBusiness ? <button type="button" className="btn-primary" onClick={() => { setOpeningTill(true); setOpeningError(''); setOpeningTillId(tills.length === 1 ? tills[0].id : ''); }}>Open till</button> : <Link href="/shifts" className="min-h-11 inline-flex items-center font-semibold underline">Open till →</Link>) : null}</div> : null}
+            {openingTill && <fieldset className="space-y-3 rounded-xl border p-3">
+              <label className="block">Till to open
+                <select className="input mt-1" value={openingTillId} onChange={event => setOpeningTillId(event.target.value)}>
+                  <option value="">Choose a till</option>
+                  {tills.filter(till => !openShiftTillIds.includes(till.id)).map(till => <option key={till.id} value={till.id}>{till.name}</option>)}
+                </select>
+              </label>
+              <label className="block">Opening cash (GH₵)<input className="input mt-1" type="number" min="0" step="0.01" value={openingCash} onChange={event => setOpeningCash(event.target.value)} /></label>
+              {openingError && <p role="alert" className="text-red-700">{openingError}</p>}
+              <div className="flex gap-2"><button type="button" className="btn-primary" disabled={openingBusy || !openingTillId} onClick={() => void openTillInCheckout()}>Confirm opening</button>
+                <button type="button" className="btn-secondary" disabled={openingBusy} onClick={() => setOpeningTill(false)}>Cancel</button></div>
+            </fieldset>}
+
             <div
               className={
                 checkoutLoading

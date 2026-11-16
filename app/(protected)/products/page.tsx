@@ -464,7 +464,7 @@ export default async function ProductsPage(
                   <label className="flex items-center gap-2 text-sm">
                     <input type="hidden" name="ingredientOnlyIncluded" value="1" />
                     <input type="checkbox" name="ingredientOnly" defaultChecked={isFoodBusiness(business.businessCategory)} />
-                    Ingredient – not sold
+                    {isFoodBusiness(business.businessCategory) ? 'Ingredient or supply (no selling price)' : 'Ingredient – not sold'}
                   </label>
                   <div>
                     <label className="label" htmlFor="create-product-name">Name</label>
@@ -476,7 +476,7 @@ export default async function ProductsPage(
                   </div>
                   <div>
                     <label className="label" htmlFor="create-product-sellingPriceBasePence">Selling price ({getCurrencySymbol(business.currency)})</label>
-                    <input className="input" id="create-product-sellingPriceBasePence" name="sellingPriceBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
+                    <input className="input" id="create-product-sellingPriceBasePence" name="sellingPriceBasePence" type="number" min={0} step="0.01" inputMode="decimal" required={!isFoodBusiness(business.businessCategory)} />
                     <div className="mt-1 text-xs text-black/50">Price per base unit, e.g. 5.00 for {getCurrencySymbol(business.currency)}5.00.</div>
                   </div>
                   <div>

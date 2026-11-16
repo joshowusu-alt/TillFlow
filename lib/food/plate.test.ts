@@ -232,6 +232,15 @@ describe('till-only amount sales', () => {
     expect(snapshot).toMatchObject({ platePricePence: 4000, stockPortions: 2, customAmountPence: 3500 });
     expect(formatPlateDetail(snapshot, (pence) => formatMoney(pence))).toContain('Amount GH₵35.00');
   });
+  it('accepts GH₵20 with a blank minimum and keeps custom amounts till-only', () => {
+    const noMinimum = { ...menu, minimumAmountPence: null };
+    expect(pricePlate(noMinimum, { customAmountPence: 2000 }, 3000, true)).toMatchObject({
+      platePricePence: 2000, stockPortions: 1,
+    });
+    expect(() => pricePlate(noMinimum, { customAmountPence: 0 }, 3000, true)).toThrow(/valid amount/);
+    expect(() => pricePlate(noMinimum, { customAmountPence: 2000 }, 3000)).toThrow(/unavailable/);
+  });
+
   it('rejects prices below the minimum, switch off, sold out, and online requests', () => {
     expect(() => pricePlate(menu, { customAmountPence: 3400 }, 2500, true)).toThrow('Lowest amount for this dish is GH₵35.00.');
     expect(() => pricePlate({ ...menu, allowCustomAmount: false }, selection, 2500, true)).toThrow(/unavailable/);
