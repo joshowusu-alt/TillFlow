@@ -3,6 +3,7 @@
  * Clients may send a selection. They may not send the price.
  */
 
+import { formatMoney } from '@/lib/format';
 import { isFoodBusiness } from '@/lib/food/business';
 
 export type FoodStockMode = 'NOT_COUNTED' | 'COUNTED';
@@ -49,6 +50,8 @@ export type FoodMenu = {
   soldOut: boolean;
   /** Counted dishes: warn when portions on hand are at or below this. 0 disables the low warning. */
   lowAt: number;
+  allowCustomAmount?: boolean;
+  minimumAmountPence?: number | null;
   sizes: FoodSize[];
   inclusions: FoodInclusion[];
   groups: FoodAddonGroup[];
@@ -60,6 +63,7 @@ export type PlateAddonSelection = {
 };
 
 export type PlateSelection = {
+  customAmountPence?: number;
   sizeId?: string | null;
   addons?: PlateAddonSelection[];
   /** Price the till or menu showed. The server rejects the plate when this no longer matches. */
@@ -76,6 +80,7 @@ export type PricedAddon = {
 };
 
 export type PlateSnapshot = {
+  customAmountPence?: number;
   v: 1;
   productId: string;
   dishName: string;
@@ -154,14 +159,14 @@ export function plateSelectionKey(selection: PlateSelection | null | undefined):
     .filter((addon) => addon.qty > 0)
     .map((addon) => `${addon.addonId}:${addon.qty}`)
     .sort();
-  return `${selection?.sizeId ?? ''}|${addons.join(',')}`;
+  return `${selection?.customAmountPence != null ? 'amount:'+selection.customAmountPence : selection?.sizeId ?? ''}|${addons.join(',')}`;
 }
 
 function activeAddons(group: FoodAddonGroup): FoodAddon[] {
   return group.addons.filter((addon) => addon.active !== false);
 }
 
-export function portionsForPlate(menu: FoodMenu, snapshot: Pick<PlateSnapshot, 'addons'>): number {
+export function portionsForPlate(menu: FoodMenu, snapshot: Pick<PlateSnapshot, 'addons' | 'customAmountPence'>): number {
   if (menu.stockMode !== 'COUNTED') return 0;
   const included = menu.inclusions.reduce((sum, item) => sum + Math.max(0, item.stockPortions), 0);
   const extras = snapshot.addons.reduce((sum, addon) => {
@@ -170,13 +175,14 @@ export function portionsForPlate(menu: FoodMenu, snapshot: Pick<PlateSnapshot, '
       .find((candidate) => candidate.id === addon.id);
     return sum + addon.qty * Math.max(0, defined?.stockPortions ?? 0);
   }, 0);
-  return (included || 1) + extras;
+  return (snapshot.customAmountPence !== undefined ? 1 : included || 1) + extras;
 }
 
 export function pricePlate(
   menu: FoodMenu,
   selection: PlateSelection | null | undefined,
   startingPricePence: number,
+  allowTillAmount = false,
 ): PlateSnapshot {
   if (menu.soldOut) {
     throw new PlateError(`${menu.name} is sold out.`);
@@ -185,9 +191,18 @@ export function pricePlate(
     throw new PlateError(`${menu.name} does not have a valid price.`);
   }
 
+  const amount = selection?.customAmountPence;
+  if (amount !== undefined) {
+    if (!allowTillAmount || !menu.allowCustomAmount) throw new PlateError('Other amount is unavailable for this dish.');
+    const minimum = menu.minimumAmountPence;
+    if (!minimum || !Number.isSafeInteger(amount) || amount > 100_000_000) {
+      throw new PlateError('Enter a valid amount in cedis.');
+    }
+    if (amount < minimum) throw new PlateError(`Lowest amount for this dish is ${formatMoney(minimum, 'GHS')}.`);
+  }
   const sizes = activeSizes(menu);
   let size: FoodSize | null = null;
-  if (sizes.length > 0) {
+  if (amount === undefined && sizes.length > 0) {
     const requested = selection?.sizeId ?? null;
     size = (requested ? sizes.find((candidate) => candidate.id === requested) : null) ?? defaultSize(menu);
     if (!size) throw new PlateError(`Choose a size for ${menu.name}.`);
@@ -237,7 +252,7 @@ export function pricePlate(
     throw new PlateError(`One of the extras on ${menu.name} is no longer on the menu.`);
   }
 
-  const basePrice = size ? size.pricePence : startingPricePence;
+  const basePrice = amount ?? size?.pricePence ?? startingPricePence;
   if (basePrice <= 0) throw new PlateError(`Enter a selling price for ${menu.name}.`);
   const platePricePence = basePrice + pricedAddons.reduce((sum, addon) => sum + addon.linePricePence, 0);
   if (!Number.isSafeInteger(platePricePence) || platePricePence <= 0) {
@@ -251,6 +266,7 @@ export function pricePlate(
 
   const snapshot: PlateSnapshot = {
     v: 1,
+    ...(amount !== undefined ? { customAmountPence: amount } : {}),
     productId: menu.productId,
     dishName: menu.name,
     sizeId: size?.id ?? null,
@@ -271,6 +287,7 @@ export function pricePlate(
 
 export function formatPlateDetail(snapshot: PlateSnapshot, formatMoney: (pence: number) => string): string {
   const parts: string[] = [];
+  if (snapshot.customAmountPence != null) parts.push(`Amount ${formatMoney(snapshot.customAmountPence)}`);
   if (snapshot.sizeName) parts.push(snapshot.sizeName);
   if (snapshot.inclusions.length > 0) {
     parts.push(

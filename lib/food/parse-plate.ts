@@ -3,7 +3,7 @@ import type { PlateSelection } from '@/lib/food/plate';
 /** Keep a client plate selection. Drop anything that is not a size id or an add-on quantity. */
 export function parsePlateSelection(value: unknown): PlateSelection | undefined {
   if (!value || typeof value !== 'object') return undefined;
-  const raw = value as { sizeId?: unknown; addons?: unknown; expectedPricePence?: unknown };
+  const raw = value as { customAmountPence?: unknown; sizeId?: unknown; addons?: unknown; expectedPricePence?: unknown };
   const sizeId = typeof raw.sizeId === 'string' && raw.sizeId.trim() ? raw.sizeId.trim().slice(0, 80) : null;
   const addons = Array.isArray(raw.addons)
     ? raw.addons.slice(0, 30).flatMap((addon) => {
@@ -18,6 +18,7 @@ export function parsePlateSelection(value: unknown): PlateSelection | undefined 
   const expected = Number(raw.expectedPricePence);
   return {
     sizeId,
+    ...(Object.prototype.hasOwnProperty.call(raw, 'customAmountPence') ? { customAmountPence: typeof raw.customAmountPence === 'number' ? raw.customAmountPence : Number.NaN } : {}),
     addons,
     ...(Number.isInteger(expected) && expected >= 0 ? { expectedPricePence: expected } : {}),
   };

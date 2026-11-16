@@ -223,3 +223,19 @@ describe('retail and bookshop sales stay on the catalogue price', () => {
     expect(plain).not.toBe(extra);
   });
 });
+
+describe('till-only amount sales', () => {
+  const menu = { ...banku, allowCustomAmount: true, minimumAmountPence: 3500 };
+  const selection = { customAmountPence: 3500 };
+  it('prices at the minimum and counts the extra bowl without counting inclusions', () => {
+    const snapshot = pricePlate(menu, { ...selection, addons: [{ addonId: 'extra-banku', qty: 1 }] }, 2500, true);
+    expect(snapshot).toMatchObject({ platePricePence: 4000, stockPortions: 2, customAmountPence: 3500 });
+    expect(formatPlateDetail(snapshot, (pence) => formatMoney(pence))).toContain('Amount GH₵35.00');
+  });
+  it('rejects prices below the minimum, switch off, sold out, and online requests', () => {
+    expect(() => pricePlate(menu, { customAmountPence: 3400 }, 2500, true)).toThrow('Lowest amount for this dish is GH₵35.00.');
+    expect(() => pricePlate({ ...menu, allowCustomAmount: false }, selection, 2500, true)).toThrow(/unavailable/);
+    expect(() => pricePlate({ ...menu, soldOut: true }, selection, 2500, true)).toThrow(/sold out/);
+    expect(() => pricePlate(menu, selection, 2500)).toThrow(/unavailable/);
+  });
+});

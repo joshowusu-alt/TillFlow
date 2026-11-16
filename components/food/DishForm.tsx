@@ -73,6 +73,29 @@ export default function DishForm({ initial, productId, ingredients, categories }
       </section>
 
       <section className="card space-y-3 p-4">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={Boolean(draft.allowCustomAmount)} onChange={(event) => {
+            const enabled = event.target.checked;
+            setDraft(previous => {
+              const prices = previous.sizes.map(size => Number(size.priceCedis)).filter(price => price > 0);
+              const cheapest = prices.length ? Math.min(...prices) : Number(previous.startingPriceCedis);
+              return { ...previous, allowCustomAmount: enabled,
+                minimumAmountCedis: enabled && !previous.minimumAmountCedis?.trim() && cheapest > 0
+                  ? cheapest.toFixed(2) : previous.minimumAmountCedis };
+            });
+          }} />
+          Let staff type the amount
+        </label>
+        <p className="text-sm text-black/60">Customers can ask for any amount, e.g. GH₵35. Staff tap Other amount at the till and type it.</p>
+        {draft.allowCustomAmount && <label className="block text-sm">
+          Lowest amount (GH₵)
+          <input className="input mt-1" type="number" min="0.01" step="0.01" value={draft.minimumAmountCedis ?? ''}
+            onChange={(event) => update('minimumAmountCedis', event.target.value)} />
+          <span className="block text-black/60">Starts at your cheapest price. Change it if you like.</span>
+        </label>}
+      </section>
+
+      <section className="card space-y-3 p-4">
         <h2 className="text-base font-semibold">Portions</h2>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={`rounded-full px-3 py-1.5 text-sm font-semibold ${!counted ? 'bg-accent text-white' : 'bg-black/5'}`} aria-pressed={!counted} onClick={() => update('stockMode', 'NOT_COUNTED')}>

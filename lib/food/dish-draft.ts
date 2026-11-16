@@ -10,6 +10,8 @@ export type DishDraft = {
   showOnline: boolean;
   stockMode: FoodStockMode;
   soldOut: boolean;
+  allowCustomAmount?: boolean;
+  minimumAmountCedis?: string;
   lowAt: number;
   /** Blank means no cost is posted when leftovers are written off. */
   costPerPortionCedis?: string;
@@ -32,6 +34,8 @@ export type NormalizedDish = {
   showOnline: boolean;
   stockMode: FoodStockMode;
   soldOut: boolean;
+  allowCustomAmount: boolean;
+  minimumAmountPence: number | null;
   lowAt: number;
   costPerPortionPence: number | null;
   sizes: Array<{ name: string; pricePence: number; isDefault: boolean; recipe?: import("./ingredient-costs").Ingredient[] }>;
@@ -156,6 +160,17 @@ export function normalizeDishDraft(draft: DishDraft): NormalizedDish {
     };
   });
 
+  const rawMinimum = draft.minimumAmountCedis?.trim();
+  let minimumAmountPence: number | null = null;
+  if (draft.allowCustomAmount) {
+    if (rawMinimum && !/^-?\d+(?:\.\d{1,2})?$/.test(rawMinimum)) {
+      throw new Error('Lowest amount must be a cedis amount such as 25 or 25.50.');
+    }
+    minimumAmountPence = rawMinimum ? Math.round(Number(rawMinimum) * 100)
+      : sizes.length ? Math.min(...sizes.map(size => size.pricePence)) : startingPricePence;
+    if (minimumAmountPence <= 0) throw new Error('Lowest amount must be greater than zero.');
+    if (minimumAmountPence > 100_000_000) throw new Error('Lowest amount is too high.');
+  }
   return {
     name,
     startingPricePence,
@@ -164,6 +179,8 @@ export function normalizeDishDraft(draft: DishDraft): NormalizedDish {
     showOnline: Boolean(draft.showOnline),
     stockMode,
     soldOut: Boolean(draft.soldOut),
+    allowCustomAmount: Boolean(draft.allowCustomAmount),
+    minimumAmountPence,
     lowAt,
     costPerPortionPence,
     sizes,

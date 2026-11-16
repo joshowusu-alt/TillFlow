@@ -13,6 +13,7 @@ export type OfflineSaleHashLine = {
   discountType: string;
   discountValue: string;
   plate?: {
+      customAmountPence?: number;
     sizeId?: string | null;
     addons?: Array<{ addonId: string; qty: number }>;
     expectedPricePence?: number | null;
@@ -56,6 +57,7 @@ export function canonicalizeOfflineSalePayload(input: OfflineSaleHashInput): str
     ...(line.plate
       ? {
           plate: {
+            ...(line.plate.customAmountPence !== undefined ? { customAmountPence: line.plate.customAmountPence } : {}),
             sizeId: line.plate.sizeId ?? null,
             addons: [...(line.plate.addons ?? [])]
               .map((addon) => ({ addonId: String(addon.addonId), qty: Math.floor(Number(addon.qty) || 0) }))

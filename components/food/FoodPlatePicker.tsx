@@ -10,39 +10,50 @@ import {
   type PlateSelection,
 } from '@/lib/food/plate';
 
+function focusAmount(input: HTMLInputElement | null) {
+  input?.focus();
+}
+
 export default function FoodPlatePicker({
   menu,
   startingPricePence,
   currency = 'GHS',
+  allowTillAmount = false,
+  amountIncludesVat = false,
   onCancel,
   onConfirm,
 }: {
   menu: FoodMenu;
   startingPricePence: number;
   currency?: string;
+  allowTillAmount?: boolean;
+  amountIncludesVat?: boolean;
   onCancel: () => void;
   onConfirm: (selection: PlateSelection, platePricePence: number) => void;
 }) {
   const initial = defaultPlateSelection(menu);
   const [sizeId, setSizeId] = useState<string | null>(initial.sizeId ?? null);
   const [qtyByAddon, setQtyByAddon] = useState<Record<string, number>>({});
+  const [otherAmount, setOtherAmount] = useState(false);
+  const [amount, setAmount] = useState('');
   const sizes = activeSizes(menu);
   const selection = useMemo<PlateSelection>(
     () => ({
-      sizeId,
+      sizeId: otherAmount ? null : sizeId,
+      ...(otherAmount ? { customAmountPence: /^\d+(?:\.\d{1,2})?$/.test(amount.trim()) ? Math.round(Number(amount) * 100) : NaN } : {}),
       addons: Object.entries(qtyByAddon)
         .filter(([, qty]) => qty > 0)
         .map(([addonId, qty]) => ({ addonId, qty })),
     }),
-    [qtyByAddon, sizeId],
+    [qtyByAddon, sizeId, otherAmount, amount],
   );
   const priced = useMemo(() => {
     try {
-      return { plate: pricePlate(menu, selection, startingPricePence), error: null as string | null };
+      return { plate: pricePlate(menu, selection, startingPricePence, allowTillAmount), error: null as string | null };
     } catch (error) {
       return { plate: null, error: error instanceof Error ? error.message : 'Check this plate.' };
     }
-  }, [menu, selection, startingPricePence]);
+  }, [menu, selection, startingPricePence, allowTillAmount]);
 
   function setAddonQty(addonId: string, qty: number, groupSelection: 'MANY' | 'SINGLE') {
     setQtyByAddon((prev) => {
@@ -63,7 +74,7 @@ export default function FoodPlatePicker({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-ink">{menu.name}</h2>
-            <p className="text-xs text-black/50">Build one plate. The price is worked out from the menu.</p>
+            <p className="text-xs text-black/50">{allowTillAmount && menu.allowCustomAmount ? "Choose a size or type an amount." : "Build one plate. The price is worked out from the menu."}</p>
           </div>
           <button type="button" className="text-sm text-black/50" onClick={onCancel}>
             Close
@@ -84,9 +95,9 @@ export default function FoodPlatePicker({
                 <button
                   key={size.id}
                   type="button"
-                  onClick={() => setSizeId(size.id)}
+                  onClick={() => { setOtherAmount(false); setSizeId(size.id); }}
                   className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
-                    sizeId === size.id ? 'bg-accent text-white' : 'bg-black/5 text-black/70'
+                    !otherAmount && sizeId === size.id ? 'bg-accent text-white' : 'bg-black/5 text-black/70'
                   }`}
                 >
                   {size.name} · {formatMoney(size.pricePence, currency)}
@@ -96,6 +107,19 @@ export default function FoodPlatePicker({
             </div>
           </div>
         ) : null}
+
+        {allowTillAmount && menu.allowCustomAmount && !menu.soldOut && (
+          <div className="mt-3">
+            <button type="button" aria-pressed={otherAmount} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${otherAmount ? 'bg-accent text-white' : 'bg-black/5 text-black/70'}`} onClick={() => setOtherAmount(!otherAmount)}>Other amount</button>
+            {otherAmount && <label className="mt-3 block">
+              Amount (GH₵)
+              <input className="input mt-1 text-xl" inputMode="decimal" value={amount}
+                ref={focusAmount}
+                onChange={(event) => setAmount(event.target.value)} />
+              {amountIncludesVat && <span className="mt-1 block text-sm text-black/60">Includes VAT</span>}
+            </label>}
+          </div>
+        )}
 
         {menu.groups.map((group) => (
           <div key={group.id} className="mt-4">
@@ -138,7 +162,7 @@ export default function FoodPlatePicker({
           </div>
         ))}
 
-        {priced.error ? <p className="mt-4 text-sm text-rose-700">{priced.error}</p> : null}
+        {priced.error && (!otherAmount || amount) ? <p className="mt-4 text-sm text-rose-700">{priced.error}</p> : null}
         <div className="mt-4 flex items-center justify-between gap-3">
           <div className="text-base font-bold">{priced.plate ? formatMoney(priced.plate.platePricePence, currency) : '—'}</div>
           <button
@@ -147,7 +171,7 @@ export default function FoodPlatePicker({
             disabled={!priced.plate}
             onClick={() => priced.plate && onConfirm(selection, priced.plate.platePricePence)}
           >
-            Add plate
+            {otherAmount && priced.plate ? `Add ${formatMoney(priced.plate.platePricePence, currency)}` : 'Add plate'}
           </button>
         </div>
       </div>

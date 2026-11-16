@@ -492,8 +492,9 @@ export default function PosClient({
       setStockAlert(`${product.name} is sold out.`);
       return;
     }
-    if (product.food && !plate && dishNeedsPicker(product.food)) {
+    if (product.food && !plate && (product.food.allowCustomAmount || dishNeedsPicker(product.food))) {
       mergeProductOption(product);
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       setPlateProduct(product);
       return;
     }
@@ -501,7 +502,7 @@ export default function PosClient({
     let qtyBase: number | undefined;
     if (product.food && selection) {
       try {
-        qtyBase = pricePlate(product.food, selection, product.sellingPriceBasePence).stockPortions;
+        qtyBase = pricePlate(product.food, selection, product.sellingPriceBasePence, true).stockPortions;
       } catch {
         setPlateProduct(product);
         return;
@@ -1216,7 +1217,7 @@ export default function PosClient({
           const product = saleSnapshot.productOptions.find((candidate) => candidate.id === line.productId);
           if (!product?.food) return line;
           try {
-            const priced = pricePlate(product.food, line.plate, product.sellingPriceBasePence);
+            const priced = pricePlate(product.food, line.plate, product.sellingPriceBasePence, true);
             return { ...line, plate: { ...line.plate, expectedPricePence: priced.platePricePence } };
           } catch {
             return line;
@@ -1280,7 +1281,7 @@ export default function PosClient({
               let plate = l.plate;
               if (product?.food && l.plate) {
                 try {
-                  const priced = pricePlate(product.food, l.plate, product.sellingPriceBasePence);
+                  const priced = pricePlate(product.food, l.plate, product.sellingPriceBasePence, true);
                   unitPricePence = priced.platePricePence;
                   plate = { ...l.plate, expectedPricePence: priced.platePricePence };
                 } catch {
@@ -1723,7 +1724,7 @@ export default function PosClient({
                               setProductSearch('');
                               setProductDropdownOpen(false);
                               playBeep(true);
-                              barcodeRef.current?.focus();
+                              if (!product.food || !(product.food.allowCustomAmount || dishNeedsPicker(product.food))) barcodeRef.current?.focus();
                             }
                           }}
                         >
@@ -1890,6 +1891,8 @@ export default function PosClient({
 
         {plateProduct?.food ? (
           <FoodPlatePicker
+            allowTillAmount
+            amountIncludesVat={business.vatEnabled && plateProduct.vatRateBps > 0}
             menu={plateProduct.food}
             startingPricePence={plateProduct.sellingPriceBasePence}
             currency={business.currency}
@@ -1898,7 +1901,7 @@ export default function PosClient({
               addPlateToCart(plateProduct, selection);
               setPlateProduct(null);
               playBeep(true);
-              barcodeRef.current?.focus();
+              if (selection.customAmountPence === undefined) barcodeRef.current?.focus();
             }}
           />
         ) : null}
@@ -1915,7 +1918,7 @@ export default function PosClient({
             else {
               addPlateToCart(product);
               playBeep(true);
-              barcodeRef.current?.focus();
+              if (!product.food || !(product.food.allowCustomAmount || dishNeedsPicker(product.food))) barcodeRef.current?.focus();
             }
           }}
         />

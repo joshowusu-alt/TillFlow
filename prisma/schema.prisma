@@ -1447,6 +1447,7 @@ model SalesInvoiceLine {
   costBasis                 String?
   /// Plate as sold: dish, size, included items, extras and prices. Null on retail lines.
   plateSnapshotJson         String?
+  customAmountPence          Int?
   createdAt                 DateTime @default(now())
 
   salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
@@ -2278,6 +2279,8 @@ model FoodDish {
   /// COUNTED portions, or NOT_COUNTED (available / sold out only).
   stockMode  String   @default("NOT_COUNTED")
   soldOut    Boolean  @default(false)
+  allowCustomAmount Boolean @default(false)
+  minimumAmountPence Int?
   /// Counted dishes: till shows Low at or below this many portions. 0 means no low warning.
   lowAt      Int      @default(0)
   /// Optional cost of one cooked portion, used only when leftovers are written off. Null posts no money.

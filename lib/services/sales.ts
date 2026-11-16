@@ -1,3 +1,4 @@
+import { amountLineVat } from '@/lib/food/amount-vat';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { isPendingMomo, receiptLedgerFields, settledReceiptSplit } from '@/lib/payments/receipt-ledger';
@@ -40,6 +41,7 @@ import { reserveNextDocumentNumber, reserveNextSequenceValue } from './document-
 import { unstable_cache } from 'next/cache';
 import { checkoutContextTag } from '@/lib/cache/pos-tags';
 import { isFoodBusiness } from '@/lib/food/business';
+import { parsePlateSnapshot } from '@/lib/food/plate';
 import { priceFoodSaleLines } from '@/lib/food/price-sale';
 import type { PlateSelection } from '@/lib/food/plate';
 
@@ -155,18 +157,20 @@ function buildLinePricing(
       resolveProductUnitBaseValuePence(unitPricePence, productUnit, promoFreeUnits),
       Math.max(resolvedLineSubtotal - lineDiscount, 0)
     );
-    const lineNetSubtotal = Math.max(resolvedLineSubtotal - lineDiscount - promoDiscount, 0);
     const vatRate = vatEnabled ? productUnit.product.vatRateBps : 0;
-    const lineVat = vatEnabled ? Math.round((lineNetSubtotal * vatRate) / 10000) : 0;
+    const inclusiveAmount = (parsePlateSnapshot(line.plateSnapshotJson)?.customAmountPence ?? 0) * line.qtyInUnit;
+    const beforeDiscount = amountLineVat(resolvedLineSubtotal, inclusiveAmount, 0, vatRate).net;
+    const afterLineDiscount = amountLineVat(resolvedLineSubtotal, inclusiveAmount, lineDiscount, vatRate).net;
+    const { net: lineNetSubtotal, vat: lineVat } = amountLineVat(resolvedLineSubtotal, inclusiveAmount, lineDiscount + promoDiscount, vatRate);
     const lineTotal = lineNetSubtotal + lineVat;
     return {
       ...line,
       productUnit,
       qtyBase,
       unitPricePence,
-      lineSubtotal: resolvedLineSubtotal,
-      lineDiscount,
-      promoDiscount,
+      lineSubtotal: beforeDiscount,
+      lineDiscount: beforeDiscount - afterLineDiscount,
+      promoDiscount: afterLineDiscount - lineNetSubtotal,
       lineNetSubtotal,
       lineVat,
       lineTotal,
@@ -652,7 +656,7 @@ async function createSaleImpl(input: CreateSaleInput) {
           ...(onlineOrder ? { email: `online-system+${input.businessId}@tillflow.system`, active: false }
             : capturedShiftId || input.saleSource === 'LATE_OFFLINE' ? {} : { active: true }),
         },
-        select: { id: true },
+        select: { id: true, name: true, role: true },
       }),
       resolveBranchIdForStore({ businessId: input.businessId, storeId: input.storeId }),
       getOpenShiftForTill(input.businessId, input.tillId),
@@ -705,6 +709,10 @@ async function createSaleImpl(input: CreateSaleInput) {
     'action.checkout.cart-pricing',
     input,
     async () => {
+      if (input.lines.some(line => line.plate?.customAmountPence !== undefined)
+        && (input.onlineOrderId || !isFoodBusiness(business.businessCategory))) {
+        throw new UserError('Other amount is unavailable for this dish.');
+      }
       const lines = input.onlineOrderId || !isFoodBusiness(business.businessCategory)
         ? input.lines
         : await priceFoodSaleLines(input.businessId, input.lines);
@@ -1128,6 +1136,7 @@ async function createSaleImpl(input: CreateSaleInput) {
           lineCostPence: transactionCosts[index].costPence,
           costBasis: transactionCosts[index].costBasis,
           plateSnapshotJson: line.plateSnapshotJson ?? null,
+          customAmountPence: parsePlateSnapshot(line.plateSnapshotJson)?.customAmountPence ?? null,
         }))
       },
       payments: {
@@ -1231,6 +1240,18 @@ async function createSaleImpl(input: CreateSaleInput) {
       idempotentExternalRefReplay = true;
       return idempotentReplayInvoice;
     }
+
+    const amountLines = lineDetails.flatMap(line => {
+      const plate = parsePlateSnapshot(line.plateSnapshotJson);
+      if (plate?.customAmountPence == null) return [];
+      return [{
+        businessId: input.businessId, userId: input.cashierUserId,
+        userName: cashier?.name ?? input.cashierUserId, userRole: cashier?.role ?? 'CASHIER',
+        action: 'SELL_DISH_BY_AMOUNT', entity: 'SalesInvoice', entityId: created.id, branchId,
+        details: JSON.stringify({ productId: line.productId, dish: plate.dishName, amountPence: plate.customAmountPence, quantity: line.qtyInUnit }),
+      }];
+    });
+    if (amountLines.length) await tx.auditLog.createMany({ data: amountLines });
 
     if (liveShiftForMoney) {
       if (!isSqliteDatabaseUrl(process.env.DATABASE_URL)) {

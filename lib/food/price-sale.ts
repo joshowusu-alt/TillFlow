@@ -34,11 +34,12 @@ export async function priceFoodSaleLines<T extends PricedSaleLine>(businessId: s
   try {
     return lines.map((line) => {
       const menu = menus.get(line.productId);
+      if (!menu && line.plate?.customAmountPence !== undefined) throw new PlateError('Other amount is unavailable for this dish.');
       if (!menu) return line.plateSnapshotJson ? { ...line, plateSnapshotJson: null } : line;
       if (inactiveProductIds.has(line.productId)) {
         throw new PlateError(`${menu.name} is no longer on the menu.`);
       }
-      const snapshot = pricePlate(menu, line.plate, startingPrices.get(line.productId) ?? 0);
+      const snapshot = pricePlate(menu, line.plate, startingPrices.get(line.productId) ?? 0, true);
       const qty = Math.floor(line.qtyInUnit);
       return {
         ...line,

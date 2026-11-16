@@ -1,3 +1,5 @@
+import { summarizeAmountSales } from '@/lib/food/amount-sales';
+import { isFoodBusiness } from '@/lib/food/business';
 import { purchasedStockOnly } from '@/lib/food/business';
 import TradingReportView from '@/components/reports/stage3b/TradingReportView';
 import { prisma } from '@/lib/prisma';
@@ -507,7 +509,11 @@ export default async function TradingDashboardContent({
       packagingUnit: packaging?.unit.name, packagingUnitPlural: packaging?.unit.pluralName, packagingConversion: packaging?.conversionToBase });
   };
   void hasActivity;
+  const amountSales = isFoodBusiness(businessCategory) ? await summarizeAmountSales({
+    businessId, ...storeFilter, createdAt: { gte: scope.startInclusive, lt: scope.endExclusive },
+  }) : null;
   return <TradingReportView data={{
+    amountSales,
     currency, totalSales, totalPaymentReceipts,
     grossProfit: marginReady ? totalGrossMargin : null, grossProfitPercent: marginReady ? gpPercent : null,
     ...(tradingMargin.seeProfitAndLoss ? { seeProfitAndLoss: true } : {}),
