@@ -1,3 +1,5 @@
+import { deletedSaleLabel, saleDeletionPreview } from '@/lib/food/sale-deletion';
+import { isFoodBusiness } from '@/lib/food/business';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import ReceiptClient from './ReceiptClient';
@@ -23,7 +25,9 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
       cashReceivedPence: true,
       changeDuePence: true,
       paymentStatus: true,
-      salesReturn: { select: { id: true } },
+      tillId: true,
+      shift: { select: { status: true, tillId: true, till: { select: { name: true, active: true } } } },
+      salesReturn: { select: { id: true, managerApprovalMode: true, reasonCode: true } },
       store: { select: { id: true, name: true } },
       cashierUser: { select: { name: true } },
       customer: { select: { name: true, phone: true } },
@@ -32,6 +36,7 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
           id: true,
           name: true,
           currency: true,
+          businessCategory: true,
           vatEnabled: true,
           vatNumber: true,
           receiptTemplate: true,
@@ -179,6 +184,9 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
       }))}
       lines={lines}
       canReturn={canReturn}
+      deletePreview={user.role === 'OWNER' && !isReturned && isFoodBusiness(invoice.business.businessCategory)
+        ? saleDeletionPreview(invoice, invoice.business.currency) : null}
+      deletedLabel={deletedSaleLabel(invoice.salesReturn)}
       isReturned={isReturned}
       salesListHref={salesListHref}
     />

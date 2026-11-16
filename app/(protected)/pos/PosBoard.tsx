@@ -150,6 +150,7 @@ export default async function PosBoard({
             id: business.id,
             currency: business.currency,
             vatEnabled: business.vatEnabled,
+            foodBusiness: isFoodBusiness(business.businessCategory),
             canManageDishes: isFoodBusiness(business.businessCategory) && (user.role === "OWNER" || user.role === "MANAGER"),
             momoEnabled: (business as any).momoEnabled ?? false,
             momoProvider: (business as any).momoProvider ?? null,

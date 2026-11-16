@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import QuickPurchaseForm from './QuickPurchaseForm';
 import { createQuickPurchaseProduct, saveQuickPurchase, setFoodPurchasePhotoRequired } from '@/app/actions/quick-purchases';
@@ -8,6 +8,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
 vi.mock('@/app/actions/quick-purchases', () => ({
   createQuickPurchaseProduct: vi.fn(),
+  changeNewQuickPurchaseItem: vi.fn(),
   saveQuickPurchase: vi.fn(),
   setFoodPurchasePhotoRequired: vi.fn(),
 }));
@@ -164,19 +165,16 @@ describe('food quick purchases', () => {
 
   it('creates a missing item and fills the row', async () => {
     vi.mocked(createQuickPurchaseProduct).mockResolvedValue({
-      success: true, data: { ...tea, units: [{ ...piece, conversionToBase: 1 }], barcode: null, defaultCostBasePence: 0,
+      success: true, data: { ...tea, units: [{ ...piece, conversionToBase: 1 }], created: true, barcode: null, defaultCostBasePence: 0,
         sellingPriceBasePence: 0, promoBuyQty: 0, promoGetQty: 0, onHandBase: 0 },
     });
-    render(<QuickPurchaseForm {...props} products={[]} />);
+    render(<QuickPurchaseForm {...props} products={[{ ...tea, id: 'similar', name: 'Tea bread tin' }]} />);
     const item = screen.getByLabelText('Item');
     fireEvent.focus(item);
     fireEvent.change(item, { target: { value: 'Tea bread' } });
-    fireEvent.click(screen.getByRole('button', { name: "Add 'Tea bread' as a new item" }));
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByLabelText('Unit')).toHaveValue('piece');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Add item' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add "Tea bread" as new item' }));
     expect(await screen.findByLabelText('Cost each (GH₵)')).toBeVisible();
     expect(item).toHaveValue('Tea bread');
-    expect(createQuickPurchaseProduct).toHaveBeenCalledWith(expect.objectContaining({ name: 'Tea bread', ingredient: true }), 'store');
+    expect(createQuickPurchaseProduct).toHaveBeenCalledWith({ name: 'Tea bread' }, 'store');
   });
 });

@@ -1,12 +1,14 @@
 import React from 'react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PosClient from './PosClient';
 import { getParkedCartsStorageKey, getPosTillStorageKey } from '@/lib/business-scope';
+import { openShiftAction } from '@/app/actions/shifts';
 import { completeSaleAction } from '@/app/actions/sales';
+import { queueOfflineSale } from '@/lib/offline';
 
 const searchParamsGet = vi.hoisted(() => vi.fn((_key?: string) => null as string | null));
 const refreshMock = vi.hoisted(() => vi.fn());
@@ -25,6 +27,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ prefetch: vi.fn(), refresh: refreshMock }),
 }));
 
+vi.mock('@/app/actions/shifts', () => ({ openShiftAction: vi.fn() }));
 vi.mock('@/app/actions/sales', () => ({ completeSaleAction: vi.fn() }));
 vi.mock('@/app/actions/mobile-money', () => ({
   checkMomoCollectionStatusAction: vi.fn(),
@@ -549,6 +552,31 @@ describe('PosClient mobile phase 1 layout', () => {
     });
     expect(screen.getByRole('link', { name: /Open till/i })).toHaveAttribute('href', '/shifts');
     expect(screen.getByText(/Open a till to complete sales/i)).toBeInTheDocument();
+  });
+
+  it('opens a till in food checkout and keeps the cart ready to complete', async () => {
+    vi.mocked(openShiftAction).mockResolvedValueOnce({ success: true, data: { id: 'new-shift', tillId: baseProps.tills[0].id } });
+    render(<PosClient {...baseProps} business={{ ...baseProps.business, foodBusiness: true }} openShiftTillIds={[]} />);
+    const search = screen.getByPlaceholderText(/type product name/i);
+    fireEvent.change(search, { target: { value: 'Coca' } });
+    fireEvent.focus(search);
+    fireEvent.click(await screen.findByRole('button', { name: /^Coca Cola/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open till' }));
+    fireEvent.change(screen.getByLabelText('Opening cash (GH₵)'), { target: { value: '50' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm opening' }));
+    await waitFor(() => expect(document.querySelector('[data-pos-shift-id="new-shift"]')).not.toBeNull());
+    expect(vi.mocked(openShiftAction).mock.calls.at(-1)?.[0].get('openingCash')).toBe('50');
+    expect(screen.queryByText('Cart is empty')).not.toBeInTheDocument();
+    mockedCompleteSaleAction.mockResolvedValueOnce({
+      success: true, data: { receiptId: 'new-receipt', totalPence: 250, transactionNumber: 'INV-NEW' },
+    });
+    const complete = screen.getAllByRole('button', { name: /Complete Cash Sale/i })
+      .find(button => !(button as HTMLButtonElement).disabled);
+    expect(complete).toBeDefined();
+    fireEvent.click(complete!);
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledWith(expect.objectContaining({
+      tillId: baseProps.tills[0].id, cashPaid: 250,
+    })));
   });
 
   it('keeps Option B defaults and mutual exclusivity after adding an item on phone', async () => {
@@ -1257,4 +1285,115 @@ it.each([
   fireEvent.change(search, { target: { value: 'Coca' } });
   expect(await screen.findByRole('button', { name: /^Coca Cola/i })).toBeDisabled();
   expect(screen.queryByRole('link', { name: /Manage dish/ })).toBeNull();
+});
+
+it.each([null, 1500])('edits a food cart amount with minimum %s', async minimumAmountPence => {
+  window.localStorage.clear();
+  const dish = {
+    ...product, id: 'banku', name: 'Banku', sellingPriceBasePence: 3000,
+    food: {
+      productId: 'banku', name: 'Banku', stockMode: 'NOT_COUNTED' as const,
+      soldOut: false, lowAt: 1, sizes: [], inclusions: [], groups: [],
+      allowCustomAmount: true, minimumAmountPence,
+    },
+  };
+  render(<PosClient {...baseProps} business={{ ...baseProps.business, foodBusiness: true }} products={[dish]} />);
+  const search = screen.getByLabelText('Search products');
+  fireEvent.focus(search);
+  fireEvent.change(search, { target: { value: 'Banku' } });
+  fireEvent.click(await screen.findByRole('button', { name: /^Banku/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Other amount' }));
+  fireEvent.change(screen.getByLabelText('Amount (GH₵)'), { target: { value: '20' } });
+  fireEvent.click(screen.getByRole('button', { name: /Add GH₵20.00/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Edit amount for Banku, GH₵20.00/ }));
+  expect(screen.getByLabelText('Amount (GH₵)')).toHaveValue('20.00');
+
+  fireEvent.change(screen.getByLabelText('Amount (GH₵)'), { target: { value: minimumAmountPence ? '14' : '0' } });
+  expect(screen.getByRole('button', { name: 'Save amount' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Amount (GH₵)'), { target: { value: '16.50' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save amount' }));
+  expect(screen.getByRole('button', { name: /Edit amount for Banku, GH₵16.50/ })).toBeVisible();
+  expect(screen.getAllByRole('button', { name: 'Remove Banku' })).toHaveLength(1);
+});
+
+describe('converting a size to an amount in the food cart', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  async function addSize({ allowCustomAmount = true, minimumAmountPence = null as number | null, extras = false, vat = false, foodBusiness = true } = {}) {
+    const dish = {
+      ...product, id: 'jollof', name: 'Jollof', sellingPriceBasePence: 3000, vatRateBps: 1500,
+      food: {
+        productId: 'jollof', name: 'Jollof', stockMode: 'COUNTED' as const, soldOut: false, lowAt: 1,
+        sizes: [{ id: 'regular', name: 'Regular', pricePence: 3000, isDefault: true }],
+        inclusions: [],
+        groups: extras ? [{
+          id: 'extras', name: 'Extras', selection: 'SINGLE' as const, required: false,
+          addons: [{ id: 'egg', name: 'Egg', pricePence: 500, maxQty: 1, stockPortions: 1 }],
+        }] : [],
+        allowCustomAmount, minimumAmountPence,
+      },
+    };
+    render(<PosClient {...baseProps} business={{ ...baseProps.business, foodBusiness, vatEnabled: vat }} products={[dish]} />);
+    const search = screen.getByLabelText('Search products');
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: 'Jollof' } });
+    fireEvent.click(await screen.findByRole('button', { name: /^Jollof/i }));
+    if (extras) fireEvent.click(screen.getByRole('button', { name: 'Choose' }));
+    const add = screen.queryByRole('button', { name: 'Add plate' });
+    if (add) {
+      fireEvent.click(screen.getByRole('button', { name: /Regular · GH₵30.00/ }));
+      fireEvent.click(add);
+    }
+    return screen.getByRole('button', { name: 'Remove Jollof' }).closest<HTMLElement>('.pos-cart-line')!;
+  }
+
+  it('converts a size to GH₵20 with a blank lowest amount', async () => {
+    const row = within(await addSize());
+    fireEvent.click(row.getByRole('button', { name: 'Change amount for Jollof' }));
+    expect(row.getByLabelText('Amount (GH₵)')).toHaveValue('30.00');
+    fireEvent.change(row.getByLabelText('Amount (GH₵)'), { target: { value: '20' } });
+    fireEvent.click(row.getByRole('button', { name: 'Save amount' }));
+    expect(row.getByText('Amount GH₵20.00')).toBeVisible();
+    expect(row.getByRole('button', { name: 'Edit amount for Jollof, GH₵20.00' })).toBeVisible();
+  });
+
+  it('keeps the size when the entered amount is below the lowest amount', async () => {
+    const row = within(await addSize({ minimumAmountPence: 2500 }));
+    fireEvent.click(row.getByRole('button', { name: 'Change amount for Jollof' }));
+    fireEvent.change(row.getByLabelText('Amount (GH₵)'), { target: { value: '20' } });
+    expect(row.getByRole('button', { name: 'Save amount' })).toBeDisabled();
+    expect(row.getByText('Lowest amount for this dish is GH₵25.00.')).toBeVisible();
+    expect(row.getByText('Regular')).toBeVisible();
+  });
+
+  it.each([{ allowCustomAmount: false }, { foodBusiness: false }])('hides Change amount with settings %j', async options => {
+    const row = within(await addSize(options));
+    expect(row.getByText('Regular')).toBeVisible();
+    expect(row.queryByRole('button', { name: /Change amount/ })).toBeNull();
+  });
+
+  it('prefills the gross price including extras and queues the converted line offline', async () => {
+    const row = within(await addSize({ extras: true, vat: true }));
+    fireEvent.click(row.getByRole('button', { name: '+' }));
+    expect(row.getByText('GH₵80.50')).toBeVisible();
+    fireEvent.click(row.getByRole('button', { name: 'Change amount for Jollof' }));
+    expect(row.getByLabelText('Amount (GH₵)')).toHaveValue('40.25');
+    expect(row.getByLabelText('Amount (GH₵)')).toHaveAccessibleDescription('Per plate, including extras and VAT.');
+    fireEvent.click(row.getByRole('button', { name: 'Save amount' }));
+    expect(row.getByRole('button', { name: 'Edit amount for Jollof, GH₵80.50' })).toBeVisible();
+
+    mockedCompleteSaleAction.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    vi.mocked(queueOfflineSale).mockResolvedValueOnce('queued-converted-size');
+    fireEvent.click(screen.getByTestId('pos-complete-checkout'));
+    await waitFor(() => expect(queueOfflineSale).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [expect.objectContaining({
+        productId: 'jollof', qtyInUnit: 2, qtyBase: 4, unitPricePence: 3950,
+        plate: { sizeId: null, customAmountPence: 3450, addons: [{ addonId: 'egg', qty: 1 }], expectedPricePence: 3950 },
+      })],
+      payments: [expect.objectContaining({ method: 'CASH', amountPence: 8050 })],
+    })));
+  });
 });

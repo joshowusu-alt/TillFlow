@@ -44,6 +44,7 @@ import {
   type DueDateDecision,
 } from '@/lib/payments/pos-checkout-state';
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
+import { openShiftAction } from '@/app/actions/shifts';
 import FoodPlatePicker from '@/components/food/FoodPlatePicker';
 import { dishSettingsHref } from '@/lib/food/business';
 import { foodAvailabilityText } from '@/lib/food/availability';
@@ -108,6 +109,7 @@ type PosClientProps = {
     currency: string;
     vatEnabled: boolean;
     canManageDishes?: boolean;
+    foodBusiness?: boolean;
     momoEnabled?: boolean;
     momoProvider?: string | null;
     requireOpenTillForSales?: boolean;
@@ -164,8 +166,8 @@ export default function PosClient({
   business,
   store,
   tills,
-  openShiftTillIds,
-  openShifts,
+  openShiftTillIds: initialOpenTillIds,
+  openShifts: initialOpenShifts,
   cashierUserId,
   products,
   posCatalogueMode,
@@ -177,6 +179,16 @@ export default function PosClient({
   customersUnavailable = false,
   checkoutUnavailable = false,
 }: PosClientProps) {
+  const [openedShift, setOpenedShift] = useState<{ tillId: string; shiftId: string }>();
+  const openShiftTillIds = openedShift ? [...new Set([...initialOpenTillIds, openedShift.tillId])] : initialOpenTillIds;
+  const openShifts = useMemo(() => openedShift
+    ? [...(initialOpenShifts ?? []).filter(shift => shift.tillId !== openedShift.tillId), openedShift]
+    : initialOpenShifts, [initialOpenShifts, openedShift]);
+  const [openingTill, setOpeningTill] = useState(false);
+  const [openingBusy, setOpeningBusy] = useState(false);
+  const [openingError, setOpeningError] = useState('');
+  const [openingTillId, setOpeningTillId] = useState('');
+  const [openingCash, setOpeningCash] = useState('0');
   const searchParams = useSearchParams();
   const router = useRouter();
   const safeUnits = useMemo(() => units ?? [], [units]);
@@ -485,6 +497,10 @@ export default function PosClient({
     onFirstCartLine: () => router.prefetch('/pos'),
   });
   const [plateProduct, setPlateProduct] = useState<ProductDto | null>(null);
+  const [editingAmount, setEditingAmount] = useState<{
+    lineId: string;
+    sizeAmount?: { grossPricePence: number; grossExtrasPence: number };
+  } | null>(null);
   const addPlateToCart = useCallback((product: ProductDto, plate?: PlateSelection) => {
     const baseUnitId = getProductBaseUnitId(product);
     if (!baseUnitId) return;
@@ -1413,6 +1429,13 @@ export default function PosClient({
     isCompletingSale,
     totalLabel: formatMoney(totalDue, business.currency),
   });
+  const showNoTillBlock =
+    checkoutExtrasReady &&
+    !checkoutUnavailable &&
+    (tills.length === 0 ||
+      openShiftTillIds.length === 0 ||
+      (tillSelected && !openShiftTillIds.includes(tillId)));
+  const showFoodOpenTill = Boolean(showNoTillBlock && business.foodBusiness && tills.length > 0);
   const checkoutIssues = useMemo(() => {
     const issues: Array<{ tone: 'warning' | 'success'; message: string }> = [];
     if (checkoutLoading) {
@@ -1432,10 +1455,10 @@ export default function PosClient({
     }
     if (checkoutExtrasReady && !checkoutUnavailable && tills.length === 0) {
       issues.push({ tone: 'warning', message: 'No tills are configured for this store.' });
-    } else if (checkoutExtrasReady && !checkoutUnavailable && tills.length > 0 && !tillSelected) {
-      issues.push({ tone: 'warning', message: openShiftTillIds.length > 0 ? 'Select an open till before recording sales.' : 'Open a till shift before recording sales.' });
-    } else if (checkoutExtrasReady && !checkoutUnavailable && !tillReady) {
-      issues.push({ tone: 'warning', message: 'Open this till shift before recording sales.' });
+    } else if (!showFoodOpenTill && checkoutExtrasReady && !checkoutUnavailable && tills.length > 0 && !tillSelected) {
+      issues.push({ tone: 'warning', message: openShiftTillIds.length > 0 ? 'Select an open till before recording sales.' : business.foodBusiness ? 'Open a till to take payment.' : 'Open a till shift before recording sales.' });
+    } else if (!showFoodOpenTill && checkoutExtrasReady && !checkoutUnavailable && !tillReady) {
+      issues.push({ tone: 'warning', message: business.foodBusiness ? 'Open a till to take payment.' : 'Open this till shift before recording sales.' });
     }
     if (needsMomoConfirmation && !momoConfirmed) {
       issues.push({ tone: 'success', message: 'MoMo will be recorded manually. Confirm payment on the customer phone before completion.' });
@@ -1459,22 +1482,40 @@ export default function PosClient({
       issues.push({ tone: 'warning', message: 'Payment amounts cannot be negative or invalid.' });
     }
     return issues;
-  }, [ambiguousFailure, checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, dueDateReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, openShiftTillIds.length, partPaidValid, paymentStatus, requiresCustomer, requiresDiscountApproval, tenderMalformed, tillReady, tillSelected, tills.length]);
+  }, [ambiguousFailure, business.foodBusiness, checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, dueDateReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, openShiftTillIds.length, partPaidValid, paymentStatus, requiresCustomer, requiresDiscountApproval, showFoodOpenTill, tenderMalformed, tillReady, tillSelected, tills.length]);
   const primaryCheckoutIssue = checkoutIssues.find((issue) => issue.tone === 'warning') ?? checkoutIssues[0] ?? null;
   const errorParam = searchParams?.get('error');
   const selectedTillName = tills.find((till) => till.id === tillId)?.name ?? null;
   const boundShiftId = openShifts?.find((shift) => shift.tillId === tillId)?.shiftId ?? '';
-  const showNoTillBlock =
-    checkoutExtrasReady &&
-    !checkoutUnavailable &&
-    (tills.length === 0 ||
-      openShiftTillIds.length === 0 ||
-      (tillSelected && !openShiftTillIds.includes(tillId)));
+  async function openTillInCheckout() {
+    if (openingBusy || !openingTillId || !openingCash.trim() || !Number.isFinite(Number(openingCash)) || Number(openingCash) < 0) return;
+    setOpeningBusy(true);
+    setOpeningError('');
+    const data = new FormData();
+    data.set('tillId', openingTillId);
+    data.set('openingCash', openingCash);
+    data.set('storeId', store.id);
+    try {
+      const result = await openShiftAction(data);
+      if (!result.success) {
+        setOpeningError(result.error);
+        return;
+      }
+      setOpenedShift({ tillId: result.data.tillId, shiftId: result.data.id });
+      setTillId(result.data.tillId);
+      setOpeningTill(false);
+    } catch {
+      setOpeningError('The till could not open. Try again or ask your manager or owner.');
+    } finally {
+      setOpeningBusy(false);
+    }
+  }
   // Phone empty-cart keeps checkout collapsed via CSS (`max-md:hidden`), not matchMedia.
   const showCheckoutPanel = cartFilled || checkoutUnavailable;
   const closePhoneCheckoutSheet = useCallback(() => {
     if (isCompletingSale) return;
     setPhoneCheckoutSheetOpen(false);
+    setEditingAmount(null);
   }, [isCompletingSale]);
 
   useEffect(() => {
@@ -2187,6 +2228,30 @@ export default function PosClient({
               >
                 {cartDetails.map((line, index) => {
                   const isActive = activeLineId === line.id;
+                  const isAmountLine = line.plate?.customAmountPence !== undefined;
+                  const canEditAmount = Boolean(business.foodBusiness && line.product.food?.allowCustomAmount &&
+                    (isAmountLine || line.plate?.sizeId));
+                  function editAmount(event: React.MouseEvent<HTMLButtonElement>) {
+                    event.stopPropagation();
+                    if (isAmountLine) {
+                      setEditingAmount({ lineId: line.id });
+                      return;
+                    }
+                    const menu = line.product.food;
+                    if (!menu) return;
+                    try {
+                      const plate = pricePlate(menu, { ...line.plate, expectedPricePence: undefined }, line.product.sellingPriceBasePence, true);
+                      const extras = plate.addons.reduce((total, addon) => total + addon.linePricePence, 0);
+                      const vatRate = business.vatEnabled ? line.product.vatRateBps : 0;
+                      const gross = (price: number) => price + Math.round(price * vatRate / 10000);
+                      setEditingAmount({
+                        lineId: line.id,
+                        sizeAmount: { grossPricePence: gross(plate.platePricePence), grossExtrasPence: gross(extras) },
+                      });
+                    } catch (error) {
+                      setStockAlert(error instanceof Error ? error.message : 'Check this plate.');
+                    }
+                  }
                   const availBase = availableBaseMap.get(line.productId) ?? getAvailableBase(line.productId, line.id);
                   return (
                     <div
@@ -2262,9 +2327,34 @@ export default function PosClient({
                           </button>
                         </div>
                         <div className="ml-auto text-right sm:min-w-[5rem]">
-                          <div className="text-sm font-bold">{formatMoney(line.total, business.currency)}</div>
+                          {canEditAmount && isAmountLine ? <button type="button" className="min-h-11 text-sm font-bold text-accent underline"
+                            aria-label={`Edit amount for ${line.product.name}, ${formatMoney(line.total, business.currency)}`}
+                            disabled={isCompletingSale || ambiguousFailure}
+                            onClick={editAmount}>{formatMoney(line.total, business.currency)}</button>
+                            : <div className="flex flex-wrap items-center justify-end gap-x-2">
+                              <span className="text-sm font-bold">{formatMoney(line.total, business.currency)}</span>
+                              {canEditAmount && <button type="button" className="min-h-11 text-xs text-accent underline"
+                                aria-label={`Change amount for ${line.product.name}`}
+                                disabled={isCompletingSale || ambiguousFailure || line.product.food?.soldOut}
+                                onClick={editAmount}>Change amount</button>}
+                            </div>}
                         </div>
                       </div>
+                      {canEditAmount && editingAmount?.lineId === line.id && line.product.food && line.plate && (
+                        <FoodPlatePicker menu={line.product.food} startingPricePence={line.product.sellingPriceBasePence}
+                          currency={business.currency} allowTillAmount editAmount={line.plate} sizeAmountEdit={editingAmount.sizeAmount}
+                          amountVatRateBps={business.vatEnabled ? line.product.vatRateBps : 0}
+                          onCancel={() => setEditingAmount(null)}
+                          onConfirm={(selection) => {
+                            const menu = line.product.food;
+                            if (!menu || isCompletingSale || ambiguousFailure) return;
+                            const plate = pricePlate(menu, selection, line.product.sellingPriceBasePence, true);
+                            pushUndo(cart);
+                            setCart(cart.map(item => item.id === line.id
+                              ? { ...item, plate: selection, qtyBase: plate.stockPortions * item.qtyInUnit } : item));
+                            setEditingAmount(null);
+                          }} />
+                      )}
                     </div>
                   );
                 })}
@@ -2337,7 +2427,20 @@ export default function PosClient({
             data-pos-checkout-card="true"
           >
             <div className="pos-checkout-fields space-y-3">
-            {showNoTillBlock ? <div role="alert" data-pos-till-block="true" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-950"><span>{tills.length === 0 ? 'No tills configured for this branch.' : 'Open a till to complete sales.'}</span>{tills.length > 0 ? <Link href="/shifts" className="min-h-11 inline-flex items-center font-semibold underline">Open till →</Link> : null}</div> : null}
+            {showNoTillBlock ? <div role="alert" data-pos-till-block="true" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-950"><span>{tills.length === 0 ? 'No tills configured for this branch.' : 'Open a till to complete sales.'}</span>{tills.length > 0 ? (business.foodBusiness ? <button type="button" className="btn-primary" onClick={() => { setOpeningTill(true); setOpeningError(''); setOpeningTillId(tills.length === 1 ? tills[0].id : ''); }}>Open till</button> : <Link href="/shifts" className="min-h-11 inline-flex items-center font-semibold underline">Open till →</Link>) : null}</div> : null}
+            {openingTill && <fieldset className="space-y-3 rounded-xl border p-3">
+              <label className="block">Till to open
+                <select className="input mt-1" value={openingTillId} onChange={event => setOpeningTillId(event.target.value)}>
+                  <option value="">Choose a till</option>
+                  {tills.filter(till => !openShiftTillIds.includes(till.id)).map(till => <option key={till.id} value={till.id}>{till.name}</option>)}
+                </select>
+              </label>
+              <label className="block">Opening cash (GH₵)<input className="input mt-1" type="number" min="0" step="0.01" value={openingCash} onChange={event => setOpeningCash(event.target.value)} /></label>
+              {openingError && <p role="alert" className="text-red-700">{openingError}</p>}
+              <div className="flex gap-2"><button type="button" className="btn-primary" disabled={openingBusy || !openingTillId} onClick={() => void openTillInCheckout()}>Confirm opening</button>
+                <button type="button" className="btn-secondary" disabled={openingBusy} onClick={() => setOpeningTill(false)}>Cancel</button></div>
+            </fieldset>}
+
             <div
               className={
                 checkoutLoading
@@ -2397,9 +2500,9 @@ export default function PosClient({
                     <option value="">No tills configured</option>
                   ) : (
                     <>
-                      <option value="">{openShiftTillIds.length ? 'Choose an open till…' : 'No open till — open a shift'}</option>
+                      <option value="">{openShiftTillIds.length ? 'Choose an open till…' : business.foodBusiness ? 'No till open' : 'No open till — open a shift'}</option>
                       {tills.map((till) => (
-                        <option key={till.id} value={till.id}>{till.name}{openShiftTillIds.includes(till.id) ? ' · Open' : ' · Closed'}</option>
+                        <option key={till.id} value={till.id}>{till.name}{openShiftTillIds.includes(till.id) ? ' · Open' : business.foodBusiness ? ' · not open' : ' · Closed'}</option>
                       ))}
                     </>
                   )}
@@ -2589,7 +2692,7 @@ export default function PosClient({
 
             </div>
             <div className="pos-checkout-footer space-y-3">
-              {cartFilled ? <div role="status" data-pos-completion-status="true" className={`hidden rounded-xl px-3 py-2 text-xs font-medium ring-1 lg:block ${primaryCheckoutIssue?.tone === 'warning' ? 'bg-amber-50 text-amber-950 ring-amber-200' : 'bg-emerald-50 text-emerald-950 ring-emerald-200'}`}>{primaryCheckoutIssue?.message ?? `✓ Ready — ${activePaymentMethodLabels.join(' + ')}`}</div> : null}
+              {cartFilled && (!showFoodOpenTill || primaryCheckoutIssue) ? <div role="status" data-pos-completion-status="true" className={`hidden rounded-xl px-3 py-2 text-xs font-medium ring-1 lg:block ${primaryCheckoutIssue?.tone === 'warning' ? 'bg-amber-50 text-amber-950 ring-amber-200' : 'bg-emerald-50 text-emerald-950 ring-emerald-200'}`}>{primaryCheckoutIssue?.message ?? `✓ Ready — ${activePaymentMethodLabels.join(' + ')}`}</div> : null}
               <div className="hidden lg:block"><PosPaymentSummary currency={business.currency} subtotal={totals.netSubtotal} discount={orderDiscount} tax={vatTotal} totalDue={totalDue} changeDue={changeDue} hasCash={paymentStatus !== 'UNPAID' && hasMethod('CASH')} balanceRemaining={balanceRemaining} /></div>
             <div className="flex flex-col gap-2 md:flex-row lg:flex-col">
               {/* Narrow screens complete through the Cart/Payment sheet. */}
@@ -2656,7 +2759,7 @@ export default function PosClient({
                     summary={<PosPaymentSummary currency={business.currency} subtotal={totals.netSubtotal} discount={orderDiscount} tax={vatTotal} totalDue={totalDue} changeDue={changeDue} hasCash={paymentStatus !== 'UNPAID' && hasMethod('CASH')} balanceRemaining={balanceRemaining} />}
                     footer={
                       <div className="space-y-2" data-pos-mobile-payment-actions="true">
-                        <div
+                        {(!showFoodOpenTill || primaryCheckoutIssue) && <div
                           className={`rounded-2xl px-3 py-2 text-xs font-medium ${
                             canSubmit
                               ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'
@@ -2667,7 +2770,7 @@ export default function PosClient({
                             ? `Ready to complete • ${activePaymentMethodLabels.join(' + ')} • ${formatMoney(totalDue, business.currency)}`
                             : primaryCheckoutIssue?.message ??
                               `Review checkout before completing this ${formatMoney(totalDue, business.currency)} sale.`}
-                        </div>
+                        </div>}
                         <div className="flex items-center gap-2">
                           <button
                             type="button"

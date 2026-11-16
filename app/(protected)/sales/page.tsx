@@ -1,3 +1,5 @@
+import { deletedSaleLabel, saleDeletionPreview } from '@/lib/food/sale-deletion';
+import DeleteFoodSaleButton from '@/components/DeleteFoodSaleButton';
 import { summarizeAmountSales } from '@/lib/food/amount-sales';
 import { isFoodBusiness } from '@/lib/food/business';
 import Link from 'next/link';
@@ -21,7 +23,7 @@ export default async function SalesPage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {
     return (
       <div className="card p-6 text-center">
@@ -61,10 +63,12 @@ export default async function SalesPage(
       transactionNumber: true,
       createdAt: true,
       paymentStatus: true,
+      tillId: true,
+      shift: { select: { status: true, tillId: true, till: { select: { name: true, active: true } } } },
       totalPence: true,
       store: { select: { name: true } },
       customer: { select: { name: true } },
-      salesReturn: { select: { id: true } },
+      salesReturn: { select: { id: true, reasonCode: true, managerApprovalMode: true } },
       payments: { select: { method: true, amountPence: true, status: true } },
       _count: { select: { lines: true } },
       lines: { where: { customAmountPence: { not: null } }, select: { customAmountPence: true, product: { select: { name: true } } } },
@@ -83,10 +87,13 @@ export default async function SalesPage(
   const currentPage = listed.page;
   const totalPages = listed.totalPages;
 
-  const getClosedSaleLabel = (paymentStatus: string, hasSalesReturn: boolean) => {
+  const canDelete = user?.role === 'OWNER' && isFoodBusiness(business.businessCategory);
+  const getClosedSaleLabel = (paymentStatus: string, returned: typeof sales[number]['salesReturn']) => {
+    const deleted = deletedSaleLabel(returned);
+    if (deleted) return deleted;
     if (paymentStatus === 'VOID') return 'Voided';
     if (paymentStatus === 'RETURNED') return 'Returned';
-    return hasSalesReturn ? 'Closed' : 'Closed';
+    return 'Closed';
   };
 
   function amountLabels(sale: typeof sales[number]) {
@@ -188,7 +195,7 @@ export default async function SalesPage(
             const receiptRef = sale.transactionNumber ?? `#${sale.id.slice(0, 8).toUpperCase()}`;
             const outstandingPence = sale.totalPence - sale.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
             const isClosed = Boolean(sale.salesReturn) || ['RETURNED', 'VOID'].includes(sale.paymentStatus);
-            const closedSaleLabel = getClosedSaleLabel(sale.paymentStatus, Boolean(sale.salesReturn));
+            const closedSaleLabel = getClosedSaleLabel(sale.paymentStatus, sale.salesReturn);
 
             return (
               <DataCard key={sale.id}>
@@ -197,7 +204,7 @@ export default async function SalesPage(
                   subtitle={<>{sale.customer?.name ?? 'Walk-in'}{amountLabels(sale)}</>}
                   aside={
                     <span className="text-right">
-                      <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>
+                      {!deletedSaleLabel(sale.salesReturn) && <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>}
                       <MomoPendingQualification
                         invoiceStatus={sale.paymentStatus}
                         payments={sale.payments}
@@ -230,6 +237,7 @@ export default async function SalesPage(
                       <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
                         Amend
                       </Link>
+                      {canDelete && <DeleteFoodSaleButton invoiceId={sale.id} preview={saleDeletionPreview(sale, business.currency)} />}
                       <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
                         Return
                       </Link>
@@ -287,7 +295,7 @@ export default async function SalesPage(
               )}
               {sales.map((sale) => {
                 const isClosed = Boolean(sale.salesReturn) || ['RETURNED', 'VOID'].includes(sale.paymentStatus);
-                const closedSaleLabel = getClosedSaleLabel(sale.paymentStatus, Boolean(sale.salesReturn));
+                const closedSaleLabel = getClosedSaleLabel(sale.paymentStatus, sale.salesReturn);
 
                 return (
                   <tr key={sale.id} className="rounded-xl bg-white">
@@ -307,7 +315,7 @@ export default async function SalesPage(
                     <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.store.name}</td>
                     <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.customer?.name ?? 'Walk-in'}</td>
                     <td className="px-3 py-3">
-                      <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>
+                      {!deletedSaleLabel(sale.salesReturn) && <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>}
                       <MomoPendingQualification
                         invoiceStatus={sale.paymentStatus}
                         payments={sale.payments}
@@ -339,6 +347,7 @@ export default async function SalesPage(
                           <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
                             Amend
                           </Link>
+                          {canDelete && <DeleteFoodSaleButton invoiceId={sale.id} preview={saleDeletionPreview(sale, business.currency)} />}
                           <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
                             Return
                           </Link>

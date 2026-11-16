@@ -125,7 +125,7 @@ describePg('food release stress on throwaway Postgres', () => {
       () => db.moneyIdempotency.deleteMany({ where: { businessId } }),
       () => db.businessSequence.deleteMany({ where: { businessId } }),
       () => db.account.deleteMany({ where: { businessId } }),
-      () => db.shift.deleteMany({ where: { tillId } }),
+      () => db.shift.deleteMany({ where: { till: { storeId } } }),
       () => db.till.deleteMany({ where: { storeId } }),
       () => db.store.deleteMany({ where: { businessId } }),
       () => db.unit.deleteMany({ where: { id: unitId } }),
@@ -615,22 +615,61 @@ describePg('food release stress on throwaway Postgres', () => {
     expect(await onHand(dish.id)).toBe(1);
   });
 
+  it('keeps cash from a deleted sale out of another open drawer', async () => {
+    const { createSalesReturn } = await import('@/lib/services/returns');
+    const dish = await dishes.saveDish({ businessId, draft: draft({
+      name: 'Cash reversal dish', startingPriceCedis: '20', stockMode: 'NOT_COUNTED',
+    }) });
+    const originalShift = await db.shift.findFirstOrThrow({ where: { tillId, status: 'OPEN' } });
+    const sale = await sales.createSale({
+      businessId, storeId, tillId, cashierUserId: userId, paymentStatus: 'PAID',
+      lines: [{ productId: dish.id, unitId: await baseUnit(dish.id), qtyInUnit: 1 }],
+      payments: [{ method: 'CASH', amountPence: 2000 }],
+    });
+    expect(sale.shiftId).toBe(originalShift.id);
+    const otherTill = await db.till.create({ data: { storeId, name: 'Other counter' } });
+    const otherShift = await db.shift.create({
+      data: { tillId: otherTill.id, userId, status: 'OPEN', openKey: otherTill.id },
+    });
+    try {
+      await db.shift.update({ where: { id: originalShift.id }, data: { status: 'CLOSED', openKey: null, closedAt: new Date() } });
+      const reversal = await createSalesReturn({
+        businessId, salesInvoiceId: sale.id, userId, type: 'VOID', ownerDelete: true,
+        managerApprovedByUserId: userId, reasonCode: 'TEST_SALE',
+      });
+      expect(await db.cashDrawerEntry.count({ where: { shiftId: otherShift.id } })).toBe(0);
+      expect(await db.cashDrawerEntry.count({ where: { businessId, referenceId: reversal.id } })).toBe(0);
+      const journal = await db.journalEntry.findFirstOrThrow({
+        where: { businessId, referenceType: 'SALES_RETURN', referenceId: reversal.id },
+        include: { lines: { include: { account: true } } },
+      });
+      expect(journal.lines).toContainEqual(expect.objectContaining({
+        account: expect.objectContaining({ code: '1000' }), creditPence: 2000,
+      }));
+      await balanced(reversal.id);
+    } finally {
+      await db.shift.update({ where: { id: originalShift.id }, data: { status: 'OPEN', openKey: tillId, closedAt: null } });
+      await db.shift.delete({ where: { id: otherShift.id } });
+      await db.till.delete({ where: { id: otherTill.id } });
+    }
+  });
+
   it('revalidates an offline amount and records stock, audit and reporting once', async () => {
     const { processOfflineSale } = await import('@/app/api/offline/process-offline-sale');
     const { hashOfflineSalePayload } = await import('@/lib/offline/payload-hash');
     const { summarizeAmountSales } = await import('@/lib/food/amount-sales');
     await db.business.update({ where: { id: businessId }, data: { trialEndsAt: new Date(Date.now() + 86400000) } });
     const menu = draft({ name: 'Fried rice', startingPriceCedis: '30', stockMode: 'COUNTED',
-      allowCustomAmount: true, minimumAmountCedis: '30' });
+      allowCustomAmount: true, minimumAmountCedis: '' });
     const dish = await dishes.saveDish({ businessId, draft: menu });
     await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 3 });
     const shift = await db.shift.findFirstOrThrow({ where: { tillId, status: 'OPEN' } });
     const payload = {
       id: 'food-amount-sync', createdAt: new Date().toISOString(), businessId, storeId, tillId, shiftId: shift.id,
       cashierUserId: userId, customerId: null, paymentStatus: 'PAID' as const,
-      lines: [{ productId: dish.id, unitId: await baseUnit(dish.id), qtyInUnit: 1, unitPricePence: 3500,
-        discountType: 'NONE', discountValue: '', plate: { customAmountPence: 3500 } }],
-      payments: [{ method: 'CASH' as const, amountPence: 3500 }], orderDiscountType: 'NONE', orderDiscountValue: '',
+      lines: [{ productId: dish.id, unitId: await baseUnit(dish.id), qtyInUnit: 1, unitPricePence: 2000,
+        discountType: 'NONE', discountValue: '', plate: { customAmountPence: 2000 } }],
+      payments: [{ method: 'CASH' as const, amountPence: 2000 }], orderDiscountType: 'NONE', orderDiscountValue: '',
       inventoryPolicy: 'enforce' as const, payloadHash: '',
     };
     payload.payloadHash = await hashOfflineSalePayload(payload);
@@ -645,27 +684,35 @@ describePg('food release stress on throwaway Postgres', () => {
     const invoiceId = synced.invoiceId!;
     expect(await onHand(dish.id)).toBe(2);
     expect(await db.salesInvoiceLine.findFirst({ where: { salesInvoiceId: invoiceId } })).toMatchObject({
-      unitPricePence: 3500, customAmountPence: 3500, lineVatPence: 0, qtyBase: 1, lineCostPence: 0,
+      unitPricePence: 2000, customAmountPence: 2000, lineVatPence: 0, qtyBase: 1, lineCostPence: 0,
     });
     expect(await db.auditLog.count({ where: { businessId, entityId: invoiceId, action: 'SELL_DISH_BY_AMOUNT' } })).toBe(1);
-    expect(await summarizeAmountSales({ businessId, id: invoiceId })).toEqual({ count: 1, totalPence: 3500 });
+    expect(await summarizeAmountSales({ businessId, id: invoiceId })).toEqual({ count: 1, totalPence: 2000 });
     expect((await processOfflineSale(payload, { id: userId, businessId })).status).toBe('already_synced');
 
-    await dishes.saveDish({ businessId, draft: { ...menu, productId: dish.id, groups: [{
+    await dishes.saveDish({ businessId, draft: { ...menu, productId: dish.id,
+      sizes: [{ name: 'Regular', priceCedis: '30', isDefault: true }], groups: [{
       name: 'Extras', selection: 'MANY', required: false,
       addons: [{ name: 'Extra bowl', priceCedis: '5', stockPortions: 1, maxQty: 1 }],
     }] } });
     const configured = await menus.loadFoodCatalogue(businessId, [dish.id]);
-    const extra = configured.menus.get(dish.id)!.groups[0].addons[0];
+    const configuredDish = configured.menus.get(dish.id)!;
+    const sizeId = configuredDish.sizes[0].id;
+    const extra = configuredDish.groups[0].addons[0];
     const beforeExtra = await onHand(dish.id);
-    await sales.createSale({
+    const amountSale = await sales.createSale({
       businessId, storeId, tillId, cashierUserId: userId, paymentStatus: 'PAID',
       lines: [{ productId: dish.id, unitId: await baseUnit(dish.id), qtyInUnit: 1,
-        plate: { customAmountPence: 3500, addons: [{ addonId: extra.id, qty: 1 }] } }],
-      payments: [{ method: 'CASH', amountPence: 4000 }],
+        plate: { customAmountPence: 2000, addons: [{ addonId: extra.id, qty: 1 }] } }],
+      payments: [{ method: 'CASH', amountPence: 2500 }],
     });
     expect(await onHand(dish.id)).toBe(beforeExtra - 2);
-    await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 1 });
+    const { createSalesReturn } = await import('@/lib/services/returns');
+    await createSalesReturn({ businessId, salesInvoiceId: amountSale.id, userId,
+      managerApprovedByUserId: userId, type: 'VOID', ownerDelete: true, reasonCode: 'TEST_SALE' });
+    expect(await onHand(dish.id)).toBe(beforeExtra);
+    expect(await summarizeAmountSales({ businessId, id: amountSale.id })).toEqual({ count: 0, totalPence: 0 });
+    await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, sizeId, qty: 1 });
 
     await db.business.update({ where: { id: businessId }, data: { vatEnabled: true } });
     await db.product.update({ where: { id: dish.id }, data: { vatRateBps: 1500 } });
@@ -673,20 +720,31 @@ describePg('food release stress on throwaway Postgres', () => {
       const taxed = await sales.createSale({
         businessId, storeId, tillId, cashierUserId: userId, paymentStatus: 'PAID',
         lines: [{ productId: dish.id, unitId: await baseUnit(dish.id), qtyInUnit: 1, unitPricePence: 1,
-          plate: { customAmountPence: 3500 } }],
-        payments: [{ method: 'CASH', amountPence: 3500 }],
+          plate: { customAmountPence: 2000 } }],
+        payments: [{ method: 'CASH', amountPence: 2000 }],
       });
       expect(await db.salesInvoiceLine.findFirst({ where: { salesInvoiceId: taxed.id } })).toMatchObject({
-        unitPricePence: 3500, lineSubtotalPence: 3043, lineVatPence: 457, lineTotalPence: 3500, qtyBase: 1, lineCostPence: 0,
+        unitPricePence: 2000, lineSubtotalPence: 1739, lineVatPence: 261, lineTotalPence: 2000, qtyBase: 1, lineCostPence: 0,
       });
       await balanced(taxed.id);
-      await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 1 });
-      const vatPayload = { ...payload, id: 'food-amount-vat-sync' };
+      await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, sizeId, qty: 4 });
+      const beforeConverted = await onHand(dish.id);
+      // Same payload the till queues after converting two regular plates with extras.
+      const vatPayload = {
+        ...payload, id: 'food-amount-vat-sync',
+        lines: [{
+          ...payload.lines[0], qtyInUnit: 2, qtyBase: 4, unitPricePence: 3950,
+          plate: { sizeId: null, customAmountPence: 3450, addons: [{ addonId: extra.id, qty: 1 }], expectedPricePence: 3950 },
+        }],
+        payments: [{ method: 'CASH' as const, amountPence: 8050 }],
+      };
       vatPayload.payloadHash = await hashOfflineSalePayload(vatPayload);
       const syncedVat = await processOfflineSale(vatPayload, { id: userId, businessId });
       expect(syncedVat.status).toBe('synced');
       expect(await db.salesInvoiceLine.findFirst({ where: { salesInvoiceId: syncedVat.invoiceId! } }))
-        .toMatchObject({ lineSubtotalPence: 3043, lineVatPence: 457, lineTotalPence: 3500 });
+        .toMatchObject({ customAmountPence: 3450, qtyInUnit: 2, qtyBase: 4, lineSubtotalPence: 7000, lineVatPence: 1050, lineTotalPence: 8050 });
+      expect(await onHand(dish.id)).toBe(beforeConverted - 4);
+      await balanced(syncedVat.invoiceId!);
       expect((await processOfflineSale(vatPayload, { id: userId, businessId })).status).toBe('already_synced');
     } finally {
       await db.business.update({ where: { id: businessId }, data: { vatEnabled: false } });

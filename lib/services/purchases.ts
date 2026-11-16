@@ -771,6 +771,17 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
 
   const finishInvoice = async (created: Awaited<ReturnType<typeof _doInvoice>>, client: any) => {
     await _doInventory(client, created.id);
+    if (input.quickPurchase) {
+      for (const [productId, totals] of productTotals) {
+        const cost = Math.round(totals.costPence / totals.qtyBase);
+        if (totals.defaultCostBasePence === 0 && cost > 0) {
+          await client.product.updateMany({
+            where: { id: productId, businessId: input.businessId, defaultCostBasePence: 0 },
+            data: { defaultCostBasePence: cost },
+          });
+        }
+      }
+    }
     const supplierProductLinkSummary = await linkPurchasedProductsToSupplier(client, {
       ...input,
       supplierName: supplier?.name ?? null,

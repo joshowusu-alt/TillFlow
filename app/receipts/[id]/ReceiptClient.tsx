@@ -1,4 +1,5 @@
 'use client';
+import DeleteFoodSaleButton from '@/components/DeleteFoodSaleButton';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getLastReceiptStorageKey } from '@/lib/business-scope';
@@ -59,6 +60,8 @@ type ReceiptClientProps = {
     displayDiscountPence: number;
   }[];
   canReturn?: boolean;
+  deletePreview?: { mixedTender: boolean; refund: string | null } | null;
+  deletedLabel?: string | null;
   isReturned?: boolean;
   salesListHref?: string;
 };
@@ -72,6 +75,8 @@ export default function ReceiptClient({
   lines,
   payments,
   canReturn = false,
+  deletePreview,
+  deletedLabel,
   isReturned = false,
   salesListHref = '/sales',
 }: ReceiptClientProps) {
@@ -207,7 +212,7 @@ export default function ReceiptClient({
           </div>
           <div>
             <div className={`font-semibold ${isReturned ? 'text-amber-800' : 'text-emerald-800'}`}>
-              {isReturned ? 'Sale Returned / Voided' : 'Sale Complete!'}
+              {deletedLabel ?? (isReturned ? 'Sale Returned / Voided' : 'Sale Complete!')}
             </div>
             <div className={`text-xs ${isReturned ? 'text-amber-700' : 'text-emerald-700'}`}>
               {formatMoney(invoice.totalPence, business.currency)} | Receipt {receiptReference}
@@ -229,6 +234,7 @@ export default function ReceiptClient({
               Return Sale
             </a>
           ) : null}
+          {deletePreview && <DeleteFoodSaleButton invoiceId={invoice.id} preview={deletePreview} />}
           <button
             type="button"
             className="btn-secondary text-xs"

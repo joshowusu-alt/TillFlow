@@ -162,12 +162,11 @@ export function normalizeDishDraft(draft: DishDraft): NormalizedDish {
 
   const rawMinimum = draft.minimumAmountCedis?.trim();
   let minimumAmountPence: number | null = null;
-  if (draft.allowCustomAmount) {
-    if (rawMinimum && !/^-?\d+(?:\.\d{1,2})?$/.test(rawMinimum)) {
+  if (draft.allowCustomAmount && rawMinimum) {
+    if (!/^-?\d+(?:\.\d{1,2})?$/.test(rawMinimum)) {
       throw new Error('Lowest amount must be a cedis amount such as 25 or 25.50.');
     }
-    minimumAmountPence = rawMinimum ? Math.round(Number(rawMinimum) * 100)
-      : sizes.length ? Math.min(...sizes.map(size => size.pricePence)) : startingPricePence;
+    minimumAmountPence = Math.round(Number(rawMinimum) * 100);
     if (minimumAmountPence <= 0) throw new Error('Lowest amount must be greater than zero.');
     if (minimumAmountPence > 100_000_000) throw new Error('Lowest amount is too high.');
   }

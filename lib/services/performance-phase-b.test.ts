@@ -103,7 +103,8 @@ describe('Phase B: cache revalidation and dashboard performance hardening', () =
     // Phase 1 decrease + Phase 2 increase create paths revalidate; reverse stays blocked.
     expect(inventoryActionsSrc.match(/revalidateOwnerDashboardCache\(\);/g)).toHaveLength(2);
     expect(shiftActionsSrc.match(/revalidateOwnerDashboardCache\(\);/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
-    expect(returnActionsSrc.match(/revalidateOwnerDashboardCache\(\);/g)).toHaveLength(2);
+    // Sales returns, purchase returns, and owner sale deletion each refresh dashboard totals.
+    expect(returnActionsSrc.match(/revalidateOwnerDashboardCache\(\);/g)).toHaveLength(3);
     expect(productActionsSrc.match(/revalidateOwnerDashboardCache\(\);/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
     expect(momoActionsSrc.match(/revalidateOwnerDashboardCache\(\);/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
   });
