@@ -650,6 +650,23 @@ describePg('food release stress on throwaway Postgres', () => {
     expect(await db.auditLog.count({ where: { businessId, entityId: invoiceId, action: 'SELL_DISH_BY_AMOUNT' } })).toBe(1);
     expect(await summarizeAmountSales({ businessId, id: invoiceId })).toEqual({ count: 1, totalPence: 3500 });
     expect((await processOfflineSale(payload, { id: userId, businessId })).status).toBe('already_synced');
+
+    await db.business.update({ where: { id: businessId }, data: { vatEnabled: true } });
+    await db.product.update({ where: { id: dish.id }, data: { vatRateBps: 1500 } });
+    try {
+      const taxed = await sales.createSale({
+        businessId, storeId, tillId, cashierUserId: userId, paymentStatus: 'PAID',
+        lines: [{ productId: dish.id, unitId: await baseUnit(dish.id), qtyInUnit: 1, unitPricePence: 1,
+          plate: { customAmountPence: 3500 } }],
+        payments: [{ method: 'CASH', amountPence: 4025 }],
+      });
+      expect(await db.salesInvoiceLine.findFirst({ where: { salesInvoiceId: taxed.id } })).toMatchObject({
+        unitPricePence: 3500, lineVatPence: 525, lineTotalPence: 4025, qtyBase: 1, lineCostPence: 0,
+      });
+      await balanced(taxed.id);
+    } finally {
+      await db.business.update({ where: { id: businessId }, data: { vatEnabled: false } });
+    }
   });
 
   it('lets only one of two simultaneous sales take the last portion', async () => {
