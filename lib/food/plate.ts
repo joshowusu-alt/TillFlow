@@ -166,7 +166,7 @@ function activeAddons(group: FoodAddonGroup): FoodAddon[] {
   return group.addons.filter((addon) => addon.active !== false);
 }
 
-export function portionsForPlate(menu: FoodMenu, snapshot: Pick<PlateSnapshot, 'addons'>): number {
+export function portionsForPlate(menu: FoodMenu, snapshot: Pick<PlateSnapshot, 'addons' | 'customAmountPence'>): number {
   if (menu.stockMode !== 'COUNTED') return 0;
   const included = menu.inclusions.reduce((sum, item) => sum + Math.max(0, item.stockPortions), 0);
   const extras = snapshot.addons.reduce((sum, addon) => {
@@ -175,7 +175,7 @@ export function portionsForPlate(menu: FoodMenu, snapshot: Pick<PlateSnapshot, '
       .find((candidate) => candidate.id === addon.id);
     return sum + addon.qty * Math.max(0, defined?.stockPortions ?? 0);
   }, 0);
-  return (included || 1) + extras;
+  return (snapshot.customAmountPence !== undefined ? 1 : included || 1) + extras;
 }
 
 export function pricePlate(
@@ -281,7 +281,7 @@ export function pricePlate(
     stockPortions: 0,
     stockMode: menu.stockMode,
   };
-  snapshot.stockPortions = amount !== undefined ? Number(menu.stockMode === 'COUNTED') : portionsForPlate(menu, snapshot);
+  snapshot.stockPortions = portionsForPlate(menu, snapshot);
   return snapshot;
 }
 

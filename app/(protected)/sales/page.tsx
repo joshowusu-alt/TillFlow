@@ -97,12 +97,13 @@ export default async function SalesPage(
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      {amountSales && <p>Sold by amount: {amountSales.count} {amountSales.count === 1 ? 'sale' : 'sales'}, {formatMoney(amountSales.totalPence, business.currency)} total</p>}
       <PageHeader
         title="Sales"
         subtitle="Latest invoices, receipts, and payment status."
         actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
       />
+
+      {amountSales && amountSales.count > 0 && <p className="text-sm text-slate-600">Sold by amount: {amountSales.count} {amountSales.count === 1 ? 'sale' : 'sales'}, {formatMoney(amountSales.totalPence, business.currency)} total</p>}
 
       {/* Collapsible filter — collapsed on mobile, always-open on desktop */}
       <details className="details-mobile" open>

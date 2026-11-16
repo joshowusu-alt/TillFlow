@@ -19,6 +19,7 @@ export default function FoodPlatePicker({
   startingPricePence,
   currency = 'GHS',
   allowTillAmount = false,
+  amountIncludesVat = false,
   onCancel,
   onConfirm,
 }: {
@@ -26,6 +27,7 @@ export default function FoodPlatePicker({
   startingPricePence: number;
   currency?: string;
   allowTillAmount?: boolean;
+  amountIncludesVat?: boolean;
   onCancel: () => void;
   onConfirm: (selection: PlateSelection, platePricePence: number) => void;
 }) {
@@ -114,6 +116,7 @@ export default function FoodPlatePicker({
               <input className="input mt-1 text-xl" inputMode="decimal" value={amount}
                 ref={focusAmount}
                 onChange={(event) => setAmount(event.target.value)} />
+              {amountIncludesVat && <span className="mt-1 block text-sm text-black/60">Includes VAT</span>}
             </label>}
           </div>
         )}

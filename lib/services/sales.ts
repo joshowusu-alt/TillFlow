@@ -1,3 +1,4 @@
+import { amountLineVat } from '@/lib/food/amount-vat';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { isPendingMomo, receiptLedgerFields, settledReceiptSplit } from '@/lib/payments/receipt-ledger';
@@ -156,18 +157,20 @@ function buildLinePricing(
       resolveProductUnitBaseValuePence(unitPricePence, productUnit, promoFreeUnits),
       Math.max(resolvedLineSubtotal - lineDiscount, 0)
     );
-    const lineNetSubtotal = Math.max(resolvedLineSubtotal - lineDiscount - promoDiscount, 0);
     const vatRate = vatEnabled ? productUnit.product.vatRateBps : 0;
-    const lineVat = vatEnabled ? Math.round((lineNetSubtotal * vatRate) / 10000) : 0;
+    const inclusiveAmount = (parsePlateSnapshot(line.plateSnapshotJson)?.customAmountPence ?? 0) * line.qtyInUnit;
+    const beforeDiscount = amountLineVat(resolvedLineSubtotal, inclusiveAmount, 0, vatRate).net;
+    const afterLineDiscount = amountLineVat(resolvedLineSubtotal, inclusiveAmount, lineDiscount, vatRate).net;
+    const { net: lineNetSubtotal, vat: lineVat } = amountLineVat(resolvedLineSubtotal, inclusiveAmount, lineDiscount + promoDiscount, vatRate);
     const lineTotal = lineNetSubtotal + lineVat;
     return {
       ...line,
       productUnit,
       qtyBase,
       unitPricePence,
-      lineSubtotal: resolvedLineSubtotal,
-      lineDiscount,
-      promoDiscount,
+      lineSubtotal: beforeDiscount,
+      lineDiscount: beforeDiscount - afterLineDiscount,
+      promoDiscount: afterLineDiscount - lineNetSubtotal,
       lineNetSubtotal,
       lineVat,
       lineTotal,

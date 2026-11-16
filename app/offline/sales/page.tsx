@@ -50,6 +50,10 @@ type NewAmendLine = AmendingState['newLines'][number];
 /*  Page                                                              */
 /* ------------------------------------------------------------------ */
 
+function displayOfflineReason(reason: string) {
+  return reason.replace(/dish_amount_changed/g, "This dish's lowest amount changed. Check the price and sync again.");
+}
+
 export default function OfflineSalesPage() {
   const [sales, setSales] = useState<OfflineSale[]>([]);
   const [deadLetters, setDeadLetters] = useState<DeadLetterRecord[]>([]);
@@ -145,7 +149,7 @@ export default function OfflineSalesPage() {
         showToast('Sale re-synced successfully');
         await refresh();
       } else {
-        showToast(`Still failing: ${result.error}`);
+        showToast(`Still failing: ${displayOfflineReason(result.error ?? '')}`);
       }
     } finally {
       setRetryingKey(null);
@@ -651,7 +655,7 @@ export default function OfflineSalesPage() {
                 </div>
 
                 <div className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs text-rose-800">
-                  {record.errorMessage}
+                  {displayOfflineReason(record.errorMessage)}
                 </div>
 
                 <div className="flex flex-wrap gap-1">
@@ -751,7 +755,7 @@ export default function OfflineSalesPage() {
                     {sale.customerId && ' · Has customer'}
                     {sale.status === 'needs_review' && ' · Needs review'}
                     {sale.status === 'rejected' && ' · Rejected'}
-                    {sale.statusReason ? ` · ${sale.statusReason}` : ''}
+                    {sale.statusReason ? ` · ${displayOfflineReason(sale.statusReason)}` : ''}
                   </div>
                   <div className="mt-1 flex gap-1 flex-wrap">
                     {sale.lines.slice(0, 3).map((line: OfflineSaleLine, i: number) => (

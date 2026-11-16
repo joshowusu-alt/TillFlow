@@ -1,3 +1,4 @@
+import { formatMoney } from '@/lib/format';
 import Link from 'next/link';
 import FinancialAmount from '@/components/reports/FinancialAmount';
 import { paymentMixPresentation } from '@/lib/reports/today/method-share';
@@ -14,6 +15,7 @@ export type TradingViewData = {
   receiptsHref: string; cashDrawerHref: string; analyticsHref: string; reorderHref: string;
   receiptOrigins: { label: string; pence: number }[];
   methods: { label: string; pence: number; href: string }[];
+  amountSales?: { count: number; totalPence: number } | null;
   voidCount: number; voidTotal: number; returnCount: number; returnTotal: number;
   cashShiftCount: number; cashDiscrepancies: number;
   adjustments: { product: string; direction: string; quantity: number; user: string }[];
@@ -31,6 +33,9 @@ export default function TradingReportView({ data }: { data: TradingViewData }) {
   const unusualMargin = ready && data.grossProfitPercent! < -50 && data.totalSales > 0;
   const hasActivity = data.voidCount > 0 || data.returnCount > 0 || data.adjustments.length > 0 || data.cashDiscrepancies > 0;
   return <div className="space-y-4 sm:space-y-5" data-stage3b-report="trading" data-first-metric="">
+    {data.amountSales && data.amountSales.count > 0 && <p className="text-sm text-slate-600">
+      Sold by amount: {data.amountSales.count} {data.amountSales.count === 1 ? 'sale' : 'sales'}, {formatMoney(data.amountSales.totalPence, c)} total
+    </p>}
     <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
       <ReportSalesHero title="Sales revenue" pence={data.totalSales} currency={c} subtitle="Recognised sales for the selected period. Includes credit sales; this is not money received.">
         {data.livePulse || data.onShift ? <div>{data.livePulse ? <p className="mt-1">{data.livePulse}</p> : null}{data.onShift ? <p className="mt-1">On shift now: {data.onShift}</p> : null}</div> : null}

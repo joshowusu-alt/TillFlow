@@ -1892,6 +1892,7 @@ export default function PosClient({
         {plateProduct?.food ? (
           <FoodPlatePicker
             allowTillAmount
+            amountIncludesVat={business.vatEnabled && plateProduct.vatRateBps > 0}
             menu={plateProduct.food}
             startingPricePence={plateProduct.sellingPriceBasePence}
             currency={business.currency}

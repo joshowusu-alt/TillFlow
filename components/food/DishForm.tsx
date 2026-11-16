@@ -74,7 +74,16 @@ export default function DishForm({ initial, productId, ingredients, categories }
 
       <section className="card space-y-3 p-4">
         <label className="flex items-center gap-2">
-          <input type="checkbox" checked={Boolean(draft.allowCustomAmount)} onChange={(event) => update('allowCustomAmount', event.target.checked)} />
+          <input type="checkbox" checked={Boolean(draft.allowCustomAmount)} onChange={(event) => {
+            const enabled = event.target.checked;
+            setDraft(previous => {
+              const prices = previous.sizes.map(size => Number(size.priceCedis)).filter(price => price > 0);
+              const cheapest = prices.length ? Math.min(...prices) : Number(previous.startingPriceCedis);
+              return { ...previous, allowCustomAmount: enabled,
+                minimumAmountCedis: enabled && !previous.minimumAmountCedis?.trim() && cheapest > 0
+                  ? cheapest.toFixed(2) : previous.minimumAmountCedis };
+            });
+          }} />
           Let staff type the amount
         </label>
         <p className="text-sm text-black/60">Customers can ask for any amount, e.g. GH₵35. Staff tap Other amount at the till and type it.</p>
@@ -82,7 +91,7 @@ export default function DishForm({ initial, productId, ingredients, categories }
           Lowest amount (GH₵)
           <input className="input mt-1" type="number" min="0.01" step="0.01" value={draft.minimumAmountCedis ?? ''}
             onChange={(event) => update('minimumAmountCedis', event.target.value)} />
-          <span className="block text-black/60">Leave blank to use the cheapest size price, or the dish price if there are no sizes.</span>
+          <span className="block text-black/60">Starts at your cheapest price. Change it if you like.</span>
         </label>}
       </section>
 

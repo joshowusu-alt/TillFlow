@@ -1,3 +1,4 @@
+import { amountLineVat } from '@/lib/food/amount-vat';
 import { computeDiscount, type PosCheckoutTotals, type PosDiscountType } from './pos-checkout';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import {
@@ -161,8 +162,11 @@ export function buildCartDetails(
         resolveProductUnitBaseValuePence(unitPrice, unit, promoFreeUnits),
         Math.max(subtotal - lineDiscount, 0)
       );
-      const netSubtotal = Math.max(subtotal - lineDiscount - promoDiscount, 0);
-      const vat = vatEnabled ? Math.round((netSubtotal * product.vatRateBps) / 10000) : 0;
+      const vatRate = vatEnabled ? product.vatRateBps : 0;
+      const inclusiveAmount = (plate?.customAmountPence ?? 0) * line.qtyInUnit;
+      const beforeDiscount = amountLineVat(subtotal, inclusiveAmount, 0, vatRate).net;
+      const afterLineDiscount = amountLineVat(subtotal, inclusiveAmount, lineDiscount, vatRate).net;
+      const { net: netSubtotal, vat: vat } = amountLineVat(subtotal, inclusiveAmount, lineDiscount + promoDiscount, vatRate);
       const total = netSubtotal + vat;
       const baseUnit = product.units.find((candidate) => candidate.isBaseUnit);
       const packaging = getPrimaryPackagingUnit(
@@ -185,9 +189,9 @@ export function buildCartDetails(
         unit,
         qtyLabel,
         unitPrice,
-        subtotal,
-        lineDiscount,
-        promoDiscount,
+        subtotal: beforeDiscount,
+        lineDiscount: beforeDiscount - afterLineDiscount,
+        promoDiscount: afterLineDiscount - netSubtotal,
         netSubtotal,
         vat,
         total,

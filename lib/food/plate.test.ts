@@ -227,9 +227,9 @@ describe('retail and bookshop sales stay on the catalogue price', () => {
 describe('till-only amount sales', () => {
   const menu = { ...banku, allowCustomAmount: true, minimumAmountPence: 3500 };
   const selection = { customAmountPence: 3500 };
-  it('prices at the minimum, adds extras, and uses one counted portion', () => {
+  it('prices at the minimum and counts the extra bowl without counting inclusions', () => {
     const snapshot = pricePlate(menu, { ...selection, addons: [{ addonId: 'extra-banku', qty: 1 }] }, 2500, true);
-    expect(snapshot).toMatchObject({ platePricePence: 4000, stockPortions: 1, customAmountPence: 3500 });
+    expect(snapshot).toMatchObject({ platePricePence: 4000, stockPortions: 2, customAmountPence: 3500 });
     expect(formatPlateDetail(snapshot, (pence) => formatMoney(pence))).toContain('Amount GH₵35.00');
   });
   it('rejects prices below the minimum, switch off, sold out, and online requests', () => {
