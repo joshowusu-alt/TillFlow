@@ -26,8 +26,7 @@ type ReceiptData = {
     qtyLabel: string;
     unitPricePence: number;
     lineTotalPence: number;
-    lineDiscountPence: number;
-    promoDiscountPence: number;
+    displayDiscountPence: number;
   }[];
   payments: {
     method: string;
@@ -156,7 +155,7 @@ export function buildEscPosReceipt(data: ReceiptData) {
   const noteWidth = width - 4;
   const buffer: number[] = [];
   const lineDiscountTotal = data.lines.reduce(
-    (sum, line) => sum + line.lineDiscountPence + line.promoDiscountPence,
+    (sum, line) => sum + line.displayDiscountPence,
     0
   );
 
@@ -203,7 +202,7 @@ export function buildEscPosReceipt(data: ReceiptData) {
       appendLine(buffer, row);
     });
 
-    const discount = line.lineDiscountPence + line.promoDiscountPence;
+    const discount = line.displayDiscountPence;
     if (discount > 0) {
       wrapText(`Discount ${formatMoney(discount, data.business.currency)}`, noteWidth).forEach(
         (noteLine) => {

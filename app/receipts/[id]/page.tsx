@@ -2,6 +2,7 @@ import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import ReceiptClient from './ReceiptClient';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
+import { amountLineVat } from '@/lib/food/amount-vat';
 import { formatMoney } from '@/lib/format';
 import { formatPlateDetail, parsePlateSnapshot } from '@/lib/food/plate';
 
@@ -62,11 +63,13 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
           plateSnapshotJson: true,
           unitPricePence: true,
           lineTotalPence: true,
+          lineSubtotalPence: true,
           lineDiscountPence: true,
           promoDiscountPence: true,
           product: {
             select: {
               name: true,
+              vatRateBps: true,
               productUnits: {
                 select: {
                   isBaseUnit: true,
@@ -105,14 +108,26 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
           packagingUnitPlural: packaging?.unit.pluralName,
           packagingConversion: packaging?.conversionToBase
         });
+    let displayDiscountPence = line.lineDiscountPence + line.promoDiscountPence;
+    if (displayDiscountPence > 0 && plate?.customAmountPence !== undefined) {
+      const subtotal = line.unitPricePence * line.qtyInUnit;
+      const amount = plate.customAmountPence * line.qtyInUnit;
+      const extras = subtotal - amount;
+      const { net, vat } = amountLineVat(subtotal, amount, 0, line.product.vatRateBps);
+      // Without extras, the original gross is recorded directly. With extras,
+      // use the menu rate only if it reproduces the net recorded at checkout.
+      if (extras === 0 || (line.product.vatRateBps > 0 && net === line.lineSubtotalPence && net < subtotal)) {
+        displayDiscountPence = Math.max(0, net + vat - line.lineTotalPence);
+      }
+    }
+
     return {
       name: plate?.dishName ?? line.product.name,
       detail: plate ? formatPlateDetail(plate, (pence) => formatMoney(pence, invoice.business.currency)) : null,
       qtyLabel,
       unitPricePence: line.unitPricePence,
       lineTotalPence: line.lineTotalPence,
-      lineDiscountPence: line.lineDiscountPence,
-      promoDiscountPence: line.promoDiscountPence
+      displayDiscountPence
     };
   });
 

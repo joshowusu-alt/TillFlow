@@ -31,3 +31,23 @@ it('focuses only the visible amount input and rejects an amount below the minimu
   fireEvent.click(screen.getByRole('button', { name: 'Add GH₵35.00' }));
   expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ customAmountPence: 3500 }), 3500);
 });
+
+it('shows the VAT-inclusive cart price when paid extras are selected', () => {
+  const onConfirm = vi.fn();
+  render(<FoodPlatePicker menu={{ ...menu, groups: [{
+    id: 'extras', name: 'Extras', selection: 'SINGLE', required: false,
+    addons: [{ id: 'egg', name: 'Egg', pricePence: 500, maxQty: 1, stockPortions: 0 }],
+  }] }} startingPricePence={3000} allowTillAmount amountVatRateBps={1500}
+    onCancel={() => {}} onConfirm={onConfirm} />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Other amount' }));
+  const amount = screen.getByRole('textbox', { name: 'Amount (GH₵)' });
+  fireEvent.change(amount, { target: { value: '35' } });
+  expect(amount).toHaveAccessibleDescription('Includes VAT');
+  expect(screen.getByRole('button', { name: 'Add GH₵35.00' })).toBeVisible();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Choose' }));
+  expect(amount).toHaveAccessibleDescription('Includes VAT. Extras + VAT.');
+  fireEvent.click(screen.getByRole('button', { name: 'Add GH₵40.75' }));
+  expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ customAmountPence: 3500 }), 4000);
+});
