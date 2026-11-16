@@ -45,7 +45,7 @@ export default function DeleteFoodSaleButton({ invoiceId }: { invoiceId: string 
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
         <div className="flex gap-2">
           <button type="button" className="btn-secondary" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
-          <button type="submit" className="btn-primary bg-red-700" disabled={!reason || busy}>{busy ? 'Deleting…' : 'Delete sale'}</button>
+          <button type="submit" className="btn-destructive" disabled={!reason || busy}>{busy ? 'Deleting…' : 'Delete sale'}</button>
         </div>
       </form>
     </ResponsiveModal>}

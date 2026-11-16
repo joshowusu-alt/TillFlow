@@ -247,10 +247,10 @@ describe('createSalesReturn', () => {
     expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
   });
 
-  it('requires the approved owner to be the same person deleting the sale', async () => {
+  it.each(['manager', 'cashier'])('refuses a %s trying to delete as the owner', async role => {
     setupSuccessfulMocks(makeInvoice({ business: { vatEnabled: false, businessCategory: 'FOOD_DISHES' } }));
     prismaMock.user.findFirst.mockResolvedValue({ id: 'owner' });
-    await expect(createSalesReturn({ businessId: 'biz-1', salesInvoiceId: 'inv-1', userId: 'manager',
+    await expect(createSalesReturn({ businessId: 'biz-1', salesInvoiceId: 'inv-1', userId: role,
       managerApprovedByUserId: 'owner', type: 'VOID', reasonCode: 'MISTAKE', ownerDelete: true }))
       .rejects.toThrow('Only the owner');
     expect(prismaMock.salesInvoice.update).not.toHaveBeenCalled();

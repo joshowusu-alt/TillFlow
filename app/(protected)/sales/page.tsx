@@ -344,7 +344,7 @@ export default async function SalesPage(
                             Amend
                           </Link>
                           {canDelete && <DeleteFoodSaleButton invoiceId={sale.id} />}
-                      <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
+                          <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
                             Return
                           </Link>
                         </div>
