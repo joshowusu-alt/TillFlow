@@ -11,6 +11,8 @@ import { summarizeInventoryRisk } from '@/lib/reports/operational-metrics';
 import { purchaseDocumentFixture } from '@/lib/test/purchase-document-fixture';
 import type { DishDraft } from '@/lib/food/dish-draft';
 
+vi.mock('next/headers', () => ({ cookies: () => ({ get: () => undefined }) }));
+
 vi.mock('next/cache', () => ({
   unstable_cache: (fn: unknown) => fn,
   revalidateTag: () => undefined,
@@ -611,6 +613,43 @@ describePg('food release stress on throwaway Postgres', () => {
     await attemptSale();
     await attemptOnline();
     expect(await onHand(dish.id)).toBe(1);
+  });
+
+  it('revalidates an offline amount and records stock, audit and reporting once', async () => {
+    const { processOfflineSale } = await import('@/app/api/offline/process-offline-sale');
+    const { hashOfflineSalePayload } = await import('@/lib/offline/payload-hash');
+    const { summarizeAmountSales } = await import('@/lib/food/amount-sales');
+    await db.business.update({ where: { id: businessId }, data: { trialEndsAt: new Date(Date.now() + 86400000) } });
+    const menu = draft({ name: 'Fried rice', startingPriceCedis: '30', stockMode: 'COUNTED',
+      allowCustomAmount: true, minimumAmountCedis: '30' });
+    const dish = await dishes.saveDish({ businessId, draft: menu });
+    await prep.addPreparedPortions({ businessId, storeId, productId: dish.id, userId, qty: 3 });
+    const shift = await db.shift.findFirstOrThrow({ where: { tillId, status: 'OPEN' } });
+    const payload = {
+      id: 'food-amount-sync', createdAt: new Date().toISOString(), businessId, storeId, tillId, shiftId: shift.id,
+      cashierUserId: userId, customerId: null, paymentStatus: 'PAID' as const,
+      lines: [{ productId: dish.id, unitId: await baseUnit(dish.id), qtyInUnit: 1, unitPricePence: 3500,
+        discountType: 'NONE', discountValue: '', plate: { customAmountPence: 3500 } }],
+      payments: [{ method: 'CASH' as const, amountPence: 3500 }], orderDiscountType: 'NONE', orderDiscountValue: '',
+      inventoryPolicy: 'enforce' as const, payloadHash: '',
+    };
+    payload.payloadHash = await hashOfflineSalePayload(payload);
+    await dishes.saveDish({ businessId, draft: { ...menu, productId: dish.id, minimumAmountCedis: '36' } });
+    expect(await processOfflineSale(payload, { id: userId, businessId })).toMatchObject({
+      status: 'needs_review', reason: 'dish_amount_changed',
+    });
+    expect(await onHand(dish.id)).toBe(3);
+    await dishes.saveDish({ businessId, draft: { ...menu, productId: dish.id } });
+    const synced = await processOfflineSale(payload, { id: userId, businessId });
+    expect(synced.status).toBe('synced');
+    const invoiceId = synced.invoiceId!;
+    expect(await onHand(dish.id)).toBe(2);
+    expect(await db.salesInvoiceLine.findFirst({ where: { salesInvoiceId: invoiceId } })).toMatchObject({
+      unitPricePence: 3500, customAmountPence: 3500, lineVatPence: 0, qtyBase: 1, lineCostPence: 0,
+    });
+    expect(await db.auditLog.count({ where: { businessId, entityId: invoiceId, action: 'SELL_DISH_BY_AMOUNT' } })).toBe(1);
+    expect(await summarizeAmountSales({ businessId, id: invoiceId })).toEqual({ count: 1, totalPence: 3500 });
+    expect((await processOfflineSale(payload, { id: userId, businessId })).status).toBe('already_synced');
   });
 
   it('lets only one of two simultaneous sales take the last portion', async () => {

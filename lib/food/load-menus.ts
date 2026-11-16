@@ -16,6 +16,8 @@ type DishRow = {
   stockMode: string;
   soldOut: boolean;
   lowAt: number;
+  allowCustomAmount?: boolean;
+  minimumAmountPence?: number | null;
   product: { name: string; sellingPriceBasePence: number; active: boolean };
   sizes: Array<{ id: string; name: string; pricePence: number; isDefault: boolean; active: boolean }>;
   inclusions: Array<{ id: string; name: string; qty: number; stockPortions: number }>;
@@ -36,6 +38,8 @@ export function toFoodMenu(row: DishRow): FoodMenu {
     stockMode,
     soldOut: row.soldOut,
     lowAt: row.lowAt,
+    allowCustomAmount: row.allowCustomAmount,
+    minimumAmountPence: row.minimumAmountPence,
     sizes: row.sizes.map((size) => ({
       id: size.id,
       name: size.name,

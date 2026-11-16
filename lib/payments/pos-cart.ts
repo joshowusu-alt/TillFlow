@@ -133,7 +133,7 @@ export function buildCartDetails(
       let plate = null;
       if (product.food && line.plate) {
         try {
-          plate = pricePlate(product.food, { ...line.plate, expectedPricePence: undefined }, product.sellingPriceBasePence);
+          plate = pricePlate(product.food, { ...line.plate, expectedPricePence: undefined }, product.sellingPriceBasePence, true);
         } catch {
           plate = null;
         }

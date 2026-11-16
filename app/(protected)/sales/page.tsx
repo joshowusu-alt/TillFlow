@@ -1,3 +1,5 @@
+import { summarizeAmountSales } from '@/lib/food/amount-sales';
+import { isFoodBusiness } from '@/lib/food/business';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import RefreshIndicator from '@/components/RefreshIndicator';
@@ -65,14 +67,16 @@ export default async function SalesPage(
       salesReturn: { select: { id: true } },
       payments: { select: { method: true, amountPence: true, status: true } },
       _count: { select: { lines: true } },
+      lines: { where: { customAmountPence: { not: null } }, select: { customAmountPence: true, product: { select: { name: true } } } },
     },
     orderBy: { createdAt: 'desc' },
     skip: (listPage - 1) * DEFAULT_PAGE_SIZE,
     take: DEFAULT_PAGE_SIZE,
   });
-  const [totalCount, firstPage] = await Promise.all([
+  const [totalCount, firstPage, amountSales] = await Promise.all([
     prisma.salesInvoice.count({ where }),
     loadSales(page),
+    isFoodBusiness(business.businessCategory) ? summarizeAmountSales(where) : null,
   ]);
   const listed = await rowsForListPage(page, totalCount, DEFAULT_PAGE_SIZE, firstPage, loadSales);
   const sales = listed.rows;
@@ -85,8 +89,15 @@ export default async function SalesPage(
     return hasSalesReturn ? 'Closed' : 'Closed';
   };
 
+  function amountLabels(sale: typeof sales[number]) {
+    return sale.lines.map((line, index) => <p key={index} className="text-xs text-muted">
+      {line.product.name} · Amount {formatMoney(line.customAmountPence ?? 0, business.currency)}
+    </p>);
+  }
+
   return (
     <div className="space-y-4 sm:space-y-5">
+      {amountSales && <p>Sold by amount: {amountSales.count} sales, {formatMoney(amountSales.totalPence, business.currency)} total</p>}
       <PageHeader
         title="Sales"
         subtitle="Latest invoices, receipts, and payment status."
@@ -182,7 +193,7 @@ export default async function SalesPage(
               <DataCard key={sale.id}>
                 <DataCardHeader
                   title={<Link href={`/receipts/${sale.id}`} className="font-mono text-primary hover:underline">{receiptRef}</Link>}
-                  subtitle={sale.customer?.name ?? 'Walk-in'}
+                  subtitle={<>{sale.customer?.name ?? 'Walk-in'}{amountLabels(sale)}</>}
                   aside={
                     <span className="text-right">
                       <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>
@@ -283,6 +294,7 @@ export default async function SalesPage(
                       <Link href={`/receipts/${sale.id}`} className="text-sm font-mono font-semibold text-primary hover:underline">
                         {sale.transactionNumber ?? `#${sale.id.slice(0, 8).toUpperCase()}`}
                       </Link>
+                      {amountLabels(sale)}
                     </td>
                     <td className="px-3 py-3 text-sm tabular-nums whitespace-nowrap">
                       {sale.createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}

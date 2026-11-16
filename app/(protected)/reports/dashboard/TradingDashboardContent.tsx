@@ -1,3 +1,6 @@
+import { formatMoney } from '@/lib/format';
+import { summarizeAmountSales } from '@/lib/food/amount-sales';
+import { isFoodBusiness } from '@/lib/food/business';
 import { purchasedStockOnly } from '@/lib/food/business';
 import TradingReportView from '@/components/reports/stage3b/TradingReportView';
 import { prisma } from '@/lib/prisma';
@@ -507,7 +510,12 @@ export default async function TradingDashboardContent({
       packagingUnit: packaging?.unit.name, packagingUnitPlural: packaging?.unit.pluralName, packagingConversion: packaging?.conversionToBase });
   };
   void hasActivity;
-  return <TradingReportView data={{
+  const amountSales = isFoodBusiness(businessCategory) ? await summarizeAmountSales({
+    businessId, ...storeFilter, createdAt: { gte: scope.startInclusive, lt: scope.endExclusive },
+  }) : null;
+  return <>
+    {amountSales && <p className="mb-3">Sold by amount: {amountSales.count} sales, {formatMoney(amountSales.totalPence, currency)} total</p>}
+    <TradingReportView data={{
     currency, totalSales, totalPaymentReceipts,
     grossProfit: marginReady ? totalGrossMargin : null, grossProfitPercent: marginReady ? gpPercent : null,
     ...(tradingMargin.seeProfitAndLoss ? { seeProfitAndLoss: true } : {}),
@@ -545,5 +553,5 @@ export default async function TradingDashboardContent({
     bestItems: bestItems.map(row => ({ id: row.id, name: row.name, quantity: quantityLabel(row.qty, row.units), revenue: row.revenue })),
     livePulse: headerPulse.map(chip => chip.label).join(' · '),
     onShift: isToday && activeCashierCount > 0 ? openShifts.slice(0, 3).map(s => s.user?.name ?? '—').join(', ') + (openShifts.length > 3 ? ` +${openShifts.length - 3} more` : '') : '',
-  }} />;
+  }} /></>;
 }

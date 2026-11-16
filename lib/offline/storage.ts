@@ -73,6 +73,7 @@ export interface OfflineSaleLine {
     discountValue: string;
     /** Food plate choices. Absent on retail lines, so older queued sales stay valid. */
     plate?: {
+      customAmountPence?: number;
         sizeId?: string | null;
         addons?: Array<{ addonId: string; qty: number }>;
         expectedPricePence?: number | null;

@@ -66,7 +66,7 @@ export function usePosCartActions<TCartLine extends PosCartLine>({
 
     const mergeId = `${line.productId}:${line.unitId}`;
     const plateKey = line.plate
-      ? `${line.plate.sizeId ?? ''}:${[...(line.plate.addons ?? [])].map((addon) => `${addon.addonId}:${addon.qty}`).sort().join(',')}`
+      ? `${line.plate.customAmountPence !== undefined ? 'amount-'+line.plate.customAmountPence : line.plate.sizeId ?? ''}:${[...(line.plate.addons ?? [])].map((addon) => `${addon.addonId}:${addon.qty}`).sort().join(',')}`
       : '';
     const id =
       line.separateLine || line.lineSubtotalPence != null

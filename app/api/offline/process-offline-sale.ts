@@ -108,6 +108,9 @@ function replayMatchesExisting(
 
 function classifyCreateSaleError(error: unknown): ProcessOfflineSaleResult | null {
   const message = error instanceof Error ? error.message : String(error);
+  if (/Lowest amount for this dish|Other amount is unavailable|Enter a valid amount in cedis/.test(message)) {
+    return review('dish_amount_changed');
+  }
   if (message.includes('Insufficient on hand') || message.includes('Insufficient stock')) {
     return review('insufficient_stock');
   }

@@ -10,6 +10,8 @@ export type DishDraft = {
   showOnline: boolean;
   stockMode: FoodStockMode;
   soldOut: boolean;
+  allowCustomAmount?: boolean;
+  minimumAmountCedis?: string;
   lowAt: number;
   /** Blank means no cost is posted when leftovers are written off. */
   costPerPortionCedis?: string;
@@ -32,6 +34,8 @@ export type NormalizedDish = {
   showOnline: boolean;
   stockMode: FoodStockMode;
   soldOut: boolean;
+  allowCustomAmount: boolean;
+  minimumAmountPence: number | null;
   lowAt: number;
   costPerPortionPence: number | null;
   sizes: Array<{ name: string; pricePence: number; isDefault: boolean; recipe?: import("./ingredient-costs").Ingredient[] }>;
@@ -164,6 +168,12 @@ export function normalizeDishDraft(draft: DishDraft): NormalizedDish {
     showOnline: Boolean(draft.showOnline),
     stockMode,
     soldOut: Boolean(draft.soldOut),
+    allowCustomAmount: Boolean(draft.allowCustomAmount),
+    minimumAmountPence: draft.allowCustomAmount
+      ? draft.minimumAmountCedis?.trim()
+        ? cedisToPence(draft.minimumAmountCedis, 'the lowest amount', false)
+        : sizes.length ? Math.min(...sizes.map(size => size.pricePence)) : startingPricePence
+      : null,
     lowAt,
     costPerPortionPence,
     sizes,

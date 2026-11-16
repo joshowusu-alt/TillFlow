@@ -111,6 +111,8 @@ export async function saveDish(input: { businessId: string; draft: DishDraft }) 
         recipeJson: input.draft.recipe?.length ? JSON.stringify(input.draft.recipe) : null,
         stockMode: normalized.stockMode,
         soldOut: normalized.soldOut,
+        allowCustomAmount: normalized.allowCustomAmount,
+        minimumAmountPence: normalized.minimumAmountPence,
         lowAt: normalized.lowAt,
         costPerPortionPence: normalized.costPerPortionPence,
         sizes: {

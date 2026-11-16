@@ -51,6 +51,7 @@ export default async function DishPage(props: { params: Promise<{ productId: str
         <section className="card space-y-4 p-4">
           <h1 className="text-2xl font-semibold">{dish.product.name}</h1>
           <p className="font-semibold">{availabilityText}{portionText ? ` · ${portionText}` : ''}</p>
+          {dish.allowCustomAmount && dish.minimumAmountPence != null && <p>Any amount from {formatMoney(dish.minimumAmountPence, business.currency)}</p>}
           {sizes.length ? <>
             <h2 className="font-semibold">Sizes and prices</h2>
             <dl className="space-y-2">{sizes.map((size) => (
@@ -91,6 +92,8 @@ export default async function DishPage(props: { params: Promise<{ productId: str
     showOnline: dish.product.storefrontPublished,
     stockMode: dish.stockMode === 'COUNTED' ? 'COUNTED' : 'NOT_COUNTED',
     soldOut: dish.soldOut,
+    allowCustomAmount: dish.allowCustomAmount,
+    minimumAmountCedis: dish.minimumAmountPence == null ? '' : cedisInput(dish.minimumAmountPence),
     lowAt: dish.lowAt,
     recipe: JSON.parse(dish.recipeJson ?? '[]'),
     sizes: dish.sizes.map((size) => ({ recipe: JSON.parse(size.recipeJson ?? '[]'), name: size.name, priceCedis: cedisInput(size.pricePence), isDefault: size.isDefault })),
