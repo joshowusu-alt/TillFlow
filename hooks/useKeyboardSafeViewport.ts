@@ -6,12 +6,14 @@ type KeyboardSafeViewport = {
   keyboardOpen: boolean;
   bottomInset: number;
   viewportHeight: number;
+  viewportOffsetTop: number;
 };
 
 const DEFAULT_STATE: KeyboardSafeViewport = {
   keyboardOpen: false,
   bottomInset: 0,
   viewportHeight: 0,
+  viewportOffsetTop: 0,
 };
 
 function getViewportState(): KeyboardSafeViewport {
@@ -28,6 +30,7 @@ function getViewportState(): KeyboardSafeViewport {
     keyboardOpen,
     bottomInset: keyboardOpen ? bottomInset : 0,
     viewportHeight,
+    viewportOffsetTop,
   };
 }
 
