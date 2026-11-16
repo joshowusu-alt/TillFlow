@@ -76,7 +76,7 @@ it('asks before removing a screen and its buttons', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Keep' }));
   expect(screen.getByLabelText('Screen name')).toHaveValue('Stationery');
   fireEvent.click(screen.getByRole('button', { name: 'Remove screen' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Remove', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
   expect(screen.queryByLabelText('Screen name')).not.toBeInTheDocument();
   expect(savePosShortcutsAction).not.toHaveBeenCalled();
 });
