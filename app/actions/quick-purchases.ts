@@ -11,16 +11,15 @@ import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 import { decodePurchaseDocuments } from '@/lib/purchases/source-documents';
 import { purchaseDiscountBps } from '@/lib/purchases/discounts';
-import { quickCost, validQuickQuantity, type QuickPayment } from '@/lib/purchases/quick';
+import { quickCost, quickMoney, validQuickQuantity, type QuickCashSource, type QuickPayment } from '@/lib/purchases/quick';
 import { audit } from '@/lib/audit';
-import { businessCalendarToday, formatCalendarDate, readBatchDates } from '@/lib/inventory/batch-dates';
+import { readBatchDates } from '@/lib/inventory/batch-dates';
 
-const purchaseRoles = ['OWNER', 'MANAGER', 'CASHIER'] as const;
-const settingsRoles = ['OWNER', 'MANAGER'] as const;
+const purchaseRoles = ['OWNER', 'MANAGER'] as const;
 
 export async function setFoodPurchasePhotoRequired(required: boolean) {
   return safeAction(async () => {
-    const { businessId } = await withBusinessContext([...settingsRoles]);
+    const { businessId } = await withBusinessContext([...purchaseRoles]);
     const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId } });
     if (!isFoodBusiness(business.businessCategory) || typeof required !== 'boolean') return err('Setting unavailable.');
     await prisma.business.update({ where: { id: businessId }, data: { requirePurchasePhoto: required } });
@@ -54,7 +53,7 @@ export async function createQuickPurchaseProduct(input: { name: string; unitId: 
 }
 
 export async function saveQuickPurchase(input: {
-  storeId: string; payment: QuickPayment; supplierId: string; dueDate: string; purchaseDate: string;
+  storeId: string; payment: QuickPayment; supplierId: string; dueDate: string; cashSource: QuickCashSource | '';
   supplierInvoiceNumber: string; discount: string; additionalCost: string;
   document: string; tillId: string; key: string;
   rows: { productId: string; unitId: string; quantity: string; cost: string; expiry: string }[];
@@ -68,31 +67,53 @@ export async function saveQuickPurchase(input: {
     for (const row of input.rows) {
       if (!validQuickQuantity(row.quantity)) return err('Enter a whole number for how many you bought.');
       const unitCostPence = quickCost(row.cost);
-      if (!Number.isFinite(unitCostPence) || unitCostPence * Number(row.quantity) > 2147483647) return err('Enter a valid cost.');
+      if (!Number.isFinite(unitCostPence) || unitCostPence * Number(row.quantity) > 2147483647) {
+        const item = await prisma.product.findFirst({ where: { id: row.productId, businessId }, select: { name: true } });
+        return err('Add a cost for ' + (item?.name ?? 'this item'));
+      }
       const dates = readBatchDates('', row.expiry);
       if (!dates.ok) return err(dates.message);
       lines.push({ productId: row.productId, unitId: row.unitId, qtyInUnit: Number(row.quantity), unitCostPence, expiryDate: dates.dates.expiryDate });
     }
-    const additionalCostPence = input.additionalCost ? quickCost(input.additionalCost) : 0;
+    const additionalCostPence = input.additionalCost ? quickMoney(input.additionalCost) : 0;
     if (!Number.isSafeInteger(additionalCostPence)) return err('Enter a valid delivery or other cost.');
     const parseDate = (value: string) => {
       const parsed = readBatchDates('', value);
       return parsed.ok ? parsed.dates.expiryDate ?? undefined : undefined;
     };
     const dueDate = input.payment === 'Pay later' ? parseDate(input.dueDate) : undefined;
-    const purchaseDate = parseDate(input.purchaseDate);
-    const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { timezone: true } });
-    const today = formatCalendarDate(businessCalendarToday(new Date(), business.timezone));
-    if (input.purchaseDate && (!purchaseDate || input.purchaseDate > today)) return err('Choose a valid purchase date.');
     if (input.payment === 'Pay later' && input.dueDate && !dueDate) return err('Choose a valid date to pay.');
     const paidWith = input.payment === 'Cash' ? 'CASH' : input.payment === 'MoMo' ? 'TRANSFER' : undefined;
+    let cashSource: QuickCashSource | undefined;
+    let tillId: string | undefined;
+    if (paidWith === 'CASH') {
+      const openTills = await prisma.till.findMany({
+        where: { storeId, store: { businessId }, active: true, shifts: { some: { status: 'OPEN' } } },
+        select: { id: true },
+      });
+      if (openTills.length) {
+        tillId = openTills.find(till => till.id === input.tillId)?.id ??
+          (openTills.length === 1 ? openTills[0]?.id : undefined);
+        if (!tillId) return err('Choose which till you paid from');
+      } else {
+        if (input.cashSource !== 'OWNER_CAPITAL' && input.cashSource !== 'BUSINESS_CASH') {
+          return err('Choose where the cash came from');
+        }
+        cashSource = input.cashSource;
+        if (cashSource === 'OWNER_CAPITAL' && user.role !== 'OWNER') {
+          return err('Only the owner can record their own money here. Use the full purchase form for money paid by an owner.');
+        }
+      }
+    }
     const invoice = await createPurchase({
       businessId, storeId, userId: user.id, idempotencyKey: input.key,
-      quickPurchase: { paidWith, purchaseDate: input.purchaseDate === today ? undefined : purchaseDate },
+      quickPurchase: { paidWith },
       paymentStatus: paidWith ? 'PAID' : 'UNPAID', payments: [],
       supplierId: input.supplierId || undefined, supplierInvoiceNumber: input.supplierInvoiceNumber,
       dueDate, lines, additionalCostPence, discountBps: purchaseDiscountBps(input.discount),
-      tillId: paidWith === 'CASH' ? input.tillId : undefined,
+      tillId, cashSource,
+      cashHolderId: cashSource === 'BUSINESS_CASH' ? user.id : undefined,
+      fundingOwnerId: cashSource === 'OWNER_CAPITAL' ? user.id : undefined,
       sourceDocuments: decodePurchaseDocuments(input.document),
     });
     revalidatePosCatalog(businessId, storeId);
@@ -100,6 +121,6 @@ export async function saveQuickPurchase(input: {
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
     revalidatePath('/purchases');
-    return ok({ id: invoice.id as string, total: Number(invoice.totalPence) + additionalCostPence });
+    return ok({ id: invoice.id as string, total: Number(invoice.totalPence) + additionalCostPence, cashSource });
   });
 }

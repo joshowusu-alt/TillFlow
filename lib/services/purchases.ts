@@ -57,7 +57,7 @@ export type PurchaseLineInput = {
 };
 
 export type CreatePurchaseInput = {
-  quickPurchase?: { paidWith?: 'CASH' | 'TRANSFER'; purchaseDate?: Date };
+  quickPurchase?: { paidWith?: 'CASH' | 'TRANSFER' };
   discountBps?: number;
   receiptDocumentType?: 'INVOICE' | 'DELIVERY_NOTE';
   businessId: string;
@@ -553,7 +553,6 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         storeId: input.storeId,
         supplierId: input.supplierId ?? '',
         payments: allPayments,
-        quickPurchaseDates: input.quickPurchase ? [input.quickPurchase.purchaseDate?.toISOString() ?? '', input.dueDate?.toISOString() ?? ''] : undefined,
         documentHashes: sourceDocuments.map(document=>document.sha256),
         discountBps: input.discountBps, receiptDocumentType,
         supplierInvoiceNumber, additionalCostPence: additionalCost, additionalCostTreatment: costTreatment, additionalCostNote: input.additionalCostNote,
@@ -630,7 +629,6 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         vatPence: vatTotal,
         totalPence: total,
         transactionNumber,
-        ...(input.quickPurchase?.purchaseDate ? { createdAt: input.quickPurchase.purchaseDate } : {}),
         ...(sourceDocuments.length ? {documents:{create:sourceDocuments.map(document=>({...document,documentKind:receiptDocumentType,businessId:input.businessId,uploadedByUserId:input.userId??null}))}} : {}),
       }
     });

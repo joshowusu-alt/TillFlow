@@ -354,6 +354,7 @@ export default async function PurchasesPage(
               <p className="mt-4 text-sm text-amber-800">Select a store before recording a purchase.</p>
             ) : (
             <PurchaseFormClient
+              receiptPhotoRequired={isFoodBusiness(business.businessCategory) && business.requirePurchasePhoto}
               photoOptional={isFoodBusiness(business.businessCategory) && !business.requirePurchasePhoto}
               key={searchParams?.created ?? 'default'}
               storeId={selectedStoreId}

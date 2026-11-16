@@ -127,7 +127,6 @@ export function buildExpenseCreatePayloadHash(parts: {
 }
 
 export function buildPurchaseCreatePayloadHash(parts: {
-  quickPurchaseDates?: [string, string];
   discountBps?: number;
   receiptDocumentType?: string;
   businessId: string;
@@ -157,7 +156,6 @@ export function buildPurchaseCreatePayloadHash(parts: {
     ...(parts.documentHashes?.length ? [JSON.stringify(parts.documentHashes)] : []),
     ...(parts.discountBps || parts.lines.some(line => line.discountBps) || parts.receiptDocumentType === 'DELIVERY_NOTE' ? [JSON.stringify([parts.discountBps ?? 0, parts.lines.map(line => line.discountBps ?? 0), parts.receiptDocumentType ?? 'INVOICE'])] : []),
     ...(parts.supplierInvoiceNumber || parts.additionalCostPence ? [JSON.stringify([parts.supplierInvoiceNumber ?? null, parts.additionalCostPence ?? 0, parts.additionalCostTreatment ?? 'EXPENSE', parts.additionalCostNote?.trim() ?? ''])] : []),
-    ...(parts.quickPurchaseDates ? [JSON.stringify(parts.quickPurchaseDates)] : []),
     ...(dated ? [parts.lines.map((line) => `${formatCalendarDate(line.productionDate)}:${formatCalendarDate(line.expiryDate)}`).join('|')] : []),
   ]);
 }

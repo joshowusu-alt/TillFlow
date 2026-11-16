@@ -6,13 +6,13 @@ import { createPortal } from 'react-dom';
 import { createQuickPurchaseProduct, saveQuickPurchase } from '@/app/actions/quick-purchases';
 import { formatMoney } from '@/lib/format';
 import { purchaseDiscountBps } from '@/lib/purchases/discounts';
-import { quickCost, quickPurchaseProblem, quickPurchaseTotal, type QuickRow, type QuickPayment, type QuickProduct, type QuickUnit } from '@/lib/purchases/quick';
+import { QUICK_CASH_SOURCES, quickCost, quickMoney, quickPurchaseProblem, quickPurchaseTotal, type QuickCashSource, type QuickRow, type QuickPayment, type QuickProduct, type QuickUnit } from '@/lib/purchases/quick';
 import PurchasePhotoSwitch from './PurchasePhotoSwitch';
 
 type Choice = { id: string; name: string };
 type Props = {
   storeId: string; products: QuickProduct[]; suppliers: Choice[]; units: QuickUnit[]; tills: Choice[];
-  vatEnabled: boolean; photoRequired: boolean; canManage: boolean; today: string;
+  vatEnabled: boolean; photoRequired: boolean;
 };
 const emptyRow = (key: number): QuickRow => ({ key, unitId: '', quantity: '', cost: '', expiry: '' });
 
@@ -104,7 +104,7 @@ export default function QuickPurchaseForm(props: Props) {
   const [photo, setPhoto] = useState<File>();
   const photoAttempt = useRef(0);
   const [fileError, setFileError] = useState('');
-  const [purchaseDate, setPurchaseDate] = useState(props.today);
+  const [cashSource, setCashSource] = useState<QuickCashSource | ''>('');
   const [dueDate, setDueDate] = useState('');
   const [invoice, setInvoice] = useState('');
   const [discount, setDiscount] = useState('');
@@ -113,7 +113,7 @@ export default function QuickPurchaseForm(props: Props) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const requestKey = useRef('');
-  const [result, setResult] = useState<{ id: string; total: number }>();
+  const [result, setResult] = useState<{ id: string; total: number; cashSource?: QuickCashSource }>();
   const [newItem, setNewItem] = useState<{ row: number; name: string; unitId: string; ingredient: boolean; sellingPrice: string }>();
   const [itemError, setItemError] = useState('');
   const [creating, setCreating] = useState(false);
@@ -128,12 +128,12 @@ export default function QuickPurchaseForm(props: Props) {
   try { total = quickPurchaseTotal(rows, discountBps, props.vatEnabled); } catch {
     if (!baseProblem) pricingProblem = { id: 'item-' + rows[0].key, message: 'Check the purchase amounts' };
   }
-  const extra = additionalCost ? quickCost(additionalCost) : 0;
+  const extra = additionalCost ? quickMoney(additionalCost) : 0;
   if (!Number.isSafeInteger(extra) || extra > 2147483647) pricingProblem ??= { id: 'quick-delivery', message: 'Enter a valid delivery or other cost' };
   else total += extra;
-  const cashProblem = payment === 'Cash' && total > 0 && !till
-    ? { id: 'quick-till', message: props.tills.length ? 'Choose which till you paid from' : 'Open a till to record a cash purchase' }
-    : undefined;
+  const cashProblem = payment !== 'Cash' ? undefined : props.tills.length
+    ? (!till ? { id: 'quick-till', message: 'Choose which till you paid from' } : undefined)
+    : (!cashSource ? { id: 'quick-cash-source', message: 'Choose where the cash came from' } : undefined);
   const problem = baseProblem ?? pricingProblem ?? cashProblem;
   const inputClass = (id: string) => 'input text-base' + (problemId === id && problem?.id === id ? ' ring-2 ring-red-500' : '');
   const changeRow = (key: number, changes: Partial<QuickRow>) => setRows(current => current.map(row => row.key === key ? { ...row, ...changes } : row));
@@ -143,7 +143,15 @@ export default function QuickPurchaseForm(props: Props) {
   };
   const chooseProduct = (key: number, product: QuickProduct) => {
     const unit = product.units.find(unit => unit.id === product.lastUnitId) ?? product.units.find(unit => unit.isBaseUnit) ?? product.units[0];
-    chooseUnit(key, product, unit?.id ?? '');
+    const unitId = unit?.id ?? '';
+    const lastCost = product.lastCosts?.[unitId];
+    const newRow = emptyRow(nextKey.current++);
+    setRows(current => {
+      const updated = current.map(row => row.key === key ? {
+        ...row, product, unitId, cost: lastCost === undefined ? '' : (lastCost / 100).toFixed(2),
+      } : row);
+      return current.at(-1)?.key === key && current.length < 151 ? [...updated, newRow] : updated;
+    });
   };
   const highlight = ({ id, message }: { id: string; message: string }) => {
     setProblemId(id);
@@ -175,7 +183,7 @@ export default function QuickPurchaseForm(props: Props) {
       }
       const saved = await saveQuickPurchase({
         storeId: props.storeId, supplierId: supplier, tillId: till, payment,
-        supplierInvoiceNumber: invoice, dueDate, purchaseDate,
+        supplierInvoiceNumber: invoice, dueDate, cashSource,
         discount, additionalCost, document, key: requestKey.current,
         rows: selected.map(row => ({ productId: row.product!.id, unitId: row.unitId, quantity: row.quantity, cost: row.cost, expiry: row.expiry })),
       });
@@ -202,7 +210,7 @@ export default function QuickPurchaseForm(props: Props) {
     setFileError('');
     setInvoice('');
     setDueDate('');
-    setPurchaseDate(props.today);
+    setCashSource('');
     setDiscount('');
     setAdditionalCost('');
     requestKey.current = '';
@@ -217,11 +225,11 @@ export default function QuickPurchaseForm(props: Props) {
   if (result) return <section className="card space-y-4 p-5">
     <h1 className="text-2xl font-semibold">Purchase saved</h1>
     <p className="text-xl font-semibold">{formatMoney(result.total)}</p>
-    <p>{payment === 'Pay later' ? 'Pay later' : 'Paid by ' + payment}</p>
+    <p>{payment === 'Pay later' ? 'Pay later' : 'Paid by ' + payment + (result.cashSource ? ' · from ' + QUICK_CASH_SOURCES[result.cashSource].toLowerCase() : '')}</p>
     <p>Stock updated: {selected.map(row => row.product!.name + ' +' + row.quantity).join(', ')}</p>
     <div className="flex flex-wrap gap-3">
       <button type="button" className="btn-primary" onClick={recordAnother}>Record another</button>
-      {props.canManage && <Link className="btn-secondary" href={'/purchases/' + result.id}>View purchase</Link>}
+      <Link className="btn-secondary" href={'/purchases/' + result.id}>View purchase</Link>
     </div>
   </section>;
 
@@ -257,10 +265,10 @@ export default function QuickPurchaseForm(props: Props) {
     <fieldset disabled={busy} className="min-w-0 space-y-4">
     <header className="flex items-start justify-between gap-3">
       <div><h1 className="text-2xl font-semibold">Record purchase</h1><p className="mt-1 text-black/65">What did you buy?</p></div>
-      {props.canManage && <details className="relative">
+      <details className="relative">
         <summary className="cursor-pointer py-2 text-sm underline">Settings</summary>
         <div className="card absolute right-0 z-20 w-[min(17rem,85vw)] bg-white p-4"><PurchasePhotoSwitch required={photoRequired} onChange={setPhotoRequired} /></div>
-      </details>}
+      </details>
     </header>
 
     {rows.map(row => {
@@ -314,7 +322,17 @@ export default function QuickPurchaseForm(props: Props) {
           <select className="input text-base" value={till} onChange={event => setTill(event.target.value)}>
             <option value="">Choose till</option>{props.tills.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
           </select>
-        </label> : <p className="text-sm">Open a till first if you paid from the till.</p>}
+        </label> : <fieldset id="quick-cash-source" tabIndex={-1}
+          className={problemId === 'quick-cash-source' && !cashSource ? 'rounded-lg ring-2 ring-red-500' : ''}>
+          <legend className="mb-2 font-medium">Where did the cash come from?</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.keys(QUICK_CASH_SOURCES) as QuickCashSource[]).map(source => (
+              <button key={source} type="button" aria-pressed={cashSource === source}
+                className={cashSource === source ? 'btn-primary justify-center' : 'btn-secondary justify-center'}
+                onClick={() => setCashSource(source)}>{QUICK_CASH_SOURCES[source]}</button>
+            ))}
+          </div>
+        </fieldset>}
       </div>}
     </fieldset>
 
@@ -328,7 +346,6 @@ export default function QuickPurchaseForm(props: Props) {
         {!photoRequired && photoField}
         {payment !== 'Pay later' && supplierField}
         <label className="block">Supplier invoice number<input className="input text-base" maxLength={100} value={invoice} onChange={event => setInvoice(event.target.value)} /></label>
-        <label className="block">Purchase date<input className="input text-base" type="date" max={props.today} value={purchaseDate} onChange={event => setPurchaseDate(event.target.value)} /></label>
         {selected.map(row => <label key={row.key} className="block">Expiry date for {row.product!.name}<input className="input text-base" type="date" value={row.expiry} onChange={event => changeRow(row.key, { expiry: event.target.value })} /></label>)}
         <label className="block">Invoice discount (%)<input id="quick-discount" className={inputClass('quick-discount')} inputMode="decimal" value={discount} onChange={event => setDiscount(event.target.value)} /></label>
         <label className="block">Delivery or other costs (GH₵)<input id="quick-delivery" className={inputClass('quick-delivery')} inputMode="decimal" value={additionalCost} onChange={event => setAdditionalCost(event.target.value)} /></label>
@@ -338,7 +355,7 @@ export default function QuickPurchaseForm(props: Props) {
     <SaveBar>
       <p className="font-semibold">{selected.length} {selected.length === 1 ? 'item' : 'items'} · {formatMoney(total)}</p>
       <button type="button" className="btn-primary min-h-12 grow justify-center sm:grow-0" onClick={save} disabled={busy || Boolean(newItem)}>
-        {busy ? 'Saving…' : problem && selected.length ? problem.message : 'Save purchase'}
+        {busy ? 'Saving…' : problem?.message ?? 'Save purchase'}
       </button>
       {error && (!problemId || (problemId === problem?.id && !selected.length)) && <p className="w-full text-sm font-medium text-red-700" role="alert">{error}</p>}
     </SaveBar>

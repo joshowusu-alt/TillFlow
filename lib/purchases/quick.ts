@@ -14,8 +14,18 @@ export type QuickProduct = {
 export type QuickRow = { key: number; product?: QuickProduct; unitId: string; quantity: string; cost: string; expiry: string };
 export type QuickPayment = 'Cash' | 'MoMo' | 'Pay later';
 
-export function quickCost(value: string) {
+export const QUICK_CASH_SOURCES = {
+  OWNER_CAPITAL: 'My own money',
+  BUSINESS_CASH: 'Business cash',
+} as const;
+export type QuickCashSource = keyof typeof QUICK_CASH_SOURCES;
+
+export function quickMoney(value: string) {
   return /^\d+(?:\.\d{1,2})?$/.test(value.trim()) ? Math.round(Number(value) * 100) : NaN;
+}
+export function quickCost(value: string) {
+  const cost = quickMoney(value);
+  return cost > 0 ? cost : NaN;
 }
 export function validQuickQuantity(value: string) {
   return /^\d+$/.test(value.trim()) && Number(value) > 0 && Number(value) <= 2147483647;

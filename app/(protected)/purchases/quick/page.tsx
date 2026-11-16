@@ -4,15 +4,15 @@ import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { isFoodBusiness } from '@/lib/food/business';
 import { prisma } from '@/lib/prisma';
 import { listSelectableUnits } from '@/lib/units/list-selectable-units';
-import { businessCalendarToday, formatCalendarDate } from '@/lib/inventory/batch-dates';
+import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
 import type { QuickProduct } from '@/lib/purchases/quick';
 import QuickPurchaseForm from './QuickPurchaseForm';
 
 export default async function QuickPurchasePage() {
-  const { business, store, user, stores } = await requireBusinessAndOptionalStore(['OWNER', 'MANAGER', 'CASHIER']);
+  const { business, store, stores } = await requireBusinessAndOptionalStore(['OWNER', 'MANAGER']);
   if (!business || !isFoodBusiness(business.businessCategory)) redirect('/purchases');
-  const selected = store ?? (stores.length === 1 ? stores[0] : undefined);
-  if (!selected) return <p>Choose a store before recording a purchase.</p>;
+  const storeId = store?.id ?? resolveSoleOrSelectedStoreId(stores);
+  if (!storeId) return <p>Choose a branch at the top before recording a purchase.</p>;
 
   const [catalogue, suppliers, units, history, tills] = await Promise.all([
     prisma.product.findMany({
@@ -31,7 +31,7 @@ export default async function QuickPurchasePage() {
       select: { productId: true, unitId: true, unitCostPence: true },
     }),
     prisma.till.findMany({
-      where: { active: true, storeId: selected.id, shifts: { some: { status: 'OPEN' } } },
+      where: { active: true, storeId: storeId, shifts: { some: { status: 'OPEN' } } },
       select: { id: true, name: true }, orderBy: { name: 'asc' },
     }),
   ]);
@@ -48,9 +48,8 @@ export default async function QuickPurchasePage() {
   }));
 
   return <main className="mx-auto max-w-xl pb-40">
-    <QuickPurchaseForm storeId={selected.id} products={products} suppliers={suppliers} units={units} tills={tills}
-      vatEnabled={business.vatEnabled} photoRequired={business.requirePurchasePhoto} canManage={user.role !== 'CASHIER'}
-      today={formatCalendarDate(businessCalendarToday(new Date(), business.timezone))} />
-    {user.role !== 'CASHIER' && <Link className="mt-6 inline-block text-sm underline" href={'/purchases?full=1&storeId=' + encodeURIComponent(selected.id) + '#record-purchase-form'}>Use full purchase form</Link>}
+    <QuickPurchaseForm storeId={storeId} products={products} suppliers={suppliers} units={units} tills={tills}
+      vatEnabled={business.vatEnabled} photoRequired={business.requirePurchasePhoto} />
+    <Link className="mt-6 inline-block text-sm underline" href={'/purchases?full=1&storeId=' + encodeURIComponent(storeId) + '#record-purchase-form'}>Use full purchase form</Link>
   </main>;
 }

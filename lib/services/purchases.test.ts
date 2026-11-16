@@ -8,7 +8,8 @@ const { prismaMock, postJournalEntryMock, ensureChartOfAccountsMock, recordCashD
     supplier: { findFirst: vi.fn() },
     product: { findFirst: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
     productUnit: { findMany: vi.fn() },
-    account: { findMany: vi.fn() },
+    account: { findMany: vi.fn(), upsert: vi.fn() },
+    journalLine: { aggregate: vi.fn() },
     purchaseInvoice: { create: vi.fn(), findFirst: vi.fn() },
     purchaseInvoiceLine: { createMany: vi.fn() },
     purchasePayment: { create: vi.fn() },
@@ -128,6 +129,35 @@ describe('purchase unit conversion', () => {
       where: expect.objectContaining({ businessId: bizId, foodDish: { is: null } }),
     }));
     expect(prismaMock.purchaseInvoice.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['OWNER_CAPITAL', '3100.OWNER.user-1'],
+    ['BUSINESS_CASH', '1000.HOLD.store-1.user-1'],
+  ] as const)('posts %s without a till payout and combines duplicate-item stock', async (cashSource, accountCode) => {
+    prismaMock.business.findUnique.mockResolvedValue({ id: bizId, businessCategory: 'FOOD_DISHES', vatEnabled: false });
+    prismaMock.product.findMany.mockResolvedValue([{ id: 'bread' }]);
+    prismaMock.productUnit.findMany.mockResolvedValue([{ productId: 'bread', unitId: 'piece', conversionToBase: 1,
+      product: { name: 'Bread', defaultCostBasePence: 100, vatRateBps: 0 }, unit: { name: 'Piece' } }]);
+    prismaMock.account.findMany.mockResolvedValue([...defaultAccounts, { code: accountCode, id: 'funding' }]);
+    prismaMock.journalLine.aggregate.mockResolvedValue({ _sum: { debitPence: 5000, creditPence: 0 } });
+    await createPurchase({
+      businessId: bizId, storeId, userId, paymentStatus: 'PAID', payments: [],
+      idempotencyKey: 'duplicate-bread-funded', quickPurchase: { paidWith: 'CASH' },
+      cashSource, cashHolderId: userId, fundingOwnerId: userId,
+      lines: [
+        { productId: 'bread', unitId: 'piece', qtyInUnit: 3, unitCostPence: 500 },
+        { productId: 'bread', unitId: 'piece', qtyInUnit: 2, unitCostPence: 1000 },
+      ],
+    });
+    expect(postJournalEntryMock).toHaveBeenCalledWith(expect.objectContaining({ lines: [
+      { accountCode: '1200', debitPence: 3500 }, { accountCode, creditPence: 3500 },
+    ] }));
+    expect(prismaMock.inventoryBalance.upsert).toHaveBeenCalledTimes(1);
+    expect(prismaMock.inventoryBalance.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ productId: 'bread', qtyOnHandBase: 5, avgCostBasePence: 700 }),
+    }));
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
   });
 
   it('requires a source invoice before posting purchase stock or payments',async()=>{

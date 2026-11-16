@@ -14,8 +14,8 @@ const tea = { id: 'tea', name: 'Tea bread', vatRateBps: 0, units: [piece] };
 const sugar = { id: 'sugar', name: 'Sugar bread', vatRateBps: 0, units: [piece] };
 const props = {
   storeId: 'store', products: [tea, sugar], units: [piece], tills: [{ id: 'till', name: 'Main till' }],
-  suppliers: [{ id: 'supplier', name: 'Bread supplier' }], today: '2026-11-16',
-  vatEnabled: false, photoRequired: false, canManage: true,
+  suppliers: [{ id: 'supplier', name: 'Bread supplier' }],
+  vatEnabled: false, photoRequired: false,
 };
 function pick(name: string, row = 0) {
   fireEvent.focus(screen.getAllByLabelText('Item')[row]);
@@ -28,17 +28,18 @@ function fill(qty: string, cost: string, row = 0) {
 
 describe('food quick purchases', () => {
   it('validates incomplete rows, sends two complete items and ignores an empty row', async () => {
-    vi.mocked(saveQuickPurchase).mockResolvedValue({ success: true, data: { id: 'purchase', total: 5500 } });
+    vi.mocked(saveQuickPurchase).mockResolvedValue({ success: true, data: { id: 'purchase', total: 5500, cashSource: undefined } });
     render(<QuickPurchaseForm {...props} />);
+    expect(screen.getByRole('button', { name: 'Choose an item you bought' })).toBeEnabled();
     pick('Tea bread');
+    expect(screen.getAllByLabelText('Item')).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Add how many for Tea bread' })).toBeEnabled();
-    fill('3', '');
+    fill('3', '0');
     const missing = screen.getByRole('button', { name: 'Add a cost for Tea bread' });
     fireEvent.click(missing);
     expect(screen.getByLabelText('Cost each (GH₵)')).toHaveFocus();
     expect(saveQuickPurchase).not.toHaveBeenCalled();
     fill('3', '5');
-    fireEvent.click(screen.getByRole('button', { name: '+ Add another item' }));
     pick('Sugar bread', 1);
     fill('4', '10', 1);
     fireEvent.click(screen.getByRole('button', { name: '+ Add another item' }));
@@ -55,15 +56,30 @@ describe('food quick purchases', () => {
     }));
   });
 
-  it('requires a supplier only when paying later and hides the photo switch for cashiers', () => {
-    render(<QuickPurchaseForm {...props} canManage={false} photoRequired />);
-    expect(screen.queryByText('Settings')).not.toBeInTheDocument();
+  it('requires a supplier only when paying later', () => {
+    render(<QuickPurchaseForm {...props} photoRequired />);
     pick('Tea bread');
     fill('3', '5');
     fireEvent.click(screen.getByRole('button', { name: 'Pay later' }));
     expect(screen.getByRole('button', { name: "Choose who you're paying later" })).toBeEnabled();
     fireEvent.change(screen.getByLabelText('Supplier'), { target: { value: 'supplier' } });
     expect(screen.getByRole('button', { name: 'Add a photo of the receipt' })).toBeEnabled();
+  });
+
+  it.each([
+    ['My own money', 'OWNER_CAPITAL', 'my own money'],
+    ['Business cash', 'BUSINESS_CASH', 'business cash'],
+  ] as const)('explains the selected cash source %s when no till is open', async (label, cashSource, summary) => {
+    vi.mocked(saveQuickPurchase).mockResolvedValue({ success: true, data: { id: 'purchase', total: 1500, cashSource } });
+    render(<QuickPurchaseForm {...props} tills={[]} />);
+    pick('Tea bread');
+    fill('3', '5');
+    expect(screen.getByRole('button', { name: 'Choose where the cash came from' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: label })).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save purchase' }));
+    expect(await screen.findByText('Paid by Cash · from ' + summary)).toBeVisible();
+    expect(saveQuickPurchase).toHaveBeenLastCalledWith(expect.objectContaining({ cashSource, tillId: '' }));
   });
 
   it('opens the photo requirement panel and updates the form when the owner enables it', async () => {
