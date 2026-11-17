@@ -175,13 +175,13 @@ export default async function SalesPage(
           {totalPages > 1 ? ' · Amount on this page' : ''}
         </p>
       </div>
-      <nav aria-label="Sales date range" className="flex max-w-full gap-2 overflow-x-auto pb-1 lg:hidden">
+      <nav aria-label="Sales date range" className="flex max-w-full flex-wrap gap-1.5 lg:hidden">
         {presets.map(({ label, from, to }) => {
           const query = new URLSearchParams({ from, to });
           if (q) query.set('q', q);
           if (selectedStoreId !== 'ALL') query.set('storeId', selectedStoreId);
           return <a key={label} href={`/sales?${query}`} aria-current={label === activePreset?.label ? 'true' : undefined}
-            className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-3 text-sm font-semibold ${label === activePreset?.label ? 'border-accent bg-accent text-white' : 'border-slate-200 bg-white text-ink'}`}>{label}</a>;
+            className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-2 text-xs font-semibold sm:px-3 sm:text-sm ${label === activePreset?.label ? 'border-accent bg-accent text-white' : 'border-slate-200 bg-white text-ink'}`}>{label}</a>;
         })}
       </nav>
 

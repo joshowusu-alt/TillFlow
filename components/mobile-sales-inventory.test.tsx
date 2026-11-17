@@ -52,7 +52,8 @@ it('puts search before the compact stock tiles and leaves card details closed', 
   const tiles = screen.getByLabelText('Stock summary');
   expect(search.compareDocumentPosition(tiles) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(within(tiles).getByText('Needs a look')).toHaveClass('lg:hidden');
-  expect(within(tiles).getAllByText('On this page').every(node => node.classList.contains('hidden'))).toBe(true);
+  expect(within(tiles).getAllByText('On this page')).toHaveLength(3);
+  expect(within(tiles).getByText('In catalogue')).toBeVisible();
   const cards = [...container.querySelectorAll('details')].filter(detail => detail.querySelector('summary')?.textContent === 'Details');
   expect(cards).toHaveLength(3);
   expect(cards.every(card => !card.open)).toBe(true);

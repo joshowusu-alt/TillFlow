@@ -160,22 +160,22 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
         <div className="rounded-2xl border border-black/5 bg-white px-3 py-2 shadow-card lg:px-4 lg:py-3">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Products</div>
           <div className="mt-1 text-xl font-bold tabular-nums lg:mt-2 lg:text-2xl text-ink">{totalCount}</div>
-          <div className="mt-1 hidden text-xs text-black/50 lg:block">Active in catalogue</div>
+          <div className="mt-0.5 text-[11px] leading-tight text-black/50 lg:mt-1 lg:text-xs"><span className="hidden lg:inline">Active </span><span className="lg:hidden">In catalogue</span><span className="hidden lg:inline">in catalogue</span></div>
         </div>
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 shadow-card lg:px-4 lg:py-3">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700/70">Low stock</div>
           <div className="mt-1 text-xl font-bold tabular-nums lg:mt-2 lg:text-2xl text-amber-800">{lowStockCount}</div>
-          <div className="mt-1 hidden text-xs text-amber-600/70 lg:block">On this page</div>
+          <div className="mt-0.5 text-[11px] leading-tight text-amber-800 lg:mt-1 lg:text-xs lg:text-amber-600/70">On this page</div>
         </div>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 shadow-card lg:px-4 lg:py-3">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-700/70">Out of stock</div>
           <div className="mt-1 text-xl font-bold tabular-nums lg:mt-2 lg:text-2xl text-rose-700">{outOfStockCount}</div>
-          <div className="mt-1 hidden text-xs text-rose-600/70 lg:block">On this page</div>
+          <div className="mt-0.5 text-[11px] leading-tight text-rose-800 lg:mt-1 lg:text-xs lg:text-rose-600/70">On this page</div>
         </div>
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 shadow-card lg:px-4 lg:py-3">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700/70"><span className="lg:hidden">Needs a look</span><span className="hidden lg:inline">Cost drift</span></div>
           <div className="mt-1 text-xl font-bold tabular-nums lg:mt-2 lg:text-2xl text-sky-800">{costDriftCount}</div>
-          <div className="mt-1 hidden text-xs text-sky-600/70 lg:block">Avg cost differs on this page</div>
+          <div className="mt-0.5 text-[11px] leading-tight text-sky-800 lg:mt-1 lg:text-xs lg:text-sky-600/70"><span className="lg:hidden">On this page</span><span className="hidden lg:inline">Avg cost differs on this page</span></div>
         </div>
       </div>
 
