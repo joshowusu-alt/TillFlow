@@ -60,6 +60,7 @@ type ReceiptClientProps = {
     displayDiscountPence: number;
   }[];
   canReturn?: boolean;
+  mobileSaleActions?: React.ReactNode;
   deletePreview?: { mixedTender: boolean; refund: string | null } | null;
   deletedLabel?: string | null;
   isReturned?: boolean;
@@ -75,6 +76,7 @@ export default function ReceiptClient({
   lines,
   payments,
   canReturn = false,
+  mobileSaleActions,
   deletePreview,
   deletedLabel,
   isReturned = false,
@@ -234,6 +236,7 @@ export default function ReceiptClient({
               Return Sale
             </a>
           ) : null}
+          {mobileSaleActions && <div className="flex flex-wrap gap-2 lg:hidden">{mobileSaleActions}</div>}
           {deletePreview && <DeleteFoodSaleButton invoiceId={invoice.id} preview={deletePreview} />}
           <button
             type="button"

@@ -140,42 +140,56 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
   const costDriftCount = inventoryRows.filter((row) => row.hasCostDrift).length;
   const healthyCount = Math.max(0, inventoryRows.filter((row) => !row.dish).length - outOfStockCount - lowStockCount);
 
+  const stockOrder = (row: typeof inventoryRows[number]) => row.isOut ? 0 : row.isLow ? 1 : 2;
+  const mobileRows = [...inventoryRows].sort((left, right) => stockOrder(left) - stockOrder(right));
+
   return (
     <div className="space-y-4 sm:space-y-5">
       <PageHeader
         title="Inventory"
+        compact
         subtitle={food ? "Check dish availability, ingredients, and items you resell." : "See what is in stock, what is running low, and what needs attention."}
-        actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
+        actions={<RefreshIndicator compact fetchedAt={new Date().toISOString()} />}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-card">
+      <div className="grid items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="w-full lg:col-start-1 lg:row-start-2 lg:max-w-xl">
+        <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
+      </div>
+      <div aria-label="Stock summary" className="grid grid-cols-2 gap-2 lg:col-span-2 lg:row-start-1 lg:gap-3 xl:grid-cols-4">
+        <div className="rounded-2xl border border-black/5 bg-white px-3 py-2 shadow-card lg:px-4 lg:py-3">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Products</div>
-          <div className="mt-2 text-2xl font-bold tabular-nums text-ink">{totalCount}</div>
-          <div className="mt-1 text-xs text-black/50">Active in catalogue</div>
+          <div className="mt-1 text-xl font-bold tabular-nums lg:mt-2 lg:text-2xl text-ink">{totalCount}</div>
+          <div className="mt-1 hidden text-xs text-black/50 lg:block">Active in catalogue</div>
         </div>
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-card">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 shadow-card lg:px-4 lg:py-3">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700/70">Low stock</div>
-          <div className="mt-2 text-2xl font-bold tabular-nums text-amber-800">{lowStockCount}</div>
-          <div className="mt-1 text-xs text-amber-600/70">On this page</div>
+          <div className="mt-1 text-xl font-bold tabular-nums lg:mt-2 lg:text-2xl text-amber-800">{lowStockCount}</div>
+          <div className="mt-1 hidden text-xs text-amber-600/70 lg:block">On this page</div>
         </div>
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 shadow-card">
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 shadow-card lg:px-4 lg:py-3">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-700/70">Out of stock</div>
-          <div className="mt-2 text-2xl font-bold tabular-nums text-rose-700">{outOfStockCount}</div>
-          <div className="mt-1 text-xs text-rose-600/70">On this page</div>
+          <div className="mt-1 text-xl font-bold tabular-nums lg:mt-2 lg:text-2xl text-rose-700">{outOfStockCount}</div>
+          <div className="mt-1 hidden text-xs text-rose-600/70 lg:block">On this page</div>
         </div>
-        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 shadow-card">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700/70">Cost drift</div>
-          <div className="mt-2 text-2xl font-bold tabular-nums text-sky-800">{costDriftCount}</div>
-          <div className="mt-1 text-xs text-sky-600/70">Avg cost differs on this page</div>
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 shadow-card lg:px-4 lg:py-3">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700/70"><span className="lg:hidden">Needs a look</span><span className="hidden lg:inline">Cost drift</span></div>
+          <div className="mt-1 text-xl font-bold tabular-nums lg:mt-2 lg:text-2xl text-sky-800">{costDriftCount}</div>
+          <div className="mt-1 hidden text-xs text-sky-600/70 lg:block">Avg cost differs on this page</div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="w-full max-w-xl">
-          <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row lg:flex-shrink-0">
+      <div className="flex gap-2 lg:hidden">
+        <Link className="btn-primary min-h-11 flex-1 text-center" href="/inventory/stocktake">Stocktake</Link>
+        <details className="relative">
+          <summary className="btn-secondary min-h-11 cursor-pointer list-none [&::-webkit-details-marker]:hidden">More</summary>
+          <div className="absolute right-0 z-10 mt-1 grid w-max max-w-[75vw] rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+            <Link className="btn-ghost min-h-11 justify-start" href="/inventory/adjustments">Record adjustment</Link>
+            <Link className="btn-ghost min-h-11 justify-start" href="/inventory/conversions">Convert stock</Link>
+          </div>
+        </details>
+      </div>
+      <div className="hidden gap-2 lg:col-start-2 lg:row-start-2 lg:flex">
           <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/inventory/conversions">
             Convert stock
           </Link>
@@ -192,14 +206,17 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-display font-semibold">Current stock</h2>
-            <p className="mt-1 text-sm text-black/55">
+            <p className="mt-1 text-sm text-black/55 lg:hidden">
+              {healthyCount} in stock · {lowStockCount} low · {outOfStockCount} out{food ? ` · ${soldOutDishes} dishes sold out` : null}
+            </p>
+            <p className="mt-1 hidden text-sm text-black/55 lg:block">
               {healthyCount} healthy · {lowStockCount} low · {outOfStockCount} out of stock · {costDriftCount} with cost drift{food ? ` · ${soldOutDishes} dishes sold out` : null}
             </p>
           </div>
         </div>
 
         {costDriftCount > 0 ? (
-          <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <div className="mb-4 hidden rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 lg:block">
             <p className="font-semibold">Some average costs differ from the current product default.</p>
             <p className="mt-1 text-sky-800">
               This can be normal with weighted-average costing. The average cost is rounded for display; confirmed stock value keeps the exact amount. Missing costs remain incomplete until reviewed.
@@ -207,12 +224,17 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
           </div>
         ) : null}
 
+        {costDriftCount > 0 && <details className="mb-4 rounded-xl border border-slate-200 px-3 text-sm text-slate-700 lg:hidden">
+          <summary className="min-h-11 cursor-pointer py-3 font-medium">Why do some costs differ?</summary>
+          <p className="pb-3">The average cost comes from what you actually paid for stock, so it can differ from the product&apos;s default cost. Stock value uses the exact amounts.</p>
+        </details>}
+
         {/* Mobile cards */}
         <div className="space-y-3 lg:hidden">
           {inventoryRows.length === 0 ? (
             <InventoryEmptyState q={q} totalCount={totalCount} />
           ) : (
-            inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, stockValue, hasCostDrift, isLow, isOut, dish, status }) => (
+            mobileRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, stockValue, hasCostDrift, isLow, isOut, dish, status }) => (
               <div
                 key={product.id}
                 className={`rounded-2xl border px-4 py-4 shadow-sm transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100 ${isOut ? 'border-rose-200 bg-rose-50' : isLow ? 'border-amber-200 bg-amber-50' : 'border-black/5 bg-white'}`}
@@ -220,17 +242,20 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-semibold text-ink">{dish ? <Link className="underline" href={dishSettingsHref(product.id)}>{product.name}</Link> : [product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}</div>
-                    <div className="mt-1 text-sm text-black/60">{dish ? null : "On hand: "}<span className="font-semibold text-black/75">{formatted}</span></div>
+                    {formatted && <p className="mt-1 text-xl font-bold text-ink">{formatted}</p>}
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isOut ? 'bg-rose-100 text-rose-700' : isLow ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
                     {status}
                   </span>
                 </div>
-                {!dish && <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                {!dish && <>
+                <p className="mt-2 text-sm text-slate-600">Stock value: {stockValue == null ? 'Cost review needed' : formatMoney(stockValue, business.currency)}</p>
+                <details className="mt-2 border-t border-black/10">
+                  <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-primary">Details</summary>
+                  <div className="grid grid-cols-2 gap-3 pb-3 text-sm">
                   <div>
                     <div className="text-xs uppercase tracking-[0.16em] text-black/40">Avg cost</div>
                     <div className="mt-1 font-semibold text-ink">{formatMoney(avgCostBase, business.currency)}</div>
-                    <div className="mt-1 text-xs text-black/60">Stock value: {stockValue == null ? 'Incomplete — cost review needed' : formatMoney(stockValue, business.currency)}</div>
                     {hasCostDrift ? (
                       <div className="mt-1 text-xs font-medium text-sky-700">
                         Default cost is {formatMoney(product.defaultCostBasePence, business.currency)}
@@ -247,12 +272,9 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
                       {packaging ? `${packaging.unit.name} (${packaging.conversionToBase} base)` : 'No pack/carton unit set'}
                     </div>
                   </div>
-                  {hasCostDrift ? (
-                    <div className="col-span-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-                      Average cost reflects stock receipts and can differ from the current default cost.
-                    </div>
-                  ) : null}
-                </div>}
+                  </div>
+                </details>
+                </>}
               </div>
             ))
           )}

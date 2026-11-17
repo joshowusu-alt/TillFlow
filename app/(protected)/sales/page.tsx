@@ -12,10 +12,25 @@ import { requireBusiness } from '@/lib/auth';
 import { formatMoney, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { rowsForListPage } from '@/lib/pagination';
 import { getBusinessStores } from '@/lib/services/stores';
-import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
+import { formatBusinessLocalDateKey, resolveBusinessTimeZone } from '@/lib/notifications/utils';
 import { localDateInstant } from '@/lib/reports/reporting-clock';
-import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { MomoPendingQualification } from '@/components/MomoPendingQualification';
+
+const paymentLabels: Record<string, string> = { CASH: 'Cash', MOBILE_MONEY: 'MoMo', CARD: 'Card', TRANSFER: 'Transfer' };
+const statusLabels: Record<string, string> = { PAID: 'Paid', PART_PAID: 'Part paid', UNPAID: 'Unpaid' };
+
+function quickDates(today: string) {
+  const date = new Date(today + 'T00:00:00Z');
+  const daysAgo = (days: number) => new Date(date.getTime() - days * 86_400_000).toISOString().slice(0, 10);
+  const yesterday = daysAgo(1);
+  return [
+    { label: 'Today', from: today, to: today },
+    { label: 'Yesterday', from: yesterday, to: yesterday },
+    { label: 'This week', from: daysAgo((date.getUTCDay() + 6) % 7), to: today },
+    { label: 'This month', from: today.slice(0, 7) + '-01', to: today },
+    { label: 'All', from: '', to: '' },
+  ];
+}
 
 export default async function SalesPage(
   props: {
@@ -102,18 +117,77 @@ export default async function SalesPage(
     </p>);
   }
 
+  const presets = quickDates(todayIso);
+  const activePreset = presets.find(({ from, to }) => from === fromParam && to === toParam);
+  const pageTotal = sales.reduce((total, sale) =>
+    total + (sale.salesReturn || ['VOID', 'RETURNED'].includes(sale.paymentStatus) ? 0 : sale.totalPence), 0);
+  const filters = (prefix: string) => (
+        <div className="mt-2 rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-4 shadow-sm">
+          <form method="GET" className="grid grid-cols-2 items-end gap-3 lg:flex lg:flex-wrap">
+            {stores.length > 1 && <div className="col-span-2">
+              <label className="label" htmlFor={prefix + "-storeId"}>Branch</label>
+              <select className="input" id={prefix + "-storeId"} name="storeId" defaultValue={selectedStoreId}>
+                <option value="ALL">All branches</option>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.name}
+                  </option>
+                ))}
+              </select>
+            </div>}
+            <div className="min-w-0">
+              <label className="label" htmlFor={prefix + "-from"}>From</label>
+              <input className="input" type="date" id={prefix + "-from"} name="from" defaultValue={fromParam} />
+            </div>
+            <div className="min-w-0">
+              <label className="label" htmlFor={prefix + "-to"}>To</label>
+              <input className="input" type="date" id={prefix + "-to"} name="to" defaultValue={toParam} />
+            </div>
+            <div className="col-span-2">
+              <label className="label" htmlFor={prefix + "-q"}>Customer</label>
+              <input className="input" id={prefix + "-q"} name="q" defaultValue={q} placeholder="Search by customer..." />
+            </div>
+            <button className="btn-secondary col-span-2" type="submit">
+              Apply
+            </button>
+            {(!!searchParams?.from || !!searchParams?.to) && (
+              <Link href="/sales?from=&to=" className="self-center text-xs text-muted underline underline-offset-2 hover:text-primary">
+                Clear filter
+              </Link>
+            )}
+          </form>
+        </div>
+  );
+
   return (
     <div className="space-y-4 sm:space-y-5">
       <PageHeader
         title="Sales"
+        compact
         subtitle="Latest invoices, receipts, and payment status."
-        actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
+        actions={<RefreshIndicator compact fetchedAt={new Date().toISOString()} />}
       />
 
-      {amountSales && amountSales.count > 0 && <p className="text-sm text-slate-600">Sold by amount: {amountSales.count} {amountSales.count === 1 ? 'sale' : 'sales'}, {formatMoney(amountSales.totalPence, business.currency)} total</p>}
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm lg:hidden">
+        <p className="text-2xl font-bold tabular-nums text-ink">{formatMoney(pageTotal, business.currency)}</p>
+        <p className="text-sm text-slate-600">
+          {totalCount} {totalCount === 1 ? 'sale' : 'sales'} · {activePreset?.label ?? 'Selected dates'}
+          {totalPages > 1 ? ' · Amount on this page' : ''}
+        </p>
+      </div>
+      <nav aria-label="Sales date range" className="flex max-w-full gap-2 overflow-x-auto pb-1 lg:hidden">
+        {presets.map(({ label, from, to }) => {
+          const query = new URLSearchParams({ from, to });
+          if (q) query.set('q', q);
+          if (selectedStoreId !== 'ALL') query.set('storeId', selectedStoreId);
+          return <a key={label} href={`/sales?${query}`} aria-current={label === activePreset?.label ? 'true' : undefined}
+            className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-3 text-sm font-semibold ${label === activePreset?.label ? 'border-accent bg-accent text-white' : 'border-slate-200 bg-white text-ink'}`}>{label}</a>;
+        })}
+      </nav>
 
-      {/* Collapsible filter — collapsed on mobile, always-open on desktop */}
-      <details className="details-mobile" open>
+      {amountSales && amountSales.count > 0 && <p className="hidden text-sm text-slate-600 lg:block">Sold by amount: {amountSales.count} {amountSales.count === 1 ? 'sale' : 'sales'}, {formatMoney(amountSales.totalPence, business.currency)} total</p>}
+
+      <details className="details-mobile lg:hidden">
         <summary className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
           <span className="flex items-center gap-2 text-sm font-semibold text-ink">
             <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
@@ -128,42 +202,9 @@ export default async function SalesPage(
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
           </svg>
         </summary>
-        <div className="mt-2 rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-4 shadow-sm">
-          <form method="GET" className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className="label">Branch</label>
-              <select className="input" name="storeId" defaultValue={selectedStoreId}>
-                <option value="ALL">All branches</option>
-                {stores.map((store) => (
-                  <option key={store.id} value={store.id}>
-                    {store.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">From</label>
-              <input className="input" type="date" name="from" defaultValue={fromParam} />
-            </div>
-            <div>
-              <label className="label">To</label>
-              <input className="input" type="date" name="to" defaultValue={toParam} />
-            </div>
-            <div>
-              <label className="label">Customer</label>
-              <input className="input" name="q" defaultValue={q} placeholder="Search by customer..." />
-            </div>
-            <button className="btn-secondary" type="submit">
-              Apply
-            </button>
-            {(!!searchParams?.from || !!searchParams?.to) && (
-              <Link href="/sales?from=&to=" className="self-center text-xs text-muted underline underline-offset-2 hover:text-primary">
-                Clear filter
-              </Link>
-            )}
-          </form>
-        </div>
+        {filters('mobile-sales')}
       </details>
+      <div className="hidden lg:block">{filters('desktop-sales')}</div>
 
       <div className="card p-4 sm:p-5">
         <div className="space-y-3 lg:hidden">
@@ -179,74 +220,38 @@ export default async function SalesPage(
                   {q ? `No sales matching "${q}"` : (fromParam || toParam) ? 'No sales in this date range' : 'No sales yet'}
                 </div>
                 <div className="text-xs text-black/40 mt-1">
-                  {q ? 'Try a different search term.' : (fromParam || toParam) ? 'Adjust the date range or view all sales.' : 'Open the POS to make your first sale, or run Demo Day to preview.'}
+                  {q ? 'Try a different search term.' : (fromParam || toParam) ? 'Adjust the date range or view all sales.' : 'Open the POS to make your first sale.'}
                 </div>
                 {!q && (fromParam || toParam) ? (
                   <Link href="/sales?from=&to=" className="btn-secondary text-xs px-3 py-1.5 mt-3">View all sales</Link>
                 ) : !q ? (
                   <div className="mt-3 flex gap-2">
                     <Link href="/pos" className="btn-primary text-xs px-3 py-1.5">Open POS</Link>
-                    <Link href="/onboarding#demo" className="btn-ghost text-xs px-3 py-1.5 border border-black/10 rounded-lg">Run Demo Day</Link>
                   </div>
                 ) : null}
               </div>
             </div>
           ) : sales.map((sale) => {
             const receiptRef = sale.transactionNumber ?? `#${sale.id.slice(0, 8).toUpperCase()}`;
-            const outstandingPence = sale.totalPence - sale.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-            const isClosed = Boolean(sale.salesReturn) || ['RETURNED', 'VOID'].includes(sale.paymentStatus);
-            const closedSaleLabel = getClosedSaleLabel(sale.paymentStatus, sale.salesReturn);
-
+            const closed = Boolean(sale.salesReturn) || ['RETURNED', 'VOID'].includes(sale.paymentStatus);
+            const label = closed ? getClosedSaleLabel(sale.paymentStatus, sale.salesReturn) : statusLabels[sale.paymentStatus] ?? sale.paymentStatus;
+            const methods = [...new Set(sale.payments.map(payment => paymentLabels[payment.method]).filter(Boolean))];
             return (
-              <DataCard key={sale.id}>
-                <DataCardHeader
-                  title={<Link href={`/receipts/${sale.id}`} className="font-mono text-primary hover:underline">{receiptRef}</Link>}
-                  subtitle={<>{sale.customer?.name ?? 'Walk-in'}{amountLabels(sale)}</>}
-                  aside={
-                    <span className="text-right">
-                      {!deletedSaleLabel(sale.salesReturn) && <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>}
-                      <MomoPendingQualification
-                        invoiceStatus={sale.paymentStatus}
-                        payments={sale.payments}
-                        currency={business.currency}
-                      />
-                    </span>
-                  }
-                />
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <DataCardField label="Date" value={<span className="text-black/65">{sale.createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} {sale.createdAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>} />
-                  <DataCardField label="Total" value={<span className="font-semibold text-ink">{formatMoney(sale.totalPence, business.currency)}</span>} />
-                  <DataCardField label="Branch" value={<span className="text-black/65">{sale.store.name}</span>} />
-                  <DataCardField label="Items" value={<span className="text-black/65">{sale._count.lines}</span>} />
+              <Link key={sale.id} href={`/receipts/${sale.id}`}
+                className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-primary">{receiptRef}</p>
+                    <p className="text-xs text-slate-600">{sale.createdAt.toLocaleString('en-GB', { timeZone: resolveBusinessTimeZone(business.timezone), day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                  <p className="font-bold tabular-nums text-ink">{formatMoney(sale.totalPence, business.currency)}</p>
                 </div>
-                <DataCardActions>
-                  <Link className="btn-ghost text-xs" href={`/receipts/${sale.id}`}>
-                    Print
-                  </Link>
-                  {!isClosed && ['UNPAID', 'PART_PAID'].includes(sale.paymentStatus) ? (
-                    <InlinePaymentForm
-                      invoiceId={sale.id}
-                      outstandingPence={outstandingPence}
-                      currency={business.currency}
-                      type="customer"
-                      returnTo="/sales"
-                    />
-                  ) : null}
-                  {!isClosed ? (
-                    <>
-                      <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
-                        Amend
-                      </Link>
-                      {canDelete && <DeleteFoodSaleButton invoiceId={sale.id} preview={saleDeletionPreview(sale, business.currency)} />}
-                      <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
-                        Return
-                      </Link>
-                    </>
-                  ) : (
-                    <span className="rounded-full bg-black/5 px-3 py-2 text-xs font-semibold text-black/45">{closedSaleLabel}</span>
-                  )}
-                </DataCardActions>
-              </DataCard>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span className={`rounded-full px-2.5 py-1 font-semibold ${closed ? 'bg-slate-100 text-slate-700' : `pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}`}>{label}</span>
+                  {methods.length > 0 && <span className="text-slate-600">{methods.join(' · ')}</span>}
+                  <MomoPendingQualification invoiceStatus={sale.paymentStatus} payments={sale.payments} currency={business.currency} />
+                </div>
+              </Link>
             );
           })}
         </div>
