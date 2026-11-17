@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import SettingsPage from '@/app/(protected)/settings/page';
 import SettingsSection from './SettingsSection';
 import OpeningBalancesForm from './OpeningBalancesForm';
 import TillManagement from './TillManagement';
@@ -10,12 +11,86 @@ import MessageLogActions from '@/app/(protected)/settings/notifications/MessageL
 const mocks = vi.hoisted(() => ({ cash: vi.fn(), ar: vi.fn(), ap: vi.fn(), till: vi.fn(), deactivate: vi.fn(), help: vi.fn(), send: vi.fn(), retry: vi.fn(), mark: vi.fn(), refresh: vi.fn() }));
 vi.mock('next/navigation', () => ({ usePathname: () => '/settings', useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock('@/app/actions/opening-balances', () => ({ saveCashBankOpeningBalances: mocks.cash, saveOpeningAR: mocks.ar, saveOpeningAP: mocks.ap }));
-vi.mock('@/app/actions/settings', () => ({ createTillAction: mocks.till, deactivateTillAction: mocks.deactivate }));
+vi.mock('@/app/actions/settings', () => ({ updateBusinessAction: vi.fn(), createTillAction: mocks.till, deactivateTillAction: mocks.deactivate }));
 vi.mock('@/app/actions/help-request', () => ({ submitMerchantHelpRequestAction: mocks.help }));
 vi.mock('@/app/actions/notifications', () => ({ sendEodSummaryAction: mocks.send, retryNotificationAction: mocks.retry, markNotificationSentAction: mocks.mark }));
+vi.mock('@/lib/auth', () => ({ requireBusiness: vi.fn() }));
+vi.mock('@/lib/qz-signing.server', () => ({ isQzSigningConfigured: () => false }));
+vi.mock('./CashDrawerSetup', () => ({ default: () => <div>Cash drawer setup</div> }));
+vi.mock('./SubmitButton', () => ({ default: ({ children }: { children: React.ReactNode }) => <button type="submit">{children}</button> }));
+vi.mock('@/lib/prisma', () => ({
+  prisma: Object.fromEntries(['store', 'openingBalance', 'customer', 'supplier', 'salesInvoice', 'purchaseInvoice', 'journalEntry', 'till'].map(
+    model => [model, { findMany: async () => [] }],
+  )),
+}));
+import { requireBusiness } from '@/lib/auth';
+
 beforeEach(() => { vi.clearAllMocks(); window.history.replaceState({}, '', '/settings'); });
 afterEach(() => { window.history.replaceState({}, '', '/settings'); });
 const props = { currencySymbol: 'GHS', customers: [{ id: 'c', name: 'Customer' }], suppliers: [{ id: 's', name: 'Supplier' }], openingBalances: [], arInvoices: [], apInvoices: [] };
+
+describe('Business Settings disclosures', () => {
+  const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (originalScroll) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScroll);
+    else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+  });
+
+  const titles = {
+    profile: 'Business profile', printing: 'Receipts & label printing', tax: 'Tax registration',
+    controls: 'Operations & risk controls', payments: 'Contacts & payments',
+    'opening-capital': 'Opening balances', tills: 'Tills & drawers', 'help-and-more': 'Help & more settings',
+  };
+
+  async function renderSettings(role = 'OWNER') {
+    vi.mocked(requireBusiness).mockResolvedValue({
+      business: { id: 'business', name: 'Pubside', currency: 'GHS', vatEnabled: false },
+      user: { role },
+    } as Awaited<ReturnType<typeof requireBusiness>>);
+    render(await SettingsPage({}));
+  }
+
+  it.each(['OWNER', 'MANAGER'])('renders closed native sections with the existing fields for %s', async role => {
+    await renderSettings(role);
+    const form = screen.getByRole('button', { name: 'Save settings' }).closest('form')!;
+    const formData = new FormData(form);
+    for (const [id, title] of Object.entries(titles)) {
+      const section = document.querySelector<HTMLDetailsElement>(`details#${id}`);
+      expect(section).not.toBeNull();
+      expect(section).not.toHaveAttribute('open');
+      expect(section?.querySelector('summary')).toHaveTextContent(title);
+    }
+    for (const name of ['name', 'labelPrinterName', 'vatNumber', 'discountApprovalThresholdPercent', 'phone']) {
+      expect(formData.has(name)).toBe(true);
+    }
+    expect(formData.get('name')).toBe('Pubside');
+    expect(document.querySelector('#label-printing')?.closest('details')?.id).toBe('printing');
+    expect(form.querySelector('#opening-capital')).toBeNull();
+  });
+
+  it('opens Opening balances on direct hash navigation', async () => {
+    window.history.replaceState({}, '', '/settings#opening-capital');
+    await renderSettings();
+    expect(document.getElementById('opening-capital')).toHaveAttribute('open');
+    expect(document.getElementById('profile')).not.toHaveAttribute('open');
+  });
+
+  it('reveals and scrolls to an invalid field inside a closed card', async () => {
+    await renderSettings();
+    const field = screen.getByLabelText('Discount approval threshold (%)');
+    const scroll = vi.fn();
+    field.scrollIntoView = scroll;
+    fireEvent.change(field, { target: { value: '101' } });
+    expect((field as HTMLInputElement).checkValidity()).toBe(false);
+    expect(document.getElementById('controls')).toHaveAttribute('open');
+    await waitFor(() => expect(scroll).toHaveBeenCalled());
+  });
+});
 
 describe('section shortcuts', () => {
   it('opens a direct hash target and reopens it when the same shortcut is used again', () => {

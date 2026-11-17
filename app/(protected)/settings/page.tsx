@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+import RevealInvalidSettingsField from '@/components/RevealInvalidSettingsField';
 import HashScroll from '@/components/HashScroll';
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
@@ -13,6 +15,31 @@ import { prisma } from '@/lib/prisma';
 import HelpRequestCard from '@/components/help/HelpRequestCard';
 import Link from 'next/link';
 import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
+
+function SettingsCard({ id, title, description, grid = false, children }: {
+  id: string;
+  title: string;
+  description?: string;
+  grid?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details id={id} className="group/settings rounded-xl border border-border bg-white scroll-mt-24">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-2.5 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0">
+          <span className="block font-display text-sm font-semibold">{title}</span>
+          {description && <span className="block truncate text-xs text-black/60">{description}</span>}
+        </span>
+        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5 shrink-0 text-black/55 transition-transform group-open/settings:rotate-180">
+          <path d="m5 8 5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </summary>
+      <div className={grid ? 'grid gap-4 border-t border-border p-4 md:grid-cols-2' : 'space-y-3 border-t border-border p-4'}>
+        {children}
+      </div>
+    </details>
+  );
+}
 
 export default async function SettingsPage(props: { searchParams?: Promise<{ error?: string; storeId?: string; saved?: string; tillSaved?: string }> }) {
   const searchParams = await props.searchParams;
@@ -85,20 +112,26 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
       totalPence: inv.totalPence,
     }));
 
+  const balanceCount = obData.length + arData.length + apData.length;
+  const momoSummary = business.momoEnabled == null ? undefined : business.momoEnabled
+    ? ['MoMo on', [business.momoProvider, business.momoNumber && business.momoNumber.slice(0, 3) + '…'].filter(Boolean).join(' ')].filter(Boolean).join(' · ')
+    : 'MoMo off';
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
+      <HashScroll />
       {['created', 'deactivated'].includes(searchParams?.tillSaved ?? '') && <HashScroll key={searchParams?.tillSaved} offset={144} targetId="tills" />}
       <PageHeader title="Business Settings" subtitle="Manage your business, printing, payments, and day-to-day controls." />
       <div className="card p-4 sm:p-6">
         <FormError error={searchParams?.error} />
         {searchParams?.saved === '1' && <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">Business settings saved.</p>}
-        <nav aria-label="Business settings sections" className="mb-6 flex flex-wrap gap-2">
+        <nav aria-label="Business settings sections" className="mb-3 flex flex-wrap gap-x-1 gap-y-0">
           {[["profile", "Business profile"], ["printing", "Printing"], ["tax", "Tax"], ["controls", "Controls"], ["payments", "Payments"], ["opening-capital", "Opening balances"], ["tills", "Tills & drawers"]].map(([id, label]) => <a key={id} href={'#' + id} className="btn-ghost min-h-11 text-sm">{label}</a>)}
         </nav>
-        <form action={updateBusinessAction} className="space-y-6">
-          <section id="profile" aria-labelledby="profile-heading" className="grid scroll-mt-6 gap-4 md:grid-cols-2">
+        <form action={updateBusinessAction} className="space-y-2">
+          <RevealInvalidSettingsField />
+          <SettingsCard id="profile" title="Business profile" description={[business.name, business.currency].filter(Boolean).join(' · ')} grid>
           <div className="md:col-span-2 pt-1">
-            <h2 id="profile-heading" className="text-lg font-display font-semibold">Business profile</h2>
             <p className="mt-1 text-sm text-black/55">How your business appears on receipts and across the app.</p>
           </div>
           <div>
@@ -154,9 +187,8 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
             </datalist>
             <div className="mt-1 text-xs text-black/50">Type any ISO code or pick from the list. Common African retail currencies are listed first.</div>
           </div>
-          </section>
-          <section id="printing" aria-labelledby="printing-heading" className="grid scroll-mt-6 gap-4 border-t border-border pt-6 md:grid-cols-2">
-            <h2 id="printing-heading" className="md:col-span-2 text-lg font-display font-semibold">Receipts & label printing</h2>
+          </SettingsCard>
+          <SettingsCard id="printing" title="Receipts & label printing" description={business.receiptTemplate === 'A4' ? 'A4 full page' : business.receiptTemplate === 'THERMAL_80' ? 'Thermal 80mm' : undefined} grid>
 
           <div>
             <label className="label" htmlFor="settings-receiptTemplate">Receipt Template</label>
@@ -271,9 +303,8 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
               </div>
             </div>
           </div>
-          </section>
-          <section id="tax" aria-labelledby="tax-heading" className="grid scroll-mt-6 gap-4 border-t border-border pt-6 md:grid-cols-2">
-            <h2 id="tax-heading" className="md:col-span-2 text-lg font-display font-semibold">Tax registration</h2>
+          </SettingsCard>
+          <SettingsCard id="tax" title="Tax registration" description={business.vatEnabled == null ? undefined : business.vatEnabled ? 'VAT on' : 'VAT off'} grid>
           <div className="flex items-center gap-2">
             <input className="h-4 w-4" type="checkbox" id="settings-vatEnabled" name="vatEnabled" defaultChecked={business.vatEnabled} />
             <label className="text-sm" htmlFor="settings-vatEnabled">VAT Enabled</label>
@@ -288,9 +319,9 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
             <input id="settings-tinNumber" className="input" name="tinNumber" defaultValue={(business as any).tinNumber ?? ''} placeholder="e.g. C0012345678" />
             <div className="mt-1 text-xs text-black/50">Ghana Revenue Authority Tax Identification Number.</div>
           </div>
-          </section>
-          <section id="controls" aria-labelledby="controls-heading" className="grid scroll-mt-6 gap-4 border-t border-border pt-6 md:grid-cols-2">
-            <h2 id="controls-heading" className="md:col-span-2 text-lg font-display font-semibold">Operations & risk controls</h2>
+          <p className="text-xs text-black/50 md:col-span-2">VAT OFF hides VAT UI and skips VAT posting. VAT ON will post VAT Payable and VAT Receivable (input VAT).</p>
+          </SettingsCard>
+          <SettingsCard id="controls" title="Operations & risk controls" description={business.discountApprovalThresholdBps == null ? undefined : `Discount approval above ${business.discountApprovalThresholdBps / 100}%`} grid>
           <div className="md:col-span-2">
             <p className="mt-1 text-sm text-black/55">Guardrails for till opening, variances, discounts, and stock adjustments.</p>
           </div>
@@ -365,9 +396,8 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
             </div>
           </div>
 
-          </section>
-          <section id="payments" aria-labelledby="payments-heading" className="grid scroll-mt-6 gap-4 border-t border-border pt-6 md:grid-cols-2">
-            <h2 id="payments-heading" className="md:col-span-2 text-lg font-display font-semibold">Contacts & payments</h2>
+          </SettingsCard>
+          <SettingsCard id="payments" title="Contacts & payments" description={momoSummary} grid>
           <div className="md:col-span-2">
             <p className="mt-1 text-sm text-black/55">Phone, address, and Mobile Money details used across receipts and payment flows.</p>
           </div>
@@ -397,20 +427,17 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
             <input id="settings-momoNumber" className="input" name="momoNumber" defaultValue={(business as any).momoNumber ?? ''} placeholder="024 XXX XXXX" />
             <div className="mt-1 text-xs text-black/50">Displayed on receipts for customer payments.</div>
           </div>
-          </section>
-          <div className="lg:sticky lg:bottom-3 z-10 flex flex-col gap-3 rounded-xl border border-border bg-white p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between">
+          </SettingsCard>
+          <div className="sticky bottom-[var(--mobile-bottom-nav-height)] z-10 flex items-center justify-between gap-3 rounded-xl border border-border bg-white p-2 shadow-lg lg:bottom-3 sm:p-4">
             <div className="text-sm text-black/55">
-              Saves the preferences above. Opening balances and tills have their own save actions.
+              Saves the sections above. Opening balances and tills save on their own.
             </div>
-            <SubmitButton className="btn-primary" loadingText="Saving…">Save settings</SubmitButton>
+            <SubmitButton className="btn-primary min-h-11 shrink-0" loadingText="Saving…">Save settings</SubmitButton>
           </div>
         </form>
-        <div className="mt-4 text-xs text-black/50">
-          VAT OFF hides VAT UI and skips VAT posting. VAT ON will post VAT Payable and VAT Receivable (input VAT).
-        </div>
       </div>
-          <div id="opening-capital" className="card p-4 sm:p-6 scroll-mt-24">
-            <h2 className="text-base font-display font-semibold">Opening Balances</h2>
+      <SettingsCard id="opening-capital" title="Opening balances"
+        description={balanceCount ? `${balanceCount} recorded ${balanceCount === 1 ? 'balance' : 'balances'}` : undefined}>
             <p className="mt-1 text-sm text-black/55">
               Record your financial position when you started using TillFlow. These appear on your Balance Sheet.
             </p>
@@ -424,13 +451,14 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
                 apInvoices={apData}
               />
             </div>
-          </div>
+      </SettingsCard>
 
-      <div id="tills" className="scroll-mt-36" />
+      <SettingsCard id="tills" title="Tills & drawers"
+        description={store ? `${activeTills.length} ${activeTills.length === 1 ? 'till' : 'tills'}` : undefined}>
       {['created', 'deactivated'].includes(searchParams?.tillSaved ?? '') && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{searchParams?.tillSaved === 'created' ? 'Till added.' : 'Till deactivated.'}</p>}
       <CashDrawerSetup businessId={business.id} />
       {stores.length > 1 ? (
-        <form className="card p-4" method="GET">
+        <form className="card p-4" method="GET" action="/settings#tills">
           <label className="label" htmlFor="settings-storeId">Branch for till management</label>
           <select id="settings-storeId" className="input mt-1" name="storeId" defaultValue={storeId ?? ''} required>
             <option value="">Select a store</option>
@@ -449,6 +477,9 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
         </div>
       )}
 
+      </SettingsCard>
+
+      <SettingsCard id="help-and-more" title="Help & more settings">
       <HelpRequestCard relatedRoute="/settings" />
 
       <div className="card p-5 sm:p-6">
@@ -475,6 +506,7 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
           </div>
         </div>
       </div>
+      </SettingsCard>
     </div>
   );
 }
