@@ -73,10 +73,10 @@ describe('Business Settings disclosures', () => {
     expect(form.querySelector('#opening-capital')).toBeNull();
   });
 
-  it('opens Opening balances on direct hash navigation', async () => {
-    window.history.replaceState({}, '', '/settings#opening-capital');
+  it.each(['opening-capital', 'payments'])('opens %s on direct hash navigation', async id => {
+    window.history.replaceState({}, '', '/settings#' + id);
     await renderSettings();
-    expect(document.getElementById('opening-capital')).toHaveAttribute('open');
+    expect(document.getElementById(id)).toHaveAttribute('open');
     expect(document.getElementById('profile')).not.toHaveAttribute('open');
   });
 

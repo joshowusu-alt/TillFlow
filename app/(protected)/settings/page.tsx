@@ -125,9 +125,6 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
       <div className="card p-4 sm:p-6">
         <FormError error={searchParams?.error} />
         {searchParams?.saved === '1' && <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">Business settings saved.</p>}
-        <nav aria-label="Business settings sections" className="mb-3 flex flex-wrap gap-x-1 gap-y-0">
-          {[["profile", "Business profile"], ["printing", "Printing"], ["tax", "Tax"], ["controls", "Controls"], ["payments", "Payments"], ["opening-capital", "Opening balances"], ["tills", "Tills & drawers"]].map(([id, label]) => <a key={id} href={'#' + id} className="btn-ghost min-h-11 text-sm">{label}</a>)}
-        </nav>
         <form action={updateBusinessAction} className="space-y-2">
           <RevealInvalidSettingsField />
           <SettingsCard id="profile" title="Business profile" description={[business.name, business.currency].filter(Boolean).join(' · ')} grid>
