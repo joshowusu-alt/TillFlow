@@ -160,7 +160,7 @@ export default async function InventoryPage(props: { searchParams?: Promise<{ q?
         <div className="rounded-2xl border border-black/5 bg-white px-3 py-2 shadow-card lg:px-4 lg:py-3">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Products</div>
           <div className="mt-1 text-xl font-bold tabular-nums lg:mt-2 lg:text-2xl text-ink">{totalCount}</div>
-          <div className="mt-0.5 text-[11px] leading-tight text-black/50 lg:mt-1 lg:text-xs"><span className="hidden lg:inline">Active </span><span className="lg:hidden">In catalogue</span><span className="hidden lg:inline">in catalogue</span></div>
+          <div className="mt-0.5 text-[11px] leading-tight text-black/50 lg:mt-1 lg:text-xs"><span className="lg:hidden">In catalogue</span><span className="hidden lg:inline">Active in catalogue</span></div>
         </div>
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 shadow-card lg:px-4 lg:py-3">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700/70">Low stock</div>
