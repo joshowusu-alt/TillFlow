@@ -10,10 +10,12 @@ import { useRouterRefreshOnVisibility } from '@/hooks/useRouterRefreshOnVisibili
  */
 export default function RefreshIndicator({
   fetchedAt,
+  compact = false,
   autoRefreshMs,
 }: {
   /** ISO string of when the server rendered the page */
   fetchedAt: string;
+  compact?: boolean;
   /** If set, page re-fetches on this interval (e.g. 60_000 = 1 min) */
   autoRefreshMs?: number;
 }) {
@@ -34,12 +36,12 @@ export default function RefreshIndicator({
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-black/40">
-      <span suppressHydrationWarning>Updated {time}</span>
+      <span className={compact ? 'max-sm:hidden' : undefined} suppressHydrationWarning>Updated {time}</span>
       <button
         type="button"
         onClick={handleRefresh}
         disabled={refreshing}
-        className="rounded-lg p-1.5 hover:bg-black/5 transition disabled:opacity-50"
+        className={`rounded-lg p-1.5 hover:bg-black/5 transition disabled:opacity-50 ${compact ? 'max-sm:grid max-sm:min-h-11 max-sm:min-w-11 max-sm:place-items-center' : ''}`}
         title="Refresh data"
         aria-label="Refresh data"
       >

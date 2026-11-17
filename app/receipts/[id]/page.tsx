@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import InlinePaymentForm from '@/components/InlinePaymentForm';
 import { deletedSaleLabel, saleDeletionPreview } from '@/lib/food/sale-deletion';
 import { isFoodBusiness } from '@/lib/food/business';
 import { requireUser } from '@/lib/auth';
@@ -184,6 +186,16 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
       }))}
       lines={lines}
       canReturn={canReturn}
+      mobileSaleActions={canReturn && (
+        <>
+          <Link className="btn-ghost text-xs" href={`/sales/amend/${invoice.id}`}>Amend</Link>
+          {['UNPAID', 'PART_PAID'].includes(invoice.paymentStatus) && (
+            <InlinePaymentForm invoiceId={invoice.id}
+              outstandingPence={invoice.totalPence - invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0)}
+              currency={invoice.business.currency} type="customer" returnTo="/sales" />
+          )}
+        </>
+      )}
       deletePreview={user.role === 'OWNER' && !isReturned && isFoodBusiness(invoice.business.businessCategory)
         ? saleDeletionPreview(invoice, invoice.business.currency) : null}
       deletedLabel={deletedSaleLabel(invoice.salesReturn)}
