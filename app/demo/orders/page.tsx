@@ -1,4 +1,4 @@
-import { DEMO_ONLINE_ORDERS } from '@/lib/demo-fixtures';
+import { buildDemoLedger, getDemoOnlineOrders } from '@/lib/demo-fixtures';
 import { formatMoney } from '@/lib/format';
 
 function statusColour(status: string) {
@@ -8,17 +8,18 @@ function statusColour(status: string) {
 }
 
 export default function DemoOrdersPage() {
+  const orders = getDemoOnlineOrders(buildDemoLedger());
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-ink">Sample online orders</h1>
         <p className="mt-1 text-sm text-muted">
-          How TillFlow shows MoMo checkout, payment confirmation and pickup — demo phones and references only.
+          Pickup examples using invoices from the same 21-day fictional ledger. Dates and amounts reconcile; pickup statuses and references illustrate the workflow.
         </p>
       </div>
 
       <div className="space-y-4">
-        {DEMO_ONLINE_ORDERS.map((order) => (
+        {orders.map((order) => (
           <article key={order.id} className="card p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -52,7 +53,7 @@ export default function DemoOrdersPage() {
       </div>
 
       <p className="text-xs text-muted rounded-xl bg-slate-50 px-4 py-3">
-        These orders are part of the sample business story only. They are not linked to any real customer.
+        These examples reuse existing ledger sales and create no additional revenue or MoMo receipts. No real customer data is used.
       </p>
     </div>
   );

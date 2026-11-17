@@ -25,7 +25,7 @@ export default function DemoCustomersPage() {
       </div>
 
       {/* AR summary */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="card p-4 text-center">
           <div className="text-xs text-muted">Total Credit Sales</div>
           <div className="mt-1 text-xl font-bold text-blue-700">{fmt(totals.creditSalesPence)}</div>
@@ -40,14 +40,15 @@ export default function DemoCustomersPage() {
             {fmt(totals.arBalancePence)}
           </div>
         </div>
+        <div className="card p-4 text-center"><div className="text-xs text-muted">Customer credits / overpayments</div><div className="mt-1 text-xl font-bold text-success">{fmt(totals.customerCreditPence)}</div></div>
       </div>
 
       {/* Debtor balances */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-x-auto">
         <div className="border-b border-black/8 px-5 py-4">
-          <h2 className="text-sm font-semibold text-ink">Debtor Balances</h2>
+          <h2 className="text-sm font-semibold text-ink">Customer balances</h2><p className="mt-1 text-xs text-muted">Positive: owed to the shop. Negative: credit owed to that customer.</p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Customers table">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-black/5 text-left text-xs text-muted">
@@ -77,10 +78,10 @@ export default function DemoCustomersPage() {
             {debtors.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-black/10 bg-slate-50">
-                  <td colSpan={2} className="px-5 py-3 text-xs font-semibold">Total</td>
+                  <td colSpan={2} className="px-5 py-3 text-xs font-semibold">Net customer position</td>
                   <td className="px-5 py-3 text-right text-xs tabular-nums">{fmt(totals.creditSalesPence)}</td>
                   <td className="px-5 py-3 text-right text-xs tabular-nums text-success">{fmt(totals.creditCollectedPence)}</td>
-                  <td className="px-5 py-3 text-right text-sm font-bold tabular-nums text-amber-600">{fmt(totals.arBalancePence)}</td>
+                  <td className="px-5 py-3 text-right text-sm font-bold tabular-nums text-amber-600">{fmt(totals.arBalancePence - totals.customerCreditPence)}</td>
                 </tr>
               </tfoot>
             )}
@@ -90,7 +91,7 @@ export default function DemoCustomersPage() {
 
       {/* Credit receipts */}
       {customerReceipts.length > 0 && (
-        <div className="card overflow-hidden">
+        <div className="card overflow-x-auto" tabIndex={0} role="region" aria-label="Customer receipts">
           <div className="border-b border-black/8 px-5 py-4">
             <h2 className="text-sm font-semibold text-ink">Credit Receipts (Payments Collected)</h2>
           </div>
@@ -112,7 +113,7 @@ export default function DemoCustomersPage() {
                       {r.date.toLocaleDateString('en-GH', { day:'numeric', month:'short', year:'numeric' })}
                     </td>
                     <td className="px-5 py-3 font-medium">{cust?.name ?? r.customerId}</td>
-                    <td className="px-5 py-3 text-muted text-xs">{r.note}</td>
+                    <td className="px-5 py-3 text-muted text-xs">{r.paymentMethod}: {r.note}</td>
                     <td className="px-5 py-3 text-right font-semibold tabular-nums text-success">{fmt(r.amountPence)}</td>
                   </tr>
                 );
@@ -123,12 +124,12 @@ export default function DemoCustomersPage() {
       )}
 
       {/* Credit invoice log */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-x-auto">
         <div className="border-b border-black/8 px-5 py-4">
           <h2 className="text-sm font-semibold text-ink">Credit Invoice Log</h2>
           <p className="text-xs text-muted">{creditInvoices.length} credit transactions</p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Customers table">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-black/5 text-left text-muted">

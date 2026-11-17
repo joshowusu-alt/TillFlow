@@ -6,7 +6,7 @@
     "dev": "node scripts/start-local-dev.mjs",
     "dev:prepare": "npm run db:generate:local && npm run db:setup",
     "build": "cross-env NODE_ENV=production next build",
-    "build:vercel": "prisma generate --schema=prisma/schema.postgres.prisma && prisma migrate deploy --schema=prisma/schema.postgres.prisma && cross-env NODE_ENV=production next build && node scripts/verify-supplier-credit-build.cjs",
+    "build:vercel": "prisma generate --schema=prisma/schema.postgres.prisma && cross-env NODE_ENV=production next build",
     "db:migrate:create": "prisma migrate dev --schema=prisma/schema.postgres.prisma --create-only",
     "db:migrate:deploy": "prisma migrate deploy --schema=prisma/schema.postgres.prisma",
     "postinstall": "prisma generate --schema=prisma/schema.postgres.prisma",
@@ -51,7 +51,8 @@
     "test:migration:slice2b:unit": "vitest run --reporter=dot lib/services/migration/slice2b-engine.test.ts lib/services/migration/slice2b-services.test.ts lib/migration/lifecycle.test.ts lib/services/migration/storage-vercel.test.ts",
     "test:migration:slice2b:scale": "vitest run --reporter=verbose lib/services/migration/slice2b-scale.test.ts",
     "test:migration:slice2b:pg": "vitest run --reporter=dot lib/services/migration/slice2b-pg.integration.test.ts",
-    "test:stock-conversion:sqlite": "node scripts/test-stock-conversion-sqlite.cjs"
+    "test:stock-conversion:sqlite": "node scripts/test-stock-conversion-sqlite.cjs",
+    "test:supplier-credit:preview": "node scripts/verify-supplier-credit-build.cjs"
   },
   "engines": {
     "node": "22.x"

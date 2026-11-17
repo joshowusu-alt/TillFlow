@@ -53,5 +53,6 @@
     "app/api/**": {
       "maxDuration": 15
     }
-  }
+  },
+  "installCommand": "npm ci"
 }

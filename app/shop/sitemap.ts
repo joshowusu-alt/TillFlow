@@ -2,6 +2,9 @@ import type { MetadataRoute } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getAppBaseUrl } from '@/lib/storefront-url';
 
+// Store availability is runtime data. Marketing builds must not query a customer database.
+export const dynamic = 'force-dynamic';
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = getAppBaseUrl();
   const storefronts = await prisma.business.findMany({

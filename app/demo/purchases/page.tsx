@@ -54,7 +54,7 @@ export default function DemoPurchasesPage() {
           <div className="border-b border-amber-200 bg-amber-50 px-5 py-3">
             <h2 className="text-sm font-semibold text-amber-800">Outstanding Supplier Payables</h2>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Purchases table">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-black/5 text-left text-xs text-muted">

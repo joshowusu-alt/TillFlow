@@ -1,3 +1,4 @@
+import { DEMO_PERIOD_DAYS } from '@/lib/demo-sandbox/constants';
 import { buildDemoLedger } from '@/lib/demo-fixtures';
 import { getCurrencySymbol } from '@/lib/format';
 import POSCategoryFilter from './_components/POSCategoryFilter';
@@ -184,7 +185,7 @@ export default function DemoPosPage() {
               </div>
             </div>
             <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-muted">
-              This is a sample checkout from the 14-day sample business data. Explore inventory, sales and reports to see how TillFlow tracks everything.
+              This is a sample checkout from the {DEMO_PERIOD_DAYS}-day sample business data. Explore inventory, sales and reports to see how TillFlow tracks everything.
             </p>
           </div>
         </div>

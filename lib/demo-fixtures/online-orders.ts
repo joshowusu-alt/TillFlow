@@ -18,41 +18,21 @@ export type DemoOnlineOrder = {
   note: string;
 };
 
-export const DEMO_ONLINE_ORDERS: DemoOnlineOrder[] = [
-  {
-    id: 'WEB-2401',
-    placedAt: '2026-06-02T09:14:00',
-    customerName: 'Sample Buyer A',
-    phone: '0200-000-101',
-    status: 'AWAITING_PAYMENT',
-    statusLabel: 'Awaiting MoMo payment',
-    paymentRef: null,
-    itemSummary: 'Voltic Water 1.5L × 2, Milo 400g × 1',
-    totalPence: 5600,
-    note: 'Customer sent screenshot pending confirmation.',
-  },
-  {
-    id: 'WEB-2402',
-    placedAt: '2026-06-02T11:42:00',
-    customerName: 'Sample Buyer B',
-    phone: '0200-000-202',
-    status: 'PREPARING',
-    statusLabel: 'Payment confirmed — preparing',
-    paymentRef: 'MOMO-DEMO-88421',
-    itemSummary: "Mama's Best Rice 5kg × 1, Gino Tomato Paste × 2",
-    totalPence: 5500,
-    note: 'Picker assigned — shelf A3.',
-  },
-  {
-    id: 'WEB-2398',
-    placedAt: '2026-06-01T16:05:00',
-    customerName: 'Sample Buyer C',
-    phone: '0200-000-303',
-    status: 'COLLECTED',
-    statusLabel: 'Collected at counter',
-    paymentRef: 'MOMO-DEMO-77210',
-    itemSummary: 'Indomie Onion Chicken × 1 pack, Malta Guinness × 6',
-    totalPence: 7100,
-    note: 'Picked up same day.',
-  },
-];
+/** Pickup-state illustrations reuse ledger invoices; they do not add receipts or sales. */
+export function getDemoOnlineOrders(snapshot: import('./types').DemoSnapshot): DemoOnlineOrder[] {
+  const paid = snapshot.salesInvoices.filter(i => i.paymentMethod === 'MOMO').slice(-3);
+  const unpaid = snapshot.salesInvoices.find(i => i.paymentMethod === 'CREDIT');
+  const invoices = unpaid ? [unpaid, ...paid] : paid;
+  return invoices.map((invoice, index) => ({
+    id: `WEB-${invoice.id}`,
+    placedAt: invoice.date.toISOString(),
+    customerName: snapshot.customers.find(c => c.id === invoice.customerId)?.name ?? `Sample buyer ${index + 1}`,
+    phone: '0200-000-000',
+    status: invoice.paymentMethod === 'CREDIT' ? 'AWAITING_PAYMENT' : index === invoices.length - 1 ? 'COLLECTED' : 'PREPARING',
+    statusLabel: invoice.paymentMethod === 'CREDIT' ? 'Awaiting payment (illustration)' : index === invoices.length - 1 ? 'Collected (illustration)' : 'Preparing (illustration)',
+    paymentRef: invoice.paymentMethod === 'CREDIT' ? null : `MOMO-${invoice.id}`,
+    itemSummary: invoice.lines.map(line => `${snapshot.products.find(p => p.id === line.productId)?.name} × ${line.qty}`).join(', '),
+    totalPence: invoice.subtotalPence,
+    note: `Ledger invoice ${invoice.id}. Pickup status is illustrative; no additional sale or collection is recorded.`,
+  }));
+}

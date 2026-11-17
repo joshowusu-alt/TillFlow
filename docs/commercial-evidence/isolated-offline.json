@@ -1,0 +1,13 @@
+{
+  "nativeIndexedDB": true,
+  "offlineRetention": true,
+  "reloadPersistence": true,
+  "reconnection": true,
+  "lostAcknowledgement": true,
+  "persistedInvoices": 1,
+  "payments": 1,
+  "stockDecrements": 1,
+  "receiptStatus": 200,
+  "duplicateAfterReload": false,
+  "database": "disposable SQLite"
+}

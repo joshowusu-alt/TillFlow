@@ -1,0 +1,102 @@
+[
+  {
+    "phase": "before",
+    "width": 320,
+    "viewport": 320,
+    "scroll": 320,
+    "title": "TillFlow — Complete Control for Ghanaian Retail"
+  },
+  {
+    "phase": "before",
+    "width": 360,
+    "viewport": 360,
+    "scroll": 360,
+    "title": "TillFlow — Complete Control for Ghanaian Retail"
+  },
+  {
+    "phase": "before",
+    "width": 390,
+    "viewport": 390,
+    "scroll": 390,
+    "title": "TillFlow — Complete Control for Ghanaian Retail"
+  },
+  {
+    "phase": "before",
+    "width": 768,
+    "viewport": 768,
+    "scroll": 768,
+    "title": "TillFlow — Complete Control for Ghanaian Retail"
+  },
+  {
+    "phase": "before",
+    "width": 1440,
+    "viewport": 1440,
+    "scroll": 1440,
+    "title": "TillFlow — Complete Control for Ghanaian Retail"
+  },
+  {
+    "phase": "after",
+    "width": 320,
+    "viewport": 320,
+    "scroll": 320,
+    "title": "TillFlow — Complete Control for Ghanaian Retail"
+  },
+  {
+    "phase": "after",
+    "width": 360,
+    "viewport": 360,
+    "scroll": 360,
+    "title": "TillFlow — Complete Control for Ghanaian Retail"
+  },
+  {
+    "phase": "after",
+    "width": 390,
+    "viewport": 390,
+    "scroll": 390,
+    "title": "TillFlow — Complete Control for Ghanaian Retail"
+  },
+  {
+    "phase": "after",
+    "width": 768,
+    "viewport": 768,
+    "scroll": 768,
+    "title": "TillFlow — Complete Control for Ghanaian Retail"
+  },
+  {
+    "phase": "after",
+    "width": 1440,
+    "viewport": 1440,
+    "scroll": 1440,
+    "title": "TillFlow — Complete Control for Ghanaian Retail"
+  },
+  {
+    "route": "/demo",
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/demo/dashboard",
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/demo/reports",
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/demo/inventory",
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/demo/try-sale",
+    "status": 200,
+    "overflow": false
+  },
+  {
+    "route": "/register?plan=PRO&billing=ANNUAL",
+    "status": 200,
+    "overflow": false
+  }
+]

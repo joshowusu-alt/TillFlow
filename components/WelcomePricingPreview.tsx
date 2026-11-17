@@ -141,7 +141,7 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
 
                 {/* Secondary trial actions — visually quieter than the page WhatsApp primary. */}
                 <Link
-                  href="/register"
+                  href={`/register?plan=${plan.name.toUpperCase()}&billing=${isYearly ? 'ANNUAL' : 'MONTHLY'}`}
                   className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink/70 transition-all duration-150 hover:border-accent/30 hover:text-accent active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 >
                   {ctaLabel}

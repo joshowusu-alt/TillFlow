@@ -12,11 +12,14 @@ export default function DemoTrySale() {
   const snapshot = useMemo(() => buildDemoLedger(), []);
   const sym = getCurrencySymbol(snapshot.currency);
   const [query, setQuery] = useState('');
+  const [cashTendered, setCashTendered] = useState('');
   const [cart, setCart] = useState<CartLine[]>([]);
   const [payment, setPayment] = useState<PaymentMethod>('CASH');
   const [completed, setCompleted] = useState<{
     id: string;
     totalPence: number;
+    cashTenderedPence: number;
+    changePence: number;
     lines: CartLine[];
     payment: PaymentMethod;
     stockDeltas: Array<{ name: string; before: number; after: number }>;
@@ -37,10 +40,17 @@ export default function DemoTrySale() {
 
   const subtotalPence = cart.reduce((s, l) => s + l.qty * l.product.sellingPricePence, 0);
 
+  const cashTenderedPence = /^\d+(\.\d{1,2})?$/.test(cashTendered) ? Math.round(Number(cashTendered) * 100) : 0;
+  const changePence = Math.max(0, cashTenderedPence - subtotalPence);
+  const cashInsufficient = payment === 'CASH' && cashTenderedPence < subtotalPence;
+
   function addToCart(product: DemoProduct) {
+    const stock = balances.get(product.id)?.endingQty ?? 0;
+    if (stock <= 0) return;
     setCart((prev) => {
       const existing = prev.find((l) => l.product.id === product.id);
       if (existing) {
+        if (existing.qty >= stock) return prev;
         return prev.map((l) =>
           l.product.id === product.id ? { ...l, qty: l.qty + 1 } : l
         );
@@ -53,23 +63,24 @@ export default function DemoTrySale() {
     setCart((prev) =>
       prev
         .map((l) =>
-          l.product.id === productId ? { ...l, qty: Math.max(0, l.qty + delta) } : l
+          l.product.id === productId ? { ...l, qty: Math.min(balances.get(productId)?.endingQty ?? 0, Math.max(0, l.qty + delta)) } : l
         )
         .filter((l) => l.qty > 0)
     );
   }
 
   function completeSale() {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || cashInsufficient) return;
     const id = `DEMO-SALE-${Date.now().toString(36).toUpperCase()}`;
     const stockDeltas = cart.map((line) => {
       const bal = balances.get(line.product.id);
       const before = bal?.endingQty ?? line.product.openingQty;
       return { name: line.product.name, before, after: Math.max(0, before - line.qty) };
     });
-    setCompleted({ id, totalPence: subtotalPence, lines: [...cart], payment, stockDeltas });
+    setCompleted({ id, totalPence: subtotalPence, lines: [...cart], payment, stockDeltas, cashTenderedPence: payment === 'CASH' ? cashTenderedPence : 0, changePence: payment === 'CASH' ? changePence : 0 });
     setCart([]);
     setQuery('');
+    setCashTendered('');
   }
 
   function resetSession() {
@@ -87,6 +98,8 @@ export default function DemoTrySale() {
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="space-y-4">
           <input
+            aria-label="Search products by name, SKU or barcode"
+            onKeyDown={event => { if (event.key === 'Enter') { const match = snapshot.products.find(p => p.barcode === query.trim() || p.sku.toLowerCase() === query.trim().toLowerCase()) ?? (filtered.length === 1 ? filtered[0] : undefined); if (match) { event.preventDefault(); addToCart(match); setQuery(''); } } }}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search product name, SKU or barcode…"
@@ -101,6 +114,7 @@ export default function DemoTrySale() {
                 <button
                   key={p.id}
                   type="button"
+                  disabled={qty <= 0}
                   onClick={() => addToCart(p)}
                   className="rounded-xl border border-black/8 bg-white p-3 text-left shadow-sm transition hover:border-accent/30 hover:shadow-md"
                 >
@@ -126,7 +140,8 @@ export default function DemoTrySale() {
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      className="h-7 w-7 rounded border text-xs font-bold"
+                      className="h-11 w-11 rounded border text-xs font-bold"
+                      aria-label={`Remove one ${line.product.name}`}
                       onClick={() => changeQty(line.product.id, -1)}
                     >
                       −
@@ -134,7 +149,8 @@ export default function DemoTrySale() {
                     <span className="w-6 text-center tabular-nums">{line.qty}</span>
                     <button
                       type="button"
-                      className="h-7 w-7 rounded border text-xs font-bold"
+                      className="h-11 w-11 rounded border text-xs font-bold"
+                      aria-label={`Add one ${line.product.name}`}
                       onClick={() => changeQty(line.product.id, 1)}
                     >
                       +
@@ -152,8 +168,9 @@ export default function DemoTrySale() {
                 <button
                   key={m}
                   type="button"
+                  aria-pressed={payment === m}
                   onClick={() => setPayment(m)}
-                  className={`rounded-lg px-2 py-2 text-xs font-semibold ${
+                  className={`min-h-11 rounded-lg px-2 py-2 text-xs font-semibold ${
                     payment === m ? 'bg-accent text-white' : 'border border-black/10 bg-white text-ink'
                   }`}
                 >
@@ -170,9 +187,14 @@ export default function DemoTrySale() {
                 {sym}{(subtotalPence / 100).toFixed(2)}
               </span>
             </div>
+            {payment === 'CASH' ? <div className="mt-3 space-y-2">
+              <label htmlFor="demo-cash" className="block text-sm font-medium">Cash received (GH₵)</label>
+              <input id="demo-cash" inputMode="decimal" value={cashTendered} onChange={e => setCashTendered(e.target.value)} className="input w-full" placeholder="e.g. 100.00" aria-describedby="demo-change" />
+              <p id="demo-change" className="text-sm" aria-live="polite">{cashInsufficient ? 'Enter enough cash to cover the total.' : `Change: ${sym}${(changePence / 100).toFixed(2)}`}</p>
+            </div> : null}
             <button
               type="button"
-              disabled={cart.length === 0}
+              disabled={cart.length === 0 || cashInsufficient}
               onClick={completeSale}
               className="btn-primary mt-3 w-full disabled:opacity-50"
             >
@@ -196,6 +218,7 @@ export default function DemoTrySale() {
               Try another sale
             </button>
           </div>
+          {completed.payment === 'CASH' ? <p className="text-sm font-semibold">Cash received: {sym}{(completed.cashTenderedPence / 100).toFixed(2)} · Change: {sym}{(completed.changePence / 100).toFixed(2)}</p> : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl bg-white/80 p-4 text-sm">
               <p className="font-semibold text-ink">Receipt lines</p>

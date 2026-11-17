@@ -92,16 +92,17 @@ describe('Demo fixture – supplier payables reconciliation', () => {
 });
 
 describe('Demo fixture – debtor (AR) reconciliation', () => {
-  it('AR balance = credit sales − credit collected', () => {
-    expect(s.totals.arBalancePence).toBe(
-      Math.max(0, s.totals.creditSalesPence - s.totals.creditCollectedPence),
+  it('net customer position = gross receivables minus customer credits', () => {
+    expect(s.totals.arBalancePence - s.totals.customerCreditPence).toBe(
+      s.totals.creditSalesPence - s.totals.creditCollectedPence,
     );
   });
 
-  it('sum of debtor balances equals totals.arBalancePence', () => {
+  it('positive debtor balances equal receivables and negative balances equal customer credits', () => {
     const debtors = getDebtorBalances(s);
-    const sum = debtors.reduce((a, r) => a + r.balancePence, 0);
+    const sum = debtors.reduce((a, r) => a + Math.max(0, r.balancePence), 0);
     expect(sum).toBe(s.totals.arBalancePence);
+    expect(debtors.reduce((a, r) => a + Math.max(0, -r.balancePence), 0)).toBe(s.totals.customerCreditPence);
   });
 
   it('credit collected matches sum of customerReceipts', () => {
@@ -147,18 +148,18 @@ describe('Demo fixture – cash position reconciliation', () => {
     ).toBe(s.totals.totalRevenuePence);
   });
 
-  it('endingCashPence = opening + cashSales + creditCollected − purchasesPaid − expenses', () => {
+  it('ending cash includes cash collections only', () => {
     const expected = s.totals.openingCashPence
       + s.totals.cashSalesPence
-      + s.totals.creditCollectedPence
+      + s.totals.cashCollectedPence
       - s.totals.purchasesPaidPence
       - s.totals.totalExpensesPence;
     expect(s.totals.endingCashPence).toBe(expected);
   });
 
-  it('getCashFlow totalLiquid = endingCash + endingMomo', () => {
+  it('liquid balance includes separately classified cash, MoMo and settled card', () => {
     const cf = getCashFlow(s);
-    expect(cf.totalLiquidPence).toBe(cf.endingCashPence + cf.endingMomoPence);
+    expect(cf.totalLiquidPence).toBe(cf.endingCashPence + cf.endingMomoPence + cf.endingCardPence);
   });
 
   it('purchases paid + outstanding = total purchases', () => {

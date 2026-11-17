@@ -1,0 +1,17 @@
+/* Readable secondary labels on public light surfaces; authenticated UI is untouched. */
+.commercial-public [class*="text-ink/"],
+.commercial-public [class*="text-black/"],
+.commercial-public [class*="text-muted/"] ,
+.commercial-public .text-muted {
+  color: #475569;
+}
+.commercial-public .text-success,
+.commercial-public .text-emerald-600 { color: #047857; }
+.commercial-public .text-amber-600 { color: #92400e; }
+.commercial-public [class*="text-accent/"] { color: #1e40af; }
+/* CTA components may retain a muted default class alongside their on-blue variant. */
+.commercial-public [class*="text-white/"] { color: #ffffff; }
+.commercial-public [tabindex="0"]:focus-visible {
+  outline: 2px solid #1e40af;
+  outline-offset: 3px;
+}

@@ -3,9 +3,9 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * P0-B: Production/Preview Vercel builds must use Prisma's default advisory
+ * P0-B: Separately approved migrations must use Prisma's default advisory
  * lock during `prisma migrate deploy`. Disabling the lock allows concurrent
- * builds against the same database to race migration application.
+ * migration runners against the same database to race migration application.
  *
  * Migrations use `directUrl` (POSTGRES_URL_NON_POOLING) from
  * prisma/schema.postgres.prisma — not the pooled runtime URL.
@@ -13,16 +13,16 @@ import { describe, expect, it } from 'vitest';
  * Boundary: advisory locking serializes migrate deploy only. It does not
  * authorise Production releases — that remains Gate 3 / P0-A / Owner controls.
  */
-describe('P0-B build:vercel migration lock contract', () => {
+describe('P0-B separate migration lock and pure-build contract', () => {
   const packageJsonPath = path.join(process.cwd(), 'package.json');
   const schemaPath = path.join(process.cwd(), 'prisma', 'schema.postgres.prisma');
   const vercelJsonPath = path.join(process.cwd(), 'vercel.json');
 
-  it('does not disable Prisma advisory locking in build:vercel', () => {
+  it('does not disable Prisma advisory locking in the explicit migration command', () => {
     const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
       scripts?: Record<string, string>;
     };
-    const buildVercel = pkg.scripts?.['build:vercel'] ?? '';
+    const buildVercel = pkg.scripts?.['db:migrate:deploy'] ?? '';
 
     expect(buildVercel).toContain('prisma migrate deploy');
     expect(buildVercel).toContain('--schema=prisma/schema.postgres.prisma');
@@ -30,16 +30,11 @@ describe('P0-B build:vercel migration lock contract', () => {
     expect(buildVercel).not.toContain('PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK');
   });
 
-  it('keeps migrate deploy before next build so migration failure fails the release', () => {
-    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
-      scripts?: Record<string, string>;
-    };
-    const buildVercel = pkg.scripts?.['build:vercel'] ?? '';
-    const migrateIdx = buildVercel.indexOf('prisma migrate deploy');
-    const nextBuildIdx = buildVercel.indexOf('next build');
-
-    expect(migrateIdx).toBeGreaterThanOrEqual(0);
-    expect(nextBuildIdx).toBeGreaterThan(migrateIdx);
+  it('keeps schema migration out of automatic Vercel builds', () => {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    expect(pkg.scripts['build:vercel']).toContain('next build');
+    expect(pkg.scripts['build:vercel']).not.toMatch(/migrate|db push|seed/);
+    expect(pkg.scripts['db:migrate:deploy']).toBe('prisma migrate deploy --schema=prisma/schema.postgres.prisma');
   });
 
   it('configures Postgres schema with pooled url and directUrl for migrations', () => {

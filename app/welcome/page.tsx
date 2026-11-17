@@ -1,3 +1,6 @@
+import GettingStarted from '@/components/marketing/GettingStarted';
+import PlanComparison from '@/components/marketing/PlanComparison';
+import RetailCampaignSection from '@/components/marketing/RetailCampaignSection';
 import Link from 'next/link';
 import './welcome-marketing.css';
 import WelcomePricingPreview, { type WelcomePlanPreview } from '@/components/WelcomePricingPreview';
@@ -226,6 +229,9 @@ export default function WelcomePage() {
             <WhatsAppDemoButton size="nav" />
           </div>
         </div>
+        <nav aria-label="Mobile navigation" className="flex gap-1 overflow-x-auto border-t border-slate-100 px-3 md:hidden">
+          {NAV_LINKS.map(link => <a key={link.href} href={link.href} className="inline-flex min-h-11 shrink-0 items-center px-3 text-sm font-semibold text-slate-700">{link.label}</a>)}
+        </nav>
       </header>
 
       <section className="relative px-4 pb-5 pt-5 sm:px-6 sm:pb-8 sm:pt-8">
@@ -257,7 +263,14 @@ export default function WelcomePage() {
         </div>
       </section>
 
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+        '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'TillFlow',
+        applicationCategory: 'BusinessApplication', operatingSystem: 'Web', url: 'https://www.tillflow.app/welcome',
+        description: 'POS, inventory and financial management for Ghanaian retailers.',
+        offers: Object.entries(PLAN_MONTHLY_PRICES).map(([plan, price]) => ({ '@type': 'Offer', name: `${plan} monthly`, price, priceCurrency: 'GHS', url: `https://www.tillflow.app/register?plan=${plan}` })),
+      }).replace(/</g, '\u003c') }} />
       <EarlyNamedProof />
+      <RetailCampaignSection />
       <HopeStrip />
       <OwnerMomentsStrip />
       <RetailRealityBelt />
@@ -285,9 +298,12 @@ export default function WelcomePage() {
             </p>
           </div>
           <WelcomePricingPreview plans={planPreview} />
+          <PlanComparison />
           <ObjectionStrip />
         </div>
       </section>
+
+      <GettingStarted />
 
       <RevealOnScroll>
         <section className="border-y border-accent/20 bg-accent px-4 py-8 text-white sm:px-6 sm:py-12">
@@ -320,6 +336,12 @@ export default function WelcomePage() {
             <p className="mt-2 text-xs leading-5 text-ink/45">
               Built for Ghanaian retail · Works on phone, tablet and laptop
             </p>
+            <nav aria-label="Footer" className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold text-accent">
+              <Link href="/demo" className="inline-flex min-h-11 items-center">Explore demo</Link>
+              <a href="#pricing" className="inline-flex min-h-11 items-center">Plans and pricing</a>
+              <Link href="/register" className="inline-flex min-h-11 items-center">Get started</Link>
+              <a href="tel:+233547016160" className="inline-flex min-h-11 items-center">+233 54 701 6160</a>
+            </nav>
             <p className="mt-2 text-[11px] text-muted">© 2026 TillFlow. A Tish Group product.</p>
           </div>
         </footer>

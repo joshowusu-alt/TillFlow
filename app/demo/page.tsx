@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { buildDemoLedger } from '@/lib/demo-fixtures';
-import { ADOM_RETAIL_DEMO_NAME, ADOM_RETAIL_DEMO_SLUG, DEMO_AGENT_TALKING_POINTS, DEMO_PERIOD_DAYS } from '@/lib/demo-sandbox/constants';
+import { ADOM_RETAIL_DEMO_NAME, DEMO_AGENT_TALKING_POINTS, DEMO_PERIOD_DAYS } from '@/lib/demo-sandbox/constants';
 import { formatMoney } from '@/lib/format';
 
 const STEPS = [
@@ -89,9 +89,9 @@ export default function DemoHubPage() {
 
       <section className="rounded-2xl border border-black/8 bg-white p-5 text-sm text-muted">
         <p>
-          Live storefront preview:{' '}
-          <Link href={`/shop/${ADOM_RETAIL_DEMO_SLUG}`} className="font-semibold text-accent hover:underline">
-            /shop/{ADOM_RETAIL_DEMO_SLUG}
+          Fictional storefront preview:{' '}
+          <Link href="/demo/store" className="font-semibold text-accent hover:underline">
+            /demo/store
           </Link>
           . This is sample business data — your own TillFlow account will show your real sales, stock, payments and
           reports.

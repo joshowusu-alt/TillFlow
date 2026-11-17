@@ -1,0 +1,102 @@
+{
+  "results": [
+    {
+      "width": 320,
+      "scroll": 320,
+      "missingAlt": 0,
+      "videoAutoplay": false,
+      "videoPreload": "none",
+      "canonical": "https://www.tillflow.app/welcome",
+      "signupLinks": [
+        "/register?plan=STARTER&billing=MONTHLY",
+        "/register?plan=GROWTH&billing=MONTHLY",
+        "/register?plan=PRO&billing=MONTHLY"
+      ]
+    },
+    {
+      "width": 360,
+      "scroll": 360,
+      "missingAlt": 0,
+      "videoAutoplay": false,
+      "videoPreload": "none",
+      "canonical": "https://www.tillflow.app/welcome",
+      "signupLinks": [
+        "/register?plan=STARTER&billing=MONTHLY",
+        "/register?plan=GROWTH&billing=MONTHLY",
+        "/register?plan=PRO&billing=MONTHLY"
+      ]
+    },
+    {
+      "width": 390,
+      "scroll": 390,
+      "missingAlt": 0,
+      "videoAutoplay": false,
+      "videoPreload": "none",
+      "canonical": "https://www.tillflow.app/welcome",
+      "signupLinks": [
+        "/register?plan=STARTER&billing=MONTHLY",
+        "/register?plan=GROWTH&billing=MONTHLY",
+        "/register?plan=PRO&billing=MONTHLY"
+      ]
+    },
+    {
+      "width": 768,
+      "scroll": 768,
+      "missingAlt": 0,
+      "videoAutoplay": false,
+      "videoPreload": "none",
+      "canonical": "https://www.tillflow.app/welcome",
+      "signupLinks": [
+        "/register?plan=STARTER&billing=MONTHLY",
+        "/register?plan=GROWTH&billing=MONTHLY",
+        "/register?plan=PRO&billing=MONTHLY"
+      ]
+    },
+    {
+      "width": 1440,
+      "scroll": 1440,
+      "missingAlt": 0,
+      "videoAutoplay": false,
+      "videoPreload": "none",
+      "canonical": "https://www.tillflow.app/welcome",
+      "signupLinks": [
+        "/register?plan=STARTER&billing=MONTHLY",
+        "/register?plan=GROWTH&billing=MONTHLY",
+        "/register?plan=PRO&billing=MONTHLY"
+      ]
+    },
+    {
+      "workflow": "barcode -> cash -> receipt",
+      "result": "pass",
+      "total": "39.00",
+      "tendered": "50.00",
+      "change": "11.00"
+    },
+    {
+      "workflow": "registration plan + billing continuity",
+      "result": "pass",
+      "submitted": false
+    },
+    {
+      "route": "/demo",
+      "status": 200,
+      "overflow": false
+    },
+    {
+      "route": "/demo/dashboard",
+      "status": 200,
+      "overflow": false
+    },
+    {
+      "route": "/demo/reports",
+      "status": 200,
+      "overflow": false
+    },
+    {
+      "route": "/demo/inventory",
+      "status": 200,
+      "overflow": false
+    }
+  ],
+  "errors": []
+}

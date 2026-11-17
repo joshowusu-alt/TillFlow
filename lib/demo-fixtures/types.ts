@@ -83,6 +83,7 @@ export interface DemoExpense {
 }
 
 export interface DemoCustomerReceipt {
+  paymentMethod: 'CASH' | 'MOMO';
   id: string;
   date: Date;
   customerId: string;
@@ -116,6 +117,10 @@ export interface DemoTotals {
   creditCollectedPence: number;
   endingCashPence: number;
   endingMomoPence: number;
+  endingCardPence: number;
+  cashCollectedPence: number;
+  momoCollectedPence: number;
+  customerCreditPence: number;
   arBalancePence: number;
   apBalancePence: number;
   openingInventoryValuePence: number;
