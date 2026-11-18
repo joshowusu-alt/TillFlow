@@ -111,6 +111,12 @@ function classifyCreateSaleError(error: unknown): ProcessOfflineSaleResult | nul
   if (/Lowest amount for this dish|Other amount is unavailable|Enter a valid amount in cedis/.test(message)) {
     return review('dish_amount_changed');
   }
+  if (message.endsWith(' is not available on that day.')) {
+    return review('dish_off_day');
+  }
+  if (message.startsWith('The sale time is needed to check when ')) {
+    return review('missing_sale_time');
+  }
   if (message.includes('Insufficient on hand') || message.includes('Insufficient stock')) {
     return review('insufficient_stock');
   }

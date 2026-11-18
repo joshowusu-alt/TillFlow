@@ -125,6 +125,14 @@ describe('processOfflineSale — offline lifecycle', () => {
     expect(mockCreateSale.mock.calls[0][0].bypassOpenTillRequirement).toBeUndefined();
   });
 
+  it('keeps an off-day replay for review and passes the recorded sale time', async () => {
+    const captured = new Date(Date.now() - 60 * 60_000);
+    mockCreateSale.mockRejectedValueOnce(new Error('Fufu is not available on that day.'));
+    const result = await processOfflineSale(await makePayload({ localSaleTime: captured.toISOString() }), USER);
+    expect(mockCreateSale).toHaveBeenCalledWith(expect.objectContaining({ createdAt: captured }));
+    expect(result).toEqual({ success: false, status: 'needs_review', reason: 'dish_off_day' });
+  });
+
   it('always passes capturedShiftId and does not force saleSource from a pre-tx shift read', async () => {
     mockCreateSale.mockResolvedValue({ id: 'inv-captured' });
 
