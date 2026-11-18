@@ -1093,4 +1093,36 @@ describePg('food release stress on throwaway Postgres', () => {
     expect(expired.errors).toEqual([]);
     for (const productId of ids) expect(await onHand(productId)).toBe(3);
   }, 120000);
+
+  it('keeps existing removed and off-day dishes on amendments, but refuses adding either as a new line', async () => {
+    const removed = await dishes.saveDish({ businessId, draft: draft({ name: 'Removed amendment dish', startingPriceCedis: '20' }) });
+    const scheduled = await dishes.saveDish({ businessId, draft: draft({ name: 'Scheduled amendment dish', startingPriceCedis: '20' }) });
+    const replacement = await dishes.saveDish({ businessId, draft: draft({ name: 'Replacement amendment dish', startingPriceCedis: '20' }) });
+    const line = async (productId: string) => ({ productId, unitId: await baseUnit(productId), qtyInUnit: 1 });
+    const removedLine = await line(removed.id);
+    const scheduledLine = await line(scheduled.id);
+    const replacementLine = await line(replacement.id);
+    const originalSaleTime = new Date(Date.now() - 86_400_000);
+    const sale = await sales.createSale({
+      businessId, storeId, tillId, cashierUserId: userId, paymentStatus: 'PAID',
+      createdAt: originalSaleTime,
+      lines: [removedLine, scheduledLine, replacementLine],
+      payments: [{ method: 'CASH', amountPence: 6000 }],
+    });
+    const kept = await db.salesInvoiceLine.findMany({
+      where: { salesInvoiceId: sale.id, productId: { in: [removed.id, scheduled.id] } },
+    });
+    await db.product.update({ where: { id: removed.id }, data: { active: false } });
+    const originalDay = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][originalSaleTime.getUTCDay()];
+    await db.foodDish.update({ where: { productId: scheduled.id }, data: { availableDays: originalDay } });
+    const amendment = {
+      businessId, salesInvoiceId: sale.id, userId,
+      reason: 'Replace one line', keepLineIds: kept.map(item => item.id),
+    };
+    await expect(sales.amendSale({ ...amendment, newLines: [removedLine] })).rejects.toThrow('no longer on the menu');
+    await expect(sales.amendSale({ ...amendment, newLines: [scheduledLine] })).rejects.toThrow('not available on that day');
+    await sales.amendSale({ ...amendment, newLines: [replacementLine] });
+    expect(await db.salesInvoiceLine.count({ where: { id: { in: amendment.keepLineIds }, salesInvoiceId: sale.id } })).toBe(2);
+  });
+
 });

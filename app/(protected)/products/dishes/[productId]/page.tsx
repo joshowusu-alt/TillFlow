@@ -1,3 +1,4 @@
+import { legacyDeletedDishIds } from '@/lib/food/deleted-dish';
 import { parseDishDays } from '@/lib/food/dish-schedule';
 import FoodRecordHistory from '@/components/food/FoodRecordHistory';
 import { loadFoodRecordHistory } from '@/lib/food/record-history';
@@ -27,13 +28,15 @@ export default async function DishPage(props: { params: Promise<{ productId: str
   const dish = await prisma.foodDish.findFirst({
     where: { productId, businessId: business.id },
     include: {
-      product: { select: { active: true, categoryId: true, name: true, sellingPriceBasePence: true, defaultCostBasePence: true, storefrontDescription: true, storefrontPublished: true } },
+      product: { select: { active: true, deletedAt: true, categoryId: true, name: true, sellingPriceBasePence: true, defaultCostBasePence: true, storefrontDescription: true, storefrontPublished: true } },
       sizes: { orderBy: { sortOrder: 'asc' } },
       inclusions: { orderBy: { sortOrder: 'asc' } },
       groups: { orderBy: { sortOrder: 'asc' }, include: { addons: { orderBy: { sortOrder: 'asc' } } } },
     },
   });
-  if (!dish || (user.role === 'CASHIER' && dish.product.active === false)) notFound();
+  if (!dish || dish.product.deletedAt || (user.role === 'CASHIER' && dish.product.active === false)) notFound();
+
+  if (dish.product.active === false && (await legacyDeletedDishIds(business.id, productId)).length) notFound();
 
   const balance = dish.stockMode === 'COUNTED' && branch ? await prisma.inventoryBalance.findUnique({
     where: { storeId_productId: { storeId: branch.id, productId } },

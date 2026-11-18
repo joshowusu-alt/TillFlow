@@ -1,3 +1,4 @@
+import { legacyDeletedDishIds } from '@/lib/food/deleted-dish';
 import DishMenuControl from '@/components/food/DishMenuControl';
 import { dishDaysLabel } from '@/lib/food/dish-schedule';
 import ProductCategoryField from '@/components/products/ProductCategoryField';
@@ -240,7 +241,9 @@ export default async function ProductsPage(
   const activeTab = searchParams?.tab || 'products';
   const removedDishes = foodBusiness && isManager && !issueActive && activeTab === 'products'
     ? await prisma.product.findMany({
-        where: { businessId: business.id, active: false, foodDish: { isNot: null }, ...(q ? { name: textSearch } : {}) },
+        where: { businessId: business.id, active: false, deletedAt: null,
+          id: { notIn: await legacyDeletedDishIds(business.id) }, foodDish: { isNot: null },
+          ...(q ? { name: textSearch } : {}) },
         select: { id: true, name: true },
         orderBy: { name: 'asc' },
       })

@@ -1710,7 +1710,7 @@ export async function amendSale(input: AmendSaleInput) {
     );
 
     const priced = isFoodBusiness(invoice.business.businessCategory)
-      ? await priceFoodSaleLines(input.businessId, input.newLines!, invoice.createdAt)
+      ? await priceFoodSaleLines(input.businessId, input.newLines!)
       : input.newLines!;
     newLineDetails = buildLinePricing(priced, unitMap, invoice.business.vatEnabled);
   }

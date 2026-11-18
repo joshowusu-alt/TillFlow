@@ -713,6 +713,7 @@ model Product {
   barcode               String?
   name                  String
   active                Boolean  @default(true)
+  deletedAt             DateTime?
   imageUrl              String?
   sellingPriceBasePence Int
   allowZeroPrice        Boolean  @default(false)
