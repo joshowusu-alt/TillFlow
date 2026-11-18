@@ -715,7 +715,7 @@ async function createSaleImpl(input: CreateSaleInput) {
       }
       const lines = input.onlineOrderId || !isFoodBusiness(business.businessCategory)
         ? input.lines
-        : await priceFoodSaleLines(input.businessId, input.lines);
+        : await priceFoodSaleLines(input.businessId, input.lines, input.createdAt ?? (capturedShiftId ? null : undefined));
       return buildLinePricing(lines, unitMap, business.vatEnabled);
     },
     { stage: 'cart-pricing', rowCount: input.lines.length },

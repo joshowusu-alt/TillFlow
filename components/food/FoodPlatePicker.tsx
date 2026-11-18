@@ -1,5 +1,6 @@
 'use client';
 
+import { dishOffDayLabel } from '@/lib/food/dish-schedule';
 import { useId, useMemo, useState } from 'react';
 import { amountLineVat } from '@/lib/food/amount-vat';
 import { formatMoney } from '@/lib/format';
@@ -71,6 +72,7 @@ export default function FoodPlatePicker({
     }
   }, [menu, selection, startingPricePence, allowTillAmount]);
 
+  const offDayLabel = dishOffDayLabel(menu);
   const plate = priced.plate;
   let displayedPrice = plate?.platePricePence ?? 0;
   if (plate?.customAmountPence !== undefined && amountIncludesVat) {
@@ -193,14 +195,15 @@ export default function FoodPlatePicker({
           </div>
         ))}
 
+        {offDayLabel && <p className="mt-4 text-sm text-rose-700">{allowTillAmount ? 'Not today' : offDayLabel}</p>}
         {priced.error && (!otherAmount || amount) ? <p className="mt-4 text-sm text-rose-700">{priced.error}</p> : null}
         <div className="mt-4 flex items-center justify-between gap-3">
           <div className="text-base font-bold">{priced.plate ? formatMoney(displayedPrice, currency) : '—'}</div>
           <button
             type="button"
             className="btn-primary"
-            disabled={!priced.plate}
-            onClick={() => priced.plate && onConfirm(selection, priced.plate.platePricePence)}
+            disabled={!priced.plate || Boolean(offDayLabel)}
+            onClick={() => priced.plate && !dishOffDayLabel(menu) && onConfirm(selection, priced.plate.platePricePence)}
           >
             {editAmount ? 'Save amount' : otherAmount && priced.plate ? `Add ${formatMoney(displayedPrice, currency)}` : 'Add plate'}
           </button>

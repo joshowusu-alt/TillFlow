@@ -1,5 +1,7 @@
 'use client';
 
+import { useDishScheduleRefresh } from '@/hooks/useDishScheduleRefresh';
+import { isDishAvailableToday } from '@/lib/food/dish-schedule';
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -193,6 +195,7 @@ export default function PosClient({
   const router = useRouter();
   const safeUnits = useMemo(() => units ?? [], [units]);
   const [productOptions, setProductOptions] = useState<ProductDto[]>(products);
+  const scheduleRevision = useDishScheduleRefresh(Boolean(business.foodBusiness));
   const [productId, setProductId] = useState(products[0]?.id ?? '');
   const [unitId, setUnitId] = useState(products[0]?.units.find((u) => u.isBaseUnit)?.id ?? '');
   const [qtyInUnitInput, setQtyInUnitInput] = useState('1');
@@ -452,8 +455,9 @@ export default function PosClient({
     const product = getProduct(targetProductId);
     const unit = getUnit(product, targetUnitId);
     if (!product || !unit) return desiredQty;
-    if (product.food?.soldOut) {
-      setStockAlert(`${product.name} is sold out.`);
+    const offDay = !isDishAvailableToday(product.food);
+    if (offDay || product.food?.soldOut) {
+      setStockAlert(offDay ? `${product.name} is not available today.` : `${product.name} is sold out.`);
       return 0;
     }
     if (product.food?.stockMode === 'NOT_COUNTED') {
@@ -504,8 +508,9 @@ export default function PosClient({
   const addPlateToCart = useCallback((product: ProductDto, plate?: PlateSelection) => {
     const baseUnitId = getProductBaseUnitId(product);
     if (!baseUnitId) return;
-    if (product.food?.soldOut) {
-      setStockAlert(`${product.name} is sold out.`);
+    const offDay = !isDishAvailableToday(product.food);
+    if (offDay || product.food?.soldOut) {
+      setStockAlert(offDay ? `${product.name} is not available today.` : `${product.name} is sold out.`);
       return;
     }
     if (product.food && !plate && (product.food.allowCustomAmount || dishNeedsPicker(product.food))) {
@@ -951,7 +956,10 @@ export default function PosClient({
   );
 
   // Pre-compute available stock per product once per cart change — O(n) instead of O(n²)
-  const availableBaseMap = useMemo(() => buildAvailableBaseMap(cart, productMap), [cart, productMap]);
+  const availableBaseMap = useMemo(() => {
+    void scheduleRevision;
+    return buildAvailableBaseMap(cart, productMap);
+  }, [cart, productMap, scheduleRevision]);
 
   const totals = useMemo(() => sumCartTotals(cartDetails), [cartDetails]);
 
@@ -1176,6 +1184,11 @@ export default function PosClient({
 
   const handleCompleteSale = async () => {
     if (!canSubmit || isCompletingSale) return;
+    const offDayLine = cartDetails.find((line) => !isDishAvailableToday(line.product.food));
+    if (offDayLine) {
+      setSaleError(`${offDayLine.product.name} is not available today. Remove it to finish the sale.`);
+      return;
+    }
 
     const dueResolved = resolveDueDateForSubmit({
       paymentStatus,

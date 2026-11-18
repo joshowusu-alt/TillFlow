@@ -1,3 +1,4 @@
+import { isDishAvailableToday } from '@/lib/food/dish-schedule';
 import { UserError } from '@/lib/action-utils';
 import { isFoodBusiness } from '@/lib/food/business';
 import { loadFoodCatalogue } from '@/lib/food/load-menus';
@@ -25,7 +26,7 @@ function asUserError(error: unknown): never {
 }
 
 /** Replace client prices on dish lines. Other products in the same sale are left alone. */
-export async function priceFoodSaleLines<T extends PricedSaleLine>(businessId: string, lines: T[]): Promise<T[]> {
+export async function priceFoodSaleLines<T extends PricedSaleLine>(businessId: string, lines: T[], saleTime: Date | null = new Date()): Promise<T[]> {
   if (lines.length === 0) return lines;
   const { menus, startingPrices, inactiveProductIds } = await loadFoodCatalogue(
     businessId,
@@ -38,6 +39,9 @@ export async function priceFoodSaleLines<T extends PricedSaleLine>(businessId: s
       if (!menu) return line.plateSnapshotJson ? { ...line, plateSnapshotJson: null } : line;
       if (inactiveProductIds.has(line.productId)) {
         throw new PlateError(`${menu.name} is no longer on the menu.`);
+      }
+      if (!isDishAvailableToday(menu, saleTime)) {
+        throw new PlateError(saleTime ? `${menu.name} is not available on that day.` : `The sale time is needed to check when ${menu.name} is available.`);
       }
       const snapshot = pricePlate(menu, line.plate, startingPrices.get(line.productId) ?? 0, true);
       const qty = Math.floor(line.qtyInUnit);
@@ -84,12 +88,16 @@ export async function repriceFoodCheckoutLines<T extends CheckoutPricedLine>(inp
     input.lines.map((line) => line.productId),
   );
   if (menus.size === 0) return input.lines;
+  const orderTime = new Date();
   try {
     return input.lines.map((line, index) => {
       const menu = menus.get(line.productId);
       if (!menu) return line;
       if (inactiveProductIds.has(line.productId)) {
         throw new PlateError(`${menu.name} is no longer on the menu.`);
+      }
+      if (!isDishAvailableToday(menu, orderTime)) {
+        throw new PlateError(`${menu.name} is not available today.`);
       }
       const snapshot = pricePlate(menu, input.plates[index], startingPrices.get(line.productId) ?? 0);
       const lineSubtotalPence = snapshot.platePricePence * line.qtyInUnit;

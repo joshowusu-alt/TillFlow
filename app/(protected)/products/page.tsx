@@ -1,3 +1,6 @@
+import { legacyDeletedDishIds } from '@/lib/food/deleted-dish';
+import DishMenuControl from '@/components/food/DishMenuControl';
+import { dishDaysLabel } from '@/lib/food/dish-schedule';
 import ProductCategoryField from '@/components/products/ProductCategoryField';
 import CatalogueClassificationNav from '@/components/products/CatalogueClassificationNav';
 import ProductClassificationLabel from '@/components/products/ProductClassificationLabel';
@@ -177,7 +180,7 @@ export default async function ProductsPage(
       division: { select: { name: true } },
       group: { select: { name: true, division: { select: { name: true } } } },
       preferredSupplier: { select: { id: true, name: true } },
-      foodDish: { select: { sizes: { where: { active: true }, select: { pricePence: true } } } },
+      foodDish: { select: { availableDays: true, sizes: { where: { active: true }, select: { pricePence: true } } } },
     },
     orderBy: { name: 'asc' },
     skip: (listPage - 1) * DEFAULT_PAGE_SIZE,
@@ -236,6 +239,15 @@ export default async function ProductsPage(
   const totalProductPages = listedProducts.totalPages;
   const preferredBaseUnitId = defaultBaseUnitId(units);
   const activeTab = searchParams?.tab || 'products';
+  const removedDishes = foodBusiness && isManager && !issueActive && activeTab === 'products'
+    ? await prisma.product.findMany({
+        where: { businessId: business.id, active: false, deletedAt: null,
+          id: { notIn: await legacyDeletedDishIds(business.id) }, foodDish: { isNot: null },
+          ...(q ? { name: textSearch } : {}) },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      })
+    : [];
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
   const canBulkGenerateBarcodes = isManager && features.advancedOps && !issueActive;
   const barcodesGeneratedFlash = Math.max(0, parseInt(searchParams?.barcodesGenerated ?? '', 10) || 0);
@@ -600,6 +612,7 @@ export default async function ProductsPage(
                 </CompactMobileListItem>
               ) : products.map((product) => {
                 const unitLabel = catalogueUnitLabel(product);
+                const scheduleLabel = foodBusiness ? dishDaysLabel(product.foodDish?.availableDays) : null;
                 const productHref = foodBusiness && product.foodDish ? dishSettingsHref(product.id) : `/products/${product.id}`;
 
                 return (
@@ -623,6 +636,7 @@ export default async function ProductsPage(
                           )}
                           <Link href={productHref} className="min-h-[44px] min-w-0 break-words py-2 [overflow-wrap:anywhere] hover:underline">
                             {[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
+                            {scheduleLabel && <span className="block text-xs font-normal text-black/60">{scheduleLabel}</span>}
                           </Link>
                         </div>
                       }
@@ -723,6 +737,7 @@ export default async function ProductsPage(
                   )}
                   {products.map((product) => {
                     const unitLabel = catalogueUnitLabel(product);
+                    const scheduleLabel = foodBusiness ? dishDaysLabel(product.foodDish?.availableDays) : null;
                     const productHref = foodBusiness && product.foodDish ? dishSettingsHref(product.id) : `/products/${product.id}`;
                     return (
                       <tr key={product.id} className="rounded-xl bg-white transition-colors duration-150 hover:bg-slate-50">
@@ -744,6 +759,7 @@ export default async function ProductsPage(
                         <td className="px-3 py-3 font-semibold">
                           <Link href={productHref} className="hover:underline">
                             {[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
+                            {scheduleLabel && <span className="block text-xs font-normal text-black/60">{scheduleLabel}</span>}
                           </Link>
                         </td>
                         <td className="hidden sm:table-cell px-3 py-3">
@@ -830,6 +846,20 @@ export default async function ProductsPage(
             />
           </div>
         </>
+      )}
+
+      {removedDishes.length > 0 && (
+        <details className="card px-4">
+          <summary className="min-h-11 cursor-pointer py-3 font-semibold">Removed from menu</summary>
+          <ul className="divide-y divide-black/10 pb-3">
+            {removedDishes.map((dish) => (
+              <li key={dish.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <Link className="underline" href={dishSettingsHref(dish.id)}>{dish.name}</Link>
+                {user.role === 'OWNER' && <DishMenuControl id={dish.id} name={dish.name} removed />}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
 
       {/* ───── Categories Tab ───── */}

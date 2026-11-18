@@ -776,7 +776,7 @@ export async function softDeleteProduct(
 
   await prisma.product.update({
     where: { id: product.id },
-    data: { active: false },
+    data: { active: false, deletedAt: new Date() },
   });
 
   return product;

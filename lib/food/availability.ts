@@ -1,3 +1,4 @@
+import { isDishAvailableToday, type DishSchedule } from '@/lib/food/dish-schedule';
 import type { FoodMenu } from '@/lib/food/plate';
 
 export type FoodAvailability = 'available' | 'low' | 'sold_out';
@@ -15,6 +16,7 @@ export function foodAvailability(menu: Pick<FoodMenu, 'stockMode' | 'soldOut' | 
 }
 
 export function foodAvailabilityText(menu: FoodMenu, onHand: number): string | null {
+  if (!isDishAvailableToday(menu)) return 'Not today';
   const state = foodAvailability(menu, onHand);
   if (state === 'sold_out') return 'Sold out';
   if (state === 'low') return 'Low';
@@ -23,9 +25,9 @@ export function foodAvailabilityText(menu: FoodMenu, onHand: number): string | n
 }
 
 /** Not-counted dishes are available or sold out. They do not use a quantity. */
-export function sellableBaseQty(menu: Pick<FoodMenu, 'stockMode' | 'soldOut'> | null | undefined, onHand: number): number {
+export function sellableBaseQty(menu: (Pick<FoodMenu, 'stockMode' | 'soldOut'> & DishSchedule) | null | undefined, onHand: number): number {
   if (!menu) return onHand;
-  if (menu.soldOut) return 0;
+  if (menu.soldOut || !isDishAvailableToday(menu)) return 0;
   if (menu.stockMode === 'NOT_COUNTED') return Number.MAX_SAFE_INTEGER;
   return onHand;
 }

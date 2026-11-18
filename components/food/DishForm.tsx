@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { saveDishAction } from '@/app/actions/food';
 import { emptyDishDraft, type DishDraft } from '@/lib/food/dish-draft';
 
+import { DISH_DAYS } from '@/lib/food/dish-schedule';
+
 import IngredientRows, { type IngredientOption } from './IngredientRows';
 
 export default function DishForm({ initial, productId, ingredients, categories }: { initial?: DishDraft; productId?: string; ingredients: IngredientOption[]; categories: { id: string; name: string }[] }) {
@@ -12,6 +14,7 @@ export default function DishForm({ initial, productId, ingredients, categories }
   const [draft, setDraft] = useState<DishDraft>(initial ?? emptyDishDraft());
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const selectedDays = draft.availableDays ?? DISH_DAYS;
   const counted = draft.stockMode === 'COUNTED';
 
   const hasRecipe = Boolean(draft.recipe?.length || draft.sizes.some(size => size.recipe?.length));
@@ -22,6 +25,7 @@ export default function DishForm({ initial, productId, ingredients, categories }
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (!selectedDays.length) return;
     setPending(true);
     setError(null);
     const savedDraft = counted ? draft : {
@@ -87,6 +91,23 @@ export default function DishForm({ initial, productId, ingredients, categories }
       </section>
 
       <section className="card space-y-3 p-4">
+        <fieldset className="space-y-2">
+          <legend className="text-base font-semibold">Available on</legend>
+          <p className="text-sm text-black/60">Turn off days you don&apos;t sell this dish.</p>
+          <div className="grid grid-cols-7 gap-1">
+            {DISH_DAYS.map((day) => {
+              const selected = selectedDays.includes(day);
+              return (
+                <button key={day} type="button" aria-pressed={selected}
+                  className={`min-h-11 rounded-full text-sm font-semibold ${selected ? 'bg-accent text-white' : 'bg-black/5'}`}
+                  onClick={() => update('availableDays', selected ? selectedDays.filter((value) => value !== day) : [...selectedDays, day])}>
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+          {!selectedDays.length && <p role="alert" className="text-sm text-red-700">Choose at least one day.</p>}
+        </fieldset>
         <h2 className="text-base font-semibold">Portions</h2>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={`rounded-full px-3 py-1.5 text-sm font-semibold ${!counted ? 'bg-accent text-white' : 'bg-black/5'}`} aria-pressed={!counted} onClick={() => update('stockMode', 'NOT_COUNTED')}>
@@ -221,7 +242,7 @@ export default function DishForm({ initial, productId, ingredients, categories }
       </section>
 
       {error ? <p className="text-sm text-rose-700">{error}</p> : null}
-      <button type="submit" className="btn-primary" disabled={pending}>{pending ? 'Saving…' : productId ? 'Save dish' : 'Add dish'}</button>
+      <button type="submit" className="btn-primary" disabled={pending || !selectedDays.length}>{pending ? 'Saving…' : productId ? 'Save dish' : 'Add dish'}</button>
     </form>
   );
 }
