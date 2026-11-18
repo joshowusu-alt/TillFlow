@@ -94,12 +94,12 @@ export default function DishForm({ initial, productId, ingredients, categories }
         <fieldset className="space-y-2">
           <legend className="text-base font-semibold">Available on</legend>
           <p className="text-sm text-black/60">Turn off days you don&apos;t sell this dish.</p>
-          <div className="flex flex-wrap gap-1">
+          <div className="grid grid-cols-7 gap-1">
             {DISH_DAYS.map((day) => {
               const selected = selectedDays.includes(day);
               return (
                 <button key={day} type="button" aria-pressed={selected}
-                  className={`min-h-11 rounded-full px-2 text-sm font-semibold ${selected ? 'bg-accent text-white' : 'bg-black/5'}`}
+                  className={`min-h-11 rounded-full text-sm font-semibold ${selected ? 'bg-accent text-white' : 'bg-black/5'}`}
                   onClick={() => update('availableDays', selected ? selectedDays.filter((value) => value !== day) : [...selectedDays, day])}>
                   {day}
                 </button>
