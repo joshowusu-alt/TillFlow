@@ -1702,7 +1702,7 @@ export default function StorefrontClient({
                               Available for pickup
                             </div>
                           ) : (
-                            <div className="text-[10px] font-semibold text-slate-500">Currently sold out</div>
+                            dishOffDayLabel(product.food) ? null : <div className="text-[10px] font-semibold text-slate-500">Currently sold out</div>
                           )}
                         </div>
                       </div>
