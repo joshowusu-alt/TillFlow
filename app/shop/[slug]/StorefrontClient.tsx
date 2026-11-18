@@ -1,5 +1,7 @@
 'use client';
 
+import { useDishScheduleRefresh } from '@/hooks/useDishScheduleRefresh';
+import { dishOffDayLabel } from '@/lib/food/dish-schedule';
 import React from 'react';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -344,7 +346,7 @@ function ProductDetailSheet({
           ) : null}
           {!inStock ? (
             <div className="absolute inset-0 flex items-center justify-center bg-white/75 backdrop-blur-[1px]">
-              <span className="rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white shadow-sm">Sold out</span>
+              <span className="rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white shadow-sm">{dishOffDayLabel(product.food) ?? 'Sold out'}</span>
             </div>
           ) : null}
           <button
@@ -371,7 +373,7 @@ function ProductDetailSheet({
               {product.food && foodAvailabilityText(product.food, product.onHandBase) === 'Low' ? 'Low — a few portions left' : 'Available for pickup'}
             </div>
           ) : (
-            <div className="mt-1 text-xs font-semibold text-slate-400">{product.food ? 'Sold out' : 'Currently sold out'}</div>
+            <div className="mt-1 text-xs font-semibold text-slate-400">{dishOffDayLabel(product.food) ?? (product.food ? 'Sold out' : 'Currently sold out')}</div>
           )}
 
           {product.storefrontDescription ? (
@@ -478,6 +480,7 @@ export default function StorefrontClient({
   const checkoutKeyRef = useRef<string | null>(null);
   const checkoutPayloadRef = useRef('');
   const [catalogProducts, setCatalogProducts] = useState<PublicStorefront['products']>(() => storefront.products);
+  useDishScheduleRefresh(catalogProducts.some((product) => Boolean(product.food?.availableDays?.length)));
   const [catalogTotal, setCatalogTotal] = useState(storefront.totalProductCount ?? storefront.products.length);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -986,8 +989,10 @@ export default function StorefrontClient({
     // gap used to no-op, leaving the previous total on screen.
     const listed = productsForStore.find((item) => item.id === productId);
     const product = productMap.get(productId) ?? listed;
-    if ((listed?.food ?? product?.food)?.soldOut) {
-      setError(`${product?.name ?? 'This dish'} is sold out.`);
+    const menu = listed?.food ?? product?.food;
+    const scheduleLabel = dishOffDayLabel(menu);
+    if (scheduleLabel || menu?.soldOut) {
+      setError(scheduleLabel ? `${product?.name ?? 'This dish'}: ${scheduleLabel}.` : `${product?.name ?? 'This dish'} is sold out.`);
       return;
     }
     if (product?.food && !plate && dishNeedsPicker(product.food)) {
@@ -1662,7 +1667,7 @@ export default function StorefrontClient({
                           {!inStock ? (
                             <div className="absolute inset-0 flex items-center justify-center bg-white/75 backdrop-blur-[1px]">
                               <span className="rounded-full bg-slate-900 px-3 py-1.5 text-[10px] font-bold text-white shadow-sm">
-                                Sold out
+                                {dishOffDayLabel(product.food) ?? 'Sold out'}
                               </span>
                             </div>
                           ) : null}

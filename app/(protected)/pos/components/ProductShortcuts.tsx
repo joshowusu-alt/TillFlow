@@ -1,5 +1,6 @@
 'use client';
 
+import { isDishAvailableToday } from '@/lib/food/dish-schedule';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { savePosShortcutsAction } from '@/app/actions/pos-shortcuts';
 import { EMPTY_SHORTCUT_LAYOUT, parseShortcutLayout, type ShortcutLayout } from '@/lib/pos/shortcuts';
@@ -195,7 +196,7 @@ export default function ProductShortcuts(props: Props) {
           const product = byId.get(id);
           const unavailable = !product || (validIds !== null && !validIds.has(id));
           const available = unavailable ? 0 : getAvailable(id);
-          const tile = <button key={id} type="button" disabled={!ready || unavailable || available <= 0} className="pos-shortcut-tile min-h-20 min-w-0 rounded-xl border border-black/10 p-3 text-left transition hover:bg-accentSoft disabled:opacity-45" onClick={() => { if (product) onSelect(product); }}><span className="block break-words text-sm font-semibold">{product?.name ?? 'Unavailable product'}</span><span className="mt-1 block text-xs text-black/50">{unavailable ? 'Unavailable' : available <= 0 ? (product?.food ? 'Sold out' : 'Out of stock') : formatDishListPrice(product?.food, product?.sellingPriceBasePence ?? 0, (pence) => formatMoney(pence, currency))}</span></button>;
+          const tile = <button key={id} type="button" disabled={!ready || unavailable || available <= 0} className="pos-shortcut-tile min-h-20 min-w-0 rounded-xl border border-black/10 p-3 text-left transition hover:bg-accentSoft disabled:opacity-45" onClick={() => { if (product) onSelect(product); }}><span className="block break-words text-sm font-semibold">{product?.name ?? 'Unavailable product'}</span><span className="mt-1 block text-xs text-black/50">{unavailable ? 'Unavailable' : available <= 0 ? (!isDishAvailableToday(product?.food) ? 'Not today' : product?.food ? 'Sold out' : 'Out of stock') : formatDishListPrice(product?.food, product?.sellingPriceBasePence ?? 0, (pence) => formatMoney(pence, currency))}</span></button>;
           if (!ready || unavailable || available > 0 || !product?.food || !props.canManageDishes) return tile;
           return <div key={id} className="flex min-w-0 flex-col gap-1">
             {tile}

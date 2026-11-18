@@ -1,3 +1,4 @@
+import { isDishAvailableToday } from '@/lib/food/dish-schedule';
 import { amountLineVat } from '@/lib/food/amount-vat';
 import { computeDiscount, type PosCheckoutTotals, type PosDiscountType } from './pos-checkout';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
@@ -84,7 +85,7 @@ export function getAvailableBase(
   excludeLineId?: string
 ) {
   const product = productMap.get(targetProductId);
-  if (!product) return 0;
+  if (!product || !isDishAvailableToday(product.food)) return 0;
   if (product.food?.soldOut || product.food?.stockMode === 'NOT_COUNTED') {
     return sellableBaseQty(product.food, product.onHandBase);
   }
@@ -222,6 +223,10 @@ export function buildAvailableBaseMap(cart: PosCartLine[], productMap: Map<strin
   const result = new Map<string, number>();
   for (const [productId, used] of usedMap) {
     const product = productMap.get(productId);
+    if (!isDishAvailableToday(product?.food)) {
+      result.set(productId, 0);
+      continue;
+    }
     if (product?.food?.soldOut || product?.food?.stockMode === 'NOT_COUNTED') {
       result.set(productId, sellableBaseQty(product.food, product.onHandBase));
       continue;

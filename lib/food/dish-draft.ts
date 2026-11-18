@@ -1,5 +1,7 @@
 import type { FoodGroupSelection, FoodStockMode } from '@/lib/food/plate';
 
+import { DISH_DAYS, type DishDay } from './dish-schedule';
+
 export type DishDraft = {
   categoryId?: string | null;
   productId?: string | null;
@@ -10,6 +12,7 @@ export type DishDraft = {
   showOnline: boolean;
   stockMode: FoodStockMode;
   soldOut: boolean;
+  availableDays?: DishDay[];
   allowCustomAmount?: boolean;
   minimumAmountCedis?: string;
   lowAt: number;
@@ -34,6 +37,7 @@ export type NormalizedDish = {
   showOnline: boolean;
   stockMode: FoodStockMode;
   soldOut: boolean;
+  availableDays: string | null;
   allowCustomAmount: boolean;
   minimumAmountPence: number | null;
   lowAt: number;
@@ -160,6 +164,11 @@ export function normalizeDishDraft(draft: DishDraft): NormalizedDish {
     };
   });
 
+  const selectedDays = draft.availableDays ?? DISH_DAYS;
+  if (!Array.isArray(selectedDays) || !selectedDays.length || selectedDays.some((day) => !DISH_DAYS.includes(day))) {
+    throw new Error('Choose at least one day.');
+  }
+  const days = DISH_DAYS.filter((day) => selectedDays.includes(day));
   const rawMinimum = draft.minimumAmountCedis?.trim();
   let minimumAmountPence: number | null = null;
   if (draft.allowCustomAmount && rawMinimum) {
@@ -178,6 +187,7 @@ export function normalizeDishDraft(draft: DishDraft): NormalizedDish {
     showOnline: Boolean(draft.showOnline),
     stockMode,
     soldOut: Boolean(draft.soldOut),
+    availableDays: days.length === DISH_DAYS.length ? null : days.join(','),
     allowCustomAmount: Boolean(draft.allowCustomAmount),
     minimumAmountPence,
     lowAt,

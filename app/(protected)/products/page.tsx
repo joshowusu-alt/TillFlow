@@ -1,3 +1,4 @@
+import { dishDaysLabel } from '@/lib/food/dish-schedule';
 import ProductCategoryField from '@/components/products/ProductCategoryField';
 import CatalogueClassificationNav from '@/components/products/CatalogueClassificationNav';
 import ProductClassificationLabel from '@/components/products/ProductClassificationLabel';
@@ -177,7 +178,7 @@ export default async function ProductsPage(
       division: { select: { name: true } },
       group: { select: { name: true, division: { select: { name: true } } } },
       preferredSupplier: { select: { id: true, name: true } },
-      foodDish: { select: { sizes: { where: { active: true }, select: { pricePence: true } } } },
+      foodDish: { select: { availableDays: true, sizes: { where: { active: true }, select: { pricePence: true } } } },
     },
     orderBy: { name: 'asc' },
     skip: (listPage - 1) * DEFAULT_PAGE_SIZE,
@@ -600,6 +601,7 @@ export default async function ProductsPage(
                 </CompactMobileListItem>
               ) : products.map((product) => {
                 const unitLabel = catalogueUnitLabel(product);
+                const scheduleLabel = foodBusiness ? dishDaysLabel(product.foodDish?.availableDays) : null;
                 const productHref = foodBusiness && product.foodDish ? dishSettingsHref(product.id) : `/products/${product.id}`;
 
                 return (
@@ -623,6 +625,7 @@ export default async function ProductsPage(
                           )}
                           <Link href={productHref} className="min-h-[44px] min-w-0 break-words py-2 [overflow-wrap:anywhere] hover:underline">
                             {[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
+                            {scheduleLabel && <span className="block text-xs font-normal text-black/60">{scheduleLabel}</span>}
                           </Link>
                         </div>
                       }
@@ -723,7 +726,8 @@ export default async function ProductsPage(
                   )}
                   {products.map((product) => {
                     const unitLabel = catalogueUnitLabel(product);
-                    const productHref = foodBusiness && product.foodDish ? dishSettingsHref(product.id) : `/products/${product.id}`;
+                    const scheduleLabel = foodBusiness ? dishDaysLabel(product.foodDish?.availableDays) : null;
+                const productHref = foodBusiness && product.foodDish ? dishSettingsHref(product.id) : `/products/${product.id}`;
                     return (
                       <tr key={product.id} className="rounded-xl bg-white transition-colors duration-150 hover:bg-slate-50">
                         <td className="hidden sm:table-cell px-3 py-3 w-10">
@@ -744,6 +748,7 @@ export default async function ProductsPage(
                         <td className="px-3 py-3 font-semibold">
                           <Link href={productHref} className="hover:underline">
                             {[product.name, product.publisher, product.edition].filter(Boolean).join(" · ")}
+                            {scheduleLabel && <span className="block text-xs font-normal text-black/60">{scheduleLabel}</span>}
                           </Link>
                         </td>
                         <td className="hidden sm:table-cell px-3 py-3">

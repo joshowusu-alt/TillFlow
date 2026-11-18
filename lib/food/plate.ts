@@ -50,6 +50,8 @@ export type FoodMenu = {
   soldOut: boolean;
   /** Counted dishes: warn when portions on hand are at or below this. 0 disables the low warning. */
   lowAt: number;
+  availableDays?: readonly import('./dish-schedule').DishDay[] | null;
+  timeZone?: string | null;
   allowCustomAmount?: boolean;
   minimumAmountPence?: number | null;
   sizes: FoodSize[];

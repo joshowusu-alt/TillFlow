@@ -2280,6 +2280,7 @@ model FoodDish {
   /// COUNTED portions, or NOT_COUNTED (available / sold out only).
   stockMode  String   @default("NOT_COUNTED")
   soldOut    Boolean  @default(false)
+  availableDays String?
   allowCustomAmount Boolean @default(false)
   minimumAmountPence Int?
   /// Counted dishes: till shows Low at or below this many portions. 0 means no low warning.

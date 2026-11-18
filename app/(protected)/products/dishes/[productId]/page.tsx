@@ -1,3 +1,4 @@
+import { parseDishDays } from '@/lib/food/dish-schedule';
 import FoodRecordHistory from '@/components/food/FoodRecordHistory';
 import { loadFoodRecordHistory } from '@/lib/food/record-history';
 import Link from 'next/link';
@@ -82,6 +83,7 @@ export default async function DishPage(props: { params: Promise<{ productId: str
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     select: { costPerPortionPence: true },
   }) : null;
+  const availableDays = parseDishDays(dish.availableDays);
   const draft: DishDraft = {
     categoryId: dish.product.categoryId,
     productId: dish.productId,
@@ -92,6 +94,7 @@ export default async function DishPage(props: { params: Promise<{ productId: str
     showOnline: dish.product.storefrontPublished,
     stockMode: dish.stockMode === 'COUNTED' ? 'COUNTED' : 'NOT_COUNTED',
     soldOut: dish.soldOut,
+    availableDays: availableDays.length ? availableDays : undefined,
     allowCustomAmount: dish.allowCustomAmount,
     minimumAmountCedis: dish.minimumAmountPence == null ? '' : cedisInput(dish.minimumAmountPence),
     lowAt: dish.lowAt,

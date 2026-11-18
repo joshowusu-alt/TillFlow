@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import type { FoodGroupSelection, FoodMenu, FoodStockMode } from '@/lib/food/plate';
 
+import { parseDishDays } from '@/lib/food/dish-schedule';
+
 const dishInclude = {
   sizes: { orderBy: { sortOrder: 'asc' as const } },
   inclusions: { orderBy: { sortOrder: 'asc' as const } },
@@ -8,6 +10,7 @@ const dishInclude = {
     orderBy: { sortOrder: 'asc' as const },
     include: { addons: { orderBy: { sortOrder: 'asc' as const } } },
   },
+  business: { select: { timezone: true } },
   product: { select: { name: true, sellingPriceBasePence: true, active: true } },
 };
 
@@ -16,6 +19,8 @@ type DishRow = {
   stockMode: string;
   soldOut: boolean;
   lowAt: number;
+  availableDays?: string | null;
+  business?: { timezone: string | null };
   allowCustomAmount?: boolean;
   minimumAmountPence?: number | null;
   product: { name: string; sellingPriceBasePence: number; active: boolean };
@@ -37,6 +42,8 @@ export function toFoodMenu(row: DishRow): FoodMenu {
     name: row.product.name,
     stockMode,
     soldOut: row.soldOut,
+    availableDays: parseDishDays(row.availableDays),
+    timeZone: row.business?.timezone,
     lowAt: row.lowAt,
     allowCustomAmount: row.allowCustomAmount,
     minimumAmountPence: row.minimumAmountPence,

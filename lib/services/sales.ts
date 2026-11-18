@@ -715,7 +715,7 @@ async function createSaleImpl(input: CreateSaleInput) {
       }
       const lines = input.onlineOrderId || !isFoodBusiness(business.businessCategory)
         ? input.lines
-        : await priceFoodSaleLines(input.businessId, input.lines);
+        : await priceFoodSaleLines(input.businessId, input.lines, input.createdAt ?? (capturedShiftId ? null : undefined));
       return buildLinePricing(lines, unitMap, business.vatEnabled);
     },
     { stage: 'cart-pricing', rowCount: input.lines.length },
@@ -1710,7 +1710,7 @@ export async function amendSale(input: AmendSaleInput) {
     );
 
     const priced = isFoodBusiness(invoice.business.businessCategory)
-      ? await priceFoodSaleLines(input.businessId, input.newLines!)
+      ? await priceFoodSaleLines(input.businessId, input.newLines!, invoice.createdAt)
       : input.newLines!;
     newLineDetails = buildLinePricing(priced, unitMap, invoice.business.vatEnabled);
   }
