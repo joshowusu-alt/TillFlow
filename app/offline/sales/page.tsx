@@ -53,6 +53,7 @@ type NewAmendLine = AmendingState['newLines'][number];
 function displayOfflineReason(reason: string) {
   return reason
     .replace(/dish_amount_changed/g, "This dish's lowest amount changed. Check the price and sync again.")
+    .replace(/dish_removed_from_menu/g, 'The dish has been removed from the menu.')
     .replace(/dish_off_day/g, "The dish wasn't available on the day of this sale.")
     .replace(/missing_sale_time/g, "The sale time is missing. The dish's available days couldn't be checked.");
 }

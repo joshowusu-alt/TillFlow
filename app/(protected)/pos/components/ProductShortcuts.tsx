@@ -24,6 +24,14 @@ type Props = {
   getAvailable: (id: string) => number;
 };
 
+function cacheVisibleShortcuts(cacheKey: string, layout: ShortcutLayout, removed: Set<string>) {
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify({ screens: layout.screens.map(screen => ({
+      ...screen, productIds: screen.productIds.filter(id => !removed.has(id)),
+    })) }));
+  } catch { /* Selling remains available. */ }
+}
+
 export default function ProductShortcuts(props: Props) {
   // Parent keys this component by business and store: drafts and fetches cannot cross branches.
   const { businessId, storeId, currency, products, onProductLoaded, onSelect, getAvailable, serverCatalogue = false, workspaceTab = 'cart', onWorkspaceTabChange, cartCount = 0 } = props;
@@ -43,6 +51,7 @@ export default function ProductShortcuts(props: Props) {
   const [matches, setMatches] = useState<SellableProductDto[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [removedDishIds, setRemovedDishIds] = useState<Set<string>>(new Set());
   const [validIds, setValidIds] = useState<Set<string> | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -62,9 +71,11 @@ export default function ProductShortcuts(props: Props) {
         const next = parseShortcutLayout(data.layout);
         if (!alive) return;
         data.products.forEach(onProductLoaded);
+        const removed = new Set<string>(data.removedDishIds ?? []);
+        setRemovedDishIds(removed);
         setValidIds(new Set(data.products.map((p: SellableProductDto) => p.id)));
         setLayout(next); setRevision(data.revision); setCanManage(data.canManage === true); setOffline(false); setReady(true); setMessage('');
-        try { localStorage.setItem(cacheKey, JSON.stringify(next)); } catch { /* Selling remains available. */ }
+        cacheVisibleShortcuts(cacheKey, next, removed);
       } catch {
         if (!alive || controller.signal.aborted) return;
         setReady(true); setCanManage(false); setOffline(!navigator.onLine);
@@ -94,7 +105,7 @@ export default function ProductShortcuts(props: Props) {
     return () => { clearTimeout(timer); controller.abort(); };
   }, [query, editing, offline, storeId, onProductLoaded, serverCatalogue]);
 
-  const searchMatches = serverCatalogue ? matches : products.filter(p => `${p.name} ${p.sku ?? ''} ${p.barcode ?? ''} ${(p.additionalBarcodes ?? []).join(' ')} ${p.categoryName ?? ''}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 12);
+  const searchMatches = serverCatalogue ? matches : products.filter(p => !removedDishIds.has(p.id) && `${p.name} ${p.sku ?? ''} ${p.barcode ?? ''} ${(p.additionalBarcodes ?? []).join(' ')} ${p.categoryName ?? ''}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 12);
   const shown = draft ?? layout;
   const screen = shown.screens.find(s => s.id === selected) ?? shown.screens[0];
   const byId = useMemo(() => new Map(products.map(p => [p.id, p])), [products]);
@@ -142,7 +153,7 @@ export default function ProductShortcuts(props: Props) {
       if (!result.success) { setMessage(result.error); return; }
       setLayout(result.data.layout); setRevision(result.data.revision); closeEditor();
       setValidIds(new Set(result.data.layout.screens.flatMap(s => s.productIds)));
-      try { localStorage.setItem(cacheKey, JSON.stringify(result.data.layout)); } catch { /* Server save succeeded. */ }
+      cacheVisibleShortcuts(cacheKey, result.data.layout, removedDishIds);
       setMessage('Shortcuts saved for this branch. Other tills receive them when they reload or reconnect.');
     } catch { setMessage('Shortcuts were not confirmed saved. Reconnect and reload before trying again.'); }
     finally { setBusy(false); }
@@ -184,7 +195,7 @@ export default function ProductShortcuts(props: Props) {
           </div> : null}
           <p className="text-xs text-black/50">{screen.productIds.length} of 40 buttons. Move up or down to set the order.</p>
           <ol className="max-h-64 space-y-2 overflow-y-auto">
-            {screen.productIds.map((id, index) => <li key={id} className="flex flex-wrap items-center gap-2 rounded-lg border border-black/10 p-2 text-sm"><span className="min-w-0 flex-1 break-words">{byId.get(id)?.name ?? 'Unavailable product — remove before saving'}</span><button type="button" className="min-h-11 px-2 disabled:opacity-30" disabled={index === 0} aria-label={`Move ${byId.get(id)?.name ?? 'product'} up`} onClick={() => move(index, -1)}>↑</button><button type="button" className="min-h-11 px-2 disabled:opacity-30" disabled={index === screen.productIds.length - 1} aria-label={`Move ${byId.get(id)?.name ?? 'product'} down`} onClick={() => move(index, 1)}>↓</button><button type="button" className="min-h-11 px-2 text-red-700" aria-label={`Remove ${byId.get(id)?.name ?? 'product'}`} onClick={() => updateScreen({ productIds: screen.productIds.filter(p => p !== id) })}>Remove</button></li>)}
+            {screen.productIds.map((id, index) => <li key={id} className="flex flex-wrap items-center gap-2 rounded-lg border border-black/10 p-2 text-sm"><span className="min-w-0 flex-1 break-words">{removedDishIds.has(id) ? 'Removed from menu' : byId.get(id)?.name ?? 'Unavailable product — remove before saving'}</span><button type="button" className="min-h-11 px-2 disabled:opacity-30" disabled={index === 0} aria-label={`Move ${byId.get(id)?.name ?? 'product'} up`} onClick={() => move(index, -1)}>↑</button><button type="button" className="min-h-11 px-2 disabled:opacity-30" disabled={index === screen.productIds.length - 1} aria-label={`Move ${byId.get(id)?.name ?? 'product'} down`} onClick={() => move(index, 1)}>↓</button><button type="button" className="min-h-11 px-2 text-red-700" aria-label={`Remove ${byId.get(id)?.name ?? 'product'}`} onClick={() => updateScreen({ productIds: screen.productIds.filter(p => p !== id) })}>Remove</button></li>)}
           </ol>
           <div className="border-t border-slate-200 pt-3">
             <button type="button" className="min-h-11 text-sm text-red-700 underline"
@@ -192,7 +203,7 @@ export default function ProductShortcuts(props: Props) {
           </div>
         </> : <p className="text-xs">Add a screen, then search for its products.</p>}
       </fieldset> : <div className="pos-shortcut-tiles mt-3 grid max-h-80 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 lg:grid-cols-4">
-        {screen?.productIds.map(id => {
+        {screen?.productIds.filter(id => !removedDishIds.has(id)).map(id => {
           const product = byId.get(id);
           const unavailable = !product || (validIds !== null && !validIds.has(id));
           const available = unavailable ? 0 : getAvailable(id);
@@ -204,7 +215,7 @@ export default function ProductShortcuts(props: Props) {
               href={dishSettingsHref(id)} aria-label={`Manage dish: ${product.name}`}>Manage dish</Link>
           </div>;
         })}
-        {screen && !screen.productIds.length ? <p className="col-span-full text-xs text-black/50">No products on this screen yet.</p> : null}
+        {screen && !screen.productIds.some(id => !removedDishIds.has(id)) ? <p className="col-span-full text-xs text-black/50">No products on this screen yet.</p> : null}
       </div>}
     </section>
   );

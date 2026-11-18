@@ -4,9 +4,10 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { undoFoodRecord, type FoodRecordKind } from '@/lib/food/undo-service';
 import { recordIngredientUsage } from '@/lib/food/usage-service';
 import type { Ingredient } from '@/lib/food/ingredient-costs';
+import { FOOD_BUSINESS_CATEGORY } from '@/lib/food/business';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
-import { ok, safeAction, withBusinessContext, requireSelectedStoreContext, type ActionResult } from '@/lib/action-utils';
+import { ok, safeAction, UserError, withBusinessContext, requireSelectedStoreContext, type ActionResult } from '@/lib/action-utils';
 import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import type { DishDraft } from '@/lib/food/dish-draft';
 import { addPreparedPortions } from '@/lib/food/prepare-service';
@@ -26,6 +27,31 @@ async function refreshFoodSurfaces(businessId: string, storeId?: string | null) 
   revalidatePath('/onboarding');
   revalidatePath('/pos');
   revalidatePath('/inventory', 'layout');
+}
+
+export async function setDishOnMenuAction(productId: string, onMenu: boolean): Promise<ActionResult<{ id: string }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['OWNER']);
+    if (typeof onMenu !== 'boolean') throw new UserError('Choose whether this dish is on the menu.');
+    const dish = await prisma.product.updateMany({
+      where: {
+        id: productId, businessId, foodDish: { isNot: null },
+        business: { businessCategory: FOOD_BUSINESS_CATEGORY },
+      },
+      data: { active: onMenu },
+    });
+    if (!dish.count) throw new UserError('Dish not found.');
+
+    await refreshFoodSurfaces(businessId);
+    revalidatePath('/products/dishes/[productId]', 'page');
+    const business = await prisma.business.findUnique({ where: { id: businessId }, select: { storefrontSlug: true } });
+    if (business?.storefrontSlug) revalidatePath(`/shop/${business.storefrontSlug}`);
+    audit({
+      businessId, userId: user.id, userName: user.name, userRole: user.role,
+      action: 'FOOD_DISH_SAVE', entity: 'Product', entityId: productId, details: { onMenu },
+    }).catch(() => {});
+    return ok({ id: productId });
+  });
 }
 
 export async function saveDishAction(draft: DishDraft): Promise<ActionResult<{ id: string }>> {

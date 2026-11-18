@@ -111,6 +111,9 @@ function classifyCreateSaleError(error: unknown): ProcessOfflineSaleResult | nul
   if (/Lowest amount for this dish|Other amount is unavailable|Enter a valid amount in cedis/.test(message)) {
     return review('dish_amount_changed');
   }
+  if (message.endsWith(' is no longer on the menu.')) {
+    return review('dish_removed_from_menu');
+  }
   if (message.endsWith(' is not available on that day.')) {
     return review('dish_off_day');
   }

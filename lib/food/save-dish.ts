@@ -67,7 +67,6 @@ export async function saveDish(input: { businessId: string; draft: DishDraft }) 
           storefrontDescription: normalized.description,
           storefrontPublished: normalized.showOnline,
           reorderPointBase: normalized.lowAt,
-          active: true,
         },
       });
     } else {

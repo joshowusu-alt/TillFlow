@@ -77,4 +77,19 @@ describe('dish availability by day', () => {
     await expect(priceFoodSaleLines('food', [line], friday)).rejects.toThrow('Fufu is not available');
     await expect(repriceFoodCheckoutLines(checkout)).resolves.toMatchObject([line]);
   });
+
+  it('refuses removed dishes at the live till, on replay and at online checkout, then allows restoration', async () => {
+    const inactiveProductIds = new Set(['fufu']);
+    vi.mocked(loadFoodCatalogue).mockResolvedValue({
+      menus: new Map([['fufu', { ...dish, availableDays: [] }]]),
+      startingPrices: new Map([['fufu', 3500]]), inactiveProductIds,
+    });
+    await expect(priceFoodSaleLines('food', [line])).rejects.toThrow('Fufu is no longer on the menu.');
+    await expect(priceFoodSaleLines('food', [line], saturday)).rejects.toThrow('Fufu is no longer on the menu.');
+    await expect(repriceFoodCheckoutLines(checkout)).rejects.toThrow('Fufu is no longer on the menu.');
+    inactiveProductIds.delete('fufu');
+    await expect(priceFoodSaleLines('food', [line])).resolves.toMatchObject([line]);
+    await expect(repriceFoodCheckoutLines(checkout)).resolves.toMatchObject([line]);
+  });
+
 });

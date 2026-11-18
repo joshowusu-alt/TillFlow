@@ -807,9 +807,9 @@ async function attachFoodMenus<T extends { id: string }>(
   products: T[],
 ) {
   if (!isFoodBusiness(category) || products.length === 0) return products;
-  const { menus } = await loadFoodCatalogue(businessId, products.map((product) => product.id));
+  const { menus, inactiveProductIds } = await loadFoodCatalogue(businessId, products.map((product) => product.id));
   if (menus.size === 0) return products;
-  return products.map((product) => {
+  return products.filter((product) => !inactiveProductIds.has(product.id)).map((product) => {
     const food = menus.get(product.id);
     return food ? { ...product, food } : product;
   });

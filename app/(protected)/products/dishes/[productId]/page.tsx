@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { ingredientOptions } from '@/lib/food/ingredient-options';
+import DishMenuControl from '@/components/food/DishMenuControl';
 import DishForm from '@/components/food/DishForm';
 import PreparePortionsForm from '@/components/food/PreparePortionsForm';
 import LeftoverWriteOffForm from '@/components/food/LeftoverWriteOffForm';
@@ -26,20 +27,20 @@ export default async function DishPage(props: { params: Promise<{ productId: str
   const dish = await prisma.foodDish.findFirst({
     where: { productId, businessId: business.id },
     include: {
-      product: { select: { categoryId: true, name: true, sellingPriceBasePence: true, defaultCostBasePence: true, storefrontDescription: true, storefrontPublished: true } },
+      product: { select: { active: true, categoryId: true, name: true, sellingPriceBasePence: true, defaultCostBasePence: true, storefrontDescription: true, storefrontPublished: true } },
       sizes: { orderBy: { sortOrder: 'asc' } },
       inclusions: { orderBy: { sortOrder: 'asc' } },
       groups: { orderBy: { sortOrder: 'asc' }, include: { addons: { orderBy: { sortOrder: 'asc' } } } },
     },
   });
-  if (!dish) notFound();
+  if (!dish || (user.role === 'CASHIER' && dish.product.active === false)) notFound();
 
   const balance = dish.stockMode === 'COUNTED' && branch ? await prisma.inventoryBalance.findUnique({
     where: { storeId_productId: { storeId: branch.id, productId } },
     select: { qtyOnHandBase: true },
   }) : null;
   const availability = inventoryAvailability(business.businessCategory, dish, balance?.qtyOnHandBase ?? 0, 0);
-  const availabilityText = dish.stockMode === 'COUNTED' && !branch && !dish.soldOut
+  const availabilityText = dish.product.active === false ? 'Removed from menu' : dish.stockMode === 'COUNTED' && !branch && !dish.soldOut
     ? 'Select a branch to check portions.'
     : availability.status;
   const portionText = dish.stockMode === 'COUNTED' && branch ? availability.quantity : null;
@@ -134,6 +135,11 @@ export default async function DishPage(props: { params: Promise<{ productId: str
       ) : null}
       {branch && <FoodRecordHistory storeId={branch.id} title="Cooking history"
         records={await loadFoodRecordHistory({ businessId: business.id, storeId: branch.id, productId, timeZone: business.timezone || 'UTC' })} />}
+      {user.role === 'OWNER' && (
+        <section className="card p-4">
+          <DishMenuControl id={productId} name={dish.product.name} removed={dish.product.active === false} switchControl />
+        </section>
+      )}
       <DishForm categories={await prisma.category.findMany({ where: { businessId: business.id }, select: { id: true, name: true }, orderBy: { name: 'asc' } })} ingredients={await ingredientOptions(business.id)} initial={draft} productId={dish.productId} />
     </div>
   );
