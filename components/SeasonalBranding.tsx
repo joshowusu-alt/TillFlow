@@ -48,10 +48,10 @@ export function ChristmasHat({ logoHeight }: { logoHeight: number }) {
 
 export function ChristmasMessage({ className = '' }: { className?: string }) {
   const festive = useChristmasSeason();
-  // Keep the same height across hydration and the season boundary.
+  if (!festive) return null;
   return (
-    <div className={`min-h-[28px] text-center text-xs leading-5 text-[#B91C1C] ${className}`}>
-      <span className={festive ? undefined : 'invisible'} aria-hidden={!festive}>
+    <div className={`text-center text-xs leading-5 text-[#B91C1C] ${className}`}>
+      <span>
         Christ is the reason for the season 🎄
       </span>
     </div>
