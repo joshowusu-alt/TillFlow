@@ -46,7 +46,7 @@ export async function sendPasswordResetEmail(
           </p>
         </div>
         <p style="margin: 16px 0 0; text-align: center; color: #d1d5db; font-size: 11px;">
-          TillFlow — Sales made simple
+          TillFlow — SELL. TRACK. GROW. YOUR BUSINESS PARTNER.
         </p>
       </div>
     `,

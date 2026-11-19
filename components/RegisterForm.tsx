@@ -5,6 +5,8 @@ import { register } from '@/app/actions/register';
 import SubmitButton from '@/components/SubmitButton';
 import PasswordStrengthMeter from '@/components/PasswordStrengthMeter';
 import { Logo } from '@/components/Logo';
+import BrandTagline from '@/components/BrandTagline';
+import { ChristmasMessage } from '@/components/SeasonalBranding';
 import Link from 'next/link';
 import type { BusinessPlan } from '@/lib/features';
 import { computeSubscriptionPricing } from '@/lib/plan-pricing';
@@ -70,8 +72,9 @@ export default function RegisterForm({ error }: RegisterFormProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center">
-        <Logo variant="lockup" size={62} className="mx-auto mb-4 justify-center" alt="TillFlow" />
-        <p className="mt-1 text-xs uppercase tracking-[0.2em] text-black/40">Sales made simple</p>
+        <Logo variant="lockup" seasonal size={62} className="mx-auto mb-4 justify-center" alt="TillFlow" />
+        <BrandTagline />
+        <ChristmasMessage className="mt-1 pt-1" />
         <div className="mt-3">
           <p className="text-sm text-black/60">Your products, your prices, your currency. Clean start — yours from day one.</p>
         </div>

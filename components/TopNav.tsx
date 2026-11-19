@@ -348,6 +348,7 @@ export default function TopNav({
             <Logo
               variant="lockup"
               size={28}
+              seasonal
               ariaHidden
             />
           </a>
