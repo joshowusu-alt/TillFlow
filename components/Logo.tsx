@@ -1,4 +1,5 @@
 import React from 'react';
+import { ChristmasHat } from './SeasonalBranding';
 
 type LogoVariant = 'mark' | 'wordmark' | 'lockup';
 type LogoTone = 'brand' | 'light';
@@ -13,6 +14,7 @@ type LogoProps = {
   tagline?: string;
   alt?: string;
   ariaHidden?: boolean;
+  seasonal?: boolean;
 };
 
 const ASSETS = {
@@ -46,6 +48,7 @@ export function Logo({
   tagline,
   alt = 'TillFlow',
   ariaHidden,
+  seasonal = false,
 }: LogoProps) {
   const isMark = variant === 'mark';
   const src = isMark ? ASSETS[tone].mark : ASSETS[tone].lockup;
@@ -53,7 +56,7 @@ export function Logo({
   if (isMark) {
     const width = Math.round(size * MARK_RATIO);
     return (
-      <span className={`inline-flex min-w-0 items-center ${className ?? ''}`}>
+      <span className={`inline-flex min-w-0 items-center ${seasonal ? 'relative' : ''} ${className ?? ''}`}>
         <img
           src={src}
           width={width}
@@ -64,6 +67,7 @@ export function Logo({
           draggable={false}
           decoding="async"
         />
+        {seasonal && <ChristmasHat logoHeight={size} />}
         {tagline ? <Tagline className={taglineClassName}>{tagline}</Tagline> : null}
       </span>
     );
@@ -73,7 +77,7 @@ export function Logo({
   const imgW = Math.round(size * LOCKUP_RATIO);
 
   return (
-    <span className={`inline-flex min-w-0 items-center ${className ?? ''}`}>
+    <span className={`inline-flex min-w-0 items-center ${seasonal ? 'relative' : ''} ${className ?? ''}`}>
       <img
         src={src}
         alt={ariaHidden ? '' : alt}
@@ -85,6 +89,7 @@ export function Logo({
         className="object-contain"
         style={{ display: 'block', flexShrink: 0 }}
       />
+      {seasonal && <ChristmasHat logoHeight={size} />}
       {tagline ? <Tagline className={taglineClassName}>{tagline}</Tagline> : null}
     </span>
   );

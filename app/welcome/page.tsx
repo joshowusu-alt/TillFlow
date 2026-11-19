@@ -15,6 +15,7 @@ import {
 } from '@/components/marketing/WelcomeCTA';
 import HeroProductComposition from '@/components/marketing/visuals/HeroProductComposition';
 import { Logo } from '@/components/Logo';
+import { ChristmasMessage } from '@/components/SeasonalBranding';
 import { PLAN_MONTHLY_PRICES, ADDON_ONLINE_STOREFRONT_MONTHLY } from '@/lib/plan-pricing';
 import {
   CONTROL_POINTS,
@@ -208,7 +209,7 @@ export default function WelcomePage() {
         style={{ paddingTop: 'max(0px, env(safe-area-inset-top, 0px))' }}
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-2.5 sm:gap-3 sm:px-6 sm:py-3">
-          <Logo variant="lockup" size={26} alt="TillFlow" />
+          <Logo variant="lockup" seasonal size={26} alt="TillFlow" />
           <nav className="hidden items-center gap-5 md:flex" aria-label="Primary">
             {NAV_LINKS.map((link) => (
               <a key={link.href} href={link.href} className="text-sm font-semibold text-ink/55 transition hover:text-accent">
@@ -226,6 +227,7 @@ export default function WelcomePage() {
             <WhatsAppDemoButton size="nav" />
           </div>
         </div>
+        <ChristmasMessage className="px-4 pb-1" />
       </header>
 
       <section className="relative px-4 pb-5 pt-5 sm:px-6 sm:pb-8 sm:pt-8">

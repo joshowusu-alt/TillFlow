@@ -1,7 +1,7 @@
 {
   "name": "TillFlow",
   "short_name": "TillFlow",
-  "description": "Sales made simple. The complete point of sale system with inventory management, accounting, and offline support.",
+  "description": "Sell. Track. Grow. Your business partner. The complete point of sale system with inventory management, accounting, and offline support.",
   "start_url": "/launch",
   "scope": "/",
   "display": "standalone",

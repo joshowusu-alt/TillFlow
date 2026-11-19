@@ -81,7 +81,7 @@ export async function GET(request: Request) {
             justifyContent: 'center',
           }}
         >
-          Sales made simple · tillflow.com
+          Sell. Track. Grow. Your business partner. · tillflow.com
         </div>
       </div>
     ),
