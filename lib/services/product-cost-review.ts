@@ -29,7 +29,7 @@ export async function getProductCostReview(businessId: string, productId: string
     prisma.salesInvoiceLine.count({ where }),
     prisma.salesInvoiceLine.findMany({
       where, orderBy: [{ salesInvoice: { createdAt: 'desc' } }, { id: 'desc' }], skip: (page - 1) * COST_REVIEW_PAGE_SIZE, take: COST_REVIEW_PAGE_SIZE,
-      select: { id: true, qtyBase: true, salesInvoice: { select: { id: true, transactionNumber: true, createdAt: true, store: { select: { name: true } } } } },
+      select: { id: true, qtyBase: true, salesInvoice: { select: { id: true, transactionNumber: true, createdAt: true, store: { select: { id: true, name: true } } } } },
     }),
     prisma.purchaseInvoiceLine.findMany({
       where: { productId, product: { businessId }, purchaseInvoice: { businessId, store: { businessId }, paymentStatus: { notIn: ['VOID', 'RETURNED'] } } },
