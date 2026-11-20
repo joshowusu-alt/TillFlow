@@ -5,7 +5,7 @@ type Movement = { id: string; date: Date; type: string; referenceType: string | 
 type Sale = { id: string; label: string; date: Date; lines: { id: string; qty: number; cost: number; basis: string | null }[]; journalMatches: boolean; eligible: boolean };
 type Credit = { id: string; purchaseId: string; qty: number; value: number; journalMatches: boolean };
 export type HistoricalCostEvidence = { balance: { qty: number; knownValue: number | null; unvalued: number | null }; purchases: Source[]; movements: Movement[]; sales: Sale[]; credits: Credit[] };
-type Correction = { lineId: string; receipt: string; date: Date; qty: number; recordedCost: number; proposedCost: number };
+type Correction = { invoiceId: string; movementId: string; lineId: string; receipt: string; date: Date; qty: number; recordedCost: number; proposedCost: number };
 type Result = { status: 'REVIEWABLE'; source: Source; unitCost: number; stockValue: number; corrections: Correction[]; cogsDelta: number } | { status: 'BLOCKED'; reason: string };
 
 /**
@@ -52,7 +52,7 @@ export function previewHistoricalCost(evidence: HistoricalCostEvidence): Result 
       if (line.basis === UNVERIFIED_STOCK_V1) {
         if (line.cost !== 0 || m.basis !== UNVERIFIED_STOCK_V1 || m.value !== null)
           return blocked('An unverified sale already contains a conflicting cost or stock value.');
-        corrections.push({ lineId: line.id, receipt: sale.label, date: sale.date, qty: line.qty, recordedCost: line.cost, proposedCost: expectedCost });
+        corrections.push({ invoiceId: sale.id, movementId: m.id, lineId: line.id, receipt: sale.label, date: sale.date, qty: line.qty, recordedCost: line.cost, proposedCost: expectedCost });
         cogsDelta += expectedCost;
       } else if (line.cost !== expectedCost || (m.basis !== null && m.basis !== INVENTORY_VALUE_V1) || (line.basis !== null && line.basis !== INVENTORY_VALUE_V1) || (m.value !== null && m.value !== -expectedCost) || (line.basis === INVENTORY_VALUE_V1 && m.value !== -expectedCost)) {
         return blocked('A previously costed sale conflicts with the original cost evidence.');
