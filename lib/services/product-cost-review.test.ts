@@ -29,6 +29,8 @@ describe('product cost evidence review', () => {
     expect(query).toMatchObject({ skip: 25, take: 25, where: { productId: 'product', product: { businessId: 'business' }, salesInvoice: { businessId: 'business', store: { businessId: 'business' }, paymentStatus: { notIn: ['RETURNED', 'VOID'] } } } });
     expect(query.where.OR).toEqual([
       { costBasis: 'UNVERIFIED_STOCK_V1' },
+      { qtyBase: 0, qtyInUnit: { gt: 0 } },
+      { lineCostPence: { lt: 0 } },
       { lineCostPence: { lte: 0 }, OR: [{ costBasis: null }, { costBasis: { not: 'INVENTORY_VALUE_V1' } }] },
     ]);
     expect(db.salesInvoiceLine.count.mock.calls[0][0].where).toEqual(query.where);
