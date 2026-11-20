@@ -104,6 +104,8 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
         referenceId: { in: selectedInvoiceIds },
         productId: { in: selectedProductIds },
         type: 'SALE',
+        costBasis: null,
+        store: { businessId },
         unitCostBasePence: { gt: 0 },
       },
       select: {
@@ -178,6 +180,8 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
             referenceId: movement.salesInvoiceId,
             productId: movement.productId,
             type: 'SALE',
+            costBasis: null,
+            store: { businessId },
           },
           data: { unitCostBasePence: movement.unitCostBasePence },
         });
