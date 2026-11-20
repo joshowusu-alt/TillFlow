@@ -232,6 +232,17 @@ describe('correctTargetedSaleCostsAction', () => {
     expect(transactionMock).not.toHaveBeenCalled();
   });
 
+  it('blocks an explicitly unverified stock cost before any accounting mutation', async () => {
+    selectedLinesFindManyMock.mockResolvedValue([{id:'line-1',costBasis:'UNVERIFIED_STOCK_V1'}]);
+    const formData = new FormData();
+    formData.append('lineIds','line-1');
+    formData.set('reason','Cost evidence review');
+    formData.set('confirmCorrection','on');
+    await expect(correctTargetedSaleCostsAction(formData)).rejects.toThrow('error=Unverified+stock+costs');
+    expect(transactionMock).not.toHaveBeenCalled();
+    expect(auditMock).not.toHaveBeenCalled();
+  });
+
   it('redirects back with an error when no lines are selected', async () => {
     const formData = new FormData();
     formData.set('status', 'below-cost');
