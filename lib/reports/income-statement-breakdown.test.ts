@@ -70,6 +70,13 @@ describe('income statement supporting records',()=>{
       {productId:'rice',name:'Rice',qtyBase:1,revenuePence:950,reason:'INCOMPLETE_COSTS'},
     ]);
   });
+  it('does not treat a malformed zero-base-quantity sale as authoritative even with a stored positive cost',async()=>{
+    db.salesInvoice.findMany.mockResolvedValue([{...sale,lines:[{...sale.lines[0],qtyBase:0,qtyInUnit:1,productId:'rice',product:{name:'Rice',defaultCostBasePence:9600}}]}]);
+    const result=await getIncomeStatementBreakdown('business',start,end);
+    expect(result.incompleteLineCount).toBe(1);
+    expect(result.grossProfit).toBeNull();
+    expect(result.entries.find(entry=>entry.kind==='sale')?.incompleteLines?.[0]).toMatchObject({productId:'rice',qtyBase:0});
+  });
   it('excludes full returns and voids from both sources and totals',async()=>{
     db.salesInvoice.findMany.mockResolvedValue([{...sale,paymentStatus:'RETURNED',salesReturn:{type:'RETURN'}},{...sale,id:'void',paymentStatus:'VOID',salesReturn:{type:'VOID'}}]);
     const result=await getIncomeStatementBreakdown('business',start,end);
