@@ -134,6 +134,7 @@ export default async function IncomeStatementPage(
             <p className="mt-1">The profit exceptions above may overlap with these products, but stock valuation is a separate task.</p>
           ) : <p className="mt-1">Sales costs for this reporting period are complete. The stock-value review is separate.</p>}
           <Link className="mt-2 inline-flex min-h-11 items-center font-semibold underline" href="/products?issue=MISSING_COST">Review stock and earlier sale costs →</Link>
+          <Link className="mt-2 block min-h-11 font-semibold underline" href="/products/cost-resolution">Open Cost Resolution Centre →</Link>
         </div>
       ) : null}
 
