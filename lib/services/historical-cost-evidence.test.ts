@@ -42,6 +42,16 @@ describe('historical cost evidence preview', () => {
     const credit=evidence();credit.credits[0].purchaseId='different';
     expect(previewHistoricalCost(credit).status).toBe('BLOCKED');
   });
+  it('blocks contradictory movement authority, recorded unit cost and unsupported free-cost reconstruction',()=>{
+    const a=evidence();a.movements[1].basis=UNVERIFIED_STOCK_V1;
+    expect(previewHistoricalCost(a).status).toBe('BLOCKED');
+    const b=evidence();b.movements[3].unitCost=12900;
+    expect(previewHistoricalCost(b).status).toBe('BLOCKED');
+    const c=evidence();c.purchases[0].value=0;
+    expect(previewHistoricalCost(c).status).toBe('BLOCKED');
+    const d=evidence();d.movements[2].basis=null;
+    expect(previewHistoricalCost(d).status).toBe('BLOCKED');
+  });
   it('rejects mixed sources, incomplete movement history and partially valued balances', () => {
     const input=evidence();input.purchases.push({...input.purchases[0],id:'second'});
     expect(previewHistoricalCost(input).status).toBe('BLOCKED');
