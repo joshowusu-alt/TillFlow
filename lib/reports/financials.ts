@@ -49,7 +49,7 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
             lineDiscountPence: true,
             promoDiscountPence: true,
             lineCostPence: true, costBasis: true,
-            qtyBase: true,
+            qtyBase: true, qtyInUnit: true,
             product: { select: { defaultCostBasePence: true, name: true } },
           },
         },
@@ -95,7 +95,7 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
         lineDiscountPence: line.lineDiscountPence,
         promoDiscountPence: line.promoDiscountPence,
         lineCostPence: line.lineCostPence, costBasis: line.costBasis,
-        qtyBase: line.qtyBase,
+        qtyBase: line.qtyBase, qtyInUnit: line.qtyInUnit,
         defaultCostBasePence: line.product.defaultCostBasePence,
       })),
     };
