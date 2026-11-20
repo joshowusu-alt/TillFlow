@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
 import PageHeader from '@/components/PageHeader';
+import { buildHistoricalCostPostingPlan } from '@/lib/services/historical-cost-posting-plan';
 import { loadHistoricalCostPreview } from '@/lib/services/historical-cost-preview-load';
 
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,7 @@ export default async function HistoricalCostPreviewPage(props: { params: Promise
   const data = await loadHistoricalCostPreview(business.id, id, storeId);
   if (!data) notFound();
   const { result } = data;
+  const plan = result.status === 'REVIEWABLE' ? buildHistoricalCostPostingPlan({businessId:business.id,productId:id,storeId},result) : null;
   const money = (value: number) => formatMoney(value, business.currency);
   const date = (value: Date) => new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: business.timezone }).format(value);
   return <div className="min-w-0 space-y-4">
@@ -48,6 +50,7 @@ export default async function HistoricalCostPreviewPage(props: { params: Promise
         <p>Dr Cost of Goods Sold (5000): {money(result.cogsDelta)}</p>
         <p>Cr Inventory (1200): {money(result.cogsDelta)}</p>
         <p>Stock quantity, selling prices, customer receipts, payments and supplier credits remain unchanged. Reconstructed stock value is a subledger confirmation, not a new purchase or inventory gain.</p>
+        {plan ? <p>Correction preview reference: <span className="font-mono break-all">{plan.fingerprint.slice(0,16)}</span>. Each correction is linked to the original receipt date, sale line and stock movement; reversal entries swap the debit and credit.</p> : null}
         <p>Owner approval, source-document verification, confirmation of the wider inventory ledger and a reversible posting workflow are required before any correction. This preview cannot apply changes.</p>
       </section>
     </>}
