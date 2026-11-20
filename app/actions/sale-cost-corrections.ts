@@ -1,6 +1,5 @@
 'use server';
 
-import { UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
 import { foodDishSaleLine } from '@/lib/food/sale-cost-repair';
 import { redirect } from 'next/navigation';
 import { revalidatePath, revalidateTag } from 'next/cache';
@@ -89,8 +88,8 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
       throw new UserError('Some selected sale lines could not be loaded. Refresh the page and try again.');
     }
 
-    if (selectedLines.some(line => line.costBasis === UNVERIFIED_STOCK_V1)) {
-      throw new UserError('Unverified stock costs require evidence and journal reconciliation. Open the product cost review instead.');
+    if (selectedLines.some(line => line.costBasis != null || line.lineCostPence <= 0)) {
+      throw new UserError('Authoritative or unverified stock costs require evidence and journal reconciliation. Open the product cost review instead.');
     }
 
     // Look up the existing SALE movement cost for each invoice+product pair.
@@ -167,7 +166,7 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
     await prisma.$transaction(async (tx) => {
       for (const correction of corrections) {
         await tx.salesInvoiceLine.update({
-          where: { id: correction.id },
+          where: { id: correction.id, costBasis: null, lineCostPence: correction.previousLineCostPence, salesInvoice: { businessId } },
           data: { lineCostPence: correction.correctedLineCostPence },
         });
       }
