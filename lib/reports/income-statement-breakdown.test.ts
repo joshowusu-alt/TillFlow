@@ -58,6 +58,18 @@ describe('income statement supporting records',()=>{
     expect(result).toMatchObject({cogs:null,grossProfit:null,netProfit:null,revenue:900});
     expect(selectIncomeStatementEntries(result.entries,'cogs')[0]).toMatchObject({contributionPence:null,href:'/sales/sale'});
   });
+  it('identifies only affected lines without treating a current catalogue cost as evidence',async()=>{
+    db.salesInvoice.findMany.mockResolvedValue([{...sale,lines:[
+      {...sale.lines[0],productId:'known',product:{name:'Known',defaultCostBasePence:9999}},
+      {...sale.lines[0],productId:'rice',product:{name:'Rice',defaultCostBasePence:9600},lineCostPence:0,costBasis:'UNVERIFIED_STOCK_V1'},
+    ]}]);
+    const result=await getIncomeStatementBreakdown('business',start,end);
+    expect(result.incompleteLineCount).toBe(1);
+    expect(result.grossProfit).toBeNull();
+    expect(result.entries.find(entry=>entry.kind==='sale')?.incompleteLines).toEqual([
+      {productId:'rice',name:'Rice',qtyBase:1,revenuePence:950,reason:'INCOMPLETE_COSTS'},
+    ]);
+  });
   it('excludes full returns and voids from both sources and totals',async()=>{
     db.salesInvoice.findMany.mockResolvedValue([{...sale,paymentStatus:'RETURNED',salesReturn:{type:'RETURN'}},{...sale,id:'void',paymentStatus:'VOID',salesReturn:{type:'VOID'}}]);
     const result=await getIncomeStatementBreakdown('business',start,end);
