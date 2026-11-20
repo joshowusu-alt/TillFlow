@@ -16,6 +16,19 @@ describe('income statement detail access and period',()=>{
     expect(html).toContain('Gross Profit — supporting records');expect(html).toContain('href="/sales/one"');
     expect(html).toContain('/reports/income-statement?from=2026-10-01&amp;to=2026-10-20');
   });
+  it('filters only blocking receipts and links the precise affected product',async()=>{
+    const statement=await mocks.statement();
+    mocks.statement.mockResolvedValue({...statement,grossProfit:null,entries:[...statement.entries,{
+      ...statement.entries[0],id:'bad',label:'Affected receipt',href:'/sales/bad',costPence:null,profitPence:null,
+      incompleteLines:[{productId:'rice',name:'Rice',qtyBase:1,revenuePence:10500,reason:'INCOMPLETE_COSTS'}],
+    }]});
+    const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({metric:'grossProfit',issues:'1'})}));
+    expect(html).toContain('Affected receipt');
+    expect(html).not.toContain('SAL-001');
+    expect(html).toContain('/products/rice/cost-review');
+    expect(html).toContain('Historical cost not confirmed');
+    expect(html).toContain('2026-10-01');
+  });
   it('does not query records when report access is denied',async()=>{
     mocks.open.mockResolvedValue({ok:false,denial:<p>Access denied</p>});
     expect(renderToStaticMarkup(await Page({}))).toContain('Access denied');expect(mocks.statement).not.toHaveBeenCalled();
