@@ -1,5 +1,6 @@
 'use server';
 
+import { UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
 import { foodDishSaleLine } from '@/lib/food/sale-cost-repair';
 import { redirect } from 'next/navigation';
 import { revalidatePath, revalidateTag } from 'next/cache';
@@ -60,6 +61,7 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
         productId: true,
         qtyBase: true,
         lineCostPence: true,
+        costBasis: true,
         lineSubtotalPence: true,
         salesInvoice: {
           select: {
@@ -85,6 +87,10 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
 
     if (selectedLines.length !== lineIds.length) {
       throw new UserError('Some selected sale lines could not be loaded. Refresh the page and try again.');
+    }
+
+    if (selectedLines.some(line => line.costBasis === UNVERIFIED_STOCK_V1)) {
+      throw new UserError('Unverified stock costs require evidence and journal reconciliation. Open the product cost review instead.');
     }
 
     // Look up the existing SALE movement cost for each invoice+product pair.
