@@ -22,6 +22,13 @@ describe('income statement drilldown links',()=>{
     mocks.statement.mockResolvedValue({...statement,foodCosts:100});
     expect(renderToStaticMarkup(await Page({}))).not.toContain('No food costs are showing');
   });
+  it('links incomplete profit to the period-filtered affected sales and separates stock review',async()=>{
+    mocks.statement.mockResolvedValue({...await mocks.statement(),cogs:null,grossProfit:null,netProfit:null,incompleteLineCount:3,incompleteStockMessage:'607 products need confirmed stock value'});
+    const html=renderToStaticMarkup(await Page({}));
+    expect(html).toContain('metric=grossProfit&amp;from=2026-10-01&amp;to=2026-10-20&amp;issues=1');
+    expect(html).toContain('3 sale lines require review');
+    expect(html).toContain('/products?issue=MISSING_COST');
+  });
   it('does not load the snapshot if access is denied',async()=>{
     mocks.open.mockResolvedValue({ok:false,denial:<p>Access denied</p>});expect(renderToStaticMarkup(await Page({}))).toContain('Access denied');expect(mocks.statement).not.toHaveBeenCalled();
   });
