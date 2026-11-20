@@ -65,7 +65,7 @@ export async function loadHistoricalCostPreview(businessId: string, productId: s
       balance: { qty: balance.qtyOnHandBase, knownValue: balance.knownValuePence, unvalued: balance.unvaluedQtyBase },
       purchases: [{ id: purchase.id, label: purchase.transactionNumber ?? purchase.id, qty: source.qtyBase, value: source.lineSubtotalPence + source.allocatedCostPence,
         journalMatches: journalMatches(purchase.id, 'PURCHASE_INVOICE', purchase.lines.reduce((sum, line) => sum + line.lineSubtotalPence + line.allocatedCostPence, 0), 0) }],
-      movements: movements.map(m => ({ id: m.id, date: m.createdAt, type: m.type, referenceType: m.referenceType, referenceId: m.referenceId, qty: m.qtyBase, value: m.valuePence, basis: m.costBasis, before: m.beforeQtyBase, after: m.afterQtyBase })),
+      movements: movements.map(m => ({ id: m.id, date: m.createdAt, type: m.type, referenceType: m.referenceType, referenceId: m.referenceId, qty: m.qtyBase, value: m.valuePence, basis: m.costBasis, unitCost: m.unitCostBasePence, before: m.beforeQtyBase, after: m.afterQtyBase })),
       sales: saleRows.map(s => {
         const cogs = s.lines.reduce((sum, line) => sum + line.lineCostPence, 0);
         return { id: s.id, label: s.transactionNumber ?? s.id, date: s.createdAt,
