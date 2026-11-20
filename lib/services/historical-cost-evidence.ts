@@ -19,7 +19,7 @@ export function previewHistoricalCost(evidence: HistoricalCostEvidence): Result 
   if (purchases.length !== 1) return blocked('A single original purchase must be established; mixed or absent sources need manual reconciliation.');
   const source = purchases[0];
   const integer = (n: number) => Number.isSafeInteger(n) && n >= 0 && n <= 2147483647;
-  if (!integer(source.qty) || source.qty === 0 || !integer(source.value) || source.value % source.qty !== 0 || !source.journalMatches)
+  if (!integer(source.qty) || source.qty === 0 || !integer(source.value) || source.value === 0 || source.value % source.qty !== 0 || !source.journalMatches)
     return blocked('Original purchase quantity, exact unit cost or inventory journal does not reconcile.');
   const unitCost = source.value / source.qty;
   if (balance.knownValue !== null || (balance.unvalued !== null && balance.unvalued !== balance.qty))
@@ -39,7 +39,7 @@ export function previewHistoricalCost(evidence: HistoricalCostEvidence): Result 
       sourceSeen = true;
     } else if (sourceSeen && m.type === 'PURCHASE_RETURN' && m.referenceType === 'PURCHASE_RETURN_CREDIT' && m.qty < 0) {
       const credit = credits.find(c => c.id === m.referenceId);
-      if (!credit || credit.purchaseId !== source.id || credit.qty !== -m.qty || credit.value !== -m.qty * unitCost || m.value !== -credit.value || !credit.journalMatches)
+      if (!credit || credit.purchaseId !== source.id || credit.qty !== -m.qty || credit.value !== -m.qty * unitCost || m.value !== -credit.value || m.basis !== INVENTORY_VALUE_V1 || !credit.journalMatches)
         return blocked('A supplier credit does not match the original purchase, movement and inventory journal.');
     } else if (sourceSeen && m.type === 'SALE' && m.referenceType === 'SALES_INVOICE' && m.qty < 0) {
       const sale = sales.find(s => s.id === m.referenceId);
@@ -53,7 +53,7 @@ export function previewHistoricalCost(evidence: HistoricalCostEvidence): Result 
           return blocked('An unverified sale already contains a conflicting cost or stock value.');
         corrections.push({ lineId: line.id, receipt: sale.label, date: sale.date, qty: line.qty, recordedCost: line.cost, proposedCost: expectedCost });
         cogsDelta += expectedCost;
-      } else if (line.cost !== expectedCost || (line.basis !== null && line.basis !== INVENTORY_VALUE_V1) || (m.value !== null && m.value !== -expectedCost) || (line.basis === INVENTORY_VALUE_V1 && m.value !== -expectedCost)) {
+      } else if (line.cost !== expectedCost || (m.basis !== null && m.basis !== INVENTORY_VALUE_V1) || (line.basis !== null && line.basis !== INVENTORY_VALUE_V1) || (m.value !== null && m.value !== -expectedCost) || (line.basis === INVENTORY_VALUE_V1 && m.value !== -expectedCost)) {
         return blocked('A previously costed sale conflicts with the original cost evidence.');
       }
     } else return blocked('Stock history includes movements outside the supported single-purchase workflow.');
