@@ -48,6 +48,7 @@ export default async function ProductCostReviewPage(
       <ul className="mt-3 divide-y divide-slate-100">{data.sales.map(row => <li key={row.id} className="py-3 text-sm">
         <Link className="inline-flex min-h-11 items-center break-all font-semibold text-accent underline" href={`/sales/${encodeURIComponent(row.salesInvoice.id)}`}>{row.salesInvoice.transactionNumber ?? row.salesInvoice.id}</Link>
         <p>{date(row.salesInvoice.createdAt)} · {row.salesInvoice.store.name} · {row.qtyBase} base units</p>
+        <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={`/products/${encodeURIComponent(product.id)}/cost-review/preview?${new URLSearchParams({storeId: row.salesInvoice.store.id})}`}>Preview historical evidence →</Link>
       </li>)}</ul>
       {!data.saleCount ? <p className="mt-3 text-sm text-slate-600">No unresolved sale-cost lines for this product. An existing-stock warning alone does not mean all past sales have missing costs.</p> : null}
       {pages > 1 ? <nav aria-label="Affected sale pages" className="mt-3 flex min-h-11 flex-wrap justify-between gap-3 text-sm"><span>{data.page > 1 ? <Link className="text-accent underline" href={`?page=${data.page - 1}`}>← Previous</Link> : null}</span><span>Page {data.page} of {pages}</span>{data.page < pages ? <Link className="text-accent underline" href={`?page=${data.page + 1}`}>Next →</Link> : null}</nav> : null}
