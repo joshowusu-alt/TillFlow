@@ -22,6 +22,8 @@ export async function getProductCostReview(businessId: string, productId: string
     salesInvoice: { businessId, store: { businessId }, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
     OR: [
       { costBasis: UNVERIFIED_STOCK_V1 },
+      { qtyBase: 0, qtyInUnit: { gt: 0 } },
+      { lineCostPence: { lt: 0 } },
       { lineCostPence: { lte: 0 }, OR: [{ costBasis: null }, { costBasis: { not: INVENTORY_VALUE_V1 } }] },
     ],
   };
