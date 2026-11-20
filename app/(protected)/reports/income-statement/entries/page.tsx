@@ -11,7 +11,7 @@ import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, isIncomeStatement
 
 export default async function IncomeStatementEntriesPage(
   props: {
-    searchParams?: Promise<{ from?: string; to?: string; metric?: string; page?: string; businessId?: string; storeId?: string }>;
+    searchParams?: Promise<{ from?: string; to?: string; metric?: string; issues?: string; page?: string; businessId?: string; storeId?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -32,25 +32,47 @@ export default async function IncomeStatementEntriesPage(
     applied ? { from: applied.fromLocalDate, to: applied.toLocalDate } : searchParams, month.startInclusive, now, zone,
   );
   const statement = await getIncomeStatementBreakdown(business.id, start, end);
-  const entries = selectIncomeStatementEntries(statement.entries, metric);
+  const issuesOnly = searchParams?.issues === '1' && (metric === 'cogs' || metric === 'grossProfit' || metric === 'netProfit');
+  const allEntries = selectIncomeStatementEntries(statement.entries, metric);
+  const entries = issuesOnly ? allEntries.filter(entry => entry.kind === 'sale' && entry.contributionPence === null) : allEntries;
   const total = statement[metric];
   const size = 100, pages = Math.max(1, Math.ceil(entries.length / size));
   const page = Math.min(pages, Math.max(1, Number.parseInt(searchParams?.page ?? '1', 10) || 1));
   const metadata = INCOME_STATEMENT_METRICS[metric], money = (n: number) => formatMoney(n, business.currency);
   const backHref = `/reports/income-statement?${new URLSearchParams({ from, to })}`;
-  const href = (next: number) => `${incomeStatementEntriesHref(metric, from, to)}&page=${next}`;
+  const href = (next: number) => `${incomeStatementEntriesHref(metric, from, to)}${issuesOnly ? '&issues=1' : ''}&page=${next}`;
   const date = (value: string) => new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: zone }).format(new Date(value));
   return <div className="space-y-5">
     {opened.readOnly ? <ReportReadOnlyBanner /> : null}
     <Link className="text-sm font-semibold text-accent underline" href={backHref}>← Income Statement</Link>
     <section className="card space-y-3 p-5">
       <p className="text-xs text-ink/60">Whole business · {from} to {to}</p>
-      <h1 className="text-xl font-semibold">{metadata.label} — supporting records</h1>
+      <h1 className="text-xl font-semibold">{issuesOnly ? 'Sales requiring cost review' : `${metadata.label} — supporting records`}</h1>
       <p className="break-words text-3xl font-semibold tabular-nums">{total === null ? 'Costs incomplete' : money(total)}</p>
       <p className="text-sm text-ink/60">{metadata.explanation}</p>
+      {total === null || issuesOnly ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={incomeStatementEntriesHref(metric, from, to) + (issuesOnly ? '' : '&issues=1')}>{issuesOnly ? 'Show all supporting records' : 'Show affected sales only'}</Link> : null}
+      {issuesOnly ? <p className="text-sm">Only the receipts blocking this period&apos;s profit are shown. Review the individual products and their purchase evidence; changing today&apos;s catalogue cost does not confirm historical cost.</p> : null}
       {total === null ? <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Some sales have incomplete costs or unsupported return records. Their contribution stays incomplete until the source records are resolved.</p> : null}
     </section>
-    <section className="card overflow-hidden">
+    {issuesOnly ? <section className="space-y-3" aria-label="Affected sales">
+      {entries.slice((page - 1) * size, page * size).map(entry => <article className="card space-y-3 p-4" key={entry.id}>
+        <p className="text-sm text-ink/60">{date(entry.date)}</p>
+        {entry.href ? <Link className="inline-flex min-h-11 items-center break-all font-semibold text-accent underline" href={entry.href}>{entry.label}</Link> : <p className="font-semibold">{entry.label}</p>}
+        {(entry.incompleteLines ?? []).map((line, index) => <div key={index} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+          <p className="font-semibold break-words">{line.name ?? 'Product'}</p>
+          <p>{line.qtyBase} base units · Net sale {money(line.revenuePence)}</p>
+          <p>{line.reason === 'UNSUPPORTED_RETURN' ? 'Return evidence requires review.' : 'Historical cost not confirmed.'}</p>
+          {line.productId && line.reason !== 'UNSUPPORTED_RETURN' ? <Link className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent underline" href={`/products/${encodeURIComponent(line.productId)}/cost-review`}>Review cost evidence →</Link> : null}
+        </div>)}
+        {!entry.incompleteLines?.length ? <p className="text-sm">Return evidence requires review. Open the receipt for details.</p> : null}
+      </article>)}
+      {!entries.length ? <p className="card p-4">No affected sales in this period.</p> : null}
+      <nav className="flex flex-wrap items-center justify-between gap-3 text-sm" aria-label="Affected sales pages">
+        {page > 1 ? <Link className="inline-flex min-h-11 items-center underline" href={href(page - 1)}>← Previous</Link> : <span />}
+        <span>Page {page} of {pages} · {entries.length} affected receipts</span>
+        {page < pages ? <Link className="inline-flex min-h-11 items-center underline" href={href(page + 1)}>Next →</Link> : <span />}
+      </nav>
+    </section> : <section className="card overflow-hidden">
       <div className="overflow-x-auto"><table className="w-full text-left text-sm">
         <thead className="bg-slate-50"><tr><th scope="col" className="p-3">Date</th><th scope="col" className="p-3">Source / description</th><th scope="col" className="p-3 text-right">{metric === 'netProfit' ? 'Effect on profit' : 'Amount'}</th></tr></thead>
         <tbody>{entries.slice((page - 1) * size, page * size).map(entry => <tr className="border-t" key={entry.id}>
@@ -69,6 +91,6 @@ export default async function IncomeStatementEntriesPage(
         {page < pages ? <Link className="text-accent underline" href={href(page + 1)}>Next →</Link> : <span />}
       </div>
       <p className="flex flex-wrap justify-between gap-3 border-t p-5 font-semibold"><span>Total across all pages</span><span className="tabular-nums">{total === null ? 'Costs incomplete' : money(total)}</span></p>
-    </section>
+    </section>}
   </div>;
 }
