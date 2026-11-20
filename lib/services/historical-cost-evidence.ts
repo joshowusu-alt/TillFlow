@@ -1,7 +1,7 @@
 import { INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
 
 type Source = { id: string; label: string; qty: number; value: number; journalMatches: boolean };
-type Movement = { id: string; date: Date; type: string; referenceType: string | null; referenceId: string | null; qty: number; value: number | null; basis: string | null; before: number | null; after: number | null };
+type Movement = { id: string; date: Date; type: string; referenceType: string | null; referenceId: string | null; qty: number; value: number | null; basis: string | null; unitCost?: number | null; before: number | null; after: number | null };
 type Sale = { id: string; label: string; date: Date; lines: { id: string; qty: number; cost: number; basis: string | null }[]; journalMatches: boolean; eligible: boolean };
 type Credit = { id: string; purchaseId: string; qty: number; value: number; journalMatches: boolean };
 export type HistoricalCostEvidence = { balance: { qty: number; knownValue: number | null; unvalued: number | null }; purchases: Source[]; movements: Movement[]; sales: Sale[]; credits: Credit[] };
@@ -31,11 +31,12 @@ export function previewHistoricalCost(evidence: HistoricalCostEvidence): Result 
   const corrections: Correction[] = [];
   for (const m of movements) {
     if (!m.referenceId || !m.referenceType || !Number.isSafeInteger(m.qty) || m.qty === 0) return blocked('A stock movement has no usable source or quantity.');
+    if (m.unitCost != null && m.unitCost !== unitCost) return blocked('A recorded movement unit cost conflicts with the purchase evidence.');
     const key = m.referenceType + ':' + m.referenceId;
     if (seen.has(key)) return blocked('Multiple movements for the same source require allocation review.');
     seen.add(key);
     if (m.before !== null && m.before !== quantity) return blocked('Recorded stock history contains a quantity gap.');
-    if (m.type === 'PURCHASE' && m.referenceType === 'PURCHASE_INVOICE' && m.referenceId === source.id && !sourceSeen && quantity === 0 && m.qty === source.qty && (m.value === null || m.value === source.value)) {
+    if (m.type === 'PURCHASE' && m.referenceType === 'PURCHASE_INVOICE' && m.referenceId === source.id && !sourceSeen && quantity === 0 && m.qty === source.qty && (m.basis === null || m.basis === INVENTORY_VALUE_V1) && (m.basis !== INVENTORY_VALUE_V1 || m.value === source.value) && (m.value === null || m.value === source.value)) {
       sourceSeen = true;
     } else if (sourceSeen && m.type === 'PURCHASE_RETURN' && m.referenceType === 'PURCHASE_RETURN_CREDIT' && m.qty < 0) {
       const credit = credits.find(c => c.id === m.referenceId);
