@@ -57,7 +57,7 @@ export async function applyHistoricalCostCorrection(input:Request) {
     const existing=await tx.moneyIdempotency.findUnique({where});
     if(existing){
       const saved=JSON.parse(existing.resultJson) as Saved;
-      if(existing.commandKind!==APPLY||!sameScope(saved.scope,scope)) throw new UserError('Correction reference conflicts with this scope.');
+      if(existing.commandKind!==APPLY||existing.payloadHash!==input.fingerprint||saved.plan?.fingerprint!==input.fingerprint||!sameScope(saved.scope,scope)) throw new UserError('Correction reference conflicts with this scope.');
       if(await tx.moneyIdempotency.findUnique({where:{businessId_key:{businessId:scope.businessId,key:key(input.fingerprint,true)}}})) throw new UserError('This correction was reversed. Review manually.');
       return {fingerprint:input.fingerprint,replayed:true};
     }
@@ -122,8 +122,9 @@ export async function listHistoricalCostCorrections(scope:Scope) {
   const result=[];
   for(const entry of entries){
     if(!entry.details)continue;
-    const saved=JSON.parse(entry.details) as Saved;
-    if(!sameScope(saved.scope,scope)||!saved.plan?.fingerprint) continue;
+    let saved:Saved;
+    try { saved=JSON.parse(entry.details) as Saved; } catch { continue; }
+    if(!saved?.scope||!sameScope(saved.scope,scope)||!saved.plan?.fingerprint) continue;
     const original=await prisma.moneyIdempotency.findUnique({where:{businessId_key:{businessId:scope.businessId,key:key(saved.plan.fingerprint)}}});
     if(!original||original.commandKind!==APPLY||original.payloadHash!==saved.plan.fingerprint)continue;
     const reversed=await prisma.moneyIdempotency.findUnique({where:{businessId_key:{businessId:scope.businessId,key:key(saved.plan.fingerprint,true)}}});
