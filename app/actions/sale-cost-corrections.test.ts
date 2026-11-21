@@ -163,7 +163,7 @@ describe('correctTargetedSaleCostsAction', () => {
 
     expect(txSalesLineUpdateMock).toHaveBeenCalledTimes(1);
     expect(txSalesLineUpdateMock).toHaveBeenCalledWith({
-      where: { id: 'line-1' },
+      where: { id: 'line-1', costBasis: null, lineCostPence: 1000, salesInvoice: { businessId: 'biz-1' } },
       data: { lineCostPence: 600 },
     });
     expect(txStockMovementUpdateManyMock).toHaveBeenCalledTimes(1);
@@ -208,7 +208,7 @@ describe('correctTargetedSaleCostsAction', () => {
 
     // Corrected cost should be 450 × 2 = 900 (from movement), not 300 × 2 = 600
     expect(txSalesLineUpdateMock).toHaveBeenCalledWith({
-      where: { id: 'line-1' },
+      where: { id: 'line-1', costBasis: null, lineCostPence: 1000, salesInvoice: { businessId: 'biz-1' } },
       data: { lineCostPence: 900 },
     });
   });
@@ -230,6 +230,17 @@ describe('correctTargetedSaleCostsAction', () => {
       }),
     }));
     expect(transactionMock).not.toHaveBeenCalled();
+  });
+
+  it.each([{costBasis:'UNVERIFIED_STOCK_V1',lineCostPence:0},{costBasis:'INVENTORY_VALUE_V1',lineCostPence:100},{costBasis:null,lineCostPence:0}])('blocks protected cost evidence before any accounting mutation: %o', async (line) => {
+    selectedLinesFindManyMock.mockResolvedValue([{id:'line-1',...line}]);
+    const formData = new FormData();
+    formData.append('lineIds','line-1');
+    formData.set('reason','Cost evidence review');
+    formData.set('confirmCorrection','on');
+    await expect(correctTargetedSaleCostsAction(formData)).rejects.toThrow('error=Authoritative+or+unverified+stock+costs');
+    expect(transactionMock).not.toHaveBeenCalled();
+    expect(auditMock).not.toHaveBeenCalled();
   });
 
   it('redirects back with an error when no lines are selected', async () => {

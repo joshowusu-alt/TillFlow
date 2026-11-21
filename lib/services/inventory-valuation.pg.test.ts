@@ -378,4 +378,101 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     })).rejects.toThrow('Injected opening failure');
     expect(await db.product.count({ where: { businessId, name } })).toBe(0);
   }, 60000);
+  async function historicalFixture() {
+    const p=await product(); const purchase=await buy(p,5,1000);
+    // Disposable fixture: reproduce a legacy balance with missing valuation evidence,
+    // while retaining the real purchase and its journal. No production data is used.
+    await db.inventoryBalance.update({where:{storeId_productId:{storeId,productId:p}},data:{knownValuePence:null,unvaluedQtyBase:5}});
+    const sale=await sell(p,1);
+    const {loadHistoricalCostPreview}=await import('./historical-cost-preview-load');
+    const {buildHistoricalCostPostingPlan}=await import('./historical-cost-posting-plan');
+    const {applyHistoricalCostCorrection,reverseHistoricalCostCorrection}=await import('./historical-cost-correction');
+    const preview=await loadHistoricalCostPreview(businessId,p,storeId);
+    expect(preview?.result.status).toBe('REVIEWABLE');
+    if(!preview||preview.result.status!=='REVIEWABLE') throw new Error('Fixture evidence did not reconcile');
+    const plan=buildHistoricalCostPostingPlan({businessId,productId:p,storeId},preview.result);
+    const request={businessId,storeId,productId:p,userId,fingerprint:plan.fingerprint,confirmed:true,reason:'Isolated historical cost reconciliation'};
+    return {p,purchase,sale,request,apply:applyHistoricalCostCorrection,reverse:reverseHistoricalCostCorrection};
+  }
+  it('posts historical COGS exactly once and reverses exactly once before subsequent activity',async()=>{
+    const f=await historicalFixture();
+    await expect(f.apply({...f.request,confirmed:false})).rejects.toThrow();
+    await expect(f.apply({...f.request,fingerprint:'a'.repeat(64)})).rejects.toThrow();
+    expect(await f.apply(f.request)).toMatchObject({replayed:false});
+    expect(await f.apply(f.request)).toMatchObject({replayed:true});
+    const {listHistoricalCostCorrections}=await import('./historical-cost-correction');
+    expect(await listHistoricalCostCorrections({businessId,productId:f.p,storeId})).toMatchObject([{fingerprint:f.request.fingerprint,cogsDelta:1000,reversed:false}]);
+    expect(await listHistoricalCostCorrections({businessId:'foreign',productId:f.p,storeId})).toEqual([]);
+    expect(await stock(f.p)).toMatchObject({qtyOnHandBase:4,knownValuePence:4000,unvaluedQtyBase:0});
+    expect(await inventoryPosting([f.purchase.id,f.sale.id])).toBe(4000);
+    expect(await db.salesInvoiceLine.findFirstOrThrow({where:{salesInvoiceId:f.sale.id}})).toMatchObject({lineCostPence:1000,costBasis:'INVENTORY_VALUE_V1'});
+    expect(await f.reverse(f.request)).toMatchObject({replayed:false});
+    expect(await f.reverse(f.request)).toMatchObject({replayed:true});
+    expect(await listHistoricalCostCorrections({businessId,productId:f.p,storeId})).toMatchObject([{fingerprint:f.request.fingerprint,reversed:true}]);
+    expect(await stock(f.p)).toMatchObject({qtyOnHandBase:4,knownValuePence:null,unvaluedQtyBase:4});
+    expect(await inventoryPosting([f.purchase.id,f.sale.id])).toBe(5000);
+    expect(await db.salesInvoiceLine.findFirstOrThrow({where:{salesInvoiceId:f.sale.id}})).toMatchObject({lineCostPence:0,costBasis:'UNVERIFIED_STOCK_V1'});
+    await expect(f.apply(f.request)).rejects.toThrow();
+    await balanced([f.purchase.id,f.sale.id]);
+  },60000);
+  it('keeps subsequent sales valued and blocks a stale reversal',async()=>{
+    const f=await historicalFixture();await f.apply(f.request);
+    const later=await sell(f.p,1);
+    expect(await stock(f.p)).toMatchObject({qtyOnHandBase:3,knownValuePence:3000});
+    expect(await db.salesInvoiceLine.findFirstOrThrow({where:{salesInvoiceId:later.id}})).toMatchObject({lineCostPence:1000,costBasis:'INVENTORY_VALUE_V1'});
+    await expect(f.reverse(f.request)).rejects.toThrow('Subsequent');
+    expect(await inventoryPosting([f.purchase.id,f.sale.id,later.id])).toBe(3000);
+  },60000);
+  it('returns a corrected sale at its established historical cost and blocks correction reversal',async()=>{
+    const f=await historicalFixture();await f.apply(f.request);
+    const returned=await returns.createSalesReturn({businessId,salesInvoiceId:f.sale.id,userId,managerApprovedByUserId:userId,type:'RETURN',reasonCode:'WRONG_ITEM'});
+    expect(await stock(f.p)).toMatchObject({qtyOnHandBase:5,knownValuePence:5000});
+    expect(await inventoryPosting([f.purchase.id,f.sale.id,returned.id])).toBe(5000);
+    await expect(f.reverse(f.request)).rejects.toThrow('Subsequent');
+  },60000);
+  it('amends a corrected receipt using its established COGS and blocks correction reversal',async()=>{
+    const f=await historicalFixture();await f.apply(f.request);
+    await sales.amendSale({businessId,salesInvoiceId:f.sale.id,userId,reason:'Fixture replacement',keepLineIds:[],newLines:[{productId:f.p,unitId,qtyInUnit:1}],additionalPaymentMethod:'TRANSFER'});
+    expect(await stock(f.p)).toMatchObject({qtyOnHandBase:4,knownValuePence:4000});
+    expect(await inventoryPosting([f.purchase.id,f.sale.id])).toBe(4000);
+    await expect(f.reverse(f.request)).rejects.toThrow('Subsequent');
+  },60000);
+  it('rolls back every correction write when the audit record fails',async()=>{
+    const f=await historicalFixture();
+    const before=await stock(f.p);
+    const beforeLine=await db.salesInvoiceLine.findFirstOrThrow({where:{salesInvoiceId:f.sale.id}});
+    const beforeJournal=await inventoryPosting([f.purchase.id,f.sale.id]);
+    const transaction=singleton.$transaction.bind(singleton);
+    const injected=vi.spyOn(singleton,'$transaction').mockImplementationOnce((async (callback:any,options:any)=>transaction(async tx=>{
+      const fail=vi.spyOn(tx.auditLog,'create').mockRejectedValueOnce(new Error('Injected audit failure'));
+      try{return await callback(tx)}finally{fail.mockRestore()}
+    },options)) as typeof singleton.$transaction);
+    try{await expect(f.apply(f.request)).rejects.toThrow('Injected audit failure')}finally{injected.mockRestore()}
+    expect(await stock(f.p)).toEqual(before);
+    expect(await db.salesInvoiceLine.findFirstOrThrow({where:{salesInvoiceId:f.sale.id}})).toEqual(beforeLine);
+    expect(await inventoryPosting([f.purchase.id,f.sale.id])).toBe(beforeJournal);
+    expect(await db.moneyIdempotency.count({where:{businessId,key:'cost-apply:'+f.request.fingerprint}})).toBe(0);
+  },60000);
+  it('blocks cross-business or non-owner correction and competing duplicate requests',async()=>{
+    const f=await historicalFixture();
+    await expect(f.apply({...f.request,businessId:'foreign-business'})).rejects.toThrow();
+    await expect(f.apply({...f.request,userId:'not-an-owner'})).rejects.toThrow();
+    const outcomes=await Promise.allSettled([f.apply(f.request),f.apply(f.request)]);
+    expect(outcomes.some(r=>r.status==='fulfilled')).toBe(true);
+    expect(await db.moneyIdempotency.count({where:{businessId,key:'cost-apply:'+f.request.fingerprint}})).toBe(1);
+    expect(await inventoryPosting([f.purchase.id,f.sale.id])).toBe(4000);
+  },60000);
+  it('serializes competing correction and sale without inventing stock or double-posting COGS',async()=>{
+    const f=await historicalFixture();
+    const outcomes=await Promise.allSettled([f.apply(f.request),sell(f.p,1)]);
+    expect(outcomes.some(r=>r.status==='fulfilled')).toBe(true);
+    const current=await stock(f.p);
+    const invoiceRows=await db.salesInvoice.findMany({where:{businessId,storeId,lines:{some:{productId:f.p}}},include:{lines:true}});
+    expect(current.qtyOnHandBase).toBe(5-invoiceRows.reduce((n,i)=>n+i.lines.filter(l=>l.productId===f.p).reduce((a,l)=>a+l.qtyBase,0),0));
+    const applied=await db.moneyIdempotency.count({where:{businessId,key:'cost-apply:'+f.request.fingerprint}});
+    expect(applied).toBeLessThanOrEqual(1);
+    if(applied)expect(current.knownValuePence).toBe(await inventoryPosting([f.purchase.id,...invoiceRows.map(i=>i.id)]));
+    else expect(current.knownValuePence).toBeNull();
+    await balanced([f.purchase.id,...invoiceRows.map(i=>i.id)]);
+  },60000);
 });

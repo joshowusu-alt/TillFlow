@@ -44,12 +44,13 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
         salesReturn: { select: { type: true } },
         lines: {
           select: {
+            productId: true,
             lineSubtotalPence: true,
             lineDiscountPence: true,
             promoDiscountPence: true,
             lineCostPence: true, costBasis: true,
-            qtyBase: true,
-            product: { select: { defaultCostBasePence: true } },
+            qtyBase: true, qtyInUnit: true,
+            product: { select: { defaultCostBasePence: true, name: true } },
           },
         },
       },
@@ -89,11 +90,12 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
       discountPence: invoice.discountPence,
       returnKind,
       lines: invoice.lines.map((line) => ({
+        productId: line.productId, name: line.product.name,
         lineSubtotalPence: line.lineSubtotalPence,
         lineDiscountPence: line.lineDiscountPence,
         promoDiscountPence: line.promoDiscountPence,
         lineCostPence: line.lineCostPence, costBasis: line.costBasis,
-        qtyBase: line.qtyBase,
+        qtyBase: line.qtyBase, qtyInUnit: line.qtyInUnit,
         defaultCostBasePence: line.product.defaultCostBasePence,
       })),
     };

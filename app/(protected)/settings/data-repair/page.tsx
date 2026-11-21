@@ -53,11 +53,11 @@ export default async function DataRepairPage() {
             </div>
             <div>
               <div className="font-medium text-ink">Older reports still use today&apos;s product cost</div>
-              <p>Run <strong>Backfill Line Costs</strong>. This writes missing historical sale costs so gross profit stays tied to the sale date.</p>
+              <p>Use <strong>Cost Resolution</strong> to review historical source and journal evidence.</p>
             </div>
             <div>
               <div className="font-medium text-ink">Only a few specific receipts were costed wrongly</div>
-              <p>Use <strong>Targeted Sale Cost Corrections</strong> for a focused correction without touching unaffected sales.</p>
+              <p>Use <strong>Targeted Sale Cost Corrections</strong> only for legacy positive-cost records. Exact and missing cost evidence must use Cost Resolution.</p>
             </div>
           </div>
         </div>
@@ -67,7 +67,7 @@ export default async function DataRepairPage() {
           <ol className="space-y-2 text-sm text-black/65">
             <li>1. Confirm the current product setup is correct.</li>
             <li>2. Repair inventory average costs if stock is still carrying an old cost.</li>
-            <li>3. Backfill or target-correct historical sale lines only if reports still look wrong afterwards.</li>
+            <li>3. Review missing historical costs against the original evidence.</li>
           </ol>
         </div>
       </div>
@@ -121,7 +121,7 @@ export default async function DataRepairPage() {
         <RepairPaymentStatusButton />
       </SettingsSection>
 
-      <SettingsSection id="backfill" title="Backfill Line Costs" description="Fill missing costs on historical sale lines." keepMounted>
+      <SettingsSection id="backfill" title="Historical Cost Evidence" description="Review missing historical cost evidence without automatic backfill." keepMounted>
         <p className="text-sm text-black/50 mb-4">
           Populates historical cost data on existing sales so profit margin reports
           use the cost at time of sale rather than the current product cost. Run this after inventory cost drift is repaired when the issue affects many older sales. Safe to run multiple times.

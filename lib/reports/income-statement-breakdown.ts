@@ -1,4 +1,4 @@
-import { evaluateMarginSet, type MarginInvoiceInput } from './margin-line';
+import { evaluateMarginLines, evaluateMarginSet, type MarginInvoiceInput } from './margin-line';
 
 export const INCOME_STATEMENT_METRICS = {
   revenue: { label: 'Revenue', explanation: 'Recorded sales after discounts, excluding tax. Fully returned and voided sales are excluded.' },
@@ -15,10 +15,12 @@ export function isIncomeStatementMetric(value: string): value is IncomeStatement
 export function incomeStatementEntriesHref(metric: IncomeStatementMetric, from: string, to: string) {
   return `/reports/income-statement/entries?${new URLSearchParams({ metric, from, to })}`;
 }
+export type IncompleteSaleLine = { productId: string | null; name: string | null; qtyBase: number; revenuePence: number; reason: string | null };
 export type IncomeStatementContribution = {
   id: string; date: string; label: string; description: string; href: string | null;
   kind: 'sale' | 'expense' | 'other-income' | 'food-cost';
   revenuePence: number; costPence: number | null; profitPence: number | null; amountPence: number;
+  incompleteLines?: IncompleteSaleLine[];
 };
 
 export function saleIncomeContribution(input: {
@@ -26,7 +28,13 @@ export function saleIncomeContribution(input: {
 }): IncomeStatementContribution | null {
   const margin = evaluateMarginSet([input.margin]);
   if (['VOID', 'RETURNED'].includes(input.margin.paymentStatus) && margin.state === 'READY') return null;
+  const incompleteLines = margin.state === 'INCOMPLETE_COSTS'
+    ? evaluateMarginLines([input.margin]).lines.flatMap((line, index) => line.ready ? [] : [{
+      productId: line.productId, name: line.name, qtyBase: input.margin.lines[index].qtyBase,
+      revenuePence: line.revenuePence, reason: line.incompleteReason,
+    }]) : [];
   return {
+    ...(incompleteLines.length ? { incompleteLines } : {}),
     id: `sale:${input.id}`, date: input.date, label: input.label, description: 'Recorded sale · after discounts, excluding tax',
     href: `/sales/${encodeURIComponent(input.id)}`, kind: 'sale',
     revenuePence: margin.recognisedSalesPence,

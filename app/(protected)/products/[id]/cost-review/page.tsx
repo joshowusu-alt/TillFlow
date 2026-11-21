@@ -37,6 +37,7 @@ export default async function ProductCostReviewPage(
           <h3 className="font-semibold">{row.store.name}</h3>
           <dl className="mt-2 grid grid-cols-2 gap-3"><div><dt className="text-slate-600">On hand</dt><dd>{row.qtyOnHandBase.toLocaleString()}</dd></div><div><dt className="text-slate-600">Confirmed stock value</dt><dd className="font-semibold">{complete ? formatMoney(row.qtyOnHandBase === 0 ? 0 : row.knownValuePence!, business.currency) : 'Not established'}</dd></div></dl>
           {!complete ? <p className="mt-2 text-amber-900">{row.knownValuePence == null ? 'The existing stock has no confirmed total value.' : `${row.unvaluedQtyBase ?? row.qtyOnHandBase} base units have no confirmed cost.`} A displayed average or default cost does not resolve this.</p> : null}
+          <Link className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent underline" href={`/products/${encodeURIComponent(product.id)}/cost-review/preview?${new URLSearchParams({storeId: row.store.id})}`}>{complete ? 'Review correction history →' : 'Preview evidence-backed correction →'}</Link>
         </article>;
       })}</div>
       {!product.inventoryBalances.length ? <p className="mt-3 text-sm text-slate-600">No stock balance is recorded for this product.</p> : null}
@@ -47,6 +48,7 @@ export default async function ProductCostReviewPage(
       <ul className="mt-3 divide-y divide-slate-100">{data.sales.map(row => <li key={row.id} className="py-3 text-sm">
         <Link className="inline-flex min-h-11 items-center break-all font-semibold text-accent underline" href={`/sales/${encodeURIComponent(row.salesInvoice.id)}`}>{row.salesInvoice.transactionNumber ?? row.salesInvoice.id}</Link>
         <p>{date(row.salesInvoice.createdAt)} · {row.salesInvoice.store.name} · {row.qtyBase} base units</p>
+        <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={`/products/${encodeURIComponent(product.id)}/cost-review/preview?${new URLSearchParams({storeId: row.salesInvoice.store.id})}`}>Preview historical evidence →</Link>
       </li>)}</ul>
       {!data.saleCount ? <p className="mt-3 text-sm text-slate-600">No unresolved sale-cost lines for this product. An existing-stock warning alone does not mean all past sales have missing costs.</p> : null}
       {pages > 1 ? <nav aria-label="Affected sale pages" className="mt-3 flex min-h-11 flex-wrap justify-between gap-3 text-sm"><span>{data.page > 1 ? <Link className="text-accent underline" href={`?page=${data.page - 1}`}>← Previous</Link> : null}</span><span>Page {data.page} of {pages}</span>{data.page < pages ? <Link className="text-accent underline" href={`?page=${data.page + 1}`}>Next →</Link> : null}</nav> : null}

@@ -105,7 +105,7 @@ export default async function IncomeStatementPage(
           label={costsIncomplete ? 'Gross Profit' : `Gross Profit (${gpPct}%)`}
           value={breakdownLink('grossProfit', costsIncomplete ? 'Costs incomplete' : formatMoney(statement.grossProfit ?? 0, business.currency))}
           tone={costsIncomplete ? 'warn' : gpPct >= 20 ? 'success' : gpPct >= 0 ? 'warn' : 'danger'}
-          helper={costsIncomplete ? `${statement.incompleteLineCount} line${statement.incompleteLineCount === 1 ? '' : 's'} without authoritative cost` : undefined}
+          helper={costsIncomplete ? statement.incompleteLineCount > 0 ? `${statement.incompleteLineCount} sale line${statement.incompleteLineCount === 1 ? '' : 's'} require review` : 'Return evidence requires review' : undefined}
         />
         <StatCard
           label={costsIncomplete ? 'Net Profit' : `Net Profit (${npPct}%)`}
@@ -114,6 +114,11 @@ export default async function IncomeStatementPage(
         />
       </div>
 
+      {costsIncomplete ? <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2 text-amber-950">
+        <h2 className="font-semibold">Review sales blocking profit</h2>
+        <p className="text-sm">{statement.incompleteLineCount > 0 ? `${statement.incompleteLineCount} sale line${statement.incompleteLineCount === 1 ? '' : 's'} require review in this reporting period.` : 'A return record requires review in this reporting period.'} Review these first; existing stock valuation is a separate task.</p>
+        <Link className="inline-flex min-h-11 items-center font-semibold underline" href={incomeStatementEntriesHref('grossProfit', fromStr, toStr) + '&issues=1'}>Review affected sales →</Link>
+      </section> : null}
       <DateRangeFilterCard from={fromStr} to={toStr} />
       <p className="text-sm text-ink/60">Tap an amount to see the records that make it up for this period.</p>
 
@@ -126,8 +131,10 @@ export default async function IncomeStatementPage(
           <p className="font-semibold">Stock value is incomplete</p>
           <p className="mt-1">{statement.incompleteStockMessage}</p>
           {costsIncomplete ? (
-            <p className="mt-1">Profit may also be incomplete until those costs are confirmed.</p>
+            <p className="mt-1">The profit exceptions above may overlap with these products, but stock valuation is a separate task.</p>
           ) : <p className="mt-1">Sales costs for this reporting period are complete. The stock-value review is separate.</p>}
+          <Link className="mt-2 inline-flex min-h-11 items-center font-semibold underline" href="/products?issue=MISSING_COST">Review stock and earlier sale costs →</Link>
+          <Link className="mt-2 block min-h-11 font-semibold underline" href="/products/cost-resolution">Open Cost Resolution Centre →</Link>
         </div>
       ) : null}
 

@@ -55,6 +55,8 @@ export default async function SaleCostCorrectionsPage(
   const rawLines = await prisma.salesInvoiceLine.findMany({
     where: {
       NOT: foodDishSaleLine,
+      costBasis: null,
+      lineCostPence: { gt: 0 },
       AND: [
         {
           salesInvoice: {
@@ -184,7 +186,7 @@ export default async function SaleCostCorrectionsPage(
     <div className="space-y-6">
       <PageHeader
         title="Targeted Sale Cost Corrections"
-        subtitle="Correct only the affected historical sales lines after fixing the product setup — without rewriting every sale."
+        subtitle="Legacy positive-cost records only. Exact or unconfirmed stock costs require the Cost Resolution Centre."
         description="Use this screen only when the customer receipt totals were correct and the problem was the historical cost setup behind the line. The correction applies the product's current base cost to the selected historical sale lines and recalculates invoice gross profit."
         secondaryCta={{ label: '← Data Repair', href: '/settings/data-repair' }}
       />

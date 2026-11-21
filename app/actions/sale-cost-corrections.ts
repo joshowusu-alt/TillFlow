@@ -60,6 +60,7 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
         productId: true,
         qtyBase: true,
         lineCostPence: true,
+        costBasis: true,
         lineSubtotalPence: true,
         salesInvoice: {
           select: {
@@ -87,6 +88,10 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
       throw new UserError('Some selected sale lines could not be loaded. Refresh the page and try again.');
     }
 
+    if (selectedLines.some(line => line.costBasis != null || line.lineCostPence <= 0)) {
+      throw new UserError('Authoritative or unverified stock costs require evidence and journal reconciliation. Open the product cost review instead.');
+    }
+
     // Look up the existing SALE movement cost for each invoice+product pair.
     // When a movement already has a real cost we use that as the correction value —
     // it is the stable historical anchor that the page uses for the needsCorrection check.
@@ -99,6 +104,8 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
         referenceId: { in: selectedInvoiceIds },
         productId: { in: selectedProductIds },
         type: 'SALE',
+        costBasis: null,
+        store: { businessId },
         unitCostBasePence: { gt: 0 },
       },
       select: {
@@ -161,7 +168,7 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
     await prisma.$transaction(async (tx) => {
       for (const correction of corrections) {
         await tx.salesInvoiceLine.update({
-          where: { id: correction.id },
+          where: { id: correction.id, costBasis: null, lineCostPence: correction.previousLineCostPence, salesInvoice: { businessId } },
           data: { lineCostPence: correction.correctedLineCostPence },
         });
       }
@@ -173,6 +180,8 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
             referenceId: movement.salesInvoiceId,
             productId: movement.productId,
             type: 'SALE',
+            costBasis: null,
+            store: { businessId },
           },
           data: { unitCostBasePence: movement.unitCostBasePence },
         });

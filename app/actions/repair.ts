@@ -7,7 +7,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { withBusinessContext, safeAction, ok, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, safeAction, ok, UserError, type ActionResult } from '@/lib/action-utils';
 import { revalidatePosCatalog, revalidatePosInventory } from '@/lib/cache/pos-tags';
 import { postJournalEntry, ensureChartOfAccounts, ACCOUNT_CODES } from '@/lib/accounting';
 import { splitPayments, debitCashBankLines, creditCashBankLines, type PaymentMethod } from '@/lib/services/shared';
@@ -696,70 +696,15 @@ export async function ownerVoidSaleAction(saleReference: string): Promise<Action
 }
 
 /**
- * Backfill lineCostPence on historical SalesInvoiceLines that still have 0.
+ * Retired legacy backfill: a missing historical cost cannot be inferred from today's catalogue.
  * Uses StockMovement.unitCostBasePence (historical) where available,
  * falling back to product.defaultCostBasePence (current).
  *
- * Safe to run multiple times — only updates lines with lineCostPence = 0.
+ * Retained for stale clients; always rejects without mutation.
  */
 export async function backfillLineCostAction(): Promise<ActionResult<{ updated: number }>> {
   return safeAction(async () => {
-    const { businessId } = await withBusinessContext(['OWNER']);
-
-    const lines = await prisma.salesInvoiceLine.findMany({
-      where: {
-        lineCostPence: 0,
-        salesInvoice: { businessId },
-      },
-      select: {
-        id: true,
-        productId: true,
-        qtyBase: true,
-        salesInvoice: { select: { id: true } },
-        product: { select: { defaultCostBasePence: true } },
-      },
-      take: 5000,
-    });
-
-    if (lines.length === 0) return ok({ updated: 0 });
-
-    // Fetch stock movements for these invoices to get historical cost
-    const invoiceIds = [...new Set(lines.map((l) => l.salesInvoice.id))];
-    const movements = await prisma.stockMovement.findMany({
-      where: {
-        referenceType: 'SALES_INVOICE',
-        referenceId: { in: invoiceIds },
-        type: 'SALE',
-      },
-      select: {
-        referenceId: true,
-        productId: true,
-        unitCostBasePence: true,
-      },
-    });
-
-    // Map: invoiceId+productId → unitCostBasePence
-    const movementCostMap = new Map<string, number>();
-    for (const m of movements) {
-      if (m.unitCostBasePence != null) {
-        movementCostMap.set(`${m.referenceId}:${m.productId}`, m.unitCostBasePence);
-      }
-    }
-
-    let updated = 0;
-    for (const line of lines) {
-      const historicalCost = movementCostMap.get(`${line.salesInvoice.id}:${line.productId}`);
-      const unitCost = historicalCost ?? line.product.defaultCostBasePence;
-      const lineCostPence = unitCost * line.qtyBase;
-
-      await prisma.salesInvoiceLine.update({
-        where: { id: line.id },
-        data: { lineCostPence },
-      });
-      updated++;
-    }
-
-    revalidatePath('/reports', 'layout');
-    return ok({ updated });
+    await withBusinessContext(['OWNER']);
+    throw new UserError('Historical cost backfill is disabled. Review purchase, stock movement and journal evidence before confirming historical costs.');
   });
 }
