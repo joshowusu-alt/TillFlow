@@ -25,9 +25,9 @@ export default async function HistoricalCostPreviewPage(props: { params: Promise
   return <div className="min-w-0 space-y-4">
     <PageHeader title="Historical cost correction preview" subtitle={data.product + ' · ' + data.store} secondaryCta={{label:'← Cost evidence',href:`/products/${encodeURIComponent(id)}/cost-review`}} />
     <p className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">Review the recorded evidence before confirming any correction. This checks recorded purchase, supplier credit, stock movement, sale and journal evidence; current catalogue prices are not used.</p>
-    {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{error.slice(0,500)}</p> : null}
+    {typeof error === 'string' && error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{error.slice(0,500)}</p> : null}
     {result.status === 'BLOCKED' ? <section className="card space-y-2 p-4">
-      <h2 className="font-semibold text-amber-900">Manual reconciliation required</h2>
+      <h2 className="font-semibold text-amber-900">{history.some(row=>!row.reversed)?'No new automatic correction available':'Manual reconciliation required'}</h2>
       <p className="text-sm">{result.reason}</p>
       <p className="text-sm text-slate-600">Keep profit unconfirmed until the missing or conflicting evidence is resolved.</p>
     </section> : <>
