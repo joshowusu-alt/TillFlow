@@ -37,7 +37,7 @@ export default async function ProductCostReviewPage(
           <h3 className="font-semibold">{row.store.name}</h3>
           <dl className="mt-2 grid grid-cols-2 gap-3"><div><dt className="text-slate-600">On hand</dt><dd>{row.qtyOnHandBase.toLocaleString()}</dd></div><div><dt className="text-slate-600">Confirmed stock value</dt><dd className="font-semibold">{complete ? formatMoney(row.qtyOnHandBase === 0 ? 0 : row.knownValuePence!, business.currency) : 'Not established'}</dd></div></dl>
           {!complete ? <p className="mt-2 text-amber-900">{row.knownValuePence == null ? 'The existing stock has no confirmed total value.' : `${row.unvaluedQtyBase ?? row.qtyOnHandBase} base units have no confirmed cost.`} A displayed average or default cost does not resolve this.</p> : null}
-          {!complete ? <Link className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent underline" href={`/products/${encodeURIComponent(product.id)}/cost-review/preview?${new URLSearchParams({storeId: row.store.id})}`}>Preview evidence-backed correction →</Link> : null}
+          <Link className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent underline" href={`/products/${encodeURIComponent(product.id)}/cost-review/preview?${new URLSearchParams({storeId: row.store.id})}`}>{complete ? 'Review correction history →' : 'Preview evidence-backed correction →'}</Link>
         </article>;
       })}</div>
       {!product.inventoryBalances.length ? <p className="mt-3 text-sm text-slate-600">No stock balance is recorded for this product.</p> : null}
