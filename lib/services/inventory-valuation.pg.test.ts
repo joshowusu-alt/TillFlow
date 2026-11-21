@@ -433,6 +433,31 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     expect(await inventoryPosting([f.purchase.id,f.sale.id])).toBe(4000);
     await expect(f.reverse(f.request)).rejects.toThrow('Subsequent');
   },60000);
+  it('rolls back every correction write when the audit record fails',async()=>{
+    const f=await historicalFixture();
+    const before=await stock(f.p);
+    const beforeLine=await db.salesInvoiceLine.findFirstOrThrow({where:{salesInvoiceId:f.sale.id}});
+    const beforeJournal=await inventoryPosting([f.purchase.id,f.sale.id]);
+    const transaction=singleton.$transaction.bind(singleton);
+    const injected=vi.spyOn(singleton,'$transaction').mockImplementationOnce((async (callback:any,options:any)=>transaction(async tx=>{
+      const fail=vi.spyOn(tx.auditLog,'create').mockRejectedValueOnce(new Error('Injected audit failure'));
+      try{return await callback(tx)}finally{fail.mockRestore()}
+    },options)) as typeof singleton.$transaction);
+    try{await expect(f.apply(f.request)).rejects.toThrow('Injected audit failure')}finally{injected.mockRestore()}
+    expect(await stock(f.p)).toEqual(before);
+    expect(await db.salesInvoiceLine.findFirstOrThrow({where:{salesInvoiceId:f.sale.id}})).toEqual(beforeLine);
+    expect(await inventoryPosting([f.purchase.id,f.sale.id])).toBe(beforeJournal);
+    expect(await db.moneyIdempotency.count({where:{businessId,key:'cost-apply:'+f.request.fingerprint}})).toBe(0);
+  },60000);
+  it('blocks cross-business or non-owner correction and competing duplicate requests',async()=>{
+    const f=await historicalFixture();
+    await expect(f.apply({...f.request,businessId:'foreign-business'})).rejects.toThrow();
+    await expect(f.apply({...f.request,userId:'not-an-owner'})).rejects.toThrow();
+    const outcomes=await Promise.allSettled([f.apply(f.request),f.apply(f.request)]);
+    expect(outcomes.some(r=>r.status==='fulfilled')).toBe(true);
+    expect(await db.moneyIdempotency.count({where:{businessId,key:'cost-apply:'+f.request.fingerprint}})).toBe(1);
+    expect(await inventoryPosting([f.purchase.id,f.sale.id])).toBe(4000);
+  },60000);
   it('serializes competing correction and sale without inventing stock or double-posting COGS',async()=>{
     const f=await historicalFixture();
     const outcomes=await Promise.allSettled([f.apply(f.request),sell(f.p,1)]);
