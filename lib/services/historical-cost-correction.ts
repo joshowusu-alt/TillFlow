@@ -84,7 +84,7 @@ export async function applyHistoricalCostCorrection(input:Request) {
     if(changed.count!==1) throw new UserError('Current stock changed.');
     const saved:Saved={scope,plan,before:{balance:{qtyOnHandBase:balance.qtyOnHandBase,avgCostBasePence:balance.avgCostBasePence,knownValuePence:balance.knownValuePence,unvaluedQtyBase:balance.unvaluedQtyBase},margins:before.invoices.filter(i=>affected.includes(i.id)).map(i=>({id:i.id,grossMarginPence:i.grossMarginPence}))},postHash:digest(await snapshot(tx,scope))};
     await tx.moneyIdempotency.create({data:{businessId:scope.businessId,key:key(input.fingerprint),payloadHash:input.fingerprint,commandKind:APPLY,resultJson:JSON.stringify(saved)}});
-    await tx.auditLog.create({data:{businessId:scope.businessId,userId:actor.id,userName:actor.name,userRole:actor.role,action:APPLY,entity:'Product',entityId:scope.productId,reason:input.reason.trim(),details:JSON.stringify(saved)}});
+    await tx.auditLog.create({data:{businessId:scope.businessId,userId:actor.id,userName:actor.name,userRole:actor.role,action:APPLY,entity:'Product',entityId:scope.productId,branchId:scope.storeId,reason:input.reason.trim(),details:JSON.stringify(saved)}});
     return {fingerprint:input.fingerprint,replayed:false};
   },transactionOptions);
 }
@@ -111,7 +111,23 @@ export async function reverseHistoricalCostCorrection(input:Request) {
     for(const margin of saved.before.margins) await tx.salesInvoice.update({where:{id:margin.id,businessId:scope.businessId},data:{grossMarginPence:margin.grossMarginPence}});
     await tx.inventoryBalance.update({where:{storeId_productId:{storeId:scope.storeId,productId:scope.productId}},data:saved.before.balance});
     await tx.moneyIdempotency.create({data:{businessId:scope.businessId,key:key(input.fingerprint,true),payloadHash:input.fingerprint,commandKind:REVERSE,resultJson:JSON.stringify({scope})}});
-    await tx.auditLog.create({data:{businessId:scope.businessId,userId:actor.id,userName:actor.name,userRole:actor.role,action:REVERSE,entity:'Product',entityId:scope.productId,reason:input.reason.trim(),details:JSON.stringify({fingerprint:input.fingerprint})}});
+    await tx.auditLog.create({data:{businessId:scope.businessId,userId:actor.id,userName:actor.name,userRole:actor.role,action:REVERSE,entity:'Product',entityId:scope.productId,branchId:scope.storeId,reason:input.reason.trim(),details:JSON.stringify({fingerprint:input.fingerprint})}});
     return {fingerprint:input.fingerprint,replayed:false};
   },transactionOptions);
+}
+
+/** Read-only scoped correction history; never trusts a client-supplied scope or amount. */
+export async function listHistoricalCostCorrections(scope:Scope) {
+  const entries=await prisma.auditLog.findMany({where:{businessId:scope.businessId,entity:'Product',entityId:scope.productId,branchId:scope.storeId,action:APPLY},orderBy:{createdAt:'desc'},take:20,select:{details:true,createdAt:true,reason:true,userName:true}});
+  const result=[];
+  for(const entry of entries){
+    if(!entry.details)continue;
+    const saved=JSON.parse(entry.details) as Saved;
+    if(!sameScope(saved.scope,scope)||!saved.plan?.fingerprint) continue;
+    const original=await prisma.moneyIdempotency.findUnique({where:{businessId_key:{businessId:scope.businessId,key:key(saved.plan.fingerprint)}}});
+    if(!original||original.commandKind!==APPLY||original.payloadHash!==saved.plan.fingerprint)continue;
+    const reversed=await prisma.moneyIdempotency.findUnique({where:{businessId_key:{businessId:scope.businessId,key:key(saved.plan.fingerprint,true)}}});
+    result.push({fingerprint:saved.plan.fingerprint,cogsDelta:saved.plan.cogsDelta,remainingStockValue:saved.plan.remainingStockValue,createdAt:entry.createdAt,reason:entry.reason,userName:entry.userName,reversed:!!reversed});
+  }
+  return result;
 }
