@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 import { previewHistoricalCost } from './historical-cost-evidence';
@@ -12,7 +13,10 @@ function creditLines(json: string): CreditLine[] | null {
   } catch { return null; }
 }
 export async function loadHistoricalCostPreview(businessId: string, productId: string, storeId: string) {
-  return prisma.$transaction(async tx => {
+  return prisma.$transaction(tx => readHistoricalCostPreview(tx,businessId,productId,storeId), { isolationLevel: 'Serializable', maxWait: 5000, timeout: 15000 });
+}
+
+export async function readHistoricalCostPreview(tx: Prisma.TransactionClient, businessId: string, productId: string, storeId: string) {
     const product = await tx.product.findFirst({ where: { id: productId, businessId }, select: { name: true, foodDish: { select: { id: true } } } });
     const store = await tx.store.findFirst({ where: { id: storeId, businessId }, select: { name: true } });
     if (!product || !store) return null;
@@ -76,5 +80,5 @@ export async function loadHistoricalCostPreview(businessId: string, productId: s
       credits,
     });
     return { product: product.name, store: store.name, result };
-  }, { isolationLevel: 'Serializable', maxWait: 5000, timeout: 15000 });
+
 }
