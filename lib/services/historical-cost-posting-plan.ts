@@ -23,6 +23,6 @@ export function buildHistoricalCostPostingPlan(scope:{businessId:string;productI
   if(new Set(rows.map(r=>r.lineId)).size!==rows.length || new Set(rows.map(r=>r.movementId)).size!==rows.length ||
      rows.some(r=>r.before.lineCostPence!==0 || !Number.isSafeInteger(r.after.lineCostPence) || r.after.lineCostPence<=0) ||
      rows.reduce((sum,r)=>sum+r.after.lineCostPence,0)!==proof.cogsDelta) throw new Error('Historical cost proposal is inconsistent.');
-  const payload={version:1,scope,sourceId:proof.source.id,unitCost:proof.unitCost,remainingStockValue:proof.stockValue,cogsDelta:proof.cogsDelta,rows};
+  const payload={version:1,scope:{businessId:scope.businessId,productId:scope.productId,storeId:scope.storeId},sourceId:proof.source.id,unitCost:proof.unitCost,remainingStockValue:proof.stockValue,cogsDelta:proof.cogsDelta,rows};
   return {...payload,fingerprint:createHash('sha256').update(JSON.stringify(payload)).digest('hex')};
 }
