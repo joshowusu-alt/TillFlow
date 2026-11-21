@@ -1776,13 +1776,13 @@ export async function amendSale(input: AmendSaleInput) {
     const current = await tx.salesInvoice.findFirst({
       where: { id: invoice.id, businessId: input.businessId },
       select: { paymentStatus: true, totalPence: true,
-        lines: { select: { id: true, qtyBase: true, lineTotalPence: true } },
+        lines: { select: { id: true, qtyBase: true, lineTotalPence: true, lineCostPence: true, costBasis: true } },
         payments: { select: { id: true, method: true, status: true, amountPence: true } } },
     });
     if (!current || ['RETURNED', 'VOID'].includes(current.paymentStatus)
       || current.payments.some(isPendingMomo)
       || current.totalPence !== invoice.totalPence || current.lines.length !== invoice.lines.length
-      || current.lines.some(line => !invoice.lines.some(old => old.id === line.id && old.qtyBase === line.qtyBase && old.lineTotalPence === line.lineTotalPence))
+      || current.lines.some(line => !invoice.lines.some(old => old.id === line.id && old.qtyBase === line.qtyBase && old.lineTotalPence === line.lineTotalPence && old.lineCostPence === line.lineCostPence && old.costBasis === line.costBasis))
       || current.payments.length !== invoice.payments.length
       || current.payments.some(payment => !invoice.payments.some(old => old.id === payment.id && old.amountPence === payment.amountPence && old.status === payment.status))) {
       throw new UserError('Sale changed or has pending MoMo. Refresh and reconcile it before amending.');
