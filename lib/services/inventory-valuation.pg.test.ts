@@ -400,11 +400,15 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     await expect(f.apply({...f.request,fingerprint:'a'.repeat(64)})).rejects.toThrow();
     expect(await f.apply(f.request)).toMatchObject({replayed:false});
     expect(await f.apply(f.request)).toMatchObject({replayed:true});
+    const {listHistoricalCostCorrections}=await import('./historical-cost-correction');
+    expect(await listHistoricalCostCorrections({businessId,productId:f.p,storeId})).toMatchObject([{fingerprint:f.request.fingerprint,cogsDelta:1000,reversed:false}]);
+    expect(await listHistoricalCostCorrections({businessId:'foreign',productId:f.p,storeId})).toEqual([]);
     expect(await stock(f.p)).toMatchObject({qtyOnHandBase:4,knownValuePence:4000,unvaluedQtyBase:0});
     expect(await inventoryPosting([f.purchase.id,f.sale.id])).toBe(4000);
     expect(await db.salesInvoiceLine.findFirstOrThrow({where:{salesInvoiceId:f.sale.id}})).toMatchObject({lineCostPence:1000,costBasis:'INVENTORY_VALUE_V1'});
     expect(await f.reverse(f.request)).toMatchObject({replayed:false});
     expect(await f.reverse(f.request)).toMatchObject({replayed:true});
+    expect(await listHistoricalCostCorrections({businessId,productId:f.p,storeId})).toMatchObject([{fingerprint:f.request.fingerprint,reversed:true}]);
     expect(await stock(f.p)).toMatchObject({qtyOnHandBase:4,knownValuePence:null,unvaluedQtyBase:4});
     expect(await inventoryPosting([f.purchase.id,f.sale.id])).toBe(5000);
     expect(await db.salesInvoiceLine.findFirstOrThrow({where:{salesInvoiceId:f.sale.id}})).toMatchObject({lineCostPence:0,costBasis:'UNVERIFIED_STOCK_V1'});
