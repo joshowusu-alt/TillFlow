@@ -425,10 +425,14 @@ export default function PosClient({
   const knownCatalogueSize = catalogueSize ?? productOptions.length;
 
   // O(1) product lookup via Map — avoids O(n) find() per cart line
-  const productMap = useMemo(
-    () => buildProductMap(productOptions as unknown as PosProduct[]),
-    [productOptions]
-  );
+  // In paged mode (catalogue > POS_LOCAL_INDEX_MAX) the server sends no products up front, so
+  // productOptions starts empty and search results live in serverSearchMatches. Include them in
+  // the lookup map, otherwise getAvailableBase() returns 0 and every result shows "None available".
+  const productMap = useMemo(() => {
+    const known = new Set(productOptions.map((product) => product.id));
+    const extra = serverSearchMatches.filter((product) => !known.has(product.id));
+    return buildProductMap([...productOptions, ...extra] as unknown as PosProduct[]);
+  }, [productOptions, serverSearchMatches]);
   const productIndex = useMemo(() => buildPosProductIndex(productOptions), [productOptions]);
 
   const mergeProductOption = useCallback((incoming: ProductDto) => {
