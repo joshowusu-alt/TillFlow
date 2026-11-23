@@ -450,7 +450,7 @@ async function createInventoryIncreaseImpl(
     if (!balance) {
       throw new InventoryIncreaseError(
         INVENTORY_INCREASE_ERROR.MISSING_BALANCE,
-        'No inventory balance exists for this product — retained average cost is required',
+        'This product has no stock or cost in this branch yet. Add it with Opening stock or receive it on a purchase (with its cost) first. Record increase is only for surplus on items already stocked.',
       );
     }
 
@@ -459,7 +459,7 @@ async function createInventoryIncreaseImpl(
     if (!Number.isInteger(unitCostBasePence) || unitCostBasePence <= 0) {
       throw new InventoryIncreaseError(
         INVENTORY_INCREASE_ERROR.MISSING_VALUATION,
-        'Authoritative average cost is missing or zero',
+        'This product has no average cost yet. Add it with Opening stock or receive it on a purchase (with its cost) first.',
       );
     }
 
