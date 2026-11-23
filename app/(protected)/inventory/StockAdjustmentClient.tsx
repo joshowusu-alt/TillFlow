@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import SubmitButton from '@/components/SubmitButton';
 import { createStockAdjustmentAction } from '@/app/actions/inventory';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
@@ -125,6 +126,10 @@ export default function StockAdjustmentClient({
   const qtyBase = selectedUnit ? qtyNumber * selectedUnit.conversionToBase : 0;
   const avgCost = selectedProduct?.avgCostBasePence ?? 0;
   const valueIncrease = qtyBase > 0 && avgCost > 0 ? qtyBase * avgCost : 0;
+  // Increases are valued at the retained average cost only. A product that has never had
+  // stock or a cost in this branch (e.g. imported with 0 stock) cannot be increased here:
+  // the server rejects it, so explain the right workflow and block the submit instead.
+  const increaseNeedsOpeningStock = mode === 'INCREASE' && !!selectedProduct && avgCost <= 0;
   const valueDecrease = qtyBase > 0 && avgCost > 0 ? qtyBase * avgCost : 0;
   const resultingQtyIncrease = (selectedProduct?.onHandBase ?? 0) + qtyBase;
   const resultingQtyDecrease = Math.max(0, (selectedProduct?.onHandBase ?? 0) - qtyBase);
@@ -417,6 +422,20 @@ export default function StockAdjustmentClient({
             </div>
           </div>
 
+          {increaseNeedsOpeningStock ? (
+            <div role="alert" data-testid="increase-needs-opening-stock" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <div className="font-semibold">{selectedProduct?.name ?? 'This product'} has no stock or cost in TillFlow yet</div>
+              <p className="mt-1 text-amber-800/90">
+                Record increase only works for items that already have an average cost. Add this item with
+                Opening stock (enter its quantity and cost) or receive it on a purchase instead.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-3">
+                <Link className="font-semibold text-amber-900 underline" href={`/setup/opening-stock?productId=${encodeURIComponent(selectedProduct?.id ?? '')}`}>Set opening stock</Link>
+                <Link className="font-semibold text-amber-900 underline" href="/purchases">Receive on a purchase</Link>
+              </div>
+            </div>
+          ) : null}
+
           {mode === 'INCREASE' ? (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
               <div className="text-sm font-semibold text-ink">Stock and value effect</div>
@@ -511,6 +530,7 @@ export default function StockAdjustmentClient({
             <SubmitButton
               className="btn-primary"
               loadingText="Recording…"
+              disabled={increaseNeedsOpeningStock}
             >
               {mode === 'INCREASE' ? 'Record increase' : 'Record decrease'}
             </SubmitButton>
