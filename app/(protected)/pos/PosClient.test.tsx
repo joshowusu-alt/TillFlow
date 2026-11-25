@@ -251,7 +251,7 @@ describe('PosClient desktop layout', () => {
     expect(screen.queryByLabelText(/^due date$/i)).not.toBeInTheDocument();
   });
 
-  it('treats ordinary method clicks as mutually exclusive outside Split', async () => {
+  it('treats ordinary method clicks as mutually exclusive for full payment', async () => {
     render(<PosClient {...baseProps} />);
     await addCocaColaToCart();
 
@@ -281,7 +281,7 @@ describe('PosClient desktop layout', () => {
     expect(screen.queryByPlaceholderText(/card ref/i)).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText(/transfer ref/i)).toBeInTheDocument();
 
-    // Selecting a second method without Split still replaces, never accumulates.
+    // Selecting another method before entering a partial amount replaces it.
     fireEvent.click(screen.getByRole('button', { name: 'Cash' }));
     expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Bank Transfer' })).toHaveAttribute('aria-pressed', 'false');
@@ -290,7 +290,7 @@ describe('PosClient desktop layout', () => {
     expect(cashTendered?.value ?? '').toBe('');
   });
 
-  it('allows multiple methods only after explicit Split and clears them when leaving Split', async () => {
+  it('adds the remainder automatically and preserves edited amounts', async () => {
     render(<PosClient {...baseProps} />);
     await addCocaColaToCart();
 
@@ -299,20 +299,114 @@ describe('PosClient desktop layout', () => {
     expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Card' })).toHaveAttribute('aria-pressed', 'false');
 
+    expect(screen.queryByRole('button', { name: /split/i })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('Amount due'), { target: { value: '1.00' } });
+    expect(screen.getByText('Still owed GH₵1.50')).toBeInTheDocument();
+    expect(screen.getByText('Pay the rest with:')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cash' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Split…' }));
-    expect(screen.getByRole('button', { name: 'Split…' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/Split payment — select every method/i)).toBeInTheDocument();
-
+    expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Cash tendered')).toHaveValue(1.5);
+    fireEvent.change(screen.getByLabelText('MoMo amount'), { target: { value: '0.50' } });
+    expect(screen.getByLabelText('Cash tendered')).toHaveValue(1.5);
+    expect(screen.getByText('Still owed GH₵0.50')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Card' }));
+    expect(screen.getByLabelText('Card amount')).toHaveValue(0.5);
+    expect(screen.getByLabelText('MoMo amount')).toHaveValue(0.5);
+    fireEvent.click(screen.getByRole('button', { name: 'MoMo' }));
     expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Card' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByPlaceholderText(/transaction ref/i)).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Split…' }));
-    expect(screen.getByRole('button', { name: 'Split…' })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Card' })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.queryByText(/Split payment — select every method/i)).not.toBeInTheDocument();
+  it('submits Cash and MoMo amounts and queues the same applied amounts when offline', async () => {
+    render(<PosClient {...baseProps} />);
+    await addCocaColaToCart();
+    fireEvent.click(screen.getByRole('button', { name: 'MoMo' }));
+    fireEvent.change(screen.getByPlaceholderText('Amount due'), { target: { value: '1.00' } });
+    expect(screen.getByTestId('pos-complete-checkout')).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cash' }));
+    await waitFor(() => expect(screen.getByTestId('pos-complete-checkout')).not.toBeDisabled());
+    mockedCompleteSaleAction.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    vi.mocked(queueOfflineSale).mockResolvedValueOnce('queued-multi');
+    fireEvent.click(screen.getByTestId('pos-complete-checkout'));
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledWith(expect.objectContaining({
+      cashPaid: 150, momoPaid: 100, cardPaid: 0, transferPaid: 0,
+    })));
+    await waitFor(() => expect(queueOfflineSale).toHaveBeenCalledWith(expect.objectContaining({
+      payments: [{ method: 'CASH', amountPence: 150 }, { method: 'MOBILE_MONEY', amountPence: 100 }],
+    })));
+  });
+
+  it.each([
+    ['Card', 'Cash', { cardPaid: 100, cashPaid: 150 }],
+    ['MoMo', 'Bank Transfer', { momoPaid: 100, transferPaid: 150 }],
+  ] as const)('submits %s followed by %s', async (first, second, amounts) => {
+    render(<PosClient {...baseProps} />);
+    await addCocaColaToCart();
+    fireEvent.click(screen.getByRole('button', { name: first }));
+    fireEvent.change(screen.getByPlaceholderText('Amount due'), { target: { value: '1.00' } });
+    fireEvent.click(screen.getByRole('button', { name: second }));
+    await waitFor(() => expect(screen.getByTestId('pos-complete-checkout')).toBeEnabled());
+    mockedCompleteSaleAction.mockResolvedValueOnce({
+      success: true, data: { receiptId: 'inv-multi', totalPence: 250, transactionNumber: 'TX-MULTI' },
+    });
+    fireEvent.click(screen.getByTestId('pos-complete-checkout'));
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledWith(expect.objectContaining(amounts)));
+  });
+
+  it('clears all tender amounts and references on switching to unpaid', async () => {
+    render(<PosClient {...baseProps} />);
+    await addCocaColaToCart();
+    fireEvent.click(screen.getByRole('button', { name: 'MoMo' }));
+    fireEvent.change(screen.getByLabelText('MoMo amount'), { target: { value: '1' } });
+    fireEvent.change(screen.getByPlaceholderText('Transaction ref (optional)'), { target: { value: 'REF' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cash' }));
+    fireEvent.change(screen.getByLabelText('Payment status'), { target: { value: 'UNPAID' } });
+    expect(screen.queryByRole('button', { name: 'Cash' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Payment status'), { target: { value: 'PAID' } });
+    expect(screen.getByLabelText(/Cash tendered/)).toHaveValue(null);
+    fireEvent.click(screen.getByRole('button', { name: 'MoMo' }));
+    expect(screen.getByLabelText('MoMo amount')).toHaveValue(null);
+    expect(screen.getByPlaceholderText('Transaction ref (optional)')).toHaveValue('');
+  });
+
+  it('rotates the sale attempt when a mixed tender changes but retains it on unchanged retry', async () => {
+    render(<PosClient {...baseProps} />);
+    await addCocaColaToCart();
+    fireEvent.click(screen.getByRole('button', { name: 'MoMo' }));
+    fireEvent.change(screen.getByLabelText('MoMo amount'), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cash' }));
+    const complete = screen.getByTestId('pos-complete-checkout');
+    mockedCompleteSaleAction.mockRejectedValueOnce(new Error('uncertain sale'));
+    await waitFor(() => expect(complete).toBeEnabled());
+    fireEvent.click(complete);
+    await waitFor(() => expect(screen.getByText(/Sale outcome is unclear/i)).toBeInTheDocument());
+    const initial = mockedCompleteSaleAction.mock.calls[0][0].externalRef;
+    mockedCompleteSaleAction.mockRejectedValueOnce(new Error('uncertain sale'));
+    fireEvent.click(complete);
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(2));
+    expect(mockedCompleteSaleAction.mock.calls[1][0].externalRef).toBe(initial);
+    await waitFor(() => expect(complete).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('Cash tendered'), { target: { value: '2' } });
+    mockedCompleteSaleAction.mockRejectedValueOnce(new Error('uncertain sale'));
+    await waitFor(() => expect(complete).toBeEnabled());
+    fireEvent.click(complete);
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(3));
+    expect(mockedCompleteSaleAction.mock.calls[2][0].externalRef).not.toBe(initial);
+    expect(mockedCompleteSaleAction.mock.calls[2][0].cashPaid).toBe(150);
+    const edited = mockedCompleteSaleAction.mock.calls[2][0].externalRef;
+    await waitFor(() => expect(complete).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Cash' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Card' }));
+    mockedCompleteSaleAction.mockResolvedValueOnce({
+      success: true, data: { receiptId: 'inv-multi', totalPence: 250, transactionNumber: 'TX-MULTI' },
+    });
+    await waitFor(() => expect(complete).toBeEnabled());
+    fireEvent.click(complete);
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(4));
+    expect(mockedCompleteSaleAction.mock.calls[3][0].externalRef).not.toBe(edited);
+    expect(mockedCompleteSaleAction.mock.calls[3][0]).toMatchObject({ cashPaid: 0, cardPaid: 150, momoPaid: 100 });
   });
 
   it('keeps a sticky desktop complete action and mobile sticky checkout chrome', async () => {
@@ -614,7 +708,7 @@ describe('PosClient mobile phase 1 layout', () => {
     expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'false');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Split…' }));
+    fireEvent.change(screen.getByPlaceholderText('Amount due'), { target: { value: '1.00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Card' }));
     expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Card' })).toHaveAttribute('aria-pressed', 'true');

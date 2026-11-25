@@ -216,7 +216,6 @@ export default function PosClient({
   const [transferRef, setTransferRef] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [dueDateDecision, setDueDateDecision] = useState<DueDateDecision>('unset');
-  const [showSplitPanel, setShowSplitPanel] = useState(false);
   const saleAttemptStorageKey = useMemo(
     () => buildPosSaleAttemptStorageKey(business.id, store.id),
     [business.id, store.id]
@@ -716,7 +715,6 @@ export default function PosClient({
       clearTransferFields();
       resetMomoPaymentFields();
       setPaymentMethods([]);
-      setShowSplitPanel(false);
       return;
     }
     // PART_PAID — keep methods but ensure at least one for receiving payment
@@ -738,62 +736,6 @@ export default function PosClient({
     if (!next.includes('TRANSFER')) clearTransferFields();
     if (!next.includes('MOBILE_MONEY')) resetMomoPaymentFields();
   }, [clearCashFields, clearCardFields, clearTransferFields, resetMomoPaymentFields]);
-
-  const isSplitMode = showSplitPanel || paymentMethods.length > 1;
-
-  const togglePaymentMethod = (method: PaymentMethod) => {
-    if (paymentStatus === 'UNPAID') return;
-
-    // Outside explicit Split mode, methods are mutually exclusive — a normal
-    // method click replaces Cash (or any prior single method) and never implies split.
-    if (!isSplitMode) {
-      if (paymentMethods.length === 1 && paymentMethods[0] === method) {
-        return;
-      }
-      const next: PaymentMethod[] = [method];
-      clearFieldsForAbsentMethods(next);
-      setShowSplitPanel(false);
-      setPaymentMethods(next);
-      return;
-    }
-
-    // Split mode: allow additive multi-method selection.
-    const exists = paymentMethods.includes(method);
-    let next = exists
-      ? paymentMethods.filter((current) => current !== method)
-      : [...paymentMethods, method];
-    if (next.length === 0) {
-      next = ['CASH'];
-    }
-    if (exists) {
-      if (method === 'CASH') clearCashFields();
-      if (method === 'CARD') clearCardFields();
-      if (method === 'TRANSFER') clearTransferFields();
-      if (method === 'MOBILE_MONEY') resetMomoPaymentFields();
-    }
-    if (next.length === 1) {
-      clearFieldsForAbsentMethods(next);
-    }
-    setPaymentMethods(next);
-  };
-
-  const handleToggleSplitPanel = () => {
-    if (showSplitPanel || paymentMethods.length > 1) {
-      // Leave Split: collapse to one method and drop stale split-only amounts/refs.
-      const keep = paymentMethods[0] ?? 'CASH';
-      const next: PaymentMethod[] = [keep];
-      clearFieldsForAbsentMethods(next);
-      // Reset kept non-cash amounts so single-method Paid defaults re-apply the full due.
-      if (keep === 'CARD') setCardPaid('');
-      if (keep === 'TRANSFER') setTransferPaid('');
-      if (keep === 'MOBILE_MONEY') setMomoPaid('');
-      if (keep === 'CASH') clearCashFields();
-      setPaymentMethods(next);
-      setShowSplitPanel(false);
-      return;
-    }
-    setShowSplitPanel(true);
-  };
 
   useEffect(() => {
     if (!useServerCatalogue) {
@@ -999,7 +941,6 @@ export default function PosClient({
     resetMomoPaymentFields();
     clearDueDateState();
     setPaymentMethods(['CASH']);
-    setShowSplitPanel(false);
     setAmbiguousFailure(false);
     orderDiscountForm.reset();
     loyaltyRedemption.reset();
@@ -1144,6 +1085,38 @@ export default function PosClient({
     momoSignature,
   } = checkoutSummary;
 
+  const togglePaymentMethod = (method: PaymentMethod) => {
+    if (paymentStatus === 'UNPAID') return;
+    if (hasMethod(method)) {
+      if (paymentMethods.length === 1) return;
+      const next = paymentMethods.filter((current) => current !== method);
+      clearFieldsForAbsentMethods(next);
+      setPaymentMethods(next);
+      return;
+    }
+
+    // A single untouched (or fully paid) tender remains a one-tap choice.
+    // Explicit partial payments keep their amounts when another method is added.
+    const hasTypedAmount = [cashTendered, cardPaid, transferPaid, momoPaid].some((amount) => amount.trim() !== '');
+    const adding = balanceRemaining > 0 && (hasTypedAmount || paymentMethods.length > 1);
+    if (!adding && paymentMethods.length <= 1) {
+      clearFieldsForAbsentMethods([method]);
+      setPaymentMethods([method]);
+      return;
+    }
+    if (!adding) return;
+    const next = [...paymentMethods, method];
+    // Part-paid sales must remain below the full total; don't fill their balance.
+    if (paymentStatus === 'PAID') {
+      const remainder = (balanceRemaining / 100).toFixed(2);
+      if (method === 'CASH') setCashTendered(remainder);
+      if (method === 'CARD') setCardPaid(remainder);
+      if (method === 'TRANSFER') setTransferPaid(remainder);
+      if (method === 'MOBILE_MONEY') setMomoPaid(remainder);
+    }
+    setPaymentMethods(next);
+  };
+
   const confirmClearCart = () => {
     if (!cartFilled || isCompletingSale || ambiguousFailure || isInitiatingMomo) return;
     const discount = orderDiscountForm.snapshot();
@@ -1152,7 +1125,7 @@ export default function PosClient({
       setCart(cart); setCustomerId(customerId); setCustomerSearch(customerSearch);
       setCashTendered(cashTendered); setCardPaid(cardPaid); setCardRef(cardRef);
       setTransferPaid(transferPaid); setTransferRef(transferRef); restoreMomoSnapshot(momo);
-      setPaymentStatus(paymentStatus); setPaymentMethods(paymentMethods); setShowSplitPanel(showSplitPanel);
+      setPaymentStatus(paymentStatus); setPaymentMethods(paymentMethods);
       setDueDate(dueDate); setDueDateDecision(dueDateDecision);
       orderDiscountForm.restore(discount); loyaltyRedemption.setPointsInput(loyaltyRedemption.pointsInput);
       setQtyDrafts(qtyDrafts); restoreUndoStack(undoStack); setSaleAttemptId(saleAttemptId);
@@ -1484,7 +1457,7 @@ export default function PosClient({
       issues.push({ tone: 'warning', message: 'High discount needs manager PIN and reason before completion.' });
     }
     if (paymentStatus === 'PAID' && !fullyPaid) {
-      issues.push({ tone: 'warning', message: 'Full payment required. Enter enough cash or switch to Part Paid/Unpaid.' });
+      issues.push({ tone: 'warning', message: 'Full payment required. Pay the rest or switch to Part Paid/Unpaid.' });
     }
     if (paymentStatus === 'PART_PAID' && !partPaidValid) {
       issues.push({ tone: 'warning', message: 'Part-paid sales need an amount greater than zero and below the total.' });
@@ -2655,8 +2628,6 @@ export default function PosClient({
               availablePaymentMethods={availablePaymentMethods}
               paymentMethods={paymentMethods}
               onTogglePaymentMethod={togglePaymentMethod}
-              showSplitPanel={showSplitPanel}
-              onToggleSplitPanel={handleToggleSplitPanel}
               cashTendered={cashTendered}
               onCashTenderedChange={setCashTendered}
               cashRef={cashRef}
