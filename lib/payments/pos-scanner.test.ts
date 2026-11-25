@@ -42,6 +42,28 @@ describe('pos-scanner helpers', () => {
     expect(state).toEqual(createState());
   });
 
+  it('recognises same-millisecond scanner events and preserves a detected burst through a short gap', () => {
+    const state = createState();
+    for (const key of '1234') updateScannerBufferState(state, key, 1000);
+    expect(handleScannerEnter(state)).toEqual({ shouldScan: true, code: '1234' });
+    updateScannerBufferState(state, 'a', 1000);
+    updateScannerBufferState(state, 'b', 1020);
+    updateScannerBufferState(state, 'c', 1040);
+    updateScannerBufferState(state, 'd', 1140);
+    expect(handleScannerEnter(state)).toEqual({ shouldScan: true, code: 'abcd' });
+  });
+
+  it('keeps a burst at exactly 200 ms but resets beyond 200 ms', () => {
+    const state = createState();
+    for (const [index, key] of [...'123'].entries()) updateScannerBufferState(state, key, 1000 + index * 20);
+    updateScannerBufferState(state, '4', 1240);
+    expect(state.active).toBe(true);
+    expect(state.value).toBe('1234');
+    updateScannerBufferState(state, '5', 1441);
+    expect(state.active).toBe(false);
+    expect(state.value).toBe('5');
+  });
+
   it('calculates compact dropdown viewport bounds', () => {
     expect(calculateCompactDropdownViewport({
       viewportHeight: 700,

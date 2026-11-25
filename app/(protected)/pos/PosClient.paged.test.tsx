@@ -38,5 +38,27 @@ describe('POS paged catalogue (more than 2,000 products)', () => {
     const button = await screen.findByRole('button', { name: /^10 BASIC STEPS/i }, { timeout: 3000 });
     expect(button).not.toBeDisabled();
     expect(screen.queryByText(/None available/i)).toBeNull();
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(screen.getByRole('button', { name: 'Remove 10 BASIC STEPS' })).toBeInTheDocument();
+    expect(search).toHaveValue('');
+  });
+
+  it('resolves an uncached barcode via the barcode endpoint and adds once', async () => {
+    localStorage.clear();
+    const fetchMock = vi.fn(async (url: string) => ({ ok: true, json: async () => String(url).includes('/api/pos/barcode')
+      ? { kind: 'matched', product: book, baseUnitId: 'piece', qtyInUnit: 1 } : { products: [] } }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<PosClient
+      business={{ id: 'biz', currency: 'GHS', vatEnabled: false, momoEnabled: false, momoProvider: null, requireOpenTillForSales: false, discountApprovalThresholdBps: 1500 } as any}
+      store={{ id: 'store', name: 'Main Branch' }} tills={[{ id: 'till', name: 'Till 2' }]} openShiftTillIds={['till']}
+      products={[]} posCatalogueMode="paged" catalogueSize={2784}
+      customers={[]} units={[{ id: 'piece', name: 'piece' }]} categories={[]} {...({} as any)} />);
+    const search = screen.getByLabelText('Scan barcode or search products');
+    fireEvent.change(search, { target: { value: book.barcode } });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    await screen.findByRole('button', { name: 'Remove 10 BASIC STEPS' });
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/api/pos/barcode'))).toHaveLength(1);
+    expect(document.querySelector('[data-pos-payment-amounts]')).toHaveTextContent('GH₵65.00');
   });
 });

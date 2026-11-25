@@ -35,14 +35,12 @@ export function updateScannerBufferState(
   if (delta > 200) {
     resetScannerBuffer(state);
   }
-  if (delta > 0 && delta < 50) {
+  if (state.lastTime && delta >= 0 && delta < 50) {
     state.fastCount += 1;
   } else {
     state.fastCount = 0;
   }
-  if (state.fastCount >= 2) {
-    state.active = true;
-  }
+  if (state.fastCount >= 2) state.active = true;
 
   state.value += key;
   state.lastTime = now;

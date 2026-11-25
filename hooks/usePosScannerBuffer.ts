@@ -19,6 +19,8 @@ type UsePosScannerBufferOptions = {
 };
 
 export function usePosScannerBuffer({ barcodeRef, onScan }: UsePosScannerBufferOptions) {
+  const onScanRef = useRef(onScan);
+  onScanRef.current = onScan;
   const scanBufferRef = useRef<ScannerBufferState>({
     value: '',
     lastTime: 0,
@@ -31,7 +33,10 @@ export function usePosScannerBuffer({ barcodeRef, onScan }: UsePosScannerBufferO
     const handler = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
-      if (target && barcodeRef.current && target === barcodeRef.current) return;
+      if (target && barcodeRef.current && target === barcodeRef.current) {
+        resetScannerBuffer(scanBuffer);
+        return;
+      }
       const isEditable =
         target &&
         (target.tagName === 'INPUT' ||
@@ -46,7 +51,7 @@ export function usePosScannerBuffer({ barcodeRef, onScan }: UsePosScannerBufferO
         if (enterResult.shouldScan && enterResult.code) {
           event.preventDefault();
           if (state.timer) clearTimeout(state.timer);
-          onScan(enterResult.code);
+          onScanRef.current(enterResult.code);
         }
         return;
       }
@@ -69,5 +74,5 @@ export function usePosScannerBuffer({ barcodeRef, onScan }: UsePosScannerBufferO
       if (scanBuffer.timer) clearTimeout(scanBuffer.timer);
       window.removeEventListener('keydown', handler);
     };
-  }, [barcodeRef, onScan]);
+  }, [barcodeRef]);
 }
