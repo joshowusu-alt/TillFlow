@@ -144,7 +144,7 @@ async function main() {
         if (role.startsWith('cashier')) {
           const before = await prisma.salesInvoice.count({ where: { businessId: fixture.businessId, cashierUserId: fixture.users[role].id } });
           await page.goto('/pos');
-          const barcode = page.getByRole('textbox', { name: 'Scan barcode', exact: true });
+          const barcode = page.getByRole('textbox', { name: 'Scan barcode or search products', exact: true });
           await barcode.fill(fixture.products[index - 2].barcode);
           await barcode.press('Enter');
           const add = page.getByRole('button', { name: /Add to Cart/i });
@@ -203,7 +203,7 @@ async function main() {
           await page.goto('/suppliers');
           await page.waitForURL(url => !url.pathname.startsWith('/suppliers'), { timeout: 45000 });
           assert(!new URL(page.url()).pathname.startsWith('/suppliers'), 'Cashier must not read supplier management');
-          await page.getByRole('textbox', { name: 'Scan barcode', exact: true }).waitFor({ state: 'visible', timeout: 45000 });
+          await page.getByRole('textbox', { name: 'Scan barcode or search products', exact: true }).waitFor({ state: 'visible', timeout: 45000 });
           results.push(`PASS cashier supplier-route denial ${role}`);
         } else {
           if (role === 'owner') {
