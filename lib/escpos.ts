@@ -255,10 +255,12 @@ export function buildEscPosReceipt(data: ReceiptData) {
     (payment) => payment.method === 'MOBILE_MONEY' && payment.amountPence > 0
   );
 
-  appendLine(buffer, formatLine('Paid (cash)', formatMoney(cashPaid, data.business.currency), width));
+  if (cashPaid > 0) {
+    appendLine(buffer, formatLine('Paid (cash)', formatMoney(cashPaid, data.business.currency), width));
+  }
   if (cardPaid > 0) {
     appendLine(buffer, formatLine('Paid (card)', formatMoney(cardPaid, data.business.currency), width));
-    for (const payment of data.payments.filter((p) => p.method === 'CARD' && p.reference)) {
+    for (const payment of data.payments.filter((p) => p.method === 'CARD' && p.amountPence > 0 && p.reference)) {
       appendLine(buffer, `    Ref: ${sanitize(payment.reference ?? '')}`);
     }
   }
@@ -267,7 +269,7 @@ export function buildEscPosReceipt(data: ReceiptData) {
       buffer,
       formatLine('Paid (Bank Transfer)', formatMoney(transferPaid, data.business.currency), width)
     );
-    for (const payment of data.payments.filter((p) => p.method === 'TRANSFER' && p.reference)) {
+    for (const payment of data.payments.filter((p) => p.method === 'TRANSFER' && p.amountPence > 0 && p.reference)) {
       appendLine(buffer, `    Ref: ${sanitize(payment.reference ?? '')}`);
     }
   }
