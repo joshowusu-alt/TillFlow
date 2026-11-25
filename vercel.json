@@ -1,5 +1,6 @@
 {
   "buildCommand": "npm run build:vercel",
+  "ignoreCommand": "if [ \"$VERCEL_GIT_COMMIT_REF\" = \"til5-c-cashier-close-review\" ]; then exit 0; else exit 1; fi",
   "git": {
     "deploymentEnabled": {
       "ci/p0b-prisma-migration-lock": false,
