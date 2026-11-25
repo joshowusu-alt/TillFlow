@@ -34,15 +34,15 @@ function KeyboardHelpModal({ show, onClose }: Props) {
         <div className="grid gap-2 text-sm sm:grid-cols-2">
           <div className="flex items-center gap-2">
             <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">F2</kbd>
-            <span>Barcode field</span>
+            <span>Scan or search</span>
           </div>
           <div className="flex items-center gap-2">
             <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">F3</kbd>
-            <span>Product search</span>
+            <span>Scan or search</span>
           </div>
           <div className="flex items-center gap-2">
             <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">F4</kbd>
-            <span>Quantity field</span>
+            <span>Scan or search</span>
           </div>
           <div className="flex items-center gap-2">
             <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">F8</kbd>
@@ -50,7 +50,7 @@ function KeyboardHelpModal({ show, onClose }: Props) {
           </div>
           <div className="flex items-center gap-2">
             <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">/</kbd>
-            <span>Focus barcode</span>
+            <span>Focus scan/search</span>
           </div>
         </div>
         <div className="mt-4 text-xs uppercase tracking-wide text-black/50">Actions</div>

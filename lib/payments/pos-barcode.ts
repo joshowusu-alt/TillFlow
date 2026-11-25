@@ -54,7 +54,7 @@ export function resolveBarcodeScan<TProduct extends PosBarcodeProduct>(
   const digits = /^[\d\s-]+$/.test(trimmed) ? normalizeBarcodeDigits(trimmed) : trimmed;
 
   if (lookupIndex) {
-    const exact = findProductByExactBarcode(lookupIndex, trimmed);
+    const exact = findProductByExactBarcode(lookupIndex, trimmed) ?? lookupIndex.bySku.get(trimmed.toLowerCase());
     if (exact) {
       return {
         kind: 'matched',

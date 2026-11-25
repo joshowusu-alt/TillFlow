@@ -7,7 +7,7 @@ import {
   resolveBarcodeScan,
   type BarcodeScanResolution,
 } from '@/lib/payments/pos-barcode';
-import type { PosProductIndex } from '@/lib/pos/product-index';
+import { buildPosProductIndex, type PosProductIndex } from '@/lib/pos/product-index';
 
 type BarcodeProduct = {
   id: string;
@@ -29,7 +29,7 @@ type AddToCartLine = {
 type UsePosBarcodeHandlerOptions<TProduct extends BarcodeProduct> = {
   products: TProduct[];
   productIndex: PosProductIndex<TProduct>;
-  addToCart: (line: AddToCartLine) => void;
+  addToCart: (line: AddToCartLine, product: TProduct) => void;
   playBeep: (success: boolean) => void;
   onMatched?: (product: TProduct, baseUnitId: string) => void;
   onMissing: (code: string) => void;
@@ -64,7 +64,7 @@ export function usePosBarcodeHandler<TProduct extends BarcodeProduct>({
           productId: product.id,
           unitId: baseUnitId,
           qtyInUnit: resolution.qtyInUnit ?? 1,
-        });
+        }, product);
         onMatched?.(product, baseUnitId);
         return;
       }
@@ -80,7 +80,7 @@ export function usePosBarcodeHandler<TProduct extends BarcodeProduct>({
           lineSubtotalPence,
           weighedLabel: formatWeighedLabel(weightGrams),
           separateLine: true,
-        });
+        }, product);
         onWeighed?.(product, weightGrams, lineSubtotalPence);
         onMatched?.(product, baseUnitId);
         return;
@@ -93,8 +93,10 @@ export function usePosBarcodeHandler<TProduct extends BarcodeProduct>({
   );
 
   const handleBarcodeScan = useCallback(
-    (code: string) => {
-      const resolution = resolveBarcodeScan(code, products, productIndex);
+    (code: string, exactSearchProduct?: TProduct) => {
+      const resolution = exactSearchProduct
+        ? resolveBarcodeScan(code, [exactSearchProduct], buildPosProductIndex([exactSearchProduct]))
+        : resolveBarcodeScan(code, products, productIndex);
       if (!resolution) return;
 
       if (resolution.kind === 'missing' && lookupRemote) {

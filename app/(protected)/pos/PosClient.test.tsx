@@ -48,7 +48,7 @@ vi.mock('./components/KeyboardHelpModal', () => ({
 }));
 vi.mock('./components/ProductShortcuts', () => ({ default: () => null }));
 vi.mock('./components/QuickAddPanel', () => ({
-  default: () => <div data-testid="quick-add-panel" />,
+  default: ({ initialBarcode }: { initialBarcode?: string }) => <div data-testid="quick-add-panel" data-barcode={initialBarcode} />,
 }));
 vi.mock('./components/ParkModal', () => ({
   default: () => <div data-testid="park-modal" />,
@@ -115,6 +115,128 @@ describe('PosClient desktop layout', () => {
 
   afterEach(() => {
     window.localStorage.clear();
+  });
+
+  it('uses one input, searches without adding, and adds the top result with Enter', async () => {
+    render(<PosClient {...baseProps} />);
+    const search = screen.getByLabelText('Scan barcode or search products');
+    expect(document.querySelectorAll('[data-pos-search-card] input')).toHaveLength(1);
+    fireEvent.change(search, { target: { value: 'coca' } });
+    await screen.findByRole('button', { name: /^Coca Cola/i });
+    expect(screen.getByText('Cart is empty')).toBeInTheDocument();
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(screen.getByRole('button', { name: 'Remove Coca Cola' })).toBeInTheDocument();
+    expect(search).toHaveValue('');
+    expect(search).toHaveFocus();
+  });
+
+  it.each(['12345', 'COKE-330'])('adds an exact barcode or SKU %s', async code => {
+    render(<PosClient {...baseProps} />);
+    const search = screen.getByLabelText('Scan barcode or search products');
+    fireEvent.change(search, { target: { value: code } });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(screen.getByRole('button', { name: 'Remove Coca Cola' })).toBeInTheDocument();
+    expect(search).toHaveValue('');
+  });
+
+  it.each([true, false])('adds a fast scan once (focused=%s)', async focused => {
+    render(<PosClient {...baseProps} />);
+    const search = screen.getByLabelText('Scan barcode or search products');
+    const target = focused ? search : document.body;
+    if (focused) search.focus();
+    for (const [i, key] of [...'12345'].entries()) {
+      fireEvent.keyDown(target, { key });
+      if (focused) fireEvent.change(search, { target: { value: '12345'.slice(0, i + 1) } });
+      expect(document.querySelector('#pos-product-results')).toBeNull();
+    }
+    fireEvent.keyDown(target, { key: 'Enter' });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(screen.getByRole('button', { name: 'Remove Coca Cola' })).toBeInTheDocument();
+    expect(document.querySelector('[data-pos-payment-amounts]')).toHaveTextContent('GH₵2.50');
+    expect(search).toHaveValue('');
+    expect(search).toHaveFocus();
+  });
+
+  it('preserves available stock and its warning when a subsequent scan exceeds it', () => {
+    render(<PosClient {...baseProps} products={[{ ...product, onHandBase: 1 }]} />);
+    const search = screen.getByLabelText('Scan barcode or search products');
+    const clock = vi.spyOn(Date, 'now');
+    try {
+      const start = Date.now();
+      const scan = () => {
+        fireEvent.change(search, { target: { value: '12345' } });
+        fireEvent.keyDown(search, { key: 'Enter' });
+      };
+      clock.mockReturnValue(start);
+      scan();
+      clock.mockReturnValue(start + 100);
+      scan();
+      expect(screen.queryByText(/Only .* available for Coca Cola/)).not.toBeInTheDocument();
+      clock.mockReturnValue(start + 301);
+      scan();
+      expect(screen.getByText(/Only .* available for Coca Cola/)).toBeInTheDocument();
+      expect(screen.queryByText(/No stock available for Coca Cola/)).not.toBeInTheDocument();
+      expect(document.querySelector('[data-pos-payment-amounts]')).toHaveTextContent('GH₵2.50');
+      expect(screen.getAllByRole('button', { name: 'Remove Coca Cola' })).toHaveLength(1);
+      expect(search).toHaveValue('');
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('refocuses unified input with F2 and blocks an unavailable search result', async () => {
+    render(<PosClient {...baseProps} products={[{ ...product, onHandBase: 0 }]} />);
+    const search = screen.getByLabelText('Scan barcode or search products');
+    fireEvent.keyDown(document.body, { key: 'F2' });
+    expect(search).toHaveFocus();
+    fireEvent.change(search, { target: { value: 'coca' } });
+    expect(await screen.findByRole('button', { name: /^Coca Cola/i })).toBeDisabled();
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(screen.getByText('Cart is empty')).toBeInTheDocument();
+    fireEvent.keyDown(search, { key: 'Escape' });
+    expect(search).toHaveValue('coca');
+    expect(document.querySelector('#pos-product-results')).toBeNull();
+  });
+
+  it('preserves the missing barcode quick-add flow', () => {
+    render(<PosClient {...baseProps} />);
+    const search = screen.getByLabelText('Scan barcode or search products');
+    fireEvent.change(search, { target: { value: '999999' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(screen.getByTestId('quick-add-panel')).toHaveAttribute('data-barcode', '999999');
+    expect(screen.getByText(/Barcode "999999" not found/)).toBeInTheDocument();
+  });
+
+  it('keeps additional and weighed barcode lookup offline', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const weighed = { ...product, id: 'weighed', name: 'Loose rice', barcode: '200123', onHandBase: 5000,
+        sellingPriceBasePence: 2000, units: [{ ...product.units[0], sellingPricePence: 2000 }] };
+      render(<PosClient {...baseProps} products={[{ ...product, additionalBarcodes: ['987654'] }, weighed]} />);
+      const search = screen.getByLabelText('Scan barcode or search products');
+      fireEvent.change(search, { target: { value: '987654' } });
+      fireEvent.keyDown(search, { key: 'Enter' });
+      expect(screen.getByRole('button', { name: 'Remove Coca Cola' })).toBeInTheDocument();
+      fireEvent.change(search, { target: { value: '2001230123456' } });
+      fireEvent.keyDown(search, { key: 'Enter' });
+      expect(screen.getByRole('button', { name: 'Remove Loose rice' })).toBeInTheDocument();
+      expect(document.querySelector('[data-pos-payment-amounts]')).toHaveTextContent('GH₵27.18');
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/api/pos/'))).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('uses arrows to select a different result instead of the first', async () => {
+    render(<PosClient {...baseProps} products={[product, { ...product, id: 'prod-2', name: 'Coca Zero', barcode: '99999', sku: 'COKE-ZERO' }]} />);
+    const search = screen.getByLabelText('Scan barcode or search products');
+    fireEvent.change(search, { target: { value: 'Coca' } });
+    await screen.findByRole('button', { name: /^Coca Zero/i });
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(screen.getByRole('button', { name: 'Remove Coca Zero' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove Coca Cola' })).not.toBeInTheDocument();
   });
 
   it('keeps readable change and completion with the actual checkout controls', () => {
@@ -581,7 +703,7 @@ describe('PosClient mobile phase 1 layout', () => {
   it('keeps desktop shortcut controls available off phone widths', () => {
     mockPhoneViewport(false);
     render(<PosClient {...baseProps} />);
-    expect(screen.getByRole('button', { name: /F2 focus barcode/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /F2 focus scan\/search/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /\? keyboard help/i })).toBeInTheDocument();
     expect(screen.getByLabelText('Keyboard help')).toBeInTheDocument();
   });
@@ -902,7 +1024,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
   it('CSS-hides the unified narrow-screen cart bar at desktop widths', async () => {
     mockPhoneViewport(false);
     render(<PosClient {...baseProps} />);
-    expect(screen.getByRole('button', { name: /F2 focus barcode/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /F2 focus scan\/search/i })).toBeInTheDocument();
     const search = screen.getByPlaceholderText(/type product name/i);
     fireEvent.focus(search);
     fireEvent.change(search, { target: { value: 'Coca' } });
@@ -1218,7 +1340,7 @@ it('preserves cash received and readable change when moving between mobile cart 
   searchParamsGet.mockReturnValue(null);
   mockPhoneViewport(true);
   render(<PosClient {...baseProps} />);
-  const search = screen.getByLabelText('Search products');
+  const search = screen.getByLabelText('Scan barcode or search products');
   fireEvent.focus(search);
   fireEvent.change(search, { target: { value: 'Coca' } });
   fireEvent.click(await screen.findByRole('button', { name: /^Coca Cola/i }));
@@ -1238,7 +1360,7 @@ it('does not let an earlier search blur close a newly reopened catalogue dropdow
   window.localStorage.clear();
   searchParamsGet.mockReturnValue(null);
   render(<PosClient {...baseProps} />);
-  const search = screen.getByLabelText('Search products');
+  const search = screen.getByLabelText('Scan barcode or search products');
   fireEvent.focus(search);
   fireEvent.change(search, { target: { value: 'Coca' } });
   fireEvent.click(await screen.findByRole('button', { name: /^Coca Cola/i }));
@@ -1366,7 +1488,7 @@ it.each([
     food: { productId: 'banku', name: 'Banku', stockMode, soldOut, lowAt: 1, sizes: [], inclusions: [], groups: [] },
   };
   render(<PosClient {...baseProps} business={{ ...baseProps.business, canManageDishes }} products={[dish, { ...product, onHandBase: 0 }]} />);
-  const search = screen.getByLabelText('Search products');
+  const search = screen.getByLabelText('Scan barcode or search products');
   fireEvent.focus(search);
   fireEvent.change(search, { target: { value: 'Banku' } });
   const result = await screen.findByRole('button', { name: /^Banku/i });
@@ -1392,7 +1514,7 @@ it.each([null, 1500])('edits a food cart amount with minimum %s', async minimumA
     },
   };
   render(<PosClient {...baseProps} business={{ ...baseProps.business, foodBusiness: true }} products={[dish]} />);
-  const search = screen.getByLabelText('Search products');
+  const search = screen.getByLabelText('Scan barcode or search products');
   fireEvent.focus(search);
   fireEvent.change(search, { target: { value: 'Banku' } });
   fireEvent.click(await screen.findByRole('button', { name: /^Banku/i }));
@@ -1431,7 +1553,7 @@ describe('converting a size to an amount in the food cart', () => {
       },
     };
     render(<PosClient {...baseProps} business={{ ...baseProps.business, foodBusiness, vatEnabled: vat }} products={[dish]} />);
-    const search = screen.getByLabelText('Search products');
+    const search = screen.getByLabelText('Scan barcode or search products');
     fireEvent.focus(search);
     fireEvent.change(search, { target: { value: 'Jollof' } });
     fireEvent.click(await screen.findByRole('button', { name: /^Jollof/i }));
