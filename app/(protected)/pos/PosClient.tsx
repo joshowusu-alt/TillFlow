@@ -977,7 +977,7 @@ export default function PosClient({
   // Pre-compute available stock per product once per cart change — O(n) instead of O(n²)
   const availableBaseMap = useMemo(() => {
     void scheduleRevision;
-    return buildAvailableBaseMap(cart, productMap);
+    return buildAvailableBaseMap(cart, productMap, true);
   }, [cart, productMap, scheduleRevision]);
 
   const totals = useMemo(() => sumCartTotals(cartDetails), [cartDetails]);
@@ -2348,8 +2348,8 @@ export default function PosClient({
                             {line.promoLabel && <span className="text-[10px] text-emerald-600 font-medium">{line.promoLabel}</span>}
                             {(line.lineDiscount > 0) && <span className="text-[10px] text-rose-500">-{formatMoney(line.lineDiscount, business.currency)}</span>}
                             {availBase <= 10 && (
-                              <span className={`text-[10px] font-semibold ${availBase <= 3 ? 'text-rose-500' : 'text-amber-500'}`}>
-                                {availBase <= 0 ? 'Out of stock' : `${availBase} left`}
+                              <span className={`text-[10px] font-semibold ${availBase < 0 || (availBase > 0 && availBase <= 3) ? 'text-rose-500' : 'text-amber-500'}`}>
+                                {availBase < 0 ? 'Out of stock' : `${availBase} left`}
                               </span>
                             )}
                           </div>

@@ -417,10 +417,12 @@ export default function ReceiptClient({
           Payments
         </div>
         <div className="mt-2 space-y-1">
-          <div className="flex justify-between">
-            <span>Paid (cash)</span>
-            <span>{formatMoney(cashPaid, business.currency)}</span>
-          </div>
+          {cashPaid > 0 ? (
+            <div className="flex justify-between">
+              <span>Paid (cash)</span>
+              <span>{formatMoney(cashPaid, business.currency)}</span>
+            </div>
+          ) : null}
           {cardPaid > 0 ? (
             <>
               <div className="flex justify-between">
@@ -428,7 +430,7 @@ export default function ReceiptClient({
                 <span>{formatMoney(cardPaid, business.currency)}</span>
               </div>
               {payments
-                .filter((payment) => payment.method === 'CARD' && payment.reference)
+                .filter((payment) => payment.method === 'CARD' && payment.amountPence > 0 && payment.reference)
                 .map((payment, index) => (
                   <div key={`card-ref-${index}`} className="text-[11px] text-black/60">
                     Ref: {payment.reference}
@@ -443,7 +445,7 @@ export default function ReceiptClient({
                 <span>{formatMoney(transferPaid, business.currency)}</span>
               </div>
               {payments
-                .filter((payment) => payment.method === 'TRANSFER' && payment.reference)
+                .filter((payment) => payment.method === 'TRANSFER' && payment.amountPence > 0 && payment.reference)
                 .map((payment, index) => (
                   <div key={`transfer-ref-${index}`} className="text-[11px] text-black/60">
                     Ref: {payment.reference}

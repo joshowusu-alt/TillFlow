@@ -239,6 +239,23 @@ describe('PosClient desktop layout', () => {
     expect(screen.queryByRole('button', { name: 'Remove Coca Cola' })).not.toBeInTheDocument();
   });
 
+  it('does not mark the last available unit in the cart as out of stock', async () => {
+    render(<PosClient {...baseProps} products={[{ ...product, onHandBase: 1 }]} />);
+    await addCocaColaToCart();
+    const row = screen.getByRole('button', { name: 'Remove Coca Cola' }).closest<HTMLElement>('.pos-cart-line')!;
+    expect(within(row).queryByText('Out of stock')).toBeNull();
+    expect(within(row).getByText('0 left')).not.toHaveClass('text-rose-500');
+  });
+
+  it('shows out of stock for a restored cart that exceeds current availability', async () => {
+    const { getPosCartStorageKey } = await import('@/lib/business-scope');
+    window.localStorage.setItem(getPosCartStorageKey({ businessId: baseProps.business.id, storeId: baseProps.store.id }),
+      JSON.stringify([{ id: 'prod-1:bottle', productId: 'prod-1', unitId: 'bottle', qtyInUnit: 2 }]));
+    render(<PosClient {...baseProps} products={[{ ...product, onHandBase: 1 }]} />);
+    const row = (await screen.findByRole('button', { name: 'Remove Coca Cola' })).closest<HTMLElement>('.pos-cart-line')!;
+    expect(within(row).getByText('Out of stock')).toHaveClass('text-rose-500');
+  });
+
   it('keeps readable change and completion with the actual checkout controls', () => {
     render(<PosClient {...baseProps} />);
     const checkout = document.querySelector('[data-pos-checkout-card]');

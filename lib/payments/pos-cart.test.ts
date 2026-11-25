@@ -100,6 +100,18 @@ describe('pos-cart helpers', () => {
     expect(getAvailableBase(cart, productMap, 'prod-1', 'prod-1:pack')).toBe(24);
   });
 
+  it('distinguishes exact stock usage from an aggregate deficit across units', () => {
+    const productMap = buildProductMap(products);
+    const lines = [
+      { ...cart[0], qtyInUnit: 12 },
+      { ...cart[0], id: 'prod-1:carton', unitId: 'carton', qtyInUnit: 1 },
+    ];
+    expect(buildAvailableBaseMap(lines, productMap, true).get('prod-1')).toBe(0);
+    lines[0].qtyInUnit = 13;
+    expect(buildAvailableBaseMap(lines, productMap, true).get('prod-1')).toBe(-1);
+    expect(buildAvailableBaseMap(lines, productMap).get('prod-1')).toBe(0);
+  });
+
   it('formats available quantities using packaging units', () => {
     expect(formatAvailable(products[0], 18)).toBe('1 carton + 6 packs');
     expect(formatAvailable(products[1], 2)).toBe('2 bottles');
