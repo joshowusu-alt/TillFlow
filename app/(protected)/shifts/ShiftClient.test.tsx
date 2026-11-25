@@ -445,7 +445,7 @@ describe('ShiftClient', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
     fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '865.50' } });
-    fireEvent.change(screen.getByPlaceholderText('Enter manager approval PIN'), { target: { value: '1234' } });
+    expect(screen.queryByPlaceholderText('Enter manager approval PIN')).not.toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'Close Shift' }).at(-1)!);
     await waitFor(() => expect(closeShiftActionMock).toHaveBeenCalledTimes(1));
     expect((closeShiftActionMock.mock.calls[0][0] as FormData).get('storeId')).toBe('store-b');
@@ -471,9 +471,12 @@ describe('ShiftClient', () => {
     expect(screen.getAllByText('Till B1').length).toBeGreaterThan(0);
     expect(screen.getByText('Ama Cashier')).toBeInTheDocument();
     expect(screen.getAllByText(/Opened/i).length).toBeGreaterThan(0);
-    expect(screen.getByLabelText('Variance Details')).toHaveValue('');
+    expect(screen.getByLabelText('Reason details')).toHaveValue('');
+    expect(screen.queryByPlaceholderText('Enter manager approval PIN')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '1.00' } });
+    expect(screen.getByText(/Manager PIN needed — shortage is above GH₵50.00/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveValue('');
-    expect(screen.getByLabelText('Variance Details')).toHaveAttribute('autoComplete', 'off');
+    expect(screen.getByLabelText('Reason details')).toHaveAttribute('autoComplete', 'off');
     expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('name', 'close-shift-manager-approval');
     expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('type', 'password');
     expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('autoComplete', 'one-time-code');
@@ -496,14 +499,26 @@ describe('ShiftClient', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+    fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '1.00' } });
     const pin = screen.getByPlaceholderText('Enter manager approval PIN');
     expect(pin).toHaveValue('');
-    fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '865.50' } });
+    fireEvent.change(screen.getByLabelText('Reason details'), { target: { value: 'Short count' } });
     fireEvent.change(pin, { target: { value: '1234' } });
     fireEvent.click(screen.getAllByRole('button', { name: 'Close Shift' }).at(-1)!);
     await waitFor(() => expect(closeShiftActionMock).toHaveBeenCalledTimes(1));
     expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveValue('');
     expect(screen.getByText('Invalid manager PIN for till close.')).toBeInTheDocument();
+  });
+
+  it.each(['815.50', '900.00'])('requires a reason but no PIN for count %s', (count) => {
+    render(<ShiftClient tills={[{ id: 'till-1', name: 'Till 1' }]} openShifts={[baseOpenShift]} recentShifts={[]} currency="GHS" userRole="CASHIER" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+    fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: count } });
+    expect(screen.queryByPlaceholderText('Enter manager approval PIN')).not.toBeInTheDocument();
+    const close = screen.getAllByRole('button', { name: 'Close Shift' }).at(-1)!;
+    expect(close).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Reason details'), { target: { value: 'Count checked' } });
+    expect(close).not.toBeDisabled();
   });
 
   it('does not claim the full float can be retained when counted cash is below it', async () => {

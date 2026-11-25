@@ -37,6 +37,7 @@ export default async function CashVarianceDetailPage(
     include: {
       assignedReviewer: { select: { id: true, name: true, role: true } },
       approvedBy: { select: { name: true } },
+      reviewedBy: { select: { name: true } },
       shift: {
         select: {
           id: true,
@@ -69,8 +70,8 @@ export default async function CashVarianceDetailPage(
     <div className="mx-auto max-w-3xl space-y-5">
       <PageHeader
         title={displayDocumentNumber('cash_variance', investigation.transactionNumber, investigation.id)}
-        subtitle="Review the variance. Counted and expected cash on the shift are not rewritten."
-        secondaryCta={{ label: 'All investigations', href: withStoreQuery('/shifts/variance', store.id) }}
+        subtitle="Review the cash difference. Counted and expected cash stay unchanged."
+        secondaryCta={{ label: 'All cash differences', href: withStoreQuery('/shifts/variance', store.id) }}
       />
 
       {invalidLegacyCloseNote(investigation.shift.actualCashPence) ? (
@@ -105,9 +106,9 @@ export default async function CashVarianceDetailPage(
             </div>
           </div>
           <div>
-            <div className="text-xs text-black/40">Variance snapshot</div>
+            <div className="text-xs text-black/40">Cash doesn't match</div>
             <div className="font-semibold">
-              {formatMoney(investigation.variancePence, business.currency)}
+              {investigation.variancePence > 0 ? 'Over by ' : 'Short by '}{formatMoney(Math.abs(investigation.variancePence), business.currency)}
             </div>
           </div>
           <div>
@@ -130,6 +131,9 @@ export default async function CashVarianceDetailPage(
         assignedReviewerName={investigation.assignedReviewer?.name ?? null}
         approvedByName={investigation.approvedBy?.name ?? null}
         approvedAt={investigation.approvedAt?.toISOString() ?? null}
+        reviewedByName={investigation.reviewedBy?.name ?? null}
+        reviewedAt={investigation.reviewedAt?.toISOString() ?? null}
+        reviewNote={investigation.reviewNote}
         reviewers={reviewers}
         userRole={user.role}
         canExplain={

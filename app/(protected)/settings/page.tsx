@@ -335,7 +335,12 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
               id="settings-varianceReasonRequired" name="varianceReasonRequired"
               defaultChecked={(business as any).varianceReasonRequired ?? true}
             />
-            <label className="text-sm" htmlFor="settings-varianceReasonRequired">Require variance reason when closing till</label>
+            <label className="text-sm" htmlFor="settings-varianceReasonRequired">Require a reason on owner override (cashier differences always require a reason)</label>
+          </div>
+          <div>
+            <label className="label" htmlFor="settings-shiftCloseApprovalThresholdAmount">Manager PIN for shortages above ({currencySymbol})</label>
+            <input id="settings-shiftCloseApprovalThresholdAmount" className="input" name="shiftCloseApprovalThresholdAmount" type="number" min="0" step="0.01" defaultValue={((business.shiftCloseApprovalThresholdPence ?? 5000) / 100).toFixed(2)} />
+            <div className="mt-1 text-xs text-black/50">Every cash difference still needs a reason and review.</div>
           </div>
           <div>
             <label className="label" htmlFor="settings-discountApprovalThresholdPercent">Discount approval threshold (%)</label>

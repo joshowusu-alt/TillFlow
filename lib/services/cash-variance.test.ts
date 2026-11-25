@@ -13,6 +13,7 @@ const {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     auditLog: { create: vi.fn() },
     user: { findFirst: vi.fn() },
@@ -34,9 +35,31 @@ import {
   createCashVarianceInvestigationTx,
   explainCashVariance,
   resolveCashVariance,
+  markCashVarianceReviewed,
 } from './cash-variance';
 
 const ACTOR = { userId: 'owner-1', userName: 'Owner', userRole: 'OWNER' };
+
+it.each([['OWNER', 'OPEN'], ['MANAGER', 'ASSIGNED'], ['OWNER', 'EXPLAINED'], ['MANAGER', 'RESOLVED']])('records an idempotent review by %s from %s', async (role, status) => {
+  const actor = { ...ACTOR, userRole: role };
+  const input = { businessId: 'biz-1', investigationId: 'var-1', actor, note: 'Checked' };
+  prismaMock.cashVarianceInvestigation.findFirst.mockResolvedValueOnce({ id: 'var-1', status, businessId: 'biz-1' });
+  prismaMock.cashVarianceInvestigation.updateMany.mockResolvedValue({ count: 1 });
+  const result = await markCashVarianceReviewed(input);
+  expect(result).toMatchObject({ status: 'REVIEWED', reviewedByUserId: actor.userId, reviewedAt: expect.any(Date), reviewNote: 'Checked' });
+  expect(prismaMock.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'CASH_VARIANCE_REVIEW' }) }));
+  prismaMock.cashVarianceInvestigation.findFirst.mockResolvedValueOnce(result);
+  expect(await markCashVarianceReviewed({ ...input, note: 'different' })).toEqual(result);
+  expect(prismaMock.cashVarianceInvestigation.updateMany).toHaveBeenCalledTimes(1);
+});
+
+it('rejects cashier and missing business-scoped review', async () => {
+  const input = { businessId: 'wrong', investigationId: 'var-1', actor: ACTOR };
+  await expect(markCashVarianceReviewed({ ...input, actor: { ...ACTOR, userRole: 'CASHIER' } })).rejects.toThrow('Only a manager or owner');
+  prismaMock.cashVarianceInvestigation.findFirst.mockResolvedValueOnce(null);
+  await expect(markCashVarianceReviewed(input)).rejects.toThrow('not found');
+  expect(prismaMock.cashVarianceInvestigation.updateMany).not.toHaveBeenCalled();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

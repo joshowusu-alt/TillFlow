@@ -31,6 +31,7 @@ function isOpenKeyUniqueConflict(error: unknown): boolean {
 }
 
 export type CloseShiftApproval =
+  | { mode: 'SELF' }
   | { mode: 'PIN'; approvingManagerId: string }
   | {
       mode: 'OWNER_OVERRIDE';
@@ -346,13 +347,21 @@ async function performShiftCloseImpl(
     // Expected cash is the drawer running balance (float + cash sales + receipts
     // + additions − supplier/expense/refunds/removals), not invoice CASH re-sum.
     const lockedVariance = actualCash - lockedExpectedCash;
+    if (actor.userRole === 'CASHIER' && lockedShift.userId !== actor.userId) {
+      throw new Error('You can only close your own shift.');
+    }
     if (
       lockedVariance !== 0 &&
-      business?.varianceReasonRequired &&
-      !varianceReasonCode &&
-      !varianceReason
+      (approval.mode !== 'OWNER_OVERRIDE' || business?.varianceReasonRequired) &&
+      !varianceReasonCode?.trim() &&
+      !varianceReason?.trim()
     ) {
-      throw new Error('Variance reason is required when counted cash differs from expected.');
+      throw new Error(approval.mode === 'OWNER_OVERRIDE' ? 'Variance reason is required when counted cash differs from expected.' : "Please say why the cash doesn't match.");
+    }
+    if (approval.mode === 'SELF' && lockedVariance < 0) {
+      const settings = await tx.business.findUnique({ where: { id: businessId }, select: { shiftCloseApprovalThresholdPence: true } });
+      const threshold = settings?.shiftCloseApprovalThresholdPence ?? 5000;
+      if (-lockedVariance > threshold) throw new Error(`This shortage is above GH₵${(threshold / 100).toFixed(2)}. A manager PIN is needed to close.`);
     }
     const lockedEntriesSummary = summarizeCashDrawerEntries(lockedShift.cashDrawerEntries);
     const lockedSnapshotBase = {
@@ -382,7 +391,7 @@ async function performShiftCloseImpl(
             ownerOverrideJustification: approval.overrideJustification,
             overrideByUserId: actor.userId,
           }
-        : {
+        : approval.mode === 'SELF' ? { ...lockedSnapshotBase, closedBySelf: true } : {
             ...lockedSnapshotBase,
             managerApprovedByUserId: approval.approvingManagerId,
           };
@@ -419,8 +428,8 @@ async function performShiftCloseImpl(
         varianceReason,
         notes,
         closedByUserId: actor.userId,
-        closeManagerApprovedByUserId: approval.approvingManagerId,
-        closeManagerApprovalMode: approval.mode === 'PIN' ? 'PIN' : 'OWNER_OVERRIDE',
+        closeManagerApprovedByUserId: approval.mode === 'SELF' ? null : approval.approvingManagerId,
+        closeManagerApprovalMode: approval.mode,
         closureSnapshotJson: JSON.stringify(lockedSnapshot),
         closureNumber,
         status: 'CLOSED',
@@ -440,7 +449,7 @@ async function performShiftCloseImpl(
       businessId,
       shiftId: lockedShift.id,
       variancePence: lockedVariance,
-      cashierExplanation: varianceReason,
+      cashierExplanation: varianceReason?.trim() || varianceReasonCode?.trim() || null,
       actor,
     });
 
@@ -469,7 +478,8 @@ async function performShiftCloseImpl(
           countedCashPence: actualCash,
           variancePence: closedState.variancePence,
           varianceReasonCode,
-          managerApprovedByUserId: approval.approvingManagerId,
+          approvalMode: approval.mode,
+          ...(approval.mode === 'SELF' ? { closedBySelf: true } : { managerApprovedByUserId: approval.approvingManagerId }),
         };
 
   audit({

@@ -32,6 +32,10 @@ export default async function CashVarianceListPage() {
       variancePence: true,
       transactionNumber: true,
       createdAt: true,
+      reviewedAt: true,
+      reviewedBy: { select: { name: true } },
+      approvedAt: true,
+      approvedBy: { select: { name: true } },
       assignedReviewer: { select: { name: true } },
       shift: {
         select: {
@@ -49,8 +53,8 @@ export default async function CashVarianceListPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <PageHeader
-        title="Cash variance investigations"
-        subtitle="Non-zero close variances stay on the original counted and expected cash. This workflow only records review."
+        title="Cash differences"
+        subtitle="Review cash differences without changing the original counted and expected cash."
         secondaryCta={{ label: 'Back to shifts', href: withStoreQuery('/shifts', store.id) }}
       />
 
@@ -61,7 +65,7 @@ export default async function CashVarianceListPage() {
       <div className="card overflow-hidden p-4">
         {investigations.length === 0 ? (
           <div className="rounded-xl border border-dashed border-black/10 px-4 py-8 text-center text-sm text-black/50">
-            No cash variance investigations for this store.
+            No cash differences for this store.
           </div>
         ) : (
           <div className="responsive-table-shell">
@@ -71,7 +75,7 @@ export default async function CashVarianceListPage() {
                   <th>Number</th>
                   <th>Till</th>
                   <th>Cashier</th>
-                  <th>Variance</th>
+                  <th>Difference</th>
                   <th>Counted / expected</th>
                   <th>Status</th>
                   <th>Opened</th>
@@ -91,14 +95,14 @@ export default async function CashVarianceListPage() {
                     <td className="px-3 py-2">{row.shift.till.name}</td>
                     <td className="px-3 py-2">{row.shift.user.name}</td>
                     <td className="px-3 py-2 font-semibold">
-                      {formatMoney(row.variancePence, business.currency)}
+                      {row.variancePence > 0 ? 'Over by ' : 'Short by '}{formatMoney(Math.abs(row.variancePence), business.currency)}
                     </td>
                     <td className="px-3 py-2 text-xs text-black/55">
                       {formatMoney(row.shift.actualCashPence ?? 0, business.currency)}
                       {' / '}
                       {formatMoney(row.shift.expectedCashPence, business.currency)}
                     </td>
-                    <td className="px-3 py-2">{row.status}</td>
+                    <td className="px-3 py-2">{row.status === 'REVIEWED' || row.status === 'APPROVED' ? `Reviewed by ${row.reviewedBy?.name ?? row.approvedBy?.name ?? 'Unknown'}${row.reviewedAt || row.approvedAt ? ` · ${formatDateTime((row.reviewedAt ?? row.approvedAt)!)}` : ''}` : 'Needs review'}</td>
                     <td className="px-3 py-2">{formatDateTime(row.createdAt)}</td>
                   </tr>
                 ))}

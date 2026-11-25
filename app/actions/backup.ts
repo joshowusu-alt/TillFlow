@@ -384,6 +384,7 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
           typeof backup.business.cashVarianceRiskThresholdPence === 'number'
             ? backup.business.cashVarianceRiskThresholdPence
             : 2000,
+        shiftCloseApprovalThresholdPence: typeof backup.business.shiftCloseApprovalThresholdPence === 'number' ? backup.business.shiftCloseApprovalThresholdPence : 5000,
         customerScope: backup.business.customerScope ?? 'SHARED',
       },
     });

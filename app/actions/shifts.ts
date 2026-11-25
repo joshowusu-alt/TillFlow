@@ -20,6 +20,7 @@ import {
   assignCashVarianceReviewer,
   explainCashVariance,
   resolveCashVariance,
+  markCashVarianceReviewed,
 } from '@/lib/services/cash-variance';
 import { sendCashVarianceAlert } from '@/app/actions/stock-alerts';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
@@ -182,7 +183,7 @@ export async function closeShiftAction(
     if (!requestedStoreId) return err(MISSING_STORE_CONTEXT_MSG);
     const closingShift = await prisma.shift.findFirst({
       where: { id: shiftId, till: { store: { businessId } } },
-      select: { till: { select: { storeId: true } } },
+      select: { userId: true, till: { select: { storeId: true } } },
     });
     if (!closingShift) return err('Could not find the shift. Please refresh and try again.');
     if (requestedStoreId !== closingShift.till.storeId) {
@@ -190,10 +191,9 @@ export async function closeShiftAction(
     }
     const storeId = closingShift.till.storeId;
     await requireSelectedStoreContext(undefined, storeId);
-    if (!managerPin) return err('Manager PIN is required to close till.');
-
-    const manager = await verifyManagerPin({ businessId, pin: managerPin });
-    if (!manager) return err('Invalid manager PIN.');
+    if (user.role === 'CASHIER' && closingShift.userId !== user.id) return err('You can only close your own shift.');
+    const manager = managerPin ? await verifyManagerPin({ businessId, pin: managerPin }) : null;
+    if (managerPin && !manager) return err('Invalid manager PIN.');
 
     try {
       const result = await performShiftClose({
@@ -204,7 +204,7 @@ export async function closeShiftAction(
         notes,
         varianceReasonCode,
         varianceReason,
-        approval: { mode: 'PIN', approvingManagerId: manager.id },
+        approval: manager ? { mode: 'PIN', approvingManagerId: manager.id } : { mode: 'SELF' },
       });
       void sendCashVarianceAlert({ shiftId: result.id, businessId }).catch((error) => {
         appLog('warn', 'cash_variance_alert_failed', { businessId, stage: 'shift-close' });
@@ -495,5 +495,17 @@ export async function approveCashVarianceAction(
     } catch (e) {
       return err((e as Error).message);
     }
+  });
+}
+
+export async function markCashVarianceReviewedAction(formData: FormData): Promise<ActionResult<{ id: string }>> {
+  return safeAction(async () => {
+    const investigationId = formString(formData, 'investigationId');
+    if (!investigationId) return err('Cash difference is required.');
+    const { user, businessId } = await requireVarianceOperationalStore(['MANAGER', 'OWNER'], investigationId);
+    const result = await markCashVarianceReviewed({ businessId, investigationId, actor: varianceActor(user), note: formString(formData, 'note') });
+    revalidatePath('/shifts/variance');
+    revalidatePath(`/shifts/variance/${investigationId}`);
+    return ok({ id: result.id });
   });
 }

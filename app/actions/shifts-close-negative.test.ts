@@ -136,17 +136,25 @@ describe('close shift actions reject negative counted cash', () => {
     expect(performShiftCloseMock).not.toHaveBeenCalled();
   });
 
-  it('fails closed when the manager PIN is omitted or wrong', async () => {
+  it('uses SELF without a PIN and fails closed for an invalid supplied PIN', async () => {
     const { closeShiftAction } = await import('./shifts');
-    expect(await closeShiftAction(closeForm({ actualCash: '10.00', managerPin: '' }))).toEqual({
-      success: false,
-      error: 'Manager PIN is required to close till.',
-    });
+    performShiftCloseMock.mockRejectedValueOnce(new Error('transaction guard'));
+    await closeShiftAction(closeForm({ actualCash: '10.00', managerPin: '' }));
+    expect(performShiftCloseMock).toHaveBeenCalledWith(expect.objectContaining({ approval: { mode: 'SELF' } }));
+    expect(verifyManagerPinMock).not.toHaveBeenCalled();
+    performShiftCloseMock.mockClear();
     verifyManagerPinMock.mockResolvedValue(null);
     expect(await closeShiftAction(closeForm({ actualCash: '10.00', managerPin: '0000' }))).toEqual({
       success: false,
       error: 'Invalid manager PIN.',
     });
+    expect(performShiftCloseMock).not.toHaveBeenCalled();
+  });
+  it('rejects a cashier closing another user’s shift', async () => {
+    const { closeShiftAction } = await import('./shifts');
+    withBusinessContextMock.mockResolvedValue({ user: { id: 'cashier-1', name: 'Cashier', role: 'CASHIER' }, businessId: 'biz-1' });
+    findFirstMock.mockResolvedValue({ userId: 'cashier-2', till: { storeId: 'store-b' } });
+    expect(await closeShiftAction(closeForm({ actualCash: '10.00', managerPin: '' }))).toEqual({ success: false, error: 'You can only close your own shift.' });
     expect(performShiftCloseMock).not.toHaveBeenCalled();
   });
 });

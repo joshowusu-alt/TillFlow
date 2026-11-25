@@ -113,6 +113,7 @@ type Props = {
   currency: string;
   userRole?: string;
   currentUserId?: string;
+  shiftCloseApprovalThresholdPence?: number;
 };
 
 function resolveTillId(shift: { tillId?: string; till: { name: string } }, tills: Till[]) {
@@ -140,6 +141,7 @@ export default function ShiftClient({
   currency,
   userRole,
   currentUserId,
+  shiftCloseApprovalThresholdPence = 5000,
 }: Props) {
   const openShifts = openShiftList ?? (legacyOpenShift ? [legacyOpenShift] : []);
   const occupancy: OccupiedTill[] = occupiedTills ?? [
@@ -371,7 +373,7 @@ export default function ShiftClient({
       formData.set('overrideReasonCode', overrideReasonCode);
       formData.set('overrideJustification', overrideJustification);
     } else {
-      formData.set('managerPin', managerPin);
+      formData.set('managerPin', needsManagerPin ? managerPin : '');
     }
 
     startTransition(async () => {
@@ -445,6 +447,7 @@ export default function ShiftClient({
   });
   const variancePence = handover.variancePence ?? 0;
   const varianceNeedsReason = countedPence !== null && variancePence !== 0;
+  const needsManagerPin = countedPence !== null && variancePence < -shiftCloseApprovalThresholdPence;
   const closeShiftNumber = shiftToClose
     ? displayShiftPresentationNumber({
         shiftNumber: shiftToClose.shiftNumber,
@@ -1190,7 +1193,7 @@ export default function ShiftClient({
                 </span>
               </div>
               <div className="flex justify-between text-sm text-black/60">
-                <span>Variance</span>
+                <span>Cash difference</span>
                 <span className="font-semibold">
                   {handover.variancePence === null ? '—' : formatMoney(handover.variancePence, currency)}
                 </span>
@@ -1237,7 +1240,7 @@ export default function ShiftClient({
               />
               {actualCash && (
                 <div className="mt-2 text-sm">
-                  Variance:{' '}
+                  {variancePence === 0 ? 'Cash matches' : variancePence > 0 ? 'Over by' : 'Short by'}{' '}
                   <span
                     className={
                       Number(actualCash) * 100 === shiftToClose.expectedCash
@@ -1248,7 +1251,7 @@ export default function ShiftClient({
                     }
                   >
                     {formatMoney(
-                      Math.round(Number(actualCash) * 100) - shiftToClose.expectedCash,
+                      Math.abs(variancePence),
                       currency
                     )}
                   </span>
@@ -1271,7 +1274,7 @@ export default function ShiftClient({
             </div>
 
             <div className="mt-4">
-              <label className="label">Variance Reason Code</label>
+              <label className="label">Why doesn't it match?</label>
               <select
                 className="input"
                 value={varianceReasonCode}
@@ -1286,13 +1289,13 @@ export default function ShiftClient({
               </select>
               {varianceNeedsReason && !varianceReasonCode && !varianceReason ? (
                 <div className="mt-1 text-xs text-amber-700">
-                  Reason code or notes are required for non-zero variance.
+                  Please say why the cash doesn't match.
                 </div>
               ) : null}
             </div>
 
             <div className="mt-4">
-              <label className="label" htmlFor="close-shift-variance-details">Variance Details</label>
+              <label className="label" htmlFor="close-shift-variance-details">Reason details</label>
               <input
                 id="close-shift-variance-details"
                 name="close-shift-variance-details"
@@ -1308,9 +1311,9 @@ export default function ShiftClient({
               />
             </div>
 
-            {!showOwnerOverride ? (
+            {!showOwnerOverride ? (needsManagerPin ? (
               <fieldset className="mt-4">
-                <label className="label" htmlFor="close-shift-manager-approval">Manager PIN (required)</label>
+                <label className="label" htmlFor="close-shift-manager-approval">Manager PIN needed — shortage is above {formatMoney(shiftCloseApprovalThresholdPence, currency)}</label>
                 <input
                   id="close-shift-manager-approval"
                   name="close-shift-manager-approval"
@@ -1331,7 +1334,7 @@ export default function ShiftClient({
                   style={{ WebkitTextSecurity: 'disc' } as React.CSSProperties}
                 />
               </fieldset>
-            ) : (
+            ) : null) : (
               <div className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <div className="text-xs font-semibold uppercase tracking-wider text-amber-700">Owner Override</div>
                 <div>
@@ -1417,7 +1420,7 @@ export default function ShiftClient({
                   isPending ||
                   actualCash === '' ||
                   Number(actualCash) < 0 ||
-                  (!showOwnerOverride && !managerPin) ||
+                  (!showOwnerOverride && needsManagerPin && !managerPin) ||
                   (showOwnerOverride && (!ownerPassword || !overrideReasonCode || !overrideJustification.trim())) ||
                   (varianceNeedsReason && !varianceReasonCode && !varianceReason.trim())
                 }

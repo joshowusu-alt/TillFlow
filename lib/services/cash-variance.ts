@@ -12,6 +12,7 @@ export const CASH_VARIANCE_STATUS = {
   EXPLAINED: 'EXPLAINED',
   RESOLVED: 'RESOLVED',
   APPROVED: 'APPROVED',
+  REVIEWED: 'REVIEWED',
 } as const satisfies Record<CashVarianceStatus, CashVarianceStatus>;
 
 export const VARIANCE_REVIEWER_ROLES = ['MANAGER', 'OWNER'] as const;
@@ -239,7 +240,7 @@ export async function assignCashVarianceReviewer(
     }
 
     const updated = await client.cashVarianceInvestigation.update({
-      where: { id: investigation.id },
+      where: { id: investigation.id, status: investigation.status, businessId: input.businessId },
       data: {
         assignedReviewerUserId: reviewer.id,
         status: CASH_VARIANCE_STATUS.ASSIGNED,
@@ -278,7 +279,7 @@ export async function explainCashVariance(
     const client = tx as unknown as VarianceTx;
     const investigation = await loadScopedInvestigation(client, input.businessId, input.investigationId);
     const status = assertVarianceStatus(investigation.status);
-    if (status === 'RESOLVED' || status === 'APPROVED') {
+    if (status === 'RESOLVED' || status === 'APPROVED' || status === 'REVIEWED') {
       throw new Error('This investigation is already closed.');
     }
 
@@ -300,7 +301,7 @@ export async function explainCashVariance(
     }
 
     const updated = await client.cashVarianceInvestigation.update({
-      where: { id: investigation.id },
+      where: { id: investigation.id, status: investigation.status, businessId: input.businessId },
       data: {
         cashierExplanation: explanation,
         // No file-upload path exists for variance evidence; store the note here.
@@ -349,7 +350,7 @@ export async function resolveCashVariance(
     }
 
     const updated = await client.cashVarianceInvestigation.update({
-      where: { id: investigation.id },
+      where: { id: investigation.id, status: investigation.status, businessId: input.businessId },
       data: {
         managerResolution: resolution,
         status: CASH_VARIANCE_STATUS.RESOLVED,
@@ -391,7 +392,7 @@ export async function approveCashVariance(
     }
 
     const updated = await client.cashVarianceInvestigation.update({
-      where: { id: investigation.id },
+      where: { id: investigation.id, status: investigation.status, businessId: input.businessId },
       data: {
         approvedByUserId: input.actor.userId,
         approvedAt: new Date(),
@@ -410,5 +411,25 @@ export async function approveCashVariance(
     });
 
     return updated;
+  });
+}
+
+export async function markCashVarianceReviewed(input: { businessId: string; investigationId: string; actor: VarianceActor; note?: string | null }) {
+  if (!isReviewerRole(input.actor.userRole)) throw new Error('Only a manager or owner can review cash differences.');
+  return prisma.$transaction(async (tx) => {
+    const investigation = await tx.cashVarianceInvestigation.findFirst({ where: { id: input.investigationId, businessId: input.businessId } });
+    if (!investigation) throw new Error('Cash difference was not found for this business.');
+    if (investigation.status === 'REVIEWED') return investigation;
+    if (!['OPEN', 'ASSIGNED', 'EXPLAINED', 'RESOLVED'].includes(investigation.status)) throw new Error('This cash difference has already been approved.');
+    const reviewedAt = new Date();
+    const reviewNote = input.note?.trim() || null;
+    const updated = await tx.cashVarianceInvestigation.updateMany({ where: { id: investigation.id, businessId: input.businessId, status: investigation.status }, data: { status: 'REVIEWED', reviewedByUserId: input.actor.userId, reviewedAt, reviewNote } });
+    if (!updated.count) {
+      const current = await tx.cashVarianceInvestigation.findFirst({ where: { id: investigation.id, businessId: input.businessId } });
+      if (current?.status === 'REVIEWED') return current;
+      throw new Error('This cash difference changed. Please refresh and review again.');
+    }
+    await writeVarianceAudit(tx as unknown as VarianceTx, { businessId: input.businessId, actor: input.actor, entityId: investigation.id, action: 'CASH_VARIANCE_REVIEW', before: { status: investigation.status }, after: { status: 'REVIEWED', reviewedByUserId: input.actor.userId, reviewedAt, reviewNote }, reason: reviewNote });
+    return { ...investigation, status: 'REVIEWED', reviewedByUserId: input.actor.userId, reviewedAt, reviewNote };
   });
 }

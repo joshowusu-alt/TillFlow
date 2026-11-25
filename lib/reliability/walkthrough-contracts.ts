@@ -196,6 +196,7 @@ export const CASH_VARIANCE_STATUSES = [
   'EXPLAINED',
   'RESOLVED',
   'APPROVED',
+  'REVIEWED',
 ] as const;
 
 export type CashVarianceStatus = (typeof CASH_VARIANCE_STATUSES)[number];
