@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 describe('purchases page polish', () => {
   const pageSrc = readFileSync(join(process.cwd(), 'app/(protected)/purchases/page.tsx'), 'utf8');
   const formSrc = readFileSync(join(process.cwd(), 'app/(protected)/purchases/PurchaseFormClient.tsx'), 'utf8');
+  const menuSrc = readFileSync(join(process.cwd(), 'app/(protected)/purchases/PurchaseRowMenu.tsx'), 'utf8');
+  const detailSrc = readFileSync(join(process.cwd(), 'app/(protected)/purchases/[id]/page.tsx'), 'utf8');
   const paymentSrc = readFileSync(join(process.cwd(), 'components/InlinePaymentForm.tsx'), 'utf8');
   const btnSrc = readFileSync(join(process.cwd(), 'app/(protected)/purchases/RecordPurchaseButton.tsx'), 'utf8');
   const barcodeScanSrc = readFileSync(join(process.cwd(), 'components/BarcodeScanInput.tsx'), 'utf8');
@@ -14,11 +16,11 @@ describe('purchases page polish', () => {
   });
 
   it('page subtitle is owner-friendly', () => {
-    expect(pageSrc).toContain('Record deliveries once');
+    expect(pageSrc).toContain('Record purchases and see what you owe.');
   });
 
-  it('total invoices stat card is present', () => {
-    expect(pageSrc).toContain('Total invoices');
+  it('total purchases stat card is present', () => {
+    expect(pageSrc).toContain('Total purchases');
     expect(pageSrc).toContain('purchaseCount');
     expect(pageSrc).toContain('Supplier deliveries recorded');
   });
@@ -96,17 +98,19 @@ describe('purchases page polish', () => {
   });
 
   it('return actions open item selection rather than whole-invoice reversal', () => {
-    expect(pageSrc).toContain('/purchases/partial-return/');
-    expect(pageSrc).not.toContain('/purchases/return/');
+    expect(menuSrc).toContain('/purchases/partial-return/');
+    expect(menuSrc).not.toContain('/purchases/return/');
   });
 
   it('delete action remains available', () => {
-    expect(pageSrc).toContain('DeletePurchaseButton');
+    expect(menuSrc).toContain('DeletePurchaseButton');
   });
 
-  it('inline payment form remains available', () => {
-    expect(pageSrc).toContain('InlinePaymentForm');
-    expect(pageSrc).toContain('storeId={purchase.storeId}');
+  it('payment remains available via the existing detail form, only when money is owed', () => {
+    expect(menuSrc).toContain('#record-payment');
+    expect(pageSrc).toContain('outstandingPence > 0');
+    expect(detailSrc).toContain('SupplierPaymentForm');
+    expect(detailSrc).toContain('storeId={invoice.storeId}');
   });
 
   it('does not add pointer or touch handlers', () => {

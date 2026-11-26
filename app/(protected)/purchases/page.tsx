@@ -424,7 +424,7 @@ export default async function PurchasesPage(
               </div>
             ) : (
               purchaseRows.map(({ purchase, lineLabel, outstandingPence, itemSummary, purchaseReference }) => (
-                <PurchaseRow key={purchase.id} href={`/purchases/${purchase.id}`} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm">
+                <PurchaseRow key={purchase.id} href={`/purchases/${purchase.id}`} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="font-mono text-sm font-semibold text-ink">{purchaseReference}</div>
@@ -504,7 +504,7 @@ export default async function PurchasesPage(
                 )}
                 {purchaseRows.map(({ purchase, lineLabel, outstandingPence, itemSummary, purchaseReference }) => {
                   return (
-                    <PurchaseRow table key={purchase.id} href={`/purchases/${purchase.id}`} className="rounded-xl bg-white hover:bg-slate-50">
+                    <PurchaseRow table key={purchase.id} href={`/purchases/${purchase.id}`} className="rounded-xl bg-white hover:bg-slate-50 hover:shadow-card hover:-translate-y-px">
                       <td className="px-3 py-3 font-mono text-xs">{purchaseReference}</td>
                       <td className="px-3 py-3 text-sm">
                         {purchase.supplier?.name
