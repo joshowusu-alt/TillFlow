@@ -8,6 +8,9 @@ import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNot
 import { prisma } from '@/lib/prisma';
 import { VARIANCE_REVIEWER_ROLES } from '@/lib/services/cash-variance';
 import { invalidLegacyCloseNote } from '@/lib/reliability/invalid-preview-shift-closures';
+import { cashDifferenceReason } from '@/lib/cash-difference-presentation';
+import Link from 'next/link';
+import { EXPECTED_CASH_ENTRY_TYPES, expectedCashPenceFromEntries } from '@/lib/reports/expected-cash';
 import VarianceWorkflowClient from '../VarianceWorkflowClient';
 
 export default async function CashVarianceDetailPage(
@@ -46,6 +49,8 @@ export default async function CashVarianceDetailPage(
           actualCashPence: true,
           expectedCashPence: true,
           variance: true,
+          varianceReason: true,
+          varianceReasonCode: true,
           openedAt: true,
           closedAt: true,
           user: { select: { name: true } },
@@ -55,6 +60,19 @@ export default async function CashVarianceDetailPage(
     },
   });
   if (!investigation) notFound();
+
+  const drawerTotals = await prisma.cashDrawerEntry.groupBy({
+    by: ['entryType'],
+    where: { businessId: business.id, storeId: store.id, shiftId: investigation.shift.id, entryType: { in: [...EXPECTED_CASH_ENTRY_TYPES] } },
+    _sum: { amountPence: true },
+  });
+  const entries = drawerTotals.map(row => ({ entryType: row.entryType, amountPence: row._sum.amountPence ?? 0 }));
+  const recordedTotal = expectedCashPenceFromEntries(entries);
+  const labels = {
+    OPEN_FLOAT: 'Opening cash', CASH_SALE: 'Cash sales', CASH_DEBTOR_PAYMENT: 'Credit payments in cash',
+    CASH_ADJUSTMENT: 'Cash added or removed', PAID_OUT_SUPPLIER: 'Supplier payments',
+    PAID_OUT_EXPENSE: 'Cash expenses', CASH_REFUND: 'Customer refunds', SUPPLIER_REFUND_RECEIVED: 'Supplier refunds',
+  };
 
   const reviewers = await prisma.user.findMany({
     where: {
@@ -69,8 +87,8 @@ export default async function CashVarianceDetailPage(
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <PageHeader
-        title={displayDocumentNumber('cash_variance', investigation.transactionNumber, investigation.id)}
-        subtitle="Review the cash difference. Counted and expected cash stay unchanged."
+        title={`Cash ${investigation.variancePence < 0 ? 'shortage' : 'surplus'} — ${formatMoney(Math.abs(investigation.variancePence), business.currency)}`}
+        subtitle={`${displayDocumentNumber('cash_variance', investigation.transactionNumber, investigation.id)} · Original cash figures stay unchanged.`}
         secondaryCta={{ label: 'All cash differences', href: withStoreQuery('/shifts/variance', store.id) }}
       />
 
@@ -96,7 +114,7 @@ export default async function CashVarianceDetailPage(
           <div>
             <div className="text-xs text-black/40">Counted cash</div>
             <div className="font-semibold">
-              {formatMoney(investigation.shift.actualCashPence ?? 0, business.currency)}
+              {investigation.shift.actualCashPence == null ? 'Not recorded' : formatMoney(investigation.shift.actualCashPence, business.currency)}
             </div>
           </div>
           <div>
@@ -122,10 +140,27 @@ export default async function CashVarianceDetailPage(
         </div>
       </div>
 
+      <details className="card p-4">
+        <summary className="min-h-11 cursor-pointer py-3 font-semibold">Check how expected cash is made up</summary>
+        <p className="text-sm text-black/70">These are the drawer entries currently recorded for this shift. MoMo and card sales are not physical cash.</p>
+        <dl className="mt-3 space-y-2 text-sm">
+          {EXPECTED_CASH_ENTRY_TYPES.map(type => (
+            <div key={type} className="flex justify-between gap-3">
+              <dt><Link className="inline-flex min-h-11 items-center text-accent underline" href={withStoreQuery(`/shifts/drawer?type=${type}&shiftId=${encodeURIComponent(investigation.shift.id)}`, store.id)}>{labels[type]}</Link></dt>
+              <dd className="shrink-0 font-semibold">{formatMoney(entries.find(entry => entry.entryType === type)?.amountPence ?? 0, business.currency)}</dd>
+            </div>
+          ))}
+          <div className="flex justify-between gap-3 border-t border-black/10 pt-2 font-semibold"><dt>Recorded drawer total</dt><dd>{formatMoney(recordedTotal, business.currency)}</dd></div>
+        </dl>
+        {recordedTotal !== investigation.shift.expectedCashPence && <p className="mt-3 text-sm text-amber-900">Current drawer records differ from expected cash at closing. Check the transactions before closing this review. The original closing figure has not changed.</p>}
+        <p className="mt-2 text-sm text-black/60">Tap a category to see its transactions.</p>
+      </details>
+
       <VarianceWorkflowClient
         investigationId={investigation.id}
         status={investigation.status}
         cashierExplanation={investigation.cashierExplanation}
+        originalReason={cashDifferenceReason(investigation.shift.varianceReasonCode, null, investigation.shift.varianceReason)}
         evidenceNote={investigation.evidencePath}
         managerResolution={investigation.managerResolution}
         assignedReviewerName={investigation.assignedReviewer?.name ?? null}

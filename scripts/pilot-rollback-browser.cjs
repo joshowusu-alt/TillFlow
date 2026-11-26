@@ -240,8 +240,8 @@ async function main() {
     await login(food.users.manager, food);
     const detail = `/shifts/variance/${investigation.id}`;
     await page.goto(detail);
-    await page.getByLabel('Note (optional)').fill('Fictional manager checked cash');
-    await page.getByRole('button', { name: "I'm comfortable" }).click();
+    await page.getByLabel('What did you check and conclude?').fill('Fictional manager checked cash');
+    await page.getByRole('button', { name: 'Close review with findings' }).click();
     await page.getByText(/Reviewed by Fictional manager/).waitFor();
     const reviewed = await prisma.cashVarianceInvestigation.findUniqueOrThrow({ where: { id: investigation.id } });
     assert.equal(reviewed.status, 'APPROVED');
@@ -262,7 +262,7 @@ async function main() {
     assert.equal((await page.goto(detail)).status(), 200);
     await page.getByText(/Reviewed by Fictional manager/).waitFor();
     await page.getByText('Fictional manager checked cash').waitFor();
-    assert.equal(await page.getByRole('button', { name: "I'm comfortable" }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Close review with findings' }).count(), 0);
     assert.deepEqual(await prisma.cashVarianceInvestigation.findUniqueOrThrow({ where: { id: reviewed.id } }), reviewed);
     results.push('PASS TIL5-C large SELF close and manager review survive dfce423 rollback and candidate restoration without re-opening, data loss or another approval');
 

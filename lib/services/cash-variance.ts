@@ -167,6 +167,7 @@ export async function createCashVarianceInvestigationTx(
       before: {},
       after: {
         status: created.status,
+        cashierExplanation: input.cashierExplanation?.trim() || null,
         variancePence: created.variancePence,
         transactionNumber: created.transactionNumber,
         shiftId: input.shiftId,
@@ -301,7 +302,7 @@ export async function explainCashVariance(
     }
 
     const updated = await client.cashVarianceInvestigation.update({
-      where: { id: investigation.id, status: investigation.status, businessId: input.businessId },
+      where: { id: investigation.id, status: investigation.status, businessId: input.businessId, cashierExplanation: investigation.cashierExplanation, evidencePath: investigation.evidencePath },
       data: {
         cashierExplanation: explanation,
         // No file-upload path exists for variance evidence; store the note here.
@@ -316,8 +317,8 @@ export async function explainCashVariance(
       actor: input.actor,
       entityId: investigation.id,
       action: 'CASH_VARIANCE_EXPLAIN',
-      before: { status: investigation.status },
-      after: { status: updated.status },
+      before: { status: investigation.status, cashierExplanation: investigation.cashierExplanation, evidencePath: investigation.evidencePath },
+      after: { status: updated.status, cashierExplanation: explanation, evidencePath: input.evidenceNote?.trim() || investigation.evidencePath },
       reason: explanation,
     });
 
@@ -423,6 +424,7 @@ export async function markCashVarianceReviewed(input: { businessId: string; inve
     if (!['OPEN', 'ASSIGNED', 'EXPLAINED', 'RESOLVED'].includes(investigation.status)) throw new Error('This cash difference has already been approved.');
     const reviewedAt = new Date();
     const reviewNote = input.note?.trim() || null;
+    if (!reviewNote) throw new Error('Enter what you checked before closing this cash difference.');
     // APPROVED is the legacy terminal state; reviewedAt distinguishes TIL5-C
     // review from old owner approval, so dfce423 never sees an unknown status.
     // Mirror the actual reviewer (never fabricate an owner) for the old UI.
