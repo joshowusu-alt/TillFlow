@@ -1373,6 +1373,37 @@ it('preserves cash received and readable change when moving between mobile cart 
   expect(screen.getByLabelText(/Cash tendered/)).toHaveValue(20);
 });
 
+it.each([true, false])('keeps whole-cedi quick cash labels and payment values (online=%s)', async (online) => {
+  window.localStorage.clear();
+  searchParamsGet.mockReturnValue(null);
+  mockPhoneViewport(true);
+  Reflect.set(navigator, 'onLine', online);
+  try {
+    render(<PosClient {...baseProps} cashierUserId="owner-1" openShifts={[{ tillId: 'till-1', shiftId: 'shift-1' }]} />);
+    await addCocaColaToCart();
+    fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to payment/ }));
+    const group = within(document.querySelector<HTMLElement>('[data-pos-cash-denominations]')!);
+    const denominations = [1, 5, 10, 20, 50, 100, 200];
+    expect(group.getAllByRole('button').map(button => button.textContent)).toEqual([
+      ...denominations.map(amount => `GH₵${amount}`), 'Exact',
+    ]);
+    for (const amount of denominations) {
+      fireEvent.click(group.getByRole('button', { name: `GH₵${amount}` }));
+      expect(screen.getByLabelText(/Cash tendered/)).toHaveValue(amount);
+      expect(document.querySelector('[data-pos-payment-amounts]')).toHaveTextContent(`Cash tenderedGH₵${amount.toFixed(2)}`);
+    }
+    const footer = document.querySelector('[data-pos-mobile-sheet-footer]');
+    expect(footer?.querySelector('[data-pos-change-due]')).toHaveTextContent('GH₵197.50');
+    fireEvent.click(group.getByRole('button', { name: 'Exact' }));
+    expect(screen.getByLabelText(/Cash tendered/)).toHaveValue(2.5);
+    expect(footer?.querySelector('[data-pos-change-due]')).toHaveTextContent('GH₵0.00');
+    expect(document.querySelector('[data-pos-payment-amounts]')).toHaveTextContent('Applied to saleGH₵2.50');
+  } finally {
+    Reflect.set(navigator, 'onLine', true);
+  }
+});
+
 it('does not let an earlier search blur close a newly reopened catalogue dropdown', async () => {
   window.localStorage.clear();
   searchParamsGet.mockReturnValue(null);

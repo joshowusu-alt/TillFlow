@@ -20,7 +20,7 @@ export default defineConfig({
     transform(code, id) {
       if (!process.env.FIXTURE_BASE_SHA) return;
       const relative = path.relative(process.cwd(), id);
-      if (['app/(protected)/pos/PosClient.tsx','app/(protected)/pos/components/PosMobileCartCheckoutSheet.tsx','components/pos/PosProgressiveShell.tsx','components/NetworkStatus.tsx','app/globals.css'].includes(relative)) return execFileSync('git', ['show',process.env.FIXTURE_BASE_SHA+':'+relative], {encoding:'utf8'});
+      if (['app/(protected)/pos/PosClient.tsx','app/(protected)/pos/components/PosCheckoutPanel.tsx','app/(protected)/pos/components/PosMobileCartCheckoutSheet.tsx','components/pos/PosProgressiveShell.tsx','components/NetworkStatus.tsx','app/globals.css'].includes(relative)) return execFileSync('git', ['show',process.env.FIXTURE_BASE_SHA+':'+relative], {encoding:'utf8'});
     }
   }, react()],
   resolve: { alias: [{find:'@', replacement: process.cwd()}] },

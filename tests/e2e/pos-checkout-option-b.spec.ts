@@ -161,9 +161,8 @@ test.describe('POS Option B checkout', () => {
     await gotoPos(page);
     await addFirstProduct(page);
 
-    await page.getByRole('button', { name: 'GH₵200.00' }).or(page.getByRole('button', { name: /GH₵\s*200/i })).first().click().catch(async () => {
-      await page.locator('#pos-cash-tendered').fill('200');
-    });
+    await page.getByRole('button', { name: 'GH₵200', exact: true }).first().click();
+    await expect(page.locator('#pos-cash-tendered').first()).toHaveValue('200');
     await expect(page.getByText(/Change/i).first()).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('cash-change.png'), fullPage: true });
 
