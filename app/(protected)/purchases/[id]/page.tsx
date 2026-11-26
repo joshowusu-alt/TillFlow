@@ -16,12 +16,13 @@ import RemainingBalance from '@/components/RemainingBalance';
 import SupplierPaymentForm from '@/components/SupplierPaymentForm';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 import { payableDocumentBalance } from '@/lib/reports/payables-balance';
+import { purchaseStatus, purchasePaymentMethod } from '@/lib/purchases/presentation';
 
 function paymentMethodLabel(payment: { method: string; reference?: string | null }) {
   if (payment.reference?.startsWith('funding:1000.HOLD.')) return 'Cash — business cash held outside the till';
   if (payment.reference?.startsWith('funding:2300.OWNER.')) return 'Owner’s money — repay owner';
   if (payment.reference?.startsWith('funding:3100.OWNER.')) return 'Owner’s money — contribution';
-  return payment.method;
+  return purchasePaymentMethod(payment.method);
 }
 
 export default async function PurchaseInvoicePage(
@@ -200,7 +201,7 @@ export default async function PurchaseInvoicePage(
         <div className="space-y-1">
           <div className="text-xs uppercase tracking-wider text-black/40">Due Date</div>
           <div className="flex items-center gap-1">
-            <DueDateBadge dueDate={invoice.dueDate} now={now} isClosed={isClosed} noneLabel="No due date" />
+            <DueDateBadge dueDate={invoice.dueDate} now={now} isClosed={isClosed || outstanding <= 0} noneLabel="No due date" />
             {!isClosed && (
               <SetPurchaseDueDateButton
                 invoiceId={invoice.id}
@@ -211,10 +212,10 @@ export default async function PurchaseInvoicePage(
         </div>
         <div className="space-y-1">
           <div className="text-xs uppercase tracking-wider text-black/40">Status</div>
-          <span className="pill bg-black/5 text-black/60">{invoice.paymentStatus}</span>
+          <span className="pill bg-black/5 text-black/60">{purchaseStatus(invoice, now)}</span>
         </div>
         <div className="space-y-1">
-          <div className="text-xs uppercase tracking-wider text-black/40">Store</div>
+          <div className="text-xs uppercase tracking-wider text-black/40">Business</div>
           <div className="text-sm">{invoice.store?.name ?? '—'}</div>
         </div>
         <div className="space-y-1 sm:col-span-2">

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   db: { product: { findMany: vi.fn() }, supplier: { findMany: vi.fn() }, purchaseInvoice: { count: vi.fn(), findMany: vi.fn() }, shift: { findMany: vi.fn() }, user: { findMany: vi.fn() } },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.db }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/lib/auth', () => ({ requireBusinessAndOptionalStore: async () => ({ business: { id: 'business', currency: 'GHS' }, store: { id: 'store', name: 'Main' }, stores: [{ id: 'store', name: 'Main' }], user: { role: 'OWNER' } }) }));
 vi.mock('@/lib/services/stores', () => ({ getBusinessStores: async () => ({ stores: [{ id: 'store', name: 'Main' }] }) }));
 vi.mock('@/lib/units/list-selectable-units', () => ({ listSelectableUnits: async () => [] }));
@@ -33,7 +34,7 @@ beforeEach(() => {
 it('takes both mobile and desktop return actions to item selection for the chosen invoice', async () => {
   const root = document.createElement('div');
   root.innerHTML = renderToStaticMarkup(await PurchasesPage({}));
-  const links = [...root.querySelectorAll('a')].filter(link => link.textContent?.trim() === 'Return selected items');
+  const links = [...root.querySelectorAll('a')].filter(link => link.textContent?.trim() === 'Return');
   expect(links).toHaveLength(2);
   expect(links.map(link => link.getAttribute('href'))).toEqual(['/purchases/partial-return/invoice-1', '/purchases/partial-return/invoice-1']);
   expect(root.querySelector('a[href^="/purchases/return/"]')).toBeNull();

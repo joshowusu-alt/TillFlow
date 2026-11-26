@@ -1,11 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
+const { randomInt, randomUUID } = require('node:crypto');
 const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:6200';
-const OWNER_EMAIL = process.env.E2E_OWNER_EMAIL || 'owner@store.com';
-const OWNER_PASSWORD = process.env.E2E_OWNER_PASSWORD || 'Pass1234!';
+const OWNER_EMAIL = process.env.E2E_OWNER_EMAIL;
+const OWNER_PASSWORD = process.env.E2E_OWNER_PASSWORD;
+const FIXTURE_PIN = String(randomInt(1000, 10000));
 const ARTIFACT_DIR = path.join(process.cwd(), 'playwright', 'test-results', 'deep-owner-flow');
 let prisma;
 
@@ -72,7 +74,7 @@ async function ensureOwnerPassword() {
   try {
     const bcrypt = require('bcryptjs');
     const hash = await bcrypt.hash(OWNER_PASSWORD, 10);
-    const pinHash = await bcrypt.hash('1234', 10);
+    const pinHash = await bcrypt.hash(FIXTURE_PIN, 10);
     await prisma.user.updateMany({
       where: { email: OWNER_EMAIL },
       data: { passwordHash: hash, approvalPinHash: pinHash },
@@ -302,16 +304,16 @@ async function openPurchaseForm(page) {
   await addLineButton.waitFor({ state: 'visible', timeout: 10000 });
 }
 
-async function attachPurchaseEvidence(page) {
-  await page.locator('#record-purchase-form input[type="file"]').setInputFiles({
-    name: 'synthetic-supplier-invoice.pdf',
-    mimeType: 'application/pdf',
-    buffer: Buffer.from('%PDF-1.4\nSynthetic CI supplier invoice\n%%EOF'),
-  });
-  await page.waitForFunction(() => {
-    const input = document.querySelector('#record-purchase-form input[name="purchaseDocumentsJson"]');
-    return input && JSON.parse(input.value || '[]').length === 1;
-  });
+async function addPurchaseProduct(page) {
+  const form = page.locator('#record-purchase-form');
+  const search = form.getByPlaceholder(/Type to search product/i);
+  await search.fill('Coca-Cola 500ml');
+  await form.getByRole('button', { name: /Coca-Cola 500ml/i }).click();
+  await form.locator('#purchase-quantity').fill('1');
+  await form.locator('#purchase-unit-cost').fill('5.00');
+  await form.getByRole('button', { name: /^Add line$/i }).click();
+  await page.waitForFunction(() => JSON.parse(document.querySelector('#record-purchase-form input[name="cart"]').value).length > 0);
+  if (await form.locator('input[type="file"]').count()) throw new Error('Purchase should not request an upload');
 }
 
 async function seedUnpaidExpense() {
@@ -344,8 +346,9 @@ async function seedUnpaidExpense() {
 }
 
 async function run() {
-  if (!['localhost', '127.0.0.1'].includes(new URL(BASE_URL).hostname) || !String(process.env.DATABASE_URL).startsWith('file:')) {
-    throw new Error('Deep owner-flow writes require a local server and explicitly selected disposable SQLite database');
+  const base = new URL(BASE_URL);
+  if (base.protocol !== 'http:' || !['localhost', '127.0.0.1'].includes(base.hostname) || base.username || base.password || process.env.DATABASE_URL !== 'file:./ci-pos-safety.db' || !OWNER_EMAIL || !OWNER_PASSWORD) {
+    throw new Error('Deep owner-flow requires the isolated CI SQLite file, local HTTP server, and explicit fixture credentials');
   }
   // Pin every Prisma alias before any seed, password or financial write.
   ({ prisma } = await openGuardedPrismaClient({ url: process.env.DATABASE_URL }));
@@ -386,7 +389,7 @@ async function run() {
     await page.waitForTimeout(2000);
     await page.locator('input[name="name"]').fill(`E2E User ${stamp}`);
     await page.locator('input[name="email"]').fill(e2eUserEmail);
-    await page.locator('input[name="password"]').fill('Pass1234!');
+    await page.locator('input[name="password"]').fill(randomUUID());
     await page.locator('select[name="role"]').selectOption('CASHIER');
     await page.getByRole('button', { name: /Create User/i }).click();
     // Wait for the user to appear in the table (server action redirects on same page)
@@ -429,7 +432,7 @@ async function run() {
     await page.goto(`${BASE_URL}/purchases`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
     await openPurchaseForm(page);
-    await page.getByRole('button', { name: /^Add line$/i }).click();
+    await addPurchaseProduct(page);
     await page.waitForTimeout(500);
     // Default paymentStatus is PAID with no payment amounts entered, which the
     // server auto-fills as a full cash payment - that requires an open till
@@ -438,7 +441,6 @@ async function run() {
     // cash-drawer dependency.
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
-    await attachPurchaseEvidence(page);
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     // On success, createPurchaseAction redirects to the invoice detail page
     // (/purchases/{id}?created=1), not back to the list page, so wait for
@@ -482,11 +484,10 @@ async function run() {
     await page.goto(`${BASE_URL}/purchases`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
     await openPurchaseForm(page);
-    await page.getByRole('button', { name: /^Add line$/i }).click();
+    await addPurchaseProduct(page);
     await page.waitForTimeout(500);
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
-    await attachPurchaseEvidence(page);
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
     step('6b/12 Create unpaid purchase OK');
@@ -557,7 +558,7 @@ async function run() {
     // Owners self-approve without PIN; managers still see the PIN field.
     const managerPin = page.locator('input[placeholder="Enter manager PIN"]');
     if ((await managerPin.count()) > 0) {
-      await managerPin.fill('1234');
+      await managerPin.fill(FIXTURE_PIN);
     } else {
       await page.getByText(/Owner approval — no PIN required/i).waitFor({ state: 'visible', timeout: 10000 });
     }

@@ -88,10 +88,10 @@ describe('food quick purchases', () => {
     render(<QuickPurchaseForm {...props} photoRequired />);
     pick('Tea bread');
     fill('3', '5');
-    fireEvent.click(screen.getByRole('button', { name: 'Pay later' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Owing' }));
     expect(screen.getByRole('button', { name: "Choose who you're paying later" })).toBeEnabled();
     fireEvent.change(screen.getByLabelText('Supplier'), { target: { value: 'supplier' } });
-    expect(screen.getByRole('button', { name: 'Add a photo of the receipt' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save purchase' })).toBeEnabled();
   });
 
   it.each([
@@ -155,12 +155,10 @@ describe('food quick purchases', () => {
     expect(await screen.findByText('Paid by Cash · from the till')).toBeVisible();
   });
 
-  it('opens the photo requirement panel and updates the form when the owner enables it', async () => {
-    vi.mocked(setFoodPurchasePhotoRequired).mockResolvedValue({ success: true });
-    render(<QuickPurchaseForm {...props} />);
-    fireEvent.click(screen.getByText('Settings'));
-    fireEvent.click(screen.getByRole('switch', { name: 'Require an invoice photo for every purchase', hidden: true }));
-    expect(await screen.findByText('Receipt photo required (set by owner)')).toBeVisible();
+  it('does not show a photo field even when the old setting is enabled', () => {
+    const { container } = render(<QuickPurchaseForm {...props} photoRequired />);
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+    expect(screen.queryByText('Receipt photo required (set by owner)')).not.toBeInTheDocument();
   });
 
   it('creates a missing item and fills the row', async () => {

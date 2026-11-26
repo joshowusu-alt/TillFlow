@@ -18,6 +18,24 @@ it('physical scanner Enter selects the matching publisher through its alternate 
   expect(screen.getByDisplayValue('Book A · Publisher Y')).toBeInTheDocument();
   expect(field).toHaveValue('');
 });
+it('opens blank and never asks for a document', () => {
+  const { container } = mount();
+  expect(screen.getByPlaceholderText('Type to search product…')).toHaveValue('');
+  expect(screen.getByLabelText(/Quantity/)).toHaveValue(null);
+  expect(screen.getByLabelText('Cost per unit')).toHaveValue(null);
+  expect(screen.getByRole('button', { name: 'Add line' })).toBeDisabled();
+  expect(container.querySelector('input[type="file"]')).toBeNull();
+  expect(screen.getByText('More details').closest('details')).not.toHaveAttribute('open');
+});
+it('adds an explicitly selected product to the blank cart', () => {
+  mount();
+  fireEvent.change(screen.getByPlaceholderText('Type to search product…'), { target: { value: 'Book A · Publisher Y' } });
+  fireEvent.click(screen.getByRole('button', { name: /Book A · Publisher Y/ }));
+  fireEvent.change(screen.getByLabelText(/Quantity/), { target: { value: '2' } });
+  fireEvent.change(screen.getByLabelText('Cost per Book'), { target: { value: '80' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add line' }));
+  expect(JSON.parse((document.querySelector('input[name="cart"]') as HTMLInputElement).value)).toMatchObject([{productId:'Y', qtyInUnit:2, unitCostInput:'80'}]);
+});
 it('unknown scans open explicit creation and preserve the scanned identifier', () => {
   mount();
   const field = screen.getByLabelText('Scan with USB/Bluetooth reader');
@@ -31,13 +49,13 @@ it('starts unpaid, shows due dates only while money is owed and reveals payment 
   mount();
   const status = screen.getByLabelText('Payment Status');
   expect(status).toHaveValue('UNPAID');
-  expect(screen.getByLabelText('Due Date')).toBeInTheDocument();
+  expect(screen.getByLabelText('Due date')).toBeInTheDocument();
   expect(screen.queryByLabelText('Where is the cash coming from?')).not.toBeInTheDocument();
   fireEvent.change(status, { target: { value: 'PAID' } });
-  expect(screen.queryByLabelText('Due Date')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Due date')).not.toBeInTheDocument();
   expect(screen.getByLabelText('Where is the cash coming from?')).toBeInTheDocument();
   fireEvent.change(status, { target: { value: 'PART_PAID' } });
-  expect(screen.getByLabelText('Due Date')).toBeInTheDocument();
+  expect(screen.getByLabelText('Due date')).toBeInTheDocument();
 });
 
 it('keeps a restored purchase identity across remounts and creates a new one only on discard', () => {
