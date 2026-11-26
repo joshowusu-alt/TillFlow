@@ -46,7 +46,8 @@ it.each([['OWNER', 'OPEN'], ['MANAGER', 'ASSIGNED'], ['OWNER', 'EXPLAINED'], ['M
   prismaMock.cashVarianceInvestigation.findFirst.mockResolvedValueOnce({ id: 'var-1', status, businessId: 'biz-1' });
   prismaMock.cashVarianceInvestigation.updateMany.mockResolvedValue({ count: 1 });
   const result = await markCashVarianceReviewed(input);
-  expect(result).toMatchObject({ status: 'REVIEWED', reviewedByUserId: actor.userId, reviewedAt: expect.any(Date), reviewNote: 'Checked' });
+  expect(result).toMatchObject({ status: 'APPROVED', reviewedByUserId: actor.userId, reviewedAt: expect.any(Date), reviewNote: 'Checked', approvedByUserId: actor.userId, approvedAt: expect.any(Date) });
+  expect(prismaMock.cashVarianceInvestigation.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'APPROVED', reviewedByUserId: actor.userId, approvedByUserId: actor.userId }) }));
   expect(prismaMock.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'CASH_VARIANCE_REVIEW' }) }));
   prismaMock.cashVarianceInvestigation.findFirst.mockResolvedValueOnce(result);
   expect(await markCashVarianceReviewed({ ...input, note: 'different' })).toEqual(result);

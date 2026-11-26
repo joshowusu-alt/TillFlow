@@ -419,17 +419,21 @@ export async function markCashVarianceReviewed(input: { businessId: string; inve
   return prisma.$transaction(async (tx) => {
     const investigation = await tx.cashVarianceInvestigation.findFirst({ where: { id: input.investigationId, businessId: input.businessId } });
     if (!investigation) throw new Error('Cash difference was not found for this business.');
-    if (investigation.status === 'REVIEWED') return investigation;
+    if (investigation.status === 'APPROVED' && investigation.reviewedAt) return investigation;
     if (!['OPEN', 'ASSIGNED', 'EXPLAINED', 'RESOLVED'].includes(investigation.status)) throw new Error('This cash difference has already been approved.');
     const reviewedAt = new Date();
     const reviewNote = input.note?.trim() || null;
-    const updated = await tx.cashVarianceInvestigation.updateMany({ where: { id: investigation.id, businessId: input.businessId, status: investigation.status }, data: { status: 'REVIEWED', reviewedByUserId: input.actor.userId, reviewedAt, reviewNote } });
+    // APPROVED is the legacy terminal state; reviewedAt distinguishes TIL5-C
+    // review from old owner approval, so dfce423 never sees an unknown status.
+    // Mirror the actual reviewer (never fabricate an owner) for the old UI.
+    const reviewData = { status: 'APPROVED', reviewedByUserId: input.actor.userId, reviewedAt, reviewNote, approvedByUserId: input.actor.userId, approvedAt: reviewedAt };
+    const updated = await tx.cashVarianceInvestigation.updateMany({ where: { id: investigation.id, businessId: input.businessId, status: investigation.status }, data: reviewData });
     if (!updated.count) {
       const current = await tx.cashVarianceInvestigation.findFirst({ where: { id: investigation.id, businessId: input.businessId } });
-      if (current?.status === 'REVIEWED') return current;
+      if (current?.status === 'APPROVED' && current.reviewedAt) return current;
       throw new Error('This cash difference changed. Please refresh and review again.');
     }
-    await writeVarianceAudit(tx as unknown as VarianceTx, { businessId: input.businessId, actor: input.actor, entityId: investigation.id, action: 'CASH_VARIANCE_REVIEW', before: { status: investigation.status }, after: { status: 'REVIEWED', reviewedByUserId: input.actor.userId, reviewedAt, reviewNote }, reason: reviewNote });
-    return { ...investigation, status: 'REVIEWED', reviewedByUserId: input.actor.userId, reviewedAt, reviewNote };
+    await writeVarianceAudit(tx as unknown as VarianceTx, { businessId: input.businessId, actor: input.actor, entityId: investigation.id, action: 'CASH_VARIANCE_REVIEW', before: { status: investigation.status }, after: { ...reviewData, reviewState: 'REVIEWED' }, reason: reviewNote });
+    return { ...investigation, ...reviewData };
   });
 }

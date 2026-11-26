@@ -70,30 +70,10 @@ jobs:
           TILLFLOW_PILOT_MANUAL_PAYMENTS: '1'
       - name: Password login, barcode checkout, roles, mobile and tablet
         run: node scripts/pilot-acceptance-browser.cjs
-      - name: Native offline migration preservation
-        run: node scripts/commercial-offline-browser-audit.cjs
-        env:
-          TILLFLOW_VERIFY_ROLLBACK_READER: '1'
-      - name: Native offline retry failure recovery
-        run: |
-          if test -f scripts/commercial-offline-retry-browser.cjs; then
-            node scripts/commercial-offline-retry-browser.cjs
-          else
-            echo 'Retry browser harness is on the companion financial PR; not executed in this branch.'
-          fi
-      - name: Persist real debtor, supplier and expense records for native recovery
-        run: npx vitest run lib/services/pilot-native-recovery.pg.test.ts --reporter=verbose
-        env:
-          TILLFLOW_RUN_FULL_DB_RECOVERY: '1'
-      - name: Full native PostgreSQL backup and restore with complete controls
-        run: node scripts/pilot-full-database-recovery.cjs
-        env:
-          TILLFLOW_RUN_FULL_DB_RECOVERY: '1'
-          TILLFLOW_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
-      - name: Checkout immutable v4 fallback
+      - name: Checkout immutable dfce423 fallback
         uses: actions/checkout@v4
         with:
-          ref: 38fbfef1ae6dd0f184d385a03177b23f01313dc1
+          ref: dfce423c571c99f98ef2efbe7d8f834bf741047c
           path: .pilot-fallback
           persist-credentials: false
       - name: Independently build fallback on Node22 and PostgreSQL
@@ -116,6 +96,28 @@ jobs:
           TILLFLOW_PILOT_MANUAL_PAYMENTS: '1'
       - name: Candidate to fallback to candidate with real pending financial transactions
         run: node scripts/pilot-rollback-browser.cjs
+      # Run the independent two-version proof before asserting source equivalence;
+      # the checksum assertion remains mandatory.
+      - name: Native offline migration preservation
+        run: node scripts/commercial-offline-browser-audit.cjs
+        env:
+          TILLFLOW_VERIFY_ROLLBACK_READER: '1'
+      - name: Native offline retry failure recovery
+        run: |
+          if test -f scripts/commercial-offline-retry-browser.cjs; then
+            node scripts/commercial-offline-retry-browser.cjs
+          else
+            echo 'Retry browser harness is on the companion financial PR; not executed in this branch.'
+          fi
+      - name: Persist real debtor, supplier and expense records for native recovery
+        run: npx vitest run lib/services/pilot-native-recovery.pg.test.ts --reporter=verbose
+        env:
+          TILLFLOW_RUN_FULL_DB_RECOVERY: '1'
+      - name: Full native PostgreSQL backup and restore with complete controls
+        run: node scripts/pilot-full-database-recovery.cjs
+        env:
+          TILLFLOW_RUN_FULL_DB_RECOVERY: '1'
+          TILLFLOW_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
       - name: Retain immutable fallback build for immediate review
         uses: actions/upload-artifact@v4
         with:
