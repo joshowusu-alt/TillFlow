@@ -25,6 +25,9 @@ describe('affected sale presentation and navigation', () => {
     expect(costReviewHref('rice', period, { storeId: 'branch' })).toBe('/products/rice/cost-review/preview?from=2026-10-01&to=2026-10-31&metric=netProfit&storeId=branch');
     expect(affectedSalesHref(period)).toBe('/reports/income-statement/entries?from=2026-10-01&to=2026-10-31&metric=netProfit&issues=1');
     expect(costReviewPeriod({ ...period, metric: 'https://example.com' })?.metric).toBe('grossProfit');
+    expect(costReviewPeriod({ from: '2028-02-29', to: '2028-02-29' })).toEqual({ from: '2028-02-29', to: '2028-02-29', metric: 'grossProfit' });
+    expect(costReviewPeriod({ from: '2027-02-29', to: '2027-03-01' })).toBeNull();
+    expect(costReviewPeriod({ ...period, from: ' 2026-10-01' })).toBeNull();
     for (const invalid of [{ ...period, from: '2026-02-30' }, { ...period, to: '2026-01-01' }, { ...period, from: ['/'] }]) {
       expect(costReviewPeriod(invalid)).toBeNull();
       expect(affectedSalesHref(invalid)).toBeNull();

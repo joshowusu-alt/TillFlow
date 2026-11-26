@@ -1,7 +1,8 @@
 import type { IncomeStatementContribution, IncompleteSaleLine } from './income-statement-breakdown';
+import { parseBusinessLocalDateKey } from '@/lib/notifications/utils';
 
 type Search = { from?: unknown; to?: unknown; metric?: unknown };
-const validDay = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+const validDay = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && parseBusinessLocalDateKey(value) !== null;
 
 /** Only report navigation; never used to determine which costs can be posted. */
 export function costReviewPeriod(search?: Search) {
