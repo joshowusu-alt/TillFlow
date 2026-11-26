@@ -174,6 +174,6 @@ describe('incomplete stock disclosure', () => {
         stockValueIncomplete: true,
         profitMayBeIncomplete: true,
       })
-    ).toContain('incomplete');
+    ).toContain('stock value is not complete');
   });
 });

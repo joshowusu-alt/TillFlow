@@ -2,9 +2,8 @@ import BusinessMovementReportView from '@/components/reports/stage3b/BusinessMov
 import { notFound } from 'next/navigation';
 import { reportScopeLabel } from '@/lib/reports/scope-labels';
 import EmptyState from '@/components/EmptyState';
-import { addCalendarDays } from '@/lib/entitlements/range';
+import { defaultMovementPeriod } from '@/components/reports/PeriodChips';
 import { openLiveReport } from '@/lib/entitlements/live-report';
-import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { prisma } from '@/lib/prisma';
 import { requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { getBusinessStores } from '@/lib/services/stores';
@@ -33,10 +32,12 @@ export default async function BusinessMovementReportPage(
       currentTo?: string;
       storeId?: string;
       businessId?: string;
+      periodChip?: string;
     }>;
   }
 ) {
   const searchParams = await props.searchParams;
+  let authorisedDefault: ReturnType<typeof defaultMovementPeriod> | undefined;
   const opened = await openLiveReport({
     surfaceId: 'business_movement',
     search: searchParams,
@@ -45,9 +46,10 @@ export default async function BusinessMovementReportPage(
         searchParams?.preset === 'equal_length_custom' &&
         Boolean(searchParams.currentFrom) &&
         Boolean(searchParams.currentTo);
-      if (canonicalPlan === 'STARTER' && !custom && !searchParams?.preset) {
-        const today = formatBusinessLocalDateKey(now, timezone);
-        return { fromLocalDate: addCalendarDays(today, -29), toLocalDate: today, preset: 'CUSTOM' };
+      if (!searchParams?.preset) {
+        authorisedDefault = defaultMovementPeriod(now, timezone, canonicalPlan);
+        const pair = resolveEqualLengthPeriodPair({ timeZone: timezone, ...authorisedDefault });
+        return { fromLocalDate: pair.comparisonFromKey, toLocalDate: pair.currentToKey, preset: 'CUSTOM' };
       }
       if (custom && searchParams?.currentFrom && searchParams.currentTo) {
         const pair = resolveEqualLengthPeriodPair({
@@ -108,16 +110,8 @@ export default async function BusinessMovementReportPage(
   });
   const timeZone = requireReportTimeZone(businessTz?.timezone);
 
-  const starterDefault =
-    business.canonicalPlan === 'STARTER' &&
-    searchParams?.preset !== 'equal_length_custom' &&
-    !searchParams?.preset;
-  const periodInput = starterDefault
-    ? {
-        preset: 'equal_length_custom' as const,
-        currentFromKey: addCalendarDays(formatBusinessLocalDateKey(new Date(), timeZone), -14),
-        currentToKey: formatBusinessLocalDateKey(new Date(), timeZone),
-      }
+  const periodInput = !searchParams?.preset
+    ? authorisedDefault ?? defaultMovementPeriod(new Date(), timeZone, business.canonicalPlan)
     : resolveBusinessMovementPeriodInput({
         preset: searchParams?.preset,
         currentFrom: searchParams?.currentFrom,
@@ -182,5 +176,5 @@ export default async function BusinessMovementReportPage(
   return <BusinessMovementReportView result={result} scopeLabel={scopeLabel} readOnly={opened.readOnly}
     choices={opened.branch.choices} offerAll={opened.branch.offerAll} selectedStoreId={selectedStoreId}
     selectedPreset={selectedPreset} currentFromValue={currentFromValue} currentToValue={currentToValue}
-    exportQuery={exportQs.toString()} moneyQuery={moneyQs.toString()} />;
+    exportQuery={exportQs.toString()} moneyQuery={moneyQs.toString()} selectedPeriod={searchParams?.periodChip} />;
 }

@@ -13,7 +13,7 @@ describe('income statement detail access and period',()=>{
     const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({businessId:'another-business',from:'2020-01-01',to:'2030-01-01',metric:'grossProfit'})}));
     expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({surfaceId:'income_statement'}));
     expect(mocks.statement).toHaveBeenCalledWith('business',new Date('2026-10-01T00:00:00Z'),new Date('2026-10-21T00:00:00Z'));
-    expect(html).toContain('Gross Profit — supporting records');expect(html).toContain('href="/sales/one"');
+    expect(html).toContain('Gross profit — supporting records');expect(html).toContain('href="/sales/one"');
     expect(html).toContain('/reports/income-statement?from=2026-10-01&amp;to=2026-10-20');
   });
   it('filters only blocking receipts and links the precise affected product',async()=>{
@@ -42,5 +42,25 @@ describe('income statement detail access and period',()=>{
     expect(html).toContain('Page 2 of 2');expect(html).toContain('101 records');expect(html).toContain('Total across all pages');
     expect(html).toContain('metric=revenue&amp;from=2026-10-01&amp;to=2026-10-20&amp;page=1');
     expect(html).toContain('SAL-99');
+  });
+  it('filters an expense category to its own net records and preserves the period and pagination',async()=>{
+    const statement=await mocks.statement();
+    const expense={...statement.entries[0],kind:'expense',label:'Rent & rates',description:'Rent record',href:'/expenses/rent',amountPence:2};
+    mocks.statement.mockResolvedValue({...statement,otherExpenses:300,entries:[
+      ...Array.from({length:101},(_,i)=>({...expense,id:`rent:${i}`})),
+      {...expense,id:'credit',amountPence:-2,description:'Rent reversal'},
+      {...expense,id:'other',label:'Electricity',description:'Electricity only',amountPence:100},
+    ]});
+    const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({metric:'otherExpenses',expenseCategory:'Rent & rates',page:'2'})}));
+    expect(html).toContain('Rent &amp; rates — supporting records');
+    expect(html).toContain('GH₵2.00');
+    expect(html).toContain('102 records');
+    expect(html).toContain('expenseCategory=Rent+%26+rates&amp;page=1');
+    expect(html).not.toContain('Electricity only');
+    expect(html).toContain('View all expenses');
+  });
+  it('rejects an unavailable category and category filters on non-expense metrics',async()=>{
+    await expect(Page({searchParams:Promise.resolve({metric:'otherExpenses',expenseCategory:'another tenant'})})).rejects.toThrow();
+    await expect(Page({searchParams:Promise.resolve({metric:'revenue',expenseCategory:'Rent'})})).rejects.toThrow();
   });
 });

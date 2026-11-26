@@ -28,7 +28,7 @@ describe('incomplete-stock disclosure helpers', () => {
         profitMayBeIncomplete: true,
       })
     );
-    expect(message).toMatch(/need confirmed stock value/i);
+    expect(message).toMatch(/2 products in stock have no cost yet, so stock value is not complete/i);
   });
 
   it('describes sold-only missing cost without claiming stock qty', () => {
@@ -41,7 +41,7 @@ describe('incomplete-stock disclosure helpers', () => {
         stockValueIncomplete: false,
       })
     );
-    expect(message).toMatch(/sold without a reliable cost/i);
+    expect(message).toMatch(/sales have no product cost/i);
   });
 
   it('returns null when complete', () => {

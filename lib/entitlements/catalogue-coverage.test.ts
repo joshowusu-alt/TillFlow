@@ -169,6 +169,7 @@ describe('surface catalogue contract', () => {
       'app/(protected)/reports/balance-sheet/page.tsx',
       'app/(protected)/reports/balance-sheet/entries/page.tsx',
       'app/(protected)/reports/business-movement/page.tsx',
+      'app/(protected)/reports/business-movement/page.test.tsx',
       'app/(protected)/reports/cash-drawer/page.tsx',
       'app/(protected)/reports/cashflow/page.tsx',
       'app/(protected)/reports/cashflow/page.test.tsx',
@@ -204,6 +205,8 @@ describe('surface catalogue contract', () => {
       'app/api/reports/weekly-digest/route.ts',
       'components/TopNav.tsx',
       'components/reports/ReportSurfaceDenial.tsx',
+      'components/reports/PeriodChips.tsx',
+      'components/reports/PeriodChips.test.tsx',
     ]);
     const callers = files.filter((file) => {
       const normalised = file.replace(/\\/g, '/');

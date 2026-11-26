@@ -37,9 +37,9 @@ describe('Owner-facing movement and cash presentation', () => {
     expect(html).toContain('GH₵159,253.50');
     expect(html).toContain('1765 sales');
     expect(html).toContain('1792 sales');
-    expect(html).toContain('2026-09-01');
-    expect(html).toContain('2026-08-31');
-    expect(html).toContain('Africa/Accra');
+    expect(html).toContain('September 2026');
+    expect(html).toContain('31 Aug');
+    expect(html).not.toContain('Business-local dates');
   });
 
   it('counts calendar days independently of a DST boundary', () => {

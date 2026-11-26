@@ -642,12 +642,12 @@ async function run() {
     if (needsReportFixture) await prisma.business.update({ where: { id: reportOwner.businessId }, data: { plan: 'GROWTH', selectedPlan: 'GROWTH' } });
     try {
     await page.goto(`${BASE_URL}/reports/income-statement`, { waitUntil: 'networkidle' });
-    const revenueRecords = page.getByRole('link', { name: /^View Revenue supporting records:/ }).first();
+    const revenueRecords = page.getByRole('link', { name: /^View Sales supporting records:/ }).first();
     await revenueRecords.waitFor({ state: 'visible' });
     const detailUrl = new URL(await revenueRecords.getAttribute('href'), BASE_URL);
     await revenueRecords.click();
     await page.waitForURL(url => url.pathname === '/reports/income-statement/entries' && url.searchParams.get('metric') === 'revenue');
-    await page.getByRole('heading', { name: 'Revenue — supporting records', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Sales — supporting records', exact: true }).waitFor();
     await page.locator('a[href^="/sales/"]').first().waitFor({ state: 'visible' });
     await page.getByRole('link', { name: '← Income Statement', exact: true }).click();
     await page.waitForURL(url => url.pathname === '/reports/income-statement' && ['from', 'to'].every(key => url.searchParams.get(key) === detailUrl.searchParams.get(key)));

@@ -1,19 +1,19 @@
 import { evaluateMarginLines, evaluateMarginSet, type MarginInvoiceInput } from './margin-line';
 
 export const INCOME_STATEMENT_METRICS = {
-  revenue: { label: 'Revenue', explanation: 'Recorded sales after discounts, excluding tax. Fully returned and voided sales are excluded.' },
-  cogs: { label: 'Cost of products sold', explanation: 'Historical costs recorded on the sales in this period. Missing costs remain incomplete.' },
-  grossProfit: { label: 'Gross Profit', explanation: 'Revenue less the recorded cost of products sold.' },
-  otherExpenses: { label: 'Operating Expenses', explanation: 'Posted expense entries in this period, excluding cost of products sold. Reversals reduce the expense.' },
-  otherOperatingIncome: { label: 'Other operating income', explanation: 'Posted income entries other than sales revenue.' },
-  netProfit: { label: 'Net Profit', explanation: 'Gross profit less operating expenses, plus other operating income. Expenses reduce profit; reversals restore it.' },
+  revenue: { label: 'Sales', explanation: 'Recorded sales after discounts, excluding tax. Fully returned and voided sales are excluded.' },
+  cogs: { label: 'Cost of goods sold', explanation: 'Historical costs recorded on the sales in this period. Missing costs remain incomplete.' },
+  grossProfit: { label: 'Gross profit', explanation: 'Sales less the recorded cost of goods sold.' },
+  otherExpenses: { label: 'Expenses', explanation: 'Posted expense entries in this period, excluding cost of goods sold. Reversals reduce the expense.' },
+  otherOperatingIncome: { label: 'Other income', explanation: 'Posted income entries other than sales.' },
+  netProfit: { label: 'Profit', explanation: 'Gross profit less expenses, plus other income. Expenses reduce profit; reversals restore it.' },
 } as const;
 export type IncomeStatementMetric = keyof typeof INCOME_STATEMENT_METRICS;
 export function isIncomeStatementMetric(value: string): value is IncomeStatementMetric {
   return Object.prototype.hasOwnProperty.call(INCOME_STATEMENT_METRICS, value);
 }
-export function incomeStatementEntriesHref(metric: IncomeStatementMetric, from: string, to: string) {
-  return `/reports/income-statement/entries?${new URLSearchParams({ metric, from, to })}`;
+export function incomeStatementEntriesHref(metric: IncomeStatementMetric, from: string, to: string, expenseCategory?: string) {
+  return `/reports/income-statement/entries?${new URLSearchParams({ metric, from, to, ...(metric === 'otherExpenses' && expenseCategory !== undefined ? { expenseCategory } : {}) })}`;
 }
 export type IncompleteSaleLine = { productId: string | null; name: string | null; qtyBase: number; revenuePence: number; reason: string | null };
 export type IncomeStatementContribution = {
@@ -58,4 +58,15 @@ export function selectIncomeStatementEntries(entries: IncomeStatementContributio
     }
     return amount === 0 && entry.kind !== 'sale' ? [] : [{ ...entry, contributionPence: amount }];
   }).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+}
+
+/** Presentation-only rollup of the same posted entries that make up Expenses. */
+export function incomeStatementExpenseCategories(entries: IncomeStatementContribution[]) {
+  const byCategory = new Map<string, number>();
+  for (const entry of selectIncomeStatementEntries(entries, 'otherExpenses')) {
+    if (entry.contributionPence === null) continue;
+    byCategory.set(entry.label, (byCategory.get(entry.label) ?? 0) + entry.contributionPence);
+  }
+  return [...byCategory].map(([label, amountPence]) => ({ label, amountPence }))
+    .sort((a, b) => b.amountPence - a.amountPence || a.label.localeCompare(b.label));
 }

@@ -377,3 +377,58 @@ jobs:
         with:
           name: quick-cash-mobile-before-after
           path: tmp/quick-cash-mobile-evidence/*.png
+
+  report-owner-visual-evidence:
+    name: report-owner-visual-evidence
+    if: github.event_name == 'pull_request' && github.head_ref == 'remediation/simplify-income-statement-movement'
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: file:${{ github.workspace }}/prisma/ci-report-owner-visual.db
+      VERCEL_ENV: preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Prepare one disposable database (no migrations)
+        run: |
+          npx prisma generate --schema=prisma/schema.prisma
+          npx prisma db push --schema=prisma/schema.prisma --skip-generate
+      - uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: .next
+      - uses: actions/checkout@v4
+        with:
+          ref: a092b6aac2a8a04e9883de3dfec9381a11caa1a2
+          path: baseline
+          persist-credentials: false
+      - name: Build exact pre-change app
+        working-directory: baseline
+        run: |
+          npm ci
+          npx prisma generate --schema=prisma/schema.prisma
+          npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Seed synthetic report fixtures and compare both real apps
+        run: |
+          set -euo pipefail
+          npm run start -- -p 6200 > /tmp/report-candidate.log 2>&1 &
+          (cd baseline && npm run start -- -p 6201) > /tmp/report-baseline.log 2>&1 &
+          for port in 6200 6201; do
+            for i in {1..60}; do
+              if curl -fsS "http://127.0.0.1:$port/login" >/dev/null; then break; fi
+              sleep 1
+            done
+            curl -fsS "http://127.0.0.1:$port/login" >/dev/null
+          done
+          node scripts/report-owner-simplification-evidence.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: report-owner-before-after
+          path: tmp/report-owner-simplification/
