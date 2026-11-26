@@ -999,7 +999,6 @@ export default function PurchaseFormClient({
               id="purchase-quantity"
               value={qtyInput}
               onChange={(event) => setQtyInput(event.target.value)}
-              onFocus={(event) => event.currentTarget.select()}
             />
             {selectedUnit && selectedUnit.conversionToBase > 1 && qtyNumber > 0 ? (
               <div className="mt-1 text-xs font-medium text-emerald-700">
@@ -1027,7 +1026,6 @@ export default function PurchaseFormClient({
                 setUnitCostTouched(true);
               }}
               placeholder="e.g., 12.50"
-              onFocus={(event) => event.currentTarget.select()}
             />
             {selectedUnit && selectedUnit.conversionToBase > 1 && unitCostInput ? (
               <div className="mt-1 text-xs text-black/60">
@@ -1381,7 +1379,7 @@ export default function PurchaseFormClient({
           </div>
         ) : null}
 
-        <div className="sticky bottom-0 z-10 flex flex-col gap-3 rounded-2xl border border-black/5 bg-white/95 p-4 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur keyboard-safe-bottom hide-when-keyboard-open sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-2xl border border-black/5 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-black/60">
             Ready to receive <span className="font-semibold text-ink">{cart.length}</span> line{cart.length === 1 ? '' : 's'} totaling{' '}
             <span className="font-semibold text-ink">{formatMoney(totals.total, currency)}</span>.

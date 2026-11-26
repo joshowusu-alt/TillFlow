@@ -54,6 +54,19 @@ async function main() {
           assert.equal(await form.locator('#purchase-quantity').inputValue(), '');
         }
         await form.screenshot({ path: `tmp/purchases-visual/${label}-form.png`, animations: 'disabled' });
+        if (label === 'after') {
+          // Prove the simplified form really records an item through the browser,
+          // not merely that the blank form renders. No upload is supplied.
+          await form.locator('select[name=supplierId]').selectOption({ index: 1 });
+          await form.getByPlaceholder(/Type to search product/i).fill('Coca-Cola 500ml');
+          await form.getByRole('button', { name: /Coca-Cola 500ml/i }).click();
+          await form.locator('#purchase-quantity').fill('2');
+          await form.locator('#purchase-unit-cost').fill('5.00');
+          await form.getByRole('button', { name: 'Add line', exact: true }).click();
+          await page.waitForFunction(() => JSON.parse(document.querySelector('#record-purchase-form input[name=cart]').value).length === 1);
+          await form.getByRole('button', { name: 'Record purchase', exact: true }).click();
+          await page.waitForURL(/\/purchases\/[^/?]+\?created=1/);
+        }
       } finally { await context.close(); }
     }
   } finally { await browser.close(); }
