@@ -7,11 +7,11 @@ import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { getIncomeStatementBreakdown } from '@/lib/reports/financials';
-import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, isIncomeStatementMetric, selectIncomeStatementEntries } from '@/lib/reports/income-statement-breakdown';
+import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, incomeStatementExpenseCategories, isIncomeStatementMetric, selectIncomeStatementEntries } from '@/lib/reports/income-statement-breakdown';
 
 export default async function IncomeStatementEntriesPage(
   props: {
-    searchParams?: Promise<{ from?: string; to?: string; metric?: string; issues?: string; page?: string; businessId?: string; storeId?: string }>;
+    searchParams?: Promise<{ from?: string; to?: string; metric?: string; issues?: string; page?: string; expenseCategory?: string; businessId?: string; storeId?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -33,23 +33,30 @@ export default async function IncomeStatementEntriesPage(
   );
   const statement = await getIncomeStatementBreakdown(business.id, start, end);
   const issuesOnly = searchParams?.issues === '1' && (metric === 'cogs' || metric === 'grossProfit' || metric === 'netProfit');
+  const category = searchParams?.expenseCategory;
+  const selectedCategory = category !== undefined && metric === 'otherExpenses'
+    ? incomeStatementExpenseCategories(statement.entries).find(row => row.label === category)
+    : undefined;
+  if (category !== undefined && !selectedCategory) notFound();
   const allEntries = selectIncomeStatementEntries(statement.entries, metric);
-  const entries = issuesOnly ? allEntries.filter(entry => entry.kind === 'sale' && entry.contributionPence === null) : allEntries;
-  const total = statement[metric];
+  const entries = issuesOnly ? allEntries.filter(entry => entry.kind === 'sale' && entry.contributionPence === null)
+    : selectedCategory ? allEntries.filter(entry => entry.label === selectedCategory.label) : allEntries;
+  const total = selectedCategory ? selectedCategory.amountPence : statement[metric];
   const size = 100, pages = Math.max(1, Math.ceil(entries.length / size));
   const page = Math.min(pages, Math.max(1, Number.parseInt(searchParams?.page ?? '1', 10) || 1));
   const metadata = INCOME_STATEMENT_METRICS[metric], money = (n: number) => formatMoney(n, business.currency);
   const backHref = `/reports/income-statement?${new URLSearchParams({ from, to })}`;
-  const href = (next: number) => `${incomeStatementEntriesHref(metric, from, to)}${issuesOnly ? '&issues=1' : ''}&page=${next}`;
+  const href = (next: number) => `${incomeStatementEntriesHref(metric, from, to, selectedCategory?.label)}${issuesOnly ? '&issues=1' : ''}&page=${next}`;
   const date = (value: string) => new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: zone }).format(new Date(value));
   return <div className="space-y-5">
     {opened.readOnly ? <ReportReadOnlyBanner /> : null}
     <Link className="text-sm font-semibold text-accent underline" href={backHref}>← Income Statement</Link>
     <section className="card space-y-3 p-5">
       <p className="text-xs text-ink/60">Whole business · {from} to {to}</p>
-      <h1 className="text-xl font-semibold">{issuesOnly ? 'Sales requiring cost review' : `${metadata.label} — supporting records`}</h1>
+      <h1 className="text-xl font-semibold">{issuesOnly ? 'Sales requiring cost review' : `${selectedCategory?.label ?? metadata.label} — supporting records`}</h1>
       <p className="break-words text-3xl font-semibold tabular-nums">{total === null ? 'Costs incomplete' : money(total)}</p>
       <p className="text-sm text-ink/60">{metadata.explanation}</p>
+      {selectedCategory ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={incomeStatementEntriesHref('otherExpenses', from, to)}>View all expenses →</Link> : null}
       {total === null || issuesOnly ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={incomeStatementEntriesHref(metric, from, to) + (issuesOnly ? '' : '&issues=1')}>{issuesOnly ? 'Show all supporting records' : 'Show affected sales only'}</Link> : null}
       {issuesOnly ? <p className="text-sm">Only the receipts blocking this period&apos;s profit are shown. Review the individual products and their purchase evidence; changing today&apos;s catalogue cost does not confirm historical cost.</p> : null}
       {total === null ? <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Some sales have incomplete costs or unsupported return records. Their contribution stays incomplete until the source records are resolved.</p> : null}

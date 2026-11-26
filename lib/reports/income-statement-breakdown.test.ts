@@ -4,7 +4,7 @@ vi.mock('@/lib/prisma',()=>({prisma:db}));
 vi.mock('next/cache',()=>({unstable_cache:(fn:unknown)=>fn}));
 vi.mock('@/lib/reports/incomplete-stock',()=>({getIncompleteStockSnapshot:vi.fn().mockResolvedValue({stockValueIncomplete:false,profitMayBeIncomplete:false}),incompleteStockDisclosureMessage:()=>null}));
 import {getIncomeStatementBreakdown} from './financials';
-import {incomeStatementEntriesHref,isIncomeStatementMetric,selectIncomeStatementEntries} from './income-statement-breakdown';
+import {incomeStatementEntriesHref,incomeStatementExpenseCategories,isIncomeStatementMetric,selectIncomeStatementEntries} from './income-statement-breakdown';
 
 describe('income statement supporting records',()=>{
   const start=new Date('2026-10-01T00:00:00Z'),end=new Date('2026-11-01T00:00:00Z');
@@ -48,6 +48,7 @@ describe('income statement supporting records',()=>{
     const result = await getIncomeStatementBreakdown('food-business', start, end);
     expect(result).toMatchObject({ revenue: 36000, cogs: 0, foodCosts: 9000, foodWaste: 1000,
       grossProfit: 26000, netProfit: 26000, otherExpenses: 0 });
+    expect(incomeStatementExpenseCategories(result.entries)).toEqual([]);
     for (const metric of ['grossProfit', 'netProfit'] as const) {
       expect(selectIncomeStatementEntries(result.entries, metric).reduce((sum, row) => sum + (row.contributionPence ?? 0), 0)).toBe(26000);
     }
@@ -87,9 +88,21 @@ describe('income statement supporting records',()=>{
     db.journalLine.findMany.mockResolvedValue([{id:'rent',accountId:'rent',debitPence:200,creditPence:0,journalEntry:{entryDate:start,description:'Rent',referenceType:'EXPENSE',referenceId:'expense'}},{id:'reversal',accountId:'rent',debitPence:0,creditPence:50,journalEntry:{entryDate:end,description:'Reversal',referenceType:'REVERSAL',referenceId:null}}]);
     const result=await getIncomeStatementBreakdown('business',start,end);
     expect(selectIncomeStatementEntries(result.entries,'otherExpenses').reduce((sum,row)=>sum+row.contributionPence!,0)).toBe(150);
+    expect(incomeStatementExpenseCategories(result.entries)).toEqual([{label:'Rent',amountPence:150}]);
   });
   it('validates metric names and preserves period links',()=>{
     expect(isIncomeStatementMetric('toString')).toBe(false);expect(isIncomeStatementMetric('netProfit')).toBe(true);
     expect(incomeStatementEntriesHref('cogs','2026-10-01','2026-10-20')).toBe('/reports/income-statement/entries?metric=cogs&from=2026-10-01&to=2026-10-20');
+  });
+  it('groups posted expense entries by category including negative net amounts',async()=>{
+    const result=await getIncomeStatementBreakdown('business',start,end);
+    const rent=result.entries.find(entry=>entry.kind==='expense')!;
+    const rows=incomeStatementExpenseCategories([...result.entries,
+      {...rent,id:'second',label:'Transport',amountPence:75},
+      {...rent,id:'credit',label:'Transport',amountPence:-100},
+      {...rent,id:'rent-credit',amountPence:-50},
+    ]);
+    expect(rows).toEqual([{label:'Rent',amountPence:150},{label:'Transport',amountPence:-25}]);
+    expect(rows.reduce((sum,row)=>sum+row.amountPence,0)).toBe(125);
   });
 });

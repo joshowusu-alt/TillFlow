@@ -8,8 +8,8 @@ import { ReportReadOnlyBanner, ReportScopeLabel } from '@/components/reports/Rep
 import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { formatMoney } from '@/lib/format';
-import { getIncomeStatement, getIncomeStatementBreakdown } from '@/lib/reports/financials';
-import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, type IncomeStatementMetric } from '@/lib/reports/income-statement-breakdown';
+import { getIncomeStatementBreakdown } from '@/lib/reports/financials';
+import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, incomeStatementExpenseCategories, type IncomeStatementMetric } from '@/lib/reports/income-statement-breakdown';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
@@ -43,7 +43,10 @@ export default async function IncomeStatementPage(
     month.timeZone,
   );
 
-  const statement = await getIncomeStatement(business.id, start, end);
+  // One consistent snapshot for the summary, category amounts and supporting records.
+  const statement = await getIncomeStatementBreakdown(business.id, start, end);
+  const expenseCategories = incomeStatementExpenseCategories(statement.entries);
+  const expensesReconcile = expenseCategories.reduce((sum, category) => sum + category.amountPence, 0) === statement.otherExpenses;
   const breakdownLink = (metric: IncomeStatementMetric, value: ReactNode) => (
     <Link href={incomeStatementEntriesHref(metric, fromStr, toStr)}
       aria-label={`View ${INCOME_STATEMENT_METRICS[metric].label} supporting records: ${statement[metric] === null ? 'Costs incomplete' : formatMoney(statement[metric], business.currency)}`}
@@ -57,11 +60,9 @@ export default async function IncomeStatementPage(
   const hasData =
     statement.revenue !== 0 ||
     statement.cogs !== 0 || statement.hasFoodCosts ||
-    statement.otherExpenses !== 0 ||
+    statement.otherExpenses !== 0 || expenseCategories.length > 0 ||
     statement.otherOperatingIncome !== 0;
-  // Keep the original figure-producing service. Load supporting records only
-  // when a warning needs an exact count of affected sales rather than sale lines.
-  const issueEntries = costsIncomplete ? (await getIncomeStatementBreakdown(business.id, start, end)).entries : [];
+  const issueEntries = costsIncomplete ? statement.entries : [];
   const incompleteSales = issueEntries.filter(entry =>
     entry.kind === 'sale' && entry.incompleteLines?.some(line => line.reason !== 'UNSUPPORTED_RETURN')).length;
   const returnIssues = issueEntries.some(entry => entry.kind === 'sale' &&
@@ -123,10 +124,26 @@ export default async function IncomeStatementPage(
               }
             />
           )}
-            <ReportSummaryRow
-              label={<span className="text-black/70">Expenses</span>}
-              value={<span className="text-rose-600">{breakdownLink('otherExpenses', `(${formatMoney(statement.otherExpenses, business.currency)})`)}</span>}
-            />
+          {expenseCategories.length > 0 && expensesReconcile ? (
+            <section aria-label="Expense categories" className="border-t border-black/10 pt-2">
+              <h2 className="text-sm font-semibold">Expenses</h2>
+              {expenseCategories.map(category => (
+                <div key={category.label} className="flex min-h-11 items-center justify-between gap-2 pl-2 text-sm">
+                  <span className="min-w-0 break-words text-ink/70">{category.label}</span>
+                  <Link href={incomeStatementEntriesHref('otherExpenses', fromStr, toStr, category.label)}
+                    aria-label={`View ${category.label} expense records: ${formatMoney(category.amountPence, business.currency)}`}
+                    className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-end rounded text-rose-600 underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
+                    {formatMoney(category.amountPence, business.currency)}
+                  </Link>
+                </div>
+              ))}
+            </section>
+          ) : null}
+          {!expensesReconcile ? <p role="status" className="text-sm text-amber-900">Expense details could not be reconciled to the total. Tap the total to review the records.</p> : null}
+          <ReportSummaryRow
+            label={<span className="text-black/70">{expenseCategories.length > 0 && expensesReconcile ? 'Total expenses' : 'Expenses'}</span>}
+            value={<span className="text-rose-600">{breakdownLink('otherExpenses', `(${formatMoney(statement.otherExpenses, business.currency)})`)}</span>}
+          />
           <ReportSummaryRow
             label={percent('Profit', npPct)}
             value={breakdownLink('netProfit', costsIncomplete ? 'Costs incomplete' : <span className={(statement.netProfit ?? 0) >= 0 ? 'text-emerald-700' : 'text-rose-600'}>{formatMoney(statement.netProfit ?? 0, business.currency)}</span>)}

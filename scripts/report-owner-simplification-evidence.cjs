@@ -56,9 +56,17 @@ async function seed(warmup) {
       const costAccount = await prisma.account.create({ data: { businessId, code: '5000', name: 'Cost of goods sold', type: 'EXPENSE' } });
       const vatAccount = await prisma.account.create({ data: { businessId, code: '2100', name: 'VAT payable', type: 'LIABILITY' } });
       const expenseAccount = await prisma.account.create({ data: { businessId, code: '6000', name: 'Rent', type: 'EXPENSE' } });
-      const expense = await prisma.expense.create({ data: { businessId, storeId: store.id, userId: owner.id, accountId: expenseAccount.id, amountPence: 5000, method: 'CASH', paymentStatus: 'PAID', createdAt: at('2026-11-10'), notes: 'Synthetic rent' } });
+      const expense = await prisma.expense.create({ data: { businessId, storeId: store.id, userId: owner.id, accountId: expenseAccount.id, amountPence: 3500, method: 'CASH', paymentStatus: 'PAID', createdAt: at('2026-11-10'), notes: 'Synthetic rent' } });
       await prisma.journalEntry.create({ data: { businessId, description: 'Synthetic rent', referenceType: 'EXPENSE', referenceId: expense.id, entryDate: at('2026-11-10'), lines: { create: [
-        { accountId: expenseAccount.id, debitPence: 5000, creditPence: 0 }, { accountId: cash.id, debitPence: 0, creditPence: 5000 },
+        { accountId: expenseAccount.id, debitPence: 3500, creditPence: 0 }, { accountId: cash.id, debitPence: 0, creditPence: 3500 },
+      ] } } });
+      const electricity = await prisma.account.create({ data: { businessId, code: '6001', name: 'Electricity & water', type: 'EXPENSE' } });
+      const utilityExpense = await prisma.expense.create({ data: { businessId, storeId: store.id, userId: owner.id, accountId: electricity.id, amountPence: 2000, method: 'CASH', paymentStatus: 'PAID', createdAt: at('2026-11-11'), notes: 'Synthetic electricity' } });
+      await prisma.journalEntry.create({ data: { businessId, description: 'Synthetic electricity', referenceType: 'EXPENSE', referenceId: utilityExpense.id, entryDate: at('2026-11-11'), lines: { create: [
+        { accountId: electricity.id, debitPence: 2000, creditPence: 0 }, { accountId: cash.id, debitPence: 0, creditPence: 2000 },
+      ] } } });
+      await prisma.journalEntry.create({ data: { businessId, description: 'Synthetic rent reversal', referenceType: 'REVERSAL', entryDate: at('2026-11-12'), lines: { create: [
+        { accountId: expenseAccount.id, debitPence: 0, creditPence: 500 }, { accountId: cash.id, debitPence: 500, creditPence: 0 },
       ] } } });
       async function sale(key, product, qty, number, missing = false, vat = 0) {
         const subtotal = product.sellingPriceBasePence * qty;
@@ -111,7 +119,7 @@ async function login(page, base, fixture) {
 async function incomeValues(page, selected = metrics) {
   const values = {};
   for (const metric of selected) {
-    const links = page.locator(`a[href*="/reports/income-statement/entries?metric=${metric}&"]`);
+    const links = page.locator(`a[href*="/reports/income-statement/entries?metric=${metric}&"]:not([href*="expenseCategory="])`);
     const labels = await links.evaluateAll(nodes => [...new Set(nodes.map(node => node.getAttribute('aria-label')))].filter(Boolean));
     assert.equal(labels.length, 1, `Missing or inconsistent ${metric}`);
     values[metric] = labels[0].slice(labels[0].lastIndexOf(': ') + 2);
@@ -225,6 +233,10 @@ async function main() {
                 assert.equal(await page.getByText(/Profit is incomplete:/).count(), state === 'profit-incomplete' ? 1 : 0);
                 assert.equal(await page.getByRole('link', { name: 'Add cost →' }).count(), state === 'stock-only' ? 1 : 0);
                 assert.equal(await page.getByText('Whole business — not separated by branch').count(), 0);
+                const categories = page.getByRole('region', { name: 'Expense categories' });
+                assert.equal(await categories.getByRole('link').count(), 2);
+                assert.equal(await categories.getByRole('link', { name: 'View Rent expense records: GH₵30.00' }).count(), 1);
+                assert.equal(await categories.getByRole('link', { name: 'View Electricity & water expense records: GH₵20.00' }).count(), 1);
               });
             }
             if (state === 'stock-only' && side === 'after') {
@@ -237,6 +249,23 @@ async function main() {
               });
             }
             if (state !== 'complete') continue;
+            if (side === 'after') {
+              await check(`${width} expense category drilldown`, async () => {
+                const rent = page.getByRole('link', { name: 'View Rent expense records: GH₵30.00' });
+                await rent.scrollIntoViewIfNeeded();
+                await page.screenshot({ path: `${folder}/after-${width}x${height}-expense-categories.png`, animations: 'disabled' });
+                await rent.click();
+                await page.getByRole('heading', { name: 'Rent — supporting records' }).waitFor();
+                await page.getByText('Synthetic rent reversal', { exact: true }).waitFor();
+                assert.equal(await page.getByText('Synthetic electricity', { exact: true }).count(), 0);
+                assert.equal(new URL(page.url()).searchParams.get('expenseCategory'), 'Rent');
+                assert.equal(new URL(page.url()).searchParams.get('from'), from);
+                assert.equal(new URL(page.url()).searchParams.get('to'), to);
+                await page.getByRole('link', { name: 'View all expenses →' }).click();
+                await page.getByRole('heading', { name: 'Expenses — supporting records' }).waitFor();
+                await page.getByText('Synthetic electricity', { exact: true }).waitFor();
+              });
+            }
             const movementUrl = `${base}/reports/business-movement?preset=equal_length_custom&currentFrom=${from}&currentTo=${to}&storeId=${fixture.storeId}`;
             await page.goto(movementUrl);
             await page.getByRole('heading', { name: 'Business movement', exact: true }).waitFor();
@@ -276,7 +305,7 @@ async function main() {
     writeFileSync(`${folder}/figure-comparison.json`, JSON.stringify(values, null, 2));
     writeFileSync(`${folder}/verification-failures.json`, JSON.stringify(failures, null, 2));
     assert.equal(failures.length, 0, JSON.stringify(failures));
-    console.log('PASS: 20 phone images, same-period non-VAT sales agree, all captured canonical figures unchanged; VAT distinction preserved.');
+    console.log('PASS: 20 before/after phone images plus two expense breakdown images, same-period non-VAT sales agree, all captured canonical figures unchanged; VAT distinction preserved.');
   } finally { await browser.close(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

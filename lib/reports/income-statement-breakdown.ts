@@ -12,8 +12,8 @@ export type IncomeStatementMetric = keyof typeof INCOME_STATEMENT_METRICS;
 export function isIncomeStatementMetric(value: string): value is IncomeStatementMetric {
   return Object.prototype.hasOwnProperty.call(INCOME_STATEMENT_METRICS, value);
 }
-export function incomeStatementEntriesHref(metric: IncomeStatementMetric, from: string, to: string) {
-  return `/reports/income-statement/entries?${new URLSearchParams({ metric, from, to })}`;
+export function incomeStatementEntriesHref(metric: IncomeStatementMetric, from: string, to: string, expenseCategory?: string) {
+  return `/reports/income-statement/entries?${new URLSearchParams({ metric, from, to, ...(metric === 'otherExpenses' && expenseCategory !== undefined ? { expenseCategory } : {}) })}`;
 }
 export type IncompleteSaleLine = { productId: string | null; name: string | null; qtyBase: number; revenuePence: number; reason: string | null };
 export type IncomeStatementContribution = {
@@ -58,4 +58,15 @@ export function selectIncomeStatementEntries(entries: IncomeStatementContributio
     }
     return amount === 0 && entry.kind !== 'sale' ? [] : [{ ...entry, contributionPence: amount }];
   }).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+}
+
+/** Presentation-only rollup of the same posted entries that make up Expenses. */
+export function incomeStatementExpenseCategories(entries: IncomeStatementContribution[]) {
+  const byCategory = new Map<string, number>();
+  for (const entry of selectIncomeStatementEntries(entries, 'otherExpenses')) {
+    if (entry.contributionPence === null) continue;
+    byCategory.set(entry.label, (byCategory.get(entry.label) ?? 0) + entry.contributionPence);
+  }
+  return [...byCategory].map(([label, amountPence]) => ({ label, amountPence }))
+    .sort((a, b) => b.amountPence - a.amountPence || a.label.localeCompare(b.label));
 }

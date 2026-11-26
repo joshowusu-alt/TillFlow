@@ -7,7 +7,7 @@ vi.mock('@/components/DownloadLink',()=>({default:({href,children}:{href:string;
 vi.mock('@/components/reports/ReportsRefresh',()=>({default:()=>null}));
 import Page from './page';
 describe('income statement drilldown links',()=>{
-  beforeEach(()=>{vi.clearAllMocks();mocks.open.mockResolvedValue({ok:true,business:{id:'business',currency:'GHS',timezone:'Africa/Accra'},branch:{kind:'label',label:'Whole business'},decision:{appliedRange:{fromLocalDate:'2026-10-01',toLocalDate:'2026-10-20'}}});mocks.statement.mockResolvedValue({revenue:900,cogs:400,grossProfit:500,otherExpenses:200,otherOperatingIncome:50,netProfit:350,incompleteLineCount:0});mocks.breakdown.mockImplementation(()=>mocks.statement());});
+  beforeEach(()=>{vi.clearAllMocks();mocks.open.mockResolvedValue({ok:true,business:{id:'business',currency:'GHS',timezone:'Africa/Accra'},branch:{kind:'label',label:'Whole business'},decision:{appliedRange:{fromLocalDate:'2026-10-01',toLocalDate:'2026-10-20'}}});mocks.statement.mockResolvedValue({revenue:900,cogs:400,grossProfit:500,otherExpenses:200,otherOperatingIncome:50,netProfit:350,incompleteLineCount:0,entries:[{id:'rent',kind:'expense',date:'2026-10-03T12:00:00Z',label:'Rent',description:'Rent',href:'/expenses/rent',amountPence:200,revenuePence:0,costPence:0,profitPence:0}]});mocks.breakdown.mockImplementation(()=>mocks.statement());});
   it('links every figure to supporting records in the same period',async()=>{
     const html=renderToStaticMarkup(await Page({}));
     for(const metric of ['revenue','cogs','grossProfit','netProfit','otherExpenses','otherOperatingIncome'])expect(html).toContain(`/reports/income-statement/entries?metric=${metric}&amp;from=2026-10-01&amp;to=2026-10-20`);
@@ -31,7 +31,7 @@ describe('income statement drilldown links',()=>{
     expect(mocks.breakdown).toHaveBeenCalledTimes(1);
   });
   it('does not load the snapshot if access is denied',async()=>{
-    mocks.open.mockResolvedValue({ok:false,denial:<p>Access denied</p>});expect(renderToStaticMarkup(await Page({}))).toContain('Access denied');expect(mocks.statement).not.toHaveBeenCalled();
+    mocks.open.mockResolvedValue({ok:false,denial:<p>Access denied</p>});expect(renderToStaticMarkup(await Page({}))).toContain('Access denied');expect(mocks.statement).not.toHaveBeenCalled();expect(mocks.breakdown).not.toHaveBeenCalled();
   });
   it('renders one summary with the original figures and neutral stock-only warning', async () => {
     const statement = await mocks.statement();
@@ -42,7 +42,7 @@ describe('income statement drilldown links',()=>{
     expect(complete.match(/metric=revenue/g)).toHaveLength(1);
     expect(complete).not.toContain('Add cost');
     expect(complete).not.toContain('Profit is incomplete');
-    expect(mocks.breakdown).not.toHaveBeenCalled();
+    expect(mocks.breakdown).toHaveBeenCalledTimes(1);
     mocks.statement.mockResolvedValue({...statement, stockValueIncomplete:true, incompleteStockMessage:'1 product in stock has no cost yet, so stock value is not complete.'});
     const stock = renderToStaticMarkup(await Page({}));
     expect(stock).toContain('This does not change this period');
@@ -59,5 +59,33 @@ describe('income statement drilldown links',()=>{
     expect(renderToStaticMarkup(await Page({}))).toContain('Whole business — not separated by branch');
     const range = mocks.open.mock.calls.at(-1)![0].range;
     expect(range({timezone:'Africa/Accra',now:new Date('2026-11-26T12:00:00Z')})).toEqual({fromLocalDate:'2026-11-01',toLocalDate:'2026-11-26',preset:'MONTH_TO_DATE'});
+  });
+  it('shows categories, net reversals and the unchanged total before Profit', async () => {
+    const statement = await mocks.statement();
+    const rent = statement.entries[0];
+    mocks.statement.mockResolvedValue({...statement, entries:[
+      {...rent,amountPence:150},
+      {...rent,id:'rent-reversal',amountPence:-25},
+      {...rent,id:'utility',label:'Electricity & water',amountPence:75},
+      {...rent,id:'food',kind:'food-cost',label:'Food costs',amountPence:999},
+    ]});
+    const html=renderToStaticMarkup(await Page({}));
+    expect(html).toContain('View Rent expense records: GH₵1.25');
+    expect(html).toContain('View Electricity &amp; water expense records: GH₵0.75');
+    expect(html).toContain('expenseCategory=Electricity+%26+water');
+    expect(html).toContain('Total expenses');
+    expect(html.indexOf('Total expenses')).toBeLessThan(html.indexOf('View Profit supporting records'));
+    expect(html).not.toContain('View Food costs expense records');
+    expect(html).toContain('View Expenses supporting records: GH₵2.00');
+  });
+  it('shows a zero-net category with recorded activity and does not invent missing details', async () => {
+    const statement=await mocks.statement();
+    const rent=statement.entries[0];
+    mocks.statement.mockResolvedValue({...statement,otherExpenses:0,entries:[rent,{...rent,id:'reverse',amountPence:-200}]});
+    expect(renderToStaticMarkup(await Page({}))).toContain('View Rent expense records: GH₵0.00');
+    mocks.statement.mockResolvedValue({...statement,entries:[]});
+    const html=renderToStaticMarkup(await Page({}));
+    expect(html).toContain('Expense details could not be reconciled');
+    expect(html).toContain('View Expenses supporting records: GH₵2.00');
   });
 });
