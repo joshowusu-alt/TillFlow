@@ -71,13 +71,13 @@ async function main() {
     const directDenied = await context.request.post('http://127.0.0.1:6200/api/offline/sync-sale', { headers: { origin: 'https://untrusted.example' }, data: {} });
     assert.equal(directDenied.status(),403);
     results.push('PASS adapter and unmodified application independently refuse foreign-origin financial requests');
-    const login = async user => {
+    const login = async (user, fixture = f) => {
       await page.goto('/login');
       await page.locator('input[name=email]').fill(user.email);
-      await page.locator('input[name=password]').fill(f.password);
+      await page.locator('input[name=password]').fill(fixture.password);
       await page.getByRole('button', { name: /sign in/i }).click();
       await page.waitForURL(url => !url.pathname.startsWith('/login'));
-      await context.addCookies([{ name: 'tillflow_operational_store', value: f.stores[0].id, url: origin }]);
+      await context.addCookies([{ name: 'tillflow_operational_store', value: fixture.stores[0].id, url: origin }]);
     };
     await login(f.users.cashier1);
     const load = async variant => {
@@ -140,12 +140,13 @@ async function main() {
     assert.equal(await prisma.salesInvoice.count({ where: { businessId: other.businessId } }), 0);
     results.push('PASS candidate restoration has exactly two invoices/payments/stock reductions/drawer receipts and balanced sale journals');
 
-    // Exercise all food selection shapes on the same real, isolated database.
-    // The food feature was already present in dfce423. NOT_COUNTED keeps the
-    // fixture independent of prepared stock while retaining real price logic.
-    await prisma.business.update({ where: { id: f.businessId }, data: { businessCategory: 'FOOD_DISHES' } });
+    // Configure a separate food business before either build reads its
+    // checkout context: changing an already-cached retail business directly
+    // through the fixture DB would not exercise valid food checkout.
+    const food = await createPilotFixture(prisma, `pilot-food-rollback-${Date.now()}`);
+    await prisma.business.update({ where: { id: food.businessId }, data: { businessCategory: 'FOOD_DISHES' } });
     const dish = await prisma.foodDish.create({ data: {
-      businessId: f.businessId, productId: f.products[1].id, stockMode: 'NOT_COUNTED',
+      businessId: food.businessId, productId: food.products[1].id, stockMode: 'NOT_COUNTED',
       allowCustomAmount: true,
       sizes: { create: [{ name: 'Small', pricePence: 3000, isDefault: true }, { name: 'Large', pricePence: 3500 }] },
       groups: { create: { name: 'Extras', selection: 'MANY', required: false,
@@ -160,6 +161,8 @@ async function main() {
       { name: 'size and add-on', amount: 4000, plate: { sizeId: large.id, addons: [{ addonId: addon.id, qty: 1 }], expectedPricePence: 4000 } },
       { name: 'custom amount and add-on', amount: 3200, plate: { sizeId: null, customAmountPence: 2700, addons: [{ addonId: addon.id, qty: 1 }], expectedPricePence: 3200 } },
     ];
+    await context.clearCookies();
+    await login(food.users.cashier1, food);
     for (const [writer, reader] of [['candidate', 'fallback'], ['fallback', 'candidate']]) {
       await load(writer);
       state.outage = true;
@@ -173,7 +176,7 @@ async function main() {
             discountType: 'NONE', discountValue: '', plate: item.plate }],
           payments: [{ method: 'CASH', amountPence: item.amount }], orderDiscountType: 'NONE',
           orderDiscountValue: '', createdAt: new Date().toISOString(),
-        }), { f, item }));
+        }), { f: food, item }));
       }
       const captured = await pending();
       assert.equal(captured.length, 3);
@@ -193,10 +196,10 @@ async function main() {
       assert.equal((await sync()).synced, 0);
       for (const [index, id] of ids.entries()) {
         const invoice = await prisma.salesInvoice.findFirstOrThrow({
-          where: { businessId: f.businessId, externalRef: `OFFLINE_SYNC:${id}` },
+          where: { businessId: food.businessId, externalRef: `OFFLINE_SYNC:${id}` },
           include: { lines: true, payments: true },
         });
-        assert.equal(await prisma.salesInvoice.count({ where: { businessId: f.businessId, externalRef: `OFFLINE_SYNC:${id}` } }), 1);
+        assert.equal(await prisma.salesInvoice.count({ where: { businessId: food.businessId, externalRef: `OFFLINE_SYNC:${id}` } }), 1);
         assert.equal(invoice.totalPence, foodCases[index].amount);
         assert.equal(invoice.payments.length, 1);
         assert.equal(invoice.payments[0].amountPence, foodCases[index].amount);
@@ -212,9 +215,9 @@ async function main() {
     // Real candidate cashier close and manager review, then display through
     // the independent dfce423 application against exactly the same rows.
     await load('candidate');
-    const beforeClose = await prisma.shift.findUniqueOrThrow({ where: { id: f.stores[0].shiftId } });
+    const beforeClose = await prisma.shift.findUniqueOrThrow({ where: { id: food.stores[0].shiftId } });
     const totalFoodCash = 2 * foodCases.reduce((sum, item) => sum + item.amount, 0);
-    assert.equal(beforeClose.expectedCashPence, 30000 + totalFoodCash);
+    assert.equal(beforeClose.expectedCashPence, 20000 + totalFoodCash);
     await page.goto('/shifts');
     await page.getByRole('button', { name: 'Close Shift', exact: true }).click();
     await page.getByLabel('Actual Cash Counted').fill(((beforeClose.expectedCashPence - 100) / 100).toFixed(2));
@@ -233,7 +236,7 @@ async function main() {
     assert.equal(investigation.status, 'OPEN');
     assert.equal(investigation.cashierExplanation, 'Fictional short count');
     await context.clearCookies();
-    await login(f.users.manager);
+    await login(food.users.manager, food);
     const detail = `/shifts/variance/${investigation.id}`;
     await page.goto(detail);
     await page.getByLabel('Note (optional)').fill('Fictional manager checked cash');
@@ -241,11 +244,11 @@ async function main() {
     await page.getByText(/Reviewed by Fictional manager/).waitFor();
     const reviewed = await prisma.cashVarianceInvestigation.findUniqueOrThrow({ where: { id: investigation.id } });
     assert.equal(reviewed.status, 'APPROVED');
-    assert.equal(reviewed.reviewedByUserId, f.users.manager.id);
-    assert.equal(reviewed.approvedByUserId, f.users.manager.id);
+    assert.equal(reviewed.reviewedByUserId, food.users.manager.id);
+    assert.equal(reviewed.approvedByUserId, food.users.manager.id);
     assert(reviewed.reviewedAt);
     assert.equal(reviewed.reviewNote, 'Fictional manager checked cash');
-    assert.equal(await prisma.auditLog.count({ where: { businessId: f.businessId, entityId: investigation.id, action: 'CASH_VARIANCE_REVIEW' } }), 1);
+    assert.equal(await prisma.auditLog.count({ where: { businessId: food.businessId, entityId: investigation.id, action: 'CASH_VARIANCE_REVIEW' } }), 1);
     state.variant = 'fallback';
     assert.equal((await page.goto(detail)).status(), 200);
     await page.getByText('APPROVED', { exact: true }).waitFor();
