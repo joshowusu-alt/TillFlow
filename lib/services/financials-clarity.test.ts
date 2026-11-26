@@ -65,16 +65,16 @@ describe('Financial Reports clarity', () => {
     expect(incomeSrc).not.toContain('"COGS"');
   });
 
-  it('12. Contains "Cost of products sold"', () => {
-    expect(incomeSrc).toContain('Cost of products sold');
+  it('12. Contains "Cost of goods sold"', () => {
+    expect(incomeSrc).toContain('Cost of goods sold');
   });
 
-  it('13. Contains trust note about credit sales not yet collected', () => {
-    expect(incomeSrc).toContain('credit sales not yet collected');
+  it('13. Contains trust note about credit sales not yet paid', () => {
+    expect(incomeSrc).toContain('credit sales not yet paid');
   });
 
-  it('14. Contains wording that this is profit performance, not cash in the bank', () => {
-    expect(incomeSrc).toContain('not cash in the bank');
+  it('14. Contains wording that this is profit, not cash in hand', () => {
+    expect(incomeSrc).toContain('not cash in hand');
   });
 
   it('15. Does not contain "No journal entries yet"', () => {
@@ -199,7 +199,7 @@ describe('Financial Reports clarity', () => {
 
   it('38. Date filters remain on the reports that still show figures', () => {
     expect(cashflowSrc).not.toContain('DateRangeFilterCard');
-    expect(incomeSrc).toContain('DateRangeFilterCard');
+    expect(incomeSrc).toContain('PeriodChips');
     expect(balanceSrc).not.toContain('BalanceSheetDatePicker');
     expect(marginsSrc).toContain("name=\"period\"");
     expect(forecastSrc).not.toContain('[7, 14, 30]');

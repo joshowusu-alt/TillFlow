@@ -14,7 +14,7 @@ const metrics = ['revenue', 'cogs', 'grossProfit', 'otherExpenses', 'netProfit']
 const expected = { revenue: money(32000), cogs: money(16000), grossProfit: money(16000), otherExpenses: money(5000), netProfit: money(11000) };
 
 async function seed() {
-  assert.equal(process.env.GITHUB_ACTIONS, 'true');
+  assert.ok(process.env.GITHUB_ACTIONS === 'true' || process.argv.includes('--fixture-only'), 'CI or explicit local fixture-only diagnostic required');
   assert.match(process.env.DATABASE_URL || '', /^file:.*\/ci-report-owner-visual\.db$/);
   const { prisma } = await openGuardedPrismaClient();
   try {
@@ -65,7 +65,13 @@ async function seed() {
       await sale('2026-11-08', products[0], 2, 1, state === 'profit-incomplete');
       await sale('2026-11-12', products[1], 2, 2);
       await sale('2026-10-15', products[0], 2, 3, false, 3000);
-      fixtures[state] = { email: owner.email, password, storeId: store.id };
+      const seeded = await prisma.salesInvoice.findMany({
+        where: { businessId, createdAt: { gte: new Date(from), lt: new Date('2026-11-27') } },
+        include: { lines: true },
+      });
+      assert.equal(seeded.length, 2, 'Expected two current-period synthetic invoices');
+      assert.equal(seeded.flatMap(invoice => invoice.lines).reduce((sum, line) => sum + line.lineSubtotalPence, 0), 32000);
+      fixtures[state] = { email: owner.email, password, storeId: store.id, businessId };
     }
     return fixtures;
   } finally { await prisma.$disconnect(); }
@@ -123,6 +129,7 @@ async function geometry(page, width) {
 
 async function main() {
   const fixtures = await seed();
+  if (process.argv.includes('--fixture-only')) return;
   mkdirSync(folder, { recursive: true });
   const browser = await chromium.launch();
   const values = {};
@@ -140,8 +147,21 @@ async function main() {
             await page.goto(`${base}/reports/income-statement?from=${from}&to=${to}`);
             await page.getByRole('heading', { name: 'Income Statement', exact: true }).waitFor();
             await page.evaluate(() => document.fonts.ready);
+            await page.screenshot({ path: `${folder}/${side}-${width}x${height}-income-${state}.png`, animations: 'disabled' });
             const income = await incomeValues(page);
             const wanted = state === 'profit-incomplete' ? { ...expected, cogs: 'Costs incomplete', grossProfit: 'Costs incomplete', netProfit: 'Costs incomplete' } : expected;
+            if (JSON.stringify(income) !== JSON.stringify(wanted)) {
+              // Report only synthetic fixture diagnostics; never print account credentials or session data.
+              const { prisma } = await openGuardedPrismaClient();
+              try {
+                const invoices = await prisma.salesInvoice.findMany({
+                  where: { businessId: fixture.businessId }, select: { createdAt: true, paymentStatus: true, totalPence: true,
+                    lines: { select: { lineSubtotalPence: true, lineCostPence: true, costBasis: true } } },
+                });
+                console.log('Synthetic invoice diagnostic:', JSON.stringify(invoices));
+                console.log('Report range link:', await page.locator('a[href*="/reports/income-statement/entries?metric=revenue"]').first().getAttribute('href'));
+              } finally { await prisma.$disconnect(); }
+            }
             assert.deepEqual(income, wanted);
             values[side][`${width}-${state}`] = income;
             if (side === 'after') {
@@ -150,7 +170,6 @@ async function main() {
               assert.equal(await page.getByRole('link', { name: 'Add cost →' }).count(), state === 'stock-only' ? 1 : 0);
               assert.equal(await page.getByText('Whole business — not separated by branch').count(), 0);
             }
-            await page.screenshot({ path: `${folder}/${side}-${width}x${height}-income-${state}.png`, animations: 'disabled' });
             if (state === 'stock-only' && side === 'after') {
               const link = page.getByRole('link', { name: 'Add cost →' });
               await link.click();
