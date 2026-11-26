@@ -13,7 +13,7 @@ const folder = 'tmp/report-owner-simplification';
 const metrics = ['revenue', 'cogs', 'grossProfit', 'otherExpenses', 'netProfit'];
 const expected = { revenue: money(32000), cogs: money(16000), grossProfit: money(16000), otherExpenses: money(5000), netProfit: money(11000) };
 
-async function seed() {
+async function seed(warmup) {
   assert.ok(process.env.GITHUB_ACTIONS === 'true' || process.argv.includes('--fixture-only'), 'CI or explicit local fixture-only diagnostic required');
   assert.match(process.env.DATABASE_URL || '', /^file:.*\/ci-report-owner-visual\.db$/);
   const { prisma } = await openGuardedPrismaClient();
@@ -34,6 +34,11 @@ async function seed() {
       const organization = await prisma.organization.create({ data: { businessId, name: 'Synthetic report proof' } });
       await prisma.branch.create({ data: { businessId, organizationId: organization.id, storeId: store.id, name: store.name, code: 'SYNTHETIC' } });
       const till = await prisma.till.create({ data: { storeId: store.id, name: 'Evidence Till' } });
+      // Home performs a one-time SQLite-only legacy date normalisation.
+      // Start both real sessions before posting any report transactions so
+      // this fixture represents sales recorded after sign-in rather than
+      // pre-existing legacy SQLite data. Do not modify the app normaliser.
+      if (state === 'complete' && warmup) await warmup({ email: owner.email, password });
       const products = [];
       for (const [name, price] of [['Evidence rice', 10000], ['Evidence oil', 6000]]) {
         const product = await prisma.product.create({ data: { businessId, name, sellingPriceBasePence: price, defaultCostBasePence: price / 2, isTaxable: false,
@@ -150,8 +155,10 @@ async function geometry(page, width) {
 }
 
 async function main() {
-  const fixtures = await seed();
-  if (process.argv.includes('--fixture-only')) return;
+  if (process.argv.includes('--fixture-only')) {
+    await seed();
+    return;
+  }
   mkdirSync(folder, { recursive: true });
   const browser = await chromium.launch();
   const values = {};
@@ -161,6 +168,20 @@ async function main() {
     catch (error) { failures.push({ label, message: error.message }); console.error(label, error.message); }
   }
   try {
+    const fixtures = await seed(async fixture => {
+      for (const port of [6201, 6200]) {
+        const base = `http://127.0.0.1:${port}`;
+        const context = await browser.newContext({ serviceWorkers: 'block' });
+        try {
+          await context.route('**/*', route => route.request().url().startsWith(base + '/') || route.request().url().startsWith('data:') ? route.continue() : route.abort());
+          const page = await context.newPage();
+          await login(page, base, fixture);
+          await page.goto(base + '/home', { waitUntil: 'networkidle' });
+          assert.equal(new URL(page.url()).pathname, '/home');
+        } finally { await context.close(); }
+      }
+      console.log('Both real apps completed Home startup before report transactions were posted.');
+    });
     for (const [side, port] of [['before', 6201], ['after', 6200]]) {
       values[side] = {};
       for (const [width, height] of [[360, 740], [390, 844]]) {
@@ -186,6 +207,8 @@ async function main() {
                     lines: { select: { lineSubtotalPence: true, lineCostPence: true, costBasis: true } } },
                 });
                 console.log('Synthetic invoice diagnostic:', JSON.stringify(invoices));
+                const inRange = await prisma.salesInvoice.count({ where: { businessId: fixture.businessId, createdAt: { gte: new Date(from), lt: new Date('2026-11-27') } } });
+                console.log('Synthetic current-period invoice count after sign-in:', inRange);
                 console.log('Report range link:', await page.locator('a[href*="/reports/income-statement/entries?metric=revenue"]').first().getAttribute('href'));
               } finally { await prisma.$disconnect(); }
             }
