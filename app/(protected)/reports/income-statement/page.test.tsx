@@ -1,13 +1,13 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
-const mocks=vi.hoisted(()=>({open:vi.fn(),statement:vi.fn()}));
+const mocks=vi.hoisted(()=>({open:vi.fn(),statement:vi.fn(),breakdown:vi.fn()}));
 vi.mock('@/lib/entitlements/live-report',()=>({openLiveReport:mocks.open}));
-vi.mock('@/lib/reports/financials',()=>({getIncomeStatementBreakdown:mocks.statement}));
+vi.mock('@/lib/reports/financials',()=>({getIncomeStatement:mocks.statement,getIncomeStatementBreakdown:mocks.breakdown}));
 vi.mock('@/components/DownloadLink',()=>({default:({href,children}:{href:string;children:React.ReactNode})=><a href={href}>{children}</a>}));
 vi.mock('@/components/reports/ReportsRefresh',()=>({default:()=>null}));
 import Page from './page';
 describe('income statement drilldown links',()=>{
-  beforeEach(()=>{vi.clearAllMocks();mocks.open.mockResolvedValue({ok:true,business:{id:'business',currency:'GHS',timezone:'Africa/Accra'},branch:{kind:'label',label:'Whole business'},decision:{appliedRange:{fromLocalDate:'2026-10-01',toLocalDate:'2026-10-20'}}});mocks.statement.mockResolvedValue({revenue:900,cogs:400,grossProfit:500,otherExpenses:200,otherOperatingIncome:50,netProfit:350,incompleteLineCount:0});});
+  beforeEach(()=>{vi.clearAllMocks();mocks.open.mockResolvedValue({ok:true,business:{id:'business',currency:'GHS',timezone:'Africa/Accra'},branch:{kind:'label',label:'Whole business'},decision:{appliedRange:{fromLocalDate:'2026-10-01',toLocalDate:'2026-10-20'}}});mocks.statement.mockResolvedValue({revenue:900,cogs:400,grossProfit:500,otherExpenses:200,otherOperatingIncome:50,netProfit:350,incompleteLineCount:0});mocks.breakdown.mockImplementation(()=>mocks.statement());});
   it('links every figure to supporting records in the same period',async()=>{
     const html=renderToStaticMarkup(await Page({}));
     for(const metric of ['revenue','cogs','grossProfit','netProfit','otherExpenses','otherOperatingIncome'])expect(html).toContain(`/reports/income-statement/entries?metric=${metric}&amp;from=2026-10-01&amp;to=2026-10-20`);
@@ -28,6 +28,7 @@ describe('income statement drilldown links',()=>{
     expect(html).toContain('metric=grossProfit&amp;from=2026-10-01&amp;to=2026-10-20&amp;issues=1');
     expect(html).toContain('2 sales have no product cost');
     expect(html).not.toContain('/products?issue=MISSING_COST');
+    expect(mocks.breakdown).toHaveBeenCalledTimes(1);
   });
   it('does not load the snapshot if access is denied',async()=>{
     mocks.open.mockResolvedValue({ok:false,denial:<p>Access denied</p>});expect(renderToStaticMarkup(await Page({}))).toContain('Access denied');expect(mocks.statement).not.toHaveBeenCalled();
@@ -41,6 +42,7 @@ describe('income statement drilldown links',()=>{
     expect(complete.match(/metric=revenue/g)).toHaveLength(1);
     expect(complete).not.toContain('Add cost');
     expect(complete).not.toContain('Profit is incomplete');
+    expect(mocks.breakdown).not.toHaveBeenCalled();
     mocks.statement.mockResolvedValue({...statement, stockValueIncomplete:true, incompleteStockMessage:'1 product in stock has no cost yet, so stock value is not complete.'});
     const stock = renderToStaticMarkup(await Page({}));
     expect(stock).toContain('This does not change this period');

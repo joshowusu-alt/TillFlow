@@ -8,7 +8,7 @@ import { ReportReadOnlyBanner, ReportScopeLabel } from '@/components/reports/Rep
 import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { formatMoney } from '@/lib/format';
-import { getIncomeStatementBreakdown as getIncomeStatement } from '@/lib/reports/financials';
+import { getIncomeStatement, getIncomeStatementBreakdown } from '@/lib/reports/financials';
 import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, type IncomeStatementMetric } from '@/lib/reports/income-statement-breakdown';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
@@ -59,9 +59,12 @@ export default async function IncomeStatementPage(
     statement.cogs !== 0 || statement.hasFoodCosts ||
     statement.otherExpenses !== 0 ||
     statement.otherOperatingIncome !== 0;
-  const incompleteSales = (statement.entries ?? []).filter(entry =>
+  // Keep the original figure-producing service. Load supporting records only
+  // when a warning needs an exact count of affected sales rather than sale lines.
+  const issueEntries = costsIncomplete ? (await getIncomeStatementBreakdown(business.id, start, end)).entries : [];
+  const incompleteSales = issueEntries.filter(entry =>
     entry.kind === 'sale' && entry.incompleteLines?.some(line => line.reason !== 'UNSUPPORTED_RETURN')).length;
-  const returnIssues = (statement.entries ?? []).some(entry => entry.kind === 'sale' &&
+  const returnIssues = issueEntries.some(entry => entry.kind === 'sale' &&
     entry.profitPence === null && (!entry.incompleteLines?.length || entry.incompleteLines.some(line => line.reason === 'UNSUPPORTED_RETURN')));
   const profitWarning = incompleteSales
     ? `Profit is incomplete: ${incompleteSales} sale${incompleteSales === 1 ? ' has' : 's have'} no product cost.${returnIssues ? ' Some return records also need review.' : ''}`

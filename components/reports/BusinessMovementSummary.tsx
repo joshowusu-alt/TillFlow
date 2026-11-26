@@ -16,11 +16,11 @@ export default function BusinessMovementSummary({ result, labels }: {
   const days = (count: number) => `${count} day${count === 1 ? '' : 's'}`;
   return <section className="min-w-0" data-testid="owner-summary-strip" data-stage3b-report="movement">
     <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-      <ReportSalesHero title={`Sales · ${labels.currentFull}`} pence={result.headline.salesValuePence.current} currency={currency}
+      <ReportSalesHero title={`Sales · ${periods.currentFromKey === periods.currentToKey ? readableReportPeriod(periods.currentFromKey, periods.currentToKey) : labels.currentFull}`} pence={result.headline.salesValuePence.current} currency={currency}
         subtitle={<p>{result.headline.transactionCount.current} sales · {days(note.currentDays)}</p>}>
         <p>{change === 0 ? 'Sales unchanged' : `Sales ${change > 0 ? 'up' : 'down'} ${formatMoney(Math.abs(change), currency)}`}{percentage != null && change !== 0 ? ` (${Math.abs(percentage).toFixed(1)}%)` : ''} compared with the earlier period.</p>
       </ReportSalesHero>
-      <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
+      <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-card sm:p-6">
         <h2 className="font-display text-lg font-semibold text-ink">Sales in the earlier period</h2>
         <p className="mt-2 text-sm text-slate-600">{readableReportPeriod(periods.comparisonFromKey, periods.comparisonToKey)}</p>
         <div className="financial-fit mt-2 text-ink"><FinancialAmount pence={result.headline.salesValuePence.comparison} currency={currency} variant="prominent" /></div>

@@ -108,7 +108,7 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
       {queryFailed ? <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Payment figures could not be loaded. Receipts, refunds, pending MoMo and the gap are unavailable. Sales figures remain separate.</p> : null}
       <BusinessMovementSummary result={result} labels={chrome} strip={strip} />
 
-      <div className="grid min-w-0 gap-2 sm:grid-cols-3 [&>*]:!col-span-1">
+      <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 [&>*]:p-3 sm:[&>*]:p-5">
         <ReportMetric currency={currency}
           label="Money received"
           value="Could not load"

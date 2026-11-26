@@ -46,6 +46,10 @@ async function seed() {
         await prisma.inventoryBalance.create({ data: { storeId: store.id, productId: product.id, qtyOnHandBase: 5, avgCostBasePence: 0, knownValuePence: 0, unvaluedQtyBase: 5 } });
       }
       const cash = await prisma.account.create({ data: { businessId, code: '1000', name: 'Cash', type: 'ASSET' } });
+      const salesAccount = await prisma.account.create({ data: { businessId, code: '4000', name: 'Sales', type: 'INCOME' } });
+      const inventoryAccount = await prisma.account.create({ data: { businessId, code: '1200', name: 'Inventory', type: 'ASSET' } });
+      const costAccount = await prisma.account.create({ data: { businessId, code: '5000', name: 'Cost of goods sold', type: 'EXPENSE' } });
+      const vatAccount = await prisma.account.create({ data: { businessId, code: '2100', name: 'VAT payable', type: 'LIABILITY' } });
       const expenseAccount = await prisma.account.create({ data: { businessId, code: '6000', name: 'Rent', type: 'EXPENSE' } });
       const expense = await prisma.expense.create({ data: { businessId, storeId: store.id, userId: owner.id, accountId: expenseAccount.id, amountPence: 5000, method: 'CASH', paymentStatus: 'PAID', createdAt: at('2026-11-10'), notes: 'Synthetic rent' } });
       await prisma.journalEntry.create({ data: { businessId, description: 'Synthetic rent', referenceType: 'EXPENSE', referenceId: expense.id, entryDate: at('2026-11-10'), lines: { create: [
@@ -53,13 +57,27 @@ async function seed() {
       ] } } });
       async function sale(key, product, qty, number, missing = false, vat = 0) {
         const subtotal = product.sellingPriceBasePence * qty;
-        await prisma.salesInvoice.create({ data: { businessId, storeId: store.id, tillId: till.id, cashierUserId: owner.id,
+        const invoice = await prisma.salesInvoice.create({ data: { businessId, storeId: store.id, tillId: till.id, cashierUserId: owner.id,
           transactionNumber: `EVIDENCE-${number}`, paymentStatus: 'PAID', subtotalPence: subtotal, vatPence: vat,
           totalPence: subtotal + vat, createdAt: at(key),
           lines: { create: { productId: product.id, unitId: unit.id, qtyBase: qty, qtyInUnit: qty,
             unitPricePence: product.sellingPriceBasePence, lineSubtotalPence: subtotal, lineVatPence: vat, lineTotalPence: subtotal + vat,
             lineCostPence: missing ? 0 : subtotal / 2, costBasis: missing ? 'UNVERIFIED_STOCK_V1' : 'INVENTORY_VALUE_V1' } },
           payments: { create: { businessId, method: 'CASH', status: 'CONFIRMED', amountPence: subtotal + vat, receivedAt: at(key), confirmedAt: at(key), receiptOrigin: 'RECEIVED_AT_SALE' } },
+        } });
+        // Match a posted sale, not just an isolated invoice. The journal balances
+        // independently and the existing sale-line report engine still owns revenue/COGS.
+        await prisma.journalEntry.create({ data: {
+          businessId, referenceType: 'SALES_INVOICE', referenceId: invoice.id, entryDate: at(key),
+          description: 'Synthetic posted sale', lines: { create: [
+            { accountId: cash.id, debitPence: subtotal + vat, creditPence: 0 },
+            { accountId: salesAccount.id, debitPence: 0, creditPence: subtotal },
+            ...(vat ? [{ accountId: vatAccount.id, debitPence: 0, creditPence: vat }] : []),
+            ...(!missing ? [
+              { accountId: costAccount.id, debitPence: subtotal / 2, creditPence: 0 },
+              { accountId: inventoryAccount.id, debitPence: 0, creditPence: subtotal / 2 },
+            ] : []),
+          ] },
         } });
       }
       await sale('2026-11-08', products[0], 2, 1, state === 'profit-incomplete');
@@ -125,6 +143,10 @@ async function geometry(page, width) {
   assert.ok(new Set(boxes.map(box => box.top)).size > 1, 'Chips should wrap at phone sizes');
   const links = await page.locator('a[href*="/reports/income-statement/entries?metric="]:visible').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height));
   assert.ok(links.every(height => height >= 44), 'Report amount link below 44px');
+  const targets = await page.locator('[data-report-header-actions] > a:visible, [data-stage3b-actions] > summary:visible, [data-report-value-bars] a:visible, [data-reports-focus-scope] details > summary:visible, a:visible[href="/products?issue=MISSING_COST"]').evaluateAll(nodes => nodes.map(node => {
+    const rect = node.getBoundingClientRect(); return { label: node.textContent, height: rect.height, width: rect.width };
+  }));
+  for (const target of targets) assert.ok(target.height >= 44 && target.width >= 44, JSON.stringify(target));
 }
 
 async function main() {
@@ -133,6 +155,11 @@ async function main() {
   mkdirSync(folder, { recursive: true });
   const browser = await chromium.launch();
   const values = {};
+  const failures = [];
+  async function check(label, fn) {
+    try { await fn(); }
+    catch (error) { failures.push({ label, message: error.message }); console.error(label, error.message); }
+  }
   try {
     for (const [side, port] of [['before', 6201], ['after', 6200]]) {
       values[side] = {};
@@ -162,35 +189,41 @@ async function main() {
                 console.log('Report range link:', await page.locator('a[href*="/reports/income-statement/entries?metric=revenue"]').first().getAttribute('href'));
               } finally { await prisma.$disconnect(); }
             }
-            assert.deepEqual(income, wanted);
+            await check(`${side} ${width} ${state} income figures`, () => assert.deepEqual(income, wanted));
             values[side][`${width}-${state}`] = income;
             if (side === 'after') {
-              await geometry(page, width);
-              assert.equal(await page.getByText(/Profit is incomplete:/).count(), state === 'profit-incomplete' ? 1 : 0);
-              assert.equal(await page.getByRole('link', { name: 'Add cost →' }).count(), state === 'stock-only' ? 1 : 0);
-              assert.equal(await page.getByText('Whole business — not separated by branch').count(), 0);
+              await check(`${width} ${state} income layout`, async () => {
+                await geometry(page, width);
+                assert.equal(await page.getByText(/Profit is incomplete:/).count(), state === 'profit-incomplete' ? 1 : 0);
+                assert.equal(await page.getByRole('link', { name: 'Add cost →' }).count(), state === 'stock-only' ? 1 : 0);
+                assert.equal(await page.getByText('Whole business — not separated by branch').count(), 0);
+              });
             }
             if (state === 'stock-only' && side === 'after') {
-              const link = page.getByRole('link', { name: 'Add cost →' });
-              await link.click();
-              await page.getByText('Evidence stock without cost', { exact: true }).first().waitFor();
-              await page.goto(base + '/products/cost-resolution');
-              await page.getByText('Evidence stock without cost', { exact: true }).first().waitFor();
+              await check(`${width} affected product link`, async () => {
+                const link = page.getByRole('link', { name: 'Add cost →' });
+                await link.click();
+                await page.getByText('Evidence stock without cost', { exact: true }).first().waitFor();
+                await page.goto(base + '/products/cost-resolution');
+                await page.getByText('Evidence stock without cost', { exact: true }).first().waitFor();
+              });
             }
             if (state !== 'complete') continue;
             const movementUrl = `${base}/reports/business-movement?preset=equal_length_custom&currentFrom=${from}&currentTo=${to}&storeId=${fixture.storeId}`;
             await page.goto(movementUrl);
             await page.getByRole('heading', { name: 'Business movement', exact: true }).waitFor();
             await page.evaluate(() => document.fonts.ready);
+            await page.screenshot({ path: `${folder}/${side}-${width}x${height}-movement-top.png`, animations: 'disabled' });
             const movement = await movementValues(page);
-            assert.equal(movement.sales, income.revenue, 'Same dates and non-VAT sales must agree across reports');
+            await check(`${side} ${width} same-period sales equality`, () => assert.equal(movement.sales, income.revenue, 'Same dates and non-VAT sales must agree across reports'));
             values[side][`${width}-movement`] = movement;
             if (side === 'after') {
-              await geometry(page, width);
-              assert.equal(await page.getByLabel('Branch', { exact: true }).count(), 0);
-              assert.equal(await page.locator('[data-report-header-actions] > a').count(), 1);
+              await check(`${width} movement layout`, async () => {
+                await geometry(page, width);
+                assert.equal(await page.getByLabel('Branch', { exact: true }).count(), 0);
+                assert.equal(await page.locator('[data-report-header-actions] > a').count(), 1);
+              });
             }
-            await page.screenshot({ path: `${folder}/${side}-${width}x${height}-movement-top.png`, animations: 'disabled' });
             await page.getByRole('heading', { name: /^(Largest|Biggest) product changes$/ }).scrollIntoViewIfNeeded();
             await page.screenshot({ path: `${folder}/${side}-${width}x${height}-movement-products.png`, animations: 'disabled' });
             // Taxed sale is intentionally outside the screenshot's current period.
@@ -199,15 +232,22 @@ async function main() {
             const vatIncome = await incomeValues(page, ['revenue']);
             await page.goto(`${base}/reports/business-movement?preset=equal_length_custom&currentFrom=2026-10-15&currentTo=2026-10-15&storeId=${fixture.storeId}`);
             const vatMovement = await page.locator('[data-stage3b-hero] [data-financial-amount]').innerText();
-            assert.equal(vatIncome.revenue, money(20000));
-            assert.equal(vatMovement, money(23000));
+            await check(`${side} ${width} VAT distinction`, () => {
+              assert.equal(vatIncome.revenue, money(20000));
+              assert.equal(vatMovement, money(23000));
+            });
             values[side][`${width}-vat`] = { income: vatIncome.revenue, movement: vatMovement };
+          } catch (error) {
+            failures.push({ label: `${side} ${width} ${state} browser journey`, message: error.message });
+            console.error(error.message);
           } finally { await context.close(); }
         }
       }
     }
-    assert.deepEqual(values.after, values.before, 'Master/candidate fixed-fixture money values differ');
+    await check('Master/candidate fixed-fixture money values', () => assert.deepEqual(values.after, values.before, 'Master/candidate fixed-fixture money values differ'));
     writeFileSync(`${folder}/figure-comparison.json`, JSON.stringify(values, null, 2));
+    writeFileSync(`${folder}/verification-failures.json`, JSON.stringify(failures, null, 2));
+    assert.equal(failures.length, 0, JSON.stringify(failures));
     console.log('PASS: 20 phone images, same-period non-VAT sales agree, all captured canonical figures unchanged; VAT distinction preserved.');
   } finally { await browser.close(); }
 }
