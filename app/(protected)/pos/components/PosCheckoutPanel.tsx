@@ -221,15 +221,15 @@ export default function PosCheckoutPanel({
               <button
                 key={amount}
                 type="button"
-                className="rounded-md border border-black/10 bg-white px-1 py-2 text-center text-xs font-semibold hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                className={`min-h-11 rounded-md border border-black/10 bg-white px-1 py-2 text-center text-xs font-semibold hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${currency === 'GHS' ? 'whitespace-nowrap' : ''}`}
                 onClick={() => onCashTenderedChange(String(amount))}
               >
-                {formatMoney(amount * 100, currency)}
+                {currency === 'GHS' ? `GH₵${amount}` : formatMoney(amount * 100, currency)}
               </button>
             ))}
             <button
               type="button"
-              className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700 hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="min-h-11 whitespace-nowrap rounded-md border border-emerald-200 bg-emerald-50 px-1 py-2 text-center text-xs font-semibold text-emerald-700 hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               onClick={() => onCashTenderedChange(String(Math.max(totalDue - totalPaid + cashTenderedPence - changeDue, 0) / 100))}
             >
               Exact
