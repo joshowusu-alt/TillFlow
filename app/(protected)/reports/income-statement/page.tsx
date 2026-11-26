@@ -79,6 +79,7 @@ export default async function IncomeStatementPage(
         title="Income Statement"
         scopeLabel={opened.branch.kind === 'label' && opened.stores?.length > 1 ? 'Whole business — not separated by branch' : undefined}
         periodLabel={readableReportPeriod(fromStr, toStr)}
+        showRefresh={false}
       />
       <PeriodChips from={fromStr} to={toStr} timeZone={month.timeZone} now={now} selected={searchParams?.periodChip} />
       {costsIncomplete ? <p role="status" className="rounded-xl bg-amber-50 px-3 text-sm text-amber-950">{profitWarning} <Link className="inline-flex min-h-11 items-center font-semibold underline" href={incomeStatementEntriesHref('grossProfit', fromStr, toStr) + '&issues=1'}>Fix costs →</Link></p> : null}
@@ -93,7 +94,7 @@ export default async function IncomeStatementPage(
           hint="Demo Day generates a week of sample data so you can preview reports."
         />
       ) : (
-        <ReportSummaryCard>
+        <ReportSummaryCard spacingClassName="space-y-1 [&>div]:items-center">
           <ReportSummaryRow
             label="Sales"
             value={breakdownLink('revenue', formatMoney(statement.revenue, business.currency))}

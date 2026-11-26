@@ -195,6 +195,11 @@ async function main() {
             await page.goto(`${base}/reports/income-statement?from=${from}&to=${to}`);
             await page.getByRole('heading', { name: 'Income Statement', exact: true }).waitFor();
             await page.evaluate(() => document.fonts.ready);
+            if (state === 'stock-only') {
+              // Capture the warning in the phone viewport, not off-screen.
+              const warning = page.getByText(side === 'before' ? /Stock value is incomplete —/ : /in stock has no cost yet/).first();
+              await warning.scrollIntoViewIfNeeded();
+            }
             await page.screenshot({ path: `${folder}/${side}-${width}x${height}-income-${state}.png`, animations: 'disabled' });
             const income = await incomeValues(page);
             const wanted = state === 'profit-incomplete' ? { ...expected, cogs: 'Costs incomplete', grossProfit: 'Costs incomplete', netProfit: 'Costs incomplete' } : expected;
