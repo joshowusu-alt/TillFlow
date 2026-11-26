@@ -1389,7 +1389,7 @@ it.each([true, false])('keeps whole-cedi quick cash labels and payment values (o
       ...denominations.map(amount => `GH₵${amount}`), 'Exact',
     ]);
     for (const amount of denominations) {
-      fireEvent.click(group.getByRole('button', { name: `GH₵${amount}`, exact: true }));
+      fireEvent.click(group.getByRole('button', { name: `GH₵${amount}` }));
       expect(screen.getByLabelText(/Cash tendered/)).toHaveValue(amount);
       expect(document.querySelector('[data-pos-payment-amounts]')).toHaveTextContent(`Cash tenderedGH₵${amount.toFixed(2)}`);
     }
