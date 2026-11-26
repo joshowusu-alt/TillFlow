@@ -34,7 +34,7 @@ describe('financial exports preserve reconciliation limits', () => {
     expect(csv).toContain('Recorded opening balances and transactions');
     expect(csv).toContain('Some sales have no product cost recorded');
     expect(csv).toMatch(/"Entry difference","[^"]*3\.00"/);
-    expect(csv).toMatch(/"Profit to date","[^"]*-1\.00"/);
+    expect(csv).toContain('"Profit to date","-GH₵1.00"');
     expect(csv).not.toContain('Operational less ledger profit');
     expect(csv).toMatch(/"Total Assets","[^"]*10\.00"/);
   });
