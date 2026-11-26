@@ -161,6 +161,7 @@ export default async function PosBoard({
             loyaltyGhsPerHundredPoints: (business as any).loyaltyGhsPerHundredPoints ?? 100,
           }}
           store={{ id: baseStore.id, name: baseStore.name }}
+          cashierUserId={user.id}
           products={productDtos}
           posCatalogueMode={catalogueMode}
           catalogueSize={productCount}

@@ -193,7 +193,7 @@ export default function NetworkStatus() {
     })();
 
     return (
-        <div className="safe-floating-bottom fixed left-4 right-4 z-50 sm:left-auto sm:right-4 sm:w-full sm:max-w-sm">
+        <div data-network-status-floating="true" className="safe-floating-bottom fixed left-4 right-4 z-50 sm:left-auto sm:right-4 sm:w-full sm:max-w-sm">
             <div
                 className={`${statusConfig.bg} flex w-full items-center gap-2.5 rounded-xl px-4 py-2.5 text-sm text-white shadow-lg transition-all duration-200 sm:w-auto`}
             >

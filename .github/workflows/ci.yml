@@ -299,3 +299,42 @@ jobs:
             .candidate-server.log
             .baseline-server.log
           include-hidden-files: true
+
+  offline-mobile-visual-evidence:
+    name: offline-mobile-visual-evidence
+    if: github.event_name == 'pull_request' && github.head_ref == 'remediation/offline-mobile-checkout'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Build and exercise actual POS components in an isolated browser
+        env:
+          FIXTURE_BASE_SHA: f9fd1ebd072c61dc3209d96b69ca4b8c63c0f80a
+        run: |
+          set -euo pipefail
+          npx vite build --config tests/fixtures/offline-mobile/vite.config.ts --outDir tmp/offline-mobile-before
+          unset FIXTURE_BASE_SHA
+          npx vite build --config tests/fixtures/offline-mobile/vite.config.ts --outDir tmp/offline-mobile-after
+          npx vite preview --config tests/fixtures/offline-mobile/vite.config.ts --outDir tmp/offline-mobile-before --host 127.0.0.1 --port 4178 > /tmp/offline-before.log 2>&1 &
+          npx vite preview --config tests/fixtures/offline-mobile/vite.config.ts --outDir tmp/offline-mobile-after --host 127.0.0.1 --port 4177 > /tmp/offline-after.log 2>&1 &
+          for port in 4177 4178; do
+            for i in {1..30}; do
+              if curl -fsS "http://127.0.0.1:$port/tests/fixtures/offline-mobile/index.html" >/dev/null; then break; fi
+              sleep 1
+            done
+            curl -fsS "http://127.0.0.1:$port/tests/fixtures/offline-mobile/index.html" >/dev/null
+          done
+          node scripts/offline-mobile-checkout-browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: offline-mobile-before-after
+          path: tmp/offline-mobile-evidence/*.png
