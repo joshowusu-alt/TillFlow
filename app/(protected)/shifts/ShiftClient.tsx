@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
@@ -184,6 +184,8 @@ export default function ShiftClient({
   const occupiedKey = [...occupiedTillIds].sort().join(',');
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const closingRef = useRef(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedTill, setSelectedTill] = useState(freeTills[0]?.id ?? '');
   const [selectedOpenShiftId, setSelectedOpenShiftId] = useState(openShifts[0]?.id ?? '');
@@ -329,7 +331,7 @@ export default function ShiftClient({
   };
 
   const handleCloseShift = () => {
-    if (!shiftToClose) return;
+    if (!shiftToClose || closingRef.current) return;
     if (isStaleOperationalStoreBlocked()) {
       setError(STALE_OPERATIONAL_STORE_MSG);
       return;
@@ -376,6 +378,8 @@ export default function ShiftClient({
       formData.set('managerPin', needsManagerPin ? managerPin : '');
     }
 
+    closingRef.current = true;
+    setIsClosing(true);
     startTransition(async () => {
       try {
         const result = showOwnerOverride
@@ -383,7 +387,9 @@ export default function ShiftClient({
           : await closeShiftAction(formData);
 
         if (!result.success) {
-          setError(result.error);
+          setError(!showOwnerOverride && /^Invalid manager PIN(?: for till close)?\.?$/i.test(result.error)
+            ? "That PIN isn't right. Try again."
+            : result.error);
           setManagerPin('');
           setOwnerPassword('');
           setPinUnlocked(false);
@@ -399,6 +405,9 @@ export default function ShiftClient({
         setManagerPin('');
         setOwnerPassword('');
         setPinUnlocked(false);
+      } finally {
+        closingRef.current = false;
+        setIsClosing(false);
       }
     });
   };
@@ -471,7 +480,7 @@ export default function ShiftClient({
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      {error && (
+      {error && !showCloseModal && (
         <div className="rounded-xl border border-rose/40 bg-rose/10 px-4 py-3 text-sm text-rose">
           {error}
         </div>
@@ -1136,7 +1145,7 @@ export default function ShiftClient({
                 <div className="mt-2 flex justify-between text-sm">
                   <span>Supplier payments</span>
                   <span className="font-semibold">
-                    - {formatMoney(Math.abs(supplierPaymentsPence), currency)}
+                    {formatMoney(-Math.abs(supplierPaymentsPence), currency)}
                   </span>
                 </div>
               ) : null}
@@ -1144,7 +1153,7 @@ export default function ShiftClient({
                 <div className="mt-2 flex justify-between text-sm">
                   <span>Expenses paid from till</span>
                   <span className="font-semibold">
-                    - {formatMoney(Math.abs(shiftToClose.cashByType.PAID_OUT_EXPENSE), currency)}
+                    {formatMoney(-Math.abs(shiftToClose.cashByType.PAID_OUT_EXPENSE), currency)}
                   </span>
                 </div>
               ) : null}
@@ -1152,7 +1161,7 @@ export default function ShiftClient({
                 <div className="mt-2 flex justify-between text-sm">
                   <span>Cash Refunds</span>
                   <span className="font-semibold">
-                    - {formatMoney(Math.abs(shiftToClose.cashByType.CASH_REFUND), currency)}
+                    {formatMoney(-Math.abs(shiftToClose.cashByType.CASH_REFUND), currency)}
                   </span>
                 </div>
               ) : null}
@@ -1168,7 +1177,7 @@ export default function ShiftClient({
                 <div className="mt-2 flex justify-between text-sm">
                   <span>Cash added / adjustments</span>
                   <span className="font-semibold">
-                    {adjustmentsPence >= 0 ? '+' : '-'} {formatMoney(Math.abs(adjustmentsPence), currency)}
+                    {adjustmentsPence >= 0 ? '+ ' : ''}{formatMoney(adjustmentsPence, currency)}
                   </span>
                 </div>
               ) : null}
@@ -1210,15 +1219,9 @@ export default function ShiftClient({
                   {handover.handedOverPence === null ? 'Count cash first' : formatMoney(handover.handedOverPence, currency)}
                 </span>
               </div>
-              {handover.floatShortfallPence ? (
-                <div className="flex justify-between border-t border-amber-200 pt-1.5 text-sm font-bold text-amber-800">
-                  <span>Float shortfall</span>
-                  <span>{formatMoney(handover.floatShortfallPence, currency)}</span>
-                </div>
-              ) : null}
               {!handover.canRetainFullFloat && handover.actualCashPence !== null ? (
-                <p className="pt-1 text-xs text-amber-800">
-                  Counted cash is below the opening float, so the full float cannot be retained.
+                <p className="pt-1 text-xs text-black/60">
+                  There's less cash than the opening float. {formatMoney(handover.retainedPence ?? 0, currency)} stays in the drawer.
                 </p>
               ) : null}
             </div>
@@ -1399,10 +1402,17 @@ export default function ShiftClient({
               </div>
             ) : null}
 
+            {!showOwnerOverride && needsManagerPin && !managerPin && (
+              <p className="mt-4 text-sm text-black/70">Enter the manager PIN to close this shift.</p>
+            )}
+            {error && (
+              <p role="alert" className="mt-3 rounded-lg border border-rose/40 bg-rose/10 px-3 py-2 text-sm text-rose">{error}</p>
+            )}
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
                 className="btn-ghost flex-1"
+                disabled={isClosing}
                 onClick={() => {
                   setShowCloseModal(false);
                   setSelectedOtherShift(null);
@@ -1416,8 +1426,9 @@ export default function ShiftClient({
                 className="btn-primary flex-1 bg-rose-600 hover:bg-rose-700"
                 data-close-shift=""
                 onClick={handleCloseShift}
+                aria-busy={isClosing}
                 disabled={
-                  isPending ||
+                  isPending || isClosing ||
                   actualCash === '' ||
                   Number(actualCash) < 0 ||
                   (!showOwnerOverride && needsManagerPin && !managerPin) ||
@@ -1425,7 +1436,15 @@ export default function ShiftClient({
                   (varianceNeedsReason && !varianceReasonCode && !varianceReason.trim())
                 }
               >
-                {isPending ? 'Closing...' : 'Close Shift'}
+                {isClosing ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Closing shift…
+                  </span>
+                ) : 'Close Shift'}
               </button>
             </div>
             </form>

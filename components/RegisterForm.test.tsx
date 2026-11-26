@@ -17,6 +17,7 @@ function fillAccount() {
 describe('registration controls', () => {
   it('supports form submission on both early steps and rejects invalid email', () => {
     render(<RegisterForm />); fillBusiness();
+    expect(screen.getByText('At least 6 characters')).toBeVisible();
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'invalid' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'abcdef' } });
     expect(screen.getByRole('button', { name: 'Next — Choose Plan' })).toBeDisabled();

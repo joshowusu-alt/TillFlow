@@ -1,6 +1,6 @@
 export function formatMoney(pence: number, currency = 'GHS') {
   if (currency === 'GHS') {
-    return `GH₵${(pence / 100).toLocaleString('en-GH', {
+    return `${pence < 0 ? '-' : ''}GH₵${(Math.abs(pence) / 100).toLocaleString('en-GH', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;

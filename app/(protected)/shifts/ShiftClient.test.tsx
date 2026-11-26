@@ -507,7 +507,7 @@ describe('ShiftClient', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Close Shift' }).at(-1)!);
     await waitFor(() => expect(closeShiftActionMock).toHaveBeenCalledTimes(1));
     expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveValue('');
-    expect(screen.getByText('Invalid manager PIN for till close.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent("That PIN isn't right. Try again.");
   });
 
   it.each(['815.50', '900.00'])('requires a reason but no PIN for count %s', (count) => {
@@ -542,7 +542,46 @@ describe('ShiftClient', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
     fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '5.00' } });
-    expect(screen.getByText('Float shortfall')).toBeInTheDocument();
-    expect(screen.getByText(/full float cannot be retained/i)).toBeInTheDocument();
+    expect(screen.queryByText('Float shortfall')).not.toBeInTheDocument();
+    expect(screen.getByText("There's less cash than the opening float. GH₵5.00 stays in the drawer.")).toBeInTheDocument();
+  });
+
+  it('explains a missing manager PIN above the close button for an GH₵80 shortage', () => {
+    render(<ShiftClient tills={[{ id: 'till-1', name: 'Till 1' }]} openShifts={[baseOpenShift]} recentShifts={[]} currency="GHS" userRole="CASHIER" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+    fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '785.50' } });
+    fireEvent.change(screen.getByLabelText('Reason details'), { target: { value: 'Count checked' } });
+    expect(screen.getByText('Enter the manager PIN to close this shift.')).toBeInTheDocument();
+    expect(screen.getByText('-GH₵80.00')).toBeInTheDocument();
+    const close = screen.getAllByRole('button', { name: 'Close Shift' }).at(-1)!;
+    expect(close).toBeDisabled();
+    fireEvent.change(screen.getByPlaceholderText('Enter manager approval PIN'), { target: { value: '1234' } });
+    expect(screen.queryByText('Enter the manager PIN to close this shift.')).not.toBeInTheDocument();
+    expect(close).toBeEnabled();
+  });
+
+  it('renders signed amounts in the close screen, list and success banner; prevents double submit', async () => {
+    let finish!: (value: { success: true }) => void;
+    closeShiftActionMock.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    render(<ShiftClient tills={[{ id: 'till-1', name: 'Till 1' }]} openShifts={[baseOpenShift]} recentShifts={[{
+      id: 'closed', tillName: 'Till 1', userName: 'Cashier', openedAt: '2026-06-17T08:00:00Z', closedAt: '2026-06-17T09:00:00Z', status: 'CLOSED', salesCount: 2, openingCashPence: 0, expectedCashPence: 10000, actualCashPence: 8000, variance: -2000, cardTotalPence: 0, transferTotalPence: 0, momoTotalPence: 0,
+    }]} currency="GHS" userRole="CASHIER" />);
+    expect(screen.getAllByText('-GH₵20.00').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+    fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '845.50' } });
+    fireEvent.change(screen.getByLabelText('Reason details'), { target: { value: 'Count checked' } });
+    expect(screen.queryByText('GH₵-20.00')).not.toBeInTheDocument();
+    const close = screen.getAllByRole('button', { name: 'Close Shift' }).at(-1)!;
+    fireEvent.click(close);
+    const saving = screen.getByRole('button', { name: 'Closing shift…' });
+    expect(saving).toBeDisabled();
+    expect(saving).toHaveAttribute('aria-busy', 'true');
+    expect(saving.querySelector('svg.animate-spin')).not.toBeNull();
+    fireEvent.click(saving);
+    expect(closeShiftActionMock).toHaveBeenCalledTimes(1);
+    finish({ success: true });
+    await waitFor(() => expect(screen.getByText(/Shift Closed/)).toBeInTheDocument());
+    expect(screen.getAllByText('-GH₵20.00').length).toBeGreaterThan(1);
+    expect(refreshMock).toHaveBeenCalledTimes(1);
   });
 });
