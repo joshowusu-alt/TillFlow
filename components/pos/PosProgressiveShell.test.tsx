@@ -81,10 +81,12 @@ describe('PosProgressiveShell', () => {
     localStorage.setItem(getPosTillStorageKey({ businessId: business.id, storeId: store.id }), 't1');
     localStorage.setItem('pos.capture.shift.b1.t1', 'shift1');
     localStorage.setItem('pos.capture.cashier.b1', 'owner1');
+    localStorage.setItem('pos.capture.shift.b1.t2', 'old-shift2');
     render(<PosProgressiveShell business={business} store={store} products={products} cashierUserId="owner1">
-      <PosDeferredApply payload={{ tills: [{ id: 't1', name: 'Till 1' }], openShiftTillIds: [], customers: [], units: [], categories: [] }} />
+      <PosDeferredApply payload={{ tills: [{ id: 't1', name: 'Till 1' }, { id: 't2', name: 'Till 2' }], openShiftTillIds: [], customers: [], units: [], categories: [] }} />
     </PosProgressiveShell>);
     await waitFor(() => expect(localStorage.getItem('pos.capture.shift.b1.t1')).toBeNull());
+    expect(localStorage.getItem('pos.capture.shift.b1.t2')).toBeNull();
   });
   it('uses the existing captured shift when deferred checkout fails offline', async () => {
     Reflect.set(navigator, 'onLine', false);

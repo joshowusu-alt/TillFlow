@@ -91,15 +91,20 @@ export function PosProgressiveShell({
     const scope = { businessId: business.id, storeId: store.id };
     try {
       const tillId = localStorage.getItem(getPosTillStorageKey(scope));
-      if (!tillId) return;
-      const shiftKey = `pos.capture.shift.${business.id}.${tillId}`;
       if (deferred && !deferred.checkoutUnavailable) {
-        if (!deferred.openShiftTillIds.includes(tillId)) localStorage.removeItem(shiftKey);
+        for (const till of deferred.tills) {
+          if (!deferred.openShiftTillIds.includes(till.id)) {
+            localStorage.removeItem(`pos.capture.shift.${business.id}.${till.id}`);
+          }
+        }
+        if (tillId && !deferred.openShiftTillIds.includes(tillId)) {
+          localStorage.removeItem(`pos.capture.shift.${business.id}.${tillId}`);
+        }
         return;
       }
-      if (online || !cashierUserId ||
+      if (!tillId || online || !cashierUserId ||
         localStorage.getItem(`pos.capture.cashier.${business.id}`) !== cashierUserId) return;
-      const shiftId = localStorage.getItem(shiftKey);
+      const shiftId = localStorage.getItem(`pos.capture.shift.${business.id}.${tillId}`);
       if (!shiftId) return;
       setRecovered({ scopeKey, payload: {
         ...EMPTY_DEFERRED,

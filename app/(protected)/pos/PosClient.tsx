@@ -1527,6 +1527,9 @@ export default function PosClient({
     openShiftTillIds.includes(tillId);
   const boundShiftId = openShifts?.find((shift) => shift.tillId === tillId)?.shiftId ?? '';
   const offlineShiftReady = online || Boolean(boundShiftId && cashierUserId);
+  // An earlier uncertain online submission must be retried online under its
+  // original identity, not converted to a new offline capture.
+  const offlineAttemptReady = online || !ambiguousFailure;
   const canSubmit = Boolean(
     saleAttemptReady &&
     checkoutExtrasReady &&
@@ -1542,6 +1545,7 @@ export default function PosClient({
     discountApprovalReady &&
     tillReady &&
     offlineShiftReady &&
+    offlineAttemptReady &&
     (!requiresCustomer || customerId) &&
     !(requiresCustomer && customersUnavailable) &&
     (paymentStatus === 'UNPAID' || paymentMethods.length > 0)
@@ -1609,7 +1613,7 @@ export default function PosClient({
       issues.push({ tone: 'warning', message: 'Choose a due date or No due date for credit sales.' });
     }
     if (ambiguousFailure) {
-      issues.push({ tone: 'warning', message: 'Previous submission was unclear. Confirm before retrying.' });
+      issues.push({ tone: 'warning', message: online ? 'Previous submission was unclear. Confirm before retrying.' : 'Previous sale outcome is unclear. Reconnect and check the receipt before retrying.' });
     }
     if (!unpaidValid) issues.push({ tone: 'warning', message: 'Remove payments before recording an unpaid sale.' });
     if (paymentStatus !== 'UNPAID' && paymentMethods.length === 0) issues.push({ tone: 'warning', message: 'Choose a payment method.' });

@@ -10,11 +10,25 @@ async function verify(browser, port, before, width, height) {
     const page = await context.newPage();
     const base = `http://127.0.0.1:${port}`;
     const errors = [];
-    page.on('pageerror', error => errors.push(error.message));
+    page.on('pageerror', error => {
+      errors.push(error.message);
+      console.error('Fixture page error:', error.stack || error.message);
+    });
+    page.on('console', message => {
+      if (message.type() === 'error') console.error('Fixture console:', message.text());
+    });
+    page.on('requestfailed', request => console.error('Fixture request failed:', request.url(), request.failure()));
     await page.route('**/*', route => route.request().url().startsWith(base + '/') ? route.continue() : route.abort());
     await page.goto(base + '/tests/fixtures/offline-mobile/index.html');
+    console.log('Loaded fixture', base, before ? 'baseline' : 'candidate');
     const search = page.getByLabel('Scan barcode or search products');
-    await search.fill('Chek Chek');
+    try {
+      await search.fill('Chek Chek', { timeout: 10000 });
+    } catch (error) {
+      console.error('Fixture body:', await page.locator('body').innerText());
+      await page.screenshot({ path: path.join('tmp', 'offline-mobile-evidence', `startup-failure-${before ? 'before' : 'after'}-${width}.png`) });
+      throw error;
+    }
     await page.getByRole('button', { name: /^Chek Chek/i }).click();
     const add = page.getByRole('button', { name: 'Add plate' });
     if (await add.isVisible()) await add.click();

@@ -1462,6 +1462,20 @@ describe('offline mobile food checkout', () => {
     expect(screen.getByTestId('pos-complete-sheet')).toBeDisabled();
     expect(document.querySelector('[data-pos-mobile-completion-status]')).toHaveTextContent('Full payment required');
   });
+  it('does not turn an uncertain online attempt into an offline sale', async () => {
+    Reflect.set(navigator, 'onLine', true);
+    await openPayment();
+    mockedCompleteSaleAction.mockRejectedValueOnce(new Error('Unknown server outcome'));
+    fireEvent.click(screen.getByTestId('pos-complete-sheet'));
+    await screen.findByText(/Sale outcome is unclear/);
+    act(() => {
+      Reflect.set(navigator, 'onLine', false);
+      window.dispatchEvent(new Event('offline'));
+    });
+    expect(screen.getByTestId('pos-complete-sheet')).toBeDisabled();
+    expect(document.querySelector('[data-pos-mobile-completion-status]')).toHaveTextContent('Reconnect and check the receipt');
+    expect(queueOfflineSale).not.toHaveBeenCalled();
+  });
 });
 it('distinguishes tendered cash from the amount applied to the sale', async () => {
   render(<PosClient {...baseProps} />);
