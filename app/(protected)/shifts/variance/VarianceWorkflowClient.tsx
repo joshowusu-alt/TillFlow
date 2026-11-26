@@ -16,6 +16,7 @@ type Props = {
   investigationId: string;
   status: string;
   cashierExplanation: string | null;
+  originalReason: string;
   evidenceNote: string | null;
   managerResolution: string | null;
   assignedReviewerName: string | null;
@@ -33,6 +34,7 @@ export default function VarianceWorkflowClient({
   investigationId,
   status,
   cashierExplanation,
+  originalReason,
   evidenceNote,
   managerResolution,
   assignedReviewerName,
@@ -48,7 +50,7 @@ export default function VarianceWorkflowClient({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [reviewerUserId, setReviewerUserId] = useState(reviewers[0]?.id ?? '');
+  const [reviewerUserId, setReviewerUserId] = useState('');
   const [explanation, setExplanation] = useState(cashierExplanation ?? '');
   const [evidence, setEvidence] = useState(evidenceNote ?? '');
   const [resolution, setResolution] = useState(managerResolution ?? '');
@@ -80,12 +82,18 @@ export default function VarianceWorkflowClient({
         <span className="rounded-full bg-black/5 px-2 py-1 text-xs font-semibold">{reviewed ? 'Reviewed' : 'Needs review'}</span>
       </div>
       {error ? (
-        <div className="rounded-xl border border-rose/40 bg-rose/10 px-3 py-2 text-sm text-rose">{error}</div>
+        <div role="alert" className="rounded-xl border border-rose/40 bg-rose/10 px-3 py-2 text-sm text-rose">{error}</div>
       ) : null}
 
-      <div className="text-sm"><strong>Cashier's reason</strong><p>{cashierExplanation || '—'}</p></div>
-      {reviewed ? <div className="text-sm">Reviewed by {reviewedByName ?? approvedByName ?? 'Unknown'}{reviewedAt || approvedAt ? ` · ${new Date((reviewedAt ?? approvedAt)!).toLocaleString()}` : ''}{reviewNote ? <p>{reviewNote}</p> : null}</div> : isManagerOrOwner ? <div className="space-y-2"><label className="label" htmlFor="cash-review-note">Note (optional)</label><textarea id="cash-review-note" className="input" value={note} onChange={e => setNote(e.target.value)} /><button type="button" className="btn-primary" disabled={isPending} onClick={() => run(markCashVarianceReviewedAction, form => form.set('note', note))}>I'm comfortable</button></div> : null}
-      <details className="space-y-3"><summary className="cursor-pointer text-sm font-semibold">More options</summary>
+      <div className="text-sm"><strong>Original closing reason</strong><p>{originalReason}</p></div>
+      {reviewed ? <div className="text-sm">Reviewed by {reviewedByName ?? approvedByName ?? 'Unknown'}{reviewedAt || approvedAt ? ` · ${new Date((reviewedAt ?? approvedAt)!).toLocaleString()}` : ''}{reviewNote ? <p>{reviewNote}</p> : null}</div> : isManagerOrOwner ? <div className="space-y-2">
+        <p className="text-sm text-black/70">Check the cash count and related transactions first. Closing this review removes it from the outstanding list but does not recover cash or change financial records.</p>
+        <label className="label" htmlFor="cash-review-note">What did you check and conclude?</label>
+        <textarea id="cash-review-note" className="input" value={note} onChange={e => setNote(e.target.value)} />
+        {!note.trim() && <p className="text-sm text-black/60">Enter your findings before closing the review.</p>}
+        <button type="button" className="btn-primary min-h-11" disabled={isPending || !note.trim()} onClick={() => run(markCashVarianceReviewedAction, form => form.set('note', note))}>Close review with findings</button>
+      </div> : null}
+      <details className="space-y-3"><summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">Investigate or assign for follow-up</summary>
       <div className="text-sm text-black/60">
         Assigned reviewer: {assignedReviewerName ?? 'Not assigned'}
       </div>
@@ -98,8 +106,9 @@ export default function VarianceWorkflowClient({
 
       {isManagerOrOwner && (status === 'OPEN' || status === 'ASSIGNED') ? (
         <div className="space-y-2 rounded-xl border border-black/10 p-3">
-          <label className="label">Assign reviewer</label>
-          <select className="input" value={reviewerUserId} onChange={(e) => setReviewerUserId(e.target.value)}>
+          <label className="label" htmlFor="variance-reviewer">Assign reviewer</label>
+          <select id="variance-reviewer" className="input" value={reviewerUserId} onChange={(e) => setReviewerUserId(e.target.value)}>
+            <option value="">Choose a reviewer</option>
             {reviewers.map((reviewer) => (
               <option key={reviewer.id} value={reviewer.id}>
                 {reviewer.name} ({reviewer.role})
@@ -123,10 +132,11 @@ export default function VarianceWorkflowClient({
 
       {canExplain && !reviewed && status !== 'RESOLVED' ? (
         <div className="space-y-2 rounded-xl border border-black/10 p-3">
-          <label className="label">Cashier explanation</label>
-          <textarea className="input" rows={3} value={explanation} onChange={(e) => setExplanation(e.target.value)} />
-          <label className="label">Evidence note</label>
+          <label className="label" htmlFor="variance-explanation">Follow-up explanation</label>
+          <textarea id="variance-explanation" className="input" rows={3} value={explanation} onChange={(e) => setExplanation(e.target.value)} />
+          <label className="label" htmlFor="variance-evidence">Evidence note</label>
           <textarea
+            id="variance-evidence"
             className="input"
             rows={2}
             value={evidence}
@@ -157,8 +167,9 @@ export default function VarianceWorkflowClient({
 
       {isManagerOrOwner && !reviewed && status !== 'RESOLVED' ? (
         <div className="space-y-2 rounded-xl border border-black/10 p-3">
-          <label className="label">Manager resolution</label>
-          <textarea className="input" rows={3} value={resolution} onChange={(e) => setResolution(e.target.value)} />
+          <label className="label" htmlFor="variance-resolution">Manager resolution</label>
+          <textarea id="variance-resolution" className="input" rows={3} value={resolution} onChange={(e) => setResolution(e.target.value)} />
+          {!resolution.trim() && <p className="text-sm text-black/60">Describe the outcome before recording a resolution.</p>}
           <button
             type="button"
             className="btn-secondary"

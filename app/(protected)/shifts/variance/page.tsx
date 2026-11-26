@@ -7,7 +7,8 @@ import { withStoreQuery } from '@/lib/reliability/selected-store';
 import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import { prisma } from '@/lib/prisma';
 
-export default async function CashVarianceListPage() {
+export default async function CashVarianceListPage({ searchParams }: { searchParams?: Promise<{ page?: string; view?: string }> }) {
+  const params = await searchParams;
   const { business, store, stores, user } = await requireBusinessAndOptionalStore();
   if (!store) {
     return (
@@ -19,13 +20,19 @@ export default async function CashVarianceListPage() {
     );
   }
 
+  const requestedPage = Number(params?.page ?? 1);
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 && requestedPage <= 100000 ? requestedPage : 1;
+  const showAll = params?.view === 'all';
+  const pageSize = 25;
   const investigations = await prisma.cashVarianceInvestigation.findMany({
     where: {
       businessId: business.id,
       shift: { till: { storeId: store.id } },
+      ...(showAll ? {} : { reviewedAt: null, status: { notIn: ['APPROVED', 'REVIEWED'] } }),
     },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    skip: (page - 1) * pageSize,
+    take: pageSize + 1,
     select: {
       id: true,
       status: true,
@@ -49,6 +56,8 @@ export default async function CashVarianceListPage() {
       },
     },
   });
+  const hasNext = investigations.length > pageSize;
+  const listHref = (nextPage: number, all = showAll) => withStoreQuery(`/shifts/variance?page=${nextPage}&view=${all ? 'all' : 'outstanding'}`, store.id);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -60,12 +69,16 @@ export default async function CashVarianceListPage() {
 
       <div className="card p-4">
         <p className="text-sm font-semibold text-ink">Active branch: {store.name}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Link className={`btn-secondary min-h-11 ${!showAll ? 'font-bold underline' : ''}`} aria-current={!showAll ? 'page' : undefined} href={listHref(1, false)}>Outstanding</Link>
+          <Link className={`btn-secondary min-h-11 ${showAll ? 'font-bold underline' : ''}`} aria-current={showAll ? 'page' : undefined} href={listHref(1, true)}>All records</Link>
+        </div>
       </div>
 
       <div className="card overflow-hidden p-4">
         {investigations.length === 0 ? (
           <div className="rounded-xl border border-dashed border-black/10 px-4 py-8 text-center text-sm text-black/50">
-            No cash differences for this store.
+            No cash differences on this page for this branch.
           </div>
         ) : (
           <div className="responsive-table-shell">
@@ -82,7 +95,7 @@ export default async function CashVarianceListPage() {
                 </tr>
               </thead>
               <tbody>
-                {investigations.map((row) => (
+                {investigations.slice(0, pageSize).map((row) => (
                   <tr key={row.id}>
                     <td className="px-3 py-2">
                       <Link href={withStoreQuery(`/shifts/variance/${row.id}`, store.id)} className="font-semibold text-accent underline">
@@ -98,7 +111,7 @@ export default async function CashVarianceListPage() {
                       {row.variancePence > 0 ? 'Over by ' : 'Short by '}{formatMoney(Math.abs(row.variancePence), business.currency)}
                     </td>
                     <td className="px-3 py-2 text-xs text-black/55">
-                      {formatMoney(row.shift.actualCashPence ?? 0, business.currency)}
+                      {row.shift.actualCashPence == null ? 'Not recorded' : formatMoney(row.shift.actualCashPence, business.currency)}
                       {' / '}
                       {formatMoney(row.shift.expectedCashPence, business.currency)}
                     </td>
@@ -110,6 +123,11 @@ export default async function CashVarianceListPage() {
             </table>
           </div>
         )}
+        <nav aria-label="Cash differences pages" className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+          {page > 1 && <Link className="btn-secondary min-h-11" href={listHref(page - 1)}>Previous</Link>}
+          <span>Page {page}</span>
+          {hasNext && <Link className="btn-secondary min-h-11" href={listHref(page + 1)}>Next</Link>}
+        </nav>
       </div>
     </div>
   );

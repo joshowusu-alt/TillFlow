@@ -72,7 +72,9 @@ async function main() {
       await card.screenshot({ path: `${output}/owner-home-card.png` });
       await card.getByRole('button', { name: /Fictional cashier1/ }).click();
       await page.waitForURL(url => url.pathname === `/shifts/variance/${investigation.id}`);
-      await page.getByRole('button', { name: "I'm comfortable", exact: true }).click();
+      assert(await page.getByRole('button', { name: 'Close review with findings', exact: true }).isDisabled());
+      await page.getByLabel('What did you check and conclude?').fill('Fictional owner checked the closing count and drawer transactions');
+      await page.getByRole('button', { name: 'Close review with findings', exact: true }).click();
       await page.getByText(/Reviewed by Fictional owner/).waitFor();
       const reviewed = await prisma.cashVarianceInvestigation.findUniqueOrThrow({ where: { id: investigation.id } });
       assert.equal(reviewed.status, 'APPROVED');

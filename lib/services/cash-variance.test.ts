@@ -62,6 +62,13 @@ it('rejects cashier and missing business-scoped review', async () => {
   expect(prismaMock.cashVarianceInvestigation.updateMany).not.toHaveBeenCalled();
 });
 
+it.each(['', '   '])('does not close a review without findings (%j)', async (note) => {
+  prismaMock.cashVarianceInvestigation.findFirst.mockResolvedValueOnce({ id: 'var-1', businessId: 'biz-1', status: 'OPEN' });
+  await expect(markCashVarianceReviewed({ businessId: 'biz-1', investigationId: 'var-1', actor: ACTOR, note })).rejects.toThrow('Enter what you checked');
+  expect(prismaMock.cashVarianceInvestigation.updateMany).not.toHaveBeenCalled();
+  expect(prismaMock.auditLog.create).not.toHaveBeenCalled();
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
@@ -210,6 +217,11 @@ describe('cash variance investigation', () => {
       evidenceNote: 'Recount sheet in the safe',
       actor: { userId: 'cashier-1', userName: 'Cashier', userRole: 'CASHIER' },
     });
+    expect(prismaMock.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      action: 'CASH_VARIANCE_EXPLAIN',
+      beforeState: expect.stringContaining('"cashierExplanation":null'),
+      afterState: expect.stringContaining('Miscount then found note'),
+    }) }));
 
     prismaMock.cashVarianceInvestigation.findFirst.mockResolvedValue({
       id: 'var-1',

@@ -10,7 +10,7 @@ describe('owner Home unreviewed cash differences', () => {
   });
   it('requests only the current business’s closed, nonzero, unreviewed rows and flags both signs above the cutoff', async () => {
     const date = new Date('2026-11-26T12:00:00Z');
-    const shift = { closedAt: date, varianceReasonCode: 'MISSING_CASH', varianceReason: null, user: { name: 'Fictional Cashier' }, till: { store: { id: 'store-b', name: 'Branch B' } } };
+    const shift = { closedAt: date, varianceReasonCode: 'MISSING_CASH', varianceReason: null, user: { id: 'cashier-a', name: 'Fictional Cashier' }, till: { store: { id: 'store-b', name: 'Branch B' } } };
     mocks.rows.mockResolvedValue([-8000, 8000, -5000, 5000, -1].map((amount, i) => ({ id: String(i), createdAt: date, variancePence: amount, cashierExplanation: 'MISSING_CASH', shift })));
     const rows = await getUnreviewedHomeCashDifferences('biz');
     expect(mocks.rows).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: 'biz', reviewedAt: null, status: { notIn: ['APPROVED', 'REVIEWED'] }, variancePence: { not: 0 }, shift: { status: 'CLOSED', till: { store: { businessId: 'biz' } } } } }));
