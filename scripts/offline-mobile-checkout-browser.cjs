@@ -55,8 +55,8 @@ async function verify(browser, port, before, width, height) {
       return;
     }
     await page.waitForFunction(() => !document.querySelector('[data-testid="pos-complete-sheet"]')?.disabled);
-    assert.match(await dialog.locator('[data-pos-change-due]').innerText(), /65\.00/);
     const footer = dialog.locator('[data-pos-mobile-sheet-footer]');
+    assert.match(await footer.locator('[data-pos-change-due]').innerText(), /65\.00/);
     const status = dialog.locator('[data-pos-mobile-completion-status]');
     const boxes = await Promise.all([strip, footer, status, complete].map(item => item.boundingBox()));
     for (const box of boxes) {
