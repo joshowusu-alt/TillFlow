@@ -6,7 +6,6 @@ import PageHeader from '@/components/PageHeader';
 import { productDisplayName } from '@/lib/products/barcode-identity';
 import FormError from '@/components/FormError';
 import Pagination from '@/components/Pagination';
-import InlinePaymentForm from '@/components/InlinePaymentForm';
 import IssueResolutionBanner from '@/components/IssueResolutionBanner';
 import LinkPurchaseSupplierForm from '@/components/LinkPurchaseSupplierForm';
 import { prisma } from '@/lib/prisma';
@@ -20,7 +19,11 @@ import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { listSelectableUnits } from '@/lib/units/list-selectable-units';
 import PurchaseFormClient from './PurchaseFormClient';
-import DeletePurchaseButton from './DeletePurchaseButton';
+import PurchaseRow from './PurchaseRow';
+import PurchaseRowMenu from './PurchaseRowMenu';
+import { purchaseStatus } from '@/lib/purchases/presentation';
+import { payableDocumentBalance } from '@/lib/reports/payables-balance';
+import { isSqliteRuntimeEnv } from '@/lib/database-runtime';
 import RecordPurchaseButton from './RecordPurchaseButton';
 import { getBusinessStores } from '@/lib/services/stores';
 import { resolveSoleOrSelectedStoreId } from '@/lib/reliability/selected-store';
@@ -41,6 +44,7 @@ export default async function PurchasesPage(
       supplierId?: string;
       issue?: string;
       awaitingInvoice?: string;
+      q?: string;
     }>;
   }
 ) {
@@ -70,7 +74,7 @@ export default async function PurchasesPage(
     ? await listPurchasesNeedingSupplier(business.id)
     : null;
 
-  const purchaseWhere =
+  const baseWhere =
     invalidIssue
       ? { businessId: business.id, id: { in: ['__none__'] } }
       : missingSupplierIssue
@@ -86,6 +90,9 @@ export default async function PurchasesPage(
             ...(searchParams?.awaitingInvoice==='1'?{receiptDocumentType:'DELIVERY_NOTE',invoiceReceivedAt:null}:{}),
             ...(selectedStoreId ? { storeId: selectedStoreId } : {}),
           };
+  const q = searchParams?.q?.trim() ?? '';
+  const contains = { contains: q, ...(!isSqliteRuntimeEnv() ? { mode: 'insensitive' as const } : {}) };
+  const purchaseWhere = { ...baseWhere, ...(q ? { OR: [{ supplier: { name: contains } }, { transactionNumber: contains }] } : {}) };
   const loadPurchases = (listPage: number) => prisma.purchaseInvoice.findMany({
     where: purchaseWhere,
     select: {
@@ -97,6 +104,7 @@ export default async function PurchasesPage(
       invoiceReceivedAt: true,
       createdAt: true,
       paymentStatus: true,
+      dueDate: true,
       totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true,
       supplier: { select: { name: true } },
       purchaseReturn: { select: { id: true } },
@@ -126,7 +134,7 @@ export default async function PurchasesPage(
     take: DEFAULT_PAGE_SIZE,
   });
 
-  const [products, suppliers, units, purchaseCount, firstPurchases, openShifts] = await Promise.all([
+  const [products, suppliers, units, purchaseCount, firstPurchases, openShifts, allBalances] = await Promise.all([
     prisma.product.findMany({
       where: { ...purchasedStockOnly, businessId: business.id, active: true },
       select: {
@@ -167,6 +175,7 @@ export default async function PurchasesPage(
           orderBy: { openedAt: 'desc' },
         })
       : Promise.resolve([]),
+    prisma.purchaseInvoice.findMany({ where: purchaseWhere, select: { paymentStatus: true, totalPence: true, returnCreditPence: true, creditSettledPence: true, creditAppliedPence: true, payments: { select: { amountPence: true } } } }),
   ]);
 
   const openTills = openShifts.map((shift) => ({
@@ -233,8 +242,7 @@ export default async function PurchasesPage(
         : lineCount > 1
           ? `${lineCount} lines`
           : qtyLabel;
-    const paidPence = purchase.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-    const outstandingPence = purchase.totalPence - paidPence;
+    const outstandingPence = payableDocumentBalance(purchase).balancePence;
     const purchaseReference = [displayDocumentNumber('purchase', purchase.transactionNumber, purchase.id), purchase.supplierInvoiceNumber ? `Supplier: ${purchase.supplierInvoiceNumber}` : '',purchase.receiptDocumentType==='DELIVERY_NOTE'&&!purchase.invoiceReceivedAt?'Awaiting invoice':''].filter(Boolean).join(' · ');
 
     return {
@@ -245,9 +253,7 @@ export default async function PurchasesPage(
       outstandingPence,
     };
   });
-  const unpaidCount = purchaseRows.filter((r) =>
-    ['UNPAID', 'PART_PAID', 'PARTIAL'].includes(r.purchase.paymentStatus)
-  ).length;
+  const unpaidCount = allBalances.filter(row => payableDocumentBalance(row).balancePence > 0).length;
 
   const supplierIssueDef = IMPROVE_RECORDS_ISSUE_DEFS.MISSING_SUPPLIER;
   const issueActive = missingSupplierIssue || invalidIssue;
@@ -261,11 +267,19 @@ export default async function PurchasesPage(
         subtitle={
           missingSupplierIssue && !issueResolved
             ? supplierIssueDef.explanation
-            : 'Record deliveries once — TillFlow updates stock, costs, and payables together.'
+            : 'Record purchases and see what you owe.'
         }
         actions={issueActive ? undefined : quickPurchase ? <Link className="btn-primary" href={QUICK_PURCHASE_HREF}>Record purchase</Link> : <RecordPurchaseButton />}
       />
       <FormError error={searchParams?.error} />
+      <form action="/purchases" method="get" className="flex gap-2">
+        {selectedStoreId && <input type="hidden" name="storeId" value={selectedStoreId} />}
+        {searchParams?.issue && <input type="hidden" name="issue" value={searchParams.issue} />}
+        {searchParams?.awaitingInvoice && <input type="hidden" name="awaitingInvoice" value={searchParams.awaitingInvoice} />}
+        {searchParams?.full && <input type="hidden" name="full" value={searchParams.full} />}
+        <input type="search" aria-label="Search purchases" name="q" defaultValue={q} placeholder="Supplier or purchase number" className="input flex-1" />
+        <button className="btn-secondary" type="submit">Search</button>
+      </form>
 
       {issueActive ? (
         <IssueResolutionBanner
@@ -289,7 +303,6 @@ export default async function PurchasesPage(
           </svg>
           <div className="flex-1">
             <span className="text-sm font-semibold text-success">Purchase recorded.</span>
-            <span className="ml-1.5 text-sm text-ink/70">Stock, supplier balance, and reports have been updated for this branch.</span>
           </div>
           <Link href="/inventory" className="flex-shrink-0 text-xs font-semibold text-accent hover:underline">
             View inventory &rarr;
@@ -301,7 +314,7 @@ export default async function PurchasesPage(
         selectedStoreId ? (
           <EffectiveStoreBanner
             storeName={stores.find((row) => row.id === selectedStoreId)?.name ?? 'Selected branch'}
-            actionLabel="Purchases on this page are recorded in this branch. Switch branches from the header."
+            actionLabel="Purchases for this branch."
           />
         ) : (
           <SelectOperationalStoreNotice
@@ -315,14 +328,14 @@ export default async function PurchasesPage(
       {!issueActive && (
         <div className="operational-metric-grid sm:max-w-xl">
           <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-card">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Total invoices</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Total purchases</div>
             <div className="mt-2 text-2xl font-bold tabular-nums text-ink">{purchaseCount}</div>
             <div className="mt-1 text-xs text-black/50">Supplier deliveries recorded</div>
           </div>
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-card">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700/70">Awaiting payment</div>
             <div className="mt-2 text-2xl font-bold tabular-nums text-amber-800">{unpaidCount}</div>
-            <div className="mt-1 text-xs text-amber-600/70">{purchaseRows.length < purchaseCount ? 'On this page' : 'Unpaid or part paid'}</div>
+            <div className="mt-1 text-xs text-amber-600/70">All matching purchases</div>
           </div>
         </div>
       )}
@@ -344,18 +357,15 @@ export default async function PurchasesPage(
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-display font-semibold">Receive stock</h2>
-                <p className="mt-1 text-sm text-black/55">A single purchase entry updates stock quantities, average cost, and your supplier payable simultaneously.</p>
               </div>
               <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/suppliers">
                 Add supplier
               </Link>
             </div>
             {!selectedStoreId ? (
-              <p className="mt-4 text-sm text-amber-800">Select a store before recording a purchase.</p>
+              <p className="mt-4 text-sm text-amber-800">Select a branch before recording a purchase.</p>
             ) : (
             <PurchaseFormClient
-              receiptPhotoRequired={isFoodBusiness(business.businessCategory) && business.requirePurchasePhoto}
-              photoOptional={isFoodBusiness(business.businessCategory) && !business.requirePurchasePhoto}
               key={searchParams?.created ?? 'default'}
               storeId={selectedStoreId}
               currency={business.currency}
@@ -393,11 +403,6 @@ export default async function PurchasesPage(
               <h2 className="text-lg font-display font-semibold">
                 {missingSupplierIssue ? 'Affected purchases' : searchParams?.awaitingInvoice==='1'?'Awaiting supplier invoice':'Recent purchases'}
               </h2>
-              <p className="text-sm text-black/55">
-                {missingSupplierIssue
-                  ? 'Link a supplier on each unpaid purchase below.'
-                  : 'Review the latest invoices, outstanding balances, and returns.'}
-              </p>
             </div>
             <div className="text-xs text-black/45">
               <Link href={searchParams?.awaitingInvoice==='1'?`/purchases?storeId=${selectedStoreId}`:`/purchases?storeId=${selectedStoreId}&awaitingInvoice=1`} className="mr-3 font-semibold text-accent underline">{searchParams?.awaitingInvoice==='1'?'All purchases':'Awaiting invoice'}</Link>
@@ -409,7 +414,7 @@ export default async function PurchasesPage(
             {purchaseRows.length === 0 && purchaseCount === 0 ? (
               <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6">
                 <div className="text-sm font-semibold text-ink">
-                  {missingSupplierIssue ? 'No purchases missing a supplier.' : 'No purchases recorded yet.'}
+                  {q ? 'No matching purchases.' : missingSupplierIssue ? 'No purchases missing a supplier.' : 'No purchases recorded yet.'}
                 </div>
                 <div className="mt-1 text-sm text-black/55">
                   {missingSupplierIssue
@@ -419,7 +424,7 @@ export default async function PurchasesPage(
               </div>
             ) : (
               purchaseRows.map(({ purchase, lineLabel, outstandingPence, itemSummary, purchaseReference }) => (
-                <div key={purchase.id} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100">
+                <PurchaseRow key={purchase.id} href={`/purchases/${purchase.id}`} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="font-mono text-sm font-semibold text-ink">{purchaseReference}</div>
@@ -429,7 +434,7 @@ export default async function PurchasesPage(
                             Missing supplier
                           </span>}
                     </div>
-                    <span className={`pill-${purchase.paymentStatus.toLowerCase().replace('_', '-')}`}>{purchase.paymentStatus.replace('_', ' ')}</span>
+                    <span className="pill bg-black/5 text-black/70">{purchaseStatus(purchase)}</span>
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -462,32 +467,9 @@ export default async function PurchasesPage(
                         returnTo={returnToIssue}
                       />
                     ) : null}
-                    <div className="flex flex-wrap gap-2">
-                      <Link className="btn-ghost text-xs" href={`/purchases/${purchase.id}`}>
-                        View
-                      </Link>
-                      {!(purchase.purchaseReturn || ['RETURNED','VOID'].includes(purchase.paymentStatus)) ? <Link className="btn-ghost text-xs" href={`/purchases/${purchase.id}?edit=1#edit-purchase`}>Edit</Link> : null}
-                      {!missingSupplierIssue && !(purchase.purchaseReturn || ['RETURNED', 'VOID'].includes(purchase.paymentStatus)) ? (
-                        <>
-                          {['UNPAID', 'PART_PAID', 'PARTIAL'].includes(purchase.paymentStatus) && (
-                            <InlinePaymentForm
-                              invoiceId={purchase.id}
-                              outstandingPence={outstandingPence}
-                              currency={business.currency}
-                              type="supplier"
-                              returnTo="/purchases"
-                              storeId={purchase.storeId}
-                            />
-                          )}
-                          <Link className="btn-ghost text-xs" href={`/purchases/partial-return/${purchase.id}`}>
-                            Return selected items
-                          </Link>
-                          <DeletePurchaseButton purchaseId={purchase.id} />
-                        </>
-                      ) : null}
-                    </div>
+                    <PurchaseRowMenu id={purchase.id} canEdit={!(purchase.purchaseReturn || ['RETURNED','VOID'].includes(purchase.paymentStatus))} canPay={!missingSupplierIssue && outstandingPence > 0 && purchase.storeId === selectedStoreId} canReturn={!missingSupplierIssue && !(purchase.purchaseReturn || ['RETURNED','VOID'].includes(purchase.paymentStatus))} />
                   </div>
-                </div>
+                </PurchaseRow>
               ))
             )}
           </div>
@@ -496,7 +478,7 @@ export default async function PurchasesPage(
             <table className="table w-full border-separate border-spacing-y-1.5">
               <thead>
                 <tr>
-                  <th>Invoice</th>
+                  <th>Purchase</th>
                   <th>Supplier</th>
                   <th>Date</th>
                   <th>Lines</th>
@@ -522,7 +504,7 @@ export default async function PurchasesPage(
                 )}
                 {purchaseRows.map(({ purchase, lineLabel, outstandingPence, itemSummary, purchaseReference }) => {
                   return (
-                    <tr key={purchase.id} className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
+                    <PurchaseRow table key={purchase.id} href={`/purchases/${purchase.id}`} className="rounded-xl bg-white hover:bg-slate-50">
                       <td className="px-3 py-3 font-mono text-xs">{purchaseReference}</td>
                       <td className="px-3 py-3 text-sm">
                         {purchase.supplier?.name
@@ -534,7 +516,7 @@ export default async function PurchasesPage(
                       <td className="px-3 py-3 text-sm">{formatDateTime(purchase.createdAt)}</td>
                       <td className="px-3 py-3 text-sm">{lineLabel}</td>
                       <td className="px-3 py-3">
-                        <span className={`pill-${purchase.paymentStatus.toLowerCase().replace('_', '-')}`}>{purchase.paymentStatus.replace('_', ' ')}</span>
+                        <span className="pill bg-black/5 text-black/70">{purchaseStatus(purchase)}</span>
                       </td>
                       <td className="px-3 py-3 text-sm font-semibold">
                         <RemainingBalance
@@ -544,7 +526,7 @@ export default async function PurchasesPage(
                         />
                       </td>
                       <td className="px-3 py-3">
-                        <div className="flex min-w-[14rem] flex-col gap-2">
+                        <div className="flex flex-col gap-2">
                           {missingSupplierIssue && !purchase.supplier?.name ? (
                             <LinkPurchaseSupplierForm
                               purchaseId={purchase.id}
@@ -556,33 +538,10 @@ export default async function PurchasesPage(
                               returnTo={returnToIssue}
                             />
                           ) : null}
-                          <div className="flex flex-wrap gap-2">
-                            <Link className="btn-ghost text-xs" href={`/purchases/${purchase.id}`}>
-                              View
-                            </Link>
-                            {!(purchase.purchaseReturn || ['RETURNED','VOID'].includes(purchase.paymentStatus)) ? <Link className="btn-ghost text-xs" href={`/purchases/${purchase.id}?edit=1#edit-purchase`}>Edit</Link> : null}
-                            {!missingSupplierIssue && !(purchase.purchaseReturn || ['RETURNED', 'VOID'].includes(purchase.paymentStatus)) ? (
-                              <>
-                                {['UNPAID', 'PART_PAID', 'PARTIAL'].includes(purchase.paymentStatus) && (
-                                  <InlinePaymentForm
-                                    invoiceId={purchase.id}
-                                    outstandingPence={outstandingPence}
-                                    currency={business.currency}
-                                    type="supplier"
-                                    returnTo="/purchases"
-                                    storeId={purchase.storeId}
-                                  />
-                                )}
-                                <Link className="btn-ghost text-xs" href={`/purchases/partial-return/${purchase.id}`}>
-                                  Return selected items
-                                </Link>
-                                <DeletePurchaseButton purchaseId={purchase.id} />
-                              </>
-                            ) : null}
-                          </div>
+                          <PurchaseRowMenu id={purchase.id} canEdit={!(purchase.purchaseReturn || ['RETURNED','VOID'].includes(purchase.paymentStatus))} canPay={!missingSupplierIssue && outstandingPence > 0 && purchase.storeId === selectedStoreId} canReturn={!missingSupplierIssue && !(purchase.purchaseReturn || ['RETURNED','VOID'].includes(purchase.paymentStatus))} />
                         </div>
                       </td>
-                    </tr>
+                    </PurchaseRow>
                   );
                 })}
               </tbody>
@@ -596,6 +555,8 @@ export default async function PurchasesPage(
               storeId: !issueActive ? selectedStoreId || undefined : undefined,
               issue: missingSupplierIssue ? 'MISSING_SUPPLIER' : undefined,
               awaitingInvoice: searchParams?.awaitingInvoice,
+              q: q || undefined,
+              full: searchParams?.full,
             }}
           />
         </div>

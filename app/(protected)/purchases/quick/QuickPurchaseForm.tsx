@@ -8,7 +8,6 @@ import { changeNewQuickPurchaseItem, createQuickPurchaseProduct, saveQuickPurcha
 import { formatMoney } from '@/lib/format';
 import { purchaseDiscountBps } from '@/lib/purchases/discounts';
 import { QUICK_CASH_SOURCES, quickCashShortfallMessage, quickCost, quickMoney, quickPurchaseProblem, quickPurchaseTotal, type QuickCashSource, type QuickRow, type QuickPayment, type QuickProduct, type QuickUnit } from '@/lib/purchases/quick';
-import PurchasePhotoSwitch from './PurchasePhotoSwitch';
 
 type Choice = { id: string; name: string };
 type Props = {
@@ -17,30 +16,6 @@ type Props = {
 };
 const emptyRow = (key: number): QuickRow => ({ key, unitId: '', quantity: '', cost: '', expiry: '' });
 
-async function preparePhoto(file: File): Promise<File> {
-  const limit = 2 * 1024 * 1024;
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    throw new Error('Choose a JPEG, PNG or WebP photo.');
-  }
-  if (file.size <= limit) return file;
-  const bitmap = await createImageBitmap(file);
-  try {
-    const scale = Math.min(1, 1800 / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('Could not prepare this photo.');
-    context.fillStyle = '#fff';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const compressed = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
-    if (!compressed || compressed.size > limit) throw new Error('Choose a photo up to 2 MB.');
-    return new File([compressed], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
-  } finally {
-    bitmap.close();
-  }
-}
 
 function SaveBar({ children }: { children: React.ReactNode }) {
   const bar = useRef<HTMLDivElement>(null);
@@ -104,10 +79,6 @@ export default function QuickPurchaseForm(props: Props) {
   const [payment, setPayment] = useState<QuickPayment>('Cash');
   const [supplier, setSupplier] = useState('');
   const [till, setTill] = useState(props.tills.length === 1 ? props.tills[0].id : '');
-  const [photoRequired, setPhotoRequired] = useState(props.photoRequired);
-  const [photo, setPhoto] = useState<File>();
-  const photoAttempt = useRef(0);
-  const [fileError, setFileError] = useState('');
   const [cashSource, setCashSource] = useState<QuickCashSource | ''>('');
   const [dueDate, setDueDate] = useState('');
   const [invoice, setInvoice] = useState('');
@@ -129,7 +100,7 @@ export default function QuickPurchaseForm(props: Props) {
     setQuantityFocusRow(undefined);
   }, [quantityFocusRow, creating]);
   const selected = rows.filter(row => row.product);
-  const baseProblem = quickPurchaseProblem(rows, payment, supplier, photoRequired, Boolean(photo));
+  const baseProblem = quickPurchaseProblem(rows, payment, supplier, false, false);
   let total = 0;
   let pricingProblem: { id: string; message: string } | undefined;
   let discountBps = 0;
@@ -188,28 +159,14 @@ export default function QuickPurchaseForm(props: Props) {
     setProblemId('');
     try {
       requestKey.current ||= crypto.randomUUID();
-      let document = '';
-      if (photo) {
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result).split(',')[1]);
-          reader.onerror = () => reject(new Error('Could not read this photo.'));
-          reader.readAsDataURL(photo);
-        });
-        document = JSON.stringify([{ name: photo.name, contentType: photo.type, base64 }]);
-      }
       const saved = await saveQuickPurchase({
         storeId: props.storeId, supplierId: supplier, tillId: till, payment,
         supplierInvoiceNumber: invoice, dueDate, cashSource,
-        discount, additionalCost, document, key: requestKey.current,
+        discount, additionalCost, document: '', key: requestKey.current,
         rows: selected.map(row => ({ productId: row.product!.id, unitId: row.unitId, quantity: row.quantity, cost: row.cost, expiry: row.expiry })),
       });
       if (saved.success) setResult(saved.data);
-      else if (saved.error === 'Add a photo of the receipt') {
-        setPhotoRequired(true);
-        setError(saved.error);
-        requestAnimationFrame(() => highlight({ id: 'quick-photo', message: saved.error }));
-      } else {
+      else {
         if (saved.error === shortfallMessage) highlight({ id: 'quick-business-cash', message: saved.error });
         setError(saved.error);
       }
@@ -225,9 +182,6 @@ export default function QuickPurchaseForm(props: Props) {
     setRows([emptyRow(nextKey.current++)]);
     setPayment('Cash');
     setSupplier('');
-    photoAttempt.current++;
-    setPhoto(undefined);
-    setFileError('');
     setInvoice('');
     setDueDate('');
     setCashSource('');
@@ -261,37 +215,14 @@ export default function QuickPurchaseForm(props: Props) {
       {props.suppliers.map(option => <option value={option.id} key={option.id}>{option.name}</option>)}
     </select>
   </div>;
-  const photoField = <div>
-    <label className="block">Invoice photo
-      <input id="quick-photo" className={inputClass('quick-photo')} type="file" accept="image/jpeg,image/png,image/webp"
-        onChange={async event => {
-          const file = event.target.files?.[0];
-          const attempt = ++photoAttempt.current;
-          setPhoto(undefined);
-          setFileError('');
-          if (!file) return;
-          try {
-            const prepared = await preparePhoto(file);
-            if (attempt === photoAttempt.current) setPhoto(prepared);
-          } catch (error) {
-            if (attempt === photoAttempt.current) setFileError(error instanceof Error ? error.message : 'Could not open this photo.');
-          }
- }} />
-    </label>
-    {photo && <p className="text-sm">{photo.name}</p>}
-    {fileError && <p role="alert" className="text-sm text-red-700">{fileError}</p>}
-  </div>;
 
   return <div className="space-y-4">
     <fieldset disabled={busy} className="min-w-0 space-y-4">
     <header className="flex items-start justify-between gap-3">
       <div><h1 className="text-2xl font-semibold">Record purchase</h1><p className="mt-1 text-black/65">What did you buy?</p></div>
-      <details className="relative">
-        <summary className="cursor-pointer py-2 text-sm underline">Settings</summary>
-        <div className="card absolute right-0 z-20 w-[min(17rem,85vw)] bg-white p-4"><PurchasePhotoSwitch required={photoRequired} onChange={setPhotoRequired} /></div>
-      </details>
     </header>
 
+    {supplierField}
     {rows.map(row => {
       const unit = row.product?.units.find(option => option.id === row.unitId);
       const rowTotal = Number(row.quantity) * quickCost(row.cost);
@@ -390,11 +321,8 @@ export default function QuickPurchaseForm(props: Props) {
       <legend className="px-1 font-semibold">How did you pay?</legend>
       <div className="grid grid-cols-3 gap-2">
         {(['Cash', 'MoMo', 'Pay later'] as const).map(option => <button type="button" key={option} aria-pressed={payment === option}
-          className={payment === option ? 'btn-primary justify-center px-1' : 'btn-secondary justify-center px-1'} onClick={() => setPayment(option)}>{option}</button>)}
+          className={payment === option ? 'btn-primary justify-center px-1' : 'btn-secondary justify-center px-1'} onClick={() => setPayment(option)}>{option === 'MoMo' ? 'Mobile Money' : option === 'Pay later' ? 'Owing' : option}</button>)}
       </div>
-      {payment === 'Pay later' && <div className="space-y-2">{supplierField}
-        <label className="block">When will you pay? (optional)<input type="date" className="input text-base" value={dueDate} onChange={event => setDueDate(event.target.value)} /></label>
-      </div>}
       {payment === 'Cash' && props.tills.length !== 1 && <div id="quick-till" tabIndex={-1}>
         {props.tills.length ? <label>Which till?
           <select className="input text-base" value={till} onChange={event => setTill(event.target.value)}>
@@ -422,15 +350,10 @@ export default function QuickPurchaseForm(props: Props) {
       </div>}
     </fieldset>
 
-    {photoRequired && <section className="card space-y-2 p-4">
-      <p className="text-sm font-medium">Receipt photo required (set by owner)</p>
-      {photoField}
-    </section>}
     <details className="card p-4">
-      <summary className="cursor-pointer font-semibold">More options</summary>
+      <summary className="cursor-pointer font-semibold">More details</summary>
       <div className="mt-4 space-y-3">
-        {!photoRequired && photoField}
-        {payment !== 'Pay later' && supplierField}
+        {payment === 'Pay later' && <label className="block">Due date (optional)<input type="date" className="input text-base" value={dueDate} onChange={event => setDueDate(event.target.value)} /></label>}
         <label className="block">Supplier invoice number<input className="input text-base" maxLength={100} value={invoice} onChange={event => setInvoice(event.target.value)} /></label>
         {selected.map(row => <label key={row.key} className="block">Expiry date for {row.product!.name}<input className="input text-base" type="date" value={row.expiry} onChange={event => changeRow(row.key, { expiry: event.target.value })} /></label>)}
         <label className="block">Invoice discount (%)<input id="quick-discount" className={inputClass('quick-discount')} inputMode="decimal" value={discount} onChange={event => setDiscount(event.target.value)} /></label>

@@ -113,7 +113,7 @@ describe('purchase unit conversion', () => {
     ensureChartOfAccountsMock.mockResolvedValue(undefined);
   });
 
-  it('enforces the food photo requirement before writing and rejects prepared dishes', async () => {
+  it('ignores legacy photo requirement but still rejects prepared dishes', async () => {
     const food = { id: bizId, vatEnabled: false, currency: 'GHS', businessCategory: 'FOOD_DISHES' };
     const input = {
       businessId: bizId, storeId, supplierId: 'supplier-a', userId, paymentStatus: 'UNPAID' as const,
@@ -121,8 +121,7 @@ describe('purchase unit conversion', () => {
     };
     prismaMock.productUnit.findMany.mockResolvedValue([]);
     prismaMock.business.findUnique.mockResolvedValue({ ...food, requirePurchasePhoto: true });
-    await expect(createPurchase(input)).rejects.toThrow('Add a photo of the receipt');
-    await expect(createPurchase({ ...input, quickPurchase: undefined })).rejects.toThrow('Add a photo of the receipt');
+    await expect(createPurchase(input)).rejects.toThrow('Choose an available ingredient or item you resell.');
     prismaMock.business.findUnique.mockResolvedValue({ ...food, requirePurchasePhoto: false });
     await expect(createPurchase(input)).rejects.toThrow('Choose an available ingredient or item you resell.');
     expect(prismaMock.product.findMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -168,9 +167,11 @@ describe('purchase unit conversion', () => {
     expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
   });
 
-  it('requires a source invoice before posting purchase stock or payments',async()=>{
-    await expect(createPurchase({businessId:bizId,storeId,userId,paymentStatus:'UNPAID',payments:[],lines:[{productId:'p',unitId:'unit',qtyInUnit:1,unitCostPence:100}]})).rejects.toThrow('Attach the supplier');
-    expect(prismaMock.purchaseInvoice.create).not.toHaveBeenCalled();expect(prismaMock.stockMovement.createMany).not.toHaveBeenCalled();expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+  it('records a purchase without a source invoice',async()=>{
+    prismaMock.productUnit.findMany.mockResolvedValue([{productId:'p',unitId:'unit',conversionToBase:1,product:{name:'Bread',defaultCostBasePence:100,vatRateBps:0},unit:{name:'Piece'}}]);
+    await createPurchase({businessId:bizId,storeId,userId,supplierId:'supplier-a',paymentStatus:'UNPAID',payments:[],lines:[{productId:'p',unitId:'unit',qtyInUnit:1,unitCostPence:100}]});
+    expect(prismaMock.purchaseInvoice.create).toHaveBeenCalled();
+    expect(prismaMock.stockMovement.createMany).toHaveBeenCalled();
   });
 
   it('capitalises quantity-allocated delivery in stock and journals while preserving the supplier reference', async () => {

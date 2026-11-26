@@ -374,12 +374,9 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   if (!business) throw new Error('Business not found');
   const food = isFoodBusiness(business.businessCategory);
   if (input.quickPurchase && !food) throw new UserError('Quick purchase is only available for food businesses.');
-  const hasDocuments = Boolean(input.sourceDocuments?.length);
-  const optionalDocuments = input.stockMovementType === 'OPENING' || (food && !business.requirePurchasePhoto);
-  if (food && !optionalDocuments && !input.sourceDocuments?.some(document => document.contentType.startsWith('image/'))) {
-    throw new UserError('Add a photo of the receipt');
-  }
-  const sourceDocuments = !hasDocuments && optionalDocuments ? [] : validatePurchaseDocuments(input.sourceDocuments ?? []);
+  // A purchase is valid without an attachment. Validate and retain any files
+  // supplied by older clients; existing stored documents are untouched.
+  const sourceDocuments = input.sourceDocuments?.length ? validatePurchaseDocuments(input.sourceDocuments) : [];
   if (input.quickPurchase) {
     const eligible = await dbClient.product.findMany({
       where: {

@@ -37,7 +37,7 @@ export function quickCost(value: string) {
 export function validQuickQuantity(value: string) {
   return /^\d+$/.test(value.trim()) && Number(value) > 0 && Number(value) <= 2147483647;
 }
-export function quickPurchaseProblem(rows: QuickRow[], payment: QuickPayment, supplier: string, photoRequired: boolean, photo: boolean) {
+export function quickPurchaseProblem(rows: QuickRow[], payment: QuickPayment, supplier: string, _photoRequired: boolean, _photo: boolean) {
   const selected = rows.filter(row => row.product);
   if (!selected.length) return { id: 'item-' + rows[0]?.key, message: 'Choose an item you bought' };
   for (const row of selected) {
@@ -48,7 +48,6 @@ export function quickPurchaseProblem(rows: QuickRow[], payment: QuickPayment, su
     }
   }
   if (payment === 'Pay later' && !supplier) return { id: 'quick-supplier', message: "Choose who you're paying later" };
-  if (photoRequired && !photo) return { id: 'quick-photo', message: 'Add a photo of the receipt' };
 }
 
 export function quickPurchaseTotal(rows: QuickRow[], discountBps: number, vatEnabled: boolean) {

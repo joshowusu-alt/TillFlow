@@ -302,16 +302,13 @@ async function openPurchaseForm(page) {
   await addLineButton.waitFor({ state: 'visible', timeout: 10000 });
 }
 
-async function attachPurchaseEvidence(page) {
-  await page.locator('#record-purchase-form input[type="file"]').setInputFiles({
-    name: 'synthetic-supplier-invoice.pdf',
-    mimeType: 'application/pdf',
-    buffer: Buffer.from('%PDF-1.4\nSynthetic CI supplier invoice\n%%EOF'),
-  });
-  await page.waitForFunction(() => {
-    const input = document.querySelector('#record-purchase-form input[name="purchaseDocumentsJson"]');
-    return input && JSON.parse(input.value || '[]').length === 1;
-  });
+async function addPurchaseProduct(page) {
+  const form = page.locator('#record-purchase-form');
+  const search = form.getByPlaceholder(/Type to search product/i);
+  await search.fill('Coca-Cola 500ml');
+  await form.getByRole('button', { name: /Coca-Cola 500ml/i }).click();
+  await form.getByRole('button', { name: /^Add line$/i }).click();
+  if (await form.locator('input[type="file"]').count()) throw new Error('Purchase should not request an upload');
 }
 
 async function seedUnpaidExpense() {
@@ -429,7 +426,7 @@ async function run() {
     await page.goto(`${BASE_URL}/purchases`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
     await openPurchaseForm(page);
-    await page.getByRole('button', { name: /^Add line$/i }).click();
+    await addPurchaseProduct(page);
     await page.waitForTimeout(500);
     // Default paymentStatus is PAID with no payment amounts entered, which the
     // server auto-fills as a full cash payment - that requires an open till
@@ -438,7 +435,6 @@ async function run() {
     // cash-drawer dependency.
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
-    await attachPurchaseEvidence(page);
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     // On success, createPurchaseAction redirects to the invoice detail page
     // (/purchases/{id}?created=1), not back to the list page, so wait for
@@ -482,11 +478,10 @@ async function run() {
     await page.goto(`${BASE_URL}/purchases`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
     await openPurchaseForm(page);
-    await page.getByRole('button', { name: /^Add line$/i }).click();
+    await addPurchaseProduct(page);
     await page.waitForTimeout(500);
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
-    await attachPurchaseEvidence(page);
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
     step('6b/12 Create unpaid purchase OK');

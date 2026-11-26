@@ -241,3 +241,61 @@ jobs:
             tmp/ui-programme-evidence/**
             .ci-server.log
           if-no-files-found: ignore
+
+  purchases-visual-evidence:
+    name: purchases-visual-evidence
+    if: github.event_name == 'pull_request' && github.head_ref == 'remediation/purchases-simple-owner'
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: file:${{ github.workspace }}/prisma/ci-purchase-visual.db
+      E2E_OWNER_EMAIL: owner@store.com
+      E2E_OWNER_PASSWORD: Pass1234!
+      VERCEL_ENV: preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:prepare:ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: .next
+      - uses: actions/checkout@v4
+        with:
+          ref: c75dadbfc8a58f255292560fdc99a1f65b05b5e6
+          path: baseline
+          persist-credentials: false
+      - name: Build the exact pre-change app
+        working-directory: baseline
+        run: |
+          npm ci
+          npx prisma generate --schema=prisma/schema.prisma
+          npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Capture actual before and after screens
+        run: |
+          set -euo pipefail
+          npm run start -- -p 6200 > .candidate-server.log 2>&1 &
+          (cd baseline && npm run start -- -p 6201) > .baseline-server.log 2>&1 &
+          for port in 6200 6201; do
+            for i in {1..60}; do
+              if curl -fsS "http://localhost:$port/login" >/dev/null; then break; fi
+              sleep 1
+            done
+            curl -fsS "http://localhost:$port/login" >/dev/null
+          done
+          node scripts/purchases-visual-evidence.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: purchases-before-after
+          path: |
+            tmp/purchases-visual/*.png
+            .candidate-server.log
+            .baseline-server.log
+          include-hidden-files: true

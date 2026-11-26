@@ -1,7 +1,6 @@
 'use client';
 import Link from 'next/link';
 
-import PurchaseDocumentInput from '@/components/purchases/PurchaseDocumentInput';
 import BatchDateFields from '@/components/inventory/BatchDateFields';
 import { readBatchDates } from '@/lib/inventory/batch-dates';
 import { pricePurchaseLines, purchaseDiscountBps } from '@/lib/purchases/discounts';
@@ -116,8 +115,6 @@ export default function PurchaseFormClient({
   vatEnabled,
   openTills = [],
   cashPeople = [],
-  photoOptional = false,
-  receiptPhotoRequired = false,
 }: {
   storeId: string;
   products: ProductDto[];
@@ -143,9 +140,9 @@ export default function PurchaseFormClient({
   const [additionalCost, setAdditionalCost] = useState('');
   const [additionalCostTreatment, setAdditionalCostTreatment] = useState<'INVENTORY' | 'EXPENSE'>('EXPENSE');
   const [additionalCostNote, setAdditionalCostNote] = useState('');
-  const [productId, setProductId] = useState(products[0]?.id ?? '');
-  const [unitId, setUnitId] = useState(products[0]?.units[0]?.id ?? '');
-  const [qtyInput, setQtyInput] = useState('1');
+  const [productId, setProductId] = useState('');
+  const [unitId, setUnitId] = useState('');
+  const [qtyInput, setQtyInput] = useState('');
   const [unitCostInput, setUnitCostInput] = useState('');
   const [productionDate, setProductionDate] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
@@ -202,9 +199,9 @@ export default function PurchaseFormClient({
     setIdempotencyKey(readOrCreatePurchaseOperationKey(storeId));
     setDraftNotice(null);
     setSupplierId('');
-    setProductId(products[0]?.id ?? '');
-    setUnitId(products[0]?.units[0]?.id ?? '');
-    setQtyInput('1');
+    setProductId('');
+    setUnitId('');
+    setQtyInput('');
     setUnitCostInput('');
     setUnitCostTouched(false);
     setCart([]);
@@ -221,7 +218,7 @@ export default function PurchaseFormClient({
     setBarcodeLookup('');
     setProductSearch('');
     setProductDropdownOpen(false);
-  }, [products, storeId]);
+  }, [storeId]);
 
   useEffect(() => {
     const requestedSupplierId = searchParams?.get('supplierId') ?? '';
@@ -652,6 +649,11 @@ export default function PurchaseFormClient({
   };
 
   const discardDraft = () => {
+    setProductId('');
+    setUnitId('');
+    setQtyInput('');
+    setUnitCostInput('');
+    setUnitCostTouched(false);
     clearPurchaseOperationKey(storeId);
     setIdempotencyKey(readOrCreatePurchaseOperationKey(storeId));
     setPurchaseDiscountPercent('');
@@ -695,7 +697,6 @@ export default function PurchaseFormClient({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-black/40">Quick add product</div>
-            <div className="text-sm text-black/60">Create a new product without leaving purchases.</div>
           </div>
           <button
             type="button"
@@ -819,20 +820,10 @@ export default function PurchaseFormClient({
         <input type="hidden" name="transferPaid" value={Math.max(0, transferPaidPence)} />
         {paymentStatus !== 'UNPAID' && cashSource === 'TILL' && openTills.length === 1 ? <input type="hidden" name="tillId" value={openTills[0]!.tillId} /> : null}
 
-        <label className="label">Receiving document<select name="receiptDocumentType" className="input mt-1" value={receiptDocumentType} onChange={event=>setReceiptDocumentType(event.target.value as 'INVOICE' | 'DELIVERY_NOTE')}><option value="INVOICE">Supplier invoice</option><option value="DELIVERY_NOTE">Delivery note — invoice to follow</option></select></label>
-        {receiptDocumentType === 'DELIVERY_NOTE' ? <p className="text-sm text-amber-800">Confirm quantities and supplier costs before recording. This purchase will stay in Awaiting invoice until the supplier invoice is attached.</p> : null}
-        <PurchaseDocumentInput required={!photoOptional} imagesOnly={receiptPhotoRequired} /><p className="text-xs text-black/50">If you restore a draft or reopen this page, select the document files again before recording.</p>
-        <div className="rounded-xl border border-slate-200 p-4">
-          <label className="label" htmlFor="supplier-invoice-number">Supplier’s original invoice number (optional)</label>
-          <input id="supplier-invoice-number" name="supplierInvoiceNumber" className="input" maxLength={100} value={supplierInvoiceNumber} onChange={event => { setSupplierInvoiceNumber(event.target.value); setDuplicateInvoice(null); }} onBlur={async () => { try { const result = await checkSupplierInvoiceReferenceAction(supplierId, supplierInvoiceNumber); if (result.success) setDuplicateInvoice(result.data); } catch { /* Optional duplicate hint must not interrupt entry. */ } }} placeholder="e.g. INV-2026-1042" />
-          <p className="mt-1 text-xs text-black/55">Copy the number printed on the supplier’s invoice. TillFlow also creates its own PUR number.</p>
-          {duplicateInvoice ? <p role="status" className="mt-2 text-sm text-amber-800">This supplier’s invoice number is already recorded on <Link className="underline" href={`/purchases/${duplicateInvoice.id}`}>{duplicateInvoice.transactionNumber || 'an earlier purchase'}</Link>. Check before recording it again.</p> : null}
-        </div>
         <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-4 sm:p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="text-xs uppercase tracking-[0.2em] text-black/40">Add items</div>
-              <div className="mt-1 text-sm text-black/60">Look up a product, choose the purchase unit, then add the line to the cart.</div>
             </div>
             <div className="text-xs text-black/45">{cart.length} line{cart.length === 1 ? '' : 's'} in cart</div>
           </div>
@@ -908,7 +899,7 @@ export default function PurchaseFormClient({
             ) : !supplierId ? (
               <p className="mt-1 flex items-center gap-1 text-xs text-amber-700">
                 <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
-                No supplier selected - recording as unattributed delivery.
+                No supplier selected.
               </p>
             ) : null}
             </div>
@@ -996,7 +987,7 @@ export default function PurchaseFormClient({
             ) : null}
           </div>
           <div>
-            <label className="label">
+            <label className="label" htmlFor="purchase-quantity">
               Quantity ({isPackMode ? `packs` : selectedUnit?.name ?? 'units'})
             </label>
             <input
@@ -1005,6 +996,7 @@ export default function PurchaseFormClient({
               min={1}
               step={1}
               inputMode="numeric"
+              id="purchase-quantity"
               value={qtyInput}
               onChange={(event) => setQtyInput(event.target.value)}
               onFocus={(event) => event.currentTarget.select()}
@@ -1021,13 +1013,14 @@ export default function PurchaseFormClient({
             ) : null}
           </div>
           <div>
-            <label className="label">{isPackMode ? 'Cost per pack' : `Cost per ${selectedUnit?.name ?? 'unit'}`}</label>
+            <label className="label" htmlFor="purchase-unit-cost">{isPackMode ? 'Cost per pack' : `Cost per ${selectedUnit?.name ?? 'unit'}`}</label>
             <input
               className="input"
               type="number"
               min={0}
               step="0.01"
               inputMode="decimal"
+              id="purchase-unit-cost"
               value={unitCostInput}
               onChange={(event) => {
                 setUnitCostInput(event.target.value);
@@ -1044,7 +1037,7 @@ export default function PurchaseFormClient({
               </div>
             ) : null}
           </div>
-          <div className="min-w-0 sm:col-span-2 xl:col-span-3">
+          <details className="min-w-0 sm:col-span-2 xl:col-span-3"><summary className="cursor-pointer text-xs font-semibold">Item dates (optional)</summary>
             <BatchDateFields
               idPrefix="purchase-line"
               productionDate={productionDate}
@@ -1052,8 +1045,8 @@ export default function PurchaseFormClient({
               onProductionDate={setProductionDate}
               onExpiryDate={setExpiryDate}
             />
-            {lineError ? <p role="alert" className="mt-2 text-sm text-red-700">{lineError}</p> : null}
-          </div>
+          </details>
+          {lineError ? <p role="alert" className="mt-2 text-sm text-red-700">{lineError}</p> : null}
           <div className="flex items-end">
             <button type="button" className="btn-primary w-full" onClick={addToCart}>
               Add line
@@ -1251,7 +1244,14 @@ export default function PurchaseFormClient({
           )}
         </div>
 
-        <div className="rounded-xl border border-slate-200 p-4"><label className="label" htmlFor="purchase-discount">Extra invoice discount (%)</label><input id="purchase-discount" name="purchaseDiscountPercent" className="input mt-1 max-w-xs" type="number" min="0" max="100" step="0.01" value={purchaseDiscountPercent} onChange={event=>setPurchaseDiscountPercent(event.target.value)} /><p className="mt-2 text-sm text-black/60">Applied after item discounts, before VAT. Total discount: {formatMoney(discountPricing.lines.reduce((sum,line)=>sum+line.discountPence,0),currency)}.</p>{discountPricing.error ? <p role="alert" className="text-sm text-red-700">{discountPricing.error}</p> : null}</div>
+        <details className="rounded-xl border border-slate-200 p-4"><summary className="cursor-pointer font-semibold text-sm">More details</summary>
+        <label className="label mt-3">Receiving document<select name="receiptDocumentType" className="input mt-1" value={receiptDocumentType} onChange={event=>setReceiptDocumentType(event.target.value as 'INVOICE' | 'DELIVERY_NOTE')}><option value="INVOICE">Supplier invoice</option><option value="DELIVERY_NOTE">Delivery note</option></select></label>
+        <div className="rounded-xl border border-slate-200 p-4">
+          <label className="label" htmlFor="supplier-invoice-number">Supplier’s original invoice number (optional)</label>
+          <input id="supplier-invoice-number" name="supplierInvoiceNumber" className="input" maxLength={100} value={supplierInvoiceNumber} onChange={event => { setSupplierInvoiceNumber(event.target.value); setDuplicateInvoice(null); }} onBlur={async () => { try { const result = await checkSupplierInvoiceReferenceAction(supplierId, supplierInvoiceNumber); if (result.success) setDuplicateInvoice(result.data); } catch { /* Optional duplicate hint must not interrupt entry. */ } }} placeholder="e.g. INV-2026-1042" />
+          {duplicateInvoice ? <p role="status" className="mt-2 text-sm text-amber-800">This supplier’s invoice number is already recorded on <Link className="underline" href={`/purchases/${duplicateInvoice.id}`}>{duplicateInvoice.transactionNumber || 'an earlier purchase'}</Link>. Check before recording it again.</p> : null}
+        </div>
+        <label className="label mt-3" htmlFor="purchase-discount">Extra invoice discount (%)</label><input id="purchase-discount" name="purchaseDiscountPercent" className="input mt-1 max-w-xs" type="number" min="0" max="100" step="0.01" value={purchaseDiscountPercent} onChange={event=>setPurchaseDiscountPercent(event.target.value)} />{discountPricing.error ? <p role="alert" className="text-sm text-red-700">{discountPricing.error}</p> : null}
         <details className="rounded-xl border border-slate-200 p-4" open={extraCostPence > 0 || undefined}>
           <summary className="cursor-pointer font-semibold text-sm">Add delivery or other purchase costs</summary>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -1263,13 +1263,15 @@ export default function PurchaseFormClient({
             </div>
           </div>
         </details>
+        {paymentStatus !== 'PAID' ? <div className="mt-3"><label className="label" htmlFor="purchase-due-date">Due date</label><input id="purchase-due-date" className="input" name="dueDate" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></div> : null}
+        </details>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div>
             <label className="label" htmlFor="purchase-payment-status">Payment Status</label>
             <select id="purchase-payment-status" className="input" name="paymentStatus" value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value as PaymentStatus)}>
-              <option value="PAID">Paid</option>
-              <option value="PART_PAID">Part Paid</option>
-              <option value="UNPAID">Unpaid</option>
+              <option value="PAID">Paid now</option>
+              <option value="PART_PAID">Part paid</option>
+              <option value="UNPAID">Owing</option>
             </select>
           </div>
           {paymentStatus !== 'UNPAID' ? <div>
@@ -1282,7 +1284,7 @@ export default function PurchaseFormClient({
                     checked={hasMethod(method)}
                     onChange={() => togglePaymentMethod(method)}
                   />
-                  <span>{method === 'CASH' ? 'Cash' : method === 'CARD' ? 'Card' : 'Transfer'}</span>
+                  <span>{method === 'CASH' ? 'Cash' : method === 'CARD' ? 'Card' : 'Bank'}</span>
                 </label>
               ))}
             </div>
@@ -1320,12 +1322,8 @@ export default function PurchaseFormClient({
               </select>
             </div>
           ) : null}
-          {paymentStatus !== 'PAID' ? <div>
-            <label className="label" htmlFor="purchase-due-date">Due Date</label>
-            <input id="purchase-due-date" className="input" name="dueDate" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
-          </div> : null}
           <div>
-            <label className="label">Cart Total</label>
+            <label className="label">Total</label>
             <div className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold">
               {formatMoney(totals.total, currency)}
             </div>
@@ -1363,7 +1361,7 @@ export default function PurchaseFormClient({
           ) : null}
           {paymentStatus !== 'UNPAID' && hasMethod('TRANSFER') ? (
             <div>
-              <label className="label">Transfer Paid</label>
+              <label className="label">Bank payment</label>
               <input
                 className="input"
                 type="number"
