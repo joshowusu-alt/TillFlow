@@ -206,7 +206,9 @@ export function buildCartDetails(
     .filter(Boolean) as PosCartDetail[];
 }
 
-export function buildAvailableBaseMap(cart: PosCartLine[], productMap: Map<string, PosProduct>) {
+/** The cart badge can distinguish exact stock usage (zero) from a deficit
+ * (negative), while other callers keep the non-negative availability contract. */
+export function buildAvailableBaseMap(cart: PosCartLine[], productMap: Map<string, PosProduct>, includeDeficit = false) {
   const usedMap = new Map<string, number>();
   for (const line of cart) {
     const product = productMap.get(line.productId);
@@ -224,14 +226,15 @@ export function buildAvailableBaseMap(cart: PosCartLine[], productMap: Map<strin
   for (const [productId, used] of usedMap) {
     const product = productMap.get(productId);
     if (!isDishAvailableToday(product?.food)) {
-      result.set(productId, 0);
+      result.set(productId, includeDeficit ? -used : 0);
       continue;
     }
     if (product?.food?.soldOut || product?.food?.stockMode === 'NOT_COUNTED') {
-      result.set(productId, sellableBaseQty(product.food, product.onHandBase));
+      result.set(productId, includeDeficit && product.food.soldOut ? -used : sellableBaseQty(product.food, product.onHandBase));
       continue;
     }
-    result.set(productId, Math.max((product?.onHandBase ?? 0) - used, 0));
+    const remaining = (product?.onHandBase ?? 0) - used;
+    result.set(productId, includeDeficit ? remaining : Math.max(remaining, 0));
   }
   return result;
 }

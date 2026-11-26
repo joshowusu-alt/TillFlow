@@ -24,6 +24,21 @@ describe('computeDiscount', () => {
 });
 
 describe('calculateCheckoutSummary', () => {
+  it.each([
+    ['20', '30', 2000, 0, false],
+    ['100', '30', 2000, 8000, false],
+    ['0', '60', 0, 0, true],
+  ] as const)('handles cash %s and MoMo %s on a 50 total', (cashTendered, momoPaid, cashApplied, changeDue, nonCashOverpay) => {
+    const result = calculateCheckoutSummary({
+      totals: { subtotal: 5000, lineDiscount: 0, promoDiscount: 0, netSubtotal: 5000, vat: 0 },
+      orderDiscountType: 'NONE', orderDiscountInput: '', vatEnabled: false,
+      paymentMethods: ['CASH', 'MOBILE_MONEY'], cashTendered, momoPaid,
+      cardPaid: '', transferPaid: '', momoNetwork: 'MTN', momoPayerMsisdn: '', momoCollectionStatus: 'IDLE',
+    });
+    expect(result).toMatchObject({ cashApplied, changeDue, nonCashOverpay, balanceRemaining: 0 });
+    if (!nonCashOverpay) expect(result.totalPaid).toBe(5000);
+  });
+
   it('computes totals for mixed cash/card checkout', () => {
     const summary = calculateCheckoutSummary({
       totals: { subtotal: 10000, lineDiscount: 500, promoDiscount: 0, netSubtotal: 9500, vat: 0 },

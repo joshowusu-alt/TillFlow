@@ -19,8 +19,6 @@ type PosCheckoutPanelProps = {
   availablePaymentMethods: PosPaymentMethod[];
   paymentMethods: PosPaymentMethod[];
   onTogglePaymentMethod: (method: PosPaymentMethod) => void;
-  showSplitPanel: boolean;
-  onToggleSplitPanel: () => void;
   cashTendered: string;
   onCashTenderedChange: (value: string) => void;
   cashRef: RefObject<HTMLInputElement>;
@@ -63,8 +61,6 @@ export default function PosCheckoutPanel({
   availablePaymentMethods,
   paymentMethods,
   onTogglePaymentMethod,
-  showSplitPanel,
-  onToggleSplitPanel,
   cashTendered,
   onCashTenderedChange,
   cashRef,
@@ -87,6 +83,8 @@ export default function PosCheckoutPanel({
   momoGuidance,
   totalDue,
   totalPaid,
+  balanceRemaining,
+  changeDue,
   cashTenderedPence = 0,
   exactCashAssumed = false,
   dueDateDecision,
@@ -106,6 +104,10 @@ export default function PosCheckoutPanel({
   const showCard = showMethods && hasMethod('CARD') && (isSplit || showAmountInputs);
   const showTransfer = showMethods && hasMethod('TRANSFER') && (isSplit || showAmountInputs);
   const showMomo = showMethods && hasMethod('MOBILE_MONEY');
+  const remainingMethods = availablePaymentMethods.filter((method) => !hasMethod(method));
+  const hasTypedAmount = [cashTendered, cardPaid, transferPaid, momoPaid].some((amount) => amount.trim() !== '');
+  const showRest = paymentStatus === 'PAID' && balanceRemaining > 0 &&
+    (hasTypedAmount || isSplit) && remainingMethods.length > 0;
 
   return (
     <div id="pos-payment-panel" tabIndex={-1} className="space-y-3 rounded-2xl border border-black/10 bg-white p-3 sm:p-4">
@@ -129,7 +131,7 @@ export default function PosCheckoutPanel({
           <div className="min-w-0">
             <div className="label">Method</div>
             <div className="mt-1.5 flex flex-wrap gap-2">
-              {availablePaymentMethods.map((method) => (
+              {availablePaymentMethods.filter((method) => !(showRest || (isSplit && balanceRemaining === 0)) || hasMethod(method)).map((method) => (
                 <button
                   key={method}
                   type="button"
@@ -146,24 +148,7 @@ export default function PosCheckoutPanel({
                   {paymentMethodLabel(method)}
                 </button>
               ))}
-              <button
-                type="button"
-                onClick={onToggleSplitPanel}
-                aria-pressed={isSplit || showSplitPanel}
-                className={`rounded-full px-3 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                  isSplit || showSplitPanel
-                    ? 'bg-slate-800 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                Split…
-              </button>
             </div>
-            {isSplit || showSplitPanel ? (
-              <div className="mt-2 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-medium text-slate-700">
-                Split payment — select every method that will be used, then enter each amount.
-              </div>
-            ) : null}
           </div>
         ) : (
           <div className="flex-[2] rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 ring-1 ring-amber-200">
@@ -245,7 +230,7 @@ export default function PosCheckoutPanel({
             <button
               type="button"
               className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700 hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              onClick={() => onCashTenderedChange(String(totalDue / 100))}
+              onClick={() => onCashTenderedChange(String(Math.max(totalDue - totalPaid + cashTenderedPence - changeDue, 0) / 100))}
             >
               Exact
             </button>
@@ -254,12 +239,13 @@ export default function PosCheckoutPanel({
         </div>
       ) : null}
 
-      {(showCard || showTransfer || showMomo || (showSplitPanel && showMethods)) && (
+      {(showCard || showTransfer || showMomo) && (
         <div className="grid gap-3">
-          {(showCard || (showSplitPanel && hasMethod('CARD'))) && (
+          {showCard && (
             <div>
-              <label className="label">Card amount</label>
+              <label className="label" htmlFor="pos-card-paid">Card amount</label>
               <input
+                id="pos-card-paid"
                 className="input"
                 type="number"
                 min={0}
@@ -280,10 +266,11 @@ export default function PosCheckoutPanel({
               />
             </div>
           )}
-          {(showTransfer || (showSplitPanel && hasMethod('TRANSFER'))) && (
+          {showTransfer && (
             <div>
-              <label className="label">Bank Transfer amount</label>
+              <label className="label" htmlFor="pos-transfer-paid">Bank Transfer amount</label>
               <input
+                id="pos-transfer-paid"
                 className="input"
                 type="number"
                 min={0}
@@ -306,11 +293,12 @@ export default function PosCheckoutPanel({
           )}
           {showMomo && (
             <div>
-              <label className="label flex items-center gap-1.5">
+              <label className="label flex items-center gap-1.5" htmlFor="pos-momo-paid">
                 <span className="inline-block h-2 w-2 rounded-full bg-yellow-500" />
                 MoMo amount
               </label>
               <input
+                id="pos-momo-paid"
                 className="input"
                 type="number"
                 min={0}
@@ -360,6 +348,21 @@ export default function PosCheckoutPanel({
 
       {!isUnpaid ? <div className="space-y-1 text-sm text-slate-600" data-pos-payment-amounts="true">{showCashControls ? <div className="flex justify-between gap-2"><span>{exactCashAssumed ? 'Exact cash assumed' : 'Cash tendered'}</span><span className="font-semibold tabular-nums">{formatMoney(cashTenderedPence, currency)}</span></div> : null}<div className="flex justify-between gap-2"><span>Applied to sale</span><span className="font-semibold tabular-nums">{formatMoney(totalPaid, currency)}</span></div></div> : null}
 
+      {showRest ? (
+        <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-950">
+          <div className="font-semibold">Still owed {formatMoney(balanceRemaining, currency)}</div>
+          <div className="mt-1">Pay the rest with:</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {remainingMethods.map((method) => (
+              <button key={method} type="button" aria-pressed={false}
+                className="rounded-full bg-white px-3 py-2 font-semibold ring-1 ring-amber-200"
+                onClick={() => onTogglePaymentMethod(method)}>
+                {paymentMethodLabel(method)}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

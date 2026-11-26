@@ -22,7 +22,8 @@ import { usePosSaleResult } from '@/hooks/usePosSaleResult';
 import { usePosScannerBuffer } from '@/hooks/usePosScannerBuffer';
 import { usePosUndoHistory } from '@/hooks/usePosUndoHistory';
 import { useStagedProductSelection } from '@/hooks/useStagedProductSelection';
-import { getProductBaseUnitId } from '@/lib/payments/pos-barcode';
+import { getProductBaseUnitId, resolveBarcodeScan } from '@/lib/payments/pos-barcode';
+import { handleScannerEnter, resetScannerBuffer, updateScannerBufferState } from '@/lib/payments/pos-scanner';
 import { buildPosProductIndex } from '@/lib/pos/product-index';
 import { resolvePosTillId } from '@/lib/pos/till-context';
 import { usePosBarcodeHandler } from '@/hooks/usePosBarcodeHandler';
@@ -200,7 +201,6 @@ export default function PosClient({
   const [unitId, setUnitId] = useState(products[0]?.units.find((u) => u.isBaseUnit)?.id ?? '');
   const [qtyInUnitInput, setQtyInUnitInput] = useState('1');
   const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'PART_PAID' | 'UNPAID'>('PAID');
-  const [barcode, setBarcode] = useState('');
   const [tillId, setTillId] = useState(() => {
     return resolvePosTillId({
       requestedTillId: searchParams?.get('till') ?? searchParams?.get('tillId'),
@@ -216,7 +216,6 @@ export default function PosClient({
   const [transferRef, setTransferRef] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [dueDateDecision, setDueDateDecision] = useState<DueDateDecision>('unset');
-  const [showSplitPanel, setShowSplitPanel] = useState(false);
   const saleAttemptStorageKey = useMemo(
     () => buildPosSaleAttemptStorageKey(business.id, store.id),
     [business.id, store.id]
@@ -289,10 +288,15 @@ export default function PosClient({
   const [quickAddBarcode, setQuickAddBarcode] = useState('');
   const [pendingScan, setPendingScan] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
+  const [readySearch, setReadySearch] = useState('');
+  const [serverResultQuery, setServerResultQuery] = useState('');
+  const [highlightedProduct, setHighlightedProduct] = useState(0);
+  const inputScanner = useRef({ value: '', lastTime: 0, fastCount: 0, active: false });
+  const lastScan = useRef({ code: '', time: 0 });
+  const pendingSearchEnter = useRef<string | null>(null);
   const [serverSearchMatches, setServerSearchMatches] = useState<ProductDto[]>([]);
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const productSearchRef = useRef<HTMLInputElement>(null);
   const productSearchShellRef = useRef<HTMLDivElement>(null);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const {
@@ -365,6 +369,11 @@ export default function PosClient({
   });
   /** Filled vs empty cart. Phone vs desktop chrome is CSS (`max-md` / `md`), not matchMedia. */
   const cartFilled = cart.length > 0;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setReadySearch(productSearch), 150);
+    return () => window.clearTimeout(timer);
+  }, [productSearch]);
 
   useEffect(() => {
     barcodeRef.current?.focus({ preventScroll: true });
@@ -716,7 +725,6 @@ export default function PosClient({
       clearTransferFields();
       resetMomoPaymentFields();
       setPaymentMethods([]);
-      setShowSplitPanel(false);
       return;
     }
     // PART_PAID — keep methods but ensure at least one for receiving payment
@@ -739,62 +747,6 @@ export default function PosClient({
     if (!next.includes('MOBILE_MONEY')) resetMomoPaymentFields();
   }, [clearCashFields, clearCardFields, clearTransferFields, resetMomoPaymentFields]);
 
-  const isSplitMode = showSplitPanel || paymentMethods.length > 1;
-
-  const togglePaymentMethod = (method: PaymentMethod) => {
-    if (paymentStatus === 'UNPAID') return;
-
-    // Outside explicit Split mode, methods are mutually exclusive — a normal
-    // method click replaces Cash (or any prior single method) and never implies split.
-    if (!isSplitMode) {
-      if (paymentMethods.length === 1 && paymentMethods[0] === method) {
-        return;
-      }
-      const next: PaymentMethod[] = [method];
-      clearFieldsForAbsentMethods(next);
-      setShowSplitPanel(false);
-      setPaymentMethods(next);
-      return;
-    }
-
-    // Split mode: allow additive multi-method selection.
-    const exists = paymentMethods.includes(method);
-    let next = exists
-      ? paymentMethods.filter((current) => current !== method)
-      : [...paymentMethods, method];
-    if (next.length === 0) {
-      next = ['CASH'];
-    }
-    if (exists) {
-      if (method === 'CASH') clearCashFields();
-      if (method === 'CARD') clearCardFields();
-      if (method === 'TRANSFER') clearTransferFields();
-      if (method === 'MOBILE_MONEY') resetMomoPaymentFields();
-    }
-    if (next.length === 1) {
-      clearFieldsForAbsentMethods(next);
-    }
-    setPaymentMethods(next);
-  };
-
-  const handleToggleSplitPanel = () => {
-    if (showSplitPanel || paymentMethods.length > 1) {
-      // Leave Split: collapse to one method and drop stale split-only amounts/refs.
-      const keep = paymentMethods[0] ?? 'CASH';
-      const next: PaymentMethod[] = [keep];
-      clearFieldsForAbsentMethods(next);
-      // Reset kept non-cash amounts so single-method Paid defaults re-apply the full due.
-      if (keep === 'CARD') setCardPaid('');
-      if (keep === 'TRANSFER') setTransferPaid('');
-      if (keep === 'MOBILE_MONEY') setMomoPaid('');
-      if (keep === 'CASH') clearCashFields();
-      setPaymentMethods(next);
-      setShowSplitPanel(false);
-      return;
-    }
-    setShowSplitPanel(true);
-  };
-
   useEffect(() => {
     if (!useServerCatalogue) {
       setServerSearchMatches([]);
@@ -811,10 +763,15 @@ export default function PosClient({
       void fetch(`/api/pos/search?${params}`, { signal: controller.signal })
         .then((res) => (res.ok ? res.json() : { products: [] }))
         .then((data: { products?: ProductDto[] }) => {
+          if (controller.signal.aborted) return;
           setServerSearchMatches(Array.isArray(data.products) ? data.products : []);
+          setServerResultQuery(q);
         })
         .catch(() => {
-          if (!controller.signal.aborted) setServerSearchMatches([]);
+          if (!controller.signal.aborted) {
+            setServerSearchMatches([]);
+            setServerResultQuery(q);
+          }
         });
     }, 150);
     return () => {
@@ -824,10 +781,12 @@ export default function PosClient({
   }, [productSearch, store.id, useServerCatalogue]);
 
   const filteredProducts = useMemo(() => {
-    if (useServerCatalogue) return serverSearchMatches;
+    if (useServerCatalogue) return serverResultQuery === productSearch.trim() ? serverSearchMatches : [];
     return filterPosProducts(productOptions, productSearch, 12, productIndex);
-  }, [useServerCatalogue, serverSearchMatches, productOptions, productSearch, productIndex]);
+  }, [useServerCatalogue, serverSearchMatches, serverResultQuery, productOptions, productSearch, productIndex]);
   const productSearchMatches = filteredProducts.length;
+  const showSearchResults = productDropdownOpen && !!productSearch.trim() && readySearch === productSearch &&
+    (!useServerCatalogue || serverResultQuery === productSearch.trim());
 
   // Viewport sizing for the product dropdown in compact mode is handled by
   // usePosProductDropdownViewport. This useEffect only dismisses popovers on
@@ -885,7 +844,7 @@ export default function PosClient({
     }
     setPendingScan(null);
     setBarcodeAlert(null);
-    setBarcode('');
+    setProductSearch('');
   }, [addToCart]);
 
   const handleQuickCancel = useCallback(() => {
@@ -914,7 +873,7 @@ export default function PosClient({
     barcodeRef.current?.focus();
   };
 
-  const { handleBarcodeScan } = usePosBarcodeHandler({
+  const { handleBarcodeScan: resolveScan } = usePosBarcodeHandler({
     products: productOptions,
     productIndex,
     lookupRemote: useServerCatalogue
@@ -928,12 +887,36 @@ export default function PosClient({
           return data;
         }
       : undefined,
-    addToCart: (line) => {
-      const product = productOptions.find((candidate) => candidate.id === line.productId);
+    addToCart: (line, product) => {
+      const cached = productMap.has(product.id);
+      const scanMap = cached ? productMap : new Map([[product.id, product as unknown as PosProduct]]);
+      const available = getAvailableBaseForCart(cart, scanMap, product.id);
+      const unit = product.units.find(candidate => candidate.id === line.unitId);
+      // Cached ordinary products use the existing cart clamp, including its
+      // "Only X available" warning when adding to an existing line.
+      // An uncached remote result must be checked here because the cart map
+      // will not contain it until the next render.
+      if (!cached || line.weighedLabel) {
+        if (available <= 0) {
+          setStockAlert(`No stock available for ${product.name}.`);
+          return;
+        }
+        if (!product.food) {
+          const perUnit = line.qtyBase ?? unit?.conversionToBase ?? 1;
+          const maxQty = Math.floor(available / perUnit);
+          if (line.qtyInUnit > maxQty) {
+            setStockAlert(`Only ${formatAvailable(product, available)} available for ${product.name}.`);
+            if (maxQty <= 0) return;
+            line = { ...line, qtyInUnit: maxQty };
+          } else {
+            setStockAlert(null);
+          }
+        }
+      }
       if (product?.food) {
         addPlateToCart(product);
         setProductId(line.productId);
-        setBarcode('');
+        setProductSearch('');
         setBarcodeAlert(null);
         return;
       }
@@ -941,9 +924,8 @@ export default function PosClient({
       setProductId(line.productId);
       setUnitId(line.unitId);
       setQtyInUnitInput(String(line.qtyInUnit));
-      setBarcode('');
+      setProductSearch('');
       setBarcodeAlert(null);
-      setStockAlert(null);
       barcodeRef.current?.focus();
     },
     playBeep,
@@ -954,6 +936,39 @@ export default function PosClient({
     },
   });
 
+  const handleBarcodeScan = (raw: string, exactSearchProduct?: ProductDto) => {
+    const code = raw.trim();
+    if (!code) return;
+    const now = Date.now();
+    if (barcodeRef.current) barcodeRef.current.value = '';
+    setProductSearch('');
+    setProductDropdownOpen(false);
+    pendingSearchEnter.current = null;
+    resetScannerBuffer(inputScanner.current);
+    if (lastScan.current.code === code && now - lastScan.current.time < 300) return;
+    lastScan.current = { code, time: now };
+    resolveScan(code, exactSearchProduct);
+  };
+
+  const selectSearchProduct = (product: ProductDto) => {
+    const baseUnitId = getProductBaseUnitId(product);
+    if (!baseUnitId || getAvailableBase(product.id) <= 0) return;
+    mergeProductOption(product);
+    setProductSearch('');
+    setProductDropdownOpen(false);
+    pendingSearchEnter.current = null;
+    resetScannerBuffer(inputScanner.current);
+    if (product.units.length > 1) {
+      stageProduct(product);
+      return;
+    }
+    addPlateToCart(product);
+    setProductId(product.id);
+    setUnitId(baseUnitId);
+    playBeep(true);
+    if (!product.food || !(product.food.allowCustomAmount || dishNeedsPicker(product.food))) barcodeRef.current?.focus();
+  };
+
   const cartDetails = useMemo(
     () => buildCartDetails(cart, productMap, business.vatEnabled),
     [cart, productMap, business.vatEnabled]
@@ -962,7 +977,7 @@ export default function PosClient({
   // Pre-compute available stock per product once per cart change — O(n) instead of O(n²)
   const availableBaseMap = useMemo(() => {
     void scheduleRevision;
-    return buildAvailableBaseMap(cart, productMap);
+    return buildAvailableBaseMap(cart, productMap, true);
   }, [cart, productMap, scheduleRevision]);
 
   const totals = useMemo(() => sumCartTotals(cartDetails), [cartDetails]);
@@ -999,7 +1014,6 @@ export default function PosClient({
     resetMomoPaymentFields();
     clearDueDateState();
     setPaymentMethods(['CASH']);
-    setShowSplitPanel(false);
     setAmbiguousFailure(false);
     orderDiscountForm.reset();
     loyaltyRedemption.reset();
@@ -1144,6 +1158,38 @@ export default function PosClient({
     momoSignature,
   } = checkoutSummary;
 
+  const togglePaymentMethod = (method: PaymentMethod) => {
+    if (paymentStatus === 'UNPAID') return;
+    if (hasMethod(method)) {
+      if (paymentMethods.length === 1) return;
+      const next = paymentMethods.filter((current) => current !== method);
+      clearFieldsForAbsentMethods(next);
+      setPaymentMethods(next);
+      return;
+    }
+
+    // A single untouched (or fully paid) tender remains a one-tap choice.
+    // Explicit partial payments keep their amounts when another method is added.
+    const hasTypedAmount = [cashTendered, cardPaid, transferPaid, momoPaid].some((amount) => amount.trim() !== '');
+    const adding = balanceRemaining > 0 && (hasTypedAmount || paymentMethods.length > 1);
+    if (!adding && paymentMethods.length <= 1) {
+      clearFieldsForAbsentMethods([method]);
+      setPaymentMethods([method]);
+      return;
+    }
+    if (!adding) return;
+    const next = [...paymentMethods, method];
+    // Part-paid sales must remain below the full total; don't fill their balance.
+    if (paymentStatus === 'PAID') {
+      const remainder = (balanceRemaining / 100).toFixed(2);
+      if (method === 'CASH') setCashTendered(remainder);
+      if (method === 'CARD') setCardPaid(remainder);
+      if (method === 'TRANSFER') setTransferPaid(remainder);
+      if (method === 'MOBILE_MONEY') setMomoPaid(remainder);
+    }
+    setPaymentMethods(next);
+  };
+
   const confirmClearCart = () => {
     if (!cartFilled || isCompletingSale || ambiguousFailure || isInitiatingMomo) return;
     const discount = orderDiscountForm.snapshot();
@@ -1152,7 +1198,7 @@ export default function PosClient({
       setCart(cart); setCustomerId(customerId); setCustomerSearch(customerSearch);
       setCashTendered(cashTendered); setCardPaid(cardPaid); setCardRef(cardRef);
       setTransferPaid(transferPaid); setTransferRef(transferRef); restoreMomoSnapshot(momo);
-      setPaymentStatus(paymentStatus); setPaymentMethods(paymentMethods); setShowSplitPanel(showSplitPanel);
+      setPaymentStatus(paymentStatus); setPaymentMethods(paymentMethods);
       setDueDate(dueDate); setDueDateDecision(dueDateDecision);
       orderDiscountForm.restore(discount); loyaltyRedemption.setPointsInput(loyaltyRedemption.pointsInput);
       setQtyDrafts(qtyDrafts); restoreUndoStack(undoStack); setSaleAttemptId(saleAttemptId);
@@ -1386,12 +1432,65 @@ export default function PosClient({
     [parkedCarts]
   );
 
+  const submitSearch = (code: string, burstCode?: string) => {
+    const exact = resolveBarcodeScan(code, productOptions, productIndex);
+    const remoteExact = resolveBarcodeScan(code, filteredProducts, buildPosProductIndex(filteredProducts));
+    const barcodeLooking = /^\d[\d\s-]{3,}$/.test(code) || /^(?=.*\d)[A-Z\d-]{4,}$/i.test(code);
+    if (burstCode || (exact && exact.kind !== 'missing') ||
+        (barcodeLooking && filteredProducts.length === 0 && (!useServerCatalogue || serverResultQuery === code || /^\d[\d\s-]{3,}$/.test(code))) ||
+        (remoteExact && remoteExact.kind !== 'missing' && remoteExact.product.sku?.toLowerCase() !== code.toLowerCase())) {
+      handleBarcodeScan(burstCode ?? code);
+      return;
+    }
+    if (useServerCatalogue && serverResultQuery !== code) {
+      pendingSearchEnter.current = code;
+      return;
+    }
+    if (remoteExact && remoteExact.kind !== 'missing') {
+      handleBarcodeScan(code, remoteExact.product);
+      return;
+    }
+    const product = filteredProducts[highlightedProduct] ?? filteredProducts[0];
+    if (product) selectSearchProduct(product);
+    else setProductDropdownOpen(true);
+  };
+
+  useEffect(() => {
+    if (pendingSearchEnter.current && pendingSearchEnter.current === serverResultQuery &&
+        pendingSearchEnter.current === productSearch.trim()) {
+      const code = pendingSearchEnter.current;
+      pendingSearchEnter.current = null;
+      submitSearch(code);
+    }
+  });
+
   const handleBarcodeKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== 'Enter') return;
+    if (event.ctrlKey || event.metaKey || event.altKey || event.nativeEvent.isComposing) return;
+    if (event.key === 'Escape') {
+      setProductDropdownOpen(false);
+      pendingSearchEnter.current = null;
+      resetScannerBuffer(inputScanner.current);
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      setProductDropdownOpen(true);
+      const direction = event.key === 'ArrowDown' ? 1 : -1;
+      setHighlightedProduct(current => Math.max(0, Math.min(filteredProducts.length - 1, current + direction)));
+      return;
+    }
+    if (event.key !== 'Enter') {
+      if (event.key.length === 1) updateScannerBufferState(inputScanner.current, event.key, Date.now());
+      else resetScannerBuffer(inputScanner.current);
+      return;
+    }
     event.preventDefault();
-    const code = barcode.trim();
+    event.stopPropagation();
+    const code = event.currentTarget.value.trim();
     if (!code) return;
-    handleBarcodeScan(code);
+    const recent = Date.now() - inputScanner.current.lastTime < 250;
+    const burst = handleScannerEnter(inputScanner.current);
+    submitSearch(code, recent && burst.shouldScan ? burst.code ?? undefined : undefined);
   };
 
   const requiresCustomer = paymentStatus !== 'PAID';
@@ -1484,7 +1583,7 @@ export default function PosClient({
       issues.push({ tone: 'warning', message: 'High discount needs manager PIN and reason before completion.' });
     }
     if (paymentStatus === 'PAID' && !fullyPaid) {
-      issues.push({ tone: 'warning', message: 'Full payment required. Enter enough cash or switch to Part Paid/Unpaid.' });
+      issues.push({ tone: 'warning', message: 'Full payment required. Pay the rest or switch to Part Paid/Unpaid.' });
     }
     if (paymentStatus === 'PART_PAID' && !partPaidValid) {
       issues.push({ tone: 'warning', message: 'Part-paid sales need an amount greater than zero and below the total.' });
@@ -1548,7 +1647,6 @@ export default function PosClient({
     isCompletingSale,
     lastCartLineId: cart[cart.length - 1]?.id ?? null,
     lastReceiptId,
-    productSearchRef,
     onCloseKeyboardHelp: () => setShowKeyboardHelp(false),
     onCompleteSale: handleCompleteSale,
     onOpenParkModal: () => setShowParkModal(true),
@@ -1651,23 +1749,35 @@ export default function PosClient({
         {/* ── Scan / Search bar ─────────────────────────────── */}
         <div className="card scroll-mt-[calc(var(--app-header-offset)+0.5rem)] p-3 sm:p-4" data-pos-search-card="true">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-            <div className="w-full sm:min-w-[200px] sm:flex-1">
+            <div ref={productSearchShellRef} className="relative w-full sm:min-w-[200px] sm:flex-1">
               <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-                  <svg className="h-5 w-5 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                  </svg>
-                </div>
                 <input
-                  className="input pl-10 pr-11 text-base font-mono tracking-wider sm:text-lg"
+                  className="input pr-12 text-base sm:text-lg"
                   ref={barcodeRef}
-                  value={barcode}
-                  onChange={(event) => setBarcode(event.target.value)}
+                  value={productSearch}
+                  onChange={(event) => {
+                    if (productDropdownCloseTimer.current) clearTimeout(productDropdownCloseTimer.current);
+                    pendingSearchEnter.current = null;
+                    setReadySearch('');
+                    setProductSearch(event.target.value);
+                    setHighlightedProduct(0);
+                    setProductDropdownOpen(true);
+                    window.requestAnimationFrame(recomputeProductDropdownViewport);
+                  }}
                   onKeyDown={handleBarcodeKey}
-                  onFocus={(event) => event.currentTarget.select()}
+                  onFocus={(event) => {
+                    if (productDropdownCloseTimer.current) clearTimeout(productDropdownCloseTimer.current);
+                    event.currentTarget.select();
+                    setProductDropdownOpen(true);
+                  }}
+                  onBlur={() => {
+                    if (productDropdownCloseTimer.current) clearTimeout(productDropdownCloseTimer.current);
+                    productDropdownCloseTimer.current = setTimeout(() => setProductDropdownOpen(false), 200);
+                  }}
+                  placeholder="Scan barcode or type product name…"
                   autoComplete="off"
-                  placeholder="Scan barcode…"
-                  aria-label="Scan barcode"
+                  aria-label="Scan barcode or search products"
+                  aria-controls="pos-product-results"
                 />
                 <button
                   type="button"
@@ -1682,41 +1792,9 @@ export default function PosClient({
                   </svg>
                 </button>
               </div>
-            </div>
-
-            <div className="hidden text-center text-xs font-semibold text-black/30 sm:block">OR</div>
-
-            <div ref={productSearchShellRef} className="relative w-full sm:min-w-[200px] sm:flex-1">
-              <div className="pointer-events-none absolute inset-y-0 left-3 z-10 flex items-center">
-                <svg className="h-5 w-5 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input
-                className="input pl-10 text-base sm:text-lg"
-                ref={productSearchRef}
-                value={productSearch}
-                onChange={(event) => {
-                  if (productDropdownCloseTimer.current) clearTimeout(productDropdownCloseTimer.current);
-                  setProductSearch(event.target.value);
-                  setProductDropdownOpen(true);
-                  window.requestAnimationFrame(recomputeProductDropdownViewport);
-                }}
-                onFocus={() => {
-                  if (productDropdownCloseTimer.current) clearTimeout(productDropdownCloseTimer.current);
-                  setProductDropdownOpen(true);
-                  window.requestAnimationFrame(recomputeProductDropdownViewport);
-                }}
-                onBlur={() => {
-                  if (productDropdownCloseTimer.current) clearTimeout(productDropdownCloseTimer.current);
-                  productDropdownCloseTimer.current = setTimeout(() => setProductDropdownOpen(false), 200);
-                }}
-                placeholder="Type product name…"
-                autoComplete="off"
-                aria-label="Search products"
-              />
-              {productDropdownOpen && productSearch.trim() && (
+              {showSearchResults && (
                 <div
+                  id="pos-product-results"
                   className={isCompactViewport
                     ? 'fixed inset-x-3 z-40 overflow-auto rounded-2xl border border-black/10 bg-white shadow-2xl'
                     : 'absolute left-0 right-0 z-30 mt-1 max-h-72 overflow-auto rounded-xl border border-black/10 bg-white shadow-xl'
@@ -1743,7 +1821,7 @@ export default function PosClient({
                             >
                               Create new product
                             </button>
-                            <span className="hidden rounded-full bg-black/5 px-2.5 py-1 text-black/45 md:inline">F2 returns to barcode</span>
+                            <span className="hidden rounded-full bg-black/5 px-2.5 py-1 text-black/45 md:inline">F2 focuses search</span>
                           </div>
                         </div>
                       </div>
@@ -1752,11 +1830,10 @@ export default function PosClient({
                     <>
                     <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/5 bg-white/95 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-black/35 backdrop-blur">
                       <span>{productSearchMatches} of {knownCatalogueSize} products</span>
-                      <span className="hidden normal-case tracking-normal text-black/35 md:inline">Enter adds • F2 scan</span>
+                      <span className="hidden normal-case tracking-normal text-black/35 md:inline">Enter adds • F2 search</span>
                       <span className="normal-case tracking-normal text-black/35 md:hidden">Tap to add</span>
                     </div>
-                    {filteredProducts.map((product) => {
-                      const baseUnitId = getProductBaseUnitId(product);
+                    {filteredProducts.map((product, index) => {
                       const available = getAvailableBase(product.id);
                       const outOfStock = available <= 0;
                       const manageSoldOut = outOfStock && product.food && business.canManageDishes;
@@ -1765,26 +1842,9 @@ export default function PosClient({
                         <button
                           type="button"
                           disabled={outOfStock}
-                          className={`w-full px-4 py-3 text-left transition-colors ${outOfStock ? 'opacity-40 cursor-not-allowed' : 'hover:bg-accentSoft active:bg-blue-100'}`}
+                          className={`w-full px-4 py-3 text-left transition-colors ${outOfStock ? 'opacity-40 cursor-not-allowed' : 'hover:bg-accentSoft active:bg-blue-100'} ${index === highlightedProduct ? 'bg-accentSoft' : ''}`}
                           onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            if (!baseUnitId || outOfStock) return;
-                            mergeProductOption(product);
-                            if (product.units.length > 1) {
-                              // Multiple units — stage for unit selection
-                              stageProduct(product);
-                              setProductSearch('');
-                              setProductDropdownOpen(false);
-                            } else {
-                              addPlateToCart(product);
-                              setProductId(product.id);
-                              setUnitId(baseUnitId);
-                              setProductSearch('');
-                              setProductDropdownOpen(false);
-                              playBeep(true);
-                              if (!product.food || !(product.food.allowCustomAmount || dishNeedsPicker(product.food))) barcodeRef.current?.focus();
-                            }
-                          }}
+                          onClick={() => selectSearchProduct(product)}
                         >
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0 flex-1">
@@ -1900,7 +1960,7 @@ export default function PosClient({
                 <div className="text-xs text-emerald-700">Scanner focus is back on the till. Keep serving.</div>
               </div>
                 <span className="hidden rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200 md:inline">
-                  F2 barcode
+                  F2 scan/search
                 </span>
             </div>
           ) : null}
@@ -2220,7 +2280,7 @@ export default function PosClient({
                       onClick={() => barcodeRef.current?.focus()}
                       data-pos-desktop-shortcut="f2-focus-barcode"
                     >
-                      F2 focus barcode
+                      F2 focus scan/search
                     </button>
                     <button
                       type="button"
@@ -2288,8 +2348,8 @@ export default function PosClient({
                             {line.promoLabel && <span className="text-[10px] text-emerald-600 font-medium">{line.promoLabel}</span>}
                             {(line.lineDiscount > 0) && <span className="text-[10px] text-rose-500">-{formatMoney(line.lineDiscount, business.currency)}</span>}
                             {availBase <= 10 && (
-                              <span className={`text-[10px] font-semibold ${availBase <= 3 ? 'text-rose-500' : 'text-amber-500'}`}>
-                                {availBase <= 0 ? 'Out of stock' : `${availBase} left`}
+                              <span className={`text-[10px] font-semibold ${availBase < 0 || (availBase > 0 && availBase <= 3) ? 'text-rose-500' : 'text-amber-500'}`}>
+                                {availBase < 0 ? 'Out of stock' : `${availBase} left`}
                               </span>
                             )}
                           </div>
@@ -2655,8 +2715,6 @@ export default function PosClient({
               availablePaymentMethods={availablePaymentMethods}
               paymentMethods={paymentMethods}
               onTogglePaymentMethod={togglePaymentMethod}
-              showSplitPanel={showSplitPanel}
-              onToggleSplitPanel={handleToggleSplitPanel}
               cashTendered={cashTendered}
               onCashTenderedChange={setCashTendered}
               cashRef={cashRef}

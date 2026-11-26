@@ -9,7 +9,6 @@ type UsePosKeyboardShortcutsOptions = {
   isCompletingSale?: boolean;
   lastCartLineId: string | null;
   lastReceiptId: string;
-  productSearchRef: RefObject<HTMLInputElement>;
   onCloseKeyboardHelp: () => void;
   onCompleteSale?: () => void;
   onOpenParkModal: () => void;
@@ -27,7 +26,6 @@ export function usePosKeyboardShortcuts({
   isCompletingSale = false,
   lastCartLineId,
   lastReceiptId,
-  productSearchRef,
   onCloseKeyboardHelp,
   onCompleteSale,
   onOpenParkModal,
@@ -44,19 +42,10 @@ export function usePosKeyboardShortcuts({
           target.tagName === 'TEXTAREA' ||
           target.tagName === 'SELECT');
 
-      if (event.key === 'F2') {
+      if (['F2', 'F3', 'F4'].includes(event.key)) {
         event.preventDefault();
         barcodeRef.current?.focus();
-        return;
-      }
-      if (event.key === 'F3') {
-        event.preventDefault();
-        productSearchRef.current?.focus();
-        return;
-      }
-      if (event.key === 'F4') {
-        event.preventDefault();
-        productSearchRef.current?.focus();
+        barcodeRef.current?.select();
         return;
       }
       if (event.key === 'F8') {
@@ -74,6 +63,7 @@ export function usePosKeyboardShortcuts({
       if (!isField && event.key === '/') {
         event.preventDefault();
         barcodeRef.current?.focus();
+        barcodeRef.current?.select();
         return;
       }
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
@@ -134,6 +124,5 @@ export function usePosKeyboardShortcuts({
     onRemoveLine,
     onToggleKeyboardHelp,
     onUndo,
-    productSearchRef,
   ]);
 }

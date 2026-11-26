@@ -65,4 +65,12 @@ describe('pos-barcode helpers', () => {
       expect(result.lineSubtotalPence).toBe(computeWeighedLineSubtotalPence(1234, 2000));
     }
   });
+
+  it('resolves exact SKU and additional barcode without fuzzy matching', () => {
+    const product = { ...products[0], sku: 'COKE-330', additionalBarcodes: ['987654'] };
+    const index = buildPosProductIndex([product]);
+    expect(resolveBarcodeScan('coke-330', [product], index)).toMatchObject({ kind: 'matched', product });
+    expect(resolveBarcodeScan('987654', [product], index)).toMatchObject({ kind: 'matched', product });
+    expect(resolveBarcodeScan('COKE', [product], index)).toMatchObject({ kind: 'missing' });
+  });
 });
