@@ -42,7 +42,7 @@ async function main() {
         await page.waitForURL(url => !url.pathname.startsWith('/login'));
         await page.goto(`${base}/purchases`);
         await page.getByRole('heading', { name: 'Purchases', exact: true }).waitFor();
-        await page.getByText('PUR-000099', { exact: false }).first().waitFor();
+        await page.locator('table').getByText('PUR-000099', { exact: false }).waitFor();
         await page.evaluate(() => document.fonts.ready);
         await page.screenshot({ path: `tmp/purchases-visual/${label}-list.png`, fullPage: true, animations: 'disabled' });
         await page.getByRole('button', { name: 'Record purchase', exact: true }).click();

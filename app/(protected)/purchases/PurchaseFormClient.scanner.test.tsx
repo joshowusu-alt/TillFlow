@@ -23,8 +23,18 @@ it('opens blank and never asks for a document', () => {
   expect(screen.getByPlaceholderText('Type to search product…')).toHaveValue('');
   expect(screen.getByLabelText(/Quantity/)).toHaveValue(null);
   expect(screen.getByLabelText('Cost per unit')).toHaveValue(null);
+  expect(screen.getByRole('button', { name: 'Add line' })).toBeDisabled();
   expect(container.querySelector('input[type="file"]')).toBeNull();
   expect(screen.getByText('More details').closest('details')).not.toHaveAttribute('open');
+});
+it('adds an explicitly selected product to the blank cart', () => {
+  mount();
+  fireEvent.change(screen.getByPlaceholderText('Type to search product…'), { target: { value: 'Book A · Publisher Y' } });
+  fireEvent.click(screen.getByRole('button', { name: /Book A · Publisher Y/ }));
+  fireEvent.change(screen.getByLabelText(/Quantity/), { target: { value: '2' } });
+  fireEvent.change(screen.getByLabelText('Cost per Book'), { target: { value: '80' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add line' }));
+  expect(JSON.parse((document.querySelector('input[name="cart"]') as HTMLInputElement).value)).toMatchObject([{productId:'Y', qtyInUnit:2, unitCostInput:'80'}]);
 });
 it('unknown scans open explicit creation and preserve the scanned identifier', () => {
   mount();

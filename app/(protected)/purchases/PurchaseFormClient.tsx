@@ -1048,7 +1048,7 @@ export default function PurchaseFormClient({
           </details>
           {lineError ? <p role="alert" className="mt-2 text-sm text-red-700">{lineError}</p> : null}
           <div className="flex items-end">
-            <button type="button" className="btn-primary w-full" onClick={addToCart}>
+            <button type="button" className="btn-primary w-full" onClick={addToCart} disabled={!selectedProduct || !selectedUnit || qtyNumber <= 0}>
               Add line
             </button>
           </div>
