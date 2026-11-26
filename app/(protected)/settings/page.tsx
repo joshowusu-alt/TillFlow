@@ -328,14 +328,12 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
               Always on for POS sales so every sale is assigned to an active till and shift.
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <input
-              className="h-4 w-4"
-              type="checkbox"
-              id="settings-varianceReasonRequired" name="varianceReasonRequired"
-              defaultChecked={(business as any).varianceReasonRequired ?? true}
-            />
-            <label className="text-sm" htmlFor="settings-varianceReasonRequired">Require variance reason when closing till</label>
+          <input type="hidden" name="varianceReasonRequired" value={business.varianceReasonRequired ? 'on' : 'off'} />
+          <p className="text-sm">Every cash difference requires a reason. Cashiers can always close their own shift.</p>
+          <div>
+            <label className="label" htmlFor="settings-shiftCloseApprovalThresholdAmount">Mark cash differences above ({currencySymbol}) as Large</label>
+            <input id="settings-shiftCloseApprovalThresholdAmount" className="input" name="shiftCloseApprovalThresholdAmount" type="number" min="0" step="0.01" defaultValue={((business.shiftCloseApprovalThresholdPence ?? 5000) / 100).toFixed(2)} />
+            <div className="mt-1 text-xs text-black/50">Flags shortages and overages for attention without preventing shift closure.</div>
           </div>
           <div>
             <label className="label" htmlFor="settings-discountApprovalThresholdPercent">Discount approval threshold (%)</label>

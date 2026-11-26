@@ -71,12 +71,15 @@ async function main() {
     const directDenied = await context.request.post('http://127.0.0.1:6200/api/offline/sync-sale', { headers: { origin: 'https://untrusted.example' }, data: {} });
     assert.equal(directDenied.status(),403);
     results.push('PASS adapter and unmodified application independently refuse foreign-origin financial requests');
-    await page.goto('/login');
-    await page.locator('input[name=email]').fill(f.users.cashier1.email);
-    await page.locator('input[name=password]').fill(f.password);
-    await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL(url => !url.pathname.startsWith('/login'));
-    await context.addCookies([{ name: 'tillflow_operational_store', value: f.stores[0].id, url: origin }]);
+    const login = async (user, fixture = f) => {
+      await page.goto('/login');
+      await page.locator('input[name=email]').fill(user.email);
+      await page.locator('input[name=password]').fill(fixture.password);
+      await page.getByRole('button', { name: /sign in/i }).click();
+      await page.waitForURL(url => !url.pathname.startsWith('/login'));
+      await context.addCookies([{ name: 'tillflow_operational_store', value: fixture.stores[0].id, url: origin }]);
+    };
+    await login(f.users.cashier1);
     const load = async variant => {
       state.variant = variant;
       const live = await context.request.get('/pos');
@@ -136,12 +139,140 @@ async function main() {
     assert(entries.every(j => j.lines.reduce((n, l) => n + l.debitPence - l.creditPence, 0) === 0));
     assert.equal(await prisma.salesInvoice.count({ where: { businessId: other.businessId } }), 0);
     results.push('PASS candidate restoration has exactly two invoices/payments/stock reductions/drawer receipts and balanced sale journals');
+
+    // Configure a separate food business before either build reads its
+    // checkout context: changing an already-cached retail business directly
+    // through the fixture DB would not exercise valid food checkout.
+    const food = await createPilotFixture(prisma, `pilot-food-rollback-${Date.now()}`);
+    await prisma.business.update({ where: { id: food.businessId }, data: { businessCategory: 'FOOD_DISHES' } });
+    const dish = await prisma.foodDish.create({ data: {
+      businessId: food.businessId, productId: food.products[1].id, stockMode: 'NOT_COUNTED',
+      allowCustomAmount: true,
+      sizes: { create: [{ name: 'Small', pricePence: 3000, isDefault: true }, { name: 'Large', pricePence: 3500 }] },
+      groups: { create: { name: 'Extras', selection: 'MANY', required: false,
+        addons: { create: { name: 'Extra', pricePence: 500, maxQty: 2, stockPortions: 0 } },
+      } },
+    }, include: { sizes: true, groups: { include: { addons: true } } } });
+    const small = dish.sizes.find(s => s.name === 'Small');
+    const large = dish.sizes.find(s => s.name === 'Large');
+    const addon = dish.groups[0].addons[0];
+    const foodCases = [
+      { name: 'size', amount: 3000, plate: { sizeId: small.id, addons: [], expectedPricePence: 3000 } },
+      { name: 'size and add-on', amount: 4000, plate: { sizeId: large.id, addons: [{ addonId: addon.id, qty: 1 }], expectedPricePence: 4000 } },
+      { name: 'custom amount and add-on', amount: 3200, plate: { sizeId: null, customAmountPence: 2700, addons: [{ addonId: addon.id, qty: 1 }], expectedPricePence: 3200 } },
+    ];
+    await context.clearCookies();
+    await login(food.users.cashier1, food);
+    for (const [writer, reader] of [['candidate', 'fallback'], ['fallback', 'candidate']]) {
+      await load(writer);
+      state.outage = true;
+      const ids = [];
+      for (const item of foodCases) {
+        ids.push(await page.evaluate(({ f, item }) => window.rollbackAudit.storage.queueOfflineSale({
+          businessId: f.businessId, storeId: f.stores[0].id, tillId: f.stores[0].tillId,
+          shiftId: f.stores[0].shiftId, cashierUserId: f.users.cashier1.id, customerId: null,
+          paymentStatus: 'PAID', lines: [{ productId: f.products[1].id, unitId: f.unitId,
+            qtyInUnit: 1, unitPricePence: item.amount, lineSubtotalPence: item.amount,
+            discountType: 'NONE', discountValue: '', plate: item.plate }],
+          payments: [{ method: 'CASH', amountPence: item.amount }], orderDiscountType: 'NONE',
+          orderDiscountValue: '', createdAt: new Date().toISOString(),
+        }), { f: food, item }));
+      }
+      const captured = await pending();
+      assert.equal(captured.length, 3);
+      assert.equal((await sync()).failed, 3);
+      await load(reader);
+      assert.deepEqual(await pending(), captured, 'Queue identities and all plate fields survive switching builds');
+      assert.equal(await page.evaluate(async () => {
+        const { storage, hash } = window.rollbackAudit;
+        const rows = await storage.getPendingSales();
+        return (await Promise.all(rows.map(async row => row.payloadHash === await hash(row)))).every(Boolean);
+      }), true);
+      state.outage = false;
+      const posted = await sync();
+      assert.equal(posted.failed, 0, JSON.stringify(posted));
+      assert.equal(posted.synced, 3);
+      assert.equal((await pending()).length, 0);
+      assert.equal((await sync()).synced, 0);
+      for (const [index, id] of ids.entries()) {
+        const invoice = await prisma.salesInvoice.findFirstOrThrow({
+          where: { businessId: food.businessId, externalRef: `OFFLINE_SYNC:${id}` },
+          include: { lines: true, payments: true },
+        });
+        assert.equal(await prisma.salesInvoice.count({ where: { businessId: food.businessId, externalRef: `OFFLINE_SYNC:${id}` } }), 1);
+        assert.equal(invoice.totalPence, foodCases[index].amount);
+        assert.equal(invoice.payments.length, 1);
+        assert.equal(invoice.payments[0].amountPence, foodCases[index].amount);
+        assert.equal(invoice.lines.length, 1);
+        const snapshot = JSON.parse(invoice.lines[0].plateSnapshotJson);
+        assert.equal(snapshot.sizeId, foodCases[index].plate.sizeId);
+        assert.equal(snapshot.customAmountPence, foodCases[index].plate.customAmountPence);
+        assert.deepEqual(snapshot.addons.map(a => ({ addonId: a.id, qty: a.qty })), foodCases[index].plate.addons);
+      }
+      results.push(`PASS ${writer} to ${reader}: sized plates, extras and custom amount replay exactly once with cash and plate snapshots intact`);
+    }
+
+    // Real candidate cashier close and manager review, then display through
+    // the independent dfce423 application against exactly the same rows.
+    await load('candidate');
+    const beforeClose = await prisma.shift.findUniqueOrThrow({ where: { id: food.stores[0].shiftId } });
+    const totalFoodCash = 2 * foodCases.reduce((sum, item) => sum + item.amount, 0);
+    assert.equal(beforeClose.expectedCashPence, 20000 + totalFoodCash);
+    await page.goto('/shifts');
+    await page.getByRole('button', { name: 'Close Shift', exact: true }).click();
+    await page.getByLabel('Actual Cash Counted').fill(((beforeClose.expectedCashPence - 8000) / 100).toFixed(2));
+    await page.getByLabel('Reason details').fill('Fictional short count');
+    assert.equal(await page.getByPlaceholder('Enter manager approval PIN').count(), 0);
+    await page.getByText('Large', { exact: true }).waitFor();
+    await page.locator('[data-close-shift]').click();
+    await page.getByText(/Shift Closed/).waitFor();
+    const closed = await prisma.shift.findUniqueOrThrow({ where: { id: beforeClose.id } });
+    assert.equal(closed.status, 'CLOSED');
+    assert.equal(closed.closeManagerApprovalMode, 'SELF');
+    assert.equal(closed.closeManagerApprovedByUserId, null);
+    assert.equal(closed.actualCashPence, beforeClose.expectedCashPence - 8000);
+    assert.equal(closed.variance, -8000);
+    assert.equal(JSON.parse(closed.closureSnapshotJson).closedBySelf, true);
+    const investigation = await prisma.cashVarianceInvestigation.findUniqueOrThrow({ where: { shiftId: closed.id } });
+    assert.equal(investigation.status, 'OPEN');
+    assert.equal(investigation.cashierExplanation, 'Fictional short count');
+    await context.clearCookies();
+    await login(food.users.manager, food);
+    const detail = `/shifts/variance/${investigation.id}`;
+    await page.goto(detail);
+    await page.getByLabel('Note (optional)').fill('Fictional manager checked cash');
+    await page.getByRole('button', { name: "I'm comfortable" }).click();
+    await page.getByText(/Reviewed by Fictional manager/).waitFor();
+    const reviewed = await prisma.cashVarianceInvestigation.findUniqueOrThrow({ where: { id: investigation.id } });
+    assert.equal(reviewed.status, 'APPROVED');
+    assert.equal(reviewed.reviewedByUserId, food.users.manager.id);
+    assert.equal(reviewed.approvedByUserId, food.users.manager.id);
+    assert(reviewed.reviewedAt);
+    assert.equal(reviewed.reviewNote, 'Fictional manager checked cash');
+    assert.equal(await prisma.auditLog.count({ where: { businessId: food.businessId, entityId: investigation.id, action: 'CASH_VARIANCE_REVIEW' } }), 1);
+    state.variant = 'fallback';
+    assert.equal((await page.goto(detail)).status(), 200);
+    await page.getByText('APPROVED', { exact: true }).waitFor();
+    await page.getByText(/Approved by Fictional manager/).waitFor();
+    assert.equal(await page.getByRole('button', { name: /Assign|Save explanation|Record resolution|Approve variance/ }).count(), 0);
+    assert.equal((await page.goto('/shifts')).status(), 200);
+    assert.deepEqual(await prisma.shift.findUniqueOrThrow({ where: { id: closed.id } }), closed);
+    assert.deepEqual(await prisma.cashVarianceInvestigation.findUniqueOrThrow({ where: { id: reviewed.id } }), reviewed);
+    state.variant = 'candidate';
+    assert.equal((await page.goto(detail)).status(), 200);
+    await page.getByText(/Reviewed by Fictional manager/).waitFor();
+    await page.getByText('Fictional manager checked cash').waitFor();
+    assert.equal(await page.getByRole('button', { name: "I'm comfortable" }).count(), 0);
+    assert.deepEqual(await prisma.cashVarianceInvestigation.findUniqueOrThrow({ where: { id: reviewed.id } }), reviewed);
+    results.push('PASS TIL5-C large SELF close and manager review survive dfce423 rollback and candidate restoration without re-opening, data loss or another approval');
+
+    await page.goto('/__rollback'); await page.addScriptTag({ url: '/__rollback.js' });
     await context.clearCookies(); await page.reload(); await page.addScriptTag({ url: '/__rollback.js' });
     assert.equal((await pending()).length, 0);
     assert(await page.evaluate(async () => Boolean(await (await window.rollbackAudit.storage.getDB()).get('salesQueue', 'other-tenant-pending'))));
     results.push('PASS logged-out scope exposes no pending data and preserves another tenant pending record');
     await context.close();
-    console.log('ROLLBACK_ACCEPTANCE '+JSON.stringify({ passed: results.length, failed: 0, candidateBuild: fs.readFileSync('.next/BUILD_ID','utf8').trim(), fallbackBuild: fs.readFileSync(path.join(fallbackRoot,'.next/BUILD_ID'),'utf8').trim(), persistedSales: 2, persistedPayments: 2, cashPence: 30000, finalStock: 98, results, limitations: 'Local production servers and native IndexedDB; proxy deliberately loses acknowledgement and disables batch. Service-worker migration/retry has separate native coverage. Not a Vercel promotion, Ghana-network or physical-device test.' }));
+    console.log('ROLLBACK_ACCEPTANCE '+JSON.stringify({ passed: results.length, failed: 0, candidateBuild: fs.readFileSync('.next/BUILD_ID','utf8').trim(), fallbackBuild: fs.readFileSync(path.join(fallbackRoot,'.next/BUILD_ID'),'utf8').trim(), persistedSales: 8, persistedPayments: 8, cashPence: closed.expectedCashPence, finalRetailStock: 98, results, limitations: 'Local production servers and native IndexedDB; proxy deliberately loses acknowledgement and disables batch. Service-worker migration/retry has separate native coverage. Not a Vercel promotion, Ghana-network or physical-device test.' }));
   } finally { if(browser) await browser.close(); if(proxy) await new Promise(resolve=>proxy.close(resolve)); await prisma.$disconnect(); }
 }
 main().catch(error=>{ console.error(error); process.exitCode=1; });

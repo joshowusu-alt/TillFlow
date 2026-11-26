@@ -97,6 +97,7 @@ model Business {
   varianceReasonRequired               Boolean  @default(true)
   inventoryAdjustmentRiskThresholdBase Int      @default(50)
   cashVarianceRiskThresholdPence       Int      @default(2000)
+  shiftCloseApprovalThresholdPence     Int      @default(5000)
   customerScope                        String   @default("SHARED")
   // Phase 3B: WhatsApp daily summary settings
   whatsappEnabled                      Boolean  @default(false)
@@ -548,6 +549,7 @@ model User {
   countedStocktakeLines      StocktakeLine[]         @relation("StocktakeLineCountedBy")
   assignedCashVariances      CashVarianceInvestigation[] @relation("CashVarianceAssignedTo")
   approvedCashVariances      CashVarianceInvestigation[] @relation("CashVarianceApprovedBy")
+  reviewedCashVariances      CashVarianceInvestigation[] @relation("CashVarianceReviewedBy")
   passwordResetTokens        PasswordResetToken[]
   reconciledPayments         PaymentReconciliation[] @relation("PaymentReconciledBy")
   migrationPackagesCreated    MigrationPackage[]           @relation("MigrationPackageCreatedBy")
@@ -1817,6 +1819,9 @@ model CashVarianceInvestigation {
   managerResolution       String?
   approvedByUserId        String?
   approvedAt              DateTime?
+  reviewedByUserId        String?
+  reviewedAt              DateTime?
+  reviewNote              String?
   transactionNumber       String?
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
@@ -1825,6 +1830,7 @@ model CashVarianceInvestigation {
   shift            Shift    @relation(fields: [shiftId], references: [id])
   assignedReviewer User?    @relation("CashVarianceAssignedTo", fields: [assignedReviewerUserId], references: [id])
   approvedBy       User?    @relation("CashVarianceApprovedBy", fields: [approvedByUserId], references: [id])
+  reviewedBy       User?    @relation("CashVarianceReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([businessId, transactionNumber])
   @@index([businessId, status, createdAt])

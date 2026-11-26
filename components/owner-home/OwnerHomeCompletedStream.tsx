@@ -11,6 +11,7 @@ import { HomeActionCard, HomeIcon } from '@/components/owner-home/home-chrome';
 import HomePerformanceSlot from '@/components/owner-home/HomePerformanceSlot';
 import HomeStatusPillSlot from '@/components/owner-home/HomeStatusPillSlot';
 import HomeAttentionSlot from '@/components/owner-home/HomeAttentionSlot';
+import HomeCashDifferencesSlot from '@/components/owner-home/HomeCashDifferencesSlot';
 import HomeImproveRecordsSlot from '@/components/owner-home/HomeImproveRecordsSlot';
 import HomeExtrasSlot, { HomeLastCloseSlot } from '@/components/owner-home/HomeExtrasSlot';
 import OwnerHomeRefresh from '@/components/owner-home/OwnerHomeRefresh';
@@ -132,7 +133,10 @@ export default function OwnerHomeCompletedStream({ shell }: { shell: OwnerHomeCr
               />
             </div>
 
-            <div className="order-2 lg:col-start-2 lg:row-span-3 lg:row-start-1">
+            <div className="order-2 space-y-4 lg:col-start-2 lg:row-span-3 lg:row-start-1">
+              <Suspense fallback={null}>
+                <HomeCashDifferencesSlot businessId={shell.businessId} currency={shell.currency} />
+              </Suspense>
               <HomeSectionErrorBoundary section="attention" fallback={<HomeAttentionUnavailable />}>
                 <Suspense fallback={<HomeAttentionSkeleton />}>
                   <HomeAttentionSlot attentionPromise={attentionPromise} plan={shell.plan} />

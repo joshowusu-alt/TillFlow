@@ -230,6 +230,7 @@ export default async function ShiftsPage(
           investigationStatus: s.cashVarianceInvestigation?.status ?? null,
         }))}
         currency={business.currency}
+        shiftCloseApprovalThresholdPence={business.shiftCloseApprovalThresholdPence ?? 5000}
         userRole={user.role}
         currentUserId={user.id}
       />

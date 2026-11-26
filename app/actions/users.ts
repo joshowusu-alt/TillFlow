@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { hashApprovalPin } from '@/lib/security/pin';
-import { withBusinessContext, formAction, err } from '@/lib/action-utils';
+import { withBusinessContext, formAction, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { formString } from '@/lib/form-helpers';
 import {
   hashPassword,
@@ -14,8 +14,8 @@ import {
   assertActorCanModifyRole,
 } from '@/lib/services/users';
 
-export async function createUserAction(formData: FormData): Promise<void> {
-  return formAction(async () => {
+export async function createUserAction(formData: FormData): Promise<ActionResult> {
+  return safeAction(async () => {
     const { user: owner, businessId } = await withBusinessContext(['OWNER']);
 
     const name = formString(formData, 'name');
@@ -44,8 +44,8 @@ export async function createUserAction(formData: FormData): Promise<void> {
     audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_CREATE', entity: 'User', entityId: created.id, details: { name, email, role } }).catch((e) => console.error('[audit]', e));
 
     revalidatePath('/users');
-    redirect('/users?success=created');
-  }, '/users');
+    return ok();
+  });
 }
 
 export async function updateUserAction(formData: FormData): Promise<void> {

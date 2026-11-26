@@ -20,7 +20,7 @@ describe('balance-sheet business presentation', () => {
   afterEach(() => vi.useRealTimers());
   it('shows signed recorded balances, warnings, legacy disclosure and review navigation', async () => {
     const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ asOf: '2026-03-31' }) }));
-    expect(html).toContain('Bank &amp; MoMo'); expect(html).toContain('-1.00');
+    expect(html).toContain('Bank &amp; MoMo'); expect(html).toContain('-GH₵1.00');
     expect(html).toContain('Some sales have no product cost recorded');
     expect(html.indexOf('Financial position')).toBeLessThan(html.indexOf('Report notes'));
     expect(html).toContain('Opening capital setting'); expect(html).toContain('separate from the opening balance entries');

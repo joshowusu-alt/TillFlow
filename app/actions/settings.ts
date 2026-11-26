@@ -97,6 +97,11 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         ? toPence(formData.get('cashVarianceRiskThresholdAmount'))
         : parseInt(String(formData.get('cashVarianceRiskThresholdPence') || '2000'), 10) || 2000
     );
+    const shiftCloseApprovalThresholdAmount = formString(formData, 'shiftCloseApprovalThresholdAmount');
+    const shiftCloseApprovalThresholdPence = Math.round(Number(shiftCloseApprovalThresholdAmount) * 100);
+    if (formData.has('shiftCloseApprovalThresholdAmount') && (!shiftCloseApprovalThresholdAmount || !Number.isSafeInteger(shiftCloseApprovalThresholdPence) || shiftCloseApprovalThresholdPence < 0 || shiftCloseApprovalThresholdPence > 2147483647)) {
+      throw new Error('Enter a valid large cash difference threshold.');
+    }
     // Opening Capital is entered in whole currency units by the user (e.g. 5000 = GHS 5,000)
     const openingCapitalPence = Math.max(0, toPence(formData.get('openingCapitalPence')));
     const plan = getBusinessPlan((currentBusiness as any)?.plan ?? (currentBusiness?.mode as any), (currentBusiness?.storeMode as any) ?? 'SINGLE_STORE');
@@ -133,6 +138,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         minimumMarginThresholdBps,
         inventoryAdjustmentRiskThresholdBase,
         cashVarianceRiskThresholdPence,
+        ...(formData.has('shiftCloseApprovalThresholdAmount') ? { shiftCloseApprovalThresholdPence } : {}),
       } as any
     });
 

@@ -183,7 +183,9 @@ export default function RegisterForm({ error }: RegisterFormProps) {
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
               minLength={6}
+              aria-describedby="register-password-rule"
             />
+            <p id="register-password-rule" className="mt-1 text-xs text-black/60">At least 6 characters</p>
             <PasswordStrengthMeter password={password} />
           </div>
           <div className="flex gap-3">

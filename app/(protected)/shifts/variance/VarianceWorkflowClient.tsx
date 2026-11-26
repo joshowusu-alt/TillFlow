@@ -7,6 +7,7 @@ import {
   assignCashVarianceAction,
   explainCashVarianceAction,
   resolveCashVarianceAction,
+  markCashVarianceReviewedAction,
 } from '@/app/actions/shifts';
 
 type Reviewer = { id: string; name: string; role: string };
@@ -20,6 +21,9 @@ type Props = {
   assignedReviewerName: string | null;
   approvedByName: string | null;
   approvedAt: string | null;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
+  reviewNote?: string | null;
   reviewers: Reviewer[];
   userRole: string;
   canExplain: boolean;
@@ -34,6 +38,9 @@ export default function VarianceWorkflowClient({
   assignedReviewerName,
   approvedByName,
   approvedAt,
+  reviewedByName,
+  reviewedAt,
+  reviewNote,
   reviewers,
   userRole,
   canExplain,
@@ -45,6 +52,8 @@ export default function VarianceWorkflowClient({
   const [explanation, setExplanation] = useState(cashierExplanation ?? '');
   const [evidence, setEvidence] = useState(evidenceNote ?? '');
   const [resolution, setResolution] = useState(managerResolution ?? '');
+  const [note, setNote] = useState('');
+  const reviewed = status === 'REVIEWED' || status === 'APPROVED';
 
   const isManagerOrOwner = userRole === 'MANAGER' || userRole === 'OWNER';
   const isOwner = userRole === 'OWNER';
@@ -67,13 +76,16 @@ export default function VarianceWorkflowClient({
   return (
     <div className="card space-y-4 p-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-display font-semibold">Workflow</h2>
-        <span className="rounded-full bg-black/5 px-2 py-1 text-xs font-semibold">{status}</span>
+        <h2 className="text-lg font-display font-semibold">Cash difference review</h2>
+        <span className="rounded-full bg-black/5 px-2 py-1 text-xs font-semibold">{reviewed ? 'Reviewed' : 'Needs review'}</span>
       </div>
       {error ? (
         <div className="rounded-xl border border-rose/40 bg-rose/10 px-3 py-2 text-sm text-rose">{error}</div>
       ) : null}
 
+      <div className="text-sm"><strong>Cashier's reason</strong><p>{cashierExplanation || '—'}</p></div>
+      {reviewed ? <div className="text-sm">Reviewed by {reviewedByName ?? approvedByName ?? 'Unknown'}{reviewedAt || approvedAt ? ` · ${new Date((reviewedAt ?? approvedAt)!).toLocaleString()}` : ''}{reviewNote ? <p>{reviewNote}</p> : null}</div> : isManagerOrOwner ? <div className="space-y-2"><label className="label" htmlFor="cash-review-note">Note (optional)</label><textarea id="cash-review-note" className="input" value={note} onChange={e => setNote(e.target.value)} /><button type="button" className="btn-primary" disabled={isPending} onClick={() => run(markCashVarianceReviewedAction, form => form.set('note', note))}>I'm comfortable</button></div> : null}
+      <details className="space-y-3"><summary className="cursor-pointer text-sm font-semibold">More options</summary>
       <div className="text-sm text-black/60">
         Assigned reviewer: {assignedReviewerName ?? 'Not assigned'}
       </div>
@@ -109,7 +121,7 @@ export default function VarianceWorkflowClient({
         </div>
       ) : null}
 
-      {canExplain && status !== 'APPROVED' && status !== 'RESOLVED' ? (
+      {canExplain && !reviewed && status !== 'RESOLVED' ? (
         <div className="space-y-2 rounded-xl border border-black/10 p-3">
           <label className="label">Cashier explanation</label>
           <textarea className="input" rows={3} value={explanation} onChange={(e) => setExplanation(e.target.value)} />
@@ -143,7 +155,7 @@ export default function VarianceWorkflowClient({
         </div>
       )}
 
-      {isManagerOrOwner && status !== 'APPROVED' ? (
+      {isManagerOrOwner && !reviewed && status !== 'RESOLVED' ? (
         <div className="space-y-2 rounded-xl border border-black/10 p-3">
           <label className="label">Manager resolution</label>
           <textarea className="input" rows={3} value={resolution} onChange={(e) => setResolution(e.target.value)} />
@@ -177,6 +189,7 @@ export default function VarianceWorkflowClient({
           {isPending ? 'Approving…' : 'Approve variance'}
         </button>
       ) : null}
+      </details>
     </div>
   );
 }

@@ -65,6 +65,7 @@ async function main() {
       assert.equal(creationError, null, `First cashier creation rejected: ${creationError}`);
       try {
         await page.getByText('User created successfully.', { exact: true }).waitFor({ timeout: 15000 });
+        await page.getByText(cashierEmail, { exact: true }).filter({ visible: true }).first().waitFor({ timeout: 15000 });
       } catch (error) {
         const persisted = await prisma.user.findFirst({ where: { email: cashierEmail }, select: { active: true, role: true } });
         throw new Error(`First-cashier feedback missing: ${JSON.stringify({ path: new URL(page.url()).pathname, success: new URL(page.url()).searchParams.get('success'), persisted, visiblePage: (await page.locator('body').innerText()).slice(0, 1200) })}`);
@@ -74,6 +75,13 @@ async function main() {
       assert.equal(cashier.role, 'CASHIER');
       assert.equal(cashier.active, true);
       results.push('PASS first cashier created through newly registered owner UI');
+      await page.locator('input[name=name]').fill('Fictional Duplicate Cashier');
+      await page.locator('input[name=email]').fill(cashierEmail);
+      await page.locator('input[name=password]').fill(fixture.password);
+      await page.getByRole('button', { name: 'Create User', exact: true }).click();
+      await page.getByRole('alert').filter({ hasText: 'A user with that email already exists.' }).waitFor({ timeout: 15000 });
+      assert.equal(await prisma.user.count({ where: { email: cashierEmail } }), 1);
+      results.push('PASS duplicate user displays the real error and does not create another user');
       const firstLogin = await browser.newContext({ baseURL, serviceWorkers: 'block' });
       try {
         const firstPage = await firstLogin.newPage();
@@ -144,7 +152,7 @@ async function main() {
         if (role.startsWith('cashier')) {
           const before = await prisma.salesInvoice.count({ where: { businessId: fixture.businessId, cashierUserId: fixture.users[role].id } });
           await page.goto('/pos');
-          const barcode = page.getByRole('textbox', { name: 'Scan barcode', exact: true });
+          const barcode = page.getByRole('textbox', { name: 'Scan barcode or search products', exact: true });
           await barcode.fill(fixture.products[index - 2].barcode);
           await barcode.press('Enter');
           const add = page.getByRole('button', { name: /Add to Cart/i });
@@ -203,7 +211,7 @@ async function main() {
           await page.goto('/suppliers');
           await page.waitForURL(url => !url.pathname.startsWith('/suppliers'), { timeout: 45000 });
           assert(!new URL(page.url()).pathname.startsWith('/suppliers'), 'Cashier must not read supplier management');
-          await page.getByRole('textbox', { name: 'Scan barcode', exact: true }).waitFor({ state: 'visible', timeout: 45000 });
+          await page.getByRole('textbox', { name: 'Scan barcode or search products', exact: true }).waitFor({ state: 'visible', timeout: 45000 });
           results.push(`PASS cashier supplier-route denial ${role}`);
         } else {
           if (role === 'owner') {

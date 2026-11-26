@@ -4,16 +4,22 @@ import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observa
 import { getOwnerHomeCriticalShell } from '@/lib/owner-home/critical-shell';
 import OwnerHomeCompletedStream from '@/components/owner-home/OwnerHomeCompletedStream';
 import OnboardingClient from './OnboardingClient';
+import HomeCashDifferencesSlot from '@/components/owner-home/HomeCashDifferencesSlot';
 
 async function IncompleteOwnerHome() {
-  const readiness = await measureServerOperation(
-    'page.onboarding.owner-readiness',
-    () => getReadiness(),
-    { route: '/onboarding', role: 'OWNER' },
-    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
-  );
-
-  return <OnboardingClient readiness={readiness} />;
+  // Use the already-cached critical shell; await both pieces in this segment.
+  // The incomplete checklist intentionally has no nested Suspense boundary.
+  const shell = await getOwnerHomeCriticalShell();
+  const [readiness, cashDifferences] = await Promise.all([
+    measureServerOperation(
+      'page.onboarding.owner-readiness',
+      () => getReadiness(),
+      { route: '/onboarding', role: 'OWNER' },
+      { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+    ),
+    HomeCashDifferencesSlot({ businessId: shell.businessId, currency: shell.currency }),
+  ]);
+  return <>{cashDifferences}<OnboardingClient readiness={readiness} /></>;
 }
 
 export default async function OwnerReadinessContent({ destination }: { destination?: "home" | "onboarding" } = {}) {

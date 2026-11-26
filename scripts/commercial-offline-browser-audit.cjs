@@ -7,6 +7,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
+const { execFileSync } = require('node:child_process');
 
 async function main() {
   const root = path.resolve(__dirname, '..');
@@ -31,16 +32,21 @@ async function main() {
   const results = [];
   try {
     if (process.env.TILLFLOW_VERIFY_ROLLBACK_READER === '1') {
-      // Exact core v4 reader/sync/SW source in immutable fallback900d0f7.
-      // The native queue tests below therefore exercise that fallback reader,
-      // not an assumed-compatible v3 deployment or a mocked IndexedDB.
+      // dfce423 passed native two-version retail, food and cash-review rollback (run 45732452825); both readers must still match its exact source.
+      const fallbackRoot = path.resolve(process.env.TILLFLOW_FALLBACK_ROOT || '.pilot-fallback');
+      assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: fallbackRoot, encoding: 'utf8' }).trim(), 'dfce423c571c99f98ef2efbe7d8f834bf741047c');
       const fallback = {
-        'lib/offline/storage.ts': '334310987b4c9f221f3a6b81210677a62547c56a0188c523ff9d0b0e1de6743e',
+        'lib/offline/storage.ts': '7a3d1115e3872bf083f67211d67bfc46561a7236222bcc64262ae58ff112b5c3',
+        'lib/offline/capture.ts': 'e4335cffd7d76927183fa0112f4667189e8beb43fb90a385416741348d751781',
+        'lib/offline/payload-hash.ts': 'ba4278654d14cce41ec602e822ccc28cd672656acd119cce3a75c8a5ba083ca7',
         'lib/offline/sync.ts': 'aa26451e82f0115331dc892ebe785028f3d1f617b4c7dc6c33d2167ae9d1921a',
-        'public/sw.js': 'e782e99525636aa531479b3fd94752b24e181edfb2a6842f8332d7223b36fe21',
+        'public/sw.js': '2501ceb3fc4decc256f36b2f7d26b3f71708624df57d421cf5c5b97acb90ea44',
       };
-      for (const [file, expected] of Object.entries(fallback)) assert.equal(createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex'), expected, `Review rollback reader compatibility after changing ${file}`);
-      results.push('PASS immutable fallback900d0f7 uses the same v4 storage/sync/service-worker reader exercised below');
+      for (const [file, expected] of Object.entries(fallback)) {
+        assert.equal(createHash('sha256').update(fs.readFileSync(path.join(fallbackRoot, file))).digest('hex'), expected, `Immutable dfce423 fallback source mismatch: ${file}`);
+        assert.equal(createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex'), expected, `Review rollback reader compatibility after changing ${file}`);
+      }
+      results.push('PASS immutable dfce423 fallback and candidate have identical proven v4 storage, capture, hash, sync and service-worker source');
     }
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext();

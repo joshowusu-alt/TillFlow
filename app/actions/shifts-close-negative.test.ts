@@ -74,7 +74,7 @@ describe('close shift actions reject negative counted cash', () => {
       user: { id: 'owner-1', name: 'Owner', role: 'OWNER' },
       businessId: 'biz-1',
     });
-    findFirstMock.mockResolvedValue({ till: { storeId: 'store-b' } });
+    findFirstMock.mockResolvedValue({ userId: 'owner-1', till: { storeId: 'store-b' } });
     verifyManagerPinMock.mockResolvedValue({ id: 'mgr-1', role: 'MANAGER' });
     findUniqueMock.mockResolvedValue({ passwordHash: 'hash' });
     bcryptCompareMock.mockResolvedValue(true);
@@ -136,17 +136,23 @@ describe('close shift actions reject negative counted cash', () => {
     expect(performShiftCloseMock).not.toHaveBeenCalled();
   });
 
-  it('fails closed when the manager PIN is omitted or wrong', async () => {
+  it('uses SELF for an own shift without a PIN and ignores stale legacy PIN input', async () => {
     const { closeShiftAction } = await import('./shifts');
-    expect(await closeShiftAction(closeForm({ actualCash: '10.00', managerPin: '' }))).toEqual({
-      success: false,
-      error: 'Manager PIN is required to close till.',
-    });
-    verifyManagerPinMock.mockResolvedValue(null);
-    expect(await closeShiftAction(closeForm({ actualCash: '10.00', managerPin: '0000' }))).toEqual({
-      success: false,
-      error: 'Invalid manager PIN.',
-    });
+    performShiftCloseMock.mockRejectedValueOnce(new Error('transaction guard'));
+    await closeShiftAction(closeForm({ actualCash: '10.00', managerPin: '' }));
+    expect(performShiftCloseMock).toHaveBeenCalledWith(expect.objectContaining({ approval: { mode: 'SELF' } }));
+    expect(verifyManagerPinMock).not.toHaveBeenCalled();
+    performShiftCloseMock.mockClear();
+    performShiftCloseMock.mockRejectedValueOnce(new Error('transaction guard'));
+    await closeShiftAction(closeForm({ actualCash: '10.00', managerPin: '0000' }));
+    expect(performShiftCloseMock).toHaveBeenCalledWith(expect.objectContaining({ approval: { mode: 'SELF' } }));
+    expect(verifyManagerPinMock).not.toHaveBeenCalled();
+  });
+  it('rejects a cashier closing another user’s shift', async () => {
+    const { closeShiftAction } = await import('./shifts');
+    withBusinessContextMock.mockResolvedValue({ user: { id: 'cashier-1', name: 'Cashier', role: 'CASHIER' }, businessId: 'biz-1' });
+    findFirstMock.mockResolvedValue({ userId: 'cashier-2', till: { storeId: 'store-b' } });
+    expect(await closeShiftAction(closeForm({ actualCash: '10.00', managerPin: '' }))).toEqual({ success: false, error: 'You can only close your own shift.' });
     expect(performShiftCloseMock).not.toHaveBeenCalled();
   });
 });

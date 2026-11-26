@@ -5,7 +5,9 @@ import ResetPasswordModal from '@/components/ResetPasswordModal';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { requireRole } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { createUserAction, updateUserAction, toggleUserActiveAction } from '@/app/actions/users';
+import { toggleUserActiveAction } from '@/app/actions/users';
+import UserForm from './UserForm';
+import { userFormErrorMessage } from './user-form-errors';
 
 export default async function UsersPage(
   props: {
@@ -39,12 +41,6 @@ export default async function UsersPage(
     ? users.find((u) => u.id === searchParams.edit)
     : null;
 
-  const errorMessages: Record<string, string> = {
-    missing: 'Please fill in all required fields.',
-    duplicate: 'A user with that email already exists.',
-    password_short: 'Password must be at least 6 characters.',
-  };
-
   return (
     <div className="space-y-4 sm:space-y-5">
       <PageHeader title="Users" subtitle="Manage cashiers, managers, and owner accounts." />
@@ -52,7 +48,7 @@ export default async function UsersPage(
       {/* Error / Success banners */}
       {searchParams.error && (
         <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-          {errorMessages[searchParams.error] || 'An error occurred.'}
+          {userFormErrorMessage(searchParams.error)}
         </div>
       )}
       {searchParams.success === 'created' && (
@@ -76,7 +72,7 @@ export default async function UsersPage(
         <h2 className="text-lg font-semibold mb-4">
           {editUser ? `Edit ${editUser.name}` : 'Add New User'}
         </h2>
-        <form action={editUser ? updateUserAction : createUserAction} className="grid gap-4 sm:grid-cols-2">
+        <UserForm editing={Boolean(editUser)}>
           {editUser && <input type="hidden" name="userId" value={editUser.id} />}
           <div>
             <label className="label">Full Name *</label>
@@ -123,8 +119,10 @@ export default async function UsersPage(
               minLength={4}
               maxLength={8}
               placeholder="4-8 digits"
+              aria-describedby="manager-pin-rule"
             />
-            <div className="mt-1 text-xs text-black/50">
+            <div id="manager-pin-rule" className="mt-1 text-xs text-black/50">
+              4–8 digits.{' '}
               Required for manager approvals like till close, voids and overrides.
             </div>
           </div>
@@ -155,7 +153,7 @@ export default async function UsersPage(
               <Link href="/users" className="btn-ghost">Cancel</Link>
             )}
           </div>
-        </form>
+        </UserForm>
       </div>
 
       {/* Role guide */}

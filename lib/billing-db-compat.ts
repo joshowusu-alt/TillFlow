@@ -34,6 +34,7 @@ const AUTH_LEGACY_SELECT = {
   discountApprovalThresholdBps: true,
   inventoryAdjustmentRiskThresholdBase: true,
   cashVarianceRiskThresholdPence: true,
+  shiftCloseApprovalThresholdPence: true,
   customerScope: true,
   whatsappEnabled: true,
   whatsappPhone: true,

@@ -85,3 +85,40 @@ describe('close actions reject negative counted cash on every entry point', () =
     expect(service).toContain('assertNonNegativeActualCash(actualCash)');
   });
 });
+
+describe('cashier self-close rules on locked cash', () => {
+  const input = { ...negativeInput, actor: { userId: 'cashier-1', userName: 'Cashier', userRole: 'CASHIER' }, approval: { mode: 'SELF' as const }, varianceReason: null, varianceReasonCode: null };
+  beforeEach(async () => {
+    const { prisma } = await import('@/lib/prisma');
+    const shift = { id: 'shift-1', userId: 'cashier-1', tillId: 'till-1', status: 'OPEN', openedAt: new Date(), openingCashPence: 10000, till: { id: 'till-1', storeId: 'store-1', name: 'Till 1' }, salesInvoices: [], cashDrawerEntries: [{ id: 'entry-1', entryType: 'OPEN_FLOAT', amountPence: 10000, createdAt: new Date() }] };
+    (prisma as any).shift = { findFirst: vi.fn().mockResolvedValue(shift), updateMany: vi.fn().mockResolvedValue({ count: 1 }) };
+    (prisma as any).business = { findUnique: vi.fn().mockResolvedValue({ varianceReasonRequired: false, shiftCloseApprovalThresholdPence: 5000 }) };
+    (prisma as any).$queryRaw = vi.fn();
+    (prisma as any).$transaction = vi.fn(async (cb: any) => cb(prisma));
+  });
+  it.each([10000, 5000, 2000, 0, 12000, 18000])('closes counted %s with SELF and no approver', async (actualCash) => {
+    const { prisma } = await import('@/lib/prisma');
+    const { createCashVarianceInvestigationTx } = await import('@/lib/services/cash-variance');
+    await performShiftClose({ ...input, actualCash, varianceReason: actualCash === 10000 ? null : 'Count checked' });
+    expect((prisma as any).shift.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ closeManagerApprovalMode: 'SELF', closeManagerApprovedByUserId: null, variance: actualCash - 10000 }) }));
+    expect(JSON.parse((prisma as any).shift.updateMany.mock.calls[0][0].data.closureSnapshotJson)).toMatchObject({ closedBySelf: true });
+    expect(createCashVarianceInvestigationTx).toHaveBeenCalledWith(prisma, expect.objectContaining({ variancePence: actualCash - 10000, cashierExplanation: actualCash === 10000 ? null : 'Count checked' }));
+  });
+  it.each([5000, 2000, 0, 12000, 18000])('requires a reason for counted %s', async (actualCash) => {
+    await expect(performShiftClose({ ...input, actualCash })).rejects.toThrow("Please say why the cash doesn't match.");
+  });
+  it('closes a large shortage from the reason picker alone', async () => {
+    await expect(performShiftClose({ ...input, actualCash: 2000, varianceReasonCode: 'MISSING_CASH' })).resolves.toMatchObject({ id: 'shift-1' });
+  });
+  it('blocks a different cashier', async () => {
+    await expect(performShiftClose({ ...input, actualCash: 10000, actor: { ...input.actor, userId: 'other' } })).rejects.toThrow('You can only close your own shift');
+  });
+  it('does not create another review if the conditional close loses a concurrent race', async () => {
+    const { prisma } = await import('@/lib/prisma');
+    const { createCashVarianceInvestigationTx } = await import('@/lib/services/cash-variance');
+    vi.mocked(createCashVarianceInvestigationTx).mockClear();
+    (prisma as any).shift.updateMany.mockResolvedValue({ count: 0 });
+    await expect(performShiftClose({ ...input, actualCash: 9000, varianceReason: 'Short' })).rejects.toThrow('already closed');
+    expect(createCashVarianceInvestigationTx).not.toHaveBeenCalled();
+  });
+});
