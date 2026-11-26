@@ -1,12 +1,12 @@
 import { evaluateMarginLines, evaluateMarginSet, type MarginInvoiceInput } from './margin-line';
 
 export const INCOME_STATEMENT_METRICS = {
-  revenue: { label: 'Revenue', explanation: 'Recorded sales after discounts, excluding tax. Fully returned and voided sales are excluded.' },
-  cogs: { label: 'Cost of products sold', explanation: 'Historical costs recorded on the sales in this period. Missing costs remain incomplete.' },
-  grossProfit: { label: 'Gross Profit', explanation: 'Revenue less the recorded cost of products sold.' },
-  otherExpenses: { label: 'Operating Expenses', explanation: 'Posted expense entries in this period, excluding cost of products sold. Reversals reduce the expense.' },
-  otherOperatingIncome: { label: 'Other operating income', explanation: 'Posted income entries other than sales revenue.' },
-  netProfit: { label: 'Net Profit', explanation: 'Gross profit less operating expenses, plus other operating income. Expenses reduce profit; reversals restore it.' },
+  revenue: { label: 'Sales', explanation: 'Recorded sales after discounts, excluding tax. Fully returned and voided sales are excluded.' },
+  cogs: { label: 'Cost of goods sold', explanation: 'Historical costs recorded on the sales in this period. Missing costs remain incomplete.' },
+  grossProfit: { label: 'Gross profit', explanation: 'Sales less the recorded cost of goods sold.' },
+  otherExpenses: { label: 'Expenses', explanation: 'Posted expense entries in this period, excluding cost of goods sold. Reversals reduce the expense.' },
+  otherOperatingIncome: { label: 'Other income', explanation: 'Posted income entries other than sales.' },
+  netProfit: { label: 'Profit', explanation: 'Gross profit less expenses, plus other income. Expenses reduce profit; reversals restore it.' },
 } as const;
 export type IncomeStatementMetric = keyof typeof INCOME_STATEMENT_METRICS;
 export function isIncomeStatementMetric(value: string): value is IncomeStatementMetric {

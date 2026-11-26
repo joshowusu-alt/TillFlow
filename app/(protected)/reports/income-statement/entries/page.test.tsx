@@ -13,7 +13,7 @@ describe('income statement detail access and period',()=>{
     const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({businessId:'another-business',from:'2020-01-01',to:'2030-01-01',metric:'grossProfit'})}));
     expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({surfaceId:'income_statement'}));
     expect(mocks.statement).toHaveBeenCalledWith('business',new Date('2026-10-01T00:00:00Z'),new Date('2026-10-21T00:00:00Z'));
-    expect(html).toContain('Gross Profit — supporting records');expect(html).toContain('href="/sales/one"');
+    expect(html).toContain('Gross profit — supporting records');expect(html).toContain('href="/sales/one"');
     expect(html).toContain('/reports/income-statement?from=2026-10-01&amp;to=2026-10-20');
   });
   it('filters only blocking receipts and links the precise affected product',async()=>{

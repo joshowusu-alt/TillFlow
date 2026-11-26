@@ -79,7 +79,7 @@ export default async function IncomeStatementEntriesPage(
           <td className="whitespace-nowrap p-3 align-top">{date(entry.date)}</td>
           <td className="min-w-[12rem] p-3">{entry.href ? <Link className="font-semibold text-accent underline" href={entry.href}>{entry.label}</Link> : <span className="font-semibold">{entry.label}</span>}
             <p className="mt-1 text-xs text-ink/60">{entry.description}</p>
-            {entry.kind === 'sale' && (metric === 'grossProfit' || metric === 'netProfit') ? <p className="mt-1 text-xs text-ink/60">Revenue {money(entry.revenuePence)} · Recorded cost {entry.costPence === null ? 'incomplete' : money(entry.costPence)}</p> : null}
+            {entry.kind === 'sale' && (metric === 'grossProfit' || metric === 'netProfit') ? <p className="mt-1 text-xs text-ink/60">Sales {money(entry.revenuePence)} · Recorded cost {entry.costPence === null ? 'incomplete' : money(entry.costPence)}</p> : null}
           </td>
           <td className="whitespace-nowrap p-3 text-right align-top tabular-nums">{entry.contributionPence === null ? 'Costs incomplete' : money(entry.contributionPence)}</td>
         </tr>)}</tbody>

@@ -122,7 +122,7 @@ describe('Stage 3B presentation contracts', () => {
   it('keeps movement comparison dates, all ranked product evidence and exact export scope', () => {
     const html = movement();
     expect(html).toContain('30 days'); expect(html).toContain('31 days');
-    expect(html).toContain('2026-08-31');
+    expect(html).toContain('31 Aug');
     expect(html).toContain('All product figures');
     expect(html).toContain('Supporting figures');
     expect(html).toContain('preset=last_full_calendar_month&amp;storeId=sample-branch');

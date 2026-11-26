@@ -1,10 +1,8 @@
 import { isFoodBusiness } from '@/lib/food/business';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import DownloadLink from '@/components/DownloadLink';
-import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
-import ReportActionGroup from '@/components/reports/ReportActionGroup';
-import DateRangeFilterCard from '@/components/reports/DateRangeFilterCard';
+import PeriodChips, { readableReportPeriod } from '@/components/reports/PeriodChips';
 import ReportSummaryCard, { ReportSummaryRow } from '@/components/reports/ReportSummaryCard';
 import { ReportReadOnlyBanner, ReportScopeLabel } from '@/components/reports/ReportSurfaceDenial';
 import { openLiveReport } from '@/lib/entitlements/live-report';
@@ -17,7 +15,7 @@ import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/report
 
 export default async function IncomeStatementPage(
   props: {
-    searchParams?: Promise<{ from?: string; to?: string }>;
+    searchParams?: Promise<{ from?: string; to?: string; periodChip?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -49,7 +47,7 @@ export default async function IncomeStatementPage(
   const breakdownLink = (metric: IncomeStatementMetric, value: ReactNode) => (
     <Link href={incomeStatementEntriesHref(metric, fromStr, toStr)}
       aria-label={`View ${INCOME_STATEMENT_METRICS[metric].label} supporting records: ${statement[metric] === null ? 'Costs incomplete' : formatMoney(statement[metric], business.currency)}`}
-      className="rounded underline decoration-current/30 underline-offset-4 hover:decoration-current focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
+      className="inline-flex min-h-11 items-center rounded underline decoration-current/30 underline-offset-4 hover:decoration-current focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
       {value}
     </Link>
   );
@@ -61,82 +59,26 @@ export default async function IncomeStatementPage(
     statement.cogs !== 0 || statement.hasFoodCosts ||
     statement.otherExpenses !== 0 ||
     statement.otherOperatingIncome !== 0;
+  const incompleteSales = (statement.entries ?? []).filter(entry =>
+    entry.kind === 'sale' && entry.incompleteLines?.some(line => line.reason !== 'UNSUPPORTED_RETURN')).length;
+  const returnIssues = (statement.entries ?? []).some(entry => entry.kind === 'sale' &&
+    entry.profitPence === null && (!entry.incompleteLines?.length || entry.incompleteLines.some(line => line.reason === 'UNSUPPORTED_RETURN')));
+  const profitWarning = incompleteSales
+    ? `Profit is incomplete: ${incompleteSales} sale${incompleteSales === 1 ? ' has' : 's have'} no product cost.${returnIssues ? ' Some return records also need review.' : ''}`
+    : statement.incompleteLineCount > 0 ? 'Profit is incomplete: some sale costs or return records need review.' : 'Profit is incomplete: a return record needs review.';
+  const percent = (label: string, value: number) => <span>{label}{!costsIncomplete ? <small className="block text-xs font-normal text-slate-600">({value}% of sales)</small> : null}</span>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {opened.readOnly ? <ReportReadOnlyBanner /> : null}
       {applied?.label === 'Last 30 days' ? <ReportScopeLabel label="Last 30 days" /> : null}
       <ReportsDestinationHead
         title="Income Statement"
-        scopeLabel={opened.branch.kind === 'label' ? opened.branch.label : undefined}
-        periodLabel={`${fromStr} to ${toStr}`}
-        actions={
-          <ReportActionGroup>
-            <DownloadLink
-              href={`/api/reports/financials?type=income-statement&from=${fromStr}&to=${toStr}`}
-              fallbackFilename={`income-statement-${fromStr}.csv`}
-              className="btn-secondary text-sm"
-            >
-              Export CSV
-            </DownloadLink>
-          </ReportActionGroup>
-        }
+        scopeLabel={opened.branch.kind === 'label' && opened.stores?.length > 1 ? 'Whole business — not separated by branch' : undefined}
+        periodLabel={readableReportPeriod(fromStr, toStr)}
       />
-
-      {isFoodBusiness(business.businessCategory) && statement.revenue > 0 &&
-        statement.foodCosts === 0 && statement.foodWaste === 0 && (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            No food costs are showing for this period. If you used ingredients, record them under Ingredients used or record cooked portions for a dish with a recipe. Otherwise, profit may look higher than it was.
-          </p>
-        )}
-
-      {/* KPI Summary */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Revenue"
-          value={breakdownLink('revenue', formatMoney(statement.revenue, business.currency))}
-          tone="accent"
-        />
-        <StatCard
-          label="Cost of products sold"
-          value={breakdownLink('cogs', costsIncomplete ? 'Costs incomplete' : formatMoney(statement.cogs ?? 0, business.currency))}
-        />
-        <StatCard
-          label={costsIncomplete ? 'Gross Profit' : `Gross Profit (${gpPct}%)`}
-          value={breakdownLink('grossProfit', costsIncomplete ? 'Costs incomplete' : formatMoney(statement.grossProfit ?? 0, business.currency))}
-          tone={costsIncomplete ? 'warn' : gpPct >= 20 ? 'success' : gpPct >= 0 ? 'warn' : 'danger'}
-          helper={costsIncomplete ? statement.incompleteLineCount > 0 ? `${statement.incompleteLineCount} sale line${statement.incompleteLineCount === 1 ? '' : 's'} require review` : 'Return evidence requires review' : undefined}
-        />
-        <StatCard
-          label={costsIncomplete ? 'Net Profit' : `Net Profit (${npPct}%)`}
-          value={breakdownLink('netProfit', costsIncomplete ? 'Costs incomplete' : formatMoney(statement.netProfit ?? 0, business.currency))}
-          tone={costsIncomplete ? 'warn' : npPct >= 10 ? 'success' : npPct >= 0 ? 'warn' : 'danger'}
-        />
-      </div>
-
-      {costsIncomplete ? <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2 text-amber-950">
-        <h2 className="font-semibold">Review sales blocking profit</h2>
-        <p className="text-sm">{statement.incompleteLineCount > 0 ? `${statement.incompleteLineCount} sale line${statement.incompleteLineCount === 1 ? '' : 's'} require review in this reporting period.` : 'A return record requires review in this reporting period.'} Review these first; existing stock valuation is a separate task.</p>
-        <Link className="inline-flex min-h-11 items-center font-semibold underline" href={incomeStatementEntriesHref('grossProfit', fromStr, toStr) + '&issues=1'}>Review affected sales →</Link>
-      </section> : null}
-      <DateRangeFilterCard from={fromStr} to={toStr} />
-      <p className="text-sm text-ink/60">Tap an amount to see the records that make it up for this period.</p>
-
-      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-        Sales and product costs come from your recorded sales. Expenses come from recorded business costs. Sales figures include credit sales not yet collected — this report shows profit performance, not cash in the bank.
-      </div>
-
-      {statement.incompleteStockMessage ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-          <p className="font-semibold">Stock value is incomplete</p>
-          <p className="mt-1">{statement.incompleteStockMessage}</p>
-          {costsIncomplete ? (
-            <p className="mt-1">The profit exceptions above may overlap with these products, but stock valuation is a separate task.</p>
-          ) : <p className="mt-1">Sales costs for this reporting period are complete. The stock-value review is separate.</p>}
-          <Link className="mt-2 inline-flex min-h-11 items-center font-semibold underline" href="/products?issue=MISSING_COST">Review stock and earlier sale costs →</Link>
-          <Link className="mt-2 block min-h-11 font-semibold underline" href="/products/cost-resolution">Open Cost Resolution Centre →</Link>
-        </div>
-      ) : null}
+      <PeriodChips from={fromStr} to={toStr} timeZone={month.timeZone} now={now} selected={searchParams?.periodChip} />
+      {costsIncomplete ? <p role="status" className="rounded-xl bg-amber-50 px-3 text-sm text-amber-950">{profitWarning} <Link className="inline-flex min-h-11 items-center font-semibold underline" href={incomeStatementEntriesHref('grossProfit', fromStr, toStr) + '&issues=1'}>Fix costs →</Link></p> : null}
 
       {!hasData ? (
         <EmptyState
@@ -150,11 +92,11 @@ export default async function IncomeStatementPage(
       ) : (
         <ReportSummaryCard>
           <ReportSummaryRow
-            label="Revenue"
+            label="Sales"
             value={breakdownLink('revenue', formatMoney(statement.revenue, business.currency))}
           />
           <ReportSummaryRow
-            label="Cost of products sold"
+            label="Cost of goods sold"
             value={breakdownLink('cogs', costsIncomplete ? 'Costs incomplete' : formatMoney(statement.cogs ?? 0, business.currency))}
           />
           {statement.hasFoodCosts && <>
@@ -162,14 +104,14 @@ export default async function IncomeStatementPage(
             <ReportSummaryRow label="Food waste" value={formatMoney(statement.foodWaste, business.currency)} />
           </>}
           <ReportSummaryRow
-            label="Gross Profit"
+            label={percent('Gross profit', gpPct)}
             value={breakdownLink('grossProfit', costsIncomplete ? 'Costs incomplete' : formatMoney(statement.grossProfit ?? 0, business.currency))}
             divider="default"
             emphasis="strong"
           />
           {statement.otherOperatingIncome !== 0 && (
             <ReportSummaryRow
-              label={<span className="text-black/70">Other operating income</span>}
+              label={<span className="text-black/70">Other income</span>}
               value={
                 <span className="text-emerald-700">
                   {breakdownLink('otherOperatingIncome', formatMoney(statement.otherOperatingIncome, business.currency))}
@@ -177,20 +119,25 @@ export default async function IncomeStatementPage(
               }
             />
           )}
-          {statement.otherExpenses !== 0 && (
             <ReportSummaryRow
-              label={<span className="text-black/70">Operating Expenses</span>}
+              label={<span className="text-black/70">Expenses</span>}
               value={<span className="text-rose-600">{breakdownLink('otherExpenses', `(${formatMoney(statement.otherExpenses, business.currency)})`)}</span>}
             />
-          )}
           <ReportSummaryRow
-            label="Net Profit"
+            label={percent('Profit', npPct)}
             value={breakdownLink('netProfit', costsIncomplete ? 'Costs incomplete' : <span className={(statement.netProfit ?? 0) >= 0 ? 'text-emerald-700' : 'text-rose-600'}>{formatMoney(statement.netProfit ?? 0, business.currency)}</span>)}
             divider="default"
             emphasis="strong"
           />
         </ReportSummaryCard>
       )}
+      <p className="text-sm text-ink/60">Tap any amount to see the records behind it.</p>
+      <p className="text-sm text-ink/60">Includes credit sales not yet paid, so this is profit, not cash in hand.</p>
+      {isFoodBusiness(business.businessCategory) && statement.revenue > 0 &&
+        statement.foodCosts === 0 && statement.foodWaste === 0 ? <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">No food costs are showing for this period; record ingredients used or cooked portions to keep profit accurate.</p> : null}
+      {!costsIncomplete && statement.stockValueIncomplete && statement.incompleteStockMessage ? <p className="text-sm text-slate-600">{statement.incompleteStockMessage} This does not change this period&apos;s profit. <Link className="inline-flex min-h-11 items-center font-semibold underline" href="/products?issue=MISSING_COST">Add cost →</Link></p> : null}
+      <DownloadLink href={`/api/reports/financials?type=income-statement&from=${fromStr}&to=${toStr}`}
+        fallbackFilename={`income-statement-${fromStr}.csv`} className="inline-flex min-h-11 items-center text-sm font-semibold text-accent underline">Export CSV</DownloadLink>
     </div>
   );
 }

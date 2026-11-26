@@ -1,19 +1,22 @@
 import { PeriodComparisonChart } from '@/components/reports/charts/ReportVisuals';
 import Link from 'next/link';
 import DownloadLink from '@/components/DownloadLink';
-import ReportHeader from './ReportHeader';
+import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
+import ReportKeyboardFocus from './ReportKeyboardFocus';
+import ReportMoreActions from './ReportMoreActions';
 import { ReportDisclosure, ReportMetric, ReportSection, ReportValueBars, REPORT_LINK } from './ReportPrimitives';
 import BusinessMovementSummary from '@/components/reports/BusinessMovementSummary';
 import BusinessMovementInsight from '@/components/reports/BusinessMovementInsight';
 import BusinessMovementProductCards from '@/components/reports/BusinessMovementProductCards';
 import FinancialAmount from '@/components/reports/FinancialAmount';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
+import PeriodChips, { readableReportPeriod } from '@/components/reports/PeriodChips';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
 import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
 import { CONSOLIDATED_LABEL } from '@/lib/reports/scope-labels';
 import { formatMoney } from '@/lib/format';
-import { movementGapCopy, visibleMovementInsights } from '@/lib/reports/business-movement/presentation';
-import { buildOwnerInsightSummary, buildOwnerSummaryStrip, ownerPeriodChrome, ownerProductMovers, singleBranchNote, singleCashierNote, OWNER_STOCK_DATA_NOTE, describeChangeVsComparison,
+import { visibleMovementInsights } from '@/lib/reports/business-movement/presentation';
+import { buildOwnerInsightSummary, buildOwnerSummaryStrip, ownerPeriodChrome, ownerProductMovers, singleBranchNote, singleCashierNote, describeChangeVsComparison,
   type BusinessMovementWithMoneyResult, type ChangePair, type OwnerPeriodLabels } from '@/lib/reports/business-movement';
 
 function changeHelper(pair: ChangePair, currency: string, labels: OwnerPeriodLabels, noun = 'activity'): string {
@@ -32,10 +35,11 @@ function changeHelper(pair: ChangePair, currency: string, labels: OwnerPeriodLab
   return `${sign}${abs} vs ${labels.comparisonFull}`;
 }
 
-export default function BusinessMovementReportView({ result, scopeLabel, readOnly = false, choices, offerAll, selectedStoreId, selectedPreset, currentFromValue, currentToValue, exportQuery, moneyQuery }: {
+export default function BusinessMovementReportView({ result, scopeLabel, readOnly = false, choices, offerAll, selectedStoreId, selectedPreset, currentFromValue, currentToValue, exportQuery, moneyQuery, selectedPeriod }: {
   result: BusinessMovementWithMoneyResult; scopeLabel: string; readOnly?: boolean;
   choices: { id: string; name: string }[]; offerAll: boolean; selectedStoreId: string;
   selectedPreset: string; currentFromValue: string; currentToValue: string; exportQuery: string; moneyQuery: string;
+  selectedPeriod?: string;
 }) {
   const summary = buildOwnerInsightSummary(result);
   const strip = buildOwnerSummaryStrip(result, summary.insights);
@@ -54,24 +58,22 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
   return (
     <div className="space-y-4 sm:space-y-5 [&_tbody_td]:text-base [&_td_.financial-amount]:!text-base">
       {readOnly ? <ReportReadOnlyBanner /> : null}
-      <ReportHeader
+      <ReportsDestinationHead
         title="Business movement"
-        scopeLabel={scopeLabel}
-        periodLabel={chrome.comparingLine}
+        scopeLabel={choices.length > 1 ? scopeLabel : undefined}
+        periodLabel={`${readableReportPeriod(p.currentFromKey, p.currentToKey)} compared with ${readableReportPeriod(p.comparisonFromKey, p.comparisonToKey)}`}
+        showRefresh={false}
         actions={
-          <div className="grid gap-2">
-            <Link
-              href={`/reports/momo-confirmation?${momoQs.toString()}`}
-              className="btn-secondary justify-center text-sm"
-            >
-              Review MoMo confirmations
-            </Link>
+          <>
+            <ReportKeyboardFocus />
             <Link
               href={`/reports/money-received?${moneyQs.toString()}`}
-              className="btn-secondary justify-center text-sm"
+              className="btn-primary min-h-11 justify-center text-sm"
             >
-              Open money received
+              Money received
             </Link>
+            <ReportMoreActions>
+            <Link href={`/reports/momo-confirmation?${momoQs.toString()}`} className="btn-secondary text-sm">Review MoMo confirmations</Link>
             <DownloadLink
               href={`/exports/business-movement?${exportQs.toString()}`}
               fallbackFilename={`business-movement-${p.currentFromKey}-${p.currentToKey}.csv`}
@@ -80,40 +82,20 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
             >
               Export CSV
             </DownloadLink>
-          </div>
+            </ReportMoreActions>
+          </>
         }
       />
-      <details className="rounded-xl border border-slate-200 bg-white px-3 py-1">
-        <summary className="flex min-h-11 w-fit max-w-full cursor-pointer items-center rounded-lg px-1 text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">Change period or branch</summary>
-      <ReportFilterCard columnsClassName="md:grid-cols-2 xl:grid-cols-4">
-        <div className="text-sm">
-          <label htmlFor="movement-preset" className="mb-1 block text-slate-600">Period</label>
-          <select className="input w-full" id="movement-preset" name="preset" defaultValue={selectedPreset}>
-            <option value="last_full_calendar_month">Last full calendar month</option>
-            <option value="equal_length_custom">Custom dates (same-length comparison)</option>
-          </select>
-        </div>
-        <div className="text-sm">
-          <label htmlFor="movement-currentFrom" className="mb-1 block text-slate-600">From</label>
-          <input
-            className="input w-full"
-            type="date"
-            id="movement-currentFrom" name="currentFrom"
-            defaultValue={currentFromValue || p.currentFromKey}
-          />
-        </div>
-        <div className="text-sm">
-          <label htmlFor="movement-currentTo" className="mb-1 block text-slate-600">To</label>
-          <input
-            className="input w-full"
-            type="date"
-            id="movement-currentTo" name="currentTo"
-            defaultValue={currentToValue || p.currentToKey}
-          />
-        </div>
+      <PeriodChips from={p.currentFromKey} to={p.currentToKey} timeZone={p.timeZone}
+        now={result.scope.asOf} selected={selectedPeriod} movement storeId={selectedStoreId}
+        branchControl={choices.length > 1 ? <ReportFilterCard columnsClassName="sm:grid-cols-2" submitLabel="Apply branch">
+        <input type="hidden" name="preset" value={selectedPreset} />
+        <input type="hidden" name="currentFrom" value={currentFromValue || p.currentFromKey} />
+        <input type="hidden" name="currentTo" value={currentToValue || p.currentToKey} />
+        {selectedPeriod ? <input type="hidden" name="periodChip" value={selectedPeriod} /> : null}
         <div className="text-sm">
           <label htmlFor="movement-storeId" className="mb-1 block text-slate-600">Branch</label>
-          <select className="input w-full" id="movement-storeId" name="storeId" defaultValue={selectedStoreId}>
+          <select className="input min-h-11 w-full" id="movement-storeId" name="storeId" defaultValue={selectedStoreId}>
             {offerAll ? <option value="ALL">{CONSOLIDATED_LABEL}</option> : null}
             {choices.map((store) => (
               <option key={store.id} value={store.id}>
@@ -122,19 +104,18 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
             ))}
           </select>
         </div>
-      </ReportFilterCard>
-      </details>
+      </ReportFilterCard> : undefined} />
       {queryFailed ? <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Payment figures could not be loaded. Receipts, refunds, pending MoMo and the gap are unavailable. Sales figures remain separate.</p> : null}
       <BusinessMovementSummary result={result} labels={chrome} strip={strip} />
 
-      <div className="grid min-w-0 grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid min-w-0 gap-2 sm:grid-cols-3 [&>*]:!col-span-1">
         <ReportMetric currency={currency}
-          label="Confirmed receipts"
+          label="Money received"
           value="Could not load"
           pence={queryFailed ? null : result.money.moneyReceived.current}
           helper={
             queryFailed
-              ? 'Confirmed receipts could not be loaded'
+              ? 'Money received could not be loaded'
               : changeHelper(result.money.moneyReceived, currency, chrome)
           }
 
@@ -147,51 +128,15 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
           warning={result.money.refundOutflows.absoluteChange > 0}
         />
         <ReportMetric currency={currency}
-          label="MoMo to confirm"
+          label="MoMo waiting to be confirmed"
           value="Could not load"
           pence={queryFailed ? null : result.money.needsMomoConfirmation.current}
           helper={queryFailed ? 'Pending payments could not be loaded' : changeHelper(result.money.needsMomoConfirmation, currency, chrome, 'pending MoMo payments')}
           warning={result.money.needsMomoConfirmation.current > 0}
         />
-        <ReportMetric currency={currency}
-          label="Sales and receipts gap"
-          value="Could not load"
-          pence={queryFailed || gap == null ? null : Math.abs(gap)}
-          helper={movementGapCopy(queryFailed ? null : gap, currency)}
-
-        />
       </div>
 
-      <p className="text-sm leading-6 text-slate-600">Refunds are shown separately here. Confirmed receipts are different from Today’s net money received.</p>
-
-      <div className="grid min-w-0 items-start gap-4 xl:grid-cols-2" data-movement-charts>
-      <ReportSection title="Current and earlier period" description="The same dates and branch selection as the figures above.">
-        <PeriodComparisonChart columns currency={currency} currentLabel={chrome.currentFull} previousLabel={chrome.comparisonFull} rows={[
-          { name: 'Sales', current: result.headline.salesValuePence.current, previous: result.headline.salesValuePence.comparison },
-          ...(!queryFailed ? [
-            { name: 'Confirmed receipts', current: result.money.moneyReceived.current, previous: result.money.moneyReceived.comparison },
-            { name: 'Refunds', current: result.money.refundOutflows.current, previous: result.money.refundOutflows.comparison },
-          ] : []),
-        ]} />
-      </ReportSection>
-      <div className="min-w-0 space-y-4">
-      <ReportSection title="Largest product changes" description="Recorded sales changes in the ranked product list. An increase or decrease does not establish its cause.">
-        <ReportValueBars compact diverging currency={currency} rows={productMovers.slice(0, 6).map(row => ({ label: row.productName, pence: row.changePence, helper: row.side === 'New product' ? 'No sales in the earlier period' : row.side, href: `/products/${encodeURIComponent(row.productId)}` }))} empty="No material product changes for these periods." />
-      </ReportSection>
-        <ReportSection title="Money movement" description="Separate payment measures for the selected dates. These are not profit.">
-          {queryFailed ? <p className="text-sm text-slate-600">Payment figures could not be loaded.</p> : <ReportValueBars compact currency={currency} rows={[
-            { label: 'Confirmed receipts', pence: result.money.moneyReceived.current },
-            { label: 'Refund outflows', pence: result.money.refundOutflows.current },
-            { label: 'MoMo awaiting confirmation', pence: result.money.needsMomoConfirmation.current },
-          ]} />}
-        </ReportSection>
-      </div>
-      </div>
-
-
-
-      <div className="grid min-w-0 items-start gap-4 xl:grid-cols-3">
-      <section className="space-y-3 xl:col-span-2">
+      <section className="space-y-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">What to look at</h2>
           <p className="text-sm text-slate-600">
@@ -204,13 +149,34 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
           ))}
         </div>
         {insights.length === 0 ? <p className="text-sm text-slate-600">No material recorded changes for these periods.</p> : null}
-        {insights.length > 2 ? <ReportDisclosure title={`More recorded changes (${insights.length - 2})`}><div className="grid gap-3 lg:grid-cols-2">{insights.slice(2).map(insight => <BusinessMovementInsight key={insight.id} insight={insight} labels={chrome} currency={currency} />)}</div></ReportDisclosure> : null}
+
       </section>
+      <ReportSection title="Biggest product changes" description="Recorded sales changes in the ranked product list. An increase or decrease does not establish its cause.">
+        <ReportValueBars compact diverging currency={currency} rows={productMovers.slice(0, 6).map(row => ({ label: row.productName, pence: row.changePence, helper: row.side === 'New product' ? 'No sales in the earlier period' : row.side, href: `/products/${encodeURIComponent(row.productId)}` }))} empty="No material product changes for these periods." />
+      </ReportSection>
+        {insights.length > 2 ? <ReportDisclosure title={`More recorded changes (${insights.length - 2})`}><div className="grid gap-3 lg:grid-cols-2">{insights.slice(2).map(insight => <BusinessMovementInsight key={insight.id} insight={insight} labels={chrome} currency={currency} />)}</div></ReportDisclosure> : null}
+      <ReportDisclosure title="Sales and money compared">
+        <ReportMetric currency={currency} label={gap != null && gap < 0 ? 'Money received above sales' : 'Sales not yet received'}
+          value="Could not load" pence={queryFailed || gap == null ? null : Math.abs(gap)}
+          helper={queryFailed || gap == null ? 'Money received could not be loaded.' : gap === 0 ? 'Sales and money received have the same total.' : 'Difference between sales and money received; the totals alone do not explain it.'} />
+      <div className="min-w-0" data-movement-charts>
+      <ReportSection title="Current and earlier period" description="The same dates and branch selection as the figures above.">
+        <PeriodComparisonChart columns currency={currency} currentLabel={chrome.currentFull} previousLabel={chrome.comparisonFull} rows={[
+          { name: 'Sales', current: result.headline.salesValuePence.current, previous: result.headline.salesValuePence.comparison },
+          ...(!queryFailed ? [
+            { name: 'Money received', current: result.money.moneyReceived.current, previous: result.money.moneyReceived.comparison },
+            { name: 'Refunds', current: result.money.refundOutflows.current, previous: result.money.refundOutflows.comparison },
+          ] : []),
+        ]} />
+      </ReportSection>
+      </div>
+      </ReportDisclosure>
+      <ReportDisclosure title="Cashier sales">
         <ReportSection title="Cashier sales" description={`Recorded sales attributed to each cashier in ${chrome.currentFull}. This is not a measure of individual productivity.`}>
           <ReportValueBars compact currency={currency} rows={result.cashiers.slice(0, 5).map(row => ({ label: row.cashierName, pence: row.salesValuePence.current }))} empty="No cashier-attributed sales in this period." />
           <p className="mt-3 text-xs text-slate-600">Up to five cashiers shown. Complete current and earlier figures remain below.</p>
         </ReportSection>
-      </div>
+      </ReportDisclosure>
       <ReportDisclosure title="All product figures">
       <BusinessMovementProductCards rows={productMovers} labels={chrome} currency={currency} />
       <div className="hidden lg:block">
@@ -251,7 +217,7 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
       </div>
       </ReportDisclosure>
 
-      {branchNote ? (
+      <ReportDisclosure title="Branches">{branchNote ? (
         <section className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
           <h2 className="text-base font-semibold text-slate-900">Branches</h2>
           <p className="mt-1">{branchNote}</p>
@@ -291,9 +257,9 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
         </ReportTableCard>
           </div>
         </section>
-      )}
+      )}</ReportDisclosure>
 
-      {cashierNote ? (
+      <ReportDisclosure title="Cashier details">{cashierNote ? (
         <section className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
           <h2 className="text-base font-semibold text-slate-900">Cashiers</h2>
           <p className="mt-1">{cashierNote}</p>
@@ -333,15 +299,10 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
         </ReportTableCard>
           </div>
         </section>
-      )}
+      )}</ReportDisclosure>
 
-      <ReportDisclosure title="Data note and how to read this">
-        <p>Sales, confirmed receipts, refunds and pending MoMo are operational figures. This is not an income statement and does not calculate purchases or expenses.</p>
-        <p className="mt-1">{OWNER_STOCK_DATA_NOTE}</p>
-        <p className="mt-1">
-          Sales use the time the invoice was created. Money Received uses the time confirmed money
-          came in. Different payment dates can cause a gap. This report does not reconcile individual sales and receipts, so the gap alone cannot confirm its cause.
-        </p>
+      <ReportDisclosure title="Data note">
+        <p>Sales are counted by the time of the sale. Money received is counted by the time the money came in, so the two can differ.</p>
         {queryFailed ? (
           <p className="mt-2 text-amber-800">
             Money Received could not be loaded

@@ -220,7 +220,7 @@ describe('Business Movement 6F — surface wiring', () => {
     const hub = readFileSync(join(root, 'lib/reports/today/stage3a-nav.ts'), 'utf8');
 
     expect(page).toContain('title="Business movement"');
-    expect(page).toContain('ReportHeader');
+    expect(page).toContain('ReportsDestinationHead');
     expect(page).toContain("surfaceId: 'business_movement'");
     expect(page).toContain('Product movers');
     expect(exportRoute).toContain('COMPLETE_STREAM');
@@ -243,7 +243,7 @@ describe('Business Movement 6H — owner UX polish', () => {
     expect(insight).toContain('Supporting figures');
     expect(insight).toContain('What to check');
     expect(page).toContain('Review MoMo confirmations');
-    expect(page).toContain('Open money received');
+    expect(page).toContain('Money received');
     expect(page).toContain('Export CSV');
     expect(page).toContain('Data note');
     expect(page).toContain('singleBranchNote');
@@ -280,12 +280,12 @@ describe('Business Movement 6J — owner page period wording', () => {
       'utf8',
     ) + readFileSync(join(root, 'components/reports/stage3b/BusinessMovementReportView.tsx'), 'utf8');
 
-    expect(page).toContain('periodLabel={chrome.comparingLine}');
-    expect(page).toContain('comparingLine');
+    expect(page).toContain('periodLabel={`${readableReportPeriod');
+    expect(page).toContain('compared with');
     const comparison = readFileSync(join(root, 'components/reports/BusinessMovementSummary.tsx'), 'utf8');
-    expect(comparison).toContain('currentFromKey');
+    expect(page).toContain('currentFromKey');
     expect(comparison).toContain('comparisonFromKey');
-    expect(comparison).toContain('<time dateTime={periods.currentFromKey}>');
+    expect(comparison).toContain('readableReportPeriod');
     expect(page).toContain('ownerInsightCopy');
     expect(page).not.toMatch(/last period/i);
     expect(page).not.toMatch(/comparison period/i);

@@ -119,7 +119,7 @@ export async function getIncompleteStockSnapshot(businessId: string, db: Prisma.
 export function incompleteStockDisclosureMessage(snapshot: IncompleteStockSnapshot): string | null {
   if (!snapshot.profitMayBeIncomplete) return null;
   if (snapshot.stockValueIncomplete) {
-    return `Stock value is incomplete — ${snapshot.productsWithUnvaluedQty} product(s) need confirmed stock value. Sales can continue; profit for sales without confirmed cost is incomplete.`;
+    return `${snapshot.productsWithUnvaluedQty} product${snapshot.productsWithUnvaluedQty === 1 ? '' : 's'} in stock ${snapshot.productsWithUnvaluedQty === 1 ? 'has' : 'have'} no cost yet, so stock value is not complete.`;
   }
-  return `Profit may be incomplete — ${snapshot.missingCostProductCount} product(s) were sold without a reliable cost.`;
+  return `Some sales have no product cost, so their profit is incomplete.`;
 }

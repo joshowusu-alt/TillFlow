@@ -23,13 +23,39 @@ describe('income statement drilldown links',()=>{
     expect(renderToStaticMarkup(await Page({}))).not.toContain('No food costs are showing');
   });
   it('links incomplete profit to the period-filtered affected sales and separates stock review',async()=>{
-    mocks.statement.mockResolvedValue({...await mocks.statement(),cogs:null,grossProfit:null,netProfit:null,incompleteLineCount:3,incompleteStockMessage:'607 products need confirmed stock value'});
+    mocks.statement.mockResolvedValue({...await mocks.statement(),cogs:null,grossProfit:null,netProfit:null,incompleteLineCount:3,stockValueIncomplete:true,incompleteStockMessage:'607 products in stock have no cost yet, so stock value is not complete.',entries:[{kind:'sale',profitPence:null,incompleteLines:[{reason:'INCOMPLETE_COSTS'},{reason:'INCOMPLETE_COSTS'}]},{kind:'sale',profitPence:null,incompleteLines:[{reason:'INCOMPLETE_COSTS'}]}]});
     const html=renderToStaticMarkup(await Page({}));
     expect(html).toContain('metric=grossProfit&amp;from=2026-10-01&amp;to=2026-10-20&amp;issues=1');
-    expect(html).toContain('3 sale lines require review');
-    expect(html).toContain('/products?issue=MISSING_COST');
+    expect(html).toContain('2 sales have no product cost');
+    expect(html).not.toContain('/products?issue=MISSING_COST');
   });
   it('does not load the snapshot if access is denied',async()=>{
     mocks.open.mockResolvedValue({ok:false,denial:<p>Access denied</p>});expect(renderToStaticMarkup(await Page({}))).toContain('Access denied');expect(mocks.statement).not.toHaveBeenCalled();
+  });
+  it('renders one summary with the original figures and neutral stock-only warning', async () => {
+    const statement = await mocks.statement();
+    const complete = renderToStaticMarkup(await Page({}));
+    for (const [label, value] of [['Sales','9.00'], ['Cost of goods sold','4.00'], ['Gross profit','5.00'], ['Expenses','2.00'], ['Other income','0.50'], ['Profit','3.50']]) {
+      expect(complete).toContain(`View ${label} supporting records: GH₵${value}`);
+    }
+    expect(complete.match(/metric=revenue/g)).toHaveLength(1);
+    expect(complete).not.toContain('Add cost');
+    expect(complete).not.toContain('Profit is incomplete');
+    mocks.statement.mockResolvedValue({...statement, stockValueIncomplete:true, incompleteStockMessage:'1 product in stock has no cost yet, so stock value is not complete.'});
+    const stock = renderToStaticMarkup(await Page({}));
+    expect(stock).toContain('This does not change this period');
+    expect(stock).toContain('/products?issue=MISSING_COST');
+    expect(stock).not.toContain('Cost Resolution Centre');
+    expect(stock).not.toContain('Review stock and earlier sale costs');
+    expect(stock.indexOf('1 product in stock')).toBeGreaterThan(stock.indexOf('Tap any amount'));
+  });
+  it('keeps the whole-business label only when there are several branches and defaults to month-to-date', async () => {
+    const opened = await mocks.open();
+    mocks.open.mockResolvedValue({...opened,stores:[{id:'one'}]});
+    expect(renderToStaticMarkup(await Page({}))).not.toContain('Whole business — not separated by branch');
+    mocks.open.mockResolvedValue({...opened,stores:[{id:'one'},{id:'two'}]});
+    expect(renderToStaticMarkup(await Page({}))).toContain('Whole business — not separated by branch');
+    const range = mocks.open.mock.calls.at(-1)![0].range;
+    expect(range({timezone:'Africa/Accra',now:new Date('2026-11-26T12:00:00Z')})).toEqual({fromLocalDate:'2026-11-01',toLocalDate:'2026-11-26',preset:'MONTH_TO_DATE'});
   });
 });
