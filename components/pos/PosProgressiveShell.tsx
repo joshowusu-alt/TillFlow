@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useState,
@@ -11,6 +12,8 @@ import {
 } from 'react';
 import PosClient from '@/app/(protected)/pos/PosClient';
 import type { PosCatalogueMode, SellableProductDto } from '@/lib/pos/sellable-dto';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { getPosTillStorageKey } from '@/lib/business-scope';
 
 export type PosDeferredPayload = {
   tills: { id: string; name: string }[];
@@ -59,6 +62,7 @@ type PosProgressiveShellProps = {
     loyaltyGhsPerHundredPoints?: number;
   };
   store: { id: string; name: string };
+  cashierUserId?: string;
   products: SellableProductDto[];
   posCatalogueMode?: PosCatalogueMode;
   catalogueSize?: number;
@@ -68,21 +72,57 @@ type PosProgressiveShellProps = {
 export function PosProgressiveShell({
   business,
   store,
+  cashierUserId,
   products,
   posCatalogueMode,
   catalogueSize,
   children,
 }: PosProgressiveShellProps) {
-  const [deferred, setDeferred] = useState<PosDeferredPayload | null>(null);
+  const scopeKey = JSON.stringify([business.id, store.id, cashierUserId]);
+  const [deferredState, setDeferred] = useState<{ scopeKey: string; payload: PosDeferredPayload } | null>(null);
+  const deferred = deferredState?.scopeKey === scopeKey ? deferredState.payload : null;
+  const online = useNetworkStatus();
+  const [recovered, setRecovered] = useState<{ scopeKey: string; payload: PosDeferredPayload } | null>(null);
+
+  // Only recover a previously selected till for this branch and this cashier.
+  // An authoritative closed-till response always wins over capture metadata.
+  useEffect(() => {
+    setRecovered(null);
+    const scope = { businessId: business.id, storeId: store.id };
+    try {
+      const tillId = localStorage.getItem(getPosTillStorageKey(scope));
+      if (!tillId) return;
+      const shiftKey = `pos.capture.shift.${business.id}.${tillId}`;
+      if (deferred && !deferred.checkoutUnavailable) {
+        if (!deferred.openShiftTillIds.includes(tillId)) localStorage.removeItem(shiftKey);
+        return;
+      }
+      if (online || !cashierUserId ||
+        localStorage.getItem(`pos.capture.cashier.${business.id}`) !== cashierUserId) return;
+      const shiftId = localStorage.getItem(shiftKey);
+      if (!shiftId) return;
+      setRecovered({ scopeKey, payload: {
+        ...EMPTY_DEFERRED,
+        tills: [{ id: tillId, name: 'Saved till' }],
+        openShiftTillIds: [tillId],
+        openShifts: [{ tillId, shiftId }],
+        cashierUserId,
+        customersUnavailable: true,
+      } });
+    } catch {
+      // No verified capture context: leave checkout blocked with guidance.
+    }
+  }, [business.id, store.id, cashierUserId, online, deferred, scopeKey]);
 
   const applyDeferred = useCallback((payload: PosDeferredPayload) => {
-    setDeferred(payload);
-  }, []);
+    setDeferred({ scopeKey, payload });
+  }, [scopeKey]);
 
   const value = useMemo(() => ({ applyDeferred }), [applyDeferred]);
-  const extras = deferred ?? EMPTY_DEFERRED;
-  const checkoutExtrasReady = deferred !== null && !deferred.checkoutUnavailable;
-  const checkoutUnavailable = Boolean(deferred?.checkoutUnavailable);
+  const offlineRecovery = !online && (!deferred || deferred.checkoutUnavailable) && recovered?.scopeKey === scopeKey ? recovered.payload : null;
+  const extras = offlineRecovery ?? deferred ?? EMPTY_DEFERRED;
+  const checkoutExtrasReady = Boolean(offlineRecovery || (deferred && !deferred.checkoutUnavailable));
+  const checkoutUnavailable = !offlineRecovery && Boolean(deferred?.checkoutUnavailable);
 
   return (
     <PosDeferredContext.Provider value={value}>

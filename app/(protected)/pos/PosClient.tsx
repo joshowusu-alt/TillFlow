@@ -72,6 +72,7 @@ import {
 } from '@/lib/business-scope';
 import { DISCOUNT_REASON_CODES } from '@/lib/fraud/reason-codes';
 import { queueOfflineSale } from '@/lib/offline';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { usePosCustomers, type PosCustomerOption } from '@/hooks/usePosCustomers';
 import PosPaymentSummary from './components/PosPaymentSummary';
 import ClearCartDialog from './components/ClearCartDialog';
@@ -182,6 +183,7 @@ export default function PosClient({
   customersUnavailable = false,
   checkoutUnavailable = false,
 }: PosClientProps) {
+  const online = useNetworkStatus();
   const [openedShift, setOpenedShift] = useState<{ tillId: string; shiftId: string }>();
   const openShiftTillIds = openedShift ? [...new Set([...initialOpenTillIds, openedShift.tillId])] : initialOpenTillIds;
   const openShifts = useMemo(() => openedShift
@@ -1288,6 +1290,8 @@ export default function PosClient({
     const submitMomoPaid = paymentStatus === 'UNPAID' ? 0 : Math.max(0, Math.round(momoPaidValue));
 
     try {
+      // Do not wait for a server action that cannot be reached offline.
+      if (!navigator.onLine) throw new TypeError('Offline: skip fetch');
       const result = await completeSaleAction({
         storeId: store.id,
         tillId,
@@ -1350,8 +1354,8 @@ export default function PosClient({
             businessId: business.id,
             storeId: store.id,
             tillId,
-            shiftId: window.localStorage.getItem(`pos.capture.shift.${business.id}.${tillId}`),
-            cashierUserId: window.localStorage.getItem(`pos.capture.cashier.${business.id}`),
+            shiftId: openShifts?.find(shift => shift.tillId === tillId)?.shiftId ?? window.localStorage.getItem(`pos.capture.shift.${business.id}.${tillId}`),
+            cashierUserId: cashierUserId ?? window.localStorage.getItem(`pos.capture.cashier.${business.id}`),
             customerId: saleSnapshot.customerId || null,
             paymentStatus,
             lines: saleSnapshot.cart.map((l) => {
@@ -1514,13 +1518,15 @@ export default function PosClient({
   // providers are connected, flip this back to:
   //   const momoReady = !needsMomoConfirmation || momoConfirmed;
   const momoReady = true;
-  const checkoutLoading = !checkoutExtrasReady && !checkoutUnavailable;
+  const checkoutLoading = !checkoutExtrasReady && !checkoutUnavailable && online;
   const tillSelected = Boolean(tillId) && tills.some((t) => t.id === tillId);
   const tillReady =
     checkoutExtrasReady &&
     !checkoutUnavailable &&
     tillSelected &&
     openShiftTillIds.includes(tillId);
+  const boundShiftId = openShifts?.find((shift) => shift.tillId === tillId)?.shiftId ?? '';
+  const offlineShiftReady = online || Boolean(boundShiftId && cashierUserId);
   const canSubmit = Boolean(
     saleAttemptReady &&
     checkoutExtrasReady &&
@@ -1535,6 +1541,7 @@ export default function PosClient({
     momoReady &&
     discountApprovalReady &&
     tillReady &&
+    offlineShiftReady &&
     (!requiresCustomer || customerId) &&
     !(requiresCustomer && customersUnavailable) &&
     (paymentStatus === 'UNPAID' || paymentMethods.length > 0)
@@ -1554,10 +1561,15 @@ export default function PosClient({
   const showFoodOpenTill = Boolean(showNoTillBlock && business.foodBusiness && tills.length > 0);
   const checkoutIssues = useMemo(() => {
     const issues: Array<{ tone: 'warning' | 'success'; message: string }> = [];
-    if (checkoutLoading) {
+    if (!saleAttemptReady) {
+      issues.push({ tone: 'warning', message: 'Preparing your saved cart. Please wait.' });
+    }
+    if (!online && (!checkoutExtrasReady || checkoutUnavailable)) {
+      issues.push({ tone: 'warning', message: 'No saved open till available. Reconnect and open a till first.' });
+    } else if (checkoutLoading) {
       issues.push({ tone: 'warning', message: 'Preparing checkout…' });
     }
-    if (checkoutUnavailable) {
+    if (online && checkoutUnavailable) {
       issues.push({ tone: 'warning', message: 'Checkout information could not be loaded. Try refreshing.' });
     }
     if (requiresCustomer && customersUnavailable) {
@@ -1566,15 +1578,20 @@ export default function PosClient({
     if (requiresCustomer && !customerId && !customersUnavailable) {
       issues.push({ tone: 'warning', message: 'Select a customer for credit or part-paid sales.' });
     }
-    if (hasPaymentError) {
+    if (tenderMalformed) {
+      issues.push({ tone: 'warning', message: 'Payment amounts cannot be negative or invalid.' });
+    } else if (hasPaymentError) {
       issues.push({ tone: 'warning', message: 'Card, transfer, or MoMo cannot exceed the total due.' });
     }
     if (checkoutExtrasReady && !checkoutUnavailable && tills.length === 0) {
       issues.push({ tone: 'warning', message: 'No tills are configured for this store.' });
-    } else if (!showFoodOpenTill && checkoutExtrasReady && !checkoutUnavailable && tills.length > 0 && !tillSelected) {
-      issues.push({ tone: 'warning', message: openShiftTillIds.length > 0 ? 'Select an open till before recording sales.' : business.foodBusiness ? 'Open a till to take payment.' : 'Open a till shift before recording sales.' });
-    } else if (!showFoodOpenTill && checkoutExtrasReady && !checkoutUnavailable && !tillReady) {
-      issues.push({ tone: 'warning', message: business.foodBusiness ? 'Open a till to take payment.' : 'Open this till shift before recording sales.' });
+    } else if (checkoutExtrasReady && !checkoutUnavailable && tills.length > 0 && !tillSelected) {
+      issues.push({ tone: 'warning', message: openShiftTillIds.length > 0 ? 'Select an open till before recording sales.' : !online ? 'Open a till first — reconnect to do this.' : business.foodBusiness ? 'Open a till to take payment.' : 'Open a till shift before recording sales.' });
+    } else if (checkoutExtrasReady && !checkoutUnavailable && !tillReady) {
+      issues.push({ tone: 'warning', message: !online ? 'Open this till first — reconnect to do this.' : business.foodBusiness ? 'Open a till to take payment.' : 'Open this till shift before recording sales.' });
+    }
+    if (!offlineShiftReady && tillReady) {
+      issues.push({ tone: 'warning', message: 'Reconnect to confirm the open till and cashier before recording sales.' });
     }
     if (needsMomoConfirmation && !momoConfirmed) {
       issues.push({ tone: 'success', message: 'MoMo will be recorded manually. Confirm payment on the customer phone before completion.' });
@@ -1594,15 +1611,14 @@ export default function PosClient({
     if (ambiguousFailure) {
       issues.push({ tone: 'warning', message: 'Previous submission was unclear. Confirm before retrying.' });
     }
-    if (tenderMalformed) {
-      issues.push({ tone: 'warning', message: 'Payment amounts cannot be negative or invalid.' });
-    }
+    if (!unpaidValid) issues.push({ tone: 'warning', message: 'Remove payments before recording an unpaid sale.' });
+    if (paymentStatus !== 'UNPAID' && paymentMethods.length === 0) issues.push({ tone: 'warning', message: 'Choose a payment method.' });
+    if (!cart.length) issues.push({ tone: 'warning', message: 'Add an item to the cart.' });
     return issues;
-  }, [ambiguousFailure, business.foodBusiness, checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, dueDateReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, openShiftTillIds.length, partPaidValid, paymentStatus, requiresCustomer, requiresDiscountApproval, showFoodOpenTill, tenderMalformed, tillReady, tillSelected, tills.length]);
+  }, [ambiguousFailure, business.foodBusiness, cart.length, checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, dueDateReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, offlineShiftReady, online, openShiftTillIds.length, partPaidValid, paymentMethods.length, paymentStatus, requiresCustomer, requiresDiscountApproval, saleAttemptReady, tenderMalformed, tillReady, tillSelected, tills.length, unpaidValid]);
   const primaryCheckoutIssue = checkoutIssues.find((issue) => issue.tone === 'warning') ?? checkoutIssues[0] ?? null;
   const errorParam = searchParams?.get('error');
   const selectedTillName = tills.find((till) => till.id === tillId)?.name ?? null;
-  const boundShiftId = openShifts?.find((shift) => shift.tillId === tillId)?.shiftId ?? '';
   async function openTillInCheckout() {
     if (openingBusy || !openingTillId || !openingCash.trim() || !Number.isFinite(Number(openingCash)) || Number(openingCash) < 0) return;
     setOpeningBusy(true);
@@ -2810,6 +2826,7 @@ export default function PosClient({
                 {cartFilled ? (
                   <div className="lg:hidden">
                   <PosMobileCartCheckoutSheet
+                    businessId={business.id}
                     open={phoneCheckoutSheetOpen}
                     onClose={closePhoneCheckoutSheet}
                     dismissible={!isCompletingSale}
@@ -2834,18 +2851,20 @@ export default function PosClient({
                     summary={<PosPaymentSummary currency={business.currency} subtotal={totals.netSubtotal} discount={orderDiscount} tax={vatTotal} totalDue={totalDue} changeDue={changeDue} hasCash={paymentStatus !== 'UNPAID' && hasMethod('CASH')} balanceRemaining={balanceRemaining} />}
                     footer={
                       <div className="space-y-2" data-pos-mobile-payment-actions="true">
-                        {(!showFoodOpenTill || primaryCheckoutIssue) && <div
+                        <div
+                          role="status"
+                          data-pos-mobile-completion-status="true"
                           className={`rounded-2xl px-3 py-2 text-xs font-medium ${
                             canSubmit
                               ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'
                               : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'
                           }`}
                         >
-                          {canSubmit
+                          {isCompletingSale ? 'Saving sale… Please wait.' : canSubmit
                             ? `Ready to complete • ${activePaymentMethodLabels.join(' + ')} • ${formatMoney(totalDue, business.currency)}`
                             : primaryCheckoutIssue?.message ??
                               `Review checkout before completing this ${formatMoney(totalDue, business.currency)} sale.`}
-                        </div>}
+                        </div>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"

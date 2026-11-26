@@ -8,7 +8,7 @@ import PosClient from './PosClient';
 import { getParkedCartsStorageKey, getPosTillStorageKey } from '@/lib/business-scope';
 import { openShiftAction } from '@/app/actions/shifts';
 import { completeSaleAction } from '@/app/actions/sales';
-import { queueOfflineSale } from '@/lib/offline';
+import { getPendingSales, queueOfflineSale } from '@/lib/offline';
 
 const searchParamsGet = vi.hoisted(() => vi.fn((_key?: string) => null as string | null));
 const refreshMock = vi.hoisted(() => vi.fn());
@@ -33,7 +33,7 @@ vi.mock('@/app/actions/mobile-money', () => ({
   checkMomoCollectionStatusAction: vi.fn(),
   initiateMomoCollectionAction: vi.fn(),
 }));
-vi.mock('@/lib/offline', () => ({ queueOfflineSale: vi.fn() }));
+vi.mock('@/lib/offline', () => ({ queueOfflineSale: vi.fn(), getPendingSales: vi.fn() }));
 
 const mockedCompleteSaleAction = vi.mocked(completeSaleAction);
 
@@ -1398,6 +1398,70 @@ it('shows a genuine closed-till reason without pretending to prepare or select a
   expect(screen.queryByText('Preparing checkout…')).not.toBeInTheDocument();
   expect(document.querySelector('[data-pos-completion-status]')).toHaveTextContent('Open a till shift before recording sales.');
   expect(screen.getByTestId('pos-complete-checkout')).toBeDisabled();
+});
+
+describe('offline mobile food checkout', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    Reflect.set(navigator, 'onLine', false);
+  });
+  afterEach(() => {
+    Reflect.set(navigator, 'onLine', true);
+  });
+  async function openPayment(open = true) {
+    const dish = {
+      ...product, id: 'chek-chek', name: 'Chek Chek (Fried Rice)', sellingPriceBasePence: 3500,
+      units: [{ ...product.units[0], sellingPricePence: 3500 }],
+      food: {
+        productId: 'chek-chek', name: 'Chek Chek (Fried Rice)', stockMode: 'NOT_COUNTED' as const,
+        soldOut: false, lowAt: 1, sizes: [{ id: 'regular', name: 'Regular', pricePence: 3500, isDefault: true }],
+        inclusions: [], groups: [],
+      },
+    };
+    render(<PosClient {...baseProps} business={{ ...baseProps.business, foodBusiness: true }}
+      products={[dish]} cashierUserId="owner-1"
+      openShiftTillIds={open ? ['till-1'] : []}
+      openShifts={open ? [{ tillId: 'till-1', shiftId: 'shift-1' }] : []} />);
+    const search = screen.getByLabelText('Scan barcode or search products');
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: 'Chek Chek' } });
+    fireEvent.click(await screen.findByRole('button', { name: /^Chek Chek/i }));
+    const add = screen.queryByRole('button', { name: 'Add plate' });
+    if (add) fireEvent.click(add);
+    fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to payment/ }));
+    fireEvent.change(screen.getByLabelText(/Cash tendered/), { target: { value: '100' } });
+  }
+  it('queues GH₵35 from GH₵100 tendered without a server request', async () => {
+    vi.mocked(queueOfflineSale).mockResolvedValueOnce('queued-fried-rice');
+    vi.mocked(getPendingSales).mockResolvedValueOnce([{} as Awaited<ReturnType<typeof getPendingSales>>[number]]);
+    await openPayment();
+    expect(screen.getByText(/Offline: sales are saved on this device/)).toBeVisible();
+    expect(await screen.findByText('1 sale waiting to sync')).toBeVisible();
+    expect(document.querySelector('[data-pos-change-due]')).toHaveTextContent('GH₵65.00');
+    const complete = screen.getByTestId('pos-complete-sheet');
+    expect(complete).toBeEnabled();
+    fireEvent.click(complete);
+    await waitFor(() => expect(queueOfflineSale).toHaveBeenCalledWith(expect.objectContaining({
+      shiftId: 'shift-1', cashierUserId: 'owner-1', tillId: 'till-1',
+      payments: [{ method: 'CASH', amountPence: 3500 }],
+    })));
+    expect(mockedCompleteSaleAction).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Saved offline/)).toBeVisible();
+  });
+  it('shows a closed-till reason right above the disabled button', async () => {
+    await openPayment(false);
+    expect(screen.getByTestId('pos-complete-sheet')).toBeDisabled();
+    expect(document.querySelector('[data-pos-mobile-completion-status]')).toHaveTextContent('Open a till');
+    expect(document.querySelector('[data-pos-mobile-completion-status]')).toBeVisible();
+  });
+  it('shows an insufficient tender reason', async () => {
+    await openPayment();
+    fireEvent.change(screen.getByLabelText(/Cash tendered/), { target: { value: '10' } });
+    expect(screen.getByTestId('pos-complete-sheet')).toBeDisabled();
+    expect(document.querySelector('[data-pos-mobile-completion-status]')).toHaveTextContent('Full payment required');
+  });
 });
 it('distinguishes tendered cash from the amount applied to the sale', async () => {
   render(<PosClient {...baseProps} />);

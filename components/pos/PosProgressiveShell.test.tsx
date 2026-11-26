@@ -1,6 +1,7 @@
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { getPosTillStorageKey } from '@/lib/business-scope';
 import {
   PosDeferredApply,
   PosProgressiveShell,
@@ -61,6 +62,41 @@ const products = [
 ];
 
 describe('PosProgressiveShell', () => {
+  afterEach(() => {
+    localStorage.clear();
+    Reflect.set(navigator, 'onLine', true);
+  });
+  it.each([true, false])('recovers the captured till offline only for the same cashier (%s)', async (sameCashier) => {
+    Reflect.set(navigator, 'onLine', false);
+    localStorage.setItem(getPosTillStorageKey({ businessId: business.id, storeId: store.id }), 't1');
+    localStorage.setItem('pos.capture.shift.b1.t1', 'shift1');
+    localStorage.setItem('pos.capture.cashier.b1', 'owner1');
+    render(<PosProgressiveShell business={business} store={store} products={products}
+      cashierUserId={sameCashier ? 'owner1' : 'other'} />);
+    await waitFor(() => expect(screen.getByTestId('checkout-ready')).toHaveTextContent(String(sameCashier)));
+    expect(screen.getByTestId('till-count')).toHaveTextContent(sameCashier ? '1' : '0');
+  });
+  it('never resurrects a shift when the server reports the till closed', async () => {
+    Reflect.set(navigator, 'onLine', false);
+    localStorage.setItem(getPosTillStorageKey({ businessId: business.id, storeId: store.id }), 't1');
+    localStorage.setItem('pos.capture.shift.b1.t1', 'shift1');
+    localStorage.setItem('pos.capture.cashier.b1', 'owner1');
+    render(<PosProgressiveShell business={business} store={store} products={products} cashierUserId="owner1">
+      <PosDeferredApply payload={{ tills: [{ id: 't1', name: 'Till 1' }], openShiftTillIds: [], customers: [], units: [], categories: [] }} />
+    </PosProgressiveShell>);
+    await waitFor(() => expect(localStorage.getItem('pos.capture.shift.b1.t1')).toBeNull());
+  });
+  it('uses the existing captured shift when deferred checkout fails offline', async () => {
+    Reflect.set(navigator, 'onLine', false);
+    localStorage.setItem(getPosTillStorageKey({ businessId: business.id, storeId: store.id }), 't1');
+    localStorage.setItem('pos.capture.shift.b1.t1', 'shift1');
+    localStorage.setItem('pos.capture.cashier.b1', 'owner1');
+    render(<PosProgressiveShell business={business} store={store} products={products} cashierUserId="owner1">
+      <PosDeferredApply payload={{ tills: [], openShiftTillIds: [], customers: [], units: [], categories: [], checkoutUnavailable: true }} />
+    </PosProgressiveShell>);
+    await waitFor(() => expect(screen.getByTestId('checkout-ready')).toHaveTextContent('true'));
+    expect(screen.getByTestId('till-count')).toHaveTextContent('1');
+  });
   it('exposes products for selling before deferred checkout extras arrive', async () => {
     render(
       <PosProgressiveShell business={business} store={store} products={products}>

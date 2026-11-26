@@ -1295,6 +1295,7 @@ main#main-content { animation: fade-in-up .25s ease-out; }
   .pos-shortcuts[data-shortcut-view="cart"] > p { grid-column: 1 / -1; }
 }
 @media (max-width: 1023px) {
+  body:has([data-pos-mobile-cart-checkout-body]) [data-network-status-floating] { display: none; }
   [data-pos-mobile-view="cart"] .pos-checkout-column { display: none; }
   [data-pos-mobile-view="payment"] [data-pos-cart-card], [data-pos-mobile-view="payment"] [data-pos-line-editor] { display: none; }
 }

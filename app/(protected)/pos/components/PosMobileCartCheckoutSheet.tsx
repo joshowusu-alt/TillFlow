@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import ResponsiveModal from '@/components/ResponsiveModal';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { getPendingSales } from '@/lib/offline';
 
 type PosMobileCartCheckoutSheetProps = {
   open: boolean;
+  businessId: string;
   onClose: () => void;
   /** When true, Escape / backdrop / close cannot dismiss (active submission). */
   dismissible?: boolean;
@@ -20,6 +23,7 @@ type PosMobileCartCheckoutSheetProps = {
  */
 export default function PosMobileCartCheckoutSheet({
   open,
+  businessId,
   onClose,
   dismissible = true,
   banner,
@@ -28,6 +32,24 @@ export default function PosMobileCartCheckoutSheet({
   summary,
 }: PosMobileCartCheckoutSheetProps) {
   const [view, setView] = useState<'cart' | 'payment'>('cart');
+  const online = useNetworkStatus();
+  const [pendingCount, setPendingCount] = useState(0);
+  useEffect(() => {
+    setPendingCount(0);
+    if (!open || online) return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const sales = await getPendingSales(businessId);
+        if (active) setPendingCount(sales.length);
+      } catch {
+        if (active) setPendingCount(0);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 3000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [open, online, businessId]);
   return (
     <ResponsiveModal
       open={open}
@@ -43,6 +65,10 @@ export default function PosMobileCartCheckoutSheet({
       footer={<div className="space-y-2" data-pos-mobile-sheet-footer="true">{summary}{view === 'cart' ? <button type="button" className="btn-primary min-h-12 w-full" onClick={() => setView('payment')}>Continue to payment →</button> : footer}</div>}
     >
       <div className="sticky top-0 z-10 border-b border-black/5 bg-white">
+        {!online && <div data-pos-offline-strip="true" role="status" className="border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-xs leading-snug text-amber-950">
+          Offline: sales are saved on this device and sync when you're back online.
+          {pendingCount > 0 && <span className="block font-semibold">{pendingCount} {pendingCount === 1 ? 'sale' : 'sales'} waiting to sync</span>}
+        </div>}
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <h2 id="pos-mobile-cart-checkout-title" className="text-base font-semibold text-ink">
             Cart &amp; checkout
