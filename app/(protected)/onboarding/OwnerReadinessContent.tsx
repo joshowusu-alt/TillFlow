@@ -4,6 +4,8 @@ import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observa
 import { getOwnerHomeCriticalShell } from '@/lib/owner-home/critical-shell';
 import OwnerHomeCompletedStream from '@/components/owner-home/OwnerHomeCompletedStream';
 import OnboardingClient from './OnboardingClient';
+import { Suspense } from 'react';
+import HomeCashDifferencesSlot from '@/components/owner-home/HomeCashDifferencesSlot';
 
 async function IncompleteOwnerHome() {
   const readiness = await measureServerOperation(
@@ -26,7 +28,7 @@ export default async function OwnerReadinessContent({ destination }: { destinati
     // loading.tsx never resolved after a client transition, so /onboarding
     // stayed on "Preparing setup checklist" until a full reload. loading.tsx
     // is the only skeleton; this return replaces it with the checklist.
-    return await IncompleteOwnerHome();
+    return <><Suspense fallback={null}><HomeCashDifferencesSlot businessId={shell.businessId} currency={shell.currency} /></Suspense>{await IncompleteOwnerHome()}</>;
   }
 
   // Phase 1: complete only after a genuine successful sale — never from Start selling alone.

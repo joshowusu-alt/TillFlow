@@ -154,23 +154,7 @@ async function closeTill3Shift(page: Page, actualCash: string, step: string) {
     timeout: RELIABILITY_ACTION_TIMEOUT_MS,
   });
   await fillUniqueVisible(overlay.getByLabel('Actual Cash Counted'), actualCash, `${step} counted cash`);
-  const override = overlay.getByRole('button', { name: 'Owner Override (use password)' });
-  if (await override.isVisible().catch(() => false)) {
-    await override.click({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
-    const password = process.env.PLAYWRIGHT_OWNER_PASSWORD?.trim();
-    if (!password) blocked(step, 'owner override requires PLAYWRIGHT_OWNER_PASSWORD (value not logged).');
-    await fillUniqueVisible(overlay.getByLabel('Your Password'), password, `${step} owner password`);
-    await selectUniqueVisible(
-      overlay.locator('select').filter({ has: overlay.locator('option', { hasText: 'Manager unavailable' }) }),
-      { value: 'MANAGER_UNAVAILABLE' },
-      `${step} override reason`,
-    );
-    await fillUniqueVisible(
-      overlay.getByLabel('Justification'),
-      'Reliability Phase 9 close',
-      `${step} override justification`,
-    );
-  }
+  await fillUniqueVisible(overlay.getByLabel('Reason details'), 'Reliability Phase 9 close', `${step} cash count reason`);
   await clickUniqueVisible(overlay.getByRole('button', { name: 'Close Shift', exact: true }), `${step} confirm`);
 }
 

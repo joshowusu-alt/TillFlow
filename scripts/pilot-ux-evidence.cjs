@@ -1,67 +1,90 @@
-/** Before/after browser evidence; isolated pilot fixture, no successful writes. */
+/** End-to-end cash close and owner review evidence on a dedicated isolated pilot fixture. */
 const { chromium } = require('playwright');
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const { openGuardedPrismaClient } = require('./lib/guarded-prisma.cjs');
+const { createPilotFixture } = require('./pilot-acceptance-fixture.cjs');
 
 async function main() {
-  const phase = process.argv[2];
-  assert(['before', 'after'].includes(phase));
   const baseURL = process.env.BASE_URL;
   assert(['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname));
-  const fixture = JSON.parse(fs.readFileSync(process.env.PILOT_FIXTURE_PATH || 'tmp/pilot-acceptance.json', 'utf8'));
-  assert.match(fixture.run, /^pilot-/);
-  const { prisma } = await openGuardedPrismaClient({ url: process.env.TILLFLOW_TEST_DATABASE_URL });
+  assert(process.env.TILLFLOW_TEST_DATABASE_URL, 'Explicit isolated database required');
+  const { prisma, identity } = await openGuardedPrismaClient({ url: process.env.TILLFLOW_TEST_DATABASE_URL });
+  assert.equal(identity.database, 'tillflow_ci_pilot', 'Disposable CI database only');
+  const fixture = await createPilotFixture(prisma, `pilot-close-review-${Date.now()}`);
+  await prisma.business.update({ where: { id: fixture.businessId }, data: { onboardingCompletedAt: new Date(), shiftCloseApprovalThresholdPence: 5000 } });
   const browser = await chromium.launch();
   const output = 'tmp/pilot-ux-evidence';
   fs.mkdirSync(output, { recursive: true });
-  async function session(role) {
-    const ctx = await browser.newContext({ baseURL, serviceWorkers: 'block', viewport: { width: 1280, height: 1600 } });
+  async function session(role, storeId) {
+    const ctx = await browser.newContext({ baseURL, serviceWorkers: 'block', viewport: { width: 1280, height: 1400 } });
     const page = await ctx.newPage();
     await page.goto('/login');
     await page.locator('input[name=email]').fill(fixture.users[role].email);
     await page.locator('input[name=password]').fill(fixture.password);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.waitForURL(url => !url.pathname.startsWith('/login'), { timeout: 60000 });
-    await ctx.addCookies([{ name: 'tillflow_operational_store', value: fixture.stores[0].id, url: baseURL }]);
+    await ctx.addCookies([{ name: 'tillflow_operational_store', value: storeId, url: baseURL }]);
     return { ctx, page };
   }
   try {
-    const business = await prisma.business.findUniqueOrThrow({ where: { id: fixture.businessId } });
-    assert.match(business.name, /^FICTIONAL/);
-    const shift = await prisma.shift.findUniqueOrThrow({ where: { id: fixture.stores[0].shiftId } });
-    assert.equal(shift.status, 'OPEN');
-    assert.equal(shift.expectedCashPence, 20000);
-    const cashier = await session('cashier1');
+    const store = fixture.stores[0];
+    const cashier = await session('cashier1', store.id);
     try {
       const page = cashier.page;
       await page.goto('/shifts');
       await page.getByRole('button', { name: 'Close Shift', exact: true }).click();
       await page.getByLabel('Actual Cash Counted').fill('120.00');
-      await page.getByLabel('Reason details').fill('Fictional cash count checked');
       const modal = page.locator('.overlay-shell').filter({ has: page.locator('#actual-cash-counted') });
-      await modal.getByPlaceholder('Enter manager approval PIN').waitFor();
-      assert.equal(await modal.locator('[data-close-shift]').isEnabled(), false);
-      const expected = phase === 'before' ? 'GH₵-80.00' : '-GH₵80.00';
-      await modal.getByText(expected, { exact: true }).waitFor();
-      assert.equal(await modal.getByText('Enter the manager PIN to close this shift.', { exact: true }).count(), phase === 'after' ? 1 : 0);
-      await modal.locator('form').screenshot({ path: `${output}/close-${phase}.png` });
+      await modal.getByText('-GH₵80.00', { exact: true }).waitFor();
+      await modal.getByText('Large', { exact: true }).waitFor();
+      assert.equal(await modal.locator('[data-close-shift]').isEnabled(), false, 'Reason required');
+      await modal.locator('#close-shift-variance-reason').selectOption('MISSING_CASH');
+      await modal.getByLabel('Reason details').fill('Fictional count checked');
+      assert.equal(await modal.locator('input[type=password]').count(), 0);
+      assert.equal(await modal.locator('[data-close-shift]').isEnabled(), true);
+      await modal.locator('form').screenshot({ path: `${output}/close-shortage.png` });
+      await modal.locator('[data-close-shift]').click();
+      await page.getByText(/Shift Closed/).waitFor();
     } finally { await cashier.ctx.close(); }
-    const owner = await session('owner');
+
+    const closed = await prisma.shift.findUniqueOrThrow({ where: { id: store.shiftId } });
+    assert.equal(closed.status, 'CLOSED');
+    assert.equal(closed.variance, -8000);
+    assert.equal(closed.closeManagerApprovalMode, 'SELF');
+    assert.equal(closed.closeManagerApprovedByUserId, null);
+    assert.equal(closed.actualCashPence, 12000);
+    const investigation = await prisma.cashVarianceInvestigation.findUniqueOrThrow({ where: { shiftId: closed.id } });
+    assert.equal(investigation.status, 'OPEN');
+    assert.equal(investigation.cashierExplanation, 'Fictional count checked');
+    // Start on a different active branch: Home must lead to the authorised
+    // branch's actual review, not a 404 or stale mutation.
+    const owner = await session('owner', fixture.stores[1].id);
     try {
       const page = owner.page;
-      await page.goto('/users');
-      await page.locator('input[name=name]').fill('Fictional duplicate');
-      await page.locator('input[name=email]').fill(fixture.users.cashier1.email);
-      await page.locator('input[name=password]').fill(fixture.password);
-      await page.getByRole('button', { name: 'Create User', exact: true }).click();
-      await page.getByText(phase === 'before' ? 'An error occurred.' : 'A user with that email already exists.', { exact: true }).waitFor({ timeout: 15000 });
-      await page.locator('input[name=password]').fill('');
-      await page.screenshot({ path: `${output}/add-user-${phase}.png`, fullPage: true });
-      assert.equal(await prisma.user.count({ where: { email: fixture.users.cashier1.email } }), 1);
+      await page.goto('/home');
+      const card = page.getByTestId('home-cash-differences');
+      await card.getByRole('heading', { name: 'Needs your attention' }).waitFor();
+      await card.getByText('-GH₵80.00', { exact: true }).waitFor();
+      await card.getByText('Large', { exact: true }).waitFor();
+      await card.getByText('Fictional cashier1', { exact: true }).waitFor();
+      await card.getByText('Missing cash — Fictional count checked', { exact: true }).waitFor();
+      await card.screenshot({ path: `${output}/owner-home-card.png` });
+      await card.getByRole('button', { name: /Fictional cashier1/ }).click();
+      await page.waitForURL(url => url.pathname === `/shifts/variance/${investigation.id}`);
+      await page.getByRole('button', { name: "I'm comfortable", exact: true }).click();
+      await page.getByText(/Reviewed by Fictional owner/).waitFor();
+      const reviewed = await prisma.cashVarianceInvestigation.findUniqueOrThrow({ where: { id: investigation.id } });
+      assert.equal(reviewed.status, 'APPROVED');
+      assert.equal(reviewed.reviewedByUserId, fixture.users.owner.id);
+      assert(reviewed.reviewedAt);
+      await page.goto('/home');
+      await page.getByRole('heading', { name: /^FICTIONAL/ }).waitFor();
+      await card.waitFor({ state: 'hidden' });
+      await page.waitForLoadState('networkidle');
+      assert.equal(await card.count(), 0, 'Reviewed item must disappear from Home');
     } finally { await owner.ctx.close(); }
-    assert.equal((await prisma.shift.findUniqueOrThrow({ where: { id: shift.id } })).status, 'OPEN');
-    console.log(`PASS ${phase} UX evidence captured; no cash close or duplicate user committed`);
+    console.log('PASS large self-close with reason, red flag, cross-branch owner Home review, reviewed card hidden');
   } finally {
     await browser.close();
     await prisma.$disconnect();

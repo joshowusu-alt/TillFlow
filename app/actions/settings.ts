@@ -100,7 +100,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const shiftCloseApprovalThresholdAmount = formString(formData, 'shiftCloseApprovalThresholdAmount');
     const shiftCloseApprovalThresholdPence = Math.round(Number(shiftCloseApprovalThresholdAmount) * 100);
     if (formData.has('shiftCloseApprovalThresholdAmount') && (!shiftCloseApprovalThresholdAmount || !Number.isSafeInteger(shiftCloseApprovalThresholdPence) || shiftCloseApprovalThresholdPence < 0 || shiftCloseApprovalThresholdPence > 2147483647)) {
-      throw new Error('Enter a valid manager PIN shortage threshold.');
+      throw new Error('Enter a valid large cash difference threshold.');
     }
     // Opening Capital is entered in whole currency units by the user (e.g. 5000 = GHS 5,000)
     const openingCapitalPence = Math.max(0, toPence(formData.get('openingCapitalPence')));

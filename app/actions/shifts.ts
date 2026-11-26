@@ -192,8 +192,11 @@ export async function closeShiftAction(
     const storeId = closingShift.till.storeId;
     await requireSelectedStoreContext(undefined, storeId);
     if (user.role === 'CASHIER' && closingShift.userId !== user.id) return err('You can only close your own shift.');
-    const manager = managerPin ? await verifyManagerPin({ businessId, pin: managerPin }) : null;
-    if (managerPin && !manager) return err('Invalid manager PIN.');
+    // Self-close never requires approval, even if an older cached client
+    // includes a PIN. Keep the legacy approval route for cross-user closes.
+    const isSelf = closingShift.userId === user.id;
+    const manager = !isSelf && managerPin ? await verifyManagerPin({ businessId, pin: managerPin }) : null;
+    if (!isSelf && !manager) return err('You can only close your own shift.');
 
     try {
       const result = await performShiftClose({
@@ -213,6 +216,8 @@ export async function closeShiftAction(
       revalidatePosTillShiftTags(businessId, storeId);
       revalidateTag('reports');
       revalidateOwnerDashboardCache();
+      revalidatePath('/home');
+      revalidatePath('/onboarding');
       revalidatePath('/shifts');
       revalidatePath('/shifts/variance');
       revalidatePath('/shifts/drawer');
@@ -354,6 +359,8 @@ export async function closeShiftOwnerOverrideAction(
       revalidatePosTillShiftTags(businessId, storeId);
       revalidateTag('reports');
       revalidateOwnerDashboardCache();
+      revalidatePath('/home');
+      revalidatePath('/onboarding');
       revalidatePath('/shifts');
       revalidatePath('/shifts/variance');
       revalidatePath('/shifts/drawer');
@@ -434,6 +441,8 @@ export async function explainCashVarianceAction(
         evidenceNote,
         actor: varianceActor(user),
       });
+      revalidatePath('/home');
+      revalidatePath('/onboarding');
       revalidatePath('/shifts');
       revalidatePath('/shifts/variance');
       revalidatePath(`/shifts/variance/${investigationId}`);
@@ -488,6 +497,8 @@ export async function approveCashVarianceAction(
         investigationId,
         actor: varianceActor(user),
       });
+      revalidatePath('/home');
+      revalidatePath('/onboarding');
       revalidatePath('/shifts');
       revalidatePath('/shifts/variance');
       revalidatePath(`/shifts/variance/${investigationId}`);
@@ -504,6 +515,8 @@ export async function markCashVarianceReviewedAction(formData: FormData): Promis
     if (!investigationId) return err('Cash difference is required.');
     const { user, businessId } = await requireVarianceOperationalStore(['MANAGER', 'OWNER'], investigationId);
     const result = await markCashVarianceReviewed({ businessId, investigationId, actor: varianceActor(user), note: formString(formData, 'note') });
+    revalidatePath('/home');
+    revalidatePath('/onboarding');
     revalidatePath('/shifts/variance');
     revalidatePath(`/shifts/variance/${investigationId}`);
     return ok({ id: result.id });

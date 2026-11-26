@@ -55,10 +55,12 @@ describe('ShiftClient', () => {
     render(
       <ShiftClient
         tills={[{ id: 'till-1', name: 'Till 1' }]}
-        openShifts={[{
+        openShifts={[]}
+        otherOpenShifts={[{
           id: 'shift-1',
           till: { name: 'Till 1' },
-          openedAt: new Date('2026-03-18T08:00:00.000Z'),
+          userName: 'Other cashier',
+          openedAt: '2026-03-18T08:00:00.000Z',
           openingCashPence: 0,
           salesCount: 0,
           salesTotal: 0,
@@ -68,22 +70,20 @@ describe('ShiftClient', () => {
           momoTotal: 0,
           cashByType: {},
         }]}
-        otherOpenShifts={[]}
         recentShifts={[]}
         currency="GHS"
         userRole="OWNER"
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Owner Override (use password)' }));
+    fireEvent.click(screen.getAllByRole('button', { name: /^Close$/ }).at(-1)!);
 
     fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '0.00' } });
     fireEvent.change(screen.getByPlaceholderText('Re-enter your login password'), { target: { value: 'wrong-password' } });
     fireEvent.change(screen.getByDisplayValue('Select reason...'), { target: { value: 'SYSTEM_ISSUE' } });
     fireEvent.change(screen.getByPlaceholderText('Explain why owner override is needed'), { target: { value: 'Need to close from owner console' } });
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Close Shift' })[1]);
+    fireEvent.click(screen.getByRole('button', { name: /^Close Shift$/ }));
 
     await waitFor(() => {
       expect(closeShiftOwnerOverrideActionMock).toHaveBeenCalledTimes(1);
@@ -452,7 +452,7 @@ describe('ShiftClient', () => {
     expect((closeShiftActionMock.mock.calls[0][0] as FormData).get('shiftId')).toBe('shift-1');
   });
 
-  it('shows close-shift identity and starts approval fields empty', async () => {
+  it('shows close-shift identity without approval fields', async () => {
     render(
       <ShiftClient
         storeId="store-b"
@@ -474,17 +474,13 @@ describe('ShiftClient', () => {
     expect(screen.getByLabelText('Reason details')).toHaveValue('');
     expect(screen.queryByPlaceholderText('Enter manager approval PIN')).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '1.00' } });
-    expect(screen.getByText(/Manager PIN needed — shortage is above GH₵50.00/)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveValue('');
+    expect(screen.getByText('Large')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Enter manager approval PIN')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Reason details')).toHaveAttribute('autoComplete', 'off');
-    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('name', 'close-shift-manager-approval');
-    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('type', 'password');
-    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('autoComplete', 'one-time-code');
-    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveAttribute('type', 'password');
   });
 
-  it('clears the manager PIN after a failed close without storing it', async () => {
-    closeShiftActionMock.mockResolvedValue({ success: false, error: 'Invalid manager PIN for till close.' });
+  it('keeps the modal open and shows a genuine close failure', async () => {
+    closeShiftActionMock.mockResolvedValue({ success: false, error: 'Shift could not close.' });
     render(
       <ShiftClient
         storeId="store-b"
@@ -500,14 +496,11 @@ describe('ShiftClient', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
     fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '1.00' } });
-    const pin = screen.getByPlaceholderText('Enter manager approval PIN');
-    expect(pin).toHaveValue('');
     fireEvent.change(screen.getByLabelText('Reason details'), { target: { value: 'Short count' } });
-    fireEvent.change(pin, { target: { value: '1234' } });
     fireEvent.click(screen.getAllByRole('button', { name: 'Close Shift' }).at(-1)!);
     await waitFor(() => expect(closeShiftActionMock).toHaveBeenCalledTimes(1));
-    expect(screen.getByPlaceholderText('Enter manager approval PIN')).toHaveValue('');
-    expect(screen.getByRole('alert')).toHaveTextContent("That PIN isn't right. Try again.");
+    expect(screen.queryByPlaceholderText('Enter manager approval PIN')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Shift could not close.');
   });
 
   it.each(['815.50', '900.00'])('requires a reason but no PIN for count %s', (count) => {
@@ -546,18 +539,21 @@ describe('ShiftClient', () => {
     expect(screen.getByText("There's less cash than the opening float. GH₵5.00 stays in the drawer.")).toBeInTheDocument();
   });
 
-  it('explains a missing manager PIN above the close button for an GH₵80 shortage', () => {
+  it('flags a GH₵80 shortage as Large and closes with a reason, without a PIN', async () => {
+    closeShiftActionMock.mockResolvedValue({ success: true });
     render(<ShiftClient tills={[{ id: 'till-1', name: 'Till 1' }]} openShifts={[baseOpenShift]} recentShifts={[]} currency="GHS" userRole="CASHIER" />);
     fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
     fireEvent.change(screen.getByLabelText(/Actual Cash Counted/i), { target: { value: '785.50' } });
-    fireEvent.change(screen.getByLabelText('Reason details'), { target: { value: 'Count checked' } });
-    expect(screen.getByText('Enter the manager PIN to close this shift.')).toBeInTheDocument();
+    expect(screen.getByText('Large')).toBeInTheDocument();
+    expect(screen.queryByText(/Manager PIN/i)).not.toBeInTheDocument();
     expect(screen.getByText('-GH₵80.00')).toBeInTheDocument();
     const close = screen.getAllByRole('button', { name: 'Close Shift' }).at(-1)!;
     expect(close).toBeDisabled();
-    fireEvent.change(screen.getByPlaceholderText('Enter manager approval PIN'), { target: { value: '1234' } });
-    expect(screen.queryByText('Enter the manager PIN to close this shift.')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Reason details'), { target: { value: 'Count checked' } });
     expect(close).toBeEnabled();
+    fireEvent.click(close);
+    await waitFor(() => expect(closeShiftActionMock).toHaveBeenCalledTimes(1));
+    expect((closeShiftActionMock.mock.calls[0][0] as FormData).has('managerPin')).toBe(false);
   });
 
   it('renders signed amounts in the close screen, list and success banner; prevents double submit', async () => {

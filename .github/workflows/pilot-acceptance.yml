@@ -68,49 +68,13 @@ jobs:
         env:
           VERCEL_ENV: preview
           TILLFLOW_PILOT_MANUAL_PAYMENTS: '1'
-      - name: Checkout exact pre-UX candidate for screenshot comparison
-        uses: actions/checkout@v4
-        with:
-          ref: 35740cce9ac90cd7496ce95a8007f9c42efcdf5d
-          path: .pilot-before-ux
-          persist-credentials: false
-      - name: Build pre-UX application against isolated PostgreSQL
-        working-directory: .pilot-before-ux
-        run: |
-          npm ci
-          npm run build
-        env:
-          NEXT_PUBLIC_APP_URL: http://localhost:6203
-      - name: Start pre-UX application
-        working-directory: .pilot-before-ux
-        run: |
-          # 6202 is reserved for pilot-rollback-browser.cjs's local proxy.
-          node node_modules/next/dist/bin/next start -p 6203 > /tmp/tillflow-before-ux-server.log 2>&1 &
-          echo $! > /tmp/tillflow-before-ux-server.pid
-          for attempt in {1..60}; do
-            if curl -fsS http://localhost:6203/login >/dev/null; then exit 0; fi
-            sleep 1
-          done
-          exit 1
-        env:
-          VERCEL_ENV: preview
-          NEXT_PUBLIC_APP_URL: http://localhost:6203
-          TILLFLOW_PILOT_MANUAL_PAYMENTS: '1'
-      - name: Capture real before and after UX screenshots on the same fictional records
-        run: |
-          BASE_URL=http://localhost:6203 node scripts/pilot-ux-evidence.cjs before
-          node scripts/pilot-ux-evidence.cjs after
-      - name: Stop isolated pre-UX application
-        if: always()
-        run: |
-          if test -s /tmp/tillflow-before-ux-server.pid; then
-            kill "$(cat /tmp/tillflow-before-ux-server.pid)" 2>/dev/null || true
-          fi
+      - name: Large self-close and owner cash difference review (fictional browser evidence)
+        run: node scripts/pilot-ux-evidence.cjs
       - name: Upload fictional UX screenshots only
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: til5-c-before-after-ux
+          name: til5-c-close-review-ux
           path: tmp/pilot-ux-evidence/*.png
           if-no-files-found: warn
       - name: Password login, barcode checkout, roles, mobile and tablet

@@ -285,7 +285,7 @@ async function performShiftCloseImpl(
 
   const business = await prisma.business.findUnique({
     where: { id: businessId },
-    select: { varianceReasonRequired: true, cashVarianceRiskThresholdPence: true },
+    select: { cashVarianceRiskThresholdPence: true },
   });
 
   const defaultCloseReason =
@@ -347,21 +347,15 @@ async function performShiftCloseImpl(
     // Expected cash is the drawer running balance (float + cash sales + receipts
     // + additions − supplier/expense/refunds/removals), not invoice CASH re-sum.
     const lockedVariance = actualCash - lockedExpectedCash;
-    if (actor.userRole === 'CASHIER' && lockedShift.userId !== actor.userId) {
+    if ((approval.mode === 'SELF' || actor.userRole === 'CASHIER') && lockedShift.userId !== actor.userId) {
       throw new Error('You can only close your own shift.');
     }
     if (
       lockedVariance !== 0 &&
-      (approval.mode !== 'OWNER_OVERRIDE' || business?.varianceReasonRequired) &&
       !varianceReasonCode?.trim() &&
       !varianceReason?.trim()
     ) {
       throw new Error(approval.mode === 'OWNER_OVERRIDE' ? 'Variance reason is required when counted cash differs from expected.' : "Please say why the cash doesn't match.");
-    }
-    if (approval.mode === 'SELF' && lockedVariance < 0) {
-      const settings = await tx.business.findUnique({ where: { id: businessId }, select: { shiftCloseApprovalThresholdPence: true } });
-      const threshold = settings?.shiftCloseApprovalThresholdPence ?? 5000;
-      if (-lockedVariance > threshold) throw new Error(`This shortage is above GH₵${(threshold / 100).toFixed(2)}. A manager PIN is needed to close.`);
     }
     const lockedEntriesSummary = summarizeCashDrawerEntries(lockedShift.cashDrawerEntries);
     const lockedSnapshotBase = {

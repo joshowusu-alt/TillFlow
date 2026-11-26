@@ -220,17 +220,18 @@ async function main() {
     assert.equal(beforeClose.expectedCashPence, 20000 + totalFoodCash);
     await page.goto('/shifts');
     await page.getByRole('button', { name: 'Close Shift', exact: true }).click();
-    await page.getByLabel('Actual Cash Counted').fill(((beforeClose.expectedCashPence - 100) / 100).toFixed(2));
+    await page.getByLabel('Actual Cash Counted').fill(((beforeClose.expectedCashPence - 8000) / 100).toFixed(2));
     await page.getByLabel('Reason details').fill('Fictional short count');
     assert.equal(await page.getByPlaceholder('Enter manager approval PIN').count(), 0);
+    await page.getByText('Large', { exact: true }).waitFor();
     await page.locator('[data-close-shift]').click();
     await page.getByText(/Shift Closed/).waitFor();
     const closed = await prisma.shift.findUniqueOrThrow({ where: { id: beforeClose.id } });
     assert.equal(closed.status, 'CLOSED');
     assert.equal(closed.closeManagerApprovalMode, 'SELF');
     assert.equal(closed.closeManagerApprovedByUserId, null);
-    assert.equal(closed.actualCashPence, beforeClose.expectedCashPence - 100);
-    assert.equal(closed.variance, -100);
+    assert.equal(closed.actualCashPence, beforeClose.expectedCashPence - 8000);
+    assert.equal(closed.variance, -8000);
     assert.equal(JSON.parse(closed.closureSnapshotJson).closedBySelf, true);
     const investigation = await prisma.cashVarianceInvestigation.findUniqueOrThrow({ where: { shiftId: closed.id } });
     assert.equal(investigation.status, 'OPEN');
@@ -263,7 +264,7 @@ async function main() {
     await page.getByText('Fictional manager checked cash').waitFor();
     assert.equal(await page.getByRole('button', { name: "I'm comfortable" }).count(), 0);
     assert.deepEqual(await prisma.cashVarianceInvestigation.findUniqueOrThrow({ where: { id: reviewed.id } }), reviewed);
-    results.push('PASS TIL5-C SELF close and manager review survive dfce423 rollback and candidate restoration without re-opening, data loss or another approval');
+    results.push('PASS TIL5-C large SELF close and manager review survive dfce423 rollback and candidate restoration without re-opening, data loss or another approval');
 
     await page.goto('/__rollback'); await page.addScriptTag({ url: '/__rollback.js' });
     await context.clearCookies(); await page.reload(); await page.addScriptTag({ url: '/__rollback.js' });

@@ -96,7 +96,7 @@ describe('cashier self-close rules on locked cash', () => {
     (prisma as any).$queryRaw = vi.fn();
     (prisma as any).$transaction = vi.fn(async (cb: any) => cb(prisma));
   });
-  it.each([10000, 5000, 12000])('closes counted %s with SELF and no approver', async (actualCash) => {
+  it.each([10000, 5000, 2000, 0, 12000, 18000])('closes counted %s with SELF and no approver', async (actualCash) => {
     const { prisma } = await import('@/lib/prisma');
     const { createCashVarianceInvestigationTx } = await import('@/lib/services/cash-variance');
     await performShiftClose({ ...input, actualCash, varianceReason: actualCash === 10000 ? null : 'Count checked' });
@@ -104,12 +104,11 @@ describe('cashier self-close rules on locked cash', () => {
     expect(JSON.parse((prisma as any).shift.updateMany.mock.calls[0][0].data.closureSnapshotJson)).toMatchObject({ closedBySelf: true });
     expect(createCashVarianceInvestigationTx).toHaveBeenCalledWith(prisma, expect.objectContaining({ variancePence: actualCash - 10000, cashierExplanation: actualCash === 10000 ? null : 'Count checked' }));
   });
-  it.each([5000, 12000])('requires a reason for counted %s', async (actualCash) => {
+  it.each([5000, 2000, 0, 12000, 18000])('requires a reason for counted %s', async (actualCash) => {
     await expect(performShiftClose({ ...input, actualCash })).rejects.toThrow("Please say why the cash doesn't match.");
   });
-  it('blocks a large shortage and allows PIN approval', async () => {
-    await expect(performShiftClose({ ...input, actualCash: 4999, varianceReasonCode: 'MISSING_CASH' })).rejects.toThrow('A manager PIN is needed');
-    await expect(performShiftClose({ ...input, actualCash: 4999, varianceReasonCode: 'MISSING_CASH', approval: { mode: 'PIN', approvingManagerId: 'mgr-1' } })).resolves.toMatchObject({ id: 'shift-1' });
+  it('closes a large shortage from the reason picker alone', async () => {
+    await expect(performShiftClose({ ...input, actualCash: 2000, varianceReasonCode: 'MISSING_CASH' })).resolves.toMatchObject({ id: 'shift-1' });
   });
   it('blocks a different cashier', async () => {
     await expect(performShiftClose({ ...input, actualCash: 10000, actor: { ...input.actor, userId: 'other' } })).rejects.toThrow('You can only close your own shift');

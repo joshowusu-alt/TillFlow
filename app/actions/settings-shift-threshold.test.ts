@@ -28,6 +28,6 @@ it('does not reset the threshold if an older form omits it', async () => {
 });
 it.each(['-10', 'NaN', 'Infinity', ''])('rejects invalid threshold %s', async (value) => {
   const form = new FormData(); form.set('shiftCloseApprovalThresholdAmount', value);
-  await expect(updateBusinessAction(form)).rejects.toThrow('valid manager PIN shortage threshold');
+  await expect(updateBusinessAction(form)).rejects.toThrow('valid large cash difference threshold');
   expect(mocks.update).not.toHaveBeenCalled();
 });
