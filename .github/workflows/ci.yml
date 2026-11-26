@@ -432,3 +432,44 @@ jobs:
         with:
           name: report-owner-before-after
           path: tmp/report-owner-simplification/
+
+  product-cost-owner-mobile:
+    name: product-cost-owner-mobile
+    if: github.event_name == 'pull_request' && github.head_ref == 'remediation/simplify-product-cost-resolution'
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: file:${{ github.workspace }}/prisma/ci-report-owner-visual.db
+      VERCEL_ENV: preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Prepare disposable SQLite database (no migrations)
+        run: |
+          npx prisma generate --schema=prisma/schema.prisma
+          npx prisma db push --schema=prisma/schema.prisma --skip-generate
+      - uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: .next
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise real owner cost-review pages
+        run: |
+          set -euo pipefail
+          npm run start -- -p 6200 > /tmp/product-cost-owner.log 2>&1 &
+          for i in {1..60}; do
+            if curl -fsS "http://127.0.0.1:6200/login" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://127.0.0.1:6200/login" >/dev/null
+          node scripts/product-cost-owner-mobile-evidence.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: product-cost-owner-mobile
+          path: tmp/product-cost-owner-mobile/

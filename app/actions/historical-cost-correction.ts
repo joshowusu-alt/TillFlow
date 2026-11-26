@@ -5,6 +5,7 @@ import { safeAction, UserError, ok } from '@/lib/action-utils';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { revalidatePosInventory } from '@/lib/cache/pos-tags';
 import { redirect } from 'next/navigation';
+import { costReviewPeriod } from '@/lib/reports/cost-review-navigation';
 
 export async function submitHistoricalCostCorrection(form:FormData) {
   const {user,business}=await requireBusiness(['OWNER']);
@@ -15,6 +16,8 @@ export async function submitHistoricalCostCorrection(form:FormData) {
   const reason=String(form.get('reason')??'').trim();
   const path='/products/'+encodeURIComponent(productId)+'/cost-review/preview';
   const query=new URLSearchParams({storeId});
+  const period=costReviewPeriod({from:form.get('from'),to:form.get('to'),metric:form.get('metric')});
+  if(period) for(const [key,value] of Object.entries(period)) query.set(key,value);
   const result=await safeAction(async()=>{
     if(!productId||!storeId||productId.length>128||storeId.length>128||!['apply','reverse'].includes(operation))throw new UserError('Invalid cost correction scope.');
     const expected=operation==='apply'?'POST COST':'REVERSE COST';

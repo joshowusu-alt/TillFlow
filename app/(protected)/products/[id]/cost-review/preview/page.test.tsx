@@ -37,4 +37,12 @@ describe('owner confirmation and reversal interface',()=>{
   expect(html).toContain('Posted correction history');expect(html).toContain('REVERSE COST');expect(html).not.toContain('Post confirmed correction');
   expect(m.history).toHaveBeenCalledWith({businessId:'business',productId:'product',storeId:'store'});
  });
+ it('retains report navigation but still loads the entire branch evidence',async()=>{
+  const html=renderToStaticMarkup(await Page({...props,searchParams:Promise.resolve({storeId:'store',from:'2026-11-01',to:'2026-11-26',metric:'netProfit'})}));
+  expect(m.preview).toHaveBeenCalledWith('business','product','store');
+  expect(html).toContain('name="from" value="2026-11-01"');
+  expect(html).toContain('name="metric" value="netProfit"');
+  expect(html).toContain('Back to affected sales');
+  expect(html).toContain('not necessarily just the selected report period');
+ });
 });

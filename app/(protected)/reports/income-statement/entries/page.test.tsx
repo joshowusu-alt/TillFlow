@@ -29,6 +29,24 @@ describe('income statement detail access and period',()=>{
     expect(html).toContain('Historical cost not confirmed');
     expect(html).toContain('2026-10-01');
   });
+  it('groups repeated affected products, retains unsupported returns and links back with the applied period', async()=>{
+    const statement=await mocks.statement();
+    const line={productId:'rice',name:'Rice',qtyBase:1,revenuePence:14000,reason:'INCOMPLETE_COSTS'};
+    const bad={...statement.entries[0],costPence:null,profitPence:null};
+    mocks.statement.mockResolvedValue({...statement,grossProfit:null,entries:[
+      {...bad,id:'a',label:'Receipt A',incompleteLines:[line]},
+      {...bad,id:'b',label:'Receipt B',incompleteLines:[line]},
+      {...bad,id:'c',label:'Return C',incompleteLines:[{...line,reason:'UNSUPPORTED_RETURN'}]},
+    ]});
+    const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({metric:'grossProfit',issues:'1'})}));
+    expect(html).toContain('1 product · 3 affected receipts');
+    expect(html).toContain('2 affected receipts');
+    expect(html).toContain('GH₵280.00');
+    expect(html.match(/href="\/products\/rice\/cost-review\?/g)).toHaveLength(1);
+    expect(html).toContain('Receipt A');expect(html).toContain('Receipt B');expect(html).toContain('Return C');
+    expect(html).toContain('No automatic product correction');
+    expect(html).toContain('from=2026-10-01&amp;to=2026-10-20&amp;metric=grossProfit');
+  });
   it('does not query records when report access is denied',async()=>{
     mocks.open.mockResolvedValue({ok:false,denial:<p>Access denied</p>});
     expect(renderToStaticMarkup(await Page({}))).toContain('Access denied');expect(mocks.statement).not.toHaveBeenCalled();
