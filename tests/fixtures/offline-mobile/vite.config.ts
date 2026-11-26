@@ -25,5 +25,6 @@ export default defineConfig({
   }, react()],
   resolve: { alias: [{find:'@', replacement: process.cwd()}] },
   build: { rollupOptions: { input: 'tests/fixtures/offline-mobile/index.html' } },
-  define: {'process.env.NODE_ENV': JSON.stringify('development')},
+  // The generated Prisma browser enums expect a bundler-provided global alias.
+  define: { global: 'globalThis', 'process.env.NODE_ENV': JSON.stringify('development') },
 });
