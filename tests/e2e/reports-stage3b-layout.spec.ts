@@ -206,7 +206,9 @@ for (const width of [390, 1440, 1920]) {
     const productChanges = page.getByRole('heading', { name: 'Biggest product changes', exact: true });
     const chart = page.locator('[data-movement-charts]');
     await expect(chart).not.toBeVisible();
-    await page.getByText('Sales and money compared', { exact: true }).click();
+    const salesAndMoney = page.locator('summary').filter({ hasText: 'Sales and money compared' });
+    await expect(salesAndMoney).toHaveCount(1);
+    await salesAndMoney.click();
     await expect(chart.getByRole('heading', { name: 'Current and earlier period' })).toBeVisible();
     expect((await chart.boundingBox())!.y).toBeGreaterThan((await productChanges.boundingBox())!.y);
     await page.screenshot({ path: path.join(evidence, `movement-${width}.png`), fullPage: true });
