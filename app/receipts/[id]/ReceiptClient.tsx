@@ -338,8 +338,8 @@ export default function ReceiptClient({
                     <div className="font-bold leading-tight text-black">{line.name}</div>
                     {line.detail ? <div className="mt-0.5 text-[10px] leading-tight">{line.detail}</div> : null}
                     {discountPence > 0 ? (
-                      <div className="mt-1 text-[10px] leading-tight">
-                        <strong>Discount</strong> {formatMoney(discountPence, business.currency)}
+                      <div className="mt-1 text-[10px] leading-tight font-bold">
+                        Discount {formatMoney(discountPence, business.currency)}
                       </div>
                     ) : null}
                   </div>
