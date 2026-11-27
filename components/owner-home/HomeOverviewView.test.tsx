@@ -44,8 +44,10 @@ describe('Owner Home presentation', () => {
     const [preview, remaining] = within(panel).getAllByRole('list');
     expect(within(preview).getAllByRole('listitem')).toHaveLength(3);
     expect(within(preview).queryByText('Issue 4')).not.toBeInTheDocument();
-    const disclosure = screen.getByText('View all', { exact: true }).closest('details');
-    expect(disclosure).toBeVisible();
+    const summary = screen.getByText('View all', { exact: true });
+    expect(summary).toBeVisible();
+    const disclosure = summary.closest('details');
+    expect(disclosure).toBeInTheDocument();
     expect(disclosure).not.toHaveAttribute('open');
     expect(disclosure).toContainElement(remaining);
     expect(within(remaining).getAllByRole('listitem')).toHaveLength(1);
