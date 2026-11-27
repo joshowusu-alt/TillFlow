@@ -17,7 +17,7 @@ describe('cost resolution queue page',()=>{
   expect(mocks.auth).toHaveBeenCalledWith(['OWNER','MANAGER']);
   expect(mocks.load).toHaveBeenCalledWith('business','cursor',true);
   expect(html).toContain('Evidence candidate — not posted');
-  expect(html).toContain('Manual reconciliation required');
+  expect(html).toContain('We can&#x27;t work this cost out automatically');
   expect(html).toContain('/products/rice/cost-review/preview?storeId=main');
   expect(html).toContain('/products/cost-resolution?after=next');
   expect(html).not.toContain('<form');

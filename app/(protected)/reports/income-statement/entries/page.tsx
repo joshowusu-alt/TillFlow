@@ -10,7 +10,7 @@ import { getIncomeStatementBreakdown } from '@/lib/reports/financials';
 import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, incomeStatementJournalCategories, isIncomeStatementMetric, selectIncomeStatementEntries } from '@/lib/reports/income-statement-breakdown';
 import { costReviewHref, groupAffectedSales } from '@/lib/reports/cost-review-navigation';
 import { readableReportPeriod } from '@/components/reports/PeriodChips';
-import OneScreenCostFix from '@/components/reports/OneScreenCostFix';
+import { loadOneScreenCostFixes } from '@/components/reports/load-one-screen-cost-fixes';
 import { ownerAccountLabel, humanJournalDescription } from '@/lib/reports/owner-account-labels';
 
 export default async function IncomeStatementEntriesPage(
@@ -57,7 +57,7 @@ export default async function IncomeStatementEntriesPage(
   const date = (value: string) => new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: zone }).format(new Date(value));
   const owner=opened.user?.role==='OWNER' && !opened.readOnly;
   const shownGroups=groups.slice((page - 1) * size, page * size);
-  const fixes=owner && issuesOnly ? await Promise.all(shownGroups.map(group=>OneScreenCostFix({group,businessId:business.id,stores:opened.stores??[],currency:business.currency,timezone:zone,from,to,metric}))) : [];
+  const fixes=owner && issuesOnly ? await loadOneScreenCostFixes(shownGroups,{businessId:business.id,stores:opened.stores??[],currency:business.currency,timezone:zone,from,to,metric}) : [];
   return <div className="space-y-5">
     {opened.readOnly ? <ReportReadOnlyBanner /> : null}
     <Link className="text-sm font-semibold text-accent underline" href={backHref}>← Income Statement</Link>

@@ -96,6 +96,6 @@ function CostConfirmationForm({productId,storeId,fingerprint,operation,period}:{
     {period && reverse ? <input type="hidden" name="oneScreen" value="1" /> : null}
     <label className="block">Reason<textarea name="reason" required maxLength={500} className="input mt-1 w-full" /></label>
     <label className="flex min-h-11 items-start gap-2"><input name="confirmed" type="checkbox" required className="mt-1" /> <span>{reverse?'I have checked the original cost fix and understand the undo conditions.':'I have checked the original records and confirm this cost fix.'}</span></label>
-    <button className="btn-primary min-h-11 w-full sm:w-auto" type="submit">{reverse?'Undo this cost fix':'Post confirmed correction'}</button>
+    <button className="btn-primary min-h-11 w-full sm:w-auto" type="submit">{reverse?'Undo this cost fix':'Confirm cost fix'}</button>
   </form>;
 }

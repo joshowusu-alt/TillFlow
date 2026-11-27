@@ -2,6 +2,8 @@ import {purchaseDocumentFixture} from '@/lib/test/purchase-document-fixture';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createElement } from 'react';
 
 const backupContext = vi.hoisted(() => ({ businessId: '', user: { id: '', name: 'Owner', role: 'OWNER' } }));
 vi.mock('@/lib/action-utils', () => ({ UserError: class UserError extends Error {},
@@ -66,8 +68,8 @@ describePg('isolated inventory valuation and COGS evidence', () => {
       () => db.supplier.deleteMany({ where: { businessId } }),
       () => db.businessSequence.deleteMany({ where: { businessId } }),
       () => db.account.deleteMany({ where: { businessId } }),
-      () => db.shift.deleteMany({ where: { tillId } }),
-      () => db.till.deleteMany({ where: { storeId } }),
+      () => db.shift.deleteMany({ where: { till: { store: { businessId } } } }),
+      () => db.till.deleteMany({ where: { store: { businessId } } }),
       () => db.store.deleteMany({ where: { businessId } }),
       () => db.user.deleteMany({ where: { businessId } }),
       () => db.business.delete({ where: { id: businessId } }),
@@ -456,6 +458,36 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     expect(await db.stockMovement.findMany({where:{productId:p,storeId},orderBy:{id:'asc'}})).toEqual(beforeMovements);
     expect(await db.salesInvoiceLine.findFirstOrThrow({where:{salesInvoiceId:sale.id}})).toEqual(beforeLine);
   },60000);
+  it('loads ten affected product cards across two branches without a preview transaction timeout',async()=>{
+    const start=new Date();
+    const second=await db.store.create({data:{businessId,name:'Disposable second valuation branch'}});
+    const secondTill=await db.till.create({data:{storeId:second.id,name:'Second fixture till'}});
+    await db.shift.create({data:{tillId:secondTill.id,userId,status:'OPEN',openKey:secondTill.id}});
+    const branches=[{id:storeId,name:'Disposable valuation branch',tillId},{id:second.id,name:second.name,tillId:secondTill.id}];
+    const ids:string[]=[];
+    for(let i=0;i<10;i++){
+      const p=await product();ids.push(p);
+      const branch=branches[i%2];
+      await opening.recordOpeningInventory({businessId,storeId:branch.id,referenceId:'multi-preview:'+p,lines:[{productId:p,unitId,qtyInUnit:5,unitCostPence:0}]});
+      await sales.createSale({businessId,storeId:branch.id,tillId:branch.tillId,cashierUserId:userId,customerId,paymentStatus:'UNPAID',payments:[],lines:[{productId:p,unitId,qtyInUnit:2}]});
+    }
+    const {getIncomeStatementBreakdown}=await import('@/lib/reports/financials');
+    const {selectIncomeStatementEntries}=await import('@/lib/reports/income-statement-breakdown');
+    const {groupAffectedSales}=await import('@/lib/reports/cost-review-navigation');
+    const {loadOneScreenCostFixes}=await import('@/components/reports/load-one-screen-cost-fixes');
+    const end=new Date(Date.now()+1000);
+    const statement=await getIncomeStatementBreakdown(businessId,start,end);
+    const groups=groupAffectedSales(selectIncomeStatementEntries(statement.entries,'grossProfit').filter(entry=>entry.kind==='sale'&&entry.contributionPence===null))
+      .filter(group=>group.productId!==null&&ids.includes(group.productId));
+    expect(groups).toHaveLength(10);
+    const cards=await loadOneScreenCostFixes(groups,{businessId,stores:branches,currency:'GHS',timezone:'Africa/Accra',from:start.toISOString().slice(0,10),to:end.toISOString().slice(0,10),metric:'grossProfit'});
+    expect(cards).toHaveLength(10);
+    for(const card of cards){
+      const html=renderToStaticMarkup(createElement('div',null,card));
+      expect(html).toContain('Confirm cost');
+      expect(html).not.toContain('Review purchase and sale records');
+    }
+  },120000);
   it('keeps subsequent sales valued and blocks a stale reversal',async()=>{
     const f=await historicalFixture();await f.apply(f.request);
     const later=await sell(f.p,1);

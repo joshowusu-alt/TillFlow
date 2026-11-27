@@ -33,10 +33,10 @@ export default async function CostResolutionPage(props:{searchParams:Promise<{af
         {row.preview?.status==='REVIEWABLE' ? <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-950">
           <p className="font-semibold">Evidence candidate — not posted</p>
           <p>Proposed stock value: {money(row.preview.stockValue)}</p>
-          <p>Additional historical COGS: {money(row.preview.cogsDelta)}</p>
+          <p>Extra cost of earlier sales: {money(row.preview.cogsDelta)}</p>
           <p>{row.preview.corrections.length} affected sale lines</p>
         </div> : row.preview?.status==='BLOCKED' ? <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-950">
-          <p className="font-semibold">Manual reconciliation required</p><p>{row.preview.reason}</p>
+          <p className="font-semibold">We can&apos;t work this cost out automatically</p><p>{row.preview.reason}</p>
         </div> : <p className="text-sm">Not reviewed yet.</p>}
         <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={`/products/${encodeURIComponent(row.productId)}/cost-review/preview?${new URLSearchParams({storeId:row.storeId})}`}>Review proposed correction →</Link>
       </article>)}

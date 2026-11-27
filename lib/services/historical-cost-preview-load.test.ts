@@ -68,4 +68,19 @@ describe('historical cost preview loader',()=>{
     db.stockMovement.findMany.mockResolvedValueOnce([{...opening,valuePence:64000},sale]).mockResolvedValueOnce([{...opening,valuePence:64000}]);
     expect(await loadHistoricalCostPreview('b','p','s',12800)).toMatchObject({result:{status:'BLOCKED'}});
   });
+  it('uses already-valued opening records and rejects an owner-entered replacement cost',async()=>{
+    db.purchaseInvoice.findMany.mockResolvedValue([]);
+    const opening={id:'m-open',storeId:'s',productId:'p',createdAt:date,type:'OPENING',referenceType:'OPENING_BALANCE_INVENTORY',referenceId:'open',qtyBase:5,valuePence:64000,unitCostBasePence:12800,costBasis:'INVENTORY_VALUE_V1',beforeQtyBase:null,afterQtyBase:null};
+    const sale={id:'m-sale',storeId:'s',productId:'p',createdAt:date,type:'SALE',referenceType:'SALES_INVOICE',referenceId:'sale',qtyBase:-2,valuePence:null,unitCostBasePence:null,costBasis:'UNVERIFIED_STOCK_V1',beforeQtyBase:5,afterQtyBase:3};
+    db.stockMovement.findMany.mockResolvedValueOnce([opening,sale]).mockResolvedValueOnce([opening]);
+    db.inventoryBalance.findFirst.mockResolvedValue({qtyOnHandBase:3,knownValuePence:null,unvaluedQtyBase:3});
+    db.salesInvoice.findMany.mockResolvedValue([{id:'sale',transactionNumber:'INV-1',createdAt:date,salesReturn:null,paymentStatus:'PAID',lines:[{id:'line',productId:'p',qtyBase:2,lineCostPence:0,costBasis:'UNVERIFIED_STOCK_V1'}]}]);
+    db.journalEntry.findMany.mockResolvedValue([{referenceId:'open',referenceType:'OPENING_BALANCE_INVENTORY',lines:[
+      {account:{code:'1200',businessId:'b'},debitPence:64000,creditPence:0},
+      {account:{code:'3200',businessId:'b'},debitPence:0,creditPence:64000},
+    ]},journal('sale','SALES_INVOICE',0,0)]);
+    expect(await loadHistoricalCostPreview('b','p','s')).toMatchObject({result:{status:'REVIEWABLE',unitCost:12800,stockValue:38400,cogsDelta:25600,source:{opening:{needsValue:false}}}});
+    db.stockMovement.findMany.mockResolvedValueOnce([opening,sale]).mockResolvedValueOnce([opening]);
+    expect(await loadHistoricalCostPreview('b','p','s',9999)).toMatchObject({result:{status:'BLOCKED',reason:'Opening stock already has a recorded cost. Use the recorded value instead.'}});
+  });
 });

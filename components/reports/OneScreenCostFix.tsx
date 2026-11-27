@@ -4,9 +4,11 @@ import { submitHistoricalCostCorrection } from '@/app/actions/historical-cost-co
 import { formatMoney } from '@/lib/format';
 import type { CostReviewGroup } from '@/lib/reports/cost-review-navigation';
 
-export default async function OneScreenCostFix({ group, businessId, stores, currency, timezone, from, to, metric }: {
-  group: CostReviewGroup; businessId: string; stores: { id: string; name: string }[]; currency: string; timezone: string; from:string; to:string; metric:string;
-}) {
+export type OneScreenCostFixContext = {
+  businessId: string; stores: { id: string; name: string }[]; currency: string; timezone: string; from:string; to:string; metric:string;
+};
+
+export default async function OneScreenCostFix({ group, businessId, stores, currency, timezone, from, to, metric }: OneScreenCostFixContext & { group: CostReviewGroup }) {
   if (!group.productId) return null;
   const productId=group.productId;
   const money=(n:number)=>formatMoney(n,currency);

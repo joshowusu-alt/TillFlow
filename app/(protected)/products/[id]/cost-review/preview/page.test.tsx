@@ -20,21 +20,21 @@ describe('owner confirmation and reversal interface',()=>{
   const html=renderToStaticMarkup(await Page(props));
   expect(html).not.toContain('POST COST');expect(html).toContain('name="confirmed"');
   expect(html).toContain('name="fingerprint"');expect(html).toContain(fp);
-  expect(html).toContain('Post confirmed correction');
+  expect(html).toContain('Confirm cost fix');
   expect(m.submit).not.toHaveBeenCalled();
  });
  it('manager can review evidence but cannot see posting or reversal controls',async()=>{
   m.auth.mockResolvedValue({business:{id:'business',currency:'GHS',timezone:'Africa/Accra'},user:{role:'MANAGER'}});
   const html=renderToStaticMarkup(await Page(props));
   expect(html).toContain('Only an owner');
-  expect(html).not.toContain('Post confirmed correction');expect(html).not.toContain('Reverse correction');
+  expect(html).not.toContain('Confirm cost fix');expect(html).not.toContain('Reverse correction');
   expect(m.history).not.toHaveBeenCalled();
  });
  it('shows actual posted correction history even when preview is blocked',async()=>{
   m.preview.mockResolvedValue({product:'Rice',store:'Main',result:{status:'BLOCKED',reason:'Already confirmed'}});
   m.history.mockResolvedValue([{fingerprint:fp,cogsDelta:1000,remainingStockValue:4000,createdAt:new Date('2026-11-21'),reason:'Verified',userName:'Owner',reversed:false}]);
   const html=renderToStaticMarkup(await Page(props));
-  expect(html).toContain('Posted correction history');expect(html).toContain('Undo this cost fix');expect(html).not.toContain('Post confirmed correction');
+  expect(html).toContain('Posted correction history');expect(html).toContain('Undo this cost fix');expect(html).not.toContain('Confirm cost fix');
   expect(m.history).toHaveBeenCalledWith({businessId:'business',productId:'product',storeId:'store'});
  });
  it('retains report navigation but still loads the entire branch evidence',async()=>{
