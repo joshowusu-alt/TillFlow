@@ -9,6 +9,7 @@ import { buildEscPosReceipt, toHexString } from '@/lib/escpos';
 import { ensureQzConnection, printRawEscPos } from '@/lib/qz';
 import { reportPrintEvent } from '@/lib/print-telemetry';
 import { pendingMomoReceipt } from '@/lib/payments/pending-momo-receipt';
+import { supportsDesktopDirectPrint } from '@/lib/receipt-print-platform';
 
 type ReceiptClientProps = {
   business: {
@@ -83,7 +84,7 @@ export default function ReceiptClient({
   salesListHref = '/sales',
 }: ReceiptClientProps) {
   const [directStatus, setDirectStatus] = useState<'idle' | 'printing' | 'failed' | 'success'>('idle');
-  const [directError, setDirectError] = useState<string | null>(null);
+  const [desktopDirect, setDesktopDirect] = useState(false);
   const didPrintRef = useRef(false);
   const template = business.receiptTemplate ?? 'THERMAL_80';
   const printMode = business.printMode ?? 'DIRECT_ESC_POS';
@@ -121,10 +122,10 @@ export default function ReceiptClient({
       : 'grid-cols-[1.25rem_minmax(0,1fr)_3.75rem_4.25rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_4.75rem_5rem]';
 
   const handleDirectPrint = useCallback(async () => {
+    if (!supportsDesktopDirectPrint(navigator, window.matchMedia?.('(hover: none) and (pointer: coarse)').matches)) return;
     const startedAt = Date.now();
     try {
       setDirectStatus('printing');
-      setDirectError(null);
       await ensureQzConnection();
       const bytes = buildEscPosReceipt({
         business,
@@ -148,7 +149,6 @@ export default function ReceiptClient({
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Direct print failed.';
-      setDirectError(message);
       setDirectStatus('failed');
       reportPrintEvent({
         kind: 'receipt',
@@ -174,6 +174,8 @@ export default function ReceiptClient({
     if (typeof window === 'undefined') return;
     if (didPrintRef.current) return;
     didPrintRef.current = true;
+    const desktop = supportsDesktopDirectPrint(navigator, window.matchMedia?.('(hover: none) and (pointer: coarse)').matches);
+    setDesktopDirect(desktop);
 
     if (printMode === 'BROWSER_DIALOG') {
       window.print();
@@ -184,9 +186,8 @@ export default function ReceiptClient({
     }
 
     const isAutomationBrowser = navigator.webdriver || /HeadlessChrome/i.test(navigator.userAgent);
-    if (isAutomationBrowser) {
+    if (!desktop || isAutomationBrowser) {
       setDirectStatus('idle');
-      setDirectError(null);
       return;
     }
 
@@ -238,6 +239,7 @@ export default function ReceiptClient({
           ) : null}
           {mobileSaleActions && <div className="flex flex-wrap gap-2 lg:hidden">{mobileSaleActions}</div>}
           {deletePreview && <DeleteFoodSaleButton invoiceId={invoice.id} preview={deletePreview} />}
+          <div className={desktopDirect && directStatus === 'failed' ? 'flex flex-col gap-1 sm:basis-full' : 'contents'}>
           <button
             type="button"
             className="btn-secondary text-xs"
@@ -245,6 +247,10 @@ export default function ReceiptClient({
           >
             Print Receipt
           </button>
+          {desktopDirect && directStatus === 'failed' && (
+            <p role="status" className="text-xs text-slate-600">Direct print unavailable – tap Print Receipt. Set up direct printing in <a href="/settings#printing" className="underline font-semibold">Settings</a>.</p>
+          )}
+          </div>
           <button
             type="button"
             className="btn-ghost text-xs"
@@ -252,7 +258,7 @@ export default function ReceiptClient({
           >
             Open Drawer
           </button>
-          {printMode === 'DIRECT_ESC_POS' && directStatus === 'failed' ? (
+          {desktopDirect && printMode === 'DIRECT_ESC_POS' && directStatus === 'failed' ? (
             <button
               type="button"
               className="btn-secondary text-xs"
@@ -264,71 +270,41 @@ export default function ReceiptClient({
             </button>
           ) : null}
         </div>
-        <div className={`mt-3 text-xs ${isReturned ? 'text-amber-700' : 'text-emerald-700'}`}>
-          {printMode === 'DIRECT_ESC_POS' ? 'Direct print enabled' : 'Browser print enabled'}
-          {directStatus === 'printing' ? ' | Sending to printer...' : null}
-          {directStatus === 'success' ? ' | Printed' : null}
-          {directStatus === 'failed' ? ' | Direct print failed' : null}
-        </div>
       </div>
 
-      {directError ? (
-        <div className="no-print mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          {directError.includes('qz-tray') || directError.toLowerCase().includes('qz') ? (
-            <>
-              QZ Tray is not running on this computer. QZ Tray is the small desktop helper that
-              sends receipts straight to the printer without opening the browser print dialog. You
-              can still use <strong>Print Receipt</strong> above, or{' '}
-              <a
-                href="https://qz.io"
-                target="_blank"
-                rel="noopener"
-                className="underline font-medium"
-              >
-                install/start QZ Tray
-              </a>{' '}
-              for automatic direct printing.
-            </>
-          ) : (
-            <>
-              Print error - {directError}. Try <strong>Print Receipt</strong> instead.
-            </>
-          )}
-        </div>
-      ) : null}
-
+      <div className="receipt-content text-black font-normal">
       <div className="text-center">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.34em] text-black/45">
+        <div className="text-[10px] font-bold uppercase tracking-[0.34em]">
           Sales Receipt
         </div>
-        <h1 className="mt-2 text-xl font-display font-semibold">{business.name}</h1>
-        <p className="text-xs font-medium text-black/75">{store.name}</p>
+        <h1 className="mt-2 text-xl font-display font-bold">{business.name}</h1>
+        <p className="text-xs font-bold">{store.name}</p>
         {business.address ? <p className="text-xs">{business.address}</p> : null}
-        {business.phone ? <p className="text-xs">Tel: {business.phone}</p> : null}
-        {business.vatEnabled ? <p className="text-xs">VAT: {business.vatNumber ?? 'N/A'}</p> : null}
-        {business.tinNumber ? <p className="text-xs">TIN: {business.tinNumber}</p> : null}
+        {business.phone ? <p className="text-xs"><strong>Tel:</strong> {business.phone}</p> : null}
+        {business.vatEnabled ? <p className="text-xs"><strong>VAT:</strong> {business.vatNumber ?? 'N/A'}</p> : null}
+        {business.tinNumber ? <p className="text-xs"><strong>TIN:</strong> {business.tinNumber}</p> : null}
       </div>
 
       <div className="mt-5 rounded-xl border border-black/10 px-3 py-3">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-black/45">
+        <div className="text-[10px] font-bold uppercase tracking-[0.24em]">
           Receipt Details
         </div>
-        <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px] text-black/70">
-          <div className="font-semibold text-black/50">Receipt</div>
+        <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
+          <div className="font-bold">Receipt</div>
           <div className="text-right font-mono">{receiptReference}</div>
-          <div className="font-semibold text-black/50">Date</div>
+          <div className="font-bold">Date</div>
           <div className="text-right">{formatDateTime(new Date(invoice.createdAt))}</div>
-          <div className="font-semibold text-black/50">Cashier</div>
+          <div className="font-bold">Cashier</div>
           <div className="text-right">{cashier.name}</div>
           {customer ? (
             <>
-              <div className="font-semibold text-black/50">Customer</div>
+              <div className="font-bold">Customer</div>
               <div className="text-right">{customer.name}</div>
             </>
           ) : null}
           {customer?.phone ? (
             <>
-              <div className="font-semibold text-black/50">Phone</div>
+              <div className="font-bold">Phone</div>
               <div className="text-right">{customer.phone}</div>
             </>
           ) : null}
@@ -336,12 +312,12 @@ export default function ReceiptClient({
       </div>
 
       <div className="mt-5">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-black/45">
+        <div className="text-[10px] font-bold uppercase tracking-[0.24em]">
           Items
         </div>
         <div className="mt-2 overflow-hidden rounded-xl border border-black/10">
           <div
-            className={`grid ${itemGridClass} gap-x-2 border-b border-black/10 bg-black/[0.03] px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-black/55`}
+            className={`grid ${itemGridClass} gap-x-2 border-b border-black/10 bg-black/[0.03] px-2 py-2 text-[10px] font-bold uppercase tracking-[0.16em]`}
           >
             <div>#</div>
             <div>Description</div>
@@ -357,18 +333,18 @@ export default function ReceiptClient({
                   key={`${line.name}-${index}`}
                   className={`grid ${itemGridClass} gap-x-2 px-2 py-2 text-[11px]`}
                 >
-                  <div className="font-mono text-black/45">{index + 1}</div>
+                  <div className="font-mono">{index + 1}</div>
                   <div className="min-w-0">
-                    <div className="font-semibold leading-tight text-black">{line.name}</div>
-                    {line.detail ? <div className="mt-0.5 text-[10px] leading-tight text-black/55">{line.detail}</div> : null}
+                    <div className="font-bold leading-tight text-black">{line.name}</div>
+                    {line.detail ? <div className="mt-0.5 text-[10px] leading-tight">{line.detail}</div> : null}
                     {discountPence > 0 ? (
-                      <div className="mt-1 text-[10px] leading-tight text-emerald-700">
+                      <div className="mt-1 text-[10px] leading-tight font-bold">
                         Discount {formatMoney(discountPence, business.currency)}
                       </div>
                     ) : null}
                   </div>
-                  <div className="text-right leading-tight text-black/75">{line.qtyLabel}</div>
-                  <div className="text-right font-mono font-semibold text-black">
+                  <div className="text-right leading-tight">{line.qtyLabel}</div>
+                  <div className="text-right font-mono font-bold text-black">
                     {formatMoney(line.lineTotalPence, business.currency)}
                   </div>
                 </div>
@@ -379,33 +355,33 @@ export default function ReceiptClient({
       </div>
 
       <div className="mt-5 rounded-xl border border-black/10 px-3 py-3 text-xs">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-black/45">
+        <div className="text-[10px] font-bold uppercase tracking-[0.24em]">
           Totals
         </div>
         <div className="mt-2 space-y-1">
           <div className="flex justify-between">
-            <span>Net subtotal</span>
+            <span className="font-bold">Net subtotal</span>
             <span>{formatMoney(invoice.subtotalPence, business.currency)}</span>
           </div>
           {lineDiscountTotal > 0 ? (
-            <div className="flex justify-between text-emerald-700">
-              <span>Discounts applied (included)</span>
+            <div className="flex justify-between">
+              <span className="font-bold">Discounts applied (included)</span>
               <span>{formatMoney(lineDiscountTotal, business.currency)}</span>
             </div>
           ) : null}
           {invoice.discountPence && invoice.discountPence > 0 ? (
-            <div className="flex justify-between text-emerald-700">
-              <span>Order discount (included)</span>
+            <div className="flex justify-between">
+              <span className="font-bold">Order discount (included)</span>
               <span>{formatMoney(invoice.discountPence, business.currency)}</span>
             </div>
           ) : null}
           {business.vatEnabled ? (
             <div className="flex justify-between">
-              <span>VAT</span>
+              <span className="font-bold">VAT</span>
               <span>{formatMoney(invoice.vatPence, business.currency)}</span>
             </div>
           ) : null}
-          <div className="flex justify-between font-semibold">
+          <div className="flex justify-between font-bold">
             <span>Total</span>
             <span>{formatMoney(invoice.totalPence, business.currency)}</span>
           </div>
@@ -413,27 +389,27 @@ export default function ReceiptClient({
       </div>
 
       <div className="mt-4 rounded-xl border border-black/10 px-3 py-3 text-xs">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-black/45">
+        <div className="text-[10px] font-bold uppercase tracking-[0.24em]">
           Payments
         </div>
         <div className="mt-2 space-y-1">
           {cashPaid > 0 ? (
             <div className="flex justify-between">
-              <span>Paid (cash)</span>
+              <span className="font-bold">Paid (cash)</span>
               <span>{formatMoney(cashPaid, business.currency)}</span>
             </div>
           ) : null}
           {cardPaid > 0 ? (
             <>
               <div className="flex justify-between">
-                <span>Paid (card)</span>
+                <span className="font-bold">Paid (card)</span>
                 <span>{formatMoney(cardPaid, business.currency)}</span>
               </div>
               {payments
                 .filter((payment) => payment.method === 'CARD' && payment.amountPence > 0 && payment.reference)
                 .map((payment, index) => (
-                  <div key={`card-ref-${index}`} className="text-[11px] text-black/60">
-                    Ref: {payment.reference}
+                  <div key={`card-ref-${index}`} className="text-[11px]">
+                    <strong>Ref:</strong> {payment.reference}
                   </div>
                 ))}
             </>
@@ -441,14 +417,14 @@ export default function ReceiptClient({
           {transferPaid > 0 ? (
             <>
               <div className="flex justify-between">
-                <span>Paid (Bank Transfer)</span>
+                <span className="font-bold">Paid (Bank Transfer)</span>
                 <span>{formatMoney(transferPaid, business.currency)}</span>
               </div>
               {payments
                 .filter((payment) => payment.method === 'TRANSFER' && payment.amountPence > 0 && payment.reference)
                 .map((payment, index) => (
-                  <div key={`transfer-ref-${index}`} className="text-[11px] text-black/60">
-                    Ref: {payment.reference}
+                  <div key={`transfer-ref-${index}`} className="text-[11px]">
+                    <strong>Ref:</strong> {payment.reference}
                   </div>
                 ))}
             </>
@@ -457,12 +433,12 @@ export default function ReceiptClient({
             <>
               {momoConfirmedPaid > 0 ? (
                 <div className="flex justify-between">
-                  <span>Paid (MoMo)</span>
+                  <span className="font-bold">Paid (MoMo)</span>
                   <span>{formatMoney(momoConfirmedPaid, business.currency)}</span>
                 </div>
               ) : null}
               {momoPending.label ? (
-                <div className="flex justify-between font-medium text-amber-900" data-testid="momo-confirmation-pending">
+                <div className="flex justify-between font-bold" data-testid="momo-confirmation-pending">
                   <span>{momoPending.label}</span>
                   <span>{formatMoney(momoPending.pendingMomoPence, business.currency)}</span>
                 </div>
@@ -470,10 +446,10 @@ export default function ReceiptClient({
               {momoPayments.map((payment, index) => (
                 <div
                   key={`${payment.reference ?? 'momo'}-${index}`}
-                  className="text-[11px] text-black/60"
+                  className="text-[11px]"
                 >
                   {(payment.provider ?? payment.network ?? 'MoMo').toUpperCase()} |{' '}
-                  {payment.payerMsisdn ?? 'payer'} | Ref: {payment.reference ?? 'pending'}
+                  {payment.payerMsisdn ?? 'payer'} | <strong>Ref:</strong> {payment.reference ?? 'pending'}
                   {payment.receivedAt
                     ? ` | ${new Date(payment.receivedAt).toLocaleString('en-GB')}`
                     : ''}
@@ -485,7 +461,7 @@ export default function ReceiptClient({
       </div>
 
       {invoice.changeDuePence != null && invoice.changeDuePence > 0 ? (
-        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold">
           <div className="flex justify-between">
             <span>Change Due</span>
             <span>{formatMoney(invoice.changeDuePence, business.currency)}</span>
@@ -495,9 +471,9 @@ export default function ReceiptClient({
 
       {business.momoNumber && momoPaid > 0 ? (
         <div className="mt-3 rounded border border-yellow-300 bg-yellow-50 p-2 text-center text-xs">
-          <div className="font-semibold text-yellow-800">Mobile Money Payment</div>
-          <div className="text-yellow-700">
-            {business.momoProvider ?? 'MoMo'}: {business.momoNumber}
+          <div className="font-bold">Mobile Money Payment</div>
+          <div>
+            <strong>{business.momoProvider ?? 'MoMo'}:</strong> {business.momoNumber}
           </div>
         </div>
       ) : null}
@@ -530,7 +506,8 @@ export default function ReceiptClient({
         </div>
       ) : null}
 
-      <div className="mt-6 text-center text-xs text-black/50">Thank you for shopping with us.</div>
+      <div className="mt-6 text-center text-xs">Thank you for shopping with us.</div>
+      </div>
     </div>
   );
 }

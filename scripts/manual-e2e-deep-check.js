@@ -42,7 +42,7 @@ async function screenshotStep(page, name) {
 }
 
 async function fillVisiblePaymentForm(page, amount) {
-  const record = page.getByRole('button', { name: /Record payment/i }).first();
+  const record = page.getByRole('button', { name: /^Record (?:customer )?payment$/i }).first();
   await record.waitFor({ state: 'visible', timeout: 20000 });
   const form = record.locator('xpath=ancestor::form[1]');
   if ((await form.count()) === 0) {
@@ -50,7 +50,7 @@ async function fillVisiblePaymentForm(page, amount) {
     const dialogForm = page.locator('form').filter({ has: page.locator('input[name="amount"]') }).last();
     await dialogForm.locator('input[name="amount"]').waitFor({ state: 'visible', timeout: 20000 });
     await dialogForm.locator('input[name="amount"]').fill(amount);
-    await dialogForm.getByRole('button', { name: /Record payment/i }).click();
+    await dialogForm.getByRole('button', { name: /^Record (?:customer )?payment$/i }).click();
     return;
   }
   await form.locator('input[name="amount"]').fill(amount);

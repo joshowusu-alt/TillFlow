@@ -202,7 +202,7 @@ export default async function SettingsPage(props: { searchParams?: Promise<{ err
               <option value="BROWSER_DIALOG">Browser dialog</option>
             </select>
             <div className="mt-1 text-xs text-black/50">
-              Direct printing uses QZ Tray, a small desktop helper that sends receipts straight to the printer from a till computer.
+              Direct printing uses QZ Tray, a small desktop helper that sends receipts straight to the printer without opening the browser print dialog. Install and start it on your till computer. Phones and tablets use Print Receipt instead. If direct printing is unavailable, use Print Receipt.
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               <a

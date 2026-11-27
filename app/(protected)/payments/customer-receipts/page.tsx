@@ -278,7 +278,7 @@ export default async function CustomerReceiptsPage(
         Enter the amount received. Do not exceed the unpaid balance.
       </div>
       <div className="md:col-span-2">
-        <SubmitButton className="btn-primary w-full text-xs" loadingText="Recording…">Record payment</SubmitButton>
+        <SubmitButton className="btn-primary w-full text-xs" loadingText="Recording…">Record customer payment</SubmitButton>
       </div>
     </form>
   );
@@ -286,7 +286,7 @@ export default async function CustomerReceiptsPage(
   return (
     <div className="space-y-6">
       <ReportsReturnPath path={returnPathFor('/payments/customer-receipts')!} storeId={null} />
-      <PageHeader title="Record customer payment" subtitle="Take a payment from a customer and reduce what they owe." />
+      <PageHeader title="Customer balances" subtitle="Take a payment from a customer and reduce what they owe." />
       <EffectiveStoreBanner
         storeName={store.name}
         actionLabel={`Customer collections will be recorded in ${store.name}.`}

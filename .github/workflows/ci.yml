@@ -419,6 +419,44 @@ jobs:
           name: pos-shift-banner-mobile
           path: tmp/pos-shift-banner-mobile/*.png
 
+  receipt-print-visual-evidence:
+    name: receipt-print-visual-evidence
+    if: github.event_name == 'pull_request' && github.head_ref == 'remediation/receipt-print-clarity'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Compare actual base and candidate receipt templates
+        env:
+          FIXTURE_RECEIPT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          npx vite build --config tests/fixtures/receipt-print/vite.config.ts --outDir tmp/receipt-before
+          env -u FIXTURE_RECEIPT_BASE_SHA npx vite build --config tests/fixtures/receipt-print/vite.config.ts --outDir tmp/receipt-after
+          npx vite preview --config tests/fixtures/receipt-print/vite.config.ts --outDir tmp/receipt-before --host 127.0.0.1 --port 4177 > /tmp/receipt-before.log 2>&1 &
+          npx vite preview --config tests/fixtures/receipt-print/vite.config.ts --outDir tmp/receipt-after --host 127.0.0.1 --port 4178 > /tmp/receipt-after.log 2>&1 &
+          for port in 4177 4178; do
+            for i in {1..30}; do
+              if curl -fsS "http://127.0.0.1:$port/tests/fixtures/receipt-print/index.html" >/dev/null; then break; fi
+              sleep 1
+            done
+            curl -fsS "http://127.0.0.1:$port/tests/fixtures/receipt-print/index.html" >/dev/null
+          done
+          node scripts/receipt-print-visual-evidence.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: receipt-print-visual-evidence
+          path: tmp/receipt-print-visual/
+
   owner-home-visual-evidence:
     name: owner-home-visual-evidence
     if: github.event_name == 'pull_request' && (github.head_ref == 'remediation/owner-home-simplify' || github.head_ref == 'remediation/owner-home-brand-polish')

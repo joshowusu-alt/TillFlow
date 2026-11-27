@@ -683,6 +683,14 @@ html:has(input:focus, textarea:focus, select:focus) .safe-floating-bottom {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  .receipt .receipt-content,
+  .receipt .receipt-content * {
+    color: #000 !important;
+    -webkit-text-fill-color: #000 !important;
+    opacity: 1 !important;
+    text-shadow: none !important;
+    background-color: transparent !important;
+  }
   .receipt-thermal { max-width: 320px; padding: 0; }
   .receipt-a4 { max-width: 100%; padding: 0; }
 }

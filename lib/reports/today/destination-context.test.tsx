@@ -81,9 +81,11 @@ describe('Stage 3A destination context', () => {
     const markup = chrome();
     expect(markup).toContain('aria-label="Back to Find reports, Reports"');
     expect(markup).toContain(`href="${expectedHref}"`);
+    expect(markup).toContain('>← Find reports</span>');
     expect(markup).not.toContain('Back to More reports');
     const page = readFileSync(join(root, `app/(protected)${route}/page.tsx`), 'utf8');
     expect(page).toContain(`<ReportsReturnPath path={returnPathFor('${route}')!}`);
+    expect(page).toContain(`title="${title}"`);
   });
 
   it.each(reportReturnPaths())('$href uses its own title, one landmark, and the section return', (path) => {
