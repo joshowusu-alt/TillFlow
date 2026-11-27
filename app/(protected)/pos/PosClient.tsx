@@ -87,6 +87,8 @@ import CustomerCreditWarning from './components/CustomerCreditWarning';
 import PosCheckoutPanel from './components/PosCheckoutPanel';
 import PosMobileCartBar from './components/PosMobileCartBar';
 import PosMobileCartCheckoutSheet from './components/PosMobileCartCheckoutSheet';
+import PosWelcomeShelf, { PosWelcomeShelfSkeleton } from '@/components/pos/PosWelcomeShelf';
+import type { PosOpenShift } from '@/components/pos/PosProgressiveShell';
 
 function formatRelativeTime(timestamp: string) {
   const diffMs = Date.now() - new Date(timestamp).getTime();
@@ -125,8 +127,9 @@ type PosClientProps = {
   store: { id: string; name: string };
   tills: { id: string; name: string }[];
   openShiftTillIds: string[];
-  openShifts?: { tillId: string; shiftId: string }[];
+  openShifts?: PosOpenShift[];
   cashierUserId?: string;
+  welcome?: { firstName: string; userKey: string };
   products: ProductDto[];
   posCatalogueMode?: PosCatalogueMode;
   catalogueSize?: number;
@@ -173,6 +176,7 @@ export default function PosClient({
   openShiftTillIds: initialOpenTillIds,
   openShifts: initialOpenShifts,
   cashierUserId,
+  welcome,
   products,
   posCatalogueMode,
   catalogueSize,
@@ -184,7 +188,7 @@ export default function PosClient({
   checkoutUnavailable = false,
 }: PosClientProps) {
   const online = useNetworkStatus();
-  const [openedShift, setOpenedShift] = useState<{ tillId: string; shiftId: string }>();
+  const [openedShift, setOpenedShift] = useState<PosOpenShift>();
   const openShiftTillIds = openedShift ? [...new Set([...initialOpenTillIds, openedShift.tillId])] : initialOpenTillIds;
   const openShifts = useMemo(() => openedShift
     ? [...(initialOpenShifts ?? []).filter(shift => shift.tillId !== openedShift.tillId), openedShift]
@@ -1525,7 +1529,8 @@ export default function PosClient({
     !checkoutUnavailable &&
     tillSelected &&
     openShiftTillIds.includes(tillId);
-  const boundShiftId = openShifts?.find((shift) => shift.tillId === tillId)?.shiftId ?? '';
+  const selectedOpenShift = openShifts?.find((shift) => shift.tillId === tillId);
+  const boundShiftId = selectedOpenShift?.shiftId ?? '';
   const offlineShiftReady = online || Boolean(boundShiftId && cashierUserId);
   // An earlier uncertain online submission must be retried online under its
   // original identity, not converted to a new offline capture.
@@ -1637,7 +1642,7 @@ export default function PosClient({
         setOpeningError(result.error);
         return;
       }
-      setOpenedShift({ tillId: result.data.tillId, shiftId: result.data.id });
+      setOpenedShift({ tillId: result.data.tillId, shiftId: result.data.id, userId: cashierUserId });
       setTillId(result.data.tillId);
       setOpeningTill(false);
     } catch {
@@ -1753,6 +1758,18 @@ export default function PosClient({
   }, [cartFilled, checkoutExtrasReady, phoneCheckoutSheetOpen]);
 
   return (
+    <>
+    {welcome ? checkoutLoading ? <PosWelcomeShelfSkeleton /> : <PosWelcomeShelf
+      firstName={welcome.firstName}
+      storeName={store.name}
+      userKey={welcome.userKey}
+      tillName={selectedTillName}
+      tillOpen={tillReady}
+      shiftOwnerName={selectedOpenShift?.userName?.trim().split(/\s+/)[0]}
+      ownShift={Boolean(cashierUserId && selectedOpenShift?.userId === cashierUserId)}
+      availability={checkoutExtrasReady && !checkoutUnavailable ? 'ready' : 'unavailable'}
+      online={online}
+    /> : null}
     <div
       className={`grid gap-4 lg:pb-0 ${
         cartFilled
@@ -2621,7 +2638,7 @@ export default function PosClient({
                     className={`mt-1 text-xs ${tillReady ? 'hidden md:block text-emerald-700' : 'sr-only'}`}
                     data-checkout-state={tillReady ? 'ready' : 'closed'}
                   >
-                    {tillReady ? 'Till is open' : 'Till is not open'}
+                    {tillReady ? 'Till is open' : tillSelected ? 'Till is not open' : 'Choose an open till'}
                   </div>
                 )}
               </div>
@@ -3024,5 +3041,6 @@ export default function PosClient({
 
       <ClearCartDialog open={showClearCart} count={cartDetails.length} total={totalDue} currency={business.currency} onCancel={() => setShowClearCart(false)} onConfirm={confirmClearCart} />
     </div>
+    </>
   );
 }

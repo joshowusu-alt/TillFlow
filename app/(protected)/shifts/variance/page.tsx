@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import { formatDateTime, formatMoney } from '@/lib/format';
-import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
+import { displayDocumentNumber, displayShiftPresentationNumber } from '@/lib/reliability/walkthrough-contracts';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { withStoreQuery } from '@/lib/reliability/selected-store';
 import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
@@ -47,6 +47,7 @@ export default async function CashVarianceListPage({ searchParams }: { searchPar
       shift: {
         select: {
           id: true,
+          shiftNumber: true,
           closureNumber: true,
           actualCashPence: true,
           expectedCashPence: true,
@@ -101,8 +102,9 @@ export default async function CashVarianceListPage({ searchParams }: { searchPar
                       <Link href={withStoreQuery(`/shifts/variance/${row.id}`, store.id)} className="font-semibold text-accent underline">
                         {displayDocumentNumber('cash_variance', row.transactionNumber, row.id)}
                       </Link>
+                      <div className="text-[11px] text-black/50">Shift: {displayShiftPresentationNumber(row.shift)}</div>
                       {row.shift.closureNumber ? (
-                        <div className="text-[11px] text-black/40">{row.shift.closureNumber}</div>
+                        <div className="text-[11px] text-black/40">Closure reference: {row.shift.closureNumber}</div>
                       ) : null}
                     </td>
                     <td className="px-3 py-2">{row.shift.till.name}</td>

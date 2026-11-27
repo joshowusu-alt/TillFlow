@@ -6,7 +6,6 @@ import {
   PosDeferredLoadingHint,
   PosProgressiveShell,
 } from '@/components/pos/PosProgressiveShell';
-import { PosWelcomeShelfSkeleton } from '@/components/pos/PosWelcomeShelf';
 import PosDeferredSection from './PosDeferredSection';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import {
@@ -162,25 +161,20 @@ export default async function PosBoard({
           }}
           store={{ id: baseStore.id, name: baseStore.name }}
           cashierUserId={user.id}
+          welcomeFirstName={(user.name ?? '').trim().split(/\s+/)[0] || user.email.split('@')[0] || 'there'}
           products={productDtos}
           posCatalogueMode={catalogueMode}
           catalogueSize={productCount}
         >
           <Suspense
             fallback={
-              <>
-                <PosWelcomeShelfSkeleton />
-                <PosDeferredLoadingHint />
-              </>
+              <PosDeferredLoadingHint />
             }
           >
             <PosDeferredSection
               businessId={business.id}
               storeId={baseStore.id}
-              storeName={baseStore.name}
               userId={user.id}
-              userName={user.name}
-              userEmail={user.email}
               requestedCustomerId={requestedCustomerId}
             />
           </Suspense>

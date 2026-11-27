@@ -1,12 +1,17 @@
 'use client';
 
 import { useLayoutEffect, useState } from 'react';
+import Link from 'next/link';
 
 type PosWelcomeShelfProps = {
   firstName: string;
   storeName: string;
-  hasOpenShift: boolean;
-  openTillName: string | null;
+  tillName: string | null;
+  tillOpen: boolean;
+  shiftOwnerName?: string | null;
+  ownShift?: boolean;
+  availability: 'ready' | 'unavailable';
+  online: boolean;
   userKey: string;
 };
 
@@ -44,7 +49,7 @@ export function PosWelcomeShelfSkeleton() {
   );
 }
 
-export default function PosWelcomeShelf({ firstName, storeName, hasOpenShift, openTillName, userKey }: PosWelcomeShelfProps) {
+export default function PosWelcomeShelf({ firstName, storeName, tillName, tillOpen, shiftOwnerName, ownShift, availability, online, userKey }: PosWelcomeShelfProps) {
   const [visible, setVisible] = useState(true);
   const [greeting, setGreeting] = useState('Welcome back');
 
@@ -80,12 +85,11 @@ export default function PosWelcomeShelf({ firstName, storeName, hasOpenShift, op
         <p className="mt-0.5 text-sm font-display font-bold text-ink sm:mt-1 sm:text-lg">
           {greeting}, {firstName}
         </p>
-        <p className="mt-0.5 text-[11px] leading-snug text-slate-600 sm:text-sm sm:leading-relaxed">
-          {hasOpenShift
-            ? openTillName
-              ? `Your shift is open at ${openTillName}. Ready when you are.`
-              : 'A shift is open at this store. You can start ringing sales.'
-            : 'No shift is open yet — open a till from the shift menu before your first sale.'}
+        <p role="status" className="mt-0.5 text-[11px] leading-snug text-slate-600 sm:text-sm sm:leading-relaxed">
+          {availability === 'unavailable' ? 'Till information is unavailable. Reconnect or refresh to check.' :
+            !tillName ? 'Choose an open till to start selling.' :
+            tillOpen ? <>{tillName} is open{ownShift ? ' · your shift' : shiftOwnerName ? ` · ${shiftOwnerName}'s shift` : ''}</> :
+            <>{tillName} is closed — {online ? <>open it to start selling. <Link href="/shifts" className="inline-flex min-h-11 items-center font-semibold underline">Open till →</Link></> : 'reconnect to open it before selling.'}</>}
         </p>
       </div>
       <button

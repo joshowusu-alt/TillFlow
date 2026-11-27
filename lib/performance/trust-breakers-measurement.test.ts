@@ -63,7 +63,9 @@ describe('Trust Breakers T1: cold boot and POS measurement', () => {
     expect(deferred).toContain('page.pos.units-load');
     expect(deferred).toContain('page.pos.categories-load');
     expect(deferred).toContain('page.pos.customers-load');
-    expect(deferred).toContain('page.pos.open-shift-load');
+    // The welcome banner uses the same measured shift query as checkout.
+    expect(deferred).not.toContain('page.pos.open-shift-load');
+    expect(deferred).toContain('user: { select: { name: true } }');
 
     const initialLoadBlock = board.slice(
       board.indexOf('page.pos.initial-data-load'),

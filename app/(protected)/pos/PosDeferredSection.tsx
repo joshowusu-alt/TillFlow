@@ -1,7 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { listSelectableUnits } from '@/lib/units/list-selectable-units';
 import { unstable_cache } from 'next/cache';
-import PosWelcomeShelf from '@/components/pos/PosWelcomeShelf';
 import { PosDeferredApply, type PosDeferredPayload } from '@/components/pos/PosProgressiveShell';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS, appLog } from '@/lib/observability';
 import HomeSectionErrorBoundary from '@/components/owner-home/HomeSectionErrorBoundary';
@@ -63,10 +62,10 @@ function getCachedShifts(businessId: string, storeId: string) {
   return unstable_cache(
     () =>
       prisma.shift.findMany({
-        where: { till: { storeId }, status: 'OPEN' },
-        select: { id: true, tillId: true },
+        where: { till: { storeId, store: { businessId } }, status: 'OPEN' },
+        select: { id: true, tillId: true, userId: true, user: { select: { name: true } } },
       }),
-    ['pos-shifts', businessId, storeId],
+    ['pos-shifts-with-owner', businessId, storeId],
     { revalidate: 10, tags: [posShiftsTag(businessId, storeId)] },
   )();
 }
@@ -74,10 +73,7 @@ function getCachedShifts(businessId: string, storeId: string) {
 type PosDeferredSectionProps = {
   businessId: string;
   storeId: string;
-  storeName: string;
   userId: string;
-  userName: string | null;
-  userEmail: string;
   requestedCustomerId?: string;
 };
 
@@ -108,10 +104,7 @@ async function loadSettled<T>(label: string, meta: Record<string, string>, run: 
 export default async function PosDeferredSection({
   businessId,
   storeId,
-  storeName,
   userId,
-  userName,
-  userEmail,
   requestedCustomerId,
 }: PosDeferredSectionProps) {
   const meta = { businessId, storeId, route: '/pos' };
@@ -119,7 +112,7 @@ export default async function PosDeferredSection({
   return measureServerOperation(
     'page.pos.deferred-data-load',
     async () => {
-      const [tills, openShifts, units, categories, customers, requestedCustomer, userOpenShift] =
+      const [tills, openShifts, units, categories, customers, requestedCustomer] =
         await Promise.all([
           loadSettled('page.pos.tills-load', meta, () => getCachedTills(businessId, storeId)),
           loadSettled('page.pos.shifts-load', meta, () => getCachedShifts(businessId, storeId)),
@@ -139,25 +132,6 @@ export default async function PosDeferredSection({
                 }),
               )
             : Promise.resolve(null),
-          measureServerOperation(
-            'page.pos.open-shift-load',
-            () =>
-              prisma.shift.findFirst({
-                where: { userId, till: { storeId }, closedAt: null },
-                select: { till: { select: { name: true } } },
-              }),
-            { ...meta, cacheState: 'uncached-page-load' },
-            { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'route' },
-          ).catch((error) => {
-            appLog('error', 'pos_deferred_load_failed', {
-              businessId,
-              storeId,
-              stage: 'page.pos.open-shift-load',
-              status: 'unavailable',
-            });
-            void error;
-            return null;
-          }),
         ]);
 
       const customersUnavailable = customers === null;
@@ -171,7 +145,7 @@ export default async function PosDeferredSection({
       const payload: PosDeferredPayload = {
         tills: (tills ?? []).map((till) => ({ id: till.id, name: till.name })),
         openShiftTillIds: (openShifts ?? []).map((shift) => shift.tillId),
-        openShifts: (openShifts ?? []).map((shift) => ({ tillId: shift.tillId, shiftId: shift.id })),
+        openShifts: (openShifts ?? []).map((shift) => ({ tillId: shift.tillId, shiftId: shift.id, userId: shift.userId, userName: shift.user.name })),
         cashierUserId: userId,
         customers: withRequested.map((customer) => ({
           id: customer.id,
@@ -188,9 +162,6 @@ export default async function PosDeferredSection({
         customersUnavailable,
         checkoutUnavailable,
       };
-
-      const firstName =
-        (userName ?? '').trim().split(/\s+/)[0] || userEmail.split('@')[0] || 'there';
 
       return (
         <HomeSectionErrorBoundary
@@ -214,13 +185,6 @@ export default async function PosDeferredSection({
             </div>
           }
         >
-          <PosWelcomeShelf
-            firstName={firstName}
-            storeName={storeName}
-            hasOpenShift={Boolean(userOpenShift)}
-            openTillName={userOpenShift?.till?.name ?? null}
-            userKey={userId}
-          />
           <PosDeferredApply payload={payload} />
         </HomeSectionErrorBoundary>
       );

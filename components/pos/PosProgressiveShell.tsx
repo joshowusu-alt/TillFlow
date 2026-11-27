@@ -15,10 +15,12 @@ import type { PosCatalogueMode, SellableProductDto } from '@/lib/pos/sellable-dt
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getPosTillStorageKey } from '@/lib/business-scope';
 
+export type PosOpenShift = { tillId: string; shiftId: string; userId?: string; userName?: string | null };
+
 export type PosDeferredPayload = {
   tills: { id: string; name: string }[];
   openShiftTillIds: string[];
-  openShifts?: { tillId: string; shiftId: string }[];
+  openShifts?: PosOpenShift[];
   cashierUserId?: string;
   customers: {
     id: string;
@@ -63,6 +65,7 @@ type PosProgressiveShellProps = {
   };
   store: { id: string; name: string };
   cashierUserId?: string;
+  welcomeFirstName?: string;
   products: SellableProductDto[];
   posCatalogueMode?: PosCatalogueMode;
   catalogueSize?: number;
@@ -73,6 +76,7 @@ export function PosProgressiveShell({
   business,
   store,
   cashierUserId,
+  welcomeFirstName,
   products,
   posCatalogueMode,
   catalogueSize,
@@ -131,7 +135,7 @@ export function PosProgressiveShell({
 
   return (
     <PosDeferredContext.Provider value={value}>
-      {/* Welcome / deferred loading hint above the till so mobile does not bury them under checkout padding. */}
+      {/* Deferred loading hint above the till. Welcome follows PosClient's selected till. */}
       {children}
       <PosClient
         business={business}
@@ -143,6 +147,7 @@ export function PosProgressiveShell({
         openShiftTillIds={extras.openShiftTillIds}
         openShifts={extras.openShifts}
         cashierUserId={extras.cashierUserId}
+        welcome={welcomeFirstName && cashierUserId ? { firstName: welcomeFirstName, userKey: cashierUserId } : undefined}
         customers={extras.customers}
         units={extras.units}
         categories={extras.categories}

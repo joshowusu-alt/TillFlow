@@ -67,12 +67,20 @@ describe('walkthrough contracts', () => {
     expect(
       displayShiftPresentationNumber({
         shiftNumber: 'SHF-000123',
-        closureNumber: 'SHC-000123',
+        closureNumber: 'SHC-000121',
         status: 'CLOSED',
       }),
-    ).toBe('SHC-000123');
+    ).toBe('SHF-000123');
     expect(displayShiftPresentationNumber({ status: 'OPEN', shiftNumber: null })).toBe('Unnumbered shift');
-    expect(displayShiftPresentationNumber({ status: 'CLOSED', closureNumber: null })).toBe('Unnumbered close');
+    expect(displayShiftPresentationNumber({ status: 'CLOSED', closureNumber: null })).toBe('Unnumbered shift');
+    expect(displayShiftPresentationNumber({ status: 'CLOSED', closureNumber: 'SHC-000123' })).toBe('Unnumbered shift');
     expect(displayShiftPresentationNumber({ status: 'OPEN', shiftNumber: 'clxyz' })).not.toMatch(/••••/);
+  });
+  it('does not confuse an unrelated closure number with another shift identity',()=>{
+    const open=displayShiftPresentationNumber({shiftNumber:'SHF-000372',status:'OPEN'});
+    const before=displayShiftPresentationNumber({shiftNumber:'SHF-000374',status:'OPEN'});
+    const after=displayShiftPresentationNumber({shiftNumber:'SHF-000374',closureNumber:'SHC-000372',status:'CLOSED'});
+    expect(after).toBe(before);
+    expect(after).not.toBe(open);
   });
 });

@@ -49,6 +49,18 @@ describe('ShiftClient', () => {
     },
   };
 
+  it('keeps the close dialog shift number in Recent Shifts even when closure references differ', () => {
+    const props = { tills: [{id:'till-1',name:'Till 1'}], currency:'GHS', userRole:'CASHIER' as const };
+    const { rerender } = render(<ShiftClient {...props} openShifts={[{...baseOpenShift,shiftNumber:'SHF-000374'}]} recentShifts={[]}/>);
+    fireEvent.click(screen.getByRole('button',{name:'Close Shift'}));
+    expect(screen.getByText('SHF-000374')).toBeInTheDocument();
+    const recent = {id:'shift-1',tillName:'Till 1',userName:'Cashier',openedAt:'2026-06-17T08:00:00Z',closedAt:'2026-06-17T09:00:00Z',status:'CLOSED' as const,salesCount:2,openingCashPence:0,expectedCashPence:10000,actualCashPence:10000,variance:0,cardTotalPence:0,transferTotalPence:0,momoTotalPence:0,shiftNumber:'SHF-000374',closureNumber:'SHC-000372'};
+    rerender(<ShiftClient key="closed" {...props} openShifts={[]} recentShifts={[recent,{...recent,id:'other',status:'OPEN',closedAt:null,shiftNumber:'SHF-000372',closureNumber:null}]}/>);
+    expect(screen.getByText('SHF-000374')).toBeInTheDocument();
+    expect(screen.getByText('SHF-000372')).toBeInTheDocument();
+    expect(screen.queryByText('SHC-000372')).not.toBeInTheDocument();
+  });
+
   it('keeps the close modal open and shows owner override errors when the action fails', async () => {
     closeShiftOwnerOverrideActionMock.mockResolvedValue({ success: false, error: 'Incorrect password.' });
 

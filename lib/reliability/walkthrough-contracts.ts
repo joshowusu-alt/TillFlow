@@ -147,17 +147,16 @@ export function displayDocumentNumber(
   return transactionNumber?.trim() || fallbackDocumentNumber(sequenceName, id);
 }
 
-/** Assigned SHF/SHC only. Never masks or exposes a database id. */
+/** A shift keeps its assigned SHF identity for life. SHC is a separate
+ * closure-document reference, never a substitute shift number. */
 export function displayShiftPresentationNumber(input: {
   shiftNumber?: string | null;
   closureNumber?: string | null;
   status?: string | null;
 }): string {
-  const closure = input.closureNumber?.trim() ?? '';
   const shift = input.shiftNumber?.trim() ?? '';
-  if (input.status !== 'OPEN' && closure) return closure;
   if (shift) return shift;
-  return input.status === 'OPEN' ? 'Unnumbered shift' : 'Unnumbered close';
+  return 'Unnumbered shift';
 }
 
 export const CREDIT_PURCHASE_STATUSES = ['UNPAID', 'PART_PAID'] as const;

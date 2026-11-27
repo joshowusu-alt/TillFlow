@@ -378,6 +378,36 @@ jobs:
           name: quick-cash-mobile-before-after
           path: tmp/quick-cash-mobile-evidence/*.png
 
+  pos-shift-banner-mobile:
+    name: pos-shift-banner-mobile
+    if: github.event_name == 'pull_request' && github.head_ref == 'remediation/pos-shift-banner'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise actual POS at both phone widths
+        run: |
+          set -euo pipefail
+          npx vite build --config tests/fixtures/offline-mobile/vite.config.ts --outDir tmp/pos-shift-banner
+          npx vite preview --config tests/fixtures/offline-mobile/vite.config.ts --outDir tmp/pos-shift-banner --host 127.0.0.1 --port 4177 > /tmp/pos-shift-banner.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS "http://127.0.0.1:4177/tests/fixtures/offline-mobile/index.html" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://127.0.0.1:4177/tests/fixtures/offline-mobile/index.html" >/dev/null
+          node scripts/pos-shift-banner-mobile-evidence.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pos-shift-banner-mobile
+          path: tmp/pos-shift-banner-mobile/*.png
+
   report-owner-visual-evidence:
     name: report-owner-visual-evidence
     if: github.event_name == 'pull_request' && github.head_ref == 'remediation/simplify-income-statement-movement'
