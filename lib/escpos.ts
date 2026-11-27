@@ -161,9 +161,9 @@ export function buildEscPosReceipt(data: ReceiptData) {
 
   appendCmd(buffer, [0x1b, 0x40]);
   appendCmd(buffer, [0x1b, 0x61, 0x01]);
+  // Native monochrome text after initialization; keep emphasis on for every line.
   appendCmd(buffer, [0x1b, 0x45, 0x01]);
   appendLine(buffer, sanitize(data.business.name));
-  appendCmd(buffer, [0x1b, 0x45, 0x00]);
   appendLine(buffer, sanitize(data.store.name));
   if (data.business.address) appendLine(buffer, sanitize(data.business.address));
   if (data.business.phone) appendLine(buffer, `Tel: ${sanitize(data.business.phone)}`);
@@ -234,9 +234,7 @@ export function buildEscPosReceipt(data: ReceiptData) {
   if (data.business.vatEnabled) {
     appendLine(buffer, formatLine('VAT', formatMoney(data.invoice.vatPence, data.business.currency), width));
   }
-  appendCmd(buffer, [0x1b, 0x45, 0x01]);
   appendLine(buffer, formatLine('TOTAL', formatMoney(data.invoice.totalPence, data.business.currency), width));
-  appendCmd(buffer, [0x1b, 0x45, 0x00]);
 
   appendLine(buffer, '-'.repeat(width));
   const cashPaid = data.payments
@@ -291,6 +289,7 @@ export function buildEscPosReceipt(data: ReceiptData) {
   appendCmd(buffer, [0x1b, 0x61, 0x01]);
   appendLine(buffer);
   appendLine(buffer, 'Thank you for shopping with us.');
+  appendCmd(buffer, [0x1b, 0x45, 0x00]);
   appendCmd(buffer, [0x1d, 0x56, 0x01]);
 
   return new Uint8Array(buffer);
