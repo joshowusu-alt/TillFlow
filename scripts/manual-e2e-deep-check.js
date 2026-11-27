@@ -297,9 +297,7 @@ async function completePaidSale(page) {
 async function openPurchaseForm(page) {
   const addLineButton = page.getByRole('button', { name: /^Add line$/i });
   if (!(await addLineButton.isVisible().catch(() => false))) {
-    await page.locator('#record-purchase-form').evaluate((details) => {
-      details.setAttribute('open', '');
-    });
+    await page.locator('#record-purchase-form > summary').click();
   }
   await addLineButton.waitFor({ state: 'visible', timeout: 10000 });
 }
@@ -309,11 +307,53 @@ async function addPurchaseProduct(page) {
   const search = form.getByPlaceholder(/Type to search product/i);
   await search.fill('Coca-Cola 500ml');
   await form.getByRole('button', { name: /Coca-Cola 500ml/i }).click();
+  // Product selection automatically switches to a pack. Wait for the
+  // resulting default cost before editing, so the effect cannot overwrite it.
+  await form.getByText('Cost per pack', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForFunction(() => Number(document.querySelector('#purchase-unit-cost')?.value) > 0);
   await form.locator('#purchase-quantity').fill('1');
   await form.locator('#purchase-unit-cost').fill('5.00');
   await form.getByRole('button', { name: /^Add line$/i }).click();
-  await page.waitForFunction(() => JSON.parse(document.querySelector('#record-purchase-form input[name="cart"]').value).length > 0);
+  await page.waitForFunction(() => {
+    const cart = JSON.parse(document.querySelector('#record-purchase-form input[name="cart"]').value);
+    return cart.length === 1 && cart[0].qtyInUnit === 1 && Number(cart[0].unitCostInput) === 5;
+  });
   if (await form.locator('input[type="file"]').count()) throw new Error('Purchase should not request an upload');
+}
+
+async function submitUnpaidPurchase(page, previousInvoiceId) {
+  const form = page.locator('#record-purchase-form form');
+  const supplier = form.locator('select[name="supplierId"]');
+  await form.locator('select[name="paymentStatus"]').selectOption('UNPAID');
+  const selected = await supplier.selectOption({ index: 1 });
+  await page.waitForFunction(expectedSupplier => {
+    const form = document.querySelector('#record-purchase-form form');
+    const data = new FormData(form);
+    const cart = JSON.parse(data.get('cart'));
+    return data.get('supplierId') === expectedSupplier && data.get('paymentStatus') === 'UNPAID'
+      && !!data.get('idempotencyKey') && cart.length === 1 && cart[0].qtyInUnit === 1
+      && Number(cart[0].unitCostInput) === 5 && form.checkValidity();
+  }, selected[0]);
+  const button = form.getByRole('button', { name: /^Record purchase$/i });
+  // Make exactly one submission. Verify that it reaches the server rather
+  // than mistaking a client-side validation or hydration race for a save.
+  const [response] = await Promise.all([
+    page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/purchases', { timeout: 60000 }),
+    button.click(),
+  ]);
+  if (response.status() >= 400) throw new Error('Purchase submission returned HTTP ' + response.status());
+  await waitForURLPattern(page, url => /^\/purchases\/[^/]+$/.test(url.pathname) && url.searchParams.get('created') === '1' && url.pathname.split('/').pop() !== previousInvoiceId, 60000);
+  const id = new URL(await page.evaluate(() => window.location.href)).pathname.split('/').pop();
+  const owner = await prisma.user.findUniqueOrThrow({ where: { email: OWNER_EMAIL }, select: { businessId: true } });
+  const invoice = await prisma.purchaseInvoice.findFirstOrThrow({
+    where: { id, businessId: owner.businessId },
+    select: { paymentStatus: true, supplierId: true, totalPence: true },
+  });
+  if (invoice.paymentStatus !== 'UNPAID' || invoice.supplierId !== selected[0] || invoice.totalPence <= 0) {
+    throw new Error('New unpaid purchase was not persisted with the selected supplier and an owing balance');
+  }
+  await page.getByRole('columnheader', { name: /^(Unit Cost|Line Total)$/i }).first().waitFor({ state: 'visible', timeout: 30000 });
+  return id;
 }
 
 async function seedUnpaidExpense() {
@@ -439,16 +479,12 @@ async function run() {
     // shift (none is opened in this flow). Select Unpaid first, same as the
     // working 6b/12 purchase below, so the purchase is created without a
     // cash-drawer dependency.
-    await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
-    await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
-    await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     // On success, createPurchaseAction redirects to the invoice detail page
     // (/purchases/{id}?created=1), not back to the list page, so wait for
     // that navigation and derive the return link from the invoice id rather
     // than looking for a return link element (the detail page doesn't render
     // one - only the /purchases list page does).
-    await waitForURLPattern(page, url => /^\/purchases\/[^/]+$/.test(url.pathname) && url.searchParams.get('created') === '1', 60000);
-    const createdInvoiceId = new URL(page.url()).pathname.split('/').pop();
+    const createdInvoiceId = await submitUnpaidPurchase(page);
     const amountHeaders = page.getByRole('columnheader', { name: /^(Unit Cost|Line Total)$/i });
     await amountHeaders.first().waitFor({ state: 'visible', timeout: 10000 });
     if (await amountHeaders.count() !== 2) throw new Error('Purchase amount headings are missing');
@@ -486,23 +522,7 @@ async function run() {
     await openPurchaseForm(page);
     await addPurchaseProduct(page);
     await page.waitForTimeout(500);
-    await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
-    await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
-    await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
-    // Server actions can update App Router history without a full load
-    // event. Wait for the actual new invoice route, then prove persistence
-    // without repeating the submission.
-    await waitForURLPattern(page, url => /^\/purchases\/[^/]+$/.test(url.pathname) && url.searchParams.get('created') === '1' && url.pathname.split('/').pop() !== createdInvoiceId, 60000);
-    const unpaidPurchaseInvoiceId = new URL(await page.evaluate(() => window.location.href)).pathname.split('/').pop();
-    const purchaseOwner = await prisma.user.findUniqueOrThrow({ where: { email: OWNER_EMAIL }, select: { businessId: true } });
-    const unpaidInvoice = await prisma.purchaseInvoice.findFirstOrThrow({
-      where: { id: unpaidPurchaseInvoiceId, businessId: purchaseOwner.businessId },
-      select: { paymentStatus: true, supplierId: true, totalPence: true },
-    });
-    if (unpaidInvoice.paymentStatus !== 'UNPAID' || !unpaidInvoice.supplierId || unpaidInvoice.totalPence <= 0) {
-      throw new Error('New unpaid purchase was not persisted with an owing balance and supplier');
-    }
-    await page.getByRole('columnheader', { name: /^(Unit Cost|Line Total)$/i }).first().waitFor({ state: 'visible', timeout: 30000 });
+    await submitUnpaidPurchase(page, createdInvoiceId);
     step('6b/12 Create unpaid purchase OK');
 
     // Sales (paid, multi-line) -> receipt open -> amend
