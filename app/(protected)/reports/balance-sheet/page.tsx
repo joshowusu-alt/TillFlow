@@ -48,7 +48,13 @@ export default async function BalanceSheetPage(
     '2200': 'Refunds owed to customers', '3000': 'Retained earnings',
     '3200': 'Opening balance equity', CURRENT_PROFIT: 'Recorded profit to date',
   };
-  const accountName = (row: { accountCode: string; name: string }) => labels[row.accountCode] ?? row.name;
+  const accountName = (row: { accountCode: string; name: string; balancePence: number }) => {
+    // Credit balances in asset accounts (or debit balances in liabilities)
+    // retain their recorded sign and must not be described as money owed to us.
+    if (row.balancePence < 0 && row.accountCode === '1100') return 'Customer balances (net credit)';
+    if (row.balancePence < 0 && row.accountCode === '2000') return 'Supplier and other creditor balances (net credit to us)';
+    return labels[row.accountCode] ?? row.name;
+  };
   return <div className="space-y-6">
     <ReportsDestinationHead title="Balance sheet" scopeLabel="Whole business"
       periodLabel={'As at ' + dateLabel + (key === today ? ' · Today so far' : '')}
@@ -57,7 +63,7 @@ export default async function BalanceSheetPage(
     {hasNotes ? <section className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-4 text-sm leading-relaxed text-amber-950" aria-label="Report notes">
       <h2 className="font-semibold">{missingStockCosts || diagnostic.profitIncomplete ? 'Figures may be incomplete' : 'Balances need attention'}</h2>
       {missingStockCosts ? <p>Some stock has no cost entry. Stock value and owner’s equity may be incomplete. <Link className="font-semibold underline" href="/products?issue=MISSING_COST">View missing product costs</Link></p> : null}
-      {diagnostic.profitIncomplete ? <p>Some sales have no product cost recorded. Recorded profit and owner’s equity may be incomplete.</p> : null}
+      {diagnostic.profitIncomplete ? <p>Some sales have no product cost recorded. Recorded profit and owner’s equity may be incomplete. <Link className="font-semibold underline" href="/products?issue=MISSING_COST">Review missing costs</Link></p> : null}
       {sheet.legacyCapitalPence !== 0 ? <p>Opening capital setting: {money(sheet.legacyCapitalPence)}. This undated setting is separate from the opening balance entries included below. <Link className="font-semibold underline" href="/settings">View opening balance settings</Link></p> : null}
       {diagnostic.equationDifferencePence !== 0 ? <p>Entry difference: {money(diagnostic.equationDifferencePence)}. Assets differ from liabilities and equity by this amount. <Link className="font-semibold underline" href={'/payments/reconciliation/balances?month=' + key.slice(0, 7)}>View account entries</Link></p> : null}
     </section> : null}
@@ -65,27 +71,29 @@ export default async function BalanceSheetPage(
       <label className="label w-full sm:w-auto">Statement date<input className="input mt-1 w-full sm:w-48" type="date" name="asOf" defaultValue={key} max={today} required /></label>
       <button className="btn-secondary" type="submit">Update report</button>
     </form>
-    <dl className="grid gap-3 sm:grid-cols-3" aria-label="Financial position">
+    <dl className="grid gap-3 md:grid-cols-3" aria-label="Financial position">
       {groups.map(group => <div key={group.name} className="card min-w-0 border-t-2 border-t-accent/20 p-5 sm:p-6">
         <dt className="text-sm font-semibold text-ink/70">{group.name}</dt>
-        <dd className="mt-2 break-words text-2xl font-semibold tabular-nums tracking-tight text-ink sm:text-3xl"><a className="underline decoration-accent/30 underline-offset-4" href={'#' + group.id} aria-label={`View ${group.totalLabel.toLowerCase()} details`}>{money(group.total)}</a></dd>
+        <dd className="mt-2 break-words text-2xl font-semibold tabular-nums tracking-tight text-ink sm:text-3xl"><a className="block min-h-11 [overflow-wrap:anywhere] underline decoration-accent/30 underline-offset-4" href={'#' + group.id} aria-label={`View ${group.totalLabel.toLowerCase()} details: ${money(group.total)}`}>{money(group.total)}</a></dd>
       </div>)}
     </dl>
     <div className="card overflow-hidden border border-slate-200/80 shadow-sm">
       <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:px-6"><h2 className="text-base font-semibold">Financial position</h2><p className="mt-1 text-xs text-ink/60">{business.currency} · {dateLabel}</p></div>
       {groups.map(group => <section id={group.id} key={group.name} className="scroll-mt-20 border-b border-black/5 p-5 last:border-0 sm:px-6" aria-label={group.name}>
         <h3 className="mb-2 text-base font-semibold text-accent">{group.name}</h3>
-        {group.id === 'equity' ? <p className="mb-4 text-sm text-ink/70">What remains after deducting what the business owes from what it owns. This is not cash available to withdraw.</p> : null}
-        {group.rows.length === 0 ? <p className="mb-3 text-sm text-ink/50">No entries for this date.</p> : <dl className="space-y-3.5">
-          {[...group.rows].sort((a, b) => a.accountCode.localeCompare(b.accountCode)).map(row => <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,auto)] items-baseline gap-3 text-sm" key={row.accountCode}>
-            <dt className="min-w-0 break-words"><Link className="inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-4" href={entriesHref(row.accountCode)}>{accountName(row)} →</Link></dt><dd className="min-w-0 break-all text-right font-medium tabular-nums text-ink"><Link className="inline-flex min-h-11 items-center underline decoration-accent/30 underline-offset-4" href={entriesHref(row.accountCode)} aria-label={`View entries for ${accountName(row)}`}>{money(row.balancePence)}</Link></dd>
-          </div>)}
-        </dl>}
+        {group.id === 'equity' ? <p className="mb-4 text-sm text-ink/70">In a balanced report, this is what remains after deducting what the business owes from what it owns. This is not cash available to withdraw.</p> : null}
+        {group.rows.length === 0 ? <p className="mb-3 text-sm text-ink/50">No entries for this date.</p> : <ul className="divide-y divide-slate-100">
+          {[...group.rows].sort((a, b) => a.accountCode.localeCompare(b.accountCode)).map(row => <li key={row.accountCode}>
+            <Link className="grid min-h-11 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" href={entriesHref(row.accountCode)} aria-label={`View entries for ${accountName(row)}: ${money(row.balancePence)}`}>
+              <span className="min-w-0 break-words font-medium text-accent underline underline-offset-4">{accountName(row)} →</span><span className="min-w-0 [overflow-wrap:anywhere] text-right font-medium tabular-nums text-ink">{money(row.balancePence)}</span>
+            </Link>
+          </li>)}
+        </ul>}
         <p className="mt-4 flex flex-wrap items-baseline justify-between gap-2 border-t border-slate-200 pt-3 text-sm font-semibold"><span>{group.totalLabel}</span><span className="min-w-0 break-words tabular-nums">{money(group.total)}</span></p>
       </section>)}
-      <div className="flex items-baseline justify-between gap-4 border-t border-accent/10 bg-accentSoft px-5 py-5 text-sm font-semibold text-accent sm:px-6"><span>Total liabilities and equity</span><span className="shrink-0 tabular-nums">{money(sheet.totalLiabilities + sheet.totalEquity)}</span></div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-accent/10 bg-accentSoft px-5 py-5 text-sm font-semibold text-accent sm:px-6"><span>Total liabilities and equity</span><span className="min-w-0 [overflow-wrap:anywhere] tabular-nums">{money(sheet.totalLiabilities + sheet.totalEquity)}</span></div>
     </div>
-    <details className="rounded-xl border border-slate-200/80 bg-white/60 px-5 py-4 text-sm text-ink/70"><summary className="cursor-pointer font-semibold text-accent">How to read this report</summary><p className="mt-2">Tap any account to see its supporting entries. Owner contributions appear in equity; repayable owner advances appear in liabilities. Cash held by staff remains a business asset. Recorded profit uses posted income and expense entries.</p></details>
+    <details className="rounded-xl border border-slate-200/80 bg-white/60 px-5 py-2 text-sm text-ink/70"><summary className="min-h-11 cursor-pointer py-3 font-semibold text-accent">How to read this report</summary><div className="space-y-2 pb-3"><p>Tap any account or amount to see its supporting entries. Owner contributions appear in equity; repayable owner advances appear in liabilities. Cash held by staff remains a business asset. Recorded profit uses posted income and expense entries.</p><p>Negative balances are kept as recorded; they may reflect credits or amounts needing review. Stock-cost checks use current stock records, not a historical stock-cost snapshot.</p></div></details>
     <div className="border-t border-slate-200 pt-4 text-sm print:hidden"><Link className="font-semibold text-accent" href={'/payments/reconciliation/balances?month=' + key.slice(0, 7)}>Open monthly account review →</Link></div>
   </div>;
 }

@@ -74,6 +74,32 @@ describe('balance-sheet business presentation', () => {
     await Page({});
     expect(mocks.sheet).toHaveBeenCalledWith('biz', new Date('2026-04-02T10:00:00Z'));
   });
+  it('does not describe net credits as positive amounts owed, or an unbalanced equity figure as the residual', async () => {
+    const sheet = await mocks.sheet();
+    sheet.assets = [{ accountCode: '1100', name: 'Receivables', balancePence: -500 }];
+    sheet.liabilities = [{ accountCode: '2000', name: 'Payables', balancePence: -700 }];
+    sheet.totalAssets = -500;
+    sheet.totalLiabilities = -700;
+    sheet.totalEquity = -300;
+    sheet.reconciliation.equationDifferencePence = 500;
+    const html = renderToStaticMarkup(await Page({}));
+    expect(html).toContain('Customer balances (net credit)');
+    expect(html).toContain('Supplier and other creditor balances (net credit to us)');
+    expect(html).not.toContain('Money customers owe us');
+    expect(html).toContain('-GH₵5.00');
+    expect(html).toContain('-GH₵7.00');
+    expect(html).toContain('In a balanced report');
+    expect(html).toContain('Entry difference:');
+    expect(html).toContain('Review missing costs');
+    expect(html.match(/href="\/reports\/balance-sheet\/entries\?account=1100/g)).toHaveLength(1);
+  });
+  it('keeps the exact earlier cutoff when returning from supporting entries', async () => {
+    const cutoff = '2026-04-02T08:30:00.000Z';
+    const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ asOf: '2026-04-02', cutoff }) }));
+    expect(mocks.sheet).toHaveBeenCalledWith('biz', new Date(cutoff));
+    expect(html).toContain(`cutoff=${encodeURIComponent(cutoff)}`);
+    expect(html).toContain('not a historical stock-cost snapshot');
+  });
   it('does not load figures when access is denied', async () => {
     mocks.open.mockResolvedValue({ ok: false, denial: <p>Access denied</p> });
     expect(renderToStaticMarkup(await Page({}))).toContain('Access denied');
