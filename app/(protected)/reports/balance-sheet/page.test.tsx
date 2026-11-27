@@ -22,7 +22,8 @@ describe('balance-sheet business presentation', () => {
     const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ asOf: '2026-03-31' }) }));
     expect(html).toContain('Bank &amp; MoMo'); expect(html).toContain('-GH₵1.00');
     expect(html).toContain('Some sales have no product cost recorded');
-    expect(html.indexOf('Financial position')).toBeLessThan(html.indexOf('Report notes'));
+    expect(html.indexOf('Figures may be incomplete')).toBeLessThan(html.indexOf('Financial position'));
+    expect(html).not.toContain('Some stock has no cost entry');
     expect(html).toContain('Opening capital setting'); expect(html).toContain('separate from the opening balance entries');
     expect(html).not.toContain('No external balances');
     expect(html).not.toContain('cannot be confirmed');
@@ -40,6 +41,34 @@ describe('balance-sheet business presentation', () => {
     expect(html).not.toContain('Entry difference');
     expect(html).not.toContain('unverified');
     expect(html).toContain('Total liabilities and equity');
+  });
+  it('uses owner-friendly names without dropping accounts, changing signs or losing drill-downs', async () => {
+    const sheet = await mocks.sheet();
+    sheet.assets = [
+      { accountCode: '1000', name: 'Cash', balancePence: 500000 },
+      { accountCode: '1100', name: 'Accounts Receivable', balancePence: 700000 },
+      { accountCode: '1200', name: 'Inventory', balancePence: 4000000 },
+      { accountCode: '9999', name: 'Other recorded asset', balancePence: -100 },
+    ];
+    sheet.liabilities = [{ accountCode: '2000', name: 'Accounts Payable', balancePence: 1200000 }];
+    sheet.equity = [{ accountCode: 'CURRENT_PROFIT', name: 'Net Profit', balancePence: 3999900 }];
+    sheet.totalAssets = 5199900;
+    sheet.totalLiabilities = 1200000;
+    sheet.totalEquity = 3999900;
+    mocks.sheet.mockResolvedValue(sheet);
+    const html = renderToStaticMarkup(await Page({}));
+    expect(html.indexOf('Figures may be incomplete')).toBeLessThan(html.indexOf('What the business owns'));
+    expect(html).toContain('View missing product costs');
+    for (const name of ['Cash on hand', 'Money customers owe us', 'Stock value', 'Money owed to suppliers and other creditors', 'Other recorded asset', 'Recorded profit to date']) expect(html).toContain(name);
+    for (const code of ['1000', '1100', '1200', '9999', '2000', 'CURRENT_PROFIT']) expect(html).toContain(`account=${code}&amp;asOf=2026-04-02&amp;cutoff=2026-04-02T10%3A00%3A00.000Z`);
+    for (const id of ['assets', 'liabilities', 'equity']) {
+      expect(html).toContain(`href="#${id}"`);
+      expect(html).toContain(`id="${id}"`);
+    }
+    expect(html).toContain('-GH₵1.00');
+    expect(html).toContain('GH₵51,999.00');
+    expect(html).toContain('GH₵39,999.00');
+    expect(html).toContain('not cash available to withdraw');
   });
   it('excludes future-dated entries from today even before the local day ends', async () => {
     await Page({});
