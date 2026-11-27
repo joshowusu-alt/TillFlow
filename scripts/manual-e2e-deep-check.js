@@ -296,9 +296,10 @@ async function completePaidSale(page) {
 
 async function openPurchaseForm(page) {
   const addLineButton = page.getByRole('button', { name: /^Add line$/i });
-  if (!(await addLineButton.isVisible().catch(() => false))) {
-    await page.locator('#record-purchase-form > summary').click();
-  }
+  // The desktop summary is intentionally hidden. Use the page-header
+  // action, which opens the disclosure via the real application handler.
+  await page.locator('button[type="button"]').filter({ hasText: /^Record purchase$/i }).click();
+  await page.waitForFunction(() => document.querySelector('#record-purchase-form')?.open === true);
   await addLineButton.waitFor({ state: 'visible', timeout: 10000 });
 }
 
