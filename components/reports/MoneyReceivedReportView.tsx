@@ -35,6 +35,7 @@ export default function MoneyReceivedReportView({ bundle, drill, metric, from, t
   pageSize: number; actions?: ReactNode;
 }) {
   const { currency, timeZone } = bundle.scope;
+  const periodLabel = readableReportPeriod(from, to, true);
   const failed = bundle.quality.overall === 'QUERY_FAILED';
   const detailFailed = drill.page.queryFailed || drill.reconcile.reason === 'QUERY_FAILED';
   const amount = (id: MoneyReceivedMetricId) => failed || bundle.byId[id]?.valuePence == null
@@ -54,7 +55,7 @@ export default function MoneyReceivedReportView({ bundle, drill, metric, from, t
       value: formatMoney(row.amountPence, currency), negative: row.amountPence < 0 };
   });
   return <div className="min-w-0 space-y-4" data-money-received-view>
-    <ReportsDestinationHead title="Money received" scopeLabel={scopeLabel} periodLabel={readableReportPeriod(from, to)} showRefresh={false} />
+    <ReportsDestinationHead title="Money received" scopeLabel={scopeLabel} periodLabel={periodLabel} showRefresh={false} />
     <section aria-label="Confirmed payments" data-first-figure className="min-w-0 rounded-2xl bg-gradient-to-br from-[#172554] to-accent p-4 text-white shadow-card sm:p-6">
       <h2 className="text-sm font-semibold text-blue-100">Confirmed payments</h2>
       <p className="mt-2 text-3xl font-bold leading-tight tabular-nums [overflow-wrap:anywhere] sm:text-4xl">{amount('money_received')}</p>
@@ -107,7 +108,7 @@ export default function MoneyReceivedReportView({ bundle, drill, metric, from, t
         {actions}
         <div className="space-y-1 text-sm text-muted">
           <p>Confirmed payments are separate from sales totals and refunds. Sale edits that return money reduce confirmed payments; completed refunds are shown separately. Reports Today shows money received after completed refunds.</p>
-          <p>{scopeLabel} · {from} to {to} ({timeZone})</p>
+          <p>{scopeLabel} · {periodLabel} ({timeZone})</p>
           <p>Method check: {failed ? 'Unavailable' : bundle.methodReconcile.ok ? 'Balances' : 'Check needed — ' + (bundle.methodReconcile.reason ?? 'Method totals do not match')}</p>
           {!drill.reconcile.ok && <p>Detail check: {drill.reconcile.reason ?? 'Needs review'}</p>}
           {bundle.quality.legacyWarning && <p>Payments awaiting MoMo confirmation are excluded from confirmed payments.</p>}

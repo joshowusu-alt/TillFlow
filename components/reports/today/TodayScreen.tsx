@@ -75,7 +75,7 @@ function TodayHelpBody({ scopeLabel, zoneName }: { scopeLabel: string; zoneName:
 
 export default function TodayScreen(props: TodayScreenProps) {
   const section = stage3aSection(props.section);
-  const title = section === 'today' ? 'Today' : section === 'activity' ? 'Find a report' : 'More reports';
+  const title = section === 'today' ? 'Today' : section === 'activity' ? 'Find reports' : 'More reports';
   const quiet = Boolean(props.snapshot && isQuietToday(props.snapshot));
   return (
     <div className="reports-today-surface min-w-0 overflow-x-hidden" data-reports-focus-scope>
@@ -505,7 +505,7 @@ function Profit({
 
 function SectionLanding({ section, links }: { section: Stage3aSection; links: Stage3aLink[] }) {
   if (section === 'activity' && links.length > 0) {
-    return <section aria-label="Find a report" className="mt-3 min-w-0">
+    return <section aria-label="Find reports" className="mt-3 min-w-0">
       <p className="mb-2 text-sm text-muted">Choose what you want to know about your business.</p>
       <ul data-directory-grid="" data-owner-report-directory className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {links.map(link => <li key={link.href} className="min-w-0 rounded-xl border border-accent/15 bg-white shadow-card">

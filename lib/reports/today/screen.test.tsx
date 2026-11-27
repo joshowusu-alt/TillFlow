@@ -254,6 +254,9 @@ describe('Today screen', () => {
       links: [{ href: '/reports/dashboard?storeId=store-1', label: 'Trading', purpose: 'Sales for a period you choose', group: 'Reports', iconKey: 'reports' }],
     });
     expect(markup).toContain('Trading');
+    expect(markup).toMatch(/<h1[^>]*>Find reports<\/h1>/);
+    expect(markup).toContain('aria-label="Find reports"');
+    expect(markup).not.toContain('Find a report');
     expect(markup).toContain('More reports');
     expect(markup).not.toContain('GH₵');
     expect(markup).not.toContain('/reports/balance-sheet');

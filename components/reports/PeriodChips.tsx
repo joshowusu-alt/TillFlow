@@ -25,7 +25,15 @@ export function activeReportPeriod(options: ReturnType<typeof reportPeriodOption
     ?? matches.find(option => option.key === 'month')?.key ?? matches[0]?.key ?? 'custom';
 }
 
-export function readableReportPeriod(from: string, to: string) {
+export function readableReportPeriod(from: string, to: string, compactWithYear = false) {
+  if (compactWithYear) {
+    const format = (key: string, year = true) => new Intl.DateTimeFormat('en-GB', {
+      day: 'numeric', month: 'short', ...(year ? { year: 'numeric' } : {}), timeZone: 'UTC',
+    }).format(new Date(`${key}T00:00:00Z`));
+    if (from === to) return format(to);
+    if (from.slice(0, 7) === to.slice(0, 7)) return `${Number(from.slice(8))}–${format(to)}`;
+    return `${format(from, from.slice(0, 4) !== to.slice(0, 4))} – ${format(to)}`;
+  }
   const format = (key: string) => new Intl.DateTimeFormat('en-GB', {
     day: 'numeric', month: 'short', ...(from.slice(0, 4) !== to.slice(0, 4) ? { year: 'numeric' } : {}), timeZone: 'UTC',
   }).format(new Date(`${key}T00:00:00Z`));

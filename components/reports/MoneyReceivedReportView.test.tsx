@@ -36,6 +36,17 @@ describe('Owner Money received presentation', () => {
     expect(screen.getByRole('button', { name:'Apply' })).toHaveClass('min-h-11');
     expect(document.querySelector('input[name="storeId"]')).toHaveAttribute('value','main');
   });
+  it('uses the same concise readable period including the year in the header and More options', () => {
+    const { container } = render(<MoneyReceivedReportView {...moneyFixture()} metric="money_received" from="2026-11-01" to="2026-11-27"
+      storeId="main" scopeLabel="Main branch" choices={[{ id:'main', name:'Main branch' }]} offerAll={false} pageSize={25} periodChip="custom" />);
+    const period = container.querySelector('[data-period-label]')?.textContent;
+    expect(period).toMatch(/^1\s*–\s*27 Nov 2026$/);
+    const options = screen.getByText('More options').closest('details')!;
+    expect(options.textContent).toContain(`Main branch · ${period} (Africa/Accra)`);
+    expect(options.textContent).not.toContain('2026-11-01 to 2026-11-27');
+    expect(screen.getByLabelText('From')).toHaveValue('2026-11-01');
+    expect(screen.getByLabelText('To')).toHaveValue('2026-11-27');
+  });
   it('does not show zero or a balances claim when loading figures failed', () => {
     view('failed');
     const hero = screen.getByRole('region', { name:'Confirmed payments' });

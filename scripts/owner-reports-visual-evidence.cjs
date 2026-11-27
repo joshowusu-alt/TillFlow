@@ -49,6 +49,9 @@ async function main() {
             if (scenario === 'empty') assert.ok(await root.getByText('No transactions for this period and selection.').isVisible());
             if (scenario === 'custom') {
               assert.ok(await root.getByLabel('Branch').isVisible());
+              const period = await root.locator('[data-period-label]').textContent();
+              assert.equal(period, '27 Nov 2026');
+              assert.ok((await options.textContent()).includes(period), 'Options should repeat the friendly header period');
               if (width === 1024) {
                 const apply = options.getByRole('button', { name: 'Apply', exact: true });
                 const form = options.locator('form');
@@ -73,6 +76,7 @@ async function main() {
               }
             }
           } else if (scenario === 'activity') {
+            assert.ok(await root.getByRole('heading', { name: 'Find reports', exact: true }).isVisible());
             assert.equal(await root.locator('[data-owner-report-directory] li').count(),7);
             assert.ok(await root.getByText('How much money came in?').isVisible());
             assert.ok(await root.getByText('Income Statement',{exact:true}).isVisible());

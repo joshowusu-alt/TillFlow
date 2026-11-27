@@ -344,8 +344,11 @@ const WITHHELD_TITLES: Record<(typeof STAGE_3A_WITHHELD_HREFS)[number], string> 
 
 /** Every Activity and More destination, used to prove a return path exists. */
 export function reportReturnPaths(): ReportReturnPath[] {
-  const primary = new Set(['/reports/dashboard', '/reports/money-received', '/reports/income-statement', '/reports/business-movement', '/reports/stock-movements']);
-  return [...ACTIVITY_LINKS, ...MORE_LINKS].map((link) => ({
+  const primary = new Set(['/reports/dashboard', '/reports/money-received', '/reports/income-statement', '/reports/business-movement', '/reports/stock-movements', '/payments/customer-receipts', '/payments/supplier-aging']);
+  return [...ACTIVITY_LINKS, ...MORE_LINKS,
+    { href: '/payments/customer-receipts', label: 'Customer balances' },
+    { href: '/payments/supplier-aging', label: 'Supplier balances' },
+  ].map((link) => ({
     href: link.href,
     section: primary.has(link.href) ? 'activity' : 'more',
     title: link.label,

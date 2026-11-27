@@ -17,6 +17,8 @@ import { RECEIPT_ORIGIN, resolveReceiptOrigin } from '@/lib/payments/receipt-ori
 import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
 import EffectiveStoreBanner from '@/components/EffectiveStoreBanner';
 import { formatRecordNumber } from '@/lib/ui/document-label';
+import { ReportsReturnPath } from '@/components/reports/ReportsContextNav';
+import { returnPathFor } from '@/lib/reports/today/stage3a-nav';
 import {
   laterCreditCollectionWhere,
   RECEIPT_ORIGIN_LABELS,
@@ -283,6 +285,7 @@ export default async function CustomerReceiptsPage(
 
   return (
     <div className="space-y-6">
+      <ReportsReturnPath path={returnPathFor('/payments/customer-receipts')!} storeId={null} />
       <PageHeader title="Record customer payment" subtitle="Take a payment from a customer and reduce what they owe." />
       <EffectiveStoreBanner
         storeName={store.name}

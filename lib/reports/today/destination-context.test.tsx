@@ -71,6 +71,21 @@ describe('Stage 3A destination context', () => {
     expect(page).not.toContain('Back to More reports');
   });
 
+  it.each([
+    ['/payments/customer-receipts', 'Customer balances', '/reports?section=activity'],
+    ['/payments/supplier-aging', 'Supplier balances', '/reports?section=activity&amp;storeId=store-1'],
+  ])('returns %s to Find reports and wires the real page', (route, title, expectedHref) => {
+    pathname = route;
+    search = 'storeId=store-1';
+    expect(returnPathFor(route)).toMatchObject({ title, section: 'activity', backLabel: 'Back to Find reports' });
+    const markup = chrome();
+    expect(markup).toContain('aria-label="Back to Find reports, Reports"');
+    expect(markup).toContain(`href="${expectedHref}"`);
+    expect(markup).not.toContain('Back to More reports');
+    const page = readFileSync(join(root, `app/(protected)${route}/page.tsx`), 'utf8');
+    expect(page).toContain(`<ReportsReturnPath path={returnPathFor('${route}')!}`);
+  });
+
   it.each(reportReturnPaths())('$href uses its own title, one landmark, and the section return', (path) => {
     pathname = path.href;
     search = 'storeId=store-1';
