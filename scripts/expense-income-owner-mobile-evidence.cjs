@@ -64,8 +64,7 @@ async function main() {
         await gain.scrollIntoViewIfNeeded();
         await capture(page, width, height, 'summary');
         await tap(gain);
-        await page.getByText('Stock found', { exact: true }).waitFor();
-        await page.getByText('Product: Evidence rice', { exact: true }).waitFor();
+        await page.getByText('Found in count — Evidence rice', { exact: true }).waitFor();
         await page.getByText('Stock value adjustment — not cash received or paid.', { exact: true }).waitFor();
         await capture(page, width, height, 'income-source');
         await page.getByRole('link', { name: '← Income Statement' }).click();

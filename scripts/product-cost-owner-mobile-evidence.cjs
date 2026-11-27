@@ -81,8 +81,11 @@ async function main() {
         await capture(page, width, height, 'income');
         await tap(review);
         await page.getByRole('heading', { name: 'Fix missing costs' }).waitFor();
+        await page.getByText(/Confirm the cost for each product below\./).waitFor();
+        await page.getByText("Profit isn't final until these costs are confirmed. Today's price isn't used.",{exact:true}).waitFor();
         const purchase=page.locator('form').filter({has:page.getByRole('button',{name:'Use this cost'})});
         await purchase.getByText(/Use GH₵128.00 per stock unit/).waitFor();
+        await purchase.getByText('Confirm — this updates the cost of this sale.',{exact:true}).waitFor();
         await purchase.scrollIntoViewIfNeeded();
         await capture(page,width,height,'purchase-path');
         await purchase.getByLabel('Reason').fill('Checked original purchase');
@@ -93,6 +96,7 @@ async function main() {
         await page.getByRole('heading',{name:'Fix missing costs'}).waitFor();
         const typed=page.locator('form').filter({has:page.getByRole('button',{name:'Confirm cost'})});
         await typed.getByText('No purchase record found for this product.').waitFor();
+        await typed.getByText('Confirm — this updates the cost of this sale.',{exact:true}).waitFor();
         assert.equal(await typed.locator('input[name=unitCost]').inputValue(),'');
         await typed.scrollIntoViewIfNeeded();
         await capture(page,width,height,'typed-path');

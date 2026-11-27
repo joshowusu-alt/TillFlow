@@ -164,6 +164,10 @@ describe('surface catalogue contract', () => {
       'app/(protected)/payments/supplier-aging/page.tsx',
       'app/(protected)/payments/reconciliation/balances/page.tsx',
       'app/(protected)/payments/reconciliation/balances/page.test.tsx',
+      // The stock-cost queue reads month-to-date profit only after the
+      // Income Statement entitlement has been checked.
+      'app/(protected)/products/cost-resolution/page.tsx',
+      'app/(protected)/products/cost-resolution/page.test.tsx',
       'app/(protected)/reports/analytics/page.tsx',
       'app/(protected)/reports/audit-log/page.tsx',
       'app/(protected)/reports/balance-sheet/page.tsx',

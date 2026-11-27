@@ -69,8 +69,8 @@ export default async function IncomeStatementEntriesPage(
       <p className="text-sm text-ink/60">{selectedCategory?.label==='Inventory Loss & Shrinkage'?'Stock removed in counts or corrections. This lowers profit but no money left the business.':metadata.explanation}</p>
       {selectedCategory ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={incomeStatementEntriesHref(metric, from, to)}>View all {metric === 'otherExpenses' ? 'expenses' : 'other income'} →</Link> : null}
       {total === null || issuesOnly ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={incomeStatementEntriesHref(metric, from, to) + (issuesOnly ? '' : '&issues=1')}>{issuesOnly ? 'Show all supporting records' : 'Show affected sales only'}</Link> : null}
-      {issuesOnly ? <p className="text-sm font-semibold">{productCount} {productCount === 1 ? 'product' : 'products'} · {entries.length} affected {entries.length === 1 ? 'receipt' : 'receipts'}. Check the purchase records for each product.</p> : null}
-      {total === null ? <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Profit remains incomplete until earlier sale costs or return records are confirmed. Today&apos;s product cost is not proof of an earlier cost.</p> : null}
+      {issuesOnly ? <p className="text-sm font-semibold">{productCount} {productCount === 1 ? 'product' : 'products'} · {entries.length} affected {entries.length === 1 ? 'receipt' : 'receipts'}. Confirm the cost for each product below.</p> : null}
+      {total === null ? <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Profit isn&apos;t final until these costs are confirmed. Today&apos;s price isn&apos;t used.</p> : null}
     </section>
     {issuesOnly ? <section className="space-y-3" aria-label="Affected sales">
       {shownGroups.map((group,index) => <article className="card space-y-2 p-4" key={group.key}>
@@ -79,7 +79,7 @@ export default async function IncomeStatementEntriesPage(
         {group.productId ? <p className="text-sm text-ink/60">Net sales affected: {money(group.items.reduce((sum, item) => sum + (item.line?.revenuePence ?? 0), 0))} (not the missing cost)</p> : null}
         {group.productId ? owner ? fixes[index] : <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={costReviewHref(group.productId, { from, to, metric })}>Review purchase and sale records (owner confirms) →</Link> : <p className="text-sm text-amber-900">Check the original receipt or return. No automatic product correction is offered for this record.</p>}
         <details>
-          <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">View affected receipts</summary>
+          <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">View affected {group.receiptCount === 1 ? 'receipt' : 'receipts'}</summary>
           {group.items.map(({ receipt, line, index }) => <div key={receipt.id + ':' + index} className="border-t border-slate-100 py-3 text-sm">
             <p className="text-ink/60">{date(receipt.date)}</p>
             {receipt.href ? <Link className="inline-flex min-h-11 items-center break-all font-semibold text-accent underline" href={receipt.href}>{receipt.label}</Link> : <p className="font-semibold">{receipt.label}</p>}
@@ -90,7 +90,7 @@ export default async function IncomeStatementEntriesPage(
       {!entries.length ? <p className="card p-4">No affected sales in this period.</p> : null}
       <nav className="flex flex-wrap items-center justify-between gap-3 text-sm" aria-label="Affected sales pages">
         {page > 1 ? <Link className="inline-flex min-h-11 items-center underline" href={href(page - 1)}>← Previous</Link> : <span />}
-        <span>Page {page} of {pages} · {entries.length} affected receipts</span>
+        <span>Page {page} of {pages} · {entries.length} affected {entries.length === 1 ? 'receipt' : 'receipts'}</span>
         {page < pages ? <Link className="inline-flex min-h-11 items-center underline" href={href(page + 1)}>Next →</Link> : <span />}
       </nav>
     </section> : (metric === 'otherExpenses' || metric === 'otherOperatingIncome') ? <section className="card min-w-0 divide-y">
@@ -105,7 +105,9 @@ export default async function IncomeStatementEntriesPage(
           {entry.source.details.map((detail, i) => <p key={i} className="break-words text-ink/70">{detail}</p>)}
           {entry.source.nonCash ? <p className="text-xs text-ink/60">Stock value adjustment — not cash received or paid.</p> : null}
         </> : null}
-        {humanJournalDescription(entry.description) && humanJournalDescription(entry.description)!==entry.source?.title ? <p className="break-words text-xs text-ink/60">{humanJournalDescription(entry.description)}</p>:null}
+        {humanJournalDescription(entry.description) && humanJournalDescription(entry.description)!==entry.source?.title &&
+          !(entry.source?.nonCash && [entry.source.title.split(' — ')[0], ...entry.source.details].some(text => text.trim().toLowerCase() === humanJournalDescription(entry.description).toLowerCase()))
+          ? <p className="break-words text-xs text-ink/60">{humanJournalDescription(entry.description)}</p>:null}
         <details><summary className="min-h-11 cursor-pointer py-3 text-xs font-semibold text-ink/60">Reference details</summary>
           {entry.source?.reference?<p className="break-all text-xs">Reference: {entry.source.reference}</p>:null}
           <p className="break-all text-xs">{entry.description}</p>
@@ -118,7 +120,7 @@ export default async function IncomeStatementEntriesPage(
       {!entries.length ? <p className="p-5 text-sm text-ink/60">No contributing records in this period.</p> : null}
       <nav className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm" aria-label="Supporting records pages">
         {page > 1 ? <Link className="inline-flex min-h-11 items-center text-accent underline" href={href(page - 1)}>← Previous</Link> : <span />}
-        <span>Page {page} of {pages} · {entries.length} records</span>
+        <span>Page {page} of {pages} · {entries.length} {entries.length === 1 ? 'record' : 'records'}</span>
         {page < pages ? <Link className="inline-flex min-h-11 items-center text-accent underline" href={href(page + 1)}>Next →</Link> : <span />}
       </nav>
       <p className="flex flex-wrap justify-between gap-3 p-5 font-semibold"><span>Total across all pages</span><span className="tabular-nums">{total === null ? 'Costs incomplete' : money(total)}</span></p>
@@ -137,7 +139,7 @@ export default async function IncomeStatementEntriesPage(
       {entries.length === 0 ? <p className="p-5 text-sm text-ink/60">No contributing records in this period.</p> : null}
       <div className="flex items-center justify-between gap-3 border-t p-4 text-sm">
         {page > 1 ? <Link className="text-accent underline" href={href(page - 1)}>← Previous</Link> : <span />}
-        <span>Page {page} of {pages} · {entries.length} records</span>
+        <span>Page {page} of {pages} · {entries.length} {entries.length === 1 ? 'record' : 'records'}</span>
         {page < pages ? <Link className="text-accent underline" href={href(page + 1)}>Next →</Link> : <span />}
       </div>
       <p className="flex flex-wrap justify-between gap-3 border-t p-5 font-semibold"><span>Total across all pages</span><span className="tabular-nums">{total === null ? 'Costs incomplete' : money(total)}</span></p>
