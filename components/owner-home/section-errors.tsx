@@ -8,7 +8,7 @@ import { useTransition } from 'react';
  * the default (light-surface) tone is unreadable there, which previously made
  * retry effectively invisible on "Could not load today's figures".
  */
-function RetryButton({
+export function RetryButton({
   label = 'Try again',
   tone = 'light',
 }: {
@@ -29,7 +29,7 @@ function RetryButton({
       disabled={pending}
       onClick={() => startTransition(() => router.refresh())}
       aria-label={pending ? 'Retrying…' : `${label} — reload this section`}
-      className={`mt-2.5 inline-flex min-h-8 items-center gap-1.5 self-start rounded-lg border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${toneClasses}`}
+      className={`mt-2.5 inline-flex min-h-11 items-center gap-1.5 self-start rounded-lg border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${toneClasses}`}
     >
       {pending ? (
         <>
