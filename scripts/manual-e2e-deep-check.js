@@ -447,7 +447,7 @@ async function run() {
     // that navigation and derive the return link from the invoice id rather
     // than looking for a return link element (the detail page doesn't render
     // one - only the /purchases list page does).
-    await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
+    await waitForURLPattern(page, url => /^\/purchases\/[^/]+$/.test(url.pathname) && url.searchParams.get('created') === '1', 60000);
     const createdInvoiceId = new URL(page.url()).pathname.split('/').pop();
     const amountHeaders = page.getByRole('columnheader', { name: /^(Unit Cost|Line Total)$/i });
     await amountHeaders.first().waitFor({ state: 'visible', timeout: 10000 });
@@ -489,7 +489,20 @@ async function run() {
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('select[name="supplierId"]').selectOption({ index: 1 });
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
-    await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
+    // Server actions can update App Router history without a full load
+    // event. Wait for the actual new invoice route, then prove persistence
+    // without repeating the submission.
+    await waitForURLPattern(page, url => /^\/purchases\/[^/]+$/.test(url.pathname) && url.searchParams.get('created') === '1' && url.pathname.split('/').pop() !== createdInvoiceId, 60000);
+    const unpaidPurchaseInvoiceId = new URL(await page.evaluate(() => window.location.href)).pathname.split('/').pop();
+    const purchaseOwner = await prisma.user.findUniqueOrThrow({ where: { email: OWNER_EMAIL }, select: { businessId: true } });
+    const unpaidInvoice = await prisma.purchaseInvoice.findFirstOrThrow({
+      where: { id: unpaidPurchaseInvoiceId, businessId: purchaseOwner.businessId },
+      select: { paymentStatus: true, supplierId: true, totalPence: true },
+    });
+    if (unpaidInvoice.paymentStatus !== 'UNPAID' || !unpaidInvoice.supplierId || unpaidInvoice.totalPence <= 0) {
+      throw new Error('New unpaid purchase was not persisted with an owing balance and supplier');
+    }
+    await page.getByRole('columnheader', { name: /^(Unit Cost|Line Total)$/i }).first().waitFor({ state: 'visible', timeout: 30000 });
     step('6b/12 Create unpaid purchase OK');
 
     // Sales (paid, multi-line) -> receipt open -> amend
