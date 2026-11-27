@@ -45,7 +45,7 @@ export function ReportsReturnPath({
   }
 
   const sectionHref = withStore(`/reports?section=${path.section}`, scopedStoreId);
-  const sectionLabel = path.section === 'activity' ? 'Activity' : 'More reports';
+  const sectionLabel = path.section === 'activity' ? 'Find reports' : 'More reports';
   return (
     <nav aria-label="Reports location" className="mb-3 min-w-0" data-destination-shell="">
       <ol className="hidden min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted md:flex">

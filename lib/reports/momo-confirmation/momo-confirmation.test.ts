@@ -307,7 +307,7 @@ describe('MoMo confirmation review — surface wiring', () => {
       'utf8',
     );
     const moneyPage = readFileSync(
-      join(root, 'app/(protected)/reports/money-received/page.tsx'),
+      join(root, 'components/reports/MoneyReceivedReportView.tsx'),
       'utf8',
     );
     const nav = readFileSync(join(root, 'lib/reports/today/stage3a-nav.ts'), 'utf8');

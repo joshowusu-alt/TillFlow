@@ -24,6 +24,8 @@ describe('report period chips', () => {
     expect(activeReportPeriod(options, '2026-11-06', '2026-11-22')).toBe('custom');
     expect(activeReportPeriod(options, '2026-11-01', '2026-11-30', 'custom')).toBe('custom');
     expect(readableReportPeriod('2026-12-01', '2026-12-01')).toBe('1 Dec');
+    expect(readableReportPeriod('2026-11-01', '2026-11-27', true)).toMatch(/^1\s*–\s*27 Nov 2026$/);
+    expect(readableReportPeriod('2026-11-27', '2026-11-27', true)).toBe('27 Nov 2026');
   });
   it('opens the custom form only on Custom and preserves movement branch selection', () => {
     const props = { from: '2026-11-01', to: '2026-11-26', now, timeZone: zone };

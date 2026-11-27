@@ -222,6 +222,17 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://localhost:6200
         run: npx playwright test --project=reports-money-layout-chromium
 
+      - name: Owner Reports visual evidence (ten screen sizes)
+        if: github.event_name == 'pull_request' && github.head_ref == 'remediation/owner-report-navigation'
+        run: node scripts/owner-reports-visual-evidence.cjs
+
+      - name: Upload Owner Reports screenshots
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'remediation/owner-report-navigation'
+        uses: actions/upload-artifact@v4
+        with:
+          name: owner-reports-visual-evidence
+          path: tmp/owner-reports-visual/*.png
+
       # Read-only geometry last. Do not run it before smoke: owner POS visits
       # share the CI SQLite file with cashier till-open and can leave extras closed.
       - name: UI programme shell geometry

@@ -18,6 +18,8 @@ import {
 } from '@/lib/services/supplier-aging';
 import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { ReportsReturnPath } from '@/components/reports/ReportsContextNav';
+import { returnPathFor } from '@/lib/reports/today/stage3a-nav';
 
 export const metadata = { title: 'Supplier Aging Report' };
 export const dynamic = 'force-dynamic';
@@ -102,6 +104,7 @@ export default async function SupplierAgingPage(
 
   return (
     <div className="space-y-6">
+      <ReportsReturnPath path={returnPathFor('/payments/supplier-aging')!} storeId={opened.branch.selected === 'ALL' ? null : opened.branch.selected} />
       <PageHeader
         title="Supplier Aging"
         subtitle="Outstanding supplier balances grouped by how overdue they are."

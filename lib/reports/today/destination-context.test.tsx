@@ -34,16 +34,16 @@ describe('Stage 3A destination context', () => {
     search = 'storeId=store-1';
     const analytics = chrome();
     expect(analytics).toContain('Sales analytics');
-    expect(analytics).toContain('Back to Activity');
+    expect(analytics).toContain('Back to More reports');
 
     pathname = '/reports/money-received';
     const money = chrome();
-    expect(money).toContain('>Activity<');
+    expect(money).toContain('>Find reports<');
     expect(money).toContain('>Money received<');
     expect(money).not.toContain('Sales analytics');
     expect(count(money, 'aria-label="Reports location"')).toBe(1);
-    expect(money).toContain('aria-label="Back to Activity, Reports"');
-    expect(count(money, '>Back to Activity<')).toBe(0);
+    expect(money).toContain('aria-label="Back to Find reports, Reports"');
+    expect(count(money, '>Back to Find reports<')).toBe(0);
     expect(money).toContain('href="/reports?section=activity&amp;storeId=store-1"');
   });
 
@@ -57,12 +57,12 @@ describe('Stage 3A destination context', () => {
     const markup = chrome();
     expect(count(markup, 'aria-label="Reports location"')).toBe(1);
     expect(markup).toContain('>Income statement<');
-    expect(markup).toContain('>More reports<');
-    expect(markup).toContain('aria-label="Back to More reports, Reports"');
-    expect(count(markup, '>Back to More reports<')).toBe(0);
-    expect(markup).toContain('href="/reports?section=more"');
+    expect(markup).toContain('>Find reports<');
+    expect(markup).toContain('aria-label="Back to Find reports, Reports"');
+    expect(count(markup, '>Back to Find reports<')).toBe(0);
+    expect(markup).toContain('href="/reports?section=activity"');
     expect(markup).not.toContain('storeId=');
-    expect(markup).not.toContain('Back to Activity');
+    expect(markup).not.toContain('Back to More reports');
 
     const page = readFileSync(join(root, 'app/(protected)/reports/income-statement/page.tsx'), 'utf8');
     expect(page).toContain("surfaceId: 'income_statement'");
@@ -71,11 +71,26 @@ describe('Stage 3A destination context', () => {
     expect(page).not.toContain('Back to More reports');
   });
 
+  it.each([
+    ['/payments/customer-receipts', 'Customer balances', '/reports?section=activity'],
+    ['/payments/supplier-aging', 'Supplier balances', '/reports?section=activity&amp;storeId=store-1'],
+  ])('returns %s to Find reports and wires the real page', (route, title, expectedHref) => {
+    pathname = route;
+    search = 'storeId=store-1';
+    expect(returnPathFor(route)).toMatchObject({ title, section: 'activity', backLabel: 'Back to Find reports' });
+    const markup = chrome();
+    expect(markup).toContain('aria-label="Back to Find reports, Reports"');
+    expect(markup).toContain(`href="${expectedHref}"`);
+    expect(markup).not.toContain('Back to More reports');
+    const page = readFileSync(join(root, `app/(protected)${route}/page.tsx`), 'utf8');
+    expect(page).toContain(`<ReportsReturnPath path={returnPathFor('${route}')!}`);
+  });
+
   it.each(reportReturnPaths())('$href uses its own title, one landmark, and the section return', (path) => {
     pathname = path.href;
     search = 'storeId=store-1';
     const markup = chrome();
-    const section = path.section === 'activity' ? 'Activity' : 'More reports';
+    const section = path.section === 'activity' ? 'Find reports' : 'More reports';
     expect(returnPathFor(path.href)).toMatchObject({ title: path.title, backLabel: path.backLabel, section: path.section });
     expect(count(markup, 'aria-label="Reports location"')).toBe(1);
     expect(count(markup, `>${path.title}<`)).toBe(1);

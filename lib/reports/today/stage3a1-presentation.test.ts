@@ -55,6 +55,10 @@ describe('Stage 3A.1 customer presentation', () => {
       const source = read(file);
       if (file.includes('/dashboard/') || file.includes('/analytics/')) expect(source, file).toContain('ReportHeader');
       else if (file.includes('/business-movement/')) expect(source, file).toContain('BusinessMovementReportView');
+      else if (file.includes('/money-received/')) {
+        expect(source, file).toContain('MoneyReceivedReportView');
+        expect(read('components/reports/MoneyReceivedReportView.tsx')).toContain('ReportsDestinationHead');
+      }
       else expect(source, file).toContain('ReportsDestinationHead');
       expect(read('components/reports/stage3b/ReportHeader.tsx')).toContain('ReportsDestinationHead');
       expect(source, file).not.toContain('PageHeader');

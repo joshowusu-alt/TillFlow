@@ -21,7 +21,7 @@ describe('Stage 3A navigation correction', () => {
     const header = REPORT_NAV_SECTIONS.flatMap((section) => section.items.map((item) => `${item.label} ${item.href}`));
     expect(header).toEqual([
       'Today /reports',
-      'Activity /reports?section=activity',
+      'Find reports /reports?section=activity',
       'More reports /reports?section=more',
     ]);
     const reports = NAV_GROUPS.find((group) => group.id === 'reports');
@@ -61,11 +61,11 @@ describe('Stage 3A navigation correction', () => {
     for (const href of STAGE_3A_WITHHELD_HREFS) expect(hrefs).not.toContain(href);
     expect(paths.find((path) => path.href === '/reports/stock-movements')).toMatchObject({
       section: 'activity',
-      backLabel: 'Back to Activity',
+      backLabel: 'Back to Find reports',
     });
     expect(paths.find((path) => path.href === '/reports/income-statement')).toMatchObject({
-      section: 'more',
-      backLabel: 'Back to More reports',
+      section: 'activity',
+      backLabel: 'Back to Find reports',
     });
     expect(safeReturnStoreId('?storeId=store-a', ['store-a'])).toBe('store-a');
     expect(safeReturnStoreId('?storeId=ALL', ['store-a'])).toBeNull();
