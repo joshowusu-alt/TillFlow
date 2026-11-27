@@ -49,12 +49,13 @@ async function main() {
         assert.ok(await page.getByText('Customer balances (net credit)',{exact:false}).isVisible());
         assert.ok(await page.getByText('GH₵12,345,678.90',{exact:true}).isVisible());
         assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`overflow at ${width}`);
-        for (const target of await page.locator('a[href^="/reports/balance-sheet/entries"],a[href="#assets"],a[href="#liabilities"],a[href="#equity"]').all()) {
+        assert.equal(await page.locator('[data-balance-sheet-statement]').count(),1);
+        assert.equal(await page.locator('input[name=asOf]').count(),0);
+        assert.equal(await page.getByRole('heading',{name:'What the business owns',exact:true}).count(),1);
+        for (const target of await page.locator('a[href^="/reports/balance-sheet/entries"],nav[aria-label="Statement date"] a').all()) {
           const box=await target.boundingBox();assert.ok(box && box.height>=44 && box.x>=0 && box.x+box.width<=width+1,JSON.stringify(box));
         }
         await page.screenshot({path:`${folder}/${width}-balance-sheet.png`,fullPage:true});
-        await page.getByRole('link',{name:/View total assets details/}).click();
-        assert.equal(new URL(page.url()).hash,'#assets');
         const cash=page.getByRole('link',{name:/View entries for Cash on hand/});
         const cutoff=new URL(await cash.getAttribute('href'),base).searchParams.get('cutoff');
         await cash.click();
@@ -63,7 +64,15 @@ async function main() {
         await page.getByRole('link',{name:'← Balance sheet',exact:true}).click();
         await page.getByRole('heading',{name:'Balance sheet',exact:true}).waitFor();
         assert.equal(new URL(page.url()).searchParams.get('cutoff'),cutoff);
-        console.log(`PASS ${width}x${height} real app: figures, warning, no overflow, target sizes, anchor and drill-down cutoff`);
+        await page.getByRole('link',{name:'Custom',exact:true}).click();
+        const date=page.locator('input[name=asOf]');await date.waitFor();
+        const dateBox=await date.boundingBox();assert.ok(dateBox && dateBox.x>=0 && dateBox.x+dateBox.width<=width+1);
+        assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`custom date overflow at ${width}`);
+        await page.screenshot({path:`${folder}/${width}-custom-date.png`,fullPage:true});
+        await page.getByRole('link',{name:'Last month end',exact:true}).click();
+        await page.waitForURL(url=>url.searchParams.get('dateChip')==='last-month-end');
+        await date.waitFor({state:'detached'});
+        console.log(`PASS ${width}x${height} real app: compact statement, figures, warning, no overflow, date chips, touch targets and drill-down cutoff`);
       } finally {await context.close();}
     }
   } finally {await browser.close();}

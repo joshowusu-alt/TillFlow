@@ -489,7 +489,7 @@ jobs:
 
   balance-sheet-visual-evidence:
     name: balance-sheet-visual-evidence
-    if: github.event_name == 'pull_request' && github.head_ref == 'remediation/balance-sheet-owner-view'
+    if: github.event_name == 'pull_request' && (github.head_ref == 'remediation/balance-sheet-owner-view' || github.head_ref == 'remediation/balance-sheet-compact')
     needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
