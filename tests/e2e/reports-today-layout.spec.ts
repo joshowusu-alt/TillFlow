@@ -258,12 +258,12 @@ async function assertCustomerFocusClearsBar(page: Page, path: string, width: num
 
 const FOCUS_CASES = [
   { state: 'attention', expectName: /cash|momo|customer|supplier/i },
-  { state: 'activity', expectName: /^Trading/ },
-  { state: 'more', expectName: /^Income statement/ },
+  { state: 'activity', expectName: /How much did I sell/ },
+  { state: 'more', expectName: /^Downloads/ },
   { state: 'failed', expectName: /^Retry$/ },
   { state: 'empty&banner=none', expectName: /^Open Sell$|^How Today is calculated$/ },
-  { state: 'return&destination=trading', expectName: /Back to Activity/ },
-  { state: 'return&destination=income', expectName: /Back to More reports/ },
+  { state: 'return&destination=trading', expectName: /Back to Find reports/ },
+  { state: 'return&destination=income', expectName: /Back to Find reports/ },
 ] as const;
 
 for (const width of [320, 390] as const) {
@@ -537,15 +537,18 @@ test('Business movement supporting evidence is disclosed with the keyboard', asy
   await expect(page.getByText('not an error', { exact: false })).toHaveCount(0);
 });
 
-test('Activity does not reserve a desktop column for one queue', async ({ page }) => {
+test('Find reports uses three desktop columns and moves advanced items to More', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await reviewPage(page, '/reviews/reports-today-layout?state=activity');
   const reports = await page.locator('a[href^="/reports/dashboard"]').boundingBox();
-  const queue = await page.locator('a[href^="/reports/momo-confirmation"]').boundingBox();
-  const ledger = await page.locator('a[href^="/reports/cash-drawer"]').boundingBox();
-  expect(reports && queue && ledger).toBeTruthy();
-  expect(Math.abs(reports!.x - queue!.x)).toBeLessThan(2);
-  expect(ledger!.x).toBeGreaterThan(reports!.x + reports!.width);
+  const money = await page.locator('a[href^="/reports/money-received"]').boundingBox();
+  const income = await page.locator('a[href^="/reports/income-statement"]').boundingBox();
+  expect(reports && money && income).toBeTruthy();
+  expect(money!.x).toBeGreaterThan(reports!.x);
+  expect(income!.x).toBeGreaterThan(money!.x);
+  await expect(page.locator('a[href^="/reports/cash-drawer"]')).toHaveCount(0);
+  await reviewPage(page, '/reviews/reports-today-layout?state=more');
+  await expect(page.locator('a[href^="/reports/cash-drawer"]')).toBeVisible();
 });
 
 for (const width of [390, 1440]) {

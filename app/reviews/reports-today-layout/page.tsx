@@ -15,6 +15,8 @@ import { todayNextActions, type TodaySnapshot } from '@/lib/reports/today/model'
 import { reviewAttentionSampleRows } from '@/lib/reports/today/review-samples';
 import { returnPathFor, stage3aExploreNextSteps, stage3aLinks, type Stage3aSection } from '@/lib/reports/today/stage3a-nav';
 import { isReportsStage3aAllowed } from '@/lib/reviews/reports-stage3a-gate';
+import MoneyReceivedReportView from '@/components/reports/MoneyReceivedReportView';
+import { moneyFixture } from '@/lib/reviews/owner-money-fixture';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,6 +95,7 @@ const REVIEW_HREFS = new Set([
   '/reports/analytics',
   '/reports/business-movement',
   '/reports/money-received',
+  '/payments/supplier-aging',
   '/settings/online-store/analytics',
   '/reports/momo-confirmation',
   '/payments/reconciliation',
@@ -138,7 +141,7 @@ function reviewToday(section: Stage3aSection, extras: Partial<Parameters<typeof 
       readOnly={false}
       currency="GHS"
       storeId="sample-branch"
-      links={stage3aLinks(section, REVIEW_HREFS, { showNetworkQueue: true })}
+      links={stage3aLinks(section, REVIEW_HREFS, { showNetworkQueue: true, showCustomerBalances: true })}
       salesHref="/reports/dashboard"
       snapshot={null}
       blocked={null}
@@ -155,6 +158,13 @@ export default async function ReportsTodayLayoutReviewPage(
 ) {
   const searchParams = await props.searchParams;
   if (!isReportsStage3aAllowed()) notFound();
+  if (searchParams?.state === 'owner-money') {
+    const scenario = searchParams.fixture ?? 'normal';
+    return <ReviewShell><MoneyReceivedReportView {...moneyFixture(scenario)} metric="money_received"
+      from="2026-11-27" to="2026-11-27" storeId="main" scopeLabel="Synthetic Main Branch"
+      choices={[{ id:'main', name:'Synthetic Main Branch' }, { id:'second', name:'Synthetic Second Branch' }]} offerAll={true}
+      pageSize={25} periodChip={scenario === 'custom' ? 'custom' : undefined} /></ReviewShell>;
+  }
   if (['stage3b-trading', 'stage3b-analytics', 'stage3b-movement'].includes(searchParams?.state ?? '')) {
     const screen = searchParams!.state!.slice(8) as 'trading' | 'analytics' | 'movement';
     const fixture = (['normal', 'large', 'negative', 'empty', 'incomplete', 'failed', 'debt', 'credit'].includes(searchParams?.fixture ?? '') ? searchParams!.fixture : 'normal') as Stage3bFixture;

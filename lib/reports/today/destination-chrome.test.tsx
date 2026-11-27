@@ -20,7 +20,7 @@ const covered = [
   {
     pathname: '/reports/dashboard',
     title: 'Trading',
-    back: 'Back to Activity',
+    back: 'Back to Find reports',
     storeId: 'store-1',
     page: 'app/(protected)/reports/dashboard/page.tsx',
     usesHead: true,
@@ -28,7 +28,7 @@ const covered = [
   {
     pathname: '/reports/analytics',
     title: 'Sales analytics',
-    back: 'Back to Activity',
+    back: 'Back to More reports',
     storeId: 'store-1',
     page: 'app/(protected)/reports/analytics/page.tsx',
     usesHead: true,
@@ -36,7 +36,7 @@ const covered = [
   {
     pathname: '/reports/business-movement',
     title: 'Business movement',
-    back: 'Back to Activity',
+    back: 'Back to Find reports',
     storeId: 'store-1',
     page: 'app/(protected)/reports/business-movement/page.tsx',
     usesHead: true,
@@ -44,7 +44,7 @@ const covered = [
   {
     pathname: '/reports/income-statement',
     title: 'Income statement',
-    back: 'Back to More reports',
+    back: 'Back to Find reports',
     storeId: null,
     page: 'app/(protected)/reports/income-statement/page.tsx',
     usesHead: false,

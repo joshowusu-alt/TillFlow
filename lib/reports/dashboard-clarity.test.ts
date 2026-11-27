@@ -233,7 +233,7 @@ describe('Reports navigation clarity', () => {
     expect(REPORT_NAV_SECTIONS.map((section) => section.label)).toEqual(['Reports']);
     expect(REPORT_NAV_SECTIONS.flatMap((section) => section.items.map((item) => item.label))).toEqual([
       'Today',
-      'Activity',
+      'Find reports',
       'More reports',
     ]);
   });
@@ -356,7 +356,7 @@ describe('Reports navigation clarity', () => {
     ]));
     expect(reports.items).toEqual(expect.arrayContaining([
       expect.objectContaining({ href: '/reports', label: 'Today', iconKey: 'reportsHub' }),
-      expect.objectContaining({ href: '/reports?section=activity', label: 'Activity', iconKey: 'analytics' }),
+      expect.objectContaining({ href: '/reports?section=activity', label: 'Find reports', iconKey: 'analytics' }),
       expect.objectContaining({ href: '/reports?section=more', label: 'More reports', iconKey: 'reports' }),
     ]));
     expect(reports.items.every((item) => item.description === undefined)).toBe(true);

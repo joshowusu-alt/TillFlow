@@ -91,7 +91,7 @@ export const REPORT_NAV_SECTIONS: NavigationSection[] = [
     label: 'Reports',
     items: [
       { href: '/reports', label: 'Today', roles: ['MANAGER', 'OWNER'], iconKey: 'reportsHub' },
-      { href: '/reports?section=activity', label: 'Activity', roles: ['MANAGER', 'OWNER'], iconKey: 'analytics' },
+      { href: '/reports?section=activity', label: 'Find reports', roles: ['MANAGER', 'OWNER'], iconKey: 'analytics' },
       { href: '/reports?section=more', label: 'More reports', roles: ['MANAGER', 'OWNER'], iconKey: 'reports' },
     ],
   },

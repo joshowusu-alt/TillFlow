@@ -37,7 +37,7 @@ export default function ReportsSectionHead({
 }) {
   const items: Array<{ id: Stage3aSection; label: string }> = [
     { id: 'today', label: 'Today' },
-    { id: 'activity', label: 'Activity' },
+    { id: 'activity', label: 'Find reports' },
     { id: 'more', label: 'More reports' },
   ];
   const localMarker = ' · Local time';

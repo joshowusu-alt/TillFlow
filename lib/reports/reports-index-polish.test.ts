@@ -21,14 +21,14 @@ describe('Reports Today shell', () => {
 
   it('keeps Reports in the header as Today, Activity and More reports', () => {
     const reports = NAV_GROUPS.find((group) => group.id === 'reports');
-    expect(reports?.items.map((item) => item.label)).toEqual(['Today', 'Activity', 'More reports']);
+    expect(reports?.items.map((item) => item.label)).toEqual(['Today', 'Find reports', 'More reports']);
     expect(reports?.items.map((item) => item.href)).toEqual([
       '/reports',
       '/reports?section=activity',
       '/reports?section=more',
     ]);
     const labels = REPORT_NAV_SECTIONS.flatMap((section) => section.items.map((item) => item.label));
-    expect(labels).toEqual(['Today', 'Activity', 'More reports']);
+    expect(labels).toEqual(['Today', 'Find reports', 'More reports']);
   });
 
   it('lists existing Activity and More destinations and withholds unfinished statements', () => {

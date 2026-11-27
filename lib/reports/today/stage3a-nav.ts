@@ -41,6 +41,8 @@ export type Stage3aLinkOptions = {
   tradingReplacesSalesAnalytics?: boolean;
   /** Mobile Money network queue. Hidden when the business has not turned MoMo on. */
   showNetworkQueue?: boolean;
+  /** Existing operational customer balances route requires Owner or Manager. */
+  showCustomerBalances?: boolean;
 };
 
 const ACTIVITY_LINKS: Stage3aLink[] = [
@@ -219,6 +221,7 @@ const NO_STORE_SCOPE = new Set([
   '/reports/owner',
   '/reports/audit-log',
   '/settings/online-store/analytics',
+  '/payments/customer-receipts',
 ]);
 
 /** Whole-business and other routes whose existing scope gate rejects a branch id. */
@@ -269,8 +272,26 @@ export function stage3aLinks(
   options: Stage3aLinkOptions = {},
 ): Stage3aLink[] {
   if (section === 'today') return [];
-  const source = section === 'activity' ? ACTIVITY_LINKS : MORE_LINKS;
-  return source.filter((link) => linkVisible(link, allowedHrefs, options));
+  const visible = [...ACTIVITY_LINKS, ...MORE_LINKS].filter(link => linkVisible(link, allowedHrefs, options));
+  const main = [
+    ['/reports/dashboard', 'Sales', 'How much did I sell?'],
+    ['/reports/money-received', 'Money received', 'How much money came in?'],
+    ['/reports/income-statement', 'Income Statement', 'Did I make a profit? (Whole business)'],
+    ['/reports/business-movement', 'Business movement', 'Is my business improving?'],
+    ['/payments/customer-receipts', 'Customer balances', 'Who owes me money? Uses your active branch.'],
+    ['/payments/supplier-aging', 'Supplier balances', 'Who do I owe?'],
+    ['/reports/stock-movements', 'Stock reports', 'What came in or went out of stock?'],
+  ] as const;
+  const primaryHrefs = new Set<string>(main.map(([href]) => href));
+  if (section === 'more') return visible.filter(link => !primaryHrefs.has(link.href));
+  return main.flatMap(([href, label, purpose]): Stage3aLink[] => {
+    if (href === '/payments/customer-receipts') return options.showCustomerBalances
+      ? [{ href, label, purpose, group: 'Reports', iconKey: 'customers' }] : [];
+    if (href === '/payments/supplier-aging') return allowedHrefs.has(href)
+      ? [{ href, label, purpose, group: 'Reports', iconKey: 'supplierAging' }] : [];
+    const link = visible.find(row => row.href === href);
+    return link ? [{ ...link, label, purpose, useWhen: undefined, group: 'Reports' }] : [];
+  });
 }
 
 /** Compact destinations for a quiet Today. Not the full Activity or More list. */
@@ -313,7 +334,7 @@ export type ReportReturnPath = {
   href: string;
   section: 'activity' | 'more';
   title: string;
-  backLabel: 'Back to Activity' | 'Back to More reports';
+  backLabel: 'Back to Find reports' | 'Back to More reports';
 };
 
 const WITHHELD_TITLES: Record<(typeof STAGE_3A_WITHHELD_HREFS)[number], string> = {
@@ -323,11 +344,12 @@ const WITHHELD_TITLES: Record<(typeof STAGE_3A_WITHHELD_HREFS)[number], string> 
 
 /** Every Activity and More destination, used to prove a return path exists. */
 export function reportReturnPaths(): ReportReturnPath[] {
+  const primary = new Set(['/reports/dashboard', '/reports/money-received', '/reports/income-statement', '/reports/business-movement', '/reports/stock-movements']);
   return [...ACTIVITY_LINKS, ...MORE_LINKS].map((link) => ({
     href: link.href,
-    section: ACTIVITY_LINKS.some((item) => item.href === link.href) ? 'activity' : 'more',
+    section: primary.has(link.href) ? 'activity' : 'more',
     title: link.label,
-    backLabel: ACTIVITY_LINKS.some((item) => item.href === link.href) ? 'Back to Activity' : 'Back to More reports',
+    backLabel: primary.has(link.href) ? 'Back to Find reports' : 'Back to More reports',
   }));
 }
 

@@ -169,6 +169,7 @@ async function ReportsToday({ search }: { search?: Search }) {
   const linkOptions = {
     tradingReplacesSalesAnalytics: tradingReplacesSalesAnalytics(),
     showNetworkQueue: momoOn && (hub.user?.role === 'OWNER' || hub.user?.role === 'MANAGER'),
+    showCustomerBalances: hub.user?.role === 'OWNER' || hub.user?.role === 'MANAGER',
   };
   const links = scopeStoreLinks(stage3aLinks(section, allowed, linkOptions), storeId);
   const readOnly = data.page.decision.readOnly === true || base.readOnly;

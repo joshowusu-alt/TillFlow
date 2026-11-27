@@ -341,16 +341,17 @@ describe('Step 5B preview-equivalent — access and surface', () => {
       join(process.cwd(), 'app/(protected)/reports/money-received/page.tsx'),
       'utf8',
     );
-    expect(page).toContain('title="Money Received"');
-    expect(page).toContain('separate from sales totals');
-    expect(page).toContain('Refund outflows');
-    expect(page).toContain('Needs MoMo confirmation');
-    expect(page).toContain('Sale amend (money out)');
-    expect(page).toContain('/reports/momo-confirmation');
-    expect(page).toContain('open review');
+    const view = readFileSync(join(process.cwd(), 'components/reports/MoneyReceivedReportView.tsx'), 'utf8');
+    expect(view).toContain('title="Money received"');
+    expect(view).toContain('separate from sales totals');
+    expect(view).toContain('Refunds paid');
+    expect(view).toContain('MoMo awaiting confirmation');
+    expect(view).toContain('moneyReceivedRowKindLabel');
+    expect(view).toContain('/reports/momo-confirmation');
+    expect(view).toContain('Not included · Review');
     expect(page).toContain('resolveMoneyReceivedAccess');
     expect(page).toContain('drillDownForMetric');
-    expect(page).toContain('classifyMoneyReceivedRowKind');
+    expect(view).toContain('classifyMoneyReceivedRowKind');
     expect(page).not.toContain('Gross Profit');
     expect(page).not.toContain('Owner Home');
     expect(page).not.toContain('Command Center');

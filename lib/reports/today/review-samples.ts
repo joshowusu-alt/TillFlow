@@ -158,6 +158,7 @@ export function reviewLinks(input: {
   const options = {
     tradingReplacesSalesAnalytics: !input.analyticsVisible,
     showNetworkQueue: true,
+    showCustomerBalances: true,
   };
   return {
     links: stage3aLinks(input.section, allowed, options),

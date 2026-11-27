@@ -37,12 +37,21 @@ describe('Stage 3A navigation', () => {
     ]);
     const activity = stage3aLinks('activity', allowed).map((link) => link.href);
     const more = stage3aLinks('more', allowed).map((link) => link.href);
-    expect(activity).toEqual(['/reports/dashboard']);
-    expect(more).toEqual(['/reports/cashflow', '/reports/balance-sheet', '/reports/income-statement', '/reports/exports', '/reports/owner']);
+    expect(activity).toEqual(['/reports/dashboard', '/reports/income-statement']);
+    expect(more).toEqual(['/reports/cashflow', '/reports/balance-sheet', '/reports/exports', '/reports/owner']);
     for (const href of STAGE_3A_WITHHELD_HREFS) {
       expect(activity).not.toContain(href);
       expect(more).not.toContain(href);
     }
+  });
+
+  it('puts owner questions first, keeps every entitled advanced report and preserves role and scope boundaries', () => {
+    const allowed = new Set(['/reports/dashboard','/reports/money-received','/reports/income-statement','/reports/business-movement','/payments/supplier-aging','/reports/stock-movements','/reports/analytics','/reports/cash-drawer']);
+    const activity = stage3aLinks('activity', allowed, { showCustomerBalances: true });
+    expect(activity.map(row => row.label)).toEqual(['Sales','Money received','Income Statement','Business movement','Customer balances','Supplier balances','Stock reports']);
+    expect(stage3aLinks('more', allowed).map(row => row.href)).toEqual(['/reports/analytics','/reports/cash-drawer']);
+    expect(stage3aLinks('activity', allowed).map(row => row.href)).not.toContain('/payments/customer-receipts');
+    expect(stage3aLinks('activity', new Set(['/reports/dashboard'])).map(row => row.href)).toEqual(['/reports/dashboard']);
   });
 
   it('caps quiet Today next steps at four curated destinations', () => {
