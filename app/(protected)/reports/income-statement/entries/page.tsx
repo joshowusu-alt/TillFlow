@@ -10,10 +10,12 @@ import { getIncomeStatementBreakdown } from '@/lib/reports/financials';
 import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, incomeStatementJournalCategories, isIncomeStatementMetric, selectIncomeStatementEntries } from '@/lib/reports/income-statement-breakdown';
 import { costReviewHref, groupAffectedSales } from '@/lib/reports/cost-review-navigation';
 import { readableReportPeriod } from '@/components/reports/PeriodChips';
+import { loadOneScreenCostFixes } from '@/components/reports/load-one-screen-cost-fixes';
+import { ownerAccountLabel, humanJournalDescription } from '@/lib/reports/owner-account-labels';
 
 export default async function IncomeStatementEntriesPage(
   props: {
-    searchParams?: Promise<{ from?: string; to?: string; metric?: string; issues?: string; page?: string; expenseCategory?: string; incomeCategory?: string; businessId?: string; storeId?: string }>;
+    searchParams?: Promise<{ from?: string; to?: string; metric?: string; issues?: string; page?: string; expenseCategory?: string; incomeCategory?: string; businessId?: string; storeId?: string; error?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -53,31 +55,35 @@ export default async function IncomeStatementEntriesPage(
   const backHref = `/reports/income-statement?${new URLSearchParams({ from, to })}`;
   const href = (next: number) => `${incomeStatementEntriesHref(metric, from, to, selectedCategory?.label)}${issuesOnly ? '&issues=1' : ''}&page=${next}`;
   const date = (value: string) => new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: zone }).format(new Date(value));
+  const owner=opened.user?.role==='OWNER' && !opened.readOnly;
+  const shownGroups=groups.slice((page - 1) * size, page * size);
+  const fixes=owner && issuesOnly ? await loadOneScreenCostFixes(shownGroups,{businessId:business.id,stores:opened.stores??[],currency:business.currency,timezone:zone,from,to,metric}) : [];
   return <div className="space-y-5">
     {opened.readOnly ? <ReportReadOnlyBanner /> : null}
     <Link className="text-sm font-semibold text-accent underline" href={backHref}>← Income Statement</Link>
     <section className="card space-y-3 p-5">
       <p className="text-xs text-ink/60">Whole business · {readableReportPeriod(from, to)}</p>
-      <h1 className="text-xl font-semibold">{issuesOnly ? 'Sales requiring cost review' : `${selectedCategory?.label ?? metadata.label} — supporting records`}</h1>
+      <h1 className="text-xl font-semibold">{issuesOnly ? 'Fix missing costs' : `${ownerAccountLabel(selectedCategory?.label ?? metadata.label)} — supporting records`}</h1>
+      {issuesOnly && searchParams?.error ? <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-900">{searchParams.error.slice(0,500)}</p>:null}
       <p className="break-words text-3xl font-semibold tabular-nums">{total === null ? 'Costs incomplete' : money(total)}</p>
-      <p className="text-sm text-ink/60">{metadata.explanation}</p>
+      <p className="text-sm text-ink/60">{selectedCategory?.label==='Inventory Loss & Shrinkage'?'Stock removed in counts or corrections. This lowers profit but no money left the business.':metadata.explanation}</p>
       {selectedCategory ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={incomeStatementEntriesHref(metric, from, to)}>View all {metric === 'otherExpenses' ? 'expenses' : 'other income'} →</Link> : null}
       {total === null || issuesOnly ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={incomeStatementEntriesHref(metric, from, to) + (issuesOnly ? '' : '&issues=1')}>{issuesOnly ? 'Show all supporting records' : 'Show affected sales only'}</Link> : null}
       {issuesOnly ? <p className="text-sm font-semibold">{productCount} {productCount === 1 ? 'product' : 'products'} · {entries.length} affected {entries.length === 1 ? 'receipt' : 'receipts'}. Check the purchase records for each product.</p> : null}
       {total === null ? <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Profit remains incomplete until earlier sale costs or return records are confirmed. Today&apos;s product cost is not proof of an earlier cost.</p> : null}
     </section>
     {issuesOnly ? <section className="space-y-3" aria-label="Affected sales">
-      {groups.slice((page - 1) * size, page * size).map(group => <article className="card space-y-2 p-4" key={group.key}>
+      {shownGroups.map((group,index) => <article className="card space-y-2 p-4" key={group.key}>
         <h2 className="font-semibold break-words">{group.name}</h2>
-        <p className="text-sm">{group.receiptCount} affected {group.receiptCount === 1 ? 'receipt' : 'receipts'}</p>
+        <p className="text-sm">{group.receiptCount} {group.receiptCount === 1 ? 'sale' : 'sales'} missing a cost</p>
         {group.productId ? <p className="text-sm text-ink/60">Net sales affected: {money(group.items.reduce((sum, item) => sum + (item.line?.revenuePence ?? 0), 0))} (not the missing cost)</p> : null}
-        {group.productId ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={costReviewHref(group.productId, { from, to, metric })}>Check purchase and sale costs →</Link> : <p className="text-sm text-amber-900">Check the original receipt or return. No automatic product correction is offered for this record.</p>}
+        {group.productId ? owner ? fixes[index] : <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={costReviewHref(group.productId, { from, to, metric })}>Review purchase and sale records (owner confirms) →</Link> : <p className="text-sm text-amber-900">Check the original receipt or return. No automatic product correction is offered for this record.</p>}
         <details>
           <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">View affected receipts</summary>
           {group.items.map(({ receipt, line, index }) => <div key={receipt.id + ':' + index} className="border-t border-slate-100 py-3 text-sm">
             <p className="text-ink/60">{date(receipt.date)}</p>
             {receipt.href ? <Link className="inline-flex min-h-11 items-center break-all font-semibold text-accent underline" href={receipt.href}>{receipt.label}</Link> : <p className="font-semibold">{receipt.label}</p>}
-            {line ? <><p>{line.name ?? 'Product'} · Quantity {line.qtyBase} (stock units)</p><p>Net sale {money(line.revenuePence)} — not the missing cost</p><p>{line.reason === 'UNSUPPORTED_RETURN' ? 'Return evidence requires review.' : 'Historical cost not confirmed.'}</p></> : <p>Return evidence requires review.</p>}
+            {line ? <><p>{line.name ?? 'Product'} · Quantity {line.qtyBase} (stock units)</p><p>Net sale {money(line.revenuePence)} — not the missing cost</p><p>{line.reason === 'UNSUPPORTED_RETURN' ? 'Return records need review.' : 'Cost of earlier sale not confirmed.'}</p></> : <p>Return records need review.</p>}
           </div>)}
         </details>
       </article>)}
@@ -90,17 +96,22 @@ export default async function IncomeStatementEntriesPage(
     </section> : (metric === 'otherExpenses' || metric === 'otherOperatingIncome') ? <section className="card min-w-0 divide-y">
       {entries.slice((page - 1) * size, page * size).map(entry => <article className="min-w-0 space-y-2 p-4 text-sm" key={entry.id}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-ink/60">{date(entry.date)}</p>
+          <p className="font-semibold break-words min-w-0">{entry.source?.title && !['Expense','Posted accounting entry'].includes(entry.source.title) ? entry.source.title : ownerAccountLabel(entry.label)}</p>
           <p className="font-semibold tabular-nums">{money(entry.contributionPence ?? 0)}</p>
         </div>
-        <p className="font-semibold break-words">{entry.label}</p>
+        <p className="text-ink/60">{date(entry.date)}</p>
+        <p className="text-xs text-ink/60">{ownerAccountLabel(entry.label)}</p>
         {entry.source ? <>
-          <p className="break-words">{entry.source.title}</p>
           {entry.source.details.map((detail, i) => <p key={i} className="break-words text-ink/70">{detail}</p>)}
-          {entry.source.reference ? <p className="break-all text-xs text-ink/60">Reference: {entry.source.reference}</p> : null}
           {entry.source.nonCash ? <p className="text-xs text-ink/60">Stock value adjustment — not cash received or paid.</p> : null}
         </> : null}
-        <p className="break-words text-xs text-ink/60">Posted entry: {entry.description}</p>
+        {humanJournalDescription(entry.description) && humanJournalDescription(entry.description)!==entry.source?.title ? <p className="break-words text-xs text-ink/60">{humanJournalDescription(entry.description)}</p>:null}
+        <details><summary className="min-h-11 cursor-pointer py-3 text-xs font-semibold text-ink/60">Reference details</summary>
+          {entry.source?.reference?<p className="break-all text-xs">Reference: {entry.source.reference}</p>:null}
+          <p className="break-all text-xs">{entry.description}</p>
+          <p className="break-all text-xs">{entry.id}</p>
+        </details>
+        {!selectedCategory && entry.label==='Inventory Loss & Shrinkage'?<Link className="inline-flex min-h-11 items-center text-accent underline" href={incomeStatementEntriesHref('otherExpenses',from,to,entry.label)}>View all stock losses →</Link>:null}
         {(entry.contributionPence ?? 0) < 0 ? <p className="text-xs text-ink/60">Reduces this category total.</p> : null}
         {entry.href ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={entry.href}>View source record →</Link> : null}
       </article>)}

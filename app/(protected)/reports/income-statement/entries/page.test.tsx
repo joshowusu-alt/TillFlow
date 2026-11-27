@@ -3,7 +3,9 @@ import {renderToStaticMarkup} from 'react-dom/server';
 const mocks=vi.hoisted(()=>({open:vi.fn(),statement:vi.fn()}));
 vi.mock('@/lib/entitlements/live-report',()=>({openLiveReport:mocks.open}));
 vi.mock('@/lib/reports/financials',()=>({getIncomeStatementBreakdown:mocks.statement}));
+vi.mock('@/components/reports/OneScreenCostFix',()=>({default:vi.fn()}));
 import Page from './page';
+import OneScreenCostFix from '@/components/reports/OneScreenCostFix';
 describe('income statement detail access and period',()=>{
   beforeEach(()=>{
     vi.clearAllMocks();mocks.open.mockResolvedValue({ok:true,business:{id:'business',currency:'GHS',timezone:'Africa/Accra'},decision:{appliedRange:{fromLocalDate:'2026-10-01',toLocalDate:'2026-10-20'}}});
@@ -26,7 +28,7 @@ describe('income statement detail access and period',()=>{
     expect(html).toContain('Affected receipt');
     expect(html).not.toContain('SAL-001');
     expect(html).toContain('/products/rice/cost-review');
-    expect(html).toContain('Historical cost not confirmed');
+    expect(html).toContain('Cost of earlier sale not confirmed');
     expect(html).toContain('2026-10-01');
   });
   it('groups repeated affected products, retains unsupported returns and links back with the applied period', async()=>{
@@ -40,12 +42,38 @@ describe('income statement detail access and period',()=>{
     ]});
     const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({metric:'grossProfit',issues:'1'})}));
     expect(html).toContain('1 product · 3 affected receipts');
-    expect(html).toContain('2 affected receipts');
+    expect(html).toContain('2 sales missing a cost');
     expect(html).toContain('GH₵280.00');
     expect(html.match(/href="\/products\/rice\/cost-review\?/g)).toHaveLength(1);
     expect(html).toContain('Receipt A');expect(html).toContain('Receipt B');expect(html).toContain('Return C');
     expect(html).toContain('No automatic product correction');
     expect(html).toContain('from=2026-10-01&amp;to=2026-10-20&amp;metric=grossProfit');
+  });
+  it('loads owner previews one at a time and keeps the other cards when one throws',async()=>{
+    const access=await mocks.open(),statement=await mocks.statement();
+    mocks.open.mockResolvedValue({...access,user:{role:'OWNER'},stores:[{id:'main',name:'Main'}]});
+    mocks.statement.mockResolvedValue({...statement,cogs:null,entries:['A','B','C'].map(name=>({
+      ...statement.entries[0],id:'sale:'+name,costPence:null,profitPence:null,
+      incompleteLines:[{productId:name,name,qtyBase:1,revenuePence:100,reason:'INCOMPLETE_COSTS'}],
+    }))});
+    let active=0,peak=0;
+    vi.mocked(OneScreenCostFix).mockImplementation(async({group})=>{
+      active++;peak=Math.max(peak,active);
+      try {
+        await Promise.resolve();
+        if(group.productId==='B')throw new Error('Preview transaction timeout');
+        return <p>Ready to fix {group.name}</p>;
+      } finally {active--;}
+    });
+    const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({metric:'cogs',issues:'1'})}));
+    expect(peak).toBe(1);
+    expect(OneScreenCostFix).toHaveBeenCalledTimes(3);
+    expect(html).toContain('Ready to fix A');
+    expect(html).toContain('Ready to fix C');
+    expect(html).toContain('/products/B/cost-review?from=2026-10-01&amp;to=2026-10-20&amp;metric=cogs');
+    expect(html).toContain('Review purchase and sale records (owner confirms) →');
+    expect(html).not.toContain('Preview transaction timeout');
+    expect(html).toContain('Costs recorded on the sales in this period. Missing costs keep profit incomplete.');
   });
   it('does not query records when report access is denied',async()=>{
     mocks.open.mockResolvedValue({ok:false,denial:<p>Access denied</p>});
@@ -92,6 +120,7 @@ describe('income statement detail access and period',()=>{
     expect(income).not.toContain('Electricity payment');
     const expenses=renderToStaticMarkup(await Page({searchParams:Promise.resolve({metric:'otherExpenses',expenseCategory:'Operating Expenses'})}));
     expect(expenses).toContain('Electricity payment');expect(expenses).toContain('Payee: Power supplier');expect(expenses).toContain('/expenses/one');
+    expect(expenses).toContain('Running costs');expect(expenses).toContain('Reference details');expect(expenses).not.toContain('Posted entry:');
     expect(expenses).not.toContain('Stock found');
     await expect(Page({searchParams:Promise.resolve({metric:'otherExpenses',incomeCategory:'Inventory Gain & Surplus'})})).rejects.toThrow();
   });

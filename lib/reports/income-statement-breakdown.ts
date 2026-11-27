@@ -2,7 +2,7 @@ import { evaluateMarginLines, evaluateMarginSet, type MarginInvoiceInput } from 
 
 export const INCOME_STATEMENT_METRICS = {
   revenue: { label: 'Sales', explanation: 'Recorded sales after discounts, excluding tax. Fully returned and voided sales are excluded.' },
-  cogs: { label: 'Cost of goods sold', explanation: 'Historical costs recorded on the sales in this period. Missing costs remain incomplete.' },
+  cogs: { label: 'Cost of goods sold', explanation: 'Costs recorded on the sales in this period. Missing costs keep profit incomplete.' },
   grossProfit: { label: 'Gross profit', explanation: 'Sales less the recorded cost of goods sold.' },
   otherExpenses: { label: 'Expenses', explanation: 'Posted expense entries in this period, excluding cost of goods sold. Reversals reduce the expense.' },
   otherOperatingIncome: { label: 'Other income', explanation: 'Recorded income other than sales. Stock value adjustments can increase or decrease profit without money coming in.' },

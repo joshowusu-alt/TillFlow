@@ -9,13 +9,14 @@ import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { formatMoney } from '@/lib/format';
 import { getIncomeStatementBreakdown } from '@/lib/reports/financials';
+import { ownerAccountLabel } from '@/lib/reports/owner-account-labels';
 import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, incomeStatementExpenseCategories, incomeStatementJournalCategories, type IncomeStatementMetric } from '@/lib/reports/income-statement-breakdown';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
 export default async function IncomeStatementPage(
   props: {
-    searchParams?: Promise<{ from?: string; to?: string; periodChip?: string }>;
+    searchParams?: Promise<{ from?: string; to?: string; periodChip?: string; costFix?: string; costFixProduct?: string; costFixStore?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -50,7 +51,7 @@ export default async function IncomeStatementPage(
   const incomeCategories = incomeStatementJournalCategories(statement.entries, 'otherOperatingIncome');
   const incomeReconciles = incomeCategories.reduce((sum, category) => sum + category.amountPence, 0) === statement.otherOperatingIncome;
   const breakdownLink = (metric: IncomeStatementMetric, value: ReactNode) => (
-    <Link href={incomeStatementEntriesHref(metric, fromStr, toStr)}
+    <Link href={statement[metric] === null && ['cogs','grossProfit','netProfit'].includes(metric) ? incomeStatementEntriesHref('grossProfit',fromStr,toStr)+'&issues=1' : incomeStatementEntriesHref(metric, fromStr, toStr)}
       aria-label={`View ${INCOME_STATEMENT_METRICS[metric].label} supporting records: ${statement[metric] === null ? 'Costs incomplete' : formatMoney(statement[metric], business.currency)}`}
       className="inline-flex min-h-11 items-center rounded underline decoration-current/30 underline-offset-4 hover:decoration-current focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
       {value}
@@ -70,8 +71,8 @@ export default async function IncomeStatementPage(
   const returnIssues = issueEntries.some(entry => entry.kind === 'sale' &&
     entry.profitPence === null && (!entry.incompleteLines?.length || entry.incompleteLines.some(line => line.reason === 'UNSUPPORTED_RETURN')));
   const profitWarning = incompleteSales
-    ? `Profit is incomplete: ${incompleteSales} sale${incompleteSales === 1 ? ' has an unconfirmed historical product cost' : 's have unconfirmed historical product costs'}.${returnIssues ? ' Some return records also need review.' : ''}`
-    : statement.incompleteLineCount > 0 ? 'Profit is incomplete: some sale costs or return records need review.' : 'Profit is incomplete: a return record needs review.';
+    ? `Profit isn't final yet: ${incompleteSales} sale${incompleteSales === 1 ? ' is' : 's are'} missing a cost.${returnIssues ? ' Some return records also need review.' : ''}`
+    : statement.incompleteLineCount > 0 ? "Profit isn't final yet: some sale costs or return records need review." : "Profit isn't final yet: a return record needs review.";
   const percent = (label: string, value: number) => <span>{label}{!costsIncomplete ? <small className="block text-xs font-normal text-slate-600">({value}% of sales)</small> : null}</span>;
 
   return (
@@ -85,7 +86,9 @@ export default async function IncomeStatementPage(
         showRefresh={false}
       />
       <PeriodChips from={fromStr} to={toStr} timeZone={month.timeZone} now={now} selected={searchParams?.periodChip} />
-      {costsIncomplete ? <p role="status" className="rounded-xl bg-amber-50 px-3 text-sm text-amber-950">{profitWarning} <Link className="inline-flex min-h-11 items-center font-semibold underline" href={incomeStatementEntriesHref('grossProfit', fromStr, toStr) + '&issues=1'}>Review affected sales →</Link></p> : null}
+      {searchParams?.costFix==='done'?<div role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-950"><p>{costsIncomplete?'Cost saved. More costs still need review.':'Done. Profit updated.'}</p>{searchParams.costFixProduct && searchParams.costFixStore && opened.user?.role==='OWNER' && !opened.readOnly?<Link className="inline-flex min-h-11 items-center underline" href={`/products/${encodeURIComponent(searchParams.costFixProduct)}/cost-review/preview?${new URLSearchParams({storeId:searchParams.costFixStore,from:fromStr,to:toStr,metric:'grossProfit'})}`}>Review or undo this cost fix →</Link>:null}</div>:null}
+      {searchParams?.costFix==='undone'?<p role="status" className="rounded-xl bg-amber-50 p-3 text-sm">Cost fix undone.</p>:null}
+      {costsIncomplete ? <p role="status" className="rounded-xl bg-amber-50 px-3 text-sm text-amber-950">{profitWarning} <Link className="inline-flex min-h-11 items-center font-semibold underline" href={incomeStatementEntriesHref('grossProfit', fromStr, toStr) + '&issues=1'}>Fix now →</Link></p> : null}
 
       {!hasData ? (
         <EmptyState
@@ -121,9 +124,9 @@ export default async function IncomeStatementPage(
               <h2 className="text-sm font-semibold">Other income</h2>
               {incomeCategories.map(category => (
                 <div key={category.label} className="flex min-h-11 items-center justify-between gap-2 pl-2 text-sm">
-                  <span className="min-w-0 break-words text-ink/70">{category.label}</span>
+                  <span className="min-w-0 break-words text-ink/70">{ownerAccountLabel(category.label)}</span>
                   <Link href={incomeStatementEntriesHref('otherOperatingIncome', fromStr, toStr, category.label)}
-                    aria-label={`View ${category.label} income records: ${formatMoney(category.amountPence, business.currency)}`}
+                    aria-label={`View ${ownerAccountLabel(category.label)} income records: ${formatMoney(category.amountPence, business.currency)}`}
                     className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-end rounded underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
                     {formatMoney(category.amountPence, business.currency)}
                   </Link>
@@ -148,9 +151,9 @@ export default async function IncomeStatementPage(
               <h2 className="text-sm font-semibold">Expenses</h2>
               {expenseCategories.map(category => (
                 <div key={category.label} className="flex min-h-11 items-center justify-between gap-2 pl-2 text-sm">
-                  <span className="min-w-0 break-words text-ink/70">{category.label}</span>
+                  <span className="min-w-0 break-words text-ink/70">{ownerAccountLabel(category.label)}</span>
                   <Link href={incomeStatementEntriesHref('otherExpenses', fromStr, toStr, category.label)}
-                    aria-label={`View ${category.label} expense records: ${formatMoney(category.amountPence, business.currency)}`}
+                    aria-label={`View ${ownerAccountLabel(category.label)} expense records: ${formatMoney(category.amountPence, business.currency)}`}
                     className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-end rounded text-rose-600 underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
                     {formatMoney(category.amountPence, business.currency)}
                   </Link>

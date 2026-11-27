@@ -2,6 +2,8 @@ import {purchaseDocumentFixture} from '@/lib/test/purchase-document-fixture';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { canRunLivePostgresTests, openTestPrismaClient, runTestTeardown } from '@/lib/test/test-prisma';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createElement } from 'react';
 
 const backupContext = vi.hoisted(() => ({ businessId: '', user: { id: '', name: 'Owner', role: 'OWNER' } }));
 vi.mock('@/lib/action-utils', () => ({ UserError: class UserError extends Error {},
@@ -66,8 +68,8 @@ describePg('isolated inventory valuation and COGS evidence', () => {
       () => db.supplier.deleteMany({ where: { businessId } }),
       () => db.businessSequence.deleteMany({ where: { businessId } }),
       () => db.account.deleteMany({ where: { businessId } }),
-      () => db.shift.deleteMany({ where: { tillId } }),
-      () => db.till.deleteMany({ where: { storeId } }),
+      () => db.shift.deleteMany({ where: { till: { store: { businessId } } } }),
+      () => db.till.deleteMany({ where: { store: { businessId } } }),
       () => db.store.deleteMany({ where: { businessId } }),
       () => db.user.deleteMany({ where: { businessId } }),
       () => db.business.delete({ where: { id: businessId } }),
@@ -415,6 +417,77 @@ describePg('isolated inventory valuation and COGS evidence', () => {
     await expect(f.apply(f.request)).rejects.toThrow();
     await balanced([f.purchase.id,f.sale.id]);
   },60000);
+  it('owner-entered opening cost posts both entries atomically and undoes every value',async()=>{
+    const p=await product();
+    const referenceId='typed-opening:'+p;
+    await opening.recordOpeningInventory({businessId,storeId,referenceId,lines:[{productId:p,unitId,qtyInUnit:5,unitCostPence:0}]});
+    const sale=await sell(p,2);
+    const before=await stock(p);
+    const beforeMovements=await db.stockMovement.findMany({where:{productId:p,storeId},orderBy:{id:'asc'}});
+    const beforeLine=await db.salesInvoiceLine.findFirstOrThrow({where:{salesInvoiceId:sale.id}});
+    const openingMovement=beforeMovements.find(m=>m.type==='OPENING')!;
+    const {loadHistoricalCostPreview}=await import('./historical-cost-preview-load');
+    const {buildHistoricalCostPostingPlan}=await import('./historical-cost-posting-plan');
+    const {applyHistoricalCostCorrection,reverseHistoricalCostCorrection}=await import('./historical-cost-correction');
+    const scope={businessId,storeId,productId:p};
+    const probe=await loadHistoricalCostPreview(businessId,p,storeId,1);
+    const preview=await loadHistoricalCostPreview(businessId,p,storeId,12800);
+    if(probe?.result.status!=='REVIEWABLE'||preview?.result.status!=='REVIEWABLE')throw new Error('Opening stock fixture not reviewable');
+    const plan=buildHistoricalCostPostingPlan(scope,preview.result);
+    const request={...scope,userId,ownerUnitCost:12800,reviewFingerprint:buildHistoricalCostPostingPlan(scope,probe.result).fingerprint,fingerprint:plan.fingerprint,reason:'Owner confirmed original cost',confirmed:true};
+    const cashier=await db.user.create({data:{businessId,name:'Cashier',email:`typed-${p}@example.invalid`,role:'CASHIER',passwordHash:'fixture'}});
+    await expect(applyHistoricalCostCorrection({...request,userId:cashier.id})).rejects.toThrow();
+    await expect(applyHistoricalCostCorrection({...request,reason:''})).rejects.toThrow();
+    await expect(applyHistoricalCostCorrection({...request,reviewFingerprint:'a'.repeat(64)})).rejects.toThrow();
+    expect(await applyHistoricalCostCorrection(request)).toMatchObject({replayed:false});
+    expect(await applyHistoricalCostCorrection(request)).toMatchObject({replayed:true});
+    expect(await stock(p)).toMatchObject({qtyOnHandBase:3,knownValuePence:38400,unvaluedQtyBase:0});
+    const refs=[referenceId,openingMovement.id,sale.id];
+    expect(await inventoryPosting(refs)).toBe(38400);
+    const net=async(code:string)=>{const rows=await db.journalLine.findMany({where:{account:{businessId,code},journalEntry:{businessId,referenceId:{in:refs}}}});return rows.reduce((sum,row)=>sum+row.debitPence-row.creditPence,0)};
+    expect(await net('5000')).toBe(25600);expect(await net('3200')).toBe(-64000);
+    const posted=await db.journalEntry.findFirstOrThrow({where:{businessId,referenceId:openingMovement.id,referenceType:'HISTORICAL_COST_CORRECTION'}});
+    expect(posted.entryDate).toEqual(openingMovement.createdAt);
+    expect(await db.auditLog.count({where:{businessId,entityId:p,action:'HISTORICAL_COST_CORRECTION'}})).toBe(1);
+    expect(await db.salesInvoiceLine.findFirstOrThrow({where:{salesInvoiceId:sale.id}})).toMatchObject({lineCostPence:25600,costBasis:'INVENTORY_VALUE_V1'});
+    await balanced(refs);
+    expect(await reverseHistoricalCostCorrection(request)).toMatchObject({replayed:false});
+    expect(await reverseHistoricalCostCorrection(request)).toMatchObject({replayed:true});
+    expect(await stock(p)).toMatchObject({qtyOnHandBase:before.qtyOnHandBase,knownValuePence:before.knownValuePence,unvaluedQtyBase:before.unvaluedQtyBase,avgCostBasePence:before.avgCostBasePence});
+    expect(await net('1200')).toBe(0);expect(await net('5000')).toBe(0);expect(await net('3200')).toBe(0);
+    expect(await db.stockMovement.findMany({where:{productId:p,storeId},orderBy:{id:'asc'}})).toEqual(beforeMovements);
+    expect(await db.salesInvoiceLine.findFirstOrThrow({where:{salesInvoiceId:sale.id}})).toEqual(beforeLine);
+  },60000);
+  it('loads ten affected product cards across two branches without a preview transaction timeout',async()=>{
+    const start=new Date();
+    const second=await db.store.create({data:{businessId,name:'Disposable second valuation branch'}});
+    const secondTill=await db.till.create({data:{storeId:second.id,name:'Second fixture till'}});
+    await db.shift.create({data:{tillId:secondTill.id,userId,status:'OPEN',openKey:secondTill.id}});
+    const branches=[{id:storeId,name:'Disposable valuation branch',tillId},{id:second.id,name:second.name,tillId:secondTill.id}];
+    const ids:string[]=[];
+    for(let i=0;i<10;i++){
+      const p=await product();ids.push(p);
+      const branch=branches[i%2];
+      await opening.recordOpeningInventory({businessId,storeId:branch.id,referenceId:'multi-preview:'+p,lines:[{productId:p,unitId,qtyInUnit:5,unitCostPence:0}]});
+      await sales.createSale({businessId,storeId:branch.id,tillId:branch.tillId,cashierUserId:userId,customerId,paymentStatus:'UNPAID',payments:[],lines:[{productId:p,unitId,qtyInUnit:2}]});
+    }
+    const {getIncomeStatementBreakdown}=await import('@/lib/reports/financials');
+    const {selectIncomeStatementEntries}=await import('@/lib/reports/income-statement-breakdown');
+    const {groupAffectedSales}=await import('@/lib/reports/cost-review-navigation');
+    const {loadOneScreenCostFixes}=await import('@/components/reports/load-one-screen-cost-fixes');
+    const end=new Date(Date.now()+1000);
+    const statement=await getIncomeStatementBreakdown(businessId,start,end);
+    const groups=groupAffectedSales(selectIncomeStatementEntries(statement.entries,'grossProfit').filter(entry=>entry.kind==='sale'&&entry.contributionPence===null))
+      .filter(group=>group.productId!==null&&ids.includes(group.productId));
+    expect(groups).toHaveLength(10);
+    const cards=await loadOneScreenCostFixes(groups,{businessId,stores:branches,currency:'GHS',timezone:'Africa/Accra',from:start.toISOString().slice(0,10),to:end.toISOString().slice(0,10),metric:'grossProfit'});
+    expect(cards).toHaveLength(10);
+    for(const card of cards){
+      const html=renderToStaticMarkup(createElement('div',null,card));
+      expect(html).toContain('Confirm cost');
+      expect(html).not.toContain('Review purchase and sale records');
+    }
+  },120000);
   it('keeps subsequent sales valued and blocks a stale reversal',async()=>{
     const f=await historicalFixture();await f.apply(f.request);
     const later=await sell(f.p,1);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { previewHistoricalCost, type HistoricalCostEvidence } from './historical-cost-evidence';
 import { INVENTORY_VALUE_V1, UNVERIFIED_STOCK_V1 } from '@/lib/inventory-value';
+import { buildHistoricalCostPostingPlan } from './historical-cost-posting-plan';
 
 const date = new Date('2026-11-01');
 function evidence(): HistoricalCostEvidence {
@@ -59,5 +60,31 @@ describe('historical cost evidence preview', () => {
     expect(previewHistoricalCost(missing).status).toBe('BLOCKED');
     const partial=evidence();partial.balance.knownValue=12800;
     expect(previewHistoricalCost(partial).status).toBe('BLOCKED');
+  });
+  it('proves five unvalued opening units, two sold and three remaining using the owner cost only',()=>{
+    const input=evidence();
+    input.purchases=[];input.credits=[];input.balance={qty:3,knownValue:0,unvalued:3};
+    input.opening={id:'opening',label:'Opening stock',qty:5,value:64000,journalMatches:true,opening:{movementId:'opening-movement',date,needsValue:true,before:{valuePence:null,unitCostBasePence:null,costBasis:null}}};
+    input.movements=[{id:'opening-movement',date,type:'OPENING',referenceType:'OPENING_BALANCE_INVENTORY',referenceId:'opening',qty:5,value:null,basis:null,before:null,after:null},...input.movements.slice(-2).map(m=>({...m,unitCost:99999}))];
+    input.sales=input.sales.slice(-2);
+    expect(previewHistoricalCost(input)).toMatchObject({status:'REVIEWABLE',unitCost:12800,stockValue:38400,cogsDelta:25600});
+    input.opening.journalMatches=false;
+    expect(previewHistoricalCost(input).status).toBe('BLOCKED');
+  });
+  it('uses the recorded opening value and plans only the missing sales cost, never another opening posting',()=>{
+    const input=evidence();
+    input.purchases=[];input.credits=[];
+    input.opening={id:'opening',label:'Opening stock',qty:5,value:64000,journalMatches:true,opening:{movementId:'opening-movement',date,needsValue:false,before:{valuePence:64000,unitCostBasePence:12800,costBasis:INVENTORY_VALUE_V1}}};
+    input.movements=[{id:'opening-movement',date,type:'OPENING',referenceType:'OPENING_BALANCE_INVENTORY',referenceId:'opening',qty:5,value:64000,unitCost:12800,basis:INVENTORY_VALUE_V1,before:null,after:null},...input.movements.slice(-2)];
+    input.sales=input.sales.slice(-2);
+    const proof=previewHistoricalCost(input);
+    expect(proof).toMatchObject({status:'REVIEWABLE',unitCost:12800,stockValue:38400,cogsDelta:25600});
+    if(proof.status!=='REVIEWABLE')throw new Error('Recorded opening evidence was not reviewable');
+    const plan=buildHistoricalCostPostingPlan({businessId:'b',productId:'p',storeId:'s'},proof);
+    expect(plan).not.toHaveProperty('opening');
+    expect(plan.rows.flatMap(row=>row.journal)).toEqual([
+      {accountCode:'5000',debitPence:12800,creditPence:0},{accountCode:'1200',debitPence:0,creditPence:12800},
+      {accountCode:'5000',debitPence:12800,creditPence:0},{accountCode:'1200',debitPence:0,creditPence:12800},
+    ]);
   });
 });
