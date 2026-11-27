@@ -9,7 +9,7 @@ import { openLiveReport } from '@/lib/entitlements/live-report';
 import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { formatMoney } from '@/lib/format';
 import { getIncomeStatementBreakdown } from '@/lib/reports/financials';
-import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, incomeStatementExpenseCategories, type IncomeStatementMetric } from '@/lib/reports/income-statement-breakdown';
+import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, incomeStatementExpenseCategories, incomeStatementJournalCategories, type IncomeStatementMetric } from '@/lib/reports/income-statement-breakdown';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 
@@ -47,6 +47,8 @@ export default async function IncomeStatementPage(
   const statement = await getIncomeStatementBreakdown(business.id, start, end);
   const expenseCategories = incomeStatementExpenseCategories(statement.entries);
   const expensesReconcile = expenseCategories.reduce((sum, category) => sum + category.amountPence, 0) === statement.otherExpenses;
+  const incomeCategories = incomeStatementJournalCategories(statement.entries, 'otherOperatingIncome');
+  const incomeReconciles = incomeCategories.reduce((sum, category) => sum + category.amountPence, 0) === statement.otherOperatingIncome;
   const breakdownLink = (metric: IncomeStatementMetric, value: ReactNode) => (
     <Link href={incomeStatementEntriesHref(metric, fromStr, toStr)}
       aria-label={`View ${INCOME_STATEMENT_METRICS[metric].label} supporting records: ${statement[metric] === null ? 'Costs incomplete' : formatMoney(statement[metric], business.currency)}`}
@@ -61,7 +63,7 @@ export default async function IncomeStatementPage(
     statement.revenue !== 0 ||
     statement.cogs !== 0 || statement.hasFoodCosts ||
     statement.otherExpenses !== 0 || expenseCategories.length > 0 ||
-    statement.otherOperatingIncome !== 0;
+    statement.otherOperatingIncome !== 0 || incomeCategories.length > 0;
   const issueEntries = costsIncomplete ? statement.entries : [];
   const incompleteSales = issueEntries.filter(entry =>
     entry.kind === 'sale' && entry.incompleteLines?.some(line => line.reason !== 'UNSUPPORTED_RETURN')).length;
@@ -114,9 +116,26 @@ export default async function IncomeStatementPage(
             divider="default"
             emphasis="strong"
           />
-          {statement.otherOperatingIncome !== 0 && (
+          {incomeCategories.length > 0 && incomeReconciles ? (
+            <section aria-label="Other income categories" className="border-t border-black/10 pt-2">
+              <h2 className="text-sm font-semibold">Other income</h2>
+              {incomeCategories.map(category => (
+                <div key={category.label} className="flex min-h-11 items-center justify-between gap-2 pl-2 text-sm">
+                  <span className="min-w-0 break-words text-ink/70">{category.label}</span>
+                  <Link href={incomeStatementEntriesHref('otherOperatingIncome', fromStr, toStr, category.label)}
+                    aria-label={`View ${category.label} income records: ${formatMoney(category.amountPence, business.currency)}`}
+                    className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-end rounded underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
+                    {formatMoney(category.amountPence, business.currency)}
+                  </Link>
+                </div>
+              ))}
+              {statement.entries.some(entry => entry.kind === 'other-income' && (entry.accountCode === '4100' || entry.source?.nonCash)) ? <p className="text-xs text-ink/60">Stock value adjustments are not cash received or sales.</p> : null}
+            </section>
+          ) : null}
+          {!incomeReconciles ? <p role="status" className="text-sm text-amber-900">Other income details could not be reconciled to the total. Tap the total to review the records.</p> : null}
+          {(statement.otherOperatingIncome !== 0 || incomeCategories.length > 0) && (
             <ReportSummaryRow
-              label={<span className="text-black/70">Other income</span>}
+              label={<span className="text-black/70">{incomeCategories.length > 0 && incomeReconciles ? 'Total other income' : 'Other income'}</span>}
               value={
                 <span className="text-emerald-700">
                   {breakdownLink('otherOperatingIncome', formatMoney(statement.otherOperatingIncome, business.currency))}
@@ -137,6 +156,7 @@ export default async function IncomeStatementPage(
                   </Link>
                 </div>
               ))}
+              {expenseCategories.some(category => category.label.toLowerCase() === 'operating expenses') ? <p className="text-xs text-ink/60">Operating expenses are recorded under a general account. Tap the amount to see the original notes and payees.</p> : null}
             </section>
           ) : null}
           {!expensesReconcile ? <p role="status" className="text-sm text-amber-900">Expense details could not be reconciled to the total. Tap the total to review the records.</p> : null}

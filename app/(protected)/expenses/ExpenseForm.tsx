@@ -116,6 +116,7 @@ export default function ExpenseForm({
               </option>
             ))}
           </select>
+          <p className="mt-1 text-xs text-black/60">Choose what the expense was for (such as rent, utilities or transport) when a matching category exists.</p>
         </div>
       ) : (
         <div className="md:col-span-2">
@@ -316,6 +317,7 @@ export default function ExpenseForm({
       <div className="md:col-span-4">
         <label className="label">Notes</label>
         <input className="input" name="notes" placeholder="Optional notes" />
+        <p className="mt-1 text-xs text-black/60">Describe what the expense was for so the owner can recognise it in the Income Statement.</p>
       </div>
       <div className="md:col-span-4">
         <SubmitButton className="btn-primary" loadingText="Recording…">

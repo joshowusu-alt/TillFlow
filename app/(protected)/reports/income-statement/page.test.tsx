@@ -88,4 +88,15 @@ describe('income statement drilldown links',()=>{
     expect(html).toContain('Expense details could not be reconciled');
     expect(html).toContain('View Expenses supporting records: GH₵2.00');
   });
+  it('shows net other income categories and separates stock valuation from cash', async () => {
+    const statement=await mocks.statement();
+    const gain={...statement.entries[0],kind:'other-income',label:'Inventory Gain & Surplus',accountCode:'4100',amountPence:100};
+    mocks.statement.mockResolvedValue({...statement,entries:[...statement.entries,gain,{...gain,id:'gain-reversal',amountPence:-50}]});
+    const html=renderToStaticMarkup(await Page({}));
+    expect(html).toContain('View Inventory Gain &amp; Surplus income records: GH₵0.50');
+    expect(html).toContain('incomeCategory=Inventory+Gain+%26+Surplus');
+    expect(html).toContain('Stock value adjustments are not cash received or sales.');
+    expect(html).toContain('View Other income supporting records: GH₵0.50');
+    expect(html).toContain('View Profit supporting records: GH₵3.50');
+  });
 });

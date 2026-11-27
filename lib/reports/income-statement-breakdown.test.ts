@@ -1,5 +1,5 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
-const db=vi.hoisted(()=>({$transaction:vi.fn(),salesInvoice:{findMany:vi.fn()},account:{findMany:vi.fn()},journalLine:{groupBy:vi.fn(),findMany:vi.fn()}}));
+const db=vi.hoisted(()=>({$transaction:vi.fn(),salesInvoice:{findMany:vi.fn()},account:{findMany:vi.fn()},journalLine:{groupBy:vi.fn(),findMany:vi.fn()},expense:{findMany:vi.fn()},stockAdjustment:{findMany:vi.fn()}}));
 vi.mock('@/lib/prisma',()=>({prisma:db}));
 vi.mock('next/cache',()=>({unstable_cache:(fn:unknown)=>fn}));
 vi.mock('@/lib/reports/incomplete-stock',()=>({getIncompleteStockSnapshot:vi.fn().mockResolvedValue({stockValueIncomplete:false,profitMayBeIncomplete:false}),incompleteStockDisclosureMessage:()=>null}));
@@ -17,6 +17,8 @@ describe('income statement supporting records',()=>{
       {id:'expense-line',accountId:'rent',debitPence:200,creditPence:0,journalEntry:{id:'expense-journal',entryDate:start,description:'October rent',referenceType:'EXPENSE',referenceId:'expense'}},
       {id:'gain-line',accountId:'gain',debitPence:0,creditPence:50,journalEntry:{id:'gain-journal',entryDate:start,description:'Stock gain',referenceType:'STOCK_ADJUSTMENT',referenceId:'adjustment'}},
     ]);
+    db.expense.findMany.mockResolvedValue([{id:'expense',transactionNumber:'EXP-1',notes:'October rent',vendorName:'Landlord',reference:null,store:{name:'Main'}}]);
+    db.stockAdjustment.findMany.mockResolvedValue([{id:'adjustment',transactionNumber:'ADJ-1',reason:'Counted stock',reasonCode:'STOCK_FOUND',reversalOfId:null,product:{name:'Rice'},store:{name:'Main'}}]);
   });
   it('reconciles every metric to its own supporting records without using current product costs',async()=>{
     const result=await getIncomeStatementBreakdown('business',start,end);
@@ -28,6 +30,10 @@ describe('income statement supporting records',()=>{
     expect(db.salesInvoice.findMany).toHaveBeenCalledWith(expect.objectContaining({where:{businessId:'business',createdAt:{gte:start,lt:end}}}));
     expect(db.journalLine.findMany).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({account:expect.objectContaining({businessId:'business'}),journalEntry:{businessId:'business',entryDate:{gte:start,lt:end}}})}));
     expect(db.$transaction).toHaveBeenCalledWith(expect.any(Function),expect.objectContaining({isolationLevel:'Serializable'}));
+    expect(result.entries.find(row=>row.id==='journal:expense-line')?.source).toMatchObject({title:'October rent',reference:'EXP-1',details:['Payee: Landlord','Branch: Main']});
+    expect(result.entries.find(row=>row.id==='journal:gain-line')?.source).toMatchObject({title:'Stock found',reference:'ADJ-1',nonCash:true});
+    expect(db.expense.findMany).toHaveBeenCalledWith(expect.objectContaining({where:{businessId:'business',store:{businessId:'business'},id:{in:['expense']}}}));
+    expect(db.stockAdjustment.findMany).toHaveBeenCalledWith(expect.objectContaining({where:{id:{in:['adjustment']},store:{businessId:'business'},product:{businessId:'business'}}}));
   });
   it('deducts food costs and food waste once in gross and net profit', async () => {
     db.salesInvoice.findMany.mockResolvedValue([{ ...sale, discountPence: 0, lines: [{

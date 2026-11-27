@@ -81,4 +81,18 @@ describe('income statement detail access and period',()=>{
     await expect(Page({searchParams:Promise.resolve({metric:'otherExpenses',expenseCategory:'another tenant'})})).rejects.toThrow();
     await expect(Page({searchParams:Promise.resolve({metric:'revenue',expenseCategory:'Rent'})})).rejects.toThrow();
   });
+  it('shows original operating expense notes and stock adjustment source details without reclassifying the figures',async()=>{
+    const statement=await mocks.statement();
+    const expense={...statement.entries[0],id:'expense',kind:'expense',label:'Operating Expenses',description:'Expense posted',href:'/expenses/one',amountPence:200,source:{title:'Electricity payment',details:['Payee: Power supplier'],reference:'EXP-1'}};
+    const gain={...expense,id:'gain',kind:'other-income',label:'Inventory Gain & Surplus',amountPence:500,href:null,source:{title:'Stock found',details:['Product: Rice','Branch: Main'],reference:'ADJ-1',nonCash:true}};
+    mocks.statement.mockResolvedValue({...statement,otherOperatingIncome:300,entries:[expense,gain,{...gain,id:'reverse',amountPence:-200,source:{...gain.source,title:'Stock adjustment reversal'}}]});
+    const income=renderToStaticMarkup(await Page({searchParams:Promise.resolve({metric:'otherOperatingIncome',incomeCategory:'Inventory Gain & Surplus'})}));
+    expect(income).toContain('GH₵3.00');expect(income).toContain('Stock found');expect(income).toContain('Stock adjustment reversal');
+    expect(income).toContain('Product: Rice');expect(income).toContain('ADJ-1');expect(income).toContain('Stock value adjustment — not cash received or paid.');
+    expect(income).not.toContain('Electricity payment');
+    const expenses=renderToStaticMarkup(await Page({searchParams:Promise.resolve({metric:'otherExpenses',expenseCategory:'Operating Expenses'})}));
+    expect(expenses).toContain('Electricity payment');expect(expenses).toContain('Payee: Power supplier');expect(expenses).toContain('/expenses/one');
+    expect(expenses).not.toContain('Stock found');
+    await expect(Page({searchParams:Promise.resolve({metric:'otherExpenses',incomeCategory:'Inventory Gain & Surplus'})})).rejects.toThrow();
+  });
 });
