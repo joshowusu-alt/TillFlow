@@ -29,7 +29,22 @@ describe('read-only income statement source metadata', () => {
     const adjustment=vi.fn().mockResolvedValue([{id:'a',reason:'Damaged',reasonCode:'DAMAGED',transactionNumber:'ADJ-1',reversalOfId:null,store:{name:'Main'},product:{name:'Rice'}}]);
     const result=await loadIncomeStatementSources({expense:{findMany:expense},stockAdjustment:{findMany:adjustment}} as never,'business',[{id:'j1',referenceType:'EXPENSE',referenceId:'e'},{id:'j2',referenceType:'STOCK_ADJUSTMENT',referenceId:'a'}]);
     expect(result.get('j1')?.title).toBe('Lunch');
-    expect(result.get('j2')?.title).toBe('Damaged');
-    expect(result.get('j2')?.details).toEqual(['Product: Rice','Branch: Main']);
+    expect(result.get('j2')?.title).toBe('Damaged — Rice');
+    expect(result.get('j2')?.details).toEqual(['Branch: Main']);
+  });
+  it('titles stock cards with the recorded reason and product, preserving distinct notes and reversals',async()=>{
+    const cases=[
+      {reasonCode:'STOCKTAKE_SHORTFALL',reason:'Count shortage',title:'Count shortage — OATS',details:[]},
+      {reasonCode:'STOCK_FOUND',reason:'Stock found',title:'Found in count — OATS',details:[]},
+      {reasonCode:'PHYSICAL_COUNT_SURPLUS',reason:'Physical count surplus',title:'Found in count — OATS',details:[]},
+      {reasonCode:'THEFT',reason:'Recorded theft reason',title:'Theft — OATS',details:[]},
+      {reasonCode:'EXPIRED',reason:'Expired yesterday',title:'Expired — OATS',details:['Expired yesterday']},
+      {reasonCode:null,reason:'Damaged',title:'Damaged — OATS',details:[]},
+      {reasonCode:null,reason:'  ',title:'Quantity correction — OATS',details:[]},
+      {reasonCode:'DAMAGED',reason:'Damaged',reversalOfId:'prior',title:'Damaged — OATS — reversal',details:[]},
+    ];
+    const rows=cases.map(({reasonCode,reason,reversalOfId},i)=>({id:String(i),reasonCode,reason,reversalOfId,product:{name:'OATS'},store:{name:'Main'},transactionNumber:'ADJ-'+i}));
+    const sources=await loadIncomeStatementSources({expense:{findMany:vi.fn()},stockAdjustment:{findMany:vi.fn().mockResolvedValue(rows)}} as never,'business',rows.map(row=>({id:'j'+row.id,referenceType:'STOCK_ADJUSTMENT',referenceId:row.id})));
+    cases.forEach((test,i)=>expect(sources.get('j'+i)).toMatchObject({title:test.title,details:['Branch: Main',...test.details],nonCash:true}));
   });
 });

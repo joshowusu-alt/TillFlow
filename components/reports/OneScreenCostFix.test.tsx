@@ -16,8 +16,17 @@ describe('single screen cost fix',()=>{
     const html=renderToStaticMarkup(await OneScreenCostFix(props));
     expect(html).toContain('Use GH₵128.00 per stock unit from PUR-000010');
     expect(html).toContain('Use this cost');expect(html).toContain('name="reason"');expect(html).toContain('name="confirmed"');
+    expect(html).toContain('1 sale missing a cost');
+    expect(html).toContain('Confirm — this updates the cost of this sale.');
+    expect(html).not.toContain('these 1 sale');
     expect(html).not.toContain('name="unitCost"');expect(html).not.toContain('POST COST');
     expect(mocks.submit).not.toHaveBeenCalled();
+  });
+  it('uses plural wording for more than one affected sale',async()=>{
+    mocks.preview.mockResolvedValue({result:{...result,corrections:[...result.corrections,{invoiceId:'second',date}]}});
+    const html=renderToStaticMarkup(await OneScreenCostFix(props));
+    expect(html).toContain('2 sales missing a cost');
+    expect(html).toContain('Confirm — this updates the cost of these 2 sales.');
   });
   it('shows a blank cost input only for proven unvalued opening stock',async()=>{
     mocks.preview.mockResolvedValueOnce({result:{status:'BLOCKED'}}).mockResolvedValueOnce({result:{...result,source:{...result.source,opening:{needsValue:true}},unitCost:1}});

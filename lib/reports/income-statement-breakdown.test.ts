@@ -31,7 +31,7 @@ describe('income statement supporting records',()=>{
     expect(db.journalLine.findMany).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({account:expect.objectContaining({businessId:'business'}),journalEntry:{businessId:'business',entryDate:{gte:start,lt:end}}})}));
     expect(db.$transaction).toHaveBeenCalledWith(expect.any(Function),expect.objectContaining({isolationLevel:'Serializable'}));
     expect(result.entries.find(row=>row.id==='journal:expense-line')?.source).toMatchObject({title:'October rent',reference:'EXP-1',details:['Payee: Landlord','Branch: Main']});
-    expect(result.entries.find(row=>row.id==='journal:gain-line')?.source).toMatchObject({title:'Stock found',reference:'ADJ-1',nonCash:true});
+    expect(result.entries.find(row=>row.id==='journal:gain-line')?.source).toMatchObject({title:'Found in count — Rice',reference:'ADJ-1',nonCash:true});
     expect(db.expense.findMany).toHaveBeenCalledWith(expect.objectContaining({where:{businessId:'business',store:{businessId:'business'},id:{in:['expense']}}}));
     expect(db.stockAdjustment.findMany).toHaveBeenCalledWith(expect.objectContaining({where:{id:{in:['adjustment']},store:{businessId:'business'},product:{businessId:'business'}}}));
   });

@@ -435,7 +435,7 @@ jobs:
 
   product-cost-owner-mobile:
     name: product-cost-owner-mobile
-    if: github.event_name == 'pull_request' && (github.head_ref == 'remediation/simplify-product-cost-resolution' || github.head_ref == 'remediation/one-screen-cost-fix')
+    if: github.event_name == 'pull_request' && (github.head_ref == 'remediation/simplify-product-cost-resolution' || github.head_ref == 'remediation/one-screen-cost-fix' || github.head_ref == 'remediation/cost-wording-tidy')
     needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 20
