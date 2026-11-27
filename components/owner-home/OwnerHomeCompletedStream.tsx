@@ -14,7 +14,7 @@ import { loadHomeScope, loadHomeFigures, loadHomeAttention, loadHomeTills } from
 const loading = (message: string) => <p role="status" className="rounded-xl bg-white p-4 text-sm text-muted">{message}</p>;
 
 function HomePerformanceUnavailable() {
-  return <div role="alert" className="rounded-xl bg-white p-4">Couldn&apos;t load today&apos;s figures. Choose a branch if needed, then retry. <RetryButton label="Retry" /></div>;
+  return <div role="alert" className="rounded-xl border border-white/20 bg-black/[0.15] p-4 text-white">Couldn&apos;t load today&apos;s figures. Choose a branch if needed, then retry. <RetryButton tone="onDark" label="Retry" /></div>;
 }
 function HomeAttentionUnavailable() {
   return <HomeAttentionList rows={null} reportsHref="/reports" />;
@@ -62,7 +62,7 @@ export default function OwnerHomeCompletedStream({ shell }: { shell: OwnerHomeCr
     <OwnerHomeRefresh />
     <HomeOverviewLayout businessName={shell.businessName}
       figures={<HomeSectionErrorBoundary section="performance" fallback={<HomePerformanceUnavailable />}>
-        <Suspense fallback={loading("Loading today's figures…")}>
+        <Suspense fallback={<p role="status" className="rounded-xl border border-white/20 bg-black/[0.15] p-4 text-sm text-blue-100">Loading today&apos;s figures…</p>}>
           <HomePerformanceSlot promise={figures} />
         </Suspense>
       </HomeSectionErrorBoundary>}

@@ -380,7 +380,7 @@ jobs:
 
   pos-shift-banner-mobile:
     name: pos-shift-banner-mobile
-    if: github.event_name == 'pull_request' && (github.head_ref == 'remediation/pos-shift-banner' || github.head_ref == 'remediation/owner-home-simplify')
+    if: github.event_name == 'pull_request' && (github.head_ref == 'remediation/pos-shift-banner' || github.head_ref == 'remediation/owner-home-simplify' || github.head_ref == 'remediation/owner-home-brand-polish')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -410,7 +410,7 @@ jobs:
 
   owner-home-visual-evidence:
     name: owner-home-visual-evidence
-    if: github.event_name == 'pull_request' && github.head_ref == 'remediation/owner-home-simplify'
+    if: github.event_name == 'pull_request' && (github.head_ref == 'remediation/owner-home-simplify' || github.head_ref == 'remediation/owner-home-brand-polish')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

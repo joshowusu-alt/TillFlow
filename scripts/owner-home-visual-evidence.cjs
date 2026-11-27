@@ -16,6 +16,21 @@ async function main() {
         for (const scenario of ['healthy','incomplete','cash','empty','multiple','loading','failure','large','starter']) {
           await page.goto(base + '/tests/fixtures/owner-home/index.html?scenario=' + scenario);
           await page.getByRole('heading', { name: 'Synthetic Ghana Business' }).waitFor();
+          const hero = page.getByTestId('home-brand-hero');
+          assert.match(await hero.evaluate(el => getComputedStyle(el).backgroundImage), /linear-gradient/, 'Brand gradient missing');
+          assert.equal(await hero.getByRole('heading').evaluate(el => getComputedStyle(el).color), 'rgb(255, 255, 255)');
+          if (scenario !== 'loading') {
+            const values = hero.getByRole('region', { name: "Today's figures" });
+            assert.equal(await values.count(), 1);
+            const labels = await values.getByText('Sales', { exact: true }).count();
+            assert.equal(labels, 1);
+            if (scenario === 'large') {
+              for (const value of await values.getByText('GH₵123,456,789.00', { exact: true }).all()) {
+                assert.equal(await value.evaluate(el => getComputedStyle(el).color), 'rgb(255, 255, 255)');
+                assert.ok(await value.evaluate(el => el.scrollWidth <= el.clientWidth), 'Large value clipped');
+              }
+            }
+          }
           assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), width+' '+scenario+': overflow');
           for (const target of await page.locator('a:visible,button:visible,summary:visible').all()) {
             const box = await target.boundingBox();

@@ -1,12 +1,28 @@
 import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { HomeAttentionList, HomeFigures, HomeTills } from './HomeOverviewView';
+import { HomeAttentionList, HomeFigures, HomeOverviewLayout, HomeTills } from './HomeOverviewView';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/app/actions/operational-store', () => ({ switchOperationalStoreAction: vi.fn() }));
 
 describe('Owner Home presentation', () => {
+  it('keeps the blue brand hero around the business and four figures', () => {
+    render(<HomeOverviewLayout businessName="Synthetic Ghana Business" figures={<HomeFigures scope="Main branch" figures={[
+      { label: 'Sales', value: 'GH₵12.00', href: '/sales' },
+      { label: 'Money received', value: 'GH₵10.00', href: '/reports/money-received' },
+      { label: 'Profit', value: 'GH₵2.00', href: '/reports/income-statement' },
+      { label: 'Transactions', value: '1', href: '/sales' },
+    ]} />} tills={null} attention={null} records={null} extras={null} />);
+    const hero = screen.getByTestId('home-brand-hero');
+    expect(hero).toHaveClass('bg-gradient-to-br', 'to-accent');
+    expect(within(hero).getByRole('heading')).toHaveClass('text-white');
+    expect(within(hero).getByRole('region', { name: "Today's figures" })).toBeVisible();
+    expect(within(hero).getByText('GH₵12.00')).toHaveClass('text-white', '[overflow-wrap:anywhere]');
+    expect(screen.getByRole('link', { name: 'Purchases' })).toHaveAttribute('href', '/purchases');
+    expect(screen.getByRole('link', { name: 'Expenses' })).toHaveAttribute('href', '/expenses');
+    expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/reports');
+  });
   it('keeps credit separate from confirmed receipts and never truncates figures', () => {
     render(<HomeFigures scope="Main branch" figures={[
       { label: 'Sales', value: 'GH₵1,234,567.89', href: '/reports/dashboard?storeId=main' },
