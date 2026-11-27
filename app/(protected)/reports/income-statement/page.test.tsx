@@ -26,7 +26,7 @@ describe('income statement drilldown links',()=>{
     mocks.statement.mockResolvedValue({...await mocks.statement(),cogs:null,grossProfit:null,netProfit:null,incompleteLineCount:3,stockValueIncomplete:true,incompleteStockMessage:'607 products in stock have no cost yet, so stock value is not complete.',entries:[{kind:'sale',profitPence:null,incompleteLines:[{reason:'INCOMPLETE_COSTS'},{reason:'INCOMPLETE_COSTS'}]},{kind:'sale',profitPence:null,incompleteLines:[{reason:'INCOMPLETE_COSTS'}]}]});
     const html=renderToStaticMarkup(await Page({}));
     expect(html).toContain('metric=grossProfit&amp;from=2026-10-01&amp;to=2026-10-20&amp;issues=1');
-    expect(html).toContain('2 sales have no product cost');
+    expect(html).toContain('2 sales have unconfirmed historical product costs');
     expect(html).not.toContain('/products?issue=MISSING_COST');
     expect(mocks.breakdown).toHaveBeenCalledTimes(1);
   });

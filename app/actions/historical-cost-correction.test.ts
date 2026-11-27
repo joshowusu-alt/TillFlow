@@ -31,4 +31,9 @@ describe('owner cost confirmation boundary',()=>{
   await expect(submitHistoricalCostCorrection(form('reverse','REVERSE COST'))).rejects.toThrow('Subsequent+activity');
   expect(m.apply).not.toHaveBeenCalled();expect(m.cache).not.toHaveBeenCalled();
  });
+ it('preserves valid report dates on redirect without changing posting scope',async()=>{
+  const f=form();f.set('from','2026-11-01');f.set('to','2026-11-26');f.set('metric','cogs');
+  await expect(submitHistoricalCostCorrection(f)).rejects.toThrow('REDIRECT:/products/product/cost-review/preview?storeId=store&from=2026-11-01&to=2026-11-26&metric=cogs');
+  expect(m.apply).toHaveBeenCalledWith({businessId:'business',userId:'owner',productId:'product',storeId:'store',fingerprint:fp,reason:'Evidence reviewed',confirmed:true});
+ });
 });

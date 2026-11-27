@@ -15,21 +15,21 @@ export default async function CostResolutionPage(props:{searchParams:Promise<{af
   const href=(cursor?:string,run=false)=>'/products/cost-resolution?'+new URLSearchParams({...cursor?{after:cursor}:{},...run?{review:'1'}:{}});
   const money=(amount:number)=>formatMoney(amount,business.currency);
   return <div className="space-y-4 min-w-0">
-    <PageHeader title="Cost Resolution Centre" subtitle="Review unconfirmed stock values without changing stock or financial records." secondaryCta={{label:'← Products',href:'/products?issue=MISSING_COST'}} />
+    <PageHeader title="Check stock costs" subtitle="Find products whose stock value still needs confirmation." secondaryCta={{label:'← Products',href:'/products?issue=MISSING_COST'}} />
     <section className="card p-4 space-y-3">
-      <p className="text-sm text-slate-600">Stock positions awaiting review</p>
+      <p className="text-sm text-slate-600">Product and branch stock balances awaiting review</p>
       <p className="text-2xl font-semibold tabular-nums">{data.total}</p>
-      <p className="text-sm">Review a small batch against original purchases, movements and journals. Candidates still require owner approval and wider ledger reconciliation. A blocked record needs manual evidence; no average or catalogue cost is substituted.</p>
+      <p className="text-sm">This is the wider stock-cost queue, not the number of sales blocking this month&apos;s profit. Check original records before confirming any correction.</p>
       <div className="flex flex-wrap gap-3">
-        <Link className="btn-secondary inline-flex min-h-11 items-center" href="/reports/income-statement">Review sales blocking period profit</Link>
-        {!review && data.rows.length ? <Link className="btn-primary inline-flex min-h-11 items-center" href={href(after,true)}>Review this batch →</Link> : null}
+        <Link className="btn-secondary inline-flex min-h-11 items-center" href="/reports/income-statement">Check this month&apos;s profit first</Link>
+        {!review && data.rows.length ? <Link className="btn-primary inline-flex min-h-11 items-center" href={href(after,true)}>Check these products →</Link> : null}
         {after ? <Link className="btn-secondary inline-flex min-h-11 items-center" href={href()}>Start again</Link> : null}
       </div>
     </section>
     <section className="space-y-3" aria-label="Stock evidence batch">
       {data.rows.map(row=><article key={row.id} className="card p-4 space-y-2">
         <h2 className="font-semibold break-words">{row.product.name}</h2>
-        <p className="text-sm text-slate-600">{row.store.name} · {row.qtyOnHandBase} base units</p>
+        <p className="text-sm text-slate-600">{row.store.name} · Quantity {row.qtyOnHandBase} (stock units)</p>
         {row.preview?.status==='REVIEWABLE' ? <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-950">
           <p className="font-semibold">Evidence candidate — not posted</p>
           <p>Proposed stock value: {money(row.preview.stockValue)}</p>
@@ -38,7 +38,7 @@ export default async function CostResolutionPage(props:{searchParams:Promise<{af
         </div> : row.preview?.status==='BLOCKED' ? <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-950">
           <p className="font-semibold">Manual reconciliation required</p><p>{row.preview.reason}</p>
         </div> : <p className="text-sm">Not reviewed yet.</p>}
-        <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={`/products/${encodeURIComponent(row.productId)}/cost-review/preview?${new URLSearchParams({storeId:row.storeId})}`}>Open individual evidence →</Link>
+        <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={`/products/${encodeURIComponent(row.productId)}/cost-review/preview?${new URLSearchParams({storeId:row.storeId})}`}>Review proposed correction →</Link>
       </article>)}
       {!data.rows.length ? <p className="card p-4">No more unconfirmed stock positions in this queue.</p> : null}
     </section>

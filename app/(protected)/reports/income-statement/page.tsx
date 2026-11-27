@@ -68,7 +68,7 @@ export default async function IncomeStatementPage(
   const returnIssues = issueEntries.some(entry => entry.kind === 'sale' &&
     entry.profitPence === null && (!entry.incompleteLines?.length || entry.incompleteLines.some(line => line.reason === 'UNSUPPORTED_RETURN')));
   const profitWarning = incompleteSales
-    ? `Profit is incomplete: ${incompleteSales} sale${incompleteSales === 1 ? ' has' : 's have'} no product cost.${returnIssues ? ' Some return records also need review.' : ''}`
+    ? `Profit is incomplete: ${incompleteSales} sale${incompleteSales === 1 ? ' has an unconfirmed historical product cost' : 's have unconfirmed historical product costs'}.${returnIssues ? ' Some return records also need review.' : ''}`
     : statement.incompleteLineCount > 0 ? 'Profit is incomplete: some sale costs or return records need review.' : 'Profit is incomplete: a return record needs review.';
   const percent = (label: string, value: number) => <span>{label}{!costsIncomplete ? <small className="block text-xs font-normal text-slate-600">({value}% of sales)</small> : null}</span>;
 
@@ -83,7 +83,7 @@ export default async function IncomeStatementPage(
         showRefresh={false}
       />
       <PeriodChips from={fromStr} to={toStr} timeZone={month.timeZone} now={now} selected={searchParams?.periodChip} />
-      {costsIncomplete ? <p role="status" className="rounded-xl bg-amber-50 px-3 text-sm text-amber-950">{profitWarning} <Link className="inline-flex min-h-11 items-center font-semibold underline" href={incomeStatementEntriesHref('grossProfit', fromStr, toStr) + '&issues=1'}>Fix costs →</Link></p> : null}
+      {costsIncomplete ? <p role="status" className="rounded-xl bg-amber-50 px-3 text-sm text-amber-950">{profitWarning} <Link className="inline-flex min-h-11 items-center font-semibold underline" href={incomeStatementEntriesHref('grossProfit', fromStr, toStr) + '&issues=1'}>Review affected sales →</Link></p> : null}
 
       {!hasData ? (
         <EmptyState

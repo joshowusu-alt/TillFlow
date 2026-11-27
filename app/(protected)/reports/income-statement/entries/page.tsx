@@ -8,6 +8,8 @@ import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { getIncomeStatementBreakdown } from '@/lib/reports/financials';
 import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, incomeStatementExpenseCategories, isIncomeStatementMetric, selectIncomeStatementEntries } from '@/lib/reports/income-statement-breakdown';
+import { costReviewHref, groupAffectedSales } from '@/lib/reports/cost-review-navigation';
+import { readableReportPeriod } from '@/components/reports/PeriodChips';
 
 export default async function IncomeStatementEntriesPage(
   props: {
@@ -42,7 +44,9 @@ export default async function IncomeStatementEntriesPage(
   const entries = issuesOnly ? allEntries.filter(entry => entry.kind === 'sale' && entry.contributionPence === null)
     : selectedCategory ? allEntries.filter(entry => entry.label === selectedCategory.label) : allEntries;
   const total = selectedCategory ? selectedCategory.amountPence : statement[metric];
-  const size = 100, pages = Math.max(1, Math.ceil(entries.length / size));
+  const groups = issuesOnly ? groupAffectedSales(entries) : [];
+  const size = issuesOnly ? 25 : 100, pages = Math.max(1, Math.ceil((issuesOnly ? groups.length : entries.length) / size));
+  const productCount = groups.filter(group => group.productId).length;
   const page = Math.min(pages, Math.max(1, Number.parseInt(searchParams?.page ?? '1', 10) || 1));
   const metadata = INCOME_STATEMENT_METRICS[metric], money = (n: number) => formatMoney(n, business.currency);
   const backHref = `/reports/income-statement?${new URLSearchParams({ from, to })}`;
@@ -52,26 +56,29 @@ export default async function IncomeStatementEntriesPage(
     {opened.readOnly ? <ReportReadOnlyBanner /> : null}
     <Link className="text-sm font-semibold text-accent underline" href={backHref}>← Income Statement</Link>
     <section className="card space-y-3 p-5">
-      <p className="text-xs text-ink/60">Whole business · {from} to {to}</p>
+      <p className="text-xs text-ink/60">Whole business · {readableReportPeriod(from, to)}</p>
       <h1 className="text-xl font-semibold">{issuesOnly ? 'Sales requiring cost review' : `${selectedCategory?.label ?? metadata.label} — supporting records`}</h1>
       <p className="break-words text-3xl font-semibold tabular-nums">{total === null ? 'Costs incomplete' : money(total)}</p>
       <p className="text-sm text-ink/60">{metadata.explanation}</p>
       {selectedCategory ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={incomeStatementEntriesHref('otherExpenses', from, to)}>View all expenses →</Link> : null}
       {total === null || issuesOnly ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={incomeStatementEntriesHref(metric, from, to) + (issuesOnly ? '' : '&issues=1')}>{issuesOnly ? 'Show all supporting records' : 'Show affected sales only'}</Link> : null}
-      {issuesOnly ? <p className="text-sm">Only the receipts blocking this period&apos;s profit are shown. Review the individual products and their purchase evidence; changing today&apos;s catalogue cost does not confirm historical cost.</p> : null}
-      {total === null ? <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Some sales have incomplete costs or unsupported return records. Their contribution stays incomplete until the source records are resolved.</p> : null}
+      {issuesOnly ? <p className="text-sm font-semibold">{productCount} {productCount === 1 ? 'product' : 'products'} · {entries.length} affected {entries.length === 1 ? 'receipt' : 'receipts'}. Check the purchase records for each product.</p> : null}
+      {total === null ? <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Profit remains incomplete until earlier sale costs or return records are confirmed. Today&apos;s product cost is not proof of an earlier cost.</p> : null}
     </section>
     {issuesOnly ? <section className="space-y-3" aria-label="Affected sales">
-      {entries.slice((page - 1) * size, page * size).map(entry => <article className="card space-y-3 p-4" key={entry.id}>
-        <p className="text-sm text-ink/60">{date(entry.date)}</p>
-        {entry.href ? <Link className="inline-flex min-h-11 items-center break-all font-semibold text-accent underline" href={entry.href}>{entry.label}</Link> : <p className="font-semibold">{entry.label}</p>}
-        {(entry.incompleteLines ?? []).map((line, index) => <div key={index} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
-          <p className="font-semibold break-words">{line.name ?? 'Product'}</p>
-          <p>{line.qtyBase} base units · Net sale {money(line.revenuePence)}</p>
-          <p>{line.reason === 'UNSUPPORTED_RETURN' ? 'Return evidence requires review.' : 'Historical cost not confirmed.'}</p>
-          {line.productId && line.reason !== 'UNSUPPORTED_RETURN' ? <Link className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent underline" href={`/products/${encodeURIComponent(line.productId)}/cost-review`}>Review cost evidence →</Link> : null}
-        </div>)}
-        {!entry.incompleteLines?.length ? <p className="text-sm">Return evidence requires review. Open the receipt for details.</p> : null}
+      {groups.slice((page - 1) * size, page * size).map(group => <article className="card space-y-2 p-4" key={group.key}>
+        <h2 className="font-semibold break-words">{group.name}</h2>
+        <p className="text-sm">{group.receiptCount} affected {group.receiptCount === 1 ? 'receipt' : 'receipts'}</p>
+        {group.productId ? <p className="text-sm text-ink/60">Net sales affected: {money(group.items.reduce((sum, item) => sum + (item.line?.revenuePence ?? 0), 0))} (not the missing cost)</p> : null}
+        {group.productId ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={costReviewHref(group.productId, { from, to, metric })}>Check purchase and sale costs →</Link> : <p className="text-sm text-amber-900">Check the original receipt or return. No automatic product correction is offered for this record.</p>}
+        <details>
+          <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">View affected receipts</summary>
+          {group.items.map(({ receipt, line, index }) => <div key={receipt.id + ':' + index} className="border-t border-slate-100 py-3 text-sm">
+            <p className="text-ink/60">{date(receipt.date)}</p>
+            {receipt.href ? <Link className="inline-flex min-h-11 items-center break-all font-semibold text-accent underline" href={receipt.href}>{receipt.label}</Link> : <p className="font-semibold">{receipt.label}</p>}
+            {line ? <><p>{line.name ?? 'Product'} · Quantity {line.qtyBase} (stock units)</p><p>Net sale {money(line.revenuePence)} — not the missing cost</p><p>{line.reason === 'UNSUPPORTED_RETURN' ? 'Return evidence requires review.' : 'Historical cost not confirmed.'}</p></> : <p>Return evidence requires review.</p>}
+          </div>)}
+        </details>
       </article>)}
       {!entries.length ? <p className="card p-4">No affected sales in this period.</p> : null}
       <nav className="flex flex-wrap items-center justify-between gap-3 text-sm" aria-label="Affected sales pages">

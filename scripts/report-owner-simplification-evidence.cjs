@@ -308,4 +308,5 @@ async function main() {
     console.log('PASS: 20 before/after phone images plus two expense breakdown images, same-period non-VAT sales agree, all captured canonical figures unchanged; VAT distinction preserved.');
   } finally { await browser.close(); }
 }
-main().catch(error => { console.error(error); process.exitCode = 1; });
+module.exports = { seed, login };
+if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
