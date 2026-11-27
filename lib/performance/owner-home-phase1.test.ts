@@ -32,7 +32,7 @@ describe('Owner Home Phase 1 performance contracts', () => {
   });
 
   it('does not double mobile bottom-nav clearance on completed Home', () => {
-    const stream = read('components/owner-home/OwnerHomeCompletedStream.tsx');
+    const stream = read('components/owner-home/HomeOverviewView.tsx');
     const welcome = read('components/ReadinessJourney.tsx');
     expect(stream).toContain('pb-4');
     expect(stream).toContain('lg:pb-8');

@@ -71,13 +71,15 @@ describe('Owner Home deferred-loader failure isolation', () => {
 
   it('critical shell keeps Open POS outside deferred error boundaries', () => {
     const stream = read('components/owner-home/OwnerHomeCompletedStream.tsx');
-    expect(stream).toContain('order-1 lg:col-start-1 lg:row-start-1');
-    expect(stream).toContain('HomeActionCard');
+    const layout = read('components/owner-home/HomeOverviewView.tsx');
+    expect(layout).toContain('order-1 lg:col-start-1 lg:row-start-1');
+    expect(layout).toContain('HomeActionCard');
     expect(stream).toContain('section="attention"');
-    // Attention error boundary is in order-2 rail; Open POS card is in order-1 without that boundary.
-    const order1 = stream.indexOf('order-1 lg:col-start-1 lg:row-start-1');
-    const attentionBoundary = stream.indexOf('section="attention"');
-    const openPosAction = stream.indexOf("label: 'Open POS'");
+    // Attention boundary is supplied only as the attention slot, never around the layout.
+    expect(stream).toContain('attention={<HomeSectionErrorBoundary section="attention"');
+    const order1 = layout.indexOf('order-1 lg:col-start-1 lg:row-start-1');
+    const attentionBoundary = layout.indexOf('{attention}');
+    const openPosAction = layout.indexOf("label: 'Open POS'");
     expect(openPosAction).toBeGreaterThan(-1);
     expect(order1).toBeGreaterThan(-1);
     expect(attentionBoundary).toBeGreaterThan(order1);

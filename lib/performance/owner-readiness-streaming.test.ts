@@ -63,7 +63,7 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
     expect(protectedLayout).toContain('LaunchSessionCompletion');
     expect(onboardingPage).not.toContain('LaunchSessionCompletion');
 
-    expect(completedStream).toContain('Open POS');
+    expect(read('components/owner-home/HomeOverviewView.tsx')).toContain('Open POS');
     expect(completedStream).toContain('shell.businessName');
     expect(completedStream).toContain('<Suspense');
     expect(completedStream).toContain('HomePerformanceSlot');
