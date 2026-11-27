@@ -52,4 +52,20 @@ describe('historical cost preview loader',()=>{
     db.journalEntry.findMany.mockResolvedValue([journal('purchase','PURCHASE_INVOICE',240000,0),journal('credit','PURCHASE_RETURN_CREDIT',-192000,0),journal('sale','SALES_INVOICE',-600,600)]);
     expect(await loadHistoricalCostPreview('b','p','s')).toMatchObject({result:{status:'BLOCKED'}});
   });
+  it('rejects an entered unit cost when any purchase exists',async()=>{
+    expect(await loadHistoricalCostPreview('b','p','s',12800)).toMatchObject({result:{status:'BLOCKED'}});
+    expect(db.journalEntry.findMany).not.toHaveBeenCalled();
+  });
+  it('proves opening stock from the original movement, not today’s catalogue or count',async()=>{
+    db.purchaseInvoice.findMany.mockResolvedValue([]);
+    const opening={id:'m-open',storeId:'s',productId:'p',createdAt:date,type:'OPENING',referenceType:'OPENING_BALANCE_INVENTORY',referenceId:'open',qtyBase:5,valuePence:null,unitCostBasePence:null,costBasis:null,beforeQtyBase:null,afterQtyBase:null};
+    const sale={id:'m-sale',storeId:'s',productId:'p',createdAt:date,type:'SALE',referenceType:'SALES_INVOICE',referenceId:'sale',qtyBase:-2,valuePence:null,unitCostBasePence:9999,costBasis:'UNVERIFIED_STOCK_V1',beforeQtyBase:5,afterQtyBase:3};
+    db.stockMovement.findMany.mockResolvedValueOnce([opening,sale]).mockResolvedValueOnce([opening]);
+    db.inventoryBalance.findFirst.mockResolvedValue({qtyOnHandBase:3,knownValuePence:0,unvaluedQtyBase:3});
+    db.salesInvoice.findMany.mockResolvedValue([{id:'sale',transactionNumber:'INV-1',createdAt:date,salesReturn:null,paymentStatus:'PAID',lines:[{id:'line',productId:'p',qtyBase:2,lineCostPence:0,costBasis:'UNVERIFIED_STOCK_V1'}]}]);
+    db.journalEntry.findMany.mockResolvedValue([journal('sale','SALES_INVOICE',0,0)]);
+    expect(await loadHistoricalCostPreview('b','p','s',12800)).toMatchObject({result:{status:'REVIEWABLE',unitCost:12800,stockValue:38400,cogsDelta:25600,source:{qty:5,value:64000,opening:{needsValue:true,movementId:'m-open',date}}}});
+    db.stockMovement.findMany.mockResolvedValueOnce([{...opening,valuePence:64000},sale]).mockResolvedValueOnce([{...opening,valuePence:64000}]);
+    expect(await loadHistoricalCostPreview('b','p','s',12800)).toMatchObject({result:{status:'BLOCKED'}});
+  });
 });

@@ -14,8 +14,8 @@ export function buildHistoricalCostPostingPlan(scope:{businessId:string;productI
     ];
     return {
       invoiceId:row.invoiceId,receipt:row.receipt,lineId:row.lineId,movementId:row.movementId,entryDate:row.date.toISOString(),
-      before:{lineCostPence:row.recordedCost,costBasis:UNVERIFIED_STOCK_V1,movementValuePence:null},
-      after:{lineCostPence:row.proposedCost,costBasis:INVENTORY_VALUE_V1,movementValuePence:-row.proposedCost},
+      before:{lineCostPence:row.recordedCost,costBasis:UNVERIFIED_STOCK_V1,movementValuePence:null,...(row.previousUnitCost!==undefined?{movementUnitCost:row.previousUnitCost}:{})},
+      after:{lineCostPence:row.proposedCost,costBasis:INVENTORY_VALUE_V1,movementValuePence:-row.proposedCost,...(row.previousUnitCost!==undefined?{movementUnitCost:proof.unitCost}:{})},
       journal:lines,
       reversalJournal:lines.map(l=>({...l,debitPence:l.creditPence,creditPence:l.debitPence})),
     };
@@ -23,6 +23,8 @@ export function buildHistoricalCostPostingPlan(scope:{businessId:string;productI
   if(new Set(rows.map(r=>r.lineId)).size!==rows.length || new Set(rows.map(r=>r.movementId)).size!==rows.length ||
      rows.some(r=>r.before.lineCostPence!==0 || !Number.isSafeInteger(r.after.lineCostPence) || r.after.lineCostPence<=0) ||
      rows.reduce((sum,r)=>sum+r.after.lineCostPence,0)!==proof.cogsDelta) throw new Error('Historical cost proposal is inconsistent.');
-  const payload={version:1,scope:{businessId:scope.businessId,productId:scope.productId,storeId:scope.storeId},sourceId:proof.source.id,unitCost:proof.unitCost,remainingStockValue:proof.stockValue,cogsDelta:proof.cogsDelta,rows};
+  const opening = proof.source.opening?.needsValue ? { movementId: proof.source.opening.movementId, entryDate: proof.source.opening.date.toISOString(), valuePence: proof.source.value, before: proof.source.opening.before, source: 'owner entered, no purchase record' as const } : undefined;
+  // Preserve the fingerprint of every existing purchase-backed correction.
+  const payload={version:1,scope:{businessId:scope.businessId,productId:scope.productId,storeId:scope.storeId},sourceId:proof.source.id,unitCost:proof.unitCost,remainingStockValue:proof.stockValue,cogsDelta:proof.cogsDelta,rows,...(opening ? {opening} : {})};
   return {...payload,fingerprint:createHash('sha256').update(JSON.stringify(payload)).digest('hex')};
 }

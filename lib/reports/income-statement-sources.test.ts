@@ -24,4 +24,12 @@ describe('read-only income statement source metadata', () => {
     expect(expense.mock.calls.map(([query]) => query.where.id.in.length)).toEqual([400, 400, 5]);
     expect(result.size).toBe(806);
   });
+  it('uses the payee for an expense without notes and shows a recorded reason once',async()=>{
+    const expense=vi.fn().mockResolvedValue([{id:'e',notes:null,vendorName:'Lunch',transactionNumber:'EXP-1',reference:null,store:{name:'Main'}}]);
+    const adjustment=vi.fn().mockResolvedValue([{id:'a',reason:'Damaged',reasonCode:'DAMAGED',transactionNumber:'ADJ-1',reversalOfId:null,store:{name:'Main'},product:{name:'Rice'}}]);
+    const result=await loadIncomeStatementSources({expense:{findMany:expense},stockAdjustment:{findMany:adjustment}} as never,'business',[{id:'j1',referenceType:'EXPENSE',referenceId:'e'},{id:'j2',referenceType:'STOCK_ADJUSTMENT',referenceId:'a'}]);
+    expect(result.get('j1')?.title).toBe('Lunch');
+    expect(result.get('j2')?.title).toBe('Damaged');
+    expect(result.get('j2')?.details).toEqual(['Product: Rice','Branch: Main']);
+  });
 });

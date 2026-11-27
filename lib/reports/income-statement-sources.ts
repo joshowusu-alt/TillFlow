@@ -4,8 +4,8 @@ import type { PostedRecordSource } from './income-statement-breakdown';
 type JournalReference = { id: string; referenceType: string | null; referenceId: string | null };
 const adjustmentReasons: Record<string, string> = {
   STOCK_FOUND: 'Stock found', PHYSICAL_COUNT_SURPLUS: 'Physical count surplus',
-  WASTAGE: 'Waste', EXPIRED: 'Expired stock', DAMAGED: 'Damaged stock',
-  THEFT: 'Recorded theft reason', STOCKTAKE_SHORTFALL: 'Stock count shortfall',
+  WASTAGE: 'Waste', EXPIRED: 'Expired', DAMAGED: 'Damaged',
+  THEFT: 'Recorded theft reason', STOCKTAKE_SHORTFALL: 'Count shortage',
   AUTHORISED_QUANTITY_CORRECTION: 'Authorised quantity correction',
 };
 function batches(ids: string[]) {
@@ -32,12 +32,13 @@ export async function loadIncomeStatementSources(db: Prisma.TransactionClient, b
     const expense = journal.referenceType === 'EXPENSE' && journal.referenceId ? expenseMap.get(journal.referenceId) : undefined;
     const adjustment = journal.referenceType === 'STOCK_ADJUSTMENT' && journal.referenceId ? adjustmentMap.get(journal.referenceId) : undefined;
     if (expense) {
-      sources.set(journal.id, { title: expense.notes?.trim() || 'Recorded expense', reference: expense.transactionNumber || expense.reference,
-        details: [expense.vendorName ? 'Payee: ' + expense.vendorName : '', 'Branch: ' + expense.store.name].filter(Boolean) });
+      sources.set(journal.id, { title: expense.notes?.trim() || expense.vendorName?.trim() || 'Expense', reference: expense.transactionNumber || expense.reference,
+        details: [expense.vendorName && expense.vendorName.trim()!== (expense.notes?.trim() || expense.vendorName.trim()) ? 'Payee: ' + expense.vendorName : '', 'Branch: ' + expense.store.name].filter(Boolean) });
     } else if (adjustment) {
-      const reason = adjustment.reasonCode && Object.prototype.hasOwnProperty.call(adjustmentReasons, adjustment.reasonCode) ? adjustmentReasons[adjustment.reasonCode] : 'Stock adjustment';
-      sources.set(journal.id, { title: adjustment.reversalOfId ? 'Stock adjustment reversal' : reason, reference: adjustment.transactionNumber,
-        details: ['Product: ' + adjustment.product.name, 'Branch: ' + adjustment.store.name, ...(adjustment.reason ? ['Recorded reason: ' + adjustment.reason] : [])], nonCash: true });
+      const reason = adjustment.reasonCode && Object.prototype.hasOwnProperty.call(adjustmentReasons, adjustment.reasonCode) ? adjustmentReasons[adjustment.reasonCode] : adjustment.reason?.trim() || 'Quantity correction';
+      const repeated=adjustment.reason?.trim().toLowerCase()===reason.toLowerCase();
+      sources.set(journal.id, { title: adjustment.reversalOfId ? reason + ' — reversal' : reason, reference: adjustment.transactionNumber,
+        details: ['Product: ' + adjustment.product.name, 'Branch: ' + adjustment.store.name, ...(adjustment.reason && !repeated ? [adjustment.reason] : [])], nonCash: true });
     } else {
       sources.set(journal.id, { title: 'Posted accounting entry', reference: journal.id, details: [journal.referenceId ? 'Linked source details unavailable here.' : 'No source document linked.'] });
     }

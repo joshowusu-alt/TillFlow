@@ -26,7 +26,7 @@ describe('income statement drilldown links',()=>{
     mocks.statement.mockResolvedValue({...await mocks.statement(),cogs:null,grossProfit:null,netProfit:null,incompleteLineCount:3,stockValueIncomplete:true,incompleteStockMessage:'607 products in stock have no cost yet, so stock value is not complete.',entries:[{kind:'sale',profitPence:null,incompleteLines:[{reason:'INCOMPLETE_COSTS'},{reason:'INCOMPLETE_COSTS'}]},{kind:'sale',profitPence:null,incompleteLines:[{reason:'INCOMPLETE_COSTS'}]}]});
     const html=renderToStaticMarkup(await Page({}));
     expect(html).toContain('metric=grossProfit&amp;from=2026-10-01&amp;to=2026-10-20&amp;issues=1');
-    expect(html).toContain('2 sales have unconfirmed historical product costs');
+    expect(html).toContain('2 sales are missing a cost');
     expect(html).not.toContain('/products?issue=MISSING_COST');
     expect(mocks.breakdown).toHaveBeenCalledTimes(1);
   });
@@ -41,7 +41,7 @@ describe('income statement drilldown links',()=>{
     }
     expect(complete.match(/metric=revenue/g)).toHaveLength(1);
     expect(complete).not.toContain('Add cost');
-    expect(complete).not.toContain('Profit is incomplete');
+    expect(complete).not.toContain('Profit isn&#x27;t final yet');
     expect(mocks.breakdown).toHaveBeenCalledTimes(1);
     mocks.statement.mockResolvedValue({...statement, stockValueIncomplete:true, incompleteStockMessage:'1 product in stock has no cost yet, so stock value is not complete.'});
     const stock = renderToStaticMarkup(await Page({}));
@@ -93,7 +93,7 @@ describe('income statement drilldown links',()=>{
     const gain={...statement.entries[0],kind:'other-income',label:'Inventory Gain & Surplus',accountCode:'4100',amountPence:100};
     mocks.statement.mockResolvedValue({...statement,entries:[...statement.entries,gain,{...gain,id:'gain-reversal',amountPence:-50}]});
     const html=renderToStaticMarkup(await Page({}));
-    expect(html).toContain('View Inventory Gain &amp; Surplus income records: GH₵0.50');
+    expect(html).toContain('View Stock found in counts income records: GH₵0.50');
     expect(html).toContain('incomeCategory=Inventory+Gain+%26+Surplus');
     expect(html).toContain('Stock value adjustments are not cash received or sales.');
     expect(html).toContain('View Other income supporting records: GH₵0.50');

@@ -60,7 +60,7 @@ async function main() {
         for (const [label, value] of [['Sales','320.00'],['Cost of goods sold','160.00'],['Gross profit','160.00'],['Expenses','50.00'],['Other income','5.00'],['Profit','115.00']]) {
           await page.getByRole('link', { name: `View ${label} supporting records: GH₵${value}` }).waitFor();
         }
-        const gain = page.getByRole('link', { name: 'View Inventory Gain & Surplus income records: GH₵5.00' });
+        const gain = page.getByRole('link', { name: 'View Stock found in counts income records: GH₵5.00' });
         await gain.scrollIntoViewIfNeeded();
         await capture(page, width, height, 'summary');
         await tap(gain);
@@ -69,7 +69,7 @@ async function main() {
         await page.getByText('Stock value adjustment — not cash received or paid.', { exact: true }).waitFor();
         await capture(page, width, height, 'income-source');
         await page.getByRole('link', { name: '← Income Statement' }).click();
-        const expenses = page.getByRole('link', { name: 'View Operating Expenses expense records: GH₵30.00' });
+        const expenses = page.getByRole('link', { name: 'View Running costs expense records: GH₵30.00' });
         await expenses.waitFor();
         await tap(expenses);
         await page.getByText('Synthetic rent', { exact: true }).waitFor();

@@ -60,4 +60,14 @@ describe('historical cost evidence preview', () => {
     const partial=evidence();partial.balance.knownValue=12800;
     expect(previewHistoricalCost(partial).status).toBe('BLOCKED');
   });
+  it('proves five unvalued opening units, two sold and three remaining using the owner cost only',()=>{
+    const input=evidence();
+    input.purchases=[];input.credits=[];input.balance={qty:3,knownValue:0,unvalued:3};
+    input.opening={id:'opening',label:'Opening stock',qty:5,value:64000,journalMatches:true,opening:{movementId:'opening-movement',date,needsValue:true,before:{valuePence:null,unitCostBasePence:null,costBasis:null}}};
+    input.movements=[{id:'opening-movement',date,type:'OPENING',referenceType:'OPENING_BALANCE_INVENTORY',referenceId:'opening',qty:5,value:null,basis:null,before:null,after:null},...input.movements.slice(-2).map(m=>({...m,unitCost:99999}))];
+    input.sales=input.sales.slice(-2);
+    expect(previewHistoricalCost(input)).toMatchObject({status:'REVIEWABLE',unitCost:12800,stockValue:38400,cogsDelta:25600});
+    input.opening.journalMatches=false;
+    expect(previewHistoricalCost(input).status).toBe('BLOCKED');
+  });
 });
