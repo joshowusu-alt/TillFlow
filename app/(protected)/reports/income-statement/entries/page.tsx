@@ -7,13 +7,13 @@ import { formatBusinessLocalDateKey } from '@/lib/notifications/utils';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { businessMonthWindow, requireReportTimeZone } from '@/lib/reports/reporting-clock';
 import { getIncomeStatementBreakdown } from '@/lib/reports/financials';
-import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, incomeStatementExpenseCategories, isIncomeStatementMetric, selectIncomeStatementEntries } from '@/lib/reports/income-statement-breakdown';
+import { INCOME_STATEMENT_METRICS, incomeStatementEntriesHref, incomeStatementJournalCategories, isIncomeStatementMetric, selectIncomeStatementEntries } from '@/lib/reports/income-statement-breakdown';
 import { costReviewHref, groupAffectedSales } from '@/lib/reports/cost-review-navigation';
 import { readableReportPeriod } from '@/components/reports/PeriodChips';
 
 export default async function IncomeStatementEntriesPage(
   props: {
-    searchParams?: Promise<{ from?: string; to?: string; metric?: string; issues?: string; page?: string; expenseCategory?: string; businessId?: string; storeId?: string }>;
+    searchParams?: Promise<{ from?: string; to?: string; metric?: string; issues?: string; page?: string; expenseCategory?: string; incomeCategory?: string; businessId?: string; storeId?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -35,9 +35,10 @@ export default async function IncomeStatementEntriesPage(
   );
   const statement = await getIncomeStatementBreakdown(business.id, start, end);
   const issuesOnly = searchParams?.issues === '1' && (metric === 'cogs' || metric === 'grossProfit' || metric === 'netProfit');
-  const category = searchParams?.expenseCategory;
-  const selectedCategory = category !== undefined && metric === 'otherExpenses'
-    ? incomeStatementExpenseCategories(statement.entries).find(row => row.label === category)
+  const category = searchParams?.expenseCategory ?? searchParams?.incomeCategory;
+  if ((searchParams?.expenseCategory !== undefined && metric !== 'otherExpenses') || (searchParams?.incomeCategory !== undefined && metric !== 'otherOperatingIncome')) notFound();
+  const selectedCategory = category !== undefined && (metric === 'otherExpenses' || metric === 'otherOperatingIncome')
+    ? incomeStatementJournalCategories(statement.entries, metric).find(row => row.label === category)
     : undefined;
   if (category !== undefined && !selectedCategory) notFound();
   const allEntries = selectIncomeStatementEntries(statement.entries, metric);
@@ -60,7 +61,7 @@ export default async function IncomeStatementEntriesPage(
       <h1 className="text-xl font-semibold">{issuesOnly ? 'Sales requiring cost review' : `${selectedCategory?.label ?? metadata.label} — supporting records`}</h1>
       <p className="break-words text-3xl font-semibold tabular-nums">{total === null ? 'Costs incomplete' : money(total)}</p>
       <p className="text-sm text-ink/60">{metadata.explanation}</p>
-      {selectedCategory ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={incomeStatementEntriesHref('otherExpenses', from, to)}>View all expenses →</Link> : null}
+      {selectedCategory ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={incomeStatementEntriesHref(metric, from, to)}>View all {metric === 'otherExpenses' ? 'expenses' : 'other income'} →</Link> : null}
       {total === null || issuesOnly ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={incomeStatementEntriesHref(metric, from, to) + (issuesOnly ? '' : '&issues=1')}>{issuesOnly ? 'Show all supporting records' : 'Show affected sales only'}</Link> : null}
       {issuesOnly ? <p className="text-sm font-semibold">{productCount} {productCount === 1 ? 'product' : 'products'} · {entries.length} affected {entries.length === 1 ? 'receipt' : 'receipts'}. Check the purchase records for each product.</p> : null}
       {total === null ? <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Profit remains incomplete until earlier sale costs or return records are confirmed. Today&apos;s product cost is not proof of an earlier cost.</p> : null}
@@ -86,6 +87,30 @@ export default async function IncomeStatementEntriesPage(
         <span>Page {page} of {pages} · {entries.length} affected receipts</span>
         {page < pages ? <Link className="inline-flex min-h-11 items-center underline" href={href(page + 1)}>Next →</Link> : <span />}
       </nav>
+    </section> : (metric === 'otherExpenses' || metric === 'otherOperatingIncome') ? <section className="card min-w-0 divide-y">
+      {entries.slice((page - 1) * size, page * size).map(entry => <article className="min-w-0 space-y-2 p-4 text-sm" key={entry.id}>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-ink/60">{date(entry.date)}</p>
+          <p className="font-semibold tabular-nums">{money(entry.contributionPence ?? 0)}</p>
+        </div>
+        <p className="font-semibold break-words">{entry.label}</p>
+        {entry.source ? <>
+          <p className="break-words">{entry.source.title}</p>
+          {entry.source.details.map((detail, i) => <p key={i} className="break-words text-ink/70">{detail}</p>)}
+          {entry.source.reference ? <p className="break-all text-xs text-ink/60">Reference: {entry.source.reference}</p> : null}
+          {entry.source.nonCash ? <p className="text-xs text-ink/60">Stock value adjustment — not cash received or paid.</p> : null}
+        </> : null}
+        <p className="break-words text-xs text-ink/60">Posted entry: {entry.description}</p>
+        {(entry.contributionPence ?? 0) < 0 ? <p className="text-xs text-ink/60">Reduces this category total.</p> : null}
+        {entry.href ? <Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={entry.href}>View source record →</Link> : null}
+      </article>)}
+      {!entries.length ? <p className="p-5 text-sm text-ink/60">No contributing records in this period.</p> : null}
+      <nav className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm" aria-label="Supporting records pages">
+        {page > 1 ? <Link className="inline-flex min-h-11 items-center text-accent underline" href={href(page - 1)}>← Previous</Link> : <span />}
+        <span>Page {page} of {pages} · {entries.length} records</span>
+        {page < pages ? <Link className="inline-flex min-h-11 items-center text-accent underline" href={href(page + 1)}>Next →</Link> : <span />}
+      </nav>
+      <p className="flex flex-wrap justify-between gap-3 p-5 font-semibold"><span>Total across all pages</span><span className="tabular-nums">{total === null ? 'Costs incomplete' : money(total)}</span></p>
     </section> : <section className="card overflow-hidden">
       <div className="overflow-x-auto"><table className="w-full text-left text-sm">
         <thead className="bg-slate-50"><tr><th scope="col" className="p-3">Date</th><th scope="col" className="p-3">Source / description</th><th scope="col" className="p-3 text-right">{metric === 'netProfit' ? 'Effect on profit' : 'Amount'}</th></tr></thead>

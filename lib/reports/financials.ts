@@ -10,6 +10,7 @@ import {
 } from '@/lib/reports/incomplete-stock';
 import { evaluateMarginSet, type MarginReturnKind } from '@/lib/reports/margin-line';
 import { saleIncomeContribution, type IncomeStatementContribution } from './income-statement-breakdown';
+import { loadIncomeStatementSources } from './income-statement-sources';
 
 type AccountType = 'ASSET' | 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'EQUITY';
 
@@ -138,6 +139,7 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
 
   const entries: IncomeStatementContribution[] = [];
   if (withEntries) {
+    const sources = await loadIncomeStatementSources(db, businessId, journalLines.map(line => line.journalEntry));
     saleInvoices.forEach((invoice, index) => {
       const entry = saleIncomeContribution({ id: invoice.id, date: invoice.createdAt.toISOString(),
         label: invoice.transactionNumber || 'Sale', margin: marginInvoices[index] });
@@ -153,7 +155,7 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
       const href = journal.referenceId && journal.referenceType === 'EXPENSE' ? `/expenses/${encodeURIComponent(journal.referenceId)}`
         : journal.referenceId && journal.referenceType === 'PURCHASE_INVOICE' ? `/purchases/${encodeURIComponent(journal.referenceId)}` : null;
       entries.push({ id: `journal:${line.id}`, date: journal.entryDate.toISOString(), label: account.name,
-        description: journal.description, href,
+        description: journal.description, href, accountCode: account.code, source: sources.get(journal.id),
         kind: expense && ((account.code === ACCOUNT_CODES.foodCosts && account.name === 'Food costs') ||
           (account.code === ACCOUNT_CODES.foodWaste && account.name === 'Food waste')) ? 'food-cost' : expense ? 'expense' : 'other-income',
         revenuePence: 0, costPence: 0, profitPence: 0,
@@ -192,7 +194,7 @@ const cachedIncomeStatementBreakdown = unstable_cache(
     tx => _getIncomeStatement(businessId, startIso, endIso, tx, true),
     { isolationLevel: 'Serializable', maxWait: 5000, timeout: 15000 },
   ),
-  ['report-income-statement-breakdown'],
+  ['report-income-statement-breakdown-source-details-v2'],
   { revalidate: 300, tags: ['reports'] },
 );
 

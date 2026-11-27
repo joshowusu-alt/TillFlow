@@ -5,22 +5,25 @@ export const INCOME_STATEMENT_METRICS = {
   cogs: { label: 'Cost of goods sold', explanation: 'Historical costs recorded on the sales in this period. Missing costs remain incomplete.' },
   grossProfit: { label: 'Gross profit', explanation: 'Sales less the recorded cost of goods sold.' },
   otherExpenses: { label: 'Expenses', explanation: 'Posted expense entries in this period, excluding cost of goods sold. Reversals reduce the expense.' },
-  otherOperatingIncome: { label: 'Other income', explanation: 'Posted income entries other than sales.' },
+  otherOperatingIncome: { label: 'Other income', explanation: 'Recorded income other than sales. Stock value adjustments can increase or decrease profit without money coming in.' },
   netProfit: { label: 'Profit', explanation: 'Gross profit less expenses, plus other income. Expenses reduce profit; reversals restore it.' },
 } as const;
 export type IncomeStatementMetric = keyof typeof INCOME_STATEMENT_METRICS;
 export function isIncomeStatementMetric(value: string): value is IncomeStatementMetric {
   return Object.prototype.hasOwnProperty.call(INCOME_STATEMENT_METRICS, value);
 }
-export function incomeStatementEntriesHref(metric: IncomeStatementMetric, from: string, to: string, expenseCategory?: string) {
-  return `/reports/income-statement/entries?${new URLSearchParams({ metric, from, to, ...(metric === 'otherExpenses' && expenseCategory !== undefined ? { expenseCategory } : {}) })}`;
+export function incomeStatementEntriesHref(metric: IncomeStatementMetric, from: string, to: string, category?: string) {
+  return `/reports/income-statement/entries?${new URLSearchParams({ metric, from, to, ...(category !== undefined && metric === 'otherExpenses' ? { expenseCategory: category } : category !== undefined && metric === 'otherOperatingIncome' ? { incomeCategory: category } : {}) })}`;
 }
+export type PostedRecordSource = { title: string; details: string[]; reference: string | null; nonCash?: boolean };
 export type IncompleteSaleLine = { productId: string | null; name: string | null; qtyBase: number; revenuePence: number; reason: string | null };
 export type IncomeStatementContribution = {
   id: string; date: string; label: string; description: string; href: string | null;
   kind: 'sale' | 'expense' | 'other-income' | 'food-cost';
   revenuePence: number; costPence: number | null; profitPence: number | null; amountPence: number;
   incompleteLines?: IncompleteSaleLine[];
+  source?: PostedRecordSource;
+  accountCode?: string;
 };
 
 export function saleIncomeContribution(input: {
@@ -62,8 +65,12 @@ export function selectIncomeStatementEntries(entries: IncomeStatementContributio
 
 /** Presentation-only rollup of the same posted entries that make up Expenses. */
 export function incomeStatementExpenseCategories(entries: IncomeStatementContribution[]) {
+  return incomeStatementJournalCategories(entries, 'otherExpenses');
+}
+
+export function incomeStatementJournalCategories(entries: IncomeStatementContribution[], metric: 'otherExpenses' | 'otherOperatingIncome') {
   const byCategory = new Map<string, number>();
-  for (const entry of selectIncomeStatementEntries(entries, 'otherExpenses')) {
+  for (const entry of selectIncomeStatementEntries(entries, metric)) {
     if (entry.contributionPence === null) continue;
     byCategory.set(entry.label, (byCategory.get(entry.label) ?? 0) + entry.contributionPence);
   }
