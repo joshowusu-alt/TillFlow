@@ -69,5 +69,6 @@ export function previewHistoricalCost(evidence: HistoricalCostEvidence): Result 
     return blocked('The reconstructed stock quantity or value does not match the current balance.');
   if (sales.some(s => !seen.has('SALES_INVOICE:' + s.id)) || credits.some(c => !seen.has('PURCHASE_RETURN_CREDIT:' + c.id)))
     return blocked('Source sales or credits are missing corresponding stock movements.');
+  if (source.opening?.needsValue && corrections.length === 0) return blocked('No earlier sales are missing a cost.');
   return { status: 'REVIEWABLE', source, unitCost, stockValue: quantity * unitCost, corrections, cogsDelta };
 }
