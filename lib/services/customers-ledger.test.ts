@@ -227,7 +227,8 @@ describe('customer receipts page', () => {
   });
 
   it('uses owner-friendly page title', () => {
-    expect(src).toContain('Record customer payment');
+    expect(src).toContain('title="Customer balances"');
+    expect(src).toContain('>Record customer payment</SubmitButton>');
     expect(src).toContain('Take a payment from a customer and reduce what they owe.');
   });
 

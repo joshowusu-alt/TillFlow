@@ -21,7 +21,7 @@ import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observa
 import { ReportsReturnPath } from '@/components/reports/ReportsContextNav';
 import { returnPathFor } from '@/lib/reports/today/stage3a-nav';
 
-export const metadata = { title: 'Supplier Aging Report' };
+export const metadata = { title: 'Supplier balances' };
 export const dynamic = 'force-dynamic';
 
 function utcStartOfDay(date: Date): Date {
@@ -106,7 +106,7 @@ export default async function SupplierAgingPage(
     <div className="space-y-6">
       <ReportsReturnPath path={returnPathFor('/payments/supplier-aging')!} storeId={opened.branch.selected === 'ALL' ? null : opened.branch.selected} />
       <PageHeader
-        title="Supplier Aging"
+        title="Supplier balances"
         subtitle="Outstanding supplier balances grouped by how overdue they are."
         actions={
           <DownloadLink

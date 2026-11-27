@@ -68,8 +68,9 @@ describe('Customer and Supplier reporting clarity', () => {
     expect(customerReceiptsSrc).toContain('export default async function CustomerReceiptsPage');
   });
 
-  it('13. "Record customer payment" heading remains present', () => {
-    expect(customerReceiptsSrc).toContain('Record customer payment');
+  it('13. customer balances heading and record customer payment button are present', () => {
+    expect(customerReceiptsSrc).toContain('title="Customer balances"');
+    expect(customerReceiptsSrc).toContain('>Record customer payment</SubmitButton>');
   });
 
   it('14. "Mobile Money (MoMo)" option label is present', () => {
@@ -206,6 +207,8 @@ describe('Customer and Supplier reporting clarity', () => {
   // ── Supplier aging page ────────────────────────────────────────────────
   it('44. Supplier aging page component exists', () => {
     expect(supplierAgingSrc).toContain('export default async function SupplierAgingPage');
+    expect(supplierAgingSrc).toContain('title="Supplier balances"');
+    expect(supplierAgingSrc).toContain("title: 'Supplier balances'");
   });
 
   it('45. "Record payment" link is present on supplier aging page', () => {
