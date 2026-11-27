@@ -487,6 +487,47 @@ jobs:
           name: owner-home-visual-evidence
           path: tmp/owner-home-visual/*.png
 
+  balance-sheet-visual-evidence:
+    name: balance-sheet-visual-evidence
+    if: github.event_name == 'pull_request' && github.head_ref == 'remediation/balance-sheet-owner-view'
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: file:${{ github.workspace }}/prisma/ci-balance-sheet-qa.db
+      VERCEL_ENV: preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Prepare disposable SQLite database (no migrations)
+        run: |
+          npx prisma generate --schema=prisma/schema.prisma
+          npx prisma db push --schema=prisma/schema.prisma --skip-generate
+      - uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: .next
+      - run: npx playwright install --with-deps chromium
+      - name: Verify authenticated Balance Sheet and drill-downs at five screen sizes
+        run: |
+          set -euo pipefail
+          npm run start -- -p 6208 > /tmp/balance-sheet-app.log 2>&1 &
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:6208/login >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:6208/login >/dev/null
+          node scripts/balance-sheet-visual-evidence.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: balance-sheet-visual-evidence
+          path: tmp/balance-sheet-qa/
+
   report-owner-visual-evidence:
     name: report-owner-visual-evidence
     if: github.event_name == 'pull_request' && github.head_ref == 'remediation/simplify-income-statement-movement'
