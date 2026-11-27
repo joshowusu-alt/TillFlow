@@ -62,13 +62,27 @@ describe('balance-sheet business presentation', () => {
     for (const name of ['Cash on hand', 'Money customers owe us', 'Stock value', 'Money owed to suppliers and other creditors', 'Other recorded asset', 'Recorded profit to date']) expect(html).toContain(name);
     for (const code of ['1000', '1100', '1200', '9999', '2000', 'CURRENT_PROFIT']) expect(html).toContain(`account=${code}&amp;asOf=2026-04-02&amp;cutoff=2026-04-02T10%3A00%3A00.000Z`);
     for (const id of ['assets', 'liabilities', 'equity']) {
-      expect(html).toContain(`href="#${id}"`);
       expect(html).toContain(`id="${id}"`);
+      expect(html).not.toContain(`href="#${id}"`);
     }
     expect(html).toContain('-GH₵1.00');
     expect(html).toContain('GH₵51,999.00');
     expect(html).toContain('GH₵39,999.00');
     expect(html).toContain('not cash available to withdraw');
+  });
+  it('uses one compact statement, date chips and an optional custom date form', async () => {
+    const today = renderToStaticMarkup(await Page({}));
+    expect(today.match(/data-balance-sheet-statement/g)).toHaveLength(1);
+    expect(today.match(/What the business owns/g)).toHaveLength(2); // one heading, one accessible section label
+    expect(today).not.toContain('type="date"');
+    expect(today).toContain('asOf=2026-03-31&amp;dateChip=last-month-end');
+    expect(today).toContain('asOf=2026-04-02&amp;dateChip=custom');
+    expect(today).toContain('Export CSV');
+    const custom = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ asOf: '2026-03-30', dateChip: 'custom' }) }));
+    expect(custom).toContain('type="date"');
+    expect(custom).toContain('name="asOf"');
+    expect(custom).toContain('value="2026-03-30"');
+    expect(custom).toContain('max="2026-04-02"');
   });
   it('excludes future-dated entries from today even before the local day ends', async () => {
     await Page({});
