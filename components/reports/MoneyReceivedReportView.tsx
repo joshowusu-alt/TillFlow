@@ -93,7 +93,7 @@ export default function MoneyReceivedReportView({ bundle, drill, metric, from, t
     <details id="money-options" open={periodChip === 'custom' || undefined} className="min-w-0 rounded-xl border border-slate-200 bg-white px-3">
       <summary className={`min-h-11 cursor-pointer py-3 text-sm font-semibold text-accent ${FOCUS}`}>More options</summary>
       <div className="space-y-3 pb-3">
-        <ReportFilterCard columnsClassName="sm:grid-cols-2 lg:grid-cols-5" submitLabel="Apply">
+        <ReportFilterCard columnsClassName="sm:grid-cols-2 lg:grid-cols-5" submitLabel="Apply" submitExtraClassName="min-h-11">
           <input type="hidden" name="pageSize" value={pageSize} />
           {choices.length > 1 || offerAll ? <div><label className="label" htmlFor="storeId">Branch</label>
             <select id="storeId" className="input min-h-11 w-full" name="storeId" defaultValue={storeId}>

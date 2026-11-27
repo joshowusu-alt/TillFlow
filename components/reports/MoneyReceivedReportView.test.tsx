@@ -33,6 +33,7 @@ describe('Owner Money received presentation', () => {
     view('normal','custom');
     expect(screen.getByText('More options').closest('details')).toHaveAttribute('open');
     expect(screen.getByLabelText('From')).toHaveValue('2026-11-27');
+    expect(screen.getByRole('button', { name:'Apply' })).toHaveClass('min-h-11');
     expect(document.querySelector('input[name="storeId"]')).toHaveAttribute('value','main');
   });
   it('does not show zero or a balances claim when loading figures failed', () => {

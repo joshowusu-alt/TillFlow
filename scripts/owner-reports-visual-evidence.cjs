@@ -47,7 +47,31 @@ async function main() {
             }
             if (scenario === 'large') assert.ok(await headline.locator('p').first().evaluate(el=>el.scrollWidth<=el.clientWidth));
             if (scenario === 'empty') assert.ok(await root.getByText('No transactions for this period and selection.').isVisible());
-            if (scenario === 'custom') assert.ok(await root.getByLabel('Branch').isVisible());
+            if (scenario === 'custom') {
+              assert.ok(await root.getByLabel('Branch').isVisible());
+              if (width === 1024) {
+                const apply = options.getByRole('button', { name: 'Apply', exact: true });
+                const form = options.locator('form');
+                const afterClass = await apply.getAttribute('class');
+                assert.equal(afterClass, 'btn-secondary w-full min-h-11');
+                // The failed revision rendered exactly "btn-secondary w-full".
+                // Reconstruct that markup on the same synthetic page/viewport;
+                // restore immediately and retain the normal passing matrix.
+                let beforeHeight;
+                try {
+                  await apply.evaluate(el => { el.className = 'btn-secondary w-full'; });
+                  beforeHeight = (await apply.boundingBox()).height;
+                  assert.ok(beforeHeight < 44, 'Prior tablet button should reproduce the failing height');
+                  await form.screenshot({path:'tmp/owner-reports-visual/1024x768-apply-before-reconstructed.png'});
+                } finally {
+                  await apply.evaluate((el, value) => { el.className = value; }, afterClass);
+                }
+                const afterHeight = (await apply.boundingBox()).height;
+                assert.ok(afterHeight >= 44);
+                await form.screenshot({path:'tmp/owner-reports-visual/1024x768-apply-after.png'});
+                console.log('Tablet Apply comparison: '+beforeHeight+'px → '+afterHeight+'px');
+              }
+            }
           } else if (scenario === 'activity') {
             assert.equal(await root.locator('[data-owner-report-directory] li').count(),7);
             assert.ok(await root.getByText('How much money came in?').isVisible());
