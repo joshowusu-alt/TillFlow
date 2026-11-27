@@ -68,7 +68,7 @@ export default async function BalanceSheetPage(
     <nav aria-label="Statement date" className="flex flex-wrap gap-2 print:hidden">
       {dateOptions.map(option => <Link key={option.key} href={'?' + new URLSearchParams({ asOf: option.date, dateChip: option.key })}
         aria-current={activeDate === option.key ? 'page' : undefined}
-        className={`inline-flex min-h-11 items-center rounded-xl border px-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${activeDate === option.key ? 'border-accent bg-accent text-white' : 'border-slate-200 bg-white text-ink'}`}>
+        className={`inline-flex min-h-[45px] items-center rounded-xl border px-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${activeDate === option.key ? 'border-accent bg-accent text-white' : 'border-slate-200 bg-white text-ink'}`}>
         {option.label}
       </Link>)}
     </nav>
@@ -90,7 +90,7 @@ export default async function BalanceSheetPage(
           {group.rows.length === 0 ? <p className="py-1 text-sm text-ink/60">No entries for this date.</p> : <ul>
             {[...group.rows].sort((a, b) => a.accountCode.localeCompare(b.accountCode)).map(row => <li key={row.accountCode} className="grid min-h-11 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
               <span className="min-w-0 break-words text-ink/70">{accountName(row)}</span>
-              <Link href={entriesHref(row.accountCode)} aria-label={`View entries for ${accountName(row)}: ${money(row.balancePence)}`} className="flex min-h-11 min-w-11 max-w-full items-center justify-end rounded text-right font-semibold tabular-nums underline decoration-current/30 underline-offset-4 hover:decoration-current focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><span className="min-w-0 [overflow-wrap:anywhere]">{money(row.balancePence)}</span></Link>
+              <Link href={entriesHref(row.accountCode)} aria-label={`View entries for ${accountName(row)}: ${money(row.balancePence)}`} className="flex min-h-[45px] min-w-11 max-w-full items-center justify-end rounded text-right font-semibold tabular-nums underline decoration-current/30 underline-offset-4 hover:decoration-current focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><span className="min-w-0 [overflow-wrap:anywhere]">{money(row.balancePence)}</span></Link>
             </li>)}
           </ul>}
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 border-t border-black/10 pt-2 text-base font-semibold sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"><span>{group.totalLabel}</span><span className="min-w-0 text-right tabular-nums [overflow-wrap:anywhere]">{money(group.total)}</span></div>
@@ -98,7 +98,7 @@ export default async function BalanceSheetPage(
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 border-t border-black/10 pt-3 text-base font-semibold text-accent sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"><span>Total liabilities and equity</span><span className="min-w-0 text-right tabular-nums [overflow-wrap:anywhere]">{money(sheet.totalLiabilities + sheet.totalEquity)}</span></div>
       </section>
     </ReportSummaryCard>
-    <p className="text-sm text-ink/60">Tap an underlined amount to see the records behind it.</p>
+    <p className="text-sm text-ink/60">Your financial position from recorded opening balances and transactions. Tap an underlined amount to see the records behind it.</p>
     <p className="text-sm text-ink/60">In a balanced report, owner’s equity is what remains after deducting what the business owes from what it owns. This is not cash available to withdraw.</p>
     <details className="rounded-xl border border-slate-200/80 bg-white/60 px-4 py-1 text-sm text-ink/70"><summary className="min-h-11 cursor-pointer py-3 font-semibold text-accent">How to read this report</summary><div className="space-y-2 pb-3"><p>Owner contributions appear in equity; repayable owner advances appear in liabilities. Cash held by staff remains a business asset. Recorded profit uses posted income and expense entries.</p><p>Negative balances are kept as recorded; they may reflect credits or amounts needing review. Stock-cost checks use current stock records, not a historical stock-cost snapshot.</p></div></details>
     <div className="flex flex-wrap gap-x-4 text-sm print:hidden"><DownloadLink className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={'/api/reports/financials?type=balance-sheet&from=' + key + '&to=' + key}>Export CSV</DownloadLink><Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={'/payments/reconciliation/balances?month=' + key.slice(0, 7)}>Open monthly account review →</Link></div>

@@ -78,6 +78,7 @@ describe('balance-sheet business presentation', () => {
     expect(today).toContain('asOf=2026-03-31&amp;dateChip=last-month-end');
     expect(today).toContain('asOf=2026-04-02&amp;dateChip=custom');
     expect(today).toContain('Export CSV');
+    expect(today).toContain('Your financial position from recorded opening balances and transactions.');
     const custom = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ asOf: '2026-03-30', dateChip: 'custom' }) }));
     expect(custom).toContain('type="date"');
     expect(custom).toContain('name="asOf"');
