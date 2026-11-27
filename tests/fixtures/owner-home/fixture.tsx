@@ -22,7 +22,7 @@ const rows: HomeAttentionRow[] = scenario === 'cash' ? [
 const loading = scenario === 'loading';
 const failed = scenario === 'failure';
 createRoot(document.getElementById('root')!).render(
-  <HomeOverviewLayout businessName="Synthetic Ghana Business" figures={loading ? <p role="status">Loading today’s figures…</p> :
+  <HomeOverviewLayout businessName="Synthetic Ghana Business" figures={loading ? <p role="status" className="rounded-xl border border-white/20 bg-black/[0.15] p-4 text-sm text-blue-100">Loading today’s figures…</p> :
     <HomeFigures scope="Main branch" figures={failed ? figures.map(({ label }) => ({ label, value: null })) : figures} />}
     tills={loading ? <p role="status">Checking tills…</p> : <HomeTills count={scenario === 'empty' ? 0 : scenario === 'multiple' ? 3 : 2} expected={scenario === 'empty' ? null : amount} />}
     attention={loading ? <p role="status">Checking what needs your attention…</p> : <HomeAttentionList rows={failed ? null : rows} reportsHref="/reports?storeId=main" />}
