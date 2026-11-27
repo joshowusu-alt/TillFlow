@@ -1275,6 +1275,36 @@ describe('PosClient till selection', () => {
       expect(document.querySelector('[data-selected-shift-id="shift-3"]')).not.toBeNull();
     });
   });
+  it('uses the selected till for welcome status, including another cashier, own shift, closed and no selection', async () => {
+    searchParamsGet.mockImplementation((key?: string) => key === 'till' ? 'till-1' : null);
+    render(<PosClient {...baseProps} welcome={{firstName:'Owner',userKey:'owner'}} cashierUserId="owner"
+      tills={[{id:'till-1',name:'Till 1'},{id:'till-2',name:'Till 2'},{id:'till-3',name:'Seasonal counter'},{id:'till-4',name:'Second counter'}]}
+      openShiftTillIds={['till-1','till-3','till-4']} openShifts={[
+        {tillId:'till-1',shiftId:'s1',userId:'cashier',userName:'Kingsley Mensah'},
+        {tillId:'till-3',shiftId:'s3',userId:'owner',userName:'Owner'},
+        {tillId:'till-4',shiftId:'s4',userId:'owner',userName:'Owner'},
+      ]}/>);
+    const shelf = within(document.querySelector('[data-pos-welcome-shelf="true"]') as HTMLElement);
+    const select = document.querySelector('#pos-till-select') as HTMLSelectElement;
+    expect(shelf.getByText("Till 1 is open · Kingsley's shift")).toBeInTheDocument();
+    expect(select).toHaveAttribute('data-checkout-till-state','ready');
+    fireEvent.change(select,{target:{value:'till-3'}});
+    expect(shelf.getByText('Seasonal counter is open · your shift')).toBeInTheDocument();
+    expect(shelf.queryByText(/Second counter/)).not.toBeInTheDocument();
+    expect(select).toHaveAttribute('data-pos-shift-id','s3');
+    fireEvent.change(select,{target:{value:'till-2'}});
+    expect(shelf.getByText(/Till 2 is closed — open it to start selling/)).toBeInTheDocument();
+    expect(shelf.getByRole('link',{name:'Open till →'})).toHaveAttribute('href','/shifts');
+    expect(select).toHaveAttribute('data-checkout-till-state','closed');
+    fireEvent.change(select,{target:{value:''}});
+    expect(shelf.getByText('Choose an open till to start selling.')).toBeInTheDocument();
+    expect(shelf.queryByRole('link',{name:'Open till →'})).not.toBeInTheDocument();
+  });
+  it('does not claim a till is closed when shift information is unavailable',()=>{
+    render(<PosClient {...baseProps} welcome={{firstName:'Owner',userKey:'owner'}} checkoutExtrasReady={false} checkoutUnavailable />);
+    expect(screen.getByText('Till information is unavailable. Reconnect or refresh to check.')).toBeInTheDocument();
+    expect(screen.queryByText(/is closed —/)).not.toBeInTheDocument();
+  });
 
   it('rotates the online idempotency key when the cashier switches till after an unclear sale', async () => {
     mockedCompleteSaleAction.mockRejectedValueOnce(new Error('network reset after accept'));

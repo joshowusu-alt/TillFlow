@@ -312,7 +312,7 @@ describe('TillFlow brand logo system', () => {
     expect(onboardingClient).not.toContain('LaunchSessionCompletion');
     expect(posPage).toContain('LaunchSessionCompletion');
     expect(posPage).toContain('PosProgressiveShell');
-    expect(readSource('app/(protected)/pos/PosDeferredSection.tsx')).toContain('PosWelcomeShelf');
+    expect(readSource('app/(protected)/pos/PosClient.tsx')).toContain('PosWelcomeShelf');
     expect(launchSessionCompletion).toContain('protected shell');
     expect(launchSessionCompletion).toContain('not after the full readiness body');
     expect(launchSessionCompletion).toContain("setItem(LAUNCH_SPLASH_SEEN_KEY, '1')");

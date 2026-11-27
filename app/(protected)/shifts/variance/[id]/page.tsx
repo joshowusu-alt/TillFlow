@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import PageHeader from '@/components/PageHeader';
 import { formatDateTime, formatMoney } from '@/lib/format';
-import { displayDocumentNumber } from '@/lib/reliability/walkthrough-contracts';
+import { displayDocumentNumber, displayShiftPresentationNumber } from '@/lib/reliability/walkthrough-contracts';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { withStoreQuery } from '@/lib/reliability/selected-store';
 import SelectOperationalStoreNotice from '@/components/SelectOperationalStoreNotice';
@@ -45,6 +45,7 @@ export default async function CashVarianceDetailPage(
         select: {
           id: true,
           userId: true,
+          shiftNumber: true,
           closureNumber: true,
           actualCashPence: true,
           expectedCashPence: true,
@@ -108,8 +109,9 @@ export default async function CashVarianceDetailPage(
             </div>
           </div>
           <div>
-            <div className="text-xs text-black/40">Closure</div>
-            <div className="font-semibold">{investigation.shift.closureNumber ?? '—'}</div>
+            <div className="text-xs text-black/40">Shift</div>
+            <div className="font-semibold">{displayShiftPresentationNumber(investigation.shift)}</div>
+            {investigation.shift.closureNumber ? <p className="text-xs text-black/50">Closure reference: {investigation.shift.closureNumber}</p> : null}
           </div>
           <div>
             <div className="text-xs text-black/40">Counted cash</div>
