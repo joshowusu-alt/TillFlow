@@ -78,6 +78,7 @@ export const AUTH_BILLING_SELECT = {
   // Entitlement flag merchant pages read to gate Online Storefront access.
   // Growth businesses can buy it as an add-on; Pro includes it by default.
   addonOnlineStorefront: true,
+  storefrontEnabled: true,
   brandCompactLogoUrl: true,
   logoWidth: true,
   logoHeight: true,
@@ -161,6 +162,7 @@ export function isBillingSchemaError(error: unknown) {
       'paymentProviderStatus',
       'billingNotes',
       'addonOnlineStorefront',
+      'storefrontEnabled',
       'brandCompactLogoUrl',
       'logoWidth',
       'logoHeight',

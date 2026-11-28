@@ -12,6 +12,7 @@ describe('AUTH_BILLING_SELECT', () => {
     // page evaluates `addonOnlineStorefront ?? false` — silently blocking
     // Growth + add-on businesses from Online Store settings, analytics, and orders.
     expect(AUTH_BILLING_SELECT).toHaveProperty('addonOnlineStorefront', true);
+    expect(AUTH_BILLING_SELECT).toHaveProperty('storefrontEnabled', true);
   });
 
   it('keeps the core billing/entitlement fields the entitlement layer reads', () => {
