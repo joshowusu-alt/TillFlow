@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server';
 import { requireBusinessAndOptionalStore } from '@/lib/auth';
-import { getFeatures } from '@/lib/features';
+import { canReceiveOnlineOrderAlerts } from '@/lib/online-order-alert-eligibility';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const { user, business, store } = await requireBusinessAndOptionalStore(['CASHIER', 'MANAGER', 'OWNER']);
-  const features = getFeatures((business as any).plan ?? business.mode, (business as any).storeMode,
-    { onlineStorefront: Boolean((business as any).addonOnlineStorefront) });
-  if (!features.onlineStorefront || (user.role === 'CASHIER' && !store)) {
-    return NextResponse.json({ count: 0, orders: [] }, { headers: { 'Cache-Control': 'no-store' } });
+  if (!canReceiveOnlineOrderAlerts(business, user.role, Boolean(store))) {
+    return NextResponse.json({ eligible: false, count: 0, orders: [] }, { headers: { 'Cache-Control': 'no-store' } });
   }
   const where = {
     businessId: business.id,
@@ -30,5 +28,5 @@ export async function GET() {
         store: { select: { name: true } } } }),
   ]);
   // Identity changes when a new order arrives even if the total stays the same.
-  return NextResponse.json({ count, orders, newestId: newest?.id ?? null, newestAt: newest?.createdAt ?? null }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({ eligible: true, count, orders, newestId: newest?.id ?? null, newestAt: newest?.createdAt ?? null }, { headers: { 'Cache-Control': 'no-store' } });
 }

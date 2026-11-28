@@ -528,6 +528,61 @@ jobs:
           name: balance-sheet-visual-evidence
           path: tmp/balance-sheet-qa/
 
+  online-order-alert-visual-evidence:
+    name: online-order-alert-visual-evidence
+    if: github.event_name == 'pull_request' && github.head_ref == 'fix/online-order-alert-banner'
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: file:${{ github.workspace }}/prisma/ci-online-order-alert-visual.db
+      VERCEL_ENV: preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Prepare disposable SQLite database (no migrations)
+        run: |
+          npx prisma generate --schema=prisma/schema.prisma
+          npx prisma db push --schema=prisma/schema.prisma --skip-generate
+      - uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: .next
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+          persist-credentials: false
+      - name: Build exact pre-change app
+        working-directory: baseline
+        run: |
+          npm ci
+          npx prisma generate --schema=prisma/schema.prisma
+          npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Compare real apps with synthetic alert failures at five widths
+        run: |
+          set -euo pipefail
+          npm run start -- -p 6200 > /tmp/order-alert-candidate.log 2>&1 &
+          (cd baseline && npm run start -- -p 6201) > /tmp/order-alert-baseline.log 2>&1 &
+          for port in 6200 6201; do
+            for i in {1..60}; do
+              if curl -fsS "http://127.0.0.1:$port/login" >/dev/null; then break; fi
+              sleep 1
+            done
+            curl -fsS "http://127.0.0.1:$port/login" >/dev/null
+          done
+          node scripts/online-order-alert-visual-evidence.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: online-order-alert-before-after
+          path: tmp/online-order-alert-visual/
+
   report-owner-visual-evidence:
     name: report-owner-visual-evidence
     if: github.event_name == 'pull_request' && (github.head_ref == 'remediation/simplify-income-statement-movement' || github.head_ref == 'remediation/business-movement-compact')
