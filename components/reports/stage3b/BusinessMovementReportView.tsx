@@ -17,22 +17,27 @@ import { CONSOLIDATED_LABEL } from '@/lib/reports/scope-labels';
 import { formatMoney } from '@/lib/format';
 import { visibleMovementInsights } from '@/lib/reports/business-movement/presentation';
 import { buildOwnerInsightSummary, buildOwnerSummaryStrip, ownerPeriodChrome, ownerProductMovers, singleBranchNote, singleCashierNote, describeChangeVsComparison,
-  type BusinessMovementWithMoneyResult, type ChangePair, type OwnerPeriodLabels } from '@/lib/reports/business-movement';
+  type BusinessMovementWithMoneyResult, type ChangePair } from '@/lib/reports/business-movement';
 
-function changeHelper(pair: ChangePair, currency: string, labels: OwnerPeriodLabels, noun = 'activity'): string {
+function changeHelper(pair: ChangePair, currency: string, noun = 'activity'): string {
   const described = describeChangeVsComparison(pair, 'Change');
   const abs = formatMoney(Math.abs(pair.absoluteChange), currency);
   if (pair.comparison === 0 && pair.current > 0) {
-    return `New in ${labels.currentFull} · ${abs}`;
+    return `+${abs} · No earlier ${noun}`;
   }
   if (pair.current === 0 && pair.comparison > 0) {
-    return `No ${noun} in ${labels.currentFull} · was ${abs} in ${labels.comparisonFull}`;
+    return `−${abs} · No current ${noun}`;
   }
   const sign = pair.absoluteChange > 0 ? '+' : pair.absoluteChange < 0 ? '−' : '';
   if (described.usedPercentage && pair.percentageChange != null) {
-    return `${sign}${abs} (${Math.abs(pair.percentageChange).toFixed(1)}%) vs ${labels.comparisonFull}`;
+    return `${sign}${abs} (${Math.abs(pair.percentageChange).toFixed(1)}%)`;
   }
-  return `${sign}${abs} vs ${labels.comparisonFull}`;
+  return `${sign}${abs}`;
+}
+
+function MovementMoneyRow({ label, pair, currency, unavailable, href, earlierHref, helper }: { label: string; pair: ChangePair; currency: string; unavailable: boolean; href?: string; earlierHref?: string; helper: string }) {
+  const amount = (pence: number, link?: string) => link ? <Link href={link} className="inline-flex min-h-[45px] max-w-full items-center underline decoration-current/30 underline-offset-4" aria-label={`${label}: ${formatMoney(pence, currency)}`}><FinancialAmount pence={pence} currency={currency} variant="compact" className="min-w-0 !text-base !whitespace-normal [overflow-wrap:anywhere]" /></Link> : <FinancialAmount pence={pence} currency={currency} variant="compact" className="!text-base !whitespace-normal" />;
+  return <dl data-stage3b-metric className="min-w-0 space-y-1 border-t border-black/10 pt-2"><dt className="font-semibold text-ink">{label}</dt>{unavailable ? <dd className="text-sm text-slate-600">Could not load</dd> : <><dd className="grid min-w-0 grid-cols-2 items-center gap-2 tabular-nums"><span className="min-w-0 [overflow-wrap:anywhere]">{amount(pair.current, href)}</span><span className="min-w-0 text-right [overflow-wrap:anywhere]">{amount(pair.comparison, earlierHref)}</span></dd><dd className="text-xs text-slate-600">{helper}</dd></>}</dl>;
 }
 
 export default function BusinessMovementReportView({ result, scopeLabel, readOnly = false, choices, offerAll, selectedStoreId, selectedPreset, currentFromValue, currentToValue, exportQuery, moneyQuery, selectedPeriod }: {
@@ -55,6 +60,8 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
   const exportQs = new URLSearchParams(exportQuery);
   const moneyQs = new URLSearchParams(moneyQuery);
   const momoQs = new URLSearchParams(moneyQuery);
+  const earlierMoneyQs = new URLSearchParams(moneyQuery);
+  earlierMoneyQs.set('from', p.comparisonFromKey); earlierMoneyQs.set('to', p.comparisonToKey);
   return (
     <div className="space-y-4 sm:space-y-5 [&_tbody_td]:text-base [&_td_.financial-amount]:!text-base">
       {readOnly ? <ReportReadOnlyBanner /> : null}
@@ -106,37 +113,13 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
         </div>
       </ReportFilterCard> : undefined} />
       {queryFailed ? <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Payment figures could not be loaded. Receipts, refunds, pending MoMo and the gap are unavailable. Sales figures remain separate.</p> : null}
-      <BusinessMovementSummary result={result} labels={chrome} strip={strip} />
+      <BusinessMovementSummary result={result} labels={chrome} strip={strip}>
+        <MovementMoneyRow currency={currency} label="Money received" pair={result.money.moneyReceived} unavailable={queryFailed} helper={changeHelper(result.money.moneyReceived, currency, 'receipts')} href={`/reports/money-received?${moneyQs}`} earlierHref={`/reports/money-received?${earlierMoneyQs}`} />
+        <MovementMoneyRow currency={currency} label="Refunds" pair={result.money.refundOutflows} unavailable={queryFailed} helper={changeHelper(result.money.refundOutflows, currency, 'refunds')} />
+        <MovementMoneyRow currency={currency} label="MoMo waiting to be confirmed" pair={result.money.needsMomoConfirmation} unavailable={queryFailed} helper={changeHelper(result.money.needsMomoConfirmation, currency, 'pending MoMo payments')} href={`/reports/momo-confirmation?${momoQs}`} earlierHref={`/reports/momo-confirmation?${earlierMoneyQs}`} />
+      </BusinessMovementSummary>
 
-      <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 [&>*]:p-3 sm:[&>*]:p-5">
-        <ReportMetric currency={currency}
-          label="Money received"
-          value="Could not load"
-          pence={queryFailed ? null : result.money.moneyReceived.current}
-          helper={
-            queryFailed
-              ? 'Money received could not be loaded'
-              : changeHelper(result.money.moneyReceived, currency, chrome)
-          }
-
-        />
-        <ReportMetric currency={currency}
-          label="Refunds"
-          value="Could not load"
-          pence={queryFailed ? null : result.money.refundOutflows.current}
-          helper={queryFailed ? 'Refund figures could not be loaded' : changeHelper(result.money.refundOutflows, currency, chrome, 'refunds')}
-          warning={result.money.refundOutflows.absoluteChange > 0}
-        />
-        <ReportMetric currency={currency}
-          label="MoMo waiting to be confirmed"
-          value="Could not load"
-          pence={queryFailed ? null : result.money.needsMomoConfirmation.current}
-          helper={queryFailed ? 'Pending payments could not be loaded' : changeHelper(result.money.needsMomoConfirmation, currency, chrome, 'pending MoMo payments')}
-          warning={result.money.needsMomoConfirmation.current > 0}
-        />
-      </div>
-
-      <section className="space-y-3">
+      <section className="space-y-2">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">What to look at</h2>
           <p className="text-sm text-slate-600">
@@ -151,8 +134,8 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
         {insights.length === 0 ? <p className="text-sm text-slate-600">No material recorded changes for these periods.</p> : null}
 
       </section>
-      <ReportSection title="Biggest product changes" description="Recorded sales changes in the ranked product list. An increase or decrease does not establish its cause.">
-        <ReportValueBars compact diverging currency={currency} rows={productMovers.slice(0, 6).map(row => ({ label: row.productName, pence: row.changePence, helper: row.side === 'New product' ? 'No sales in the earlier period' : row.side, href: `/products/${encodeURIComponent(row.productId)}` }))} empty="No material product changes for these periods." />
+      <ReportSection title="Biggest product changes" description="Recorded sales changes, not proven causes.">
+        <ReportValueBars compact dense diverging currency={currency} rows={productMovers.slice(0, 6).map(row => ({ label: row.productName, pence: row.changePence, helper: row.side === 'New product' ? 'No sales in the earlier period' : row.side, href: `/products/${encodeURIComponent(row.productId)}` }))} empty="No material product changes for these periods." />
       </ReportSection>
         {insights.length > 2 ? <ReportDisclosure title={`More recorded changes (${insights.length - 2})`}><div className="grid gap-3 lg:grid-cols-2">{insights.slice(2).map(insight => <BusinessMovementInsight key={insight.id} insight={insight} labels={chrome} currency={currency} />)}</div></ReportDisclosure> : null}
       <ReportDisclosure title="Sales and money compared">
@@ -170,12 +153,6 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
         ]} />
       </ReportSection>
       </div>
-      </ReportDisclosure>
-      <ReportDisclosure title="Cashier sales">
-        <ReportSection title="Cashier sales" description={`Recorded sales attributed to each cashier in ${chrome.currentFull}. This is not a measure of individual productivity.`}>
-          <ReportValueBars compact currency={currency} rows={result.cashiers.slice(0, 5).map(row => ({ label: row.cashierName, pence: row.salesValuePence.current }))} empty="No cashier-attributed sales in this period." />
-          <p className="mt-3 text-xs text-slate-600">Up to five cashiers shown. Complete current and earlier figures remain below.</p>
-        </ReportSection>
       </ReportDisclosure>
       <ReportDisclosure title="All product figures">
       <BusinessMovementProductCards rows={productMovers} labels={chrome} currency={currency} />
@@ -259,7 +236,11 @@ export default function BusinessMovementReportView({ result, scopeLabel, readOnl
         </section>
       )}</ReportDisclosure>
 
-      <ReportDisclosure title="Cashier details">{cashierNote ? (
+      <ReportDisclosure title="Cashier sales and details">
+        <p className="text-xs text-slate-600">Recorded sales attributed to each cashier in {chrome.currentFull}. This is not a measure of individual productivity.</p>
+        <ReportValueBars compact dense currency={currency} rows={result.cashiers.slice(0, 5).map(row => ({ label: row.cashierName, pence: row.salesValuePence.current }))} empty="No cashier-attributed sales in this period." />
+        <p className="text-xs text-slate-600">Up to five cashiers shown. Complete current and earlier figures remain below.</p>
+        {cashierNote ? (
         <section className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
           <h2 className="text-base font-semibold text-slate-900">Cashiers</h2>
           <p className="mt-1">{cashierNote}</p>

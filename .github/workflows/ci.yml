@@ -530,7 +530,7 @@ jobs:
 
   report-owner-visual-evidence:
     name: report-owner-visual-evidence
-    if: github.event_name == 'pull_request' && github.head_ref == 'remediation/simplify-income-statement-movement'
+    if: github.event_name == 'pull_request' && (github.head_ref == 'remediation/simplify-income-statement-movement' || github.head_ref == 'remediation/business-movement-compact')
     needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -554,7 +554,7 @@ jobs:
           path: .next
       - uses: actions/checkout@v4
         with:
-          ref: a092b6aac2a8a04e9883de3dfec9381a11caa1a2
+          ref: ${{ github.head_ref == 'remediation/business-movement-compact' && github.event.pull_request.base.sha || 'a092b6aac2a8a04e9883de3dfec9381a11caa1a2' }}
           path: baseline
           persist-credentials: false
       - name: Build exact pre-change app
@@ -565,6 +565,8 @@ jobs:
           npm run build
       - run: npx playwright install --with-deps chromium
       - name: Seed synthetic report fixtures and compare both real apps
+        env:
+          MOVEMENT_COMPACT: ${{ github.head_ref == 'remediation/business-movement-compact' }}
         run: |
           set -euo pipefail
           npm run start -- -p 6200 > /tmp/report-candidate.log 2>&1 &
@@ -576,7 +578,11 @@ jobs:
             done
             curl -fsS "http://127.0.0.1:$port/login" >/dev/null
           done
-          node scripts/report-owner-simplification-evidence.cjs
+          if [ "$MOVEMENT_COMPACT" = "true" ]; then
+            node scripts/business-movement-compact-evidence.cjs
+          else
+            node scripts/report-owner-simplification-evidence.cjs
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:

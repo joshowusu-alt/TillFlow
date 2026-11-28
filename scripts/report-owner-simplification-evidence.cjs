@@ -137,7 +137,7 @@ async function movementValues(page) {
   })) {
     const metric = page.locator('[data-stage3b-metric]').filter({ has: page.locator('dt').filter({ hasText: new RegExp(`^(?:${names.join('|')})$`) }) });
     assert.equal(await metric.count(), 1, key);
-    values[key] = await metric.locator('[data-financial-amount]').textContent();
+    values[key] = await metric.locator('[data-financial-amount]').first().textContent();
   }
   const product = page.getByRole('heading', { name: /^(Largest|Biggest) product changes$/ }).locator('xpath=ancestor::section[1]');
   values.products = await product.locator('[data-report-value-bars] a').evaluateAll(nodes => nodes.map(node => ({ href: node.getAttribute('href'), amount: node.querySelector('[data-financial-amount]')?.textContent })));
@@ -308,5 +308,5 @@ async function main() {
     console.log('PASS: 20 before/after phone images plus two expense breakdown images, same-period non-VAT sales agree, all captured canonical figures unchanged; VAT distinction preserved.');
   } finally { await browser.close(); }
 }
-module.exports = { seed, login };
+module.exports = { seed, login, movementValues };
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
