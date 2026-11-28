@@ -27,7 +27,8 @@ describe('report chart truthfulness', () => {
     expect(mix.reduce((sum,row)=>sum+row.value,0)).toBe(12000);
     render(<SalesMixChart title="Share of supplier sales" currency="GHS" rows={rows} supplierView />);
     expect(screen.getByText('Top 8 suppliers shown. The rest are grouped as Other.')).toBeTruthy();
-    expect(screen.getByText(/33.3%/)).toBeTruthy();
+    expect(screen.getByText('Other: GH₵40.00 (33.3%)')).toBeTruthy();
+    expect(screen.getByText('GH₵40.00 · 33.3%')).toBeTruthy();
   });
   it('shows no wedge or trend when all amounts are zero', () => {
     const { container } = render(<><SalesMixChart title="Mix" currency="GHS" rows={[{ name: 'Empty', value: 0 }]} /><TrendLine title="Trend" currency="GHS" labels={['Monday']} values={[0]} /></>);

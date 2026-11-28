@@ -53,6 +53,16 @@ async function candidateRows(page){
     row.querySelector('h3').textContent.trim(), ...[...row.querySelectorAll('dd')].map(x=>(x.textContent||'').replace(/\s+/g,' ').trim())
   ]));
 }
+async function csvFromDownload(page){
+  const [response]=await Promise.all([
+    page.waitForResponse(r=>new URL(r.url()).pathname==='/reports/sales-by-supplier/export'),
+    page.getByRole('button',{name:'Download CSV',exact:true}).click(),
+  ]);
+  assert.ok(response.ok(),`export status ${response.status()}`);
+  assert.match(response.headers()['content-type']||'',/text\/csv/,'expected an authenticated CSV download');
+  assert.match(response.headers()['content-disposition']||'',/attachment/);
+  return response.text();
+}
 async function checkGeometry(page,width){
   const geometry=await page.evaluate(()=>({
     page:document.documentElement.scrollWidth, viewport:innerWidth,
@@ -87,19 +97,17 @@ async function main(){
   try {
     for(const [width,height] of widths){
       const viewport={width,height};let before;
-      await session(browser,6201,viewport,async(page,base)=>{
+      await session(browser,6201,viewport,async page=>{
         before=await baselineRows(page);assert.equal(before.length,13);
         before.summaries=await summaries(page,['Supplier-linked sales value','Quantity sold','Suppliers with sales','Top supplier']);
-        const csv=await page.request.get(base+'/reports/sales-by-supplier/export?'+params+'&storeId='+fixture.storeId);
-        assert.ok(csv.ok());before.csv=await csv.text();
+        before.csv=await csvFromDownload(page);
         await page.screenshot({path:`${folder}/before-${width}.png`,fullPage:true,animations:'disabled'});
       });
-      await session(browser,6200,viewport,async(page,base)=>{
+      await session(browser,6200,viewport,async page=>{
         const after=await candidateRows(page);
         assert.deepEqual(after,[...before],`Supplier figures changed at ${width}`);
         assert.deepEqual(await summaries(page,['Sales of supplier products','Items sold','Suppliers with sales','Top supplier']),before.summaries,'Summary figures changed');
-        const csv=await page.request.get(base+'/reports/sales-by-supplier/export?'+params+'&storeId='+fixture.storeId);
-        assert.equal(await csv.text(),before.csv,'CSV changed');
+        assert.ok(await csvFromDownload(page)===before.csv,'CSV changed');
         assert.ok(await page.getByText('Top 8 suppliers shown. The rest are grouped as Other.',{exact:true}).isVisible());
         await checkGeometry(page,width);
         const chart=await page.locator('figure svg circle title').allTextContents();
