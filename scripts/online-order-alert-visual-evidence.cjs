@@ -96,7 +96,7 @@ async function main() {
         await banner.waitFor();
         const geometry = await banner.evaluate(el=>{
           const box=el.getBoundingClientRect(), main=document.querySelector('main#main-content').getBoundingClientRect();
-          return {height:box.height,position:getComputedStyle(el).position,bottom:box.bottom,mainTop:main.top,overflow:document.documentElement.scrollWidth>innerWidth};
+          return {height:box.height,position:getComputedStyle(el).position,top:box.top,bottom:box.bottom,mainTop:main.top,overflow:document.documentElement.scrollWidth>innerWidth};
         });
         assert.ok(geometry.height<=40,JSON.stringify(geometry));
         assert.equal(geometry.position,'static');
@@ -104,9 +104,12 @@ async function main() {
         assert.equal(await banner.getByRole('link',{name:/Order alerts paused.*Open orders/}).count(),1);
         assert.equal(await banner.getByRole('button',{name:'Enable sound'}).isVisible(),width>=1024);
         await page.screenshot({path:`${folder}/after-${width}.png`,animations:'disabled'});
-        await page.evaluate(()=>window.scrollTo(0,Math.min(350,document.documentElement.scrollHeight-innerHeight)));
+        // Expand existing report evidence if the viewport is taller than the
+        // initial report, then prove the notice moves with normal document flow.
+        await page.locator('details > summary').filter({hasText:'Sales and money compared'}).click();
+        await page.evaluate(()=>window.scrollTo({top:Math.min(350,document.documentElement.scrollHeight-innerHeight),behavior:'instant'}));
         const afterScroll = await banner.evaluate(el=>({top:el.getBoundingClientRect().top,scroll:scrollY}));
-        assert.ok(afterScroll.scroll>0 && afterScroll.top<0,JSON.stringify(afterScroll));
+        assert.ok(afterScroll.scroll>0 && afterScroll.top<geometry.top,JSON.stringify(afterScroll));
         await page.screenshot({path:`${folder}/after-scrolled-${width}.png`,animations:'disabled'});
         setFail(false); await refresh();
         await banner.waitFor({state:'detached'});
@@ -115,6 +118,7 @@ async function main() {
         await banner.getByRole('button',{name:'Dismiss order alerts for this session'}).click();
         await banner.waitFor({state:'detached'});
         await page.reload(); await page.getByRole('heading',{name:'Business movement',exact:true}).waitFor();
+        await page.waitForLoadState('networkidle');
         await tick(); await tick();
         assert.equal(await banner.count(),0,'dismissal must survive reload');
         results.push({width,side:'after',...geometry,scrolled:afterScroll.scroll});

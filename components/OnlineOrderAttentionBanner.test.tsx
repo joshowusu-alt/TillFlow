@@ -15,7 +15,7 @@ const banner = () => screen.queryByRole('region', { name: 'Order alerts paused' 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
-  vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+  Reflect.set(navigator, 'onLine', true);
   fetcher.mockReset();
   fetcher.mockResolvedValue(ok(empty));
   vi.stubGlobal('fetch', fetcher);
@@ -23,6 +23,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  Reflect.set(navigator, 'onLine', true);
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -108,14 +109,14 @@ it('stops requests if the server reports that the storefront is no longer eligib
 });
 
 it('detects a sustained offline period without making requests while offline', async () => {
-  vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+  Reflect.set(navigator, 'onLine', false);
   render(<OnlineOrderAttentionBanner scopeKey="biz:main" eligible />);
   await advance(15_000);
   expect(banner()).not.toBeInTheDocument();
   await advance(15_000);
   expect(banner()).toBeInTheDocument();
   expect(fetcher).not.toHaveBeenCalled();
-  vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+  Reflect.set(navigator, 'onLine', true);
   fireEvent(window, new Event('online'));
   await flush();
   expect(banner()).not.toBeInTheDocument();

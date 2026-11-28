@@ -137,7 +137,7 @@ function OnlineOrderAttention({ scopeKey }: { scopeKey: string }) {
       data-online-order-notice={paused ? 'paused' : 'outstanding'}
       className="border-b border-amber-200 bg-amber-50 px-3 text-amber-950 sm:px-5">
       <div className="mx-auto flex h-[39px] min-w-0 max-w-screen-2xl items-center gap-2 whitespace-nowrap text-xs font-semibold lg:gap-3 lg:text-sm">
-        <Link href="/online-orders" className="flex h-full min-w-0 flex-1 items-center gap-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
+        <Link href="/online-orders" aria-label={`${label} · Open orders`} className="flex h-full min-w-0 flex-1 items-center gap-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
           <span role="status" aria-live="polite" className="truncate">{label}</span>
           <span className="shrink-0">· <span className="text-accent underline underline-offset-2">Open orders</span></span>
         </Link>
