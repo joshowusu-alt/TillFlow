@@ -4,7 +4,7 @@ import DownloadLink from '@/components/DownloadLink';
 import ReportsDestinationHead from '@/components/reports/ReportsDestinationHead';
 import ReportKeyboardFocus from './ReportKeyboardFocus';
 import ReportMoreActions from './ReportMoreActions';
-import { ReportDisclosure, ReportMetric, ReportSection, ReportValueBars, REPORT_LINK } from './ReportPrimitives';
+import { ReportDisclosure, ReportMetric, ReportSection, ReportValueBars, REPORT_LINK, REPORT_FOCUS } from './ReportPrimitives';
 import BusinessMovementSummary from '@/components/reports/BusinessMovementSummary';
 import BusinessMovementInsight from '@/components/reports/BusinessMovementInsight';
 import BusinessMovementProductCards from '@/components/reports/BusinessMovementProductCards';
@@ -36,8 +36,8 @@ function changeHelper(pair: ChangePair, currency: string, noun = 'activity'): st
 }
 
 function MovementMoneyRow({ label, pair, currency, unavailable, href, earlierHref, helper }: { label: string; pair: ChangePair; currency: string; unavailable: boolean; href?: string; earlierHref?: string; helper: string }) {
-  const amount = (pence: number, link?: string) => link ? <Link href={link} className="inline-flex min-h-[45px] max-w-full items-center underline decoration-current/30 underline-offset-4" aria-label={`${label}: ${formatMoney(pence, currency)}`}><FinancialAmount pence={pence} currency={currency} variant="compact" className="min-w-0 !text-base !whitespace-normal [overflow-wrap:anywhere]" /></Link> : <FinancialAmount pence={pence} currency={currency} variant="compact" className="!text-base !whitespace-normal" />;
-  return <dl data-stage3b-metric className="min-w-0 space-y-1 border-t border-black/10 pt-2"><dt className="font-semibold text-ink">{label}</dt>{unavailable ? <dd className="text-sm text-slate-600">Could not load</dd> : <><dd className="grid min-w-0 grid-cols-2 items-center gap-2 tabular-nums"><span className="min-w-0 [overflow-wrap:anywhere]">{amount(pair.current, href)}</span><span className="min-w-0 text-right [overflow-wrap:anywhere]">{amount(pair.comparison, earlierHref)}</span></dd><dd className="text-xs text-slate-600">{helper}</dd></>}</dl>;
+  const amount = (pence: number, period: string, link?: string) => link ? <Link href={link} className={`inline-flex min-h-[45px] max-w-full items-center underline decoration-current/30 underline-offset-4 ${REPORT_FOCUS}`} aria-label={`${label}, ${period}: ${formatMoney(pence, currency)}`}><FinancialAmount pence={pence} currency={currency} variant="compact" className="!text-base" /></Link> : <FinancialAmount pence={pence} currency={currency} variant="compact" className="!text-base" />;
+  return <dl data-stage3b-metric className="min-w-0 space-y-1 border-t border-black/10 pt-2"><dt className="font-semibold text-ink">{label}</dt>{unavailable ? <dd className="text-sm text-slate-600">Could not load</dd> : <><dd className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] items-center gap-2 tabular-nums"><span className="financial-fit"><span className="block text-xs text-slate-600">Current</span>{amount(pair.current, 'Current', href)}</span><span className="financial-fit"><span className="block text-xs text-slate-600">Earlier</span>{amount(pair.comparison, 'Earlier', earlierHref)}</span></dd><dd className="text-xs text-slate-600">{helper}</dd></>}</dl>;
 }
 
 export default function BusinessMovementReportView({ result, scopeLabel, readOnly = false, choices, offerAll, selectedStoreId, selectedPreset, currentFromValue, currentToValue, exportQuery, moneyQuery, selectedPeriod }: {

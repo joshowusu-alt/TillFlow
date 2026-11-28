@@ -13,8 +13,8 @@ export default function BusinessMovementProductCards({ rows, labels, currency }:
         <dl className="mt-1 space-y-1 text-sm">
           {([
             [labels.currentFull, row.currentPence], [labels.comparisonFull, row.comparisonPence], ['Change', row.changePence],
-          ] as const).map(([label, amount]) => <div key={label} className="grid min-w-0 grid-cols-2 items-center gap-2">
-            <dt className="min-w-0 break-words">{label}</dt><dd className="min-w-0 text-right [overflow-wrap:anywhere]"><FinancialAmount pence={amount} currency={currency} variant="compact" className="!text-sm !whitespace-normal" /></dd>
+          ] as const).map(([label, amount]) => <div key={label} className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] items-center gap-2">
+            <dt className="min-w-0 break-words">{label}</dt><dd className="financial-fit"><FinancialAmount pence={amount} currency={currency} variant="compact" className="!text-base" /></dd>
           </div>)}
         </dl>
         <p className="mt-1 text-xs leading-5 text-slate-600">{row.qtyWording}</p>

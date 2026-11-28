@@ -37,8 +37,16 @@ async function main() {
           assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
           const targets=await page.locator('[data-testid=owner-summary-strip] a, [data-movement-insight] summary').evaluateAll(nodes=>nodes.filter(x=>x.getBoundingClientRect().height>0).map(x=>x.getBoundingClientRect().height));
           assert.ok(targets.every(x=>x>=44),JSON.stringify(targets));
-          await page.getByText('All product figures',{exact:true}).click();
+          const products = page.locator('details > summary').filter({hasText:'All product figures'});
+          assert.equal(await products.count(),1);
+          await products.click();
+          assert.equal(await products.locator('..').getAttribute('open'),'');
           assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+          const amounts = await page.locator('[data-financial-amount]:visible').evaluateAll(nodes=>nodes.map(node=>({
+            text:node.textContent,font:parseFloat(getComputedStyle(node).fontSize),whiteSpace:getComputedStyle(node).whiteSpace,
+            fits:node.scrollWidth<=node.clientWidth+1
+          })));
+          assert.ok(amounts.every(amount=>amount.font>=16&&amount.whiteSpace==='nowrap'&&amount.fits),JSON.stringify(amounts));
         }
         await page.screenshot({path:`${folder}/${side}-${width}-movement.png`,fullPage:true,animations:'disabled'});
       });

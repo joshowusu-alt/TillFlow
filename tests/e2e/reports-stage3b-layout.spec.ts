@@ -53,7 +53,8 @@ for (const width of [320,390,768,1024,1440,1920,2560]) {
           const box = el.getBoundingClientRect(); return { height: box.height, width: box.width };
         });
         expect(geometry.height).toBeLessThanOrEqual(48);
-        await expect(page.locator('[data-stage3b-hero] [data-financial-amount]')).toHaveCSS('color', 'rgb(255, 255, 255)');
+        // Movement now uses a light statement card; other reports retain the dark sales hero.
+        await expect(page.locator('[data-stage3b-hero] [data-financial-amount]')).toHaveCSS('color', screen === 'movement' ? 'rgb(15, 23, 42)' : 'rgb(255, 255, 255)');
         const money = await page.locator('[data-stage3b-review] [data-financial-amount]:visible').evaluateAll(nodes => nodes.map(el => {
           const rect = el.getBoundingClientRect(), style = getComputedStyle(el);
           const parent = el.closest('.financial-fit') ?? el.parentElement!;

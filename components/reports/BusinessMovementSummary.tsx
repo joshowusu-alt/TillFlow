@@ -24,11 +24,10 @@ export default function BusinessMovementSummary({ result, labels, children }: {
       </div>
       <section className="space-y-1 border-t border-black/10 pt-2" data-movement-sales>
         <h3 className="font-semibold text-ink">Sales</h3>
-        <div className="grid min-w-0 grid-cols-2 gap-2 font-semibold tabular-nums">
-          <div className="min-w-0 [overflow-wrap:anywhere]" data-stage3b-hero data-first-figure=""><FinancialAmount pence={result.headline.salesValuePence.current} currency={currency} variant="compact" className="!text-base !whitespace-normal" /></div>
-          <div className="min-w-0 text-right [overflow-wrap:anywhere]"><FinancialAmount pence={result.headline.salesValuePence.comparison} currency={currency} variant="compact" className="!text-base !whitespace-normal" /></div>
+        <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] gap-2 font-semibold tabular-nums">
+          <div className="financial-fit" data-stage3b-hero data-first-figure=""><span className="block text-xs font-normal text-slate-600">Current · {result.headline.transactionCount.current} sales</span><FinancialAmount pence={result.headline.salesValuePence.current} currency={currency} variant="compact" className="!text-base" /></div>
+          <div className="financial-fit"><span className="block text-xs font-normal text-slate-600">Earlier · {result.headline.transactionCount.comparison} sales</span><FinancialAmount pence={result.headline.salesValuePence.comparison} currency={currency} variant="compact" className="!text-base" /></div>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-xs text-slate-600"><span>{result.headline.transactionCount.current} sales</span><span className="text-right">{result.headline.transactionCount.comparison} sales</span></div>
         <p className={`text-sm font-semibold ${change < 0 ? 'text-rose-700' : change > 0 ? 'text-emerald-700' : 'text-slate-600'}`}>{change === 0 ? 'Sales unchanged' : `Sales ${change > 0 ? 'up' : 'down'} ${formatMoney(Math.abs(change), currency)}`}{percentage != null && change !== 0 ? ` (${Math.abs(percentage).toFixed(1)}%)` : ''}</p>
       </section>
       {children}
