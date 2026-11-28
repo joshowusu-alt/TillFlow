@@ -6,11 +6,8 @@ import DownloadLink from '@/components/DownloadLink';
 import StatCard from '@/components/StatCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
-import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
-import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { ReportReadOnlyBanner } from '@/components/reports/ReportSurfaceDenial';
+import type { ReactNode } from 'react';
 import { openLiveReport } from '@/lib/entitlements/live-report';
-import { getFeatures } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import { resolveSelectableReportDateRange } from '@/lib/reports/date-parsing';
 import { getSupplierSalesReport } from '@/lib/reports/supplier-sales';
@@ -40,8 +37,28 @@ function buildHref(params: ReportFilters) {
   return `/reports/sales-by-supplier${qs ? `?${qs}` : ''}`;
 }
 
-function ProfitCells({row,currency}:{row:{netRevenuePence:number;costPence:number|null;profitPence:number|null;marginPercent:number|null};currency:string}){
-  return <><td className="px-3 py-3 text-sm tabular-nums">{formatMoney(row.netRevenuePence,currency)}</td><td className="px-3 py-3 text-sm tabular-nums">{row.costPence===null?'Incomplete costs':formatMoney(row.costPence,currency)}</td><td className="px-3 py-3 text-sm tabular-nums">{row.profitPence===null?'—':formatMoney(row.profitPence,currency)}</td><td className="px-3 py-3 text-sm tabular-nums">{row.marginPercent===null?'—':`${row.marginPercent.toFixed(1)}%`}</td></>;
+function Figure({ label, value }: { label: string; value: ReactNode }) {
+  return <div className="min-w-0"><dt className="text-xs text-slate-600">{label}</dt><dd className="mt-1 break-words font-semibold tabular-nums [overflow-wrap:anywhere]">{value}</dd></div>;
+}
+
+function SupplierSaleCard({ name, href, sales, netSales, currency, children, action }: {
+  name: string; href?: string; sales: ReactNode; netSales: number | null; currency: string; children?: ReactNode; action?: ReactNode;
+}) {
+  return <article data-supplier-sale-row className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5 sm:p-4">
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <h3 className="min-w-0 break-words text-base font-semibold text-ink [overflow-wrap:anywhere]">{href ? <Link href={href} className="hover:underline">{name}</Link> : name}</h3>
+      {action}
+    </div>
+    <dl className="mt-2 grid min-w-0 grid-cols-2 gap-3 text-base" data-supplier-primary-figures>
+      <Figure label="Sales" value={sales} />
+      <Figure label="Net sales" value={netSales === null ? '—' : formatMoney(netSales, currency)} />
+    </dl>
+    {children ? <details className="mt-2 border-t border-slate-100 text-sm"><summary className="cursor-pointer py-2 font-semibold text-accent">More figures</summary><dl className="grid min-w-0 grid-cols-2 gap-3 pb-2">{children}</dl></details> : null}
+  </article>;
+}
+
+function ProfitFigures({row,currency}:{row:{costPence:number|null;profitPence:number|null;marginPercent:number|null};currency:string}){
+  return <><Figure label="Product costs" value={row.costPence===null?'Incomplete costs':formatMoney(row.costPence,currency)}/><Figure label="Profit before running costs" value={row.profitPence===null?'—':formatMoney(row.profitPence,currency)}/><Figure label="Profit share of net sales" value={row.marginPercent===null?'—':`${row.marginPercent.toFixed(1)}%`}/></>;
 }
 
 function ReportSetupEmptyState({
@@ -133,11 +150,11 @@ export default async function SalesBySupplierPage(
   return (
     <div className="space-y-5">
       <ReportsDestinationHead
-        title="Sales by Linked Supplier"
+        title="Sales by supplier"
         periodLabel={
           isDrillDown
-            ? `Product sales under the preferred supplier link for ${drilledSupplier!.name}.`
-            : 'Understand sales performance by the preferred supplier linked to each product.'
+            ? `Sales of products linked to ${drilledSupplier!.name}.`
+            : 'See how much you sold from each supplier’s products.'
         }
         actions={isDrillDown ? (
           <Link href={reportHref({ period: periodInputValue, from: fromInputValue, to: toInputValue })} className="btn-secondary justify-center text-sm">
@@ -149,20 +166,15 @@ export default async function SalesBySupplierPage(
       <section className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-4 text-sm leading-relaxed text-blue-900 shadow-sm">
         <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-start">
           <div>
-            <p className="font-semibold">Based on preferred supplier links on products.</p>
-            <p className="mt-1">
-              This is a sales performance view, not supplier debt. It does not prove which supplier supplied the exact
-              item sold, and it does not track exact stock batch origin. Changing a product’s preferred supplier also changes which supplier its earlier sales appear under.
-            </p>
-            <p className="mt-1">
-              Returned and void sales are excluded. Supplier sales performance is separate from supplier purchases,
-              balances, and payments.
-            </p>
-            <p className="mt-1">Cost is recorded at the time of sale. Net sales and calculated gross profit exclude tax and include discounts. Missing costs leave profit incomplete. When all proceeds go back to the supplier, calculated gross profit is not retained shop earnings. Use agreed terms when settling suppliers.</p>
+            <p>This shows sales of each supplier’s products. It is not what you owe them. See Supplier balances for that.</p>
+            <details className="mt-2"><summary className="cursor-pointer font-semibold text-accent">How these figures work</summary>
+              <p className="mt-2">Sales use each product’s main supplier, not the supplier of the exact item sold. Changing the main supplier also moves earlier sales to that supplier.</p>
+              <p className="mt-1">Returned and cancelled sales are excluded. Net sales exclude tax and include discounts. Product costs are recorded at the time of sale; missing costs leave profit incomplete. Profit before running costs is not necessarily money your business keeps.</p>
+            </details>
           </div>
           <div className="flex flex-wrap gap-2 lg:justify-end">
             <Link href="/payments/supplier-aging" className="btn-secondary text-xs">
-              View supplier payables
+              Supplier balances
             </Link>
             <Link href="/payments/supplier-payments" className="btn-ghost text-xs">
               Supplier payments
@@ -173,7 +185,7 @@ export default async function SalesBySupplierPage(
 
       {/* Filter card */}
       <ReportFilterCard
-        columnsClassName={`grid gap-3 sm:grid-cols-${isCustomRange ? '5' : '3'}`}
+        columnsClassName="min-w-0 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0 [&_input]:w-full [&_input]:min-w-0 [&_input]:max-w-full [&_select]:w-full [&_select]:min-w-0 [&_select]:max-w-full"
         actions={
           <DownloadLink
             href={exportHref}
@@ -185,8 +197,8 @@ export default async function SalesBySupplierPage(
         }
       >
         <div>
-          <label className="label">Period</label>
-          <select className="input" name="period" defaultValue={periodInputValue}>
+          <label className="label" htmlFor="supplier-period">Period</label>
+          <select className="input" id="supplier-period" name="period" defaultValue={periodInputValue}>
             {PERIOD_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
@@ -195,12 +207,12 @@ export default async function SalesBySupplierPage(
         {isCustomRange ? (
           <>
             <div>
-              <label className="label">From</label>
-              <input className="input" type="date" name="from" defaultValue={fromInputValue} />
+              <label className="label" htmlFor="supplier-from">From</label>
+              <input className="input w-full min-w-0 max-w-full" id="supplier-from" type="date" name="from" defaultValue={fromInputValue} />
             </div>
             <div>
-              <label className="label">To</label>
-              <input className="input" type="date" name="to" defaultValue={toInputValue} />
+              <label className="label" htmlFor="supplier-to">To</label>
+              <input className="input w-full min-w-0 max-w-full" id="supplier-to" type="date" name="to" defaultValue={toInputValue} />
             </div>
           </>
         ) : null}
@@ -212,52 +224,49 @@ export default async function SalesBySupplierPage(
 
       {/* Summary cards — not shown in drill-down mode */}
       {!isDrillDown ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid min-w-0 grid-cols-2 gap-3 [&>*:first-child]:col-span-2 [&>*:last-child]:col-span-2 lg:grid-cols-4 lg:[&>*:first-child]:col-span-1 lg:[&>*:last-child]:col-span-1">
           <StatCard
-            label="Supplier-linked sales value"
+            label="Sales of supplier products"
             value={formatMoney(report.totalRevenuePence, business.currency)}
             tone="accent"
-            helper="From products linked to any supplier"
           />
           <StatCard
-            label="Quantity sold"
+            label="Items sold"
             value={report.totalQtyBase.toLocaleString()}
-            helper="Sum of all base-unit quantities"
           />
           <StatCard
             label="Suppliers with sales"
             value={report.suppliersWithSalesCount.toLocaleString()}
-            helper="Suppliers with revenue in this period"
           />
           <StatCard
             label="Top supplier"
             value={report.topSupplierName ?? '—'}
             tone={report.topSupplierName ? 'success' : 'default'}
-            helper="By revenue in this period"
+            helper="Highest sales in this period"
           />
         </div>
       ) : null}
 
       {/* Drill-down: product breakdown for a specific supplier */}
-      {!isDrillDown ? <SalesMixChart title="Supplier-linked sales mix" currency={business.currency} rows={report.rows.map(row => ({ name: row.supplierName, value: row.totalRevenuePence }))} /> : null}
+      {!isDrillDown ? <SalesMixChart title="Share of supplier sales" supplierView currency={business.currency} rows={report.rows.map(row => ({ name: row.supplierName, value: row.totalRevenuePence }))} /> : null}
       {isDrillDown ? (
         <div className="space-y-4">
           {/* Supplier summary */}
           <div className="card grid gap-4 p-5 sm:grid-cols-3">
             <div className="space-y-1">
-              <div className="text-xs uppercase tracking-wide text-black/40">Revenue</div>
+              <div className="text-xs uppercase tracking-wide text-black/40">Sales</div>
               <div className="text-2xl font-semibold tabular-nums">
                 {formatMoney(drilledRow?.totalRevenuePence ?? 0, business.currency)}
               </div>
             </div>
             <div className="space-y-1">
-              <div className="text-xs uppercase tracking-wide text-black/40">Quantity sold</div>
+              <div className="text-xs uppercase tracking-wide text-black/40">Items sold</div>
               <div className="text-2xl font-semibold tabular-nums">
                 {(drilledRow?.totalQtyBase ?? 0).toLocaleString()}
               </div>
             </div>
             <div className="space-y-1">
-              <div className="text-xs uppercase tracking-wide text-black/40">Sales</div>
+              <div className="text-xs uppercase tracking-wide text-black/40">Number of sales</div>
               <div className="text-2xl font-semibold tabular-nums">
                 {(drilledRow?.totalSalesCount ?? 0).toLocaleString()}
               </div>
@@ -267,7 +276,7 @@ export default async function SalesBySupplierPage(
           {drilledHasNoLinkedProducts ? (
             <ReportSetupEmptyState
               title={`No products linked to ${drilledSupplier!.name}`}
-              body={`To use this report, link products to ${drilledSupplier!.name} as their preferred supplier. TillFlow will group sales by those product links; this does not create supplier debt or track exact stock batches.`}
+              body={`Choose ${drilledSupplier!.name} as the main supplier on the products they supply. This groups sales, not money owed.`}
               actions={[
                 { label: 'Manage products', href: '/products', primary: true },
                 { label: 'View supplier profile', href: `/suppliers/${supplierId}` },
@@ -278,7 +287,7 @@ export default async function SalesBySupplierPage(
           {drilledHasLinkedProductsWithoutSales ? (
             <ReportSetupEmptyState
               title="No sales for linked products in this period"
-              body={`Products are linked to ${drilledSupplier!.name}, but none were sold in the selected date range. This report only shows sales performance for linked products, not purchases or supplier balances.`}
+              body={`Products are linked to ${drilledSupplier!.name}, but none were sold in these dates.`}
               actions={[
                 { label: 'Change period', href: reportHref({ period: 'mtd', supplierId }) },
                 { label: 'View linked products', href: `/suppliers/${supplierId}#products-supplied`, primary: true },
@@ -287,47 +296,17 @@ export default async function SalesBySupplierPage(
           ) : null}
 
           {/* Product table */}
-          <ReportTableCard title="Linked products sold">
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>SKU</th>
-                <th>Quantity sold</th>
-                <th>Sales value</th>
-                <th>Sales count</th>
-                <th>Net sales</th><th>Recorded cost</th><th>Calculated gross profit</th><th>Margin</th>
-              </tr>
-            </thead>
-            <tbody>
-              {drilledRow && drilledRow.products.length > 0 ? (
-                drilledRow.products.map((p) => (
-                  <tr key={p.productId} className="rounded-xl bg-white">
-                    <td className="px-3 py-3 text-sm font-semibold">
-                      <Link href={`/products/${p.productId}`} className="hover:underline">
-                        {p.productName}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-3 text-sm text-black/60">{p.sku ?? '—'}</td>
-                    <td className="px-3 py-3 text-sm tabular-nums">{p.qtyBase.toLocaleString()}</td>
-                    <td className="px-3 py-3 text-sm font-semibold tabular-nums">
-                      {formatMoney(p.revenuePence, business.currency)}
-                    </td>
-                    <td className="px-3 py-3 text-sm tabular-nums">{p.salesCount.toLocaleString()}</td>
-                    <ProfitCells row={p} currency={business.currency}/>
-                  </tr>
-                ))
-              ) : (
-                <ReportTableEmptyRow
-                  colSpan={9}
-                  message={
-                    drilledRow && drilledRow.linkedProductCount > 0
-                      ? `No sales for linked products in this period.`
-                      : `No products are linked to ${drilledSupplier?.name}.`
-                  }
-                />
-              )}
-            </tbody>
-          </ReportTableCard>
+          <h2 className="text-lg font-semibold">Linked products sold</h2>
+          <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {drilledRow && drilledRow.products.length > 0 ? drilledRow.products.map(p => (
+              <SupplierSaleCard key={p.productId} name={p.productName} href={`/products/${p.productId}`} sales={formatMoney(p.revenuePence, business.currency)} netSales={p.netRevenuePence} currency={business.currency}>
+                <Figure label="Product code" value={p.sku ?? '—'}/>
+                <Figure label="Items sold" value={p.qtyBase.toLocaleString()}/>
+                <Figure label="Number of sales" value={p.salesCount.toLocaleString()}/>
+                <ProfitFigures row={p} currency={business.currency}/>
+              </SupplierSaleCard>
+            )) : <p className="text-sm text-slate-600">{drilledRow && drilledRow.linkedProductCount > 0 ? 'No sales for linked products in this period.' : `No products are linked to ${drilledSupplier?.name}.`}</p>}
+          </div>
 
           <Link
             href={`/suppliers/${supplierId}`}
@@ -340,8 +319,8 @@ export default async function SalesBySupplierPage(
         /* Supplier table */
         <div className="space-y-4">
           <ReportSectionHeader
-            title="Supplier-linked sales"
-            subtitle="Products are attributed to the supplier set as preferred supplier. This is not supplier debt."
+            title="Supplier sales"
+            subtitle="Based on each product’s main supplier. This is not money owed."
             trailing={
               <DownloadLink
                 href={exportHref}
@@ -354,8 +333,8 @@ export default async function SalesBySupplierPage(
           />
           {!hasSupplierLinks ? (
             <ReportSetupEmptyState
-              title="No supplier-linked sales yet"
-              body="To use this report, link products to their preferred supplier. TillFlow will group sales by those product links; this does not create supplier debt or track exact stock batches."
+              title="No supplier sales yet"
+              body="Choose a main supplier for your products to see their sales here. This is not money owed."
               actions={[
                 { label: 'Manage products', href: '/products', primary: true },
                 { label: 'View suppliers', href: '/suppliers' },
@@ -365,91 +344,28 @@ export default async function SalesBySupplierPage(
           {hasLinkedProductsWithoutSales ? (
             <ReportSetupEmptyState
               title="No sales for linked products in this period"
-              body="Supplier links exist, but no linked products were sold in the selected date range. Use supplier payables for what you owe suppliers."
+              body="No products linked to suppliers were sold in these dates. See Supplier balances for what you owe."
               actions={[
                 { label: 'Change period', href: reportHref({ period: 'mtd' }) },
                 { label: 'Manage products', href: '/products', primary: true },
               ]}
             />
           ) : null}
-          <ReportTableCard>
-            <thead>
-              <tr>
-                <th>Supplier</th>
-                <th className="hidden sm:table-cell">Products linked</th>
-                <th>Sales value</th>
-                <th className="hidden lg:table-cell">Quantity sold</th>
-                <th className="hidden lg:table-cell">Sales count</th>
-                <th className="hidden xl:table-cell">Average sale value</th>
-                <th>Net sales</th><th>Recorded cost</th><th>Calculated gross profit</th><th>Margin</th>
-                <th className="sticky right-0 bg-slate-50" scope="col">Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.unallocatedSalesDifferencePence !== 0 ? (
-                <tr className="rounded-xl bg-white">
-                  <td className="px-3 py-3 text-sm font-semibold">{report.unallocatedSalesDifferenceLabel}</td>
-                  <td className="hidden sm:table-cell px-3 py-3 text-sm text-black/60">—</td>
-                  <td className="px-3 py-3 text-sm font-semibold tabular-nums">
-                    {formatMoney(report.unallocatedSalesDifferencePence, business.currency)}
-                  </td>
-                  <td className="hidden lg:table-cell px-3 py-3 text-sm">—</td>
-                  <td className="hidden lg:table-cell px-3 py-3 text-sm">—</td>
-                  <td className="hidden xl:table-cell px-3 py-3 text-sm">—</td>
-                  <td>—</td><td>—</td><td>—</td><td>—</td>
-                  <td className="px-3 py-3 text-sm" />
-                </tr>
-              ) : null}
-              {report.rows.length > 0 ? (
-                report.rows.map((row) => (
-                  <tr key={row.supplierId} className="rounded-xl bg-white">
-                    <td className="px-3 py-3 text-sm font-semibold">
-                      <Link href={`/suppliers/${row.supplierId}`} className="hover:underline">
-                        {row.supplierName}
-                      </Link>
-                    </td>
-                    <td className="hidden sm:table-cell px-3 py-3 text-sm text-black/60">
-                      {row.linkedProductCount}
-                    </td>
-                    <td className="px-3 py-3 text-sm font-semibold tabular-nums">
-                      {row.totalRevenuePence > 0
-                        ? formatMoney(row.totalRevenuePence, business.currency)
-                        : <span className="text-black/30">—</span>}
-                    </td>
-                    <td className="hidden lg:table-cell px-3 py-3 text-sm tabular-nums">
-                      {row.totalQtyBase > 0 ? row.totalQtyBase.toLocaleString() : <span className="text-black/30">—</span>}
-                    </td>
-                    <td className="hidden lg:table-cell px-3 py-3 text-sm tabular-nums">
-                      {row.totalSalesCount > 0 ? row.totalSalesCount.toLocaleString() : <span className="text-black/30">—</span>}
-                    </td>
-                    <td className="hidden xl:table-cell px-3 py-3 text-sm tabular-nums text-black/60">
-                      {row.avgSaleValuePence > 0 ? formatMoney(row.avgSaleValuePence, business.currency) : <span className="text-black/30">—</span>}
-                    </td>
-                    <ProfitCells row={row} currency={business.currency}/>
-                    <td className="sticky right-0 bg-white px-3 py-3 text-sm shadow-[-4px_0_6px_-5px_rgba(15,23,42,0.3)]">
-                      <Link
-                        href={reportHref({
-                          period: periodInputValue,
-                          from: fromInputValue,
-                          to: toInputValue,
-                          supplierId: row.supplierId,
-                        })}
-                        className="btn-ghost text-xs whitespace-nowrap"
-                        aria-label={`View products for ${row.supplierName}`}
-                      >
-                        View products
-                      </Link>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <ReportTableEmptyRow
-                  colSpan={11}
-                  message="Link products to their preferred supplier to start this sales performance report."
-                />
-              )}
-            </tbody>
-          </ReportTableCard>
+          <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {report.unallocatedSalesDifferencePence !== 0 ? <SupplierSaleCard name={report.unallocatedSalesDifferenceLabel} sales={formatMoney(report.unallocatedSalesDifferencePence, business.currency)} netSales={null} currency={business.currency}/> : null}
+            {report.rows.map(row => (
+              <SupplierSaleCard key={row.supplierId} name={row.supplierName} href={`/suppliers/${row.supplierId}`}
+                sales={row.totalRevenuePence > 0 ? formatMoney(row.totalRevenuePence, business.currency) : '—'} netSales={row.netRevenuePence} currency={business.currency}
+                action={<Link href={reportHref({ period: periodInputValue, from: fromInputValue, to: toInputValue, supplierId: row.supplierId })}
+                  className="inline-flex min-h-11 items-center text-sm font-semibold text-accent underline underline-offset-2" aria-label={`View products for ${row.supplierName}`}>View products</Link>}>
+                <Figure label="Linked products" value={row.linkedProductCount}/>
+                <Figure label="Items sold" value={row.totalQtyBase > 0 ? row.totalQtyBase.toLocaleString() : '—'}/>
+                <Figure label="Number of sales" value={row.totalSalesCount > 0 ? row.totalSalesCount.toLocaleString() : '—'}/>
+                <Figure label="Average sale value" value={row.avgSaleValuePence > 0 ? formatMoney(row.avgSaleValuePence, business.currency) : '—'}/>
+                <ProfitFigures row={row} currency={business.currency}/>
+              </SupplierSaleCard>
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -16,6 +16,20 @@ describe('report chart truthfulness', () => {
     expect(screen.queryByRole('img')).toBeNull();
     expect(screen.getByText(/negative values/)).toBeTruthy();
   });
+  it('expands supplier sales when Other exceeds 40% without changing any value', () => {
+    const rows = Array.from({length: 12}, (_, i) => ({name: `Supplier ${i+1}`,value:1000}));
+    const old = buildMix(rows)!;
+    const mix = buildMix(rows, true)!;
+    expect(old).toHaveLength(6);
+    expect(mix).toHaveLength(9);
+    expect(mix.slice(0,8)).toEqual(rows.slice(0,8));
+    expect(mix.at(-1)).toEqual({name:'Other',value:4000});
+    expect(mix.reduce((sum,row)=>sum+row.value,0)).toBe(12000);
+    render(<SalesMixChart title="Share of supplier sales" currency="GHS" rows={rows} supplierView />);
+    expect(screen.getByText('Top 8 suppliers shown. The rest are grouped as Other.')).toBeTruthy();
+    expect(screen.getByText('Other: GH₵40.00 (33.3%)')).toBeTruthy();
+    expect(screen.getByText('GH₵40.00 · 33.3%')).toBeTruthy();
+  });
   it('shows no wedge or trend when all amounts are zero', () => {
     const { container } = render(<><SalesMixChart title="Mix" currency="GHS" rows={[{ name: 'Empty', value: 0 }]} /><TrendLine title="Trend" currency="GHS" labels={['Monday']} values={[0]} /></>);
     expect(container.querySelector('svg')).toBeNull();

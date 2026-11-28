@@ -5,28 +5,34 @@ import FinancialAmount from '@/components/reports/FinancialAmount';
 import { formatMoney } from '@/lib/format';
 
 const colours = ['#2454d9', '#08916c', '#a450c6', '#c47b0a', '#087e99', '#b44466'];
-export function buildMix(rows: { name: string; value: number }[]) {
+const supplierColours = ['#2454d9', '#08916c', '#a450c6', '#c47b0a', '#087e99', '#6d28d9', '#be185d', '#475569', '#b44466'];
+export function buildMix(rows: { name: string; value: number }[], expandLargeOther = false) {
   if (rows.some(row => !Number.isFinite(row.value) || row.value < 0)) return null;
   const sorted = rows.filter(row => row.value > 0).sort((a, b) => b.value - a.value);
-  return sorted.length <= 6 ? sorted : [...sorted.slice(0, 5), { name: 'Other', value: sorted.slice(5).reduce((sum, row) => sum + row.value, 0) }];
+  const total = sorted.reduce((sum, row) => sum + row.value, 0);
+  const other = sorted.slice(5).reduce((sum, row) => sum + row.value, 0);
+  const limit = expandLargeOther && other > total * 0.4 ? 8 : 5;
+  return sorted.length <= limit + 1 ? sorted : [...sorted.slice(0, limit), { name: 'Other', value: sorted.slice(limit).reduce((sum, row) => sum + row.value, 0) }];
 }
 
-export function SalesMixChart({ title, rows, currency, compact = false }: { title: string; compact?: boolean; rows: { name: string; value: number }[]; currency: string }) {
-  const slices = buildMix(rows);
+export function SalesMixChart({ title, rows, currency, compact = false, supplierView = false }: { title: string; compact?: boolean; supplierView?: boolean; rows: { name: string; value: number }[]; currency: string }) {
+  const slices = buildMix(rows, supplierView);
+  const palette = supplierView ? supplierColours : colours;
+  const grouped = rows.filter(row => row.value > 0).length > (slices?.length ?? 0);
   const total = slices?.reduce((sum, row) => sum + row.value, 0) ?? 0;
-  if (!slices) return <p className="text-sm text-slate-600">{title}: a share chart is unavailable because this selection includes negative values. Use the signed figures in the table.</p>;
+  if (!slices) return <p className="text-sm text-slate-600">{title}: {supplierView ? 'Sales include negative amounts. See the figures below.' : 'a share chart is unavailable because this selection includes negative values. Use the signed figures in the table.'}</p>;
   if (!total) return <p className="text-sm text-slate-600">{title}: no sales in this selection.</p>;
   let offset = 0;
   return <figure className={compact ? "min-w-0" : "min-w-0 rounded-xl bg-slate-50 p-4"}>
     <figcaption className="mb-3 font-semibold">{title}</figcaption>
     <div className={compact ? "grid min-w-0 items-center gap-4" : "grid min-w-0 items-center gap-5 sm:grid-cols-[12rem_minmax(0,1fr)]"}>
       <svg viewBox="0 0 120 120" className="mx-auto w-44 max-w-full" role="img" aria-label={`${title}. Shares and exact amounts are listed alongside.`}>
-        {slices.map((row, i) => { const share = row.value / total * 100; const start = offset; offset += share; return <circle key={i} cx="60" cy="60" r="43" fill="none" stroke={colours[i]} strokeWidth="19" pathLength="100" strokeDasharray={`${share} ${100 - share}`} strokeDashoffset={-start} transform="rotate(-90 60 60)"><title>{`${row.name}: ${formatMoney(row.value, currency)} (${share.toFixed(1)}%)`}</title></circle>; })}
+        {slices.map((row, i) => { const share = row.value / total * 100; const start = offset; offset += share; return <circle key={i} cx="60" cy="60" r="43" fill="none" stroke={palette[i]} strokeWidth="19" pathLength="100" strokeDasharray={`${share} ${100 - share}`} strokeDashoffset={-start} transform="rotate(-90 60 60)"><title>{`${row.name}: ${formatMoney(row.value, currency)} (${share.toFixed(1)}%)`}</title></circle>; })}
         <text x="60" y="58" textAnchor="middle" fontSize="10" fill="#475569">Sales mix</text><text x="60" y="72" textAnchor="middle" fontSize="13" fontWeight="700" fill="#172033">100%</text>
       </svg>
-      <ul className="min-w-0 space-y-3 text-sm">{slices.map((row, i) => <li key={i} className="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1"><span className="min-w-0 break-words"><span aria-hidden="true" className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colours[i] }} />{row.name}</span><span className="tabular-nums">{formatMoney(row.value, currency)} · {(row.value / total * 100).toFixed(1)}%</span></li>)}</ul>
+      <ul className="min-w-0 space-y-3 text-sm">{slices.map((row, i) => <li key={i} className="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1"><span className="min-w-0 break-words [overflow-wrap:anywhere]"><span aria-hidden="true" className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: palette[i] }} />{row.name}</span><span className="tabular-nums">{formatMoney(row.value, currency)} · {(row.value / total * 100).toFixed(1)}%</span></li>)}</ul>
     </div>
-    {rows.filter(row => row.value > 0).length > 6 ? <p className="mt-3 text-xs text-slate-600">Five largest shares shown separately; Other includes every remaining positive value. The table keeps all records.</p> : null}
+    {grouped ? <p className="mt-3 text-xs text-slate-600">{supplierView ? `Top ${slices.length - 1} suppliers shown. The rest are grouped as Other.` : 'Five largest shares shown separately; Other includes every remaining positive value. The table keeps all records.'}</p> : null}
   </figure>;
 }
 
