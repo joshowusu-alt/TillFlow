@@ -9,14 +9,13 @@ export default function BusinessMovementInsight({ insight, labels, currency }: {
 }) {
   const copy = movementDisplayCopy(insight, labels, currency);
   return (
-    <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-ink" data-movement-insight>
-      <p className="mb-2 text-xs font-semibold text-accent">{ownerCategoryLabel(insight.category)}</p>
-      <dl className="space-y-3">
-        <div><dt className="text-xs font-semibold text-slate-600">What changed</dt><dd className="mt-1 break-words leading-6">{copy.fact}</dd></div>
-        <div><dt className="text-xs font-semibold text-slate-600">What to check</dt><dd className="mt-1 break-words leading-6">{copy.recommendedCheck}</dd></div>
-      </dl>
-      <details className="mt-2">
-        <summary className="flex min-h-11 w-fit max-w-full cursor-pointer items-center rounded-lg px-1 text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">Supporting figures</summary>
+    <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 text-sm text-ink" data-movement-insight>
+      <p className="mb-1 text-xs font-semibold text-accent">{ownerCategoryLabel(insight.category)}</p>
+      <p className="break-words leading-5">{copy.fact}</p>
+      <details>
+        <summary className="flex min-h-[45px] w-fit max-w-full cursor-pointer items-center rounded-lg text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">What to check · Supporting figures</summary>
+        <p className="mb-2 break-words text-sm leading-5"><strong>What changed:</strong> {copy.fact}</p>
+        <p className="mb-2 break-words text-sm leading-5"><strong>What to check:</strong> {copy.recommendedCheck}</p>
         <p className="break-words text-sm leading-6 text-slate-600">{copy.evidence}</p>
       </details>
     </article>

@@ -128,4 +128,16 @@ describe('Stage 3B presentation contracts', () => {
     expect(html).toContain('preset=last_full_calendar_month&amp;storeId=sample-branch');
     expect(html).not.toContain('Strong signal');
   });
+
+  it('puts all current and earlier money figures in one compact statement with scoped links', () => {
+    const root = document.createElement('div'); root.innerHTML = movement();
+    const summary = root.querySelector('[data-testid="owner-summary-strip"]');
+    expect(summary?.querySelectorAll('[data-movement-sales]')).toHaveLength(1);
+    expect(summary?.querySelectorAll('[data-stage3b-metric]')).toHaveLength(3);
+    for (const row of summary?.querySelectorAll('[data-stage3b-metric]') ?? []) expect(row.querySelectorAll('[data-financial-amount]')).toHaveLength(2);
+    const moneyLinks = [...(summary?.querySelectorAll('a[href^="/reports/money-received?"]') ?? [])].map(link => new URL(link.getAttribute('href')!, 'https://example.test'));
+    expect(moneyLinks.map(link => link.searchParams.get('from'))).toEqual(['2026-09-01', '2026-08-01']);
+    expect(moneyLinks.every(link => link.searchParams.get('storeId') === 'sample-branch')).toBe(true);
+    expect(root.querySelectorAll('summary')).not.toHaveLength(0);
+  });
 });

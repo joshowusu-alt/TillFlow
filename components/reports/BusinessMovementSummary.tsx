@@ -1,12 +1,13 @@
 import FinancialAmount from '@/components/reports/FinancialAmount';
 import { movementPeriodNote } from '@/lib/reports/business-movement/presentation';
 import type { BusinessMovementWithMoneyResult, OwnerPeriodLabels, OwnerSummaryStrip } from '@/lib/reports/business-movement';
-import { ReportSalesHero } from '@/components/reports/stage3b/ReportPrimitives';
+import type { ReactNode } from 'react';
+import ReportSummaryCard from '@/components/reports/ReportSummaryCard';
 import { readableReportPeriod } from '@/components/reports/PeriodChips';
 import { formatMoney } from '@/lib/format';
 
-export default function BusinessMovementSummary({ result, labels }: {
-  result: BusinessMovementWithMoneyResult; labels: OwnerPeriodLabels; strip: OwnerSummaryStrip;
+export default function BusinessMovementSummary({ result, labels, children }: {
+  result: BusinessMovementWithMoneyResult; labels: OwnerPeriodLabels; strip: OwnerSummaryStrip; children?: ReactNode;
 }) {
   const periods = result.scope.periods;
   const note = movementPeriodNote(periods);
@@ -15,18 +16,22 @@ export default function BusinessMovementSummary({ result, labels }: {
   const percentage = result.headline.salesValuePence.percentageChange;
   const days = (count: number) => `${count} day${count === 1 ? '' : 's'}`;
   return <section className="min-w-0" data-testid="owner-summary-strip" data-stage3b-report="movement">
-    <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-      <ReportSalesHero title={`Sales · ${periods.currentFromKey === periods.currentToKey ? readableReportPeriod(periods.currentFromKey, periods.currentToKey) : labels.currentFull}`} pence={result.headline.salesValuePence.current} currency={currency}
-        subtitle={<p>{result.headline.transactionCount.current} sales · {days(note.currentDays)}</p>}>
-        <p>{change === 0 ? 'Sales unchanged' : `Sales ${change > 0 ? 'up' : 'down'} ${formatMoney(Math.abs(change), currency)}`}{percentage != null && change !== 0 ? ` (${Math.abs(percentage).toFixed(1)}%)` : ''} compared with the earlier period.</p>
-      </ReportSalesHero>
-      <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-card sm:p-6">
-        <h2 className="font-display text-lg font-semibold text-ink">Sales in the earlier period</h2>
-        <p className="mt-2 text-sm text-slate-600">{readableReportPeriod(periods.comparisonFromKey, periods.comparisonToKey)}</p>
-        <div className="financial-fit mt-2 text-ink"><FinancialAmount pence={result.headline.salesValuePence.comparison} currency={currency} variant="prominent" /></div>
-        <p className="mt-2 text-sm text-ink">{result.headline.transactionCount.comparison} sales · {days(note.comparisonDays)}</p>
-        <p className="mt-3 text-sm leading-5 text-slate-600">{note.explanation}</p>
+    <ReportSummaryCard spacingClassName="min-w-0 space-y-3 !p-4 sm:!p-6">
+      <h2 className="text-base font-semibold text-ink">Sales and money movement</h2>
+      <div className="grid min-w-0 grid-cols-2 gap-3 text-xs text-slate-600">
+        <div><p className="font-semibold text-ink">Current</p>{labels.currentFull} · {days(note.currentDays)}</div>
+        <div className="text-right"><p className="font-semibold text-ink">Earlier</p>{readableReportPeriod(periods.comparisonFromKey, periods.comparisonToKey)} · {days(note.comparisonDays)}</div>
       </div>
-    </div>
+      <section className="space-y-1 border-t border-black/10 pt-2" data-movement-sales>
+        <h3 className="font-semibold text-ink">Sales</h3>
+        <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] gap-2 font-semibold tabular-nums">
+          <div className="financial-fit" data-stage3b-hero data-first-figure=""><span className="block text-xs font-normal text-slate-600">Current · {result.headline.transactionCount.current} sales</span><FinancialAmount pence={result.headline.salesValuePence.current} currency={currency} variant="compact" className="!text-base" /></div>
+          <div className="financial-fit"><span className="block text-xs font-normal text-slate-600">Earlier · {result.headline.transactionCount.comparison} sales</span><FinancialAmount pence={result.headline.salesValuePence.comparison} currency={currency} variant="compact" className="!text-base" /></div>
+        </div>
+        <p className={`text-sm font-semibold ${change < 0 ? 'text-rose-700' : change > 0 ? 'text-emerald-700' : 'text-slate-600'}`}>{change === 0 ? 'Sales unchanged' : `Sales ${change > 0 ? 'up' : 'down'} ${formatMoney(Math.abs(change), currency)}`}{percentage != null && change !== 0 ? ` (${Math.abs(percentage).toFixed(1)}%)` : ''}</p>
+      </section>
+      {children}
+      <p className="text-xs leading-5 text-slate-600">{note.explanation}</p>
+    </ReportSummaryCard>
   </section>;
 }

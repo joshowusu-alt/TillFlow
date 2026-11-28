@@ -49,14 +49,14 @@ export function ReportDisclosure({ title, children }: { title: string; children:
 }
 
 /** Exact values remain available by touch and keyboard; bars never imply negative composition. */
-export function ReportValueBars({ rows, currency, empty = 'No recorded values for this period.', compact = false, diverging = false }: {
-  rows: { label: string; pence: number; href?: string; helper?: string }[]; currency: string; empty?: string; compact?: boolean; diverging?: boolean;
+export function ReportValueBars({ rows, currency, empty = 'No recorded values for this period.', compact = false, diverging = false, dense = false }: {
+  rows: { label: string; pence: number; href?: string; helper?: string }[]; currency: string; empty?: string; compact?: boolean; diverging?: boolean; dense?: boolean;
 }) {
   const max = Math.max(...rows.map(row => Math.abs(row.pence)), 0);
   if (!rows.length) return <p className="py-3 text-sm text-slate-600">{empty}</p>;
-  return <div className="space-y-3" data-report-value-bars>{rows.some(row => row.pence < 0) ? <p className="text-xs leading-5 text-slate-600">Bar length shows the size of the amount. Negative amounts are marked with a minus sign.</p> : null}{rows.map((row, index) => {
-    const content = <><div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><span className="min-w-0 break-words text-sm font-medium text-ink">{row.label}</span>
-      <span className={`financial-fit text-ink ${compact ? 'w-full sm:w-auto sm:min-w-[9rem] sm:text-right' : 'w-full'}`}><FinancialAmount pence={row.pence} currency={currency} className="!text-base" /></span></div>
+  return <div className={dense ? 'space-y-2' : 'space-y-3'} data-report-value-bars>{rows.some(row => row.pence < 0) ? <p className="text-xs leading-5 text-slate-600">{dense ? 'Bar length shows the change; minus means a decrease.' : 'Bar length shows the size of the amount. Negative amounts are marked with a minus sign.'}</p> : null}{rows.map((row, index) => {
+    const content = <><div className={dense ? 'grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] items-baseline gap-2' : 'flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1'}><span className="min-w-0 break-words text-sm font-medium text-ink">{row.label}</span>
+      <span className={`financial-fit text-ink ${dense ? 'min-w-0' : compact ? 'w-full sm:w-auto sm:min-w-[9rem] sm:text-right' : 'w-full'}`}><FinancialAmount pence={row.pence} currency={currency} className="!text-base" /></span></div>
       {row.helper ? <p className="mt-1 text-xs leading-5 text-slate-600">{row.helper}</p> : null}
       {max > 0 ? <div aria-hidden="true" className="relative mt-2 h-2 rounded-full bg-slate-100">{diverging ? <span className="absolute left-1/2 top-[-3px] h-3.5 w-px bg-slate-400" /> : null}<div className={`h-2 rounded-full ${row.pence < 0 ? 'bg-amber-700' : 'bg-accent'} ${diverging ? 'absolute' : ''}`} style={{ width: `${Math.abs(row.pence) / max * (diverging ? 50 : 100)}%`, ...(diverging ? { left: `${row.pence < 0 ? 50 - Math.abs(row.pence) / max * 50 : 50}%` } : {}) }} /></div> : null}</>;
     return row.href ? <a key={index} href={row.href} className={`block min-h-11 min-w-0 py-1 ${REPORT_FOCUS}`}>{content}</a> : <div key={index} className="min-w-0">{content}</div>;
